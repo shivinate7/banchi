@@ -2044,10 +2044,14 @@ COMPONENTS = [
                                   "applies on top of `unfulfilled`; an unrecognised status "
                                   "answers False and changes nothing, the fail-safe direction. "
                                   "`scripts/docs-audit.py:check_terminal_statuses` reconciles "
-                                  "the set against its own published copy in the D63 entry.",
+                                  "the set against its own published copy in the D63 entry. "
+                                  "`Ledger.labels` (D326) is a third mapping, one `LabelRow` per "
+                                  "TCGplayer order number: a claim written before a TCGTracking "
+                                  "create, replaced by the whole answer, the label PDF, the "
+                                  "insurance switch and the last scan.",
                           "governed_by": ["D7", "D10", "D13", "D16", "D20", "D21", "D24", "D26",
                                           "D29", "D36", "D138", "D63", "D69", "D88", "D113",
-                                          "D193"],
+                                          "D193", "D326"],
                           "tested_by": ["T7"]},
             "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88", "D317"],
                          "tested_by": ["T7"]},
@@ -2254,10 +2258,11 @@ COMPONENTS = [
                               "into it — under the lock, files moved to legacy-json/ with a receipt. "
                               "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
-                              "migration to add one to a store already on disk.",
+                              "migration to add one to a store already on disk. The `labels` table (D326) is "
+                              "created on every open that lacks it, with no version of its own.",
                       "governed_by": ["D20", "D26", "D58", "D86", "D88", "D134", "D140", "D145",
                                       "D166", "D172", "D174", "D189", "D192", "D213", "D219",
-                                      "D243", "D294", "D273", "D299", "D320"],
+                                      "D243", "D294", "D273", "D299", "D320", "D326"],
                       "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
@@ -5990,6 +5995,21 @@ COMPONENTS = [
                         "WHAT T7 CANNOT PROVE is that Pirate Ship's importer accepts the file "
                         "this renders, or that the live TCGTracking answers as the fake does — "
                         "both are on the far side of a seam no committed fixture can hold.",
+            },
+            "tcgtracking.py": {
+                "does": "THE ONE CLIENT OF TCGTracking (D326): create(body) buys a label, "
+                        "track(order_number=|tracking_number=) reads scan status, pdf(order_id) "
+                        "re-renders a label as bytes. Every call goes through pipeline/net.open "
+                        "(D319), a create as a write that is never retried after it may have "
+                        "been sent and follows no redirect. The key and the shipper number are "
+                        "read on every call through envfile.get_live, sent as headers, and "
+                        "appear in no answer, refusal, log line or store row; an upstream body "
+                        "is never quoted. Each failure is a TrackingRefused with a tracking_ "
+                        "code. The only file that names the TCGTracking host; an override is "
+                        "https or loopback http, and the default host is refused under the "
+                        "harness and CI.",
+                "governed_by": ["D326", "D319", "D65"],
+                "tested_by": ["T7"],
             },
             "slabs_routes.py": {
                 "does": "the My Slabs routes: POST /slabs adds a slab by cert (Card Ladder reads "

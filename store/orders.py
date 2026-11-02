@@ -536,6 +536,51 @@ def _parse_fulfilment(key: Any, per_sku: Any) -> Optional[Dict[str, LineProgress
 
 
 @dataclass
+class LabelRow:
+    """One TCGTracking label, keyed by the TCGplayer order number alone (D326).
+
+    The Export Shipping file that feeds a label names no marketplace, so this key is not a
+    `Ledger.orders` key. A row is first a CLAIM (`claim` set, `answer` None): written in its own
+    `Store.write` before the create, so a double press or a reload meets it and buys nothing. The
+    answer then replaces it in a second write. `claim` is the marker of the server process that
+    holds it. A claim left by an earlier process is retried, because TCGTracking answers a repeat
+    `source_order_id` with the label it already made.
+
+    `answer` is TCGTracking's whole create answer minus `pdf_base64`, which is `pdf` (base64) so
+    it is not stored twice. `scan` is the last scan lookup: `{"at": ..., "answer": {...}}`, or
+    `{"at": ..., "status": "tracking_not_found"}` for a lookup that found nothing.
+    """
+
+    order: str
+    claim: Optional[str] = None
+    answer: Optional[Dict[str, Any]] = None
+    pdf: Optional[str] = None
+    insured: bool = False
+    scan: Optional[Dict[str, Any]] = None
+    made_at: Optional[str] = None
+
+    @property
+    def made(self) -> bool:
+        return self.answer is not None
+
+
+def _parse_label(key: Any, record: Any) -> Optional[LabelRow]:
+    """One label row from its stored record, or None for one that will not construct."""
+    if str(key).startswith("_") or not isinstance(record, dict):
+        return None
+    known = {k: v for k, v in record.items() if k in LabelRow.__annotations__}
+    known["order"] = str(key)
+    for name in ("answer", "scan"):
+        if not isinstance(known.get(name), dict):
+            known[name] = None
+    known["insured"] = bool(known.get("insured"))
+    try:
+        return LabelRow(**known)
+    except TypeError:
+        return None
+
+
+@dataclass
 class IngestReport:
     """What one sync did. Counts, so a caller can say it out loud without re-deriving it."""
 
@@ -594,6 +639,7 @@ class Ledger:
 
     orders: "Rows" = field(default_factory=lambda: Rows(Ledger.ORDERS))
     fulfilment: "Rows" = field(default_factory=lambda: Rows(Ledger.FULFILMENT))
+    labels: "Rows" = field(default_factory=lambda: Rows(Ledger.LABELS))
 
     # THE TWO TABLES (D88), and the split the header argues survives the move exactly:
     # `ingest` still cannot name `fulfilment`, because it is a different mapping bound to
@@ -617,12 +663,23 @@ class Ledger:
         columns=lambda rows: {},
         column_names=(),
     )
+    # THE TCGTracking LABELS (D326), one row per TCGplayer order number. Another mapping bound to
+    # another table, so `ingest` still cannot name it.
+    LABELS: ClassVar[TableSpec] = TableSpec(
+        "labels",
+        parse=lambda key, record: _parse_label(key, record),
+        dump=asdict,
+        columns=lambda record: {},
+        column_names=(),
+    )
 
     def __post_init__(self) -> None:
         if not isinstance(self.orders, Rows):
             self.orders = Rows(Ledger.ORDERS, objects=dict(self.orders))
         if not isinstance(self.fulfilment, Rows):
             self.fulfilment = Rows(Ledger.FULFILMENT, objects=dict(self.fulfilment))
+        if not isinstance(self.labels, Rows):
+            self.labels = Rows(Ledger.LABELS, objects=dict(self.labels))
 
     # ------------------------------------------------------------------ (de)serialising
 
@@ -643,6 +700,12 @@ class Ledger:
         payload = payload or {}
         orders: Dict[str, OrderRecord] = {}
         fulfilment: Dict[str, Dict[str, LineProgress]] = {}
+        labels: Dict[str, LabelRow] = {}
+
+        for key, record in (payload.get("labels") or {}).items():
+            label = _parse_label(key, record)
+            if label is not None:
+                labels[str(key)] = label
 
         for key, record in (payload.get("orders") or {}).items():
             parsed = _parse_order(key, record)
@@ -657,6 +720,7 @@ class Ledger:
         return cls(
             orders=Rows(cls.ORDERS, objects=orders),
             fulfilment=Rows(cls.FULFILMENT, objects=fulfilment),
+            labels=Rows(cls.LABELS, objects=labels),
         )
 
     def to_payload(self) -> Dict[str, Any]:
@@ -667,10 +731,47 @@ class Ledger:
                 key: {sku: asdict(row) for sku, row in sorted(rows.items())}
                 for key, rows in sorted(self.fulfilment.items())
             },
+            "labels": {key: asdict(row) for key, row in sorted(self.labels.items())},
         }
 
     def __len__(self) -> int:
         return len(self.orders)
+
+    # ------------------------------------------------------------------------- the labels
+
+    def claim_label(self, order: str, marker: str) -> bool:
+        """Take `order` for a create, or say it is not ours to take (D326).
+
+        False when a label is already made, or when THIS process already holds the claim (a
+        press in flight). A claim written by another process is replaced: that press died, and a
+        retried create is safe because TCGTracking dedups on `source_order_id`.
+        """
+        row = self.labels.get(order)
+        if row is not None and (row.made or row.claim == marker):
+            return False
+        self.labels[order] = LabelRow(order=order, claim=marker)
+        return True
+
+    def release_label(self, order: str, marker: str) -> None:
+        """Drop `marker`'s claim on `order` if it still holds it, so a refused press blocks nothing."""
+        row = self.labels.get(order)
+        if row is not None and not row.made and row.claim == marker:
+            del self.labels[order]
+
+    def record_label(self, order: str, answer: Dict[str, Any], pdf: str, insured: bool) -> LabelRow:
+        """Replace the claim with the made label."""
+        row = LabelRow(order=order, answer=answer, pdf=pdf, insured=insured, made_at=now())
+        self.labels[order] = row
+        return row
+
+    def record_scan(self, order: str, scan: Dict[str, Any]) -> None:
+        row = self.labels.get(order)
+        if row is not None and row.made:
+            row.scan = scan
+
+    def made_labels(self) -> List[LabelRow]:
+        """Every made label, by order number. A claim is not one."""
+        return sorted((row for row in self.labels.values() if row.made), key=lambda row: row.order)
 
     # ------------------------------------------------------------------------- the feed
 

@@ -30,9 +30,14 @@ THE LABEL ROUTES (D326, T4 and T5). Every shape below is the contract the screen
   POST /shipping/batches/BATCH/labels
     {"preview": true}
         -> 200 {"count": int, "envelope_size": "10", "fee_note": str,
+                "key_present": bool, "shipper_present": bool,
                 "orders": [{"order", "eligible": bool, "reason": str, "insured": false}]}
         Free: no request to TCGTracking, no store write. `count` is the eligible orders.
-        An order held back (parcel lane, unjudged) says why in `reason`.
+        `key_present` and `shipper_present` say whether the settings file holds each, never its
+        value. `reason` is a fixed code. An eligible order is `envelope`. A held-back order is
+        `parcel` (labelled in Pirate Ship), `needs_a_look` (unjudged), `no_full_street` (the
+        export row lacks a street, city, state or postal code) or `already_labelled` (it has a
+        label row; the confirm still answers it as `existing`).
     {"confirm": true, "orders": [order, ...], "insured": [order, ...]}   (`insured` optional)
         -> 200 {"made": [{"order", "tracking_number", "insured"}],
                 "existing": [{"order"}], "refused": [{"order", "code"}], "partial": bool}
@@ -40,15 +45,21 @@ THE LABEL ROUTES (D326, T4 and T5). Every shape below is the contract the screen
         that order is `refused` with its code, `partial` is true when any label was made, and
         the orders after it are untouched. A replay lands in `existing`.
     400 `labels_confirm_missing`: no `confirm: true`, so nothing is bought.
-    400 `labels_order_ineligible`: a confirmed order is not eligible in this batch. The whole
-        press is refused before any create, and `error.data.ineligible` lists each order and why.
+    400 `labels_order_ineligible`: a confirmed order is parcel, unjudged, short of a full street
+        or not in this batch (`not_in_batch`). The whole press is refused before any create, and
+        `error.data.ineligible` lists each order with its reason code. An already labelled order
+        is not ineligible: it is answered as `existing`.
     A missing key, a missing shipper number or a refused host answers its `tracking_` code as a
         whole-request error, with no request sent and no store write.
 
   GET /shipping/labels
-    -> 200 {"labels": [{"order", "tracking_number", "insured": bool,
+    -> 200 {"labels": [{"order", "status": "made" | "pending", "tracking_number", "insured": bool,
+                        "made_at": str | null, "scanned_at": str | null, "checked_at": str | null,
                         "scan": null | {"status": str | null, "at": str}}]}
-        Read from the store. It carries no PDF bytes.
+        Read from the store. It carries no PDF bytes. `pending` is a claim with no answer yet
+        (a create in flight): it has no tracking number and no `made_at`. `scanned_at` is the
+        time of the latest scan event in the track answer, else null. `checked_at` is when
+        Banchi last asked TCGTracking for the scan.
 
   GET /shipping/labels/ORDER/pdf
     -> 200 the stored label bytes as application/pdf, with no request to TCGTracking;
