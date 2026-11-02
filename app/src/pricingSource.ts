@@ -293,10 +293,10 @@ function pricedOrNull(value: string | null | undefined): string | null {
 }
 
 /** The group the server put a row in: a live listing's `group`, a new copy's `group`, or a markdown
- *  entry's (`asRow` fills an absent one with Needs You). Only a new copy off a run's own table, which
- *  carries no group, is going at the rule. The screen never works a group out itself. */
+ *  entry's (`asRow` fills an absent one with Needs You). A row that arrives with none is not known to
+ *  be safe to send, so it files under Needs You and waits for a tick. The screen never works a group out itself. */
 export function serverGroup(row: PricingSku): LiveGroup {
-  return row.group ?? 'at_rule'
+  return row.group ?? 'needs_you'
 }
 
 /** One live listing of the worklist as the row draws it, from the listing's own facts (name, set,

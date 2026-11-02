@@ -1359,18 +1359,18 @@ export function Pricing() {
     (sku: string) => kind === '' || (sealedOf.get(sku) === true) === (kind === 'sealed'),
     [kind, sealedOf],
   )
-  /* THE LENS AND THE KIND NARROW LIVE LISTINGS ONLY: a new copy is never a listing the read judged. */
+  /* THE LENS AND THE KIND NARROW WHAT IS DRAWN, NEVER WHAT IS SENT, and only live listings: a new copy is never
+     a listing the read judged. A listing the read never judged is under no chip (it is neither passed over nor a single). */
   const lensed = useCallback((sku: string) => stamp !== null || listed.has(sku), [stamp, listed])
-  const rows = useMemo(
-    () =>
-      standingOf.size === 0
-        ? partitioned
-        : partitioned.filter(
-            (sku) =>
-              !lensed(sku.sku) || (kindOk(sku.sku) && (lens === 'all' || liveLens(standingOf.get(sku.sku)) === lens)),
-          ),
-    [partitioned, lens, standingOf, kindOk, lensed],
+  const chipKeeps = useCallback(
+    (sku: string) =>
+      standingOf.size === 0 ||
+      !lensed(sku) ||
+      ((lens === 'all' && kind === '') || (standingOf.has(sku) && kindOk(sku) && (lens === 'all' || liveLens(standingOf.get(sku)) === lens))),
+    [standingOf, lensed, lens, kind, kindOk],
   )
+  /* ON A READ OPENED BY ITS STAMP THE CHIPS ALSO NARROW WHAT THE MARK-DOWN SENDS (the apply carries the kind); on the live list they never do. */
+  const rows = useMemo(() => (readView ? partitioned.filter((sku) => chipKeeps(sku.sku)) : partitioned), [readView, partitioned, chipKeeps])
   /** The rows that are new copies: the ones the rule, the floor and the send's copies are about. */
   const copyRows = useMemo(() => rows.filter((row) => !listed.has(row.sku)), [rows, listed])
   /** THE LENS COUNTS, OFF THE ROWS THE KIND FILTER KEEPS, so All is always Not selling plus
@@ -1587,9 +1587,10 @@ export function Pricing() {
   const nearName = useMemo(() => (query.trim() === '' ? null : didYouMean(query, new Set(rows.map((row) => row.name)))), [rows, query])
   const keepRow = useCallback(
     (row: MergedSku) =>
+      chipKeeps(row.sku) &&
       (!filterHeld || isWithheld(answerFor(row))) &&
       matchQuery(query, { text: [row.name, row.set_name, gameLabel(row.game), row.condition], numbers: [row.row['Number']], skus: [row.sku] }),
-    [filterHeld, answerFor, query],
+    [chipKeeps, filterHeld, answerFor, query],
   )
   /** The facets, each option counted under the OTHER picks and the search; a band nothing is in is not offered. */
   const facets = useMemo(
@@ -1677,7 +1678,10 @@ export function Pricing() {
         continue
       }
       const suggested = moneyField(one.price)
-      if (one.source === 'Suggested' && suggested !== null && tickedOf(row.sku)) out.push({ sku: row.sku, price: suggested, was, source: 'suggested' })
+      /* A TICKED ROW UNDER NEEDS YOU CARRIES ITS TICK: it may sit past the owner's limit, and the tick is how the server knows the owner said yes. */
+      if (one.source === 'Suggested' && suggested !== null && tickedOf(row.sku)) {
+        out.push({ sku: row.sku, price: suggested, was, source: 'suggested', ...(one.group === 'needs_you' ? { ticked: true } : {}) })
+      }
     }
     return out
   }, [rows, listed, source, answerFor, tickedOf])
@@ -1846,7 +1850,7 @@ export function Pricing() {
     /* THE SERVER'S SENTENCE, VERBATIM (D59): the client never composes a reason. */
     for (const [why, group] of closed) groups.push({ head: why, rows: group })
     return groups
-  }, [arrival, rows, facetShape, facetPicks, keepRow, sort, stamp, saved, askingAtSort, listed])
+  }, [arrival, rows, facetShape, facetPicks, keepRow, sort, saved, askingAtSort])
 
   const order = useMemo(() => drawn.flatMap((group) => group.rows.map((row) => row.sku)), [drawn])
 
@@ -2372,6 +2376,13 @@ export function Pricing() {
        * and `join.prices_for` skips a held SKU before it reads `no_market_data`, so a no-market
        * row is left out exactly as 'unlisted' left it out. `answerFor` reads it back. */
       const id = write(sku.sku, 'listable', record)
+      /* THE HOLD IS THE LATER WORD: a price typed on a live listing earlier this visit goes with it. */
+      setListedTyped((held) => {
+        if (held[sku.sku] === undefined) return held
+        const next = { ...held }
+        delete next[sku.sku]
+        return next
+      })
       setHoldFor(null)
       toast({
         kind: 'receipt',
@@ -3180,7 +3191,7 @@ export function Pricing() {
         ) : picked.size > 0 ? (
           <EmptyState
             icon="filter"
-            title="Nothing to price in that pick"
+            title={titleCase('Nothing to price in that pick', true)}
             body="Every card there already has an answer."
             actions={
               <Button variant="primary" icon="x" onClick={clearPicked}>
@@ -3305,10 +3316,7 @@ export function Pricing() {
               <span />
             </div>
             {drawn.map((group) => (
-              /* BANDAID: a filter change remounts the rows, so the D313 reader does not count a row that
-                 survives a filter moving up the list. The cause is the reader's scope: it counts rows in
-                 the list, where its claim is what sits above the list. */
-              <section className="pricing-group" key={`${group.head}${filtering ? ':filtered' : ''}`} aria-label={group.head}>
+              <section className="pricing-group" key={group.head} aria-label={group.head}>
                 {group.head === '' ? null : (
                   <h2 className="pricing-group-head" data-empty={group.rows.length === 0 ? 'true' : undefined}>
                     <span className="pricing-group-why">{group.head}</span>
@@ -4262,7 +4270,7 @@ function LiveSheet({
       </div>
       {onPreset === null ? null : (
         <div className="pricing-sheet-part">
-          <h3 className="pricing-sheet-head">{onApplyCut === null ? 'Rule for new prices' : 'Price every listing you have not typed'}</h3>
+          <h3 className="pricing-sheet-head">{titleCase(onApplyCut === null ? 'Rule for new prices' : 'Price every listing you have not typed', true)}</h3>
           <div className="pricing-sheet-presets">
             {PRESETS.map((preset) => (
               <Button key={preset.key} size="sm" onClick={() => onPreset(preset.key)}>
