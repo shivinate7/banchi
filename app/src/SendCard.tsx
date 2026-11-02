@@ -109,9 +109,9 @@ function refusalTitle(code: string, data?: unknown): string {
     case 'write_refused':
       return 'The file could not be written, so nothing was sent.'
     case 'runs_required':
-      return 'No run is picked, so nothing was sent.'
+      return 'No cards are picked, so nothing was sent.'
     case 'too_many_runs':
-      return 'Too many runs for one send, so nothing was sent.'
+      return 'Too many batches for one send, so nothing was sent.'
     case 'confirm_required':
       return 'Banchi needs your confirmation first, so nothing was sent.'
     case 'prices_invalid':
@@ -119,7 +119,7 @@ function refusalTitle(code: string, data?: unknown): string {
       return 'A price on this list could not be read, so nothing was sent.'
     case 'run_name_invalid':
     case 'no_such_run':
-      return 'A run on this list is missing or its name is not valid, so nothing was sent. Reload the list.'
+      return 'A batch on this list is missing or its name is not valid, so nothing was sent. Reload the list.'
     case 'step_timed_out':
       return 'Banchi took too long on this send, so it may not have finished. Check what is live before you send again.'
     case 'banchi_missing':

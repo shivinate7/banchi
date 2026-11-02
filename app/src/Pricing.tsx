@@ -1235,8 +1235,8 @@ export function Pricing() {
       const was = book?.policy?.per_run?.[run]
       recordUndo(
         { kind: 'runcut', run, before: { threshold: writtenCut(was) ?? undefined, sub_threshold: was?.['sub_threshold'] as never } },
-        figure === undefined ? 'Run follows the store floor' : 'Floor changed for this run',
-        figure === undefined ? 'This run now uses the store-wide floor.' : `This run's floor now reads ${figure}.`,
+        figure === undefined ? 'Batch follows the store floor' : 'Floor changed for this run',
+        figure === undefined ? 'This batch now uses the store-wide floor.' : `This batch's floor now reads ${figure}.`,
       )
       const patch =
         figure === undefined
@@ -2498,7 +2498,7 @@ export function Pricing() {
     return row === undefined ? null : runBoxLabel(row)
   }, [stamp, run, detail, runs])
   const worklistName =
-    scopeName ?? (loaded.length === 0 ? 'the cards on this screen' : `${loaded.length} run${loaded.length === 1 ? '' : 's'}`)
+    scopeName ?? 'the cards on this screen'
 
   /** Re-read what may still be cleared, and the digest — NOT the answers (StrictMode runs an
    *  updater twice, and adopting them there re-dirtied the screen; see D168's receipt case). */
@@ -2949,11 +2949,11 @@ export function Pricing() {
      will be and the list lands under it, not over it. */
   /* A READ OLDER THAN A DAY OFFERS READ AGAIN IN PLACE OF SEND: on a read opened by its stamp, and on the
      one list when no new copy waits to go and nothing is owed (a new copy can always be sent). */
-  const staleRead = readStale && (readView || (loaded.length === 0 && owedTakeOffs.owed.length === 0))
+  const staleRead = readStale && (readView || (loaded.length === 0 && listed.size === 0 && owedTakeOffs.owed.length === 0))
   const bar =
     !readView && !staleRead && (barLoading || loaded.length > 0 || listed.size > 0 || owedTakeOffs.owed.length > 0) ? (
       <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send to TCGplayer" aria-busy={barLoading ? 'true' : undefined}>
-        {tally}
+        {figures === null ? tally : null}
         {barLoading || figures === null ? null : (
           /* THE FIGURES THE PRESS WILL CARRY, in the mockup's words: copies in all, then each kind with its total. */
           <div className="pricing-figures" role="complementary" aria-label="Send to TCGplayer">
@@ -2973,6 +2973,11 @@ export function Pricing() {
               </span>
               <span>
                 <b>{progress.held}</b> kept off TCGplayer, not in this send
+                {progress.held === 0 ? null : (
+                  <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => showRows({}, true)}>
+                    Show kept off ({progress.held})
+                  </Button>
+                )}
               </span>
             </p>
           </div>
@@ -4093,10 +4098,10 @@ function RuleSheet({
 
       <section className="pricing-sheet-part" aria-labelledby="pricing-cut-head">
         <h3 className="pricing-sheet-head" id="pricing-cut-head">
-          The floor{overridden ? ', this run only' : ''}
+          The floor{overridden ? ', this batch only' : ''}
         </h3>
         <div className="pricing-cheap-figure">
-          <BigMoney value={cut} onCommit={onCut} label={overridden ? 'Floor for this run' : 'Floor'} />
+          <BigMoney value={cut} onCommit={onCut} label={overridden ? 'Floor for this batch' : 'Floor'} />
           <span className="pricing-cheap-caption">
             Cards worth less list at this price. {under} under, {above} above.
           </span>
