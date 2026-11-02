@@ -3284,10 +3284,15 @@ export function Pricing() {
               ) : null}
               <span className="pricing-col-trend" role="columnheader">Trend</span>
               {source.copies ? <span className="pricing-col-qty" role="columnheader">Qty</span> : null}
+              {source.copies ? <span /> : null}
               <SortHeader grid className="pricing-col-price" sortKey="asking" value={sort} onChange={setSort} rest={SORT_AT_REST}>{readView ? 'New price' : 'Price'}</SortHeader>
+              {source.copies ? <span className="pricing-col-src" role="columnheader">From</span> : null}
               <span />
             </div>
             {drawn.map((group) => (
+              /* BANDAID: a filter change remounts the rows, so the D313 reader does not count a row that
+                 survives a filter moving up the list. The cause is the reader's scope: it counts rows in
+                 the list, where its claim is what sits above the list. */
               <section className="pricing-group" key={`${group.head}${filtering ? ':filtered' : ''}`} aria-label={group.head}>
                 {group.head === '' ? null : (
                   <h2 className="pricing-group-head" data-empty={group.rows.length === 0 ? 'true' : undefined}>
@@ -3358,7 +3363,7 @@ export function Pricing() {
                       if (on) hovered.current = sku.sku
                       else if (hovered.current === sku.sku) hovered.current = null
                     }}
-                    onPhoto={() => openPhoto(sku)}
+                    onPhoto={() => (listed.has(sku.sku) ? openProduct(sku) : openPhoto(sku))}
                     onHold={() => toggleHold(sku)}
                     onUnhold={() => void unhold(sku)}
                     unholding={unholding === sku.sku}
@@ -3580,6 +3585,8 @@ function PricingRow({
   const why = withheld && standing !== 'unlisted' && standing.note ? standing.note : null
   const first = sku.positions[0] ?? null
   const state = fieldState(sku, standing, asking)
+  /* THE TICK THAT LETS A SUGGESTION OR A NEW COPY THAT NEEDS THE OWNER GO, by its name. */
+  const tick = listed?.tick ?? fresh?.tick ?? null
   /* THE QTY FIELD SHOWS ONLY WHERE IT CAN SAY SOMETHING (UX-084, TXT-08): more than one copy, or a
      figure already typed. A single copy goes, or is held; there is no quantity to choose. */
   const showQty = source.copies && !sku.at_cap && (sku.copies > 1 || asked !== '')
@@ -3609,36 +3616,21 @@ function PricingRow({
       data-flag={flag?.kind}
       data-hold={holding ? 'open' : undefined}
     >
-      {!source.copies ? null : listed !== undefined ? (
-        /* A LIVE LISTING HAS NO PHOTOGRAPH OF OURS, so its first cell holds the tick that keeps a suggestion in the send. */
-        <span className="pricing-tick-cell">
-          {listed.tick === null ? null : (
-            <label className="bn-check pricing-tick">
-              <input
-                type="checkbox"
-                checked={listed.tick.on}
-                aria-label={`Send the new price for ${sku.name}`}
-                onChange={(event) => listed.tick?.onChange(event.currentTarget.checked)}
-              />
-            </label>
-          )}
-        </span>
-      ) : (
-        <PricingThumb at={first} name={sku.name} onOpen={onPhoto} imageUrl={sku.image_url} />
-      )}
+      {/* A LIVE LISTING HAS NO PHOTOGRAPH OF OURS: its thumbnail is the stock photo alone. */}
+      {!source.copies ? null : <PricingThumb at={first} name={sku.name} onOpen={onPhoto} imageUrl={sku.image_url ?? null} />}
 
       <div className="pricing-id">
         <span className="pricing-name-line">
           <ProductLink sku={sku.sku} name={sku.name} className="pricing-name">
             {displayName(sku.name, sku.row['Number'] ?? '')}
           </ProductLink>
-          {fresh?.tick == null ? null : (
-            <label className="bn-check pricing-tick pricing-tick-fresh">
+          {tick === null ? null : (
+            <label className="bn-check pricing-tick">
               <input
                 type="checkbox"
-                checked={fresh.tick.on}
+                checked={tick.on}
                 aria-label={`Send the new price for ${sku.name}`}
-                onChange={(event) => fresh.tick?.onChange(event.currentTarget.checked)}
+                onChange={(event) => tick.onChange(event.currentTarget.checked)}
               />
             </label>
           )}
@@ -3662,7 +3654,7 @@ function PricingRow({
         )}
         <span className="pricing-meta">
           {/* "NEAR MINT" STAYS ON EVERY ROW (the owner's ruling, D137). */}
-          <span className="pricing-cond">{sku.condition}</span>
+          {sku.condition === '' ? null : <span className="pricing-cond">{sku.condition}</span>}
           <span>{sku.set_name}</span>
           {/* THE NUMBER ALWAYS DRAWS HERE, NEVER IN THE NAME (the owner's review, 2026-09-26:
               "Garganacl - 084/132" carried its number in the name while every other row carried
@@ -3704,29 +3696,21 @@ function PricingRow({
             </span>
           )}
           {why === null ? null : <span className="pricing-why">“{why}”</span>}
-          {from === null || lockedWhy !== null || withheld ? null : (
-            <Pill outline size="sm" className="pricing-from">
-              {from}
-            </Pill>
-          )}
-          {was === null || lockedWhy !== null || withheld ? null : (
-            <span className="pricing-was">
-              Now <Money value={Number(was)} />
-            </span>
-          )}
         </span>
-        {/* WHY THE SERVER SUGGESTS THIS PRICE, on its own line under the name and the facts, in its own words (D59). */}
-        {listed === undefined || listed.reason === '' ? null : (
-          <span className="pricing-reason" data-tone={listed.tone}>
-            {listed.reason}
-          </span>
-        )}
-        {fresh === undefined || fresh.reason === null ? null : (
-          <span className="pricing-reason" data-tone="warn">
-            {fresh.reason}
-          </span>
-        )}
       </div>
+
+      {/* WHY THE SERVER SUGGESTS THIS PRICE, in its own words (D59): the row's second line, under the name
+          and the figures, so it reads on one line. A row has a live listing's reason or a new copy's, never both. */}
+      {listed === undefined || listed.reason === '' ? null : (
+        <span className="pricing-reason" data-tone={listed.tone}>
+          {listed.reason}
+        </span>
+      )}
+      {fresh === undefined || fresh.reason === null ? null : (
+        <span className="pricing-reason" data-tone="warn">
+          {fresh.reason}
+        </span>
+      )}
 
       <span className="pricing-ref pricing-col-market" data-empty={sku.snap.market === null ? 'true' : undefined}>
         <span className="pricing-ref-label">Market </span>
@@ -3788,6 +3772,21 @@ function PricingRow({
                 }
               }}
             />
+          )}
+        </span>
+      )}
+
+      {/* WHAT TCGPLAYER HOLDS NOW, before the field, where the field holds a different price. Its own
+          track, so the field keeps its place in the price cell. */}
+      {!source.copies ? null : (
+        <span className="pricing-now">
+          {was === null || lockedWhy !== null || withheld ? null : (
+            <>
+              <span className="pricing-was">
+                Now <Money value={Number(was)} />
+              </span>
+              <Icon name="arrowRight" size={14} className="pricing-to" />
+            </>
           )}
         </span>
       )}
@@ -3859,6 +3858,17 @@ function PricingRow({
           </span>
         )}
       </div>
+
+      {/* WHERE THE PRICE COMES FROM, in its own column (under the price on a narrow desk). */}
+      {!source.copies ? null : (
+        <span className="pricing-src pricing-col-src">
+          {from === null || lockedWhy !== null || withheld ? null : (
+            <Pill outline size="sm" className="pricing-from">
+              {from}
+            </Pill>
+          )}
+        </span>
+      )}
 
       <IconButton
         ref={registerHold}

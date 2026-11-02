@@ -293,7 +293,8 @@ function pricedOrNull(value: string | null | undefined): string | null {
 }
 
 /** The group the server put a row in: a live listing's `group`, a new copy's `group`, or a markdown
- *  entry's. A row with none is going at the rule. The screen never works a group out itself. */
+ *  entry's (`asRow` fills an absent one with Needs You). Only a new copy off a run's own table, which
+ *  carries no group, is going at the rule. The screen never works a group out itself. */
 export function serverGroup(row: PricingSku): LiveGroup {
   return row.group ?? 'at_rule'
 }
