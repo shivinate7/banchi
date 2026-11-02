@@ -39,6 +39,10 @@ THE WIRE THIS GROUP PINS (the one-list-wire lane's brief names the behaviour, no
     that SKU under its top-level `held` key. `send.held` stays the receipt's own boolean.
   - The worklist's no-runs branch, with a corpus that cannot be read, answers `error:
     "corpus_unreadable"` and draws no default-policy suggestion.
+  - A live suggestion held back by the owner's limit has a reason ending "; capped at your N%",
+    N being the owner's `limit` as a percent.
+  - `do_markdown_table(stamp)["skus"]` rows carry `group` (the worklist's own rule, read off each
+    survey row's `row` cells). A corpus that cannot be read leaves `group` absent on every row.
 """
 
 from __future__ import annotations
@@ -60,6 +64,7 @@ from harness.tests.t7.common import (
     seam_run,
 )
 from harness.tests.t7.price_history import _network_recorder
+from harness.tests.t7.read_budget import TABLE_STAMP, _write_survey
 from harness.tests.t7.send_markdown import _case, _live_export_priced, _seed_sync, send_portal
 from cli import cmd_emit
 from pipeline import corpus, pricing, readings, tcgcsv, worklist
@@ -990,6 +995,71 @@ def check_worklist_group_follows_rule_price(checks: Checks) -> None:
                      "a row with neither cells nor snap is no market price")
 
 
+def check_live_capped_reason_names_the_cap(checks: Checks) -> None:
+    """A live listing whose suggested move passes the owner's limit lands in `needs_you`, and its
+    reason ends by naming that limit: "; capped at your 25%".
+
+    Dunsparce asks 3.00 at market 2.06, unsold 60 days, so the engine's price is 2.06: a 31% drop,
+    over the default 25% limit and far under the 25-dollar value line, so only the cap holds it back.
+    Only the ENDING is pinned, not the sentence before it. A second case sets the owner's limit to
+    0.20: the ending then names 20%, so the figure is the owner's setting and not a constant.
+    """
+    checks.note("")
+    checks.note("WORKLIST, CAPPED LIVE SUGGESTION — the reason names the owner's limit")
+    for label, limit, ending in (
+        ("default limit", None, "; capped at your 25%"),
+        ("limit 0.20", "0.20", "; capped at your 20%"),
+    ):
+        with run_folder() as run, isolated_home(run):
+            with _case(checks, f"worklist capped reason: {label}"):
+                _write_live("20260201-000000", _live_export_priced({DUNSPARCE_SKU: 1}, {DUNSPARCE_SKU: "3.00"}))
+                _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
+                _market_reading(DUNSPARCE_SKU, "2.06", "2.40")
+                if limit is not None:
+                    book = corpus.Corpus.read()
+                    book.limit = limit
+                    book.write()
+                row = _live_row(pipeline_routes.do_pipeline_worklist([]), DUNSPARCE_SKU) or {}
+                checks.equal(row.get("group"), "needs_you",
+                             f"{label}: a suggested move past the limit is held for the owner")
+                checks.ok(str(row.get("reason")).endswith(ending),
+                          f"{label}: the reason ends {ending!r}", repr(row.get("reason")))
+
+
+def check_markdown_table_carries_group(checks: Checks) -> None:
+    """`do_markdown_table` rows carry `group`, the worklist's own rule for a copy that is not live
+    (`worklist.new_copy_groups`), read off each survey row's export cells (`row`).
+
+    Three rows, default value line 25: market 2.06 is `at_rule`; market 25.00, AT the line, is
+    `needs_you`; a row with no market cell is `needs_you`. A `prices.json` that cannot be read
+    leaves `group` absent on every row, and the table still answers: the owner's settings decide
+    the group, and a default policy would guess.
+    """
+    checks.note("")
+    checks.note("MARKDOWN TABLE — each row carries the engine's group")
+    cells = {
+        "UNDER": {tcgcsv.MARKET_PRICE_COLUMN: "2.0600"},
+        "ATLINE": {tcgcsv.MARKET_PRICE_COLUMN: "25.0000"},
+        "NOMARKET": {},
+    }
+
+    def groups() -> dict:
+        _write_survey(0, tuple(cells), cells)
+        table = pipeline_routes.do_markdown_table(TABLE_STAMP)
+        return {row["sku"]: row.get("group", "<absent>") for row in table["skus"]}
+
+    with run_folder() as run, isolated_home(run):
+        with _case(checks, "markdown table group: readable corpus"):
+            checks.equal(groups(), {"UNDER": "at_rule", "ATLINE": "needs_you", "NOMARKET": "needs_you"},
+                         "under the value line is at the rule; at the line, or with no market, needs you")
+    with run_folder() as run, isolated_home(run):
+        with _case(checks, "markdown table group: corpus unreadable"):
+            files.prices_path().parent.mkdir(parents=True, exist_ok=True)
+            files.prices_path().write_text("{ not json", encoding="utf-8")
+            checks.equal(groups(), {"UNDER": "<absent>", "ATLINE": "<absent>", "NOMARKET": "<absent>"},
+                         "an unreadable corpus leaves `group` absent on every row, and the rows still come")
+
+
 CHECKS = (
     check_worklist_carries_live_listings,
     check_worklist_without_runs_reads_newest_export,
@@ -1010,4 +1080,6 @@ CHECKS = (
     check_worklist_live_listing_card_facts,
     check_worklist_new_copy_group,
     check_worklist_group_follows_rule_price,
+    check_live_capped_reason_names_the_cap,
+    check_markdown_table_carries_group,
 )

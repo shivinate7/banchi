@@ -617,8 +617,9 @@ def _build(checks: Checks, size: int) -> dict:
     return {"run": run.directory.name, "cid": cid, "table_stamp": TABLE_STAMP}
 
 
-def _write_survey(size: int, skus: tuple = ()) -> None:
-    """One markdown whose survey holds `size` live rows (SKU0..), or exactly `skus`, so the table route's work per row shows as growth."""
+def _write_survey(size: int, skus: tuple = (), cells: dict | None = None) -> None:
+    """One markdown whose survey holds `size` live rows (SKU0..), or exactly `skus`, so the table route's work per row shows as growth.
+    `cells` maps a SKU to its export row's cells (the survey's `row`); a SKU it does not name keeps `{}`."""
     import json
 
     from cli import cmd_reprice
@@ -626,7 +627,10 @@ def _write_survey(size: int, skus: tuple = ()) -> None:
     directory = files.inventory_dir() / cmd_reprice.DIRNAME / TABLE_STAMP
     directory.mkdir(parents=True, exist_ok=True)
     named = skus or tuple(f"SKU{n}" for n in range(size))
-    rows_ = [{"sku": sku, "standing": "offered", "skip": None, "name": sku, "market": "1.00", "row": {}} for sku in named]
+    rows_ = [
+        {"sku": sku, "standing": "offered", "skip": None, "name": sku, "market": "1.00", "row": (cells or {}).get(sku, {})}
+        for sku in named
+    ]
     (directory / cmd_reprice.SURVEY).write_text(json.dumps({"at": None, "asked": {}, "counts": {}, "source": {}, "skus": rows_}), "utf-8")
 
 
