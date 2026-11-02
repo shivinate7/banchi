@@ -235,7 +235,7 @@ on every route meant any page in any other tab of the owner's browser could send
 `DELETE /inventory/3/17` — D10's hard delete of a record, a sidecar and a photo, with no
 backup — and nothing here could tell it from the capture app. POST, PUT and DELETE now
 require an `Origin` this server knows (or none at all, which is what a non-browser client
-sends); GET is unchanged and still `*`, because `GET /photo` is loaded as an image by two
+sends); GET is unchanged and still `*` (but for the label reads), because `GET /photo` is loaded as an image by two
 screens. The argument, the allowlist and the environment variable that extends it are at
 `SAFE_METHODS` below. It is a CSRF gate, NOT authentication, and it still adds none.
 
@@ -498,6 +498,13 @@ JPEG_MAGIC = b"\xff\xd8\xff"
 # queue and the pull preview load it as an image; an `<img>` sends no `Origin` at all, and
 # narrowing the read side would break the two screens the photo service exists for while
 # protecting nothing — a read of a photo of a card is not a write.
+#
+# THE ONE EXCEPTION IS THE LABEL READS (`_PRIVATE_READ_RES`), and the reason is that a label is
+# not a photo of a card: it is a buyer's name and street address. Under `*`, a page in another
+# tab could read `GET /shipping/labels`, take a `pdf_token` from it and read the label PDF. Those
+# three GETs answer `Access-Control-Allow-Origin` for an allowed origin only (the app's own
+# pages, which read them) and none for any other, so the browser keeps the answer from the page
+# that asked. A client with no `Origin` is untouched, as everywhere above.
 #
 # WHY THIS IS WORTH MORE THAN IT LOOKS: the roadmap puts this server on the LAN so the
 # Fulfiller can reach it from his phone (D5, D13). At that point `*` is not exposed to the
@@ -817,6 +824,13 @@ _SHIPPING_LABELS_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/labels
 _SHIPPING_LABEL_PDF_RE = re.compile(r"^/shipping/labels/([^/]+)/pdf$")
 _SHIPPING_BATCH_LABELS_PDF_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/labels/pdf$")
 _SHIPPING_BATCH_LABELS_STOP_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/labels/stop$")
+# The label GETs that hand out a buyer's address or the token that does: the listing, the stored label
+# by token and the batch's combined file. `_cors_headers` answers them to an allowed origin only.
+_PRIVATE_READ_RES = (
+    re.compile(r"^/shipping/labels$"),
+    _SHIPPING_LABEL_PDF_RE,
+    _SHIPPING_BATCH_LABELS_PDF_RE,
+)
 # One slab, by grader and cert. Both are percent-decoded by the route. `/slabs/sweep` matches nothing: the owner deferred the sweep.
 _SLABS_ITEM_RE = re.compile(r"^/slabs/([^/]+)/([^/]+)$")
 
@@ -16117,7 +16131,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
                            not mix and because echoing is what makes the browser's own check
                            agree with this server's. An unknown origin still gets `*`, which
                            keeps `GET /photo` embeddable — see the CORS block above for why
-                           reads are deliberately open.
+                           reads are deliberately open. The label reads
+                           (`_PRIVATE_READ_RES`) get no ACAO at all for an unknown origin.
           the method list  an unknown origin is told GET and OPTIONS only, so its preflight
                            for a DELETE fails IN THE BROWSER and the request is never sent.
                            The dispatcher refuses it as well; this is the belt to that
@@ -16130,8 +16145,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
         origin = self._origin()
         known = origin is not None and origin in allowed_origins()
         methods = ALL_METHODS if (origin is None or known) else SAFE_METHODS
-        return (
-            ("Access-Control-Allow-Origin", origin if known else "*"),
+        path = urlparse(self.path).path.rstrip("/") or "/"
+        private = any(pattern.match(path) for pattern in _PRIVATE_READ_RES)
+        allow = ((("Access-Control-Allow-Origin", origin),) if known
+                 else () if private else (("Access-Control-Allow-Origin", "*"),))
+        return allow + (
             ("Access-Control-Allow-Methods", ", ".join(methods)),
             ("Access-Control-Allow-Headers", "Content-Type"),
             # WITHOUT THIS THE BOOT HEADER IS INVISIBLE TO THE APP. A cross-origin response

@@ -548,7 +548,8 @@ class LabelRow:
     `source_order_id` with the label it already made.
 
     `answer` is TCGTracking's whole create answer minus `pdf_base64`, which is `pdf` (base64) so
-    it is not stored twice. `scan` is the last scan lookup: `{"at": ..., "answer": {...}}`, or
+    it is not stored twice. A row with `answer` and no `pdf` is a bought label whose PDF fetch failed;
+    the PDF is fetched again by the answer's `order_id`, and the label is never bought twice. `scan` is the last scan lookup: `{"at": ..., "answer": {...}}`, or
     `{"at": ..., "status": "tracking_not_found"}` for a lookup that found nothing.
 
     `pdf_token` is 128 random bits, drawn when the row is claimed and kept through the answer. The
@@ -765,13 +766,20 @@ class Ledger:
         if row is not None and not row.made and row.claim == marker:
             del self.labels[order]
 
-    def record_label(self, order: str, answer: Dict[str, Any], pdf: str, insured: bool) -> LabelRow:
-        """Replace the claim with the made label, keeping the claim's `pdf_token`."""
+    def record_label(self, order: str, answer: Dict[str, Any], pdf: Optional[str], insured: bool) -> LabelRow:
+        """Replace the claim with the made label, keeping the claim's `pdf_token`. `pdf` is None when
+        the create answered with no PDF yet: the label is bought, `record_label_pdf` adds the bytes."""
         held = self.labels.get(order)
         token = (held.pdf_token if held is not None else None) or secrets.token_hex(16)
         row = LabelRow(order=order, pdf_token=token, answer=answer, pdf=pdf, insured=insured, made_at=now())
         self.labels[order] = row
         return row
+
+    def record_label_pdf(self, order: str, pdf: str) -> None:
+        """Add the PDF (base64) to a made label that has none."""
+        row = self.labels.get(order)
+        if row is not None and row.made and not row.pdf:
+            row.pdf = pdf
 
     def record_scan(self, order: str, scan: Dict[str, Any]) -> None:
         row = self.labels.get(order)

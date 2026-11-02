@@ -42,6 +42,7 @@ SHIPPER_ENV = "TCG_TRACKING_SHIPPER_NUMBER"
 # The test seam. Unset, the default host is called.
 URL_ENV = "BANCHI_TCGTRACKING_URL"
 DEFAULT_BASE = "https://tcgtracking.com/api/v1"
+REAL_HOST = "tcgtracking.com"
 # The smallest label envelope size TCGTracking offers, the one an envelope-lane order ships in.
 ENVELOPE_SIZE = "10"
 # A create can take several seconds to render a PDF. It is not retried once it may have been sent.
@@ -70,7 +71,7 @@ MESSAGES: Dict[str, str] = {
     "tracking_not_found": "TCGTracking has no match for that order.",
     "tracking_unreachable": (
         "TCGTracking could not be reached, or gave an answer this server cannot read. Pressing again "
-        "is safe: TCGTracking answers a repeat of the same order with the label it already made."
+        "is safe: a label already made is not bought a second time."
     ),
     "tracking_host_refused": (
         "This server will not call that TCGTracking address: the real host is not called from the "
@@ -93,13 +94,17 @@ def _refuse(code: str):
 
 
 def _base() -> str:
-    """The base URL after the host guard, or `tracking_host_refused`."""
+    """The base URL after the host guard, or `tracking_host_refused`.
+
+    The guard reads the HOST of the address, never the whole string: a query, a port, a trailing dot
+    or capitals reach the real host as well as the default text does."""
     override = (envfile.get_live(URL_ENV) or "").strip().rstrip("/")
-    if not override or override == DEFAULT_BASE:
-        if os.environ.get("BANCHI_HARNESS") or os.environ.get("CI"):
-            _refuse("tracking_host_refused")
+    parts = urllib.parse.urlsplit(override or DEFAULT_BASE)
+    host = (parts.hostname or "").lower().rstrip(".")
+    if (host == REAL_HOST or host.endswith("." + REAL_HOST)) and (os.environ.get("BANCHI_HARNESS") or os.environ.get("CI")):
+        _refuse("tracking_host_refused")
+    if not override:
         return DEFAULT_BASE
-    parts = urllib.parse.urlsplit(override)
     if parts.scheme == "https" or (parts.scheme == "http" and parts.hostname in _LOOPBACK):
         return override
     return _refuse("tracking_host_refused")
