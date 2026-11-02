@@ -11,12 +11,11 @@ because D324 calls the first deliverable a one-off, read-only report.
 
 - `pipeline/rosterholdings.py` sits beside `pipeline/holdings.py`. That module values the store's
   own stock. This one values a CSV roster. `pipeline/holdings.py` does not change.
-- The pure entry point is `build_roster_report(lines, skus, archive, product_ids_priced)`.
+- The pure entry point is `build_roster_report(lines, skus, archive)`.
   - `lines` comes from `read_roster(fileobj)`.
   - `skus` holds `SkuRow(key, set_name, product_name, number, condition, printing)`, the store's
     `skus` columns.
   - `archive` is a `store.pricearchive.PriceArchive`. Prices come only from `PriceArchive.for_sku`.
-  - `product_ids_priced` is the set of TCGplayer product ids the archive holds.
 - The verb is `./banchi holdings-roster <csv>`, in `cli/cmd_holdingsroster.py`. It opens the
   store with `store.db.open_read_only` and never writes.
 
@@ -33,13 +32,12 @@ because D324 calls the first deliverable a one-off, read-only report.
 
 ## Join
 
-- The key is `(pipeline.join.normalize_set(set), pipeline.join.name_index_key(name))`, folded
-  the same way on the SKU side. There is no second normalizer.
-- The candidate SKUs are all SKUs with the key. A product is a distinct
-  `(set_name, product_name, number)` among them.
-  - No product: `unmatched`.
-  - More than one product: `ambiguous`. It goes to review and is never valued.
-  - One product: matched.
+- The key is the roster's product id against `price_history.product_id` (D324, waiting-page item
+  119). A product id maps to the SKU keys of every archive row that carries it, any range. Id `0`
+  means the archive had none and is never a key. One product id is one product, so there is no
+  ambiguous bucket.
+  - No archive row carries the id: `unmatched`.
+  - An archive SKU with no `skus` row: `unpriced`, reason `no_sku_row`.
 - The price of a matched line: among the product's SKUs whose condition starts with
   `Near Mint`, keep the printing that agrees with `Finish`. `non-foil` keeps a SKU with no `Foil`
   in its condition and no `Foil`, `Holofoil` or `Reverse Holofoil` printing. Any other finish
@@ -47,7 +45,9 @@ because D324 calls the first deliverable a one-off, read-only report.
   `month` bucket with a market, that market is the unit price. Otherwise the line is `unpriced`,
   with the reason `no_price` or `printing`. A product whose SKUs are all `Unopened` (sealed) is priced
   from its `Unopened` SKU's latest `month` market, for any finish.
-- No line is dropped. Every kept line is priced, unpriced, ambiguous or unmatched.
+- The name join is the cross-check: `(pipeline.join.normalize_set(set),
+  pipeline.join.name_index_key(name))`, folded the same way on the SKU side, priced the same way.
+- No line is dropped. Every kept line is priced, unpriced or unmatched.
 
 ## Report, in order
 
@@ -55,12 +55,11 @@ because D324 calls the first deliverable a one-off, read-only report.
    owner answers both questions.
 2. Excluded row counts by reason, and the base line count.
 3. Unmatched, roster side: product ids with line and unit counts.
-4. Unmatched, store side: lines the name join left unmatched or ambiguous whose product id the
-   store prices. Product ids and a count.
-5. Ambiguous: product ids, for review.
-6. Unpriced: counts by reason.
-7. Per priced product id: units, paid, market each, market total, gain.
-8. Totals: paid, market, gain, and the price date (the newest bucket start used).
-9. Coverage: `priced X of N lines (P%)`, with units and paid.
+4. Unmatched, store side: lines the name join prices that the id join leaves unmatched or
+   unpriced. Product ids and a count.
+5. Unpriced: counts by reason.
+6. Per priced product id: units, paid, market each, market total, gain.
+7. Totals: paid, market, gain, and the price date (the newest bucket start used).
+8. Coverage: `priced X of N lines (P%)`, with units and paid.
 
 The output carries product ids, counts and money only.
