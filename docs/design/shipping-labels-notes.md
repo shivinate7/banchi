@@ -33,7 +33,7 @@ outline marks what this design adds.
    the foot holds an empty slot the size of the confirm (`bn-slot`), so the foot does not grow.
 5. **The summary shows the count to label, the count held back, the envelope and "Fee per your
    TCGTracking account."** (owner ruling, D326 item 109). Every state's summary sits in one grid
-   cell, so the list under it never moves (D313).
+   cell, so the list under it never moves (D313, nothing moves unless the person moved it).
 6. **Insurance is a switch on each row, off by default** (D326 item 110). The confirm sends the
    orders whose switch is on as `insured`. After the confirm the switches are off, with the
    choice still shown.
@@ -68,13 +68,17 @@ outline marks what this design adds.
 
 9. **Pick (a): progress is read from the store's label list during the press.** While the
    confirm is open, the screen reads `GET /shipping/labels` once a second and stops when the
-   confirm answers. A row turns Made when its order is in that list. These reads happen only
-   during the person's own press; scans are never read on a timer. There is no "Making" word on
-   the current row: the list does not mark an order whose create is in flight (needs wire
-   field, below). Option Q1 sends one confirm per order instead: no new field, but the
+   confirm answers. A row turns Made when its order is in that list with TCGTracking's answer.
+   These reads happen only during the person's own press; scans are never read on a timer. The
+   contract does not say whether a claim (written before each create) shows in that list. If it
+   does with no mark, "Made" would light before the label is bought, and go blank again on a
+   refusal. So the list must leave claims out or mark them (needs wire field, below); without
+   one of the two, "Made" during the press is unproven. A mark also gives a "Making" word on the
+   current row, not drawn. Option Q1 sends one confirm per order instead: no new field, but the
    stop at the first error becomes a second home in the screen. Pick: the list read.
 10. **Close is off while labels are made, with its reason on hover.** The receipt must land on
-    the sheet that asked for it.
+    the sheet that asked for it. A disabled button takes no focus, so the builder ties the reason
+    to the button with `aria-describedby`, as `pricing-owed-notes.md` item 6 does.
 11. **Stop After This Label ends the press cleanly and gives a partial receipt.** The house rule
     is that long work shows a Stop. Fifteen creates, one at a time, take more than a few
     seconds. The contract has no stop (needs wire field, below). If no stop lands, the builder
@@ -105,7 +109,8 @@ outline marks what this design adds.
 
 ## Tracking back
 
-15. **The Labels list is read from the store and sits last on the page** (spec T5). A label that
+15. **The Labels list is read from the store and sits last on the page** (spec T5). The sample
+    list shows 7 rows only; its figures do not add up with the card's. A label that
     lands moves nothing above it. Delivered labels fold under "Show 12 Delivered" (option F1 shows
     every label). The list is on the page with no export read (`#s=nofile`).
 16. **Check Scans is one press, on demand.** Its answer lands on the line under the title, in a
@@ -141,7 +146,8 @@ outline marks what this design adds.
 
 - `envelope` on the preview: the envelope size the summary shows.
 - key and shipper presence on the preview: so the confirm is absent when it would be refused.
-- a claim mark on a listing row: to show "Making" on the order whose create is in flight.
+- claims left out of the listing, or a claim mark on a listing row: so "Made" during the press
+  is true, and "Making" can show.
 - a stop for the confirm: for Stop After This Label.
 - a combined label file for a list of orders: for Print All.
 - `made_at` on a listing row: for "Made Oct 25".

@@ -1,7 +1,7 @@
 # Orders, the label word: design notes
 
 Lane kind: informed. Mockup: `orders-labels.html`. Spec: `docs/specs/order-pipeline.md`, section
-"T4" ("`#/orders` may show a status word only", D69) and "T5". The Shipping half, where labels are
+"T4" ("`#/orders` may show a status word only", D69, the order screen and its lanes) and "T5". The Shipping half, where labels are
 made and scans are checked, is `shipping-labels.html`. The frame draws my pick. The Options panel
 under it draws each alternative, and each has a control that hides it.
 
@@ -19,7 +19,7 @@ filter bar, the walk and the card pane are plain stand-ins: this design does not
 1. **One word per order, from the store's label row, joined on the order number.** The screen
    reads `GET /shipping/labels` with the orders, the way `OrdersHub` joins the shipping lanes
    (`lanesByOrder`). Gain: the word is in the first paint, so it never grows the facts row after
-   it lands (D313). Loss: one more read when Orders loads. Pick: yes.
+   it lands (D313, nothing moves unless the person moved it). Loss: one more read when Orders loads. Pick: yes.
 2. **The words are Shipping's, in this screen's casing.** "Label made", "On its way",
    "Delivered", "Held up". Shipping's "Not Checked" and "No Scan Yet" both read "Label made"
    here, and "Unclear" reads "Label made" too: the detail lives on Shipping. Orders' pills are in
