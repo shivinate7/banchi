@@ -49,7 +49,7 @@ TIMEOUT_SECONDS = 30
 
 _LOOPBACK = ("127.0.0.1", "localhost", "::1")
 
-_MESSAGES: Dict[str, str] = {
+MESSAGES: Dict[str, str] = {
     "tracking_key_missing": (
         "The TCGTracking key is missing from the Mac's settings file (the .env file in the app's "
         "folder). Nothing was sent to TCGTracking."
@@ -84,7 +84,7 @@ class TrackingRefused(Exception):
     per code and never quotes the host's answer."""
 
     def __init__(self, code: str) -> None:
-        super().__init__(_MESSAGES[code])
+        super().__init__(MESSAGES[code])
         self.code = code
 
 
@@ -117,6 +117,11 @@ def ready() -> Dict[str, str]:
         _refuse("tracking_shipper_missing")
     _base()
     return {"X-API-Key": key, "X-Shipper-Number": shipper, "Accept": "application/json"}
+
+
+def presence() -> tuple:
+    """`(key_present, shipper_present)`: whether the settings file holds each. Never the values."""
+    return bool(envfile.get_live(KEY_ENV).strip()), bool(envfile.get_live(SHIPPER_ENV).strip())
 
 
 def _call(method: str, path: str, *, query: Optional[Dict[str, str]] = None, body: Optional[dict] = None) -> tuple:

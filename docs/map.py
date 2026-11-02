@@ -5195,7 +5195,7 @@ COMPONENTS = [
                 # D70 is the QR test the photograph step reuses from demo-photos.py. D61 is
                 # why the shipping export is written fresh rather than read (the store holds
                 # no address at all). D216 is why the recording runs offline.
-                "governed_by": ["D61", "D70", "D193", "D216", "D295", "D301"],
+                "governed_by": ["D61", "D70", "D193", "D216", "D295", "D301", "D326"],
             },
             "launchagent.py": {
                 "does": "the shared launchd install and remove for a daily job on the owner's "
@@ -5762,7 +5762,7 @@ COMPONENTS = [
                                 "D192", "D193", "D196", "D203", "D212", "D213", "D219", "D225",
                                 "D227", "D231", "D251", "D252", "D258", "D259", "D260", "D261",
                                 "D262", "D264", "D271", "D273", "D277", "D278", "D294", "D298",
-                                "D299", "D301", "D320"],
+                                "D299", "D301", "D320", "D326"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
