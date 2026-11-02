@@ -16,6 +16,7 @@ import type {
   TrendsPayload,
 } from '../src/types'
 import { setViewport } from './phoneSwitch'
+import { payloadOf, productHistory } from './routeFixtures'
 import { HEAD_CENTER_PX, headOffsets, valueMeasures, VALUE_CENTER_PX, KEPT_LEFT_PX, KEPT_RIGHT_ZERO } from './shell'
 
 /* THE PRICING SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
@@ -575,6 +576,20 @@ async function open(
       body: JSON.stringify(options.history ?? history()),
     })
   })
+
+  /* THE FLOATING PRICE-HISTORY CARD'S TWO READS, which every price-field focus opens on first use:
+     `GET /pipeline/products/<sku>/history` and `GET /orders` (the owner's sale marks), the same
+     pair `ProductHistory.tsx` reads. The fixtures are `history-float.spec.ts`'s: `routeFixtures`'s
+     `productHistory`, and `stubStore`'s empty orders payload, which is `payloadOf([], [])`. NOT
+     RECORDED IN `wire`: the card is not this screen's T panel, and the Qty-field case
+     asserts that no `/history` read reached `wire`. A case that asserts the card's own
+     reads stubs them after this, and the later route wins. */
+  await page.route(/\/pipeline\/products\/[^/]+\/history$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(productHistory()) }),
+  )
+  await page.route(/\/orders$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payloadOf([], [])) }),
+  )
 
   /* THE MASS-CLEAR AND ITS WAY BACK (D168). Registered
      BEFORE the bare `/pricing$` pattern below, which Playwright would otherwise never reach
