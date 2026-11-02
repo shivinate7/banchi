@@ -199,18 +199,20 @@ def _suggest_checks(c: Checks) -> None:
     c.equal(fired(market=Decimal("8.50")), ["market_moved"], "market down exactly 15% fires too")
     c.equal(fired(market=Decimal("8.51")), [], "market down 14.9% does not fire")
 
+    # A listing is unsold after 14 days (owner's answer, queue item 117, relayed by the coordinator
+    # 2026-11-02 15:53 CST; docs/specs/pricing-suggest.md section 4). The engine's old edge was 30.
     c.equal(
-        fired(first_seen_live=_ago(30), asking=Decimal("11.01")),
+        fired(first_seen_live=_ago(14), asking=Decimal("11.01")),
         ["unsold"],
-        "unsold 30 days with the asking price 10.1% over market fires",
+        "unsold 14 days with the asking price 10.1% over market fires",
     )
     c.equal(
-        fired(first_seen_live=_ago(29), asking=Decimal("11.01")),
+        fired(first_seen_live=_ago(13), asking=Decimal("11.01")),
         [],
-        "29 days does not fire, whatever the premium",
+        "13 days does not fire, whatever the premium",
     )
     c.equal(
-        fired(first_seen_live=_ago(30), asking=Decimal("11.00")),
+        fired(first_seen_live=_ago(14), asking=Decimal("11.00")),
         [],
         "an asking price exactly 10% over market does not fire: the bar is MORE than 10%",
     )
@@ -441,14 +443,14 @@ def _suggest_checks(c: Checks) -> None:
         str(field(cut, "UC", "reason")),
     )
 
-    stale = review(_listing(sku="ST", asking=Decimal("11.50"), first_seen_live=_ago(30)))
+    stale = review(_listing(sku="ST", asking=Decimal("11.50"), first_seen_live=_ago(14)))
     c.equal(
         field(stale, "ST", "price"),
         Decimal("10.00"),
-        "unsold 30 days at 15% over market: the suggestion is the market, $10.00",
+        "unsold 14 days at 15% over market: the suggestion is the market, $10.00",
     )
     c.ok(
-        says(stale, "ST", "unsold 30 days"),
+        says(stale, "ST", "unsold 14 days"),
         "and the reason names the age",
         str(field(stale, "ST", "reason")),
     )
@@ -481,11 +483,11 @@ def _suggest_checks(c: Checks) -> None:
     )
     c.equal(groups(far, "UF"), ["at_rule"], "the same raise past the cap is Going at the rule, not Needs you")
 
-    marked = review(_listing(sku="UM", asking=Decimal("11.50"), first_seen_live=_ago(30)), rule="markup:20")
+    marked = review(_listing(sku="UM", asking=Decimal("11.50"), first_seen_live=_ago(14)), rule="markup:20")
     c.equal(
         groups(marked, "UM"),
         ["at_rule"],
-        "unsold 30 days over market, but the rule marks up to $12.00: Going at the rule, not a raise",
+        "unsold 14 days over market, but the rule marks up to $12.00: Going at the rule, not a raise",
     )
     c.equal(field(marked, "UM", "price"), Decimal("11.50"), "and it keeps its asking price")
 
