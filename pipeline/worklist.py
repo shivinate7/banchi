@@ -148,13 +148,19 @@ def live_rows(listings: list, policy: dict, today: str) -> list:
     not carry it). Money leaves as the two-decimal strings the export uses, `None` where there
     is none. `listings` and `policy` are `suggest.review`'s own.
     """
-    sold = {one["sku"]: one.get("last_sold_at") for one in listings}
+    card = {one["sku"]: one for one in listings}
+    sold = {sku: one.get("last_sold_at") for sku, one in card.items()}
     reviewed = suggest.review(listings, policy, today)
     return [
         {
             "sku": row["sku"],
             "asking": _money(row["asking"]),
             "last_sold_at": sold[row["sku"]],
+            "name": card[row["sku"]].get("name"),
+            "set_name": card[row["sku"]].get("set_name"),
+            "market": _money(card[row["sku"]].get("market")),
+            "low": _money(card[row["sku"]].get("low")),
+            "image_url": card[row["sku"]].get("image_url"),
             "group": group,
             "price": _money(row["price"]),
             "source": row["source"],
@@ -163,6 +169,26 @@ def live_rows(listings: list, policy: dict, today: str) -> list:
         for group in LIVE_GROUPS
         for row in reviewed[group]
     ]
+
+
+def new_copy_groups(rows: list, policy: dict, today: str) -> dict:
+    """SKU -> `needs_you` or `at_rule` for each unsent `sku_row`, by `suggest.review`'s rule for a
+    listing that is not live: no market price, or a rule price at or above `value_line`, needs you.
+
+    Reads the export's own cells (`row["row"]`), the ones `SkuMatch.list_price` prices from, and
+    not `snap`: `snap` is the two-decimal rendering, and a rule applied to it can land a cent
+    away from the `rule_price` the screen shows. A row without the cells reads as no price.
+    """
+    def listing(row):
+        cells = row.get("row") or {}
+        return {
+            "sku": row["sku"],
+            "market": tcgcsv.parse_price(cells.get(tcgcsv.MARKET_PRICE_COLUMN, "")),
+            "low": tcgcsv.parse_price(cells.get(tcgcsv.LOW_PRICE_COLUMN, "")),
+        }
+
+    reviewed = suggest.review([listing(row) for row in rows], policy, today)
+    return {one["sku"]: group for group in ("needs_you", "at_rule") for one in reviewed[group]}
 
 
 def _money(value) -> Optional[str]:

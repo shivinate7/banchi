@@ -17,6 +17,7 @@ Each row has the slug, the first sentence of the record, and a link to it. A rec
 | `D322-tcgcsv-is-next-price-source` | TCGCSV is the next outside source of current TCGplayer prices, because it is free and needs no key. | [`docs/decisions/D322-tcgcsv-is-next-price-source.md`](../docs/decisions/D322-tcgcsv-is-next-price-source.md) |
 | `D323-backup-one-time-guarded` | The photo backup runs once, when the owner asks, and a bad copy never replaces a good one. | [`docs/decisions/D323-backup-one-time-guarded.md`](../docs/decisions/D323-backup-one-time-guarded.md) |
 | `D324-holdings-watch` | Banchi values the owner's investment holdings at its own prices, then flags lines of $100 or more a unit when a price signal fires. | [`docs/decisions/D324-holdings-watch.md`](../docs/decisions/D324-holdings-watch.md) |
+| `D327-waiting-page-export` | The page writer exports the waiting page's database to `docs/waiting/` at each wake, so any account can read it. | [`docs/decisions/D327-waiting-page-export.md`](../docs/decisions/D327-waiting-page-export.md) |
 
 ## Build designs
 
@@ -357,3 +358,4 @@ Each row has the slug, the first sentence of the record, and a link to it. A rec
 | `111-palette-focus-red` | `tests/nav.spec.ts` (`ux-wave1: the palette input shows a focus indicator when focused`) goes red on `design-check (8)` when the focused palette input shows no outline and no box-shadow change. | [`docs/debts/111-palette-focus-red.md`](../docs/debts/111-palette-focus-red.md) |
 | `112-request-budget-leave` | The test `a screen that is left stops asking, and what it had open is aborted` in `tests/request-budget.spec.ts` goes red on `design-check (11)` when a `GET /pipeline/match/sweep` read, sent by the Capture screen, is still open or is sent after the screen is left. | [`docs/debts/112-request-budget-leave.md`](../docs/debts/112-request-budget-leave.md) |
 | `113-single-reds-on-main` | Three design-check tests went red once each on main, and their causes are unread. | [`docs/debts/113-single-reds-on-main.md`](../docs/debts/113-single-reds-on-main.md) |
+| `114-waiting-scan-misses` | `scripts/waiting-export.py`'s `PATTERNS` let some buyer-address and secret shapes through to the public `docs/waiting/`. | [`docs/debts/114-waiting-scan-misses.md`](../docs/debts/114-waiting-scan-misses.md) |

@@ -17,6 +17,10 @@ THE WIRE THIS GROUP PINS (the one-list-wire lane's brief names the behaviour, no
     Each row carries `sku`, `asking`, `last_sold_at` (the day of the newest SOLD CARD for the SKU,
     read off the card state, or None; never the sold-event log), `group`, `price`, `source` and
     `reason`.
+  - Each live row also carries `name`, `set_name`, `market`, `low` and `image_url`, all read off the
+    one `readings` row the engine used for the SKU (the thumbnail's game and number come off the
+    export row, which the reading lacks). Each unsent row in `skus` carries `group`, the engine's
+    own: `needs_you` at or above `value_line` or with no market price, else `at_rule`.
   - A listing's market on its listing day (`market_listed`) is the price archive's bucket that
     holds `first_seen_live`: the `month` bucket (one day) when there is one, else the `quarter`
     bucket (three days). No bucket holds that day, so the market-moved trigger does not fire.
@@ -58,7 +62,7 @@ from harness.tests.t7.common import (
 from harness.tests.t7.price_history import _network_recorder
 from harness.tests.t7.send_markdown import _case, _live_export_priced, _seed_sync, send_portal
 from cli import cmd_emit
-from pipeline import corpus, readings
+from pipeline import corpus, pricing, readings, tcgcsv, worklist
 from server import pipeline_routes, send_routes
 from store import clock, db, files, master
 from store.pricearchive import RANGE_WIDTH_DAYS, Bucket
@@ -811,6 +815,181 @@ def check_worklist_no_runs_corrupt_corpus(checks: Checks) -> None:
                       "and draws no default-policy suggestion for Dunsparce", repr(row))
 
 
+class _SpyImages:
+    """Stands in for `stockimages.StockImages`: records each ask and answers a url naming it."""
+
+    def __init__(self) -> None:
+        self.asked: list = []
+
+    def url_for(self, game, set_name, number):
+        self.asked.append((game, set_name, number))
+        return f"https://img.test/{game}/{set_name}/{number}"
+
+
+#: What the market reading says about Articuno here. Every one differs from the live export row
+#: and the run's table, so a build that joins a second source shows a different value.
+_READING_FACTS = {"name": "Reading Articuno", "set_name": "Reading Set", "market": "30.00", "low": "28.00"}
+
+
+def _articuno_reading() -> None:
+    with Store().write() as snapshot:
+        snapshot.readings.entries[ARTICUNO_SKU] = Reading(
+            market=_READING_FACTS["market"],
+            at=int(time.time()),
+            source="t7-one-list-wire",
+            kind="run",
+            name=_READING_FACTS["name"],
+            set_name=_READING_FACTS["set_name"],
+            low=_READING_FACTS["low"],
+        )
+
+
+def _card_facts(row: Optional[dict]) -> Optional[dict]:
+    if row is None:
+        return None
+    return {key: row.get(key, "<absent>") for key in ("name", "set_name", "market", "low", "image_url")}
+
+
+def check_worklist_live_listing_card_facts(checks: Checks) -> None:
+    """Each live listing carries its card's `name`, `set_name`, `market`, `low` and `image_url`
+    (the unsent rows' own names for the first, second and last), all from the one `readings` row
+    the engine read for the SKU. The screen joins nothing else.
+
+    The reading is a decoy: its name, set, market and lowest price differ from the live export
+    row's and from the run's table. A build that reads any second source shows a different value.
+    The thumbnail asks the resolver with the game and number off the export row (the reading holds
+    neither) and the SET OF THE READING. Handed no resolver, `image_url` is present and `None`.
+    Both branches of the route are pinned: with a run on disk, and with none.
+    """
+    checks.note("")
+    checks.note("WORKLIST, CARD FACTS — a live listing's name, prices and thumbnail come from its one reading")
+    expected = {
+        "name": "Reading Articuno", "set_name": "Reading Set", "market": "30.00", "low": "28.00",
+        "image_url": "https://img.test/pokemon/Reading Set/161/159",
+    }
+    live = _live_export_priced({ARTICUNO_SKU: 1}, {ARTICUNO_SKU: "25.00"})
+    for label, with_run in (("with a run on disk", True), ("with no run on disk", False)):
+        with run_folder() as run, isolated_home(run):
+            _seed_sync()
+            with _case(checks, f"worklist card facts, {label}"):
+                if with_run:
+                    seam_run(checks, WORKLIST_CARDS)
+                _write_live("20260201-000000", live)
+                _articuno_reading()
+                _set_listing(ARTICUNO_SKU, first_seen_live=_noon(_day(60)))
+                spy = _SpyImages()
+                payload = pipeline_routes.do_pipeline_worklist([], images=spy)
+                checks.equal(
+                    _card_facts(_live_row(payload, ARTICUNO_SKU)),
+                    expected,
+                    f"{label}: the live row carries the reading's name, set, market and lowest "
+                    "price, and the thumbnail the resolver gave for them",
+                )
+                checks.ok(
+                    ("pokemon", "Reading Set", "161/159") in spy.asked,
+                    f"{label}: the resolver is asked with the card's game and number and the reading's set",
+                    repr(spy.asked),
+                )
+                bare = _live_row(pipeline_routes.do_pipeline_worklist([]), ARTICUNO_SKU) or {}
+                checks.equal(
+                    (bare.get("image_url", "<absent>"), bare.get("name", "<absent>")),
+                    (None, "Reading Articuno"),
+                    f"{label}: with no resolver the row still has `image_url`, as None, and the same name",
+                )
+
+
+def _group_of(payload: dict, sku: str) -> str:
+    for row in payload.get("skus") or []:
+        if row.get("sku") == sku:
+            return row.get("group", "<absent>")
+    return "<no row>"
+
+
+def check_worklist_new_copy_group(checks: Checks) -> None:
+    """Each new (unsent) copy on the worklist carries `group`: `needs_you` or `at_rule`.
+
+    The server rule is the engine's own for a listing that is not live (`suggest.review`): no
+    market price, or a rule price at or above `value_line`, is `needs_you`. Anything else is
+    `at_rule`. Pinned on Articuno, whose rule price is its market, 22.03:
+      value line 25 (the default)   at_rule, with Dunsparce (2.06) beside it
+      value line 22.03              needs_you: AT the line counts
+      value line 22.04              at_rule
+    and on a card with no market price, which is `needs_you` whatever the line.
+
+    DIFFERENCES FROM TODAY'S SCREEN RULE (`takeArrival` and `flagOf` in `app/src/Pricing.tsx`):
+    the screen flags a market of $5 or more (`WORTH_A_LOOK`); the server's line is the owner's
+    `value_line` on the RULE price (25 by default). The screen also flags a typed price 25% off
+    market and skips held, locked and nothing-to-add rows; the server cannot see an unsaved typed
+    price, so those stay the screen's.
+    """
+    checks.note("")
+    checks.note("WORKLIST, NEW COPIES — each carries a server-computed group")
+    cards = WORKLIST_CARDS + [(3, 2, "Dunsparce", "120", "normal")]
+
+    def groups(line: Optional[str], *, market=None) -> dict:
+        with run_folder() as run, isolated_home(run):
+            _seed_sync()
+            seam_run(checks, cards, market=market)
+            if line is not None:
+                book = corpus.Corpus.read()
+                book.value_line = line
+                book.write()
+            payload = pipeline_routes.do_pipeline_worklist([])
+            return {"articuno": _group_of(payload, ARTICUNO_SKU), "dunsparce": _group_of(payload, DUNSPARCE_SKU)}
+
+    with _case(checks, "worklist group: default value line"):
+        checks.equal(groups(None), {"articuno": "at_rule", "dunsparce": "at_rule"},
+                     "default line 25: a 22.03 card and a 2.06 card are both going at the rule")
+    with _case(checks, "worklist group: at the line"):
+        checks.equal(groups("22.03"), {"articuno": "needs_you", "dunsparce": "at_rule"},
+                     "a rule price AT the value line needs you; the cheaper card does not")
+    with _case(checks, "worklist group: just under the line"):
+        checks.equal(groups("22.04"), {"articuno": "at_rule", "dunsparce": "at_rule"},
+                     "a cent under the line is going at the rule")
+    with _case(checks, "worklist group: no market price"):
+        checks.equal(groups(None, market={DUNSPARCE_SKU: ""}), {"articuno": "at_rule", "dunsparce": "needs_you"},
+                     "a card with no market price needs you, whatever the line")
+
+
+def check_worklist_group_follows_rule_price(checks: Checks) -> None:
+    """A new copy's group is decided from the export's own cells, the ones `SkuMatch.list_price`
+    reads, so the group and the `rule_price` the screen shows come from one figure.
+
+    The `snap` cells are two-decimal renderings of cells that are four-decimal in the fixtures.
+    Low 22.7240 on markup:10 prices at 25.00 (at the value line); the rendered 22.72 prices at
+    24.99. Low 0.0040 prices at the floor, 0.49; the rendered 0.00 reads as no market price.
+    A row with no `snap`, or a `snap` with no `low`, is read as blank and never raises.
+    """
+    checks.note("")
+    checks.note("WORKLIST, NEW COPIES — the group follows the rule price")
+    market, low = tcgcsv.MARKET_PRICE_COLUMN, tcgcsv.LOW_PRICE_COLUMN
+    policy = {"basis": "low", "rule": "markup:10"}
+
+    def group(cells: dict, snap=None, *, basis_policy=policy) -> str:
+        row = {"sku": "S", "row": cells}
+        if snap is not None:
+            row["snap"] = snap
+        return worklist.new_copy_groups([row], basis_policy, "2026-11-02")["S"]
+
+    with _case(checks, "worklist group: rule price from the raw cell"):
+        raw = tcgcsv.parse_price("22.7240")
+        checks.equal(str(pricing.list_price(raw, "markup:10", pricing.FLOOR)), "25.00",
+                     "the rule price the screen shows for low 22.7240 is 25.00")
+        checks.equal(group({market: "30.0000", low: "22.7240"}, {"market": "30.00", "low": "22.72"}),
+                     "needs_you", "25.00 is at the value line, so the group says needs_you")
+    with _case(checks, "worklist group: a sub-cent low is still a price"):
+        checks.equal(group({market: "1.0000", low: "0.0040"}, {"market": "1.00", "low": "0.00"}),
+                     "at_rule", "low 0.0040 prices at the floor 0.49, so the group says at_rule")
+    with _case(checks, "worklist group: row with no snap"):
+        checks.equal(group({market: "5.0000"}, basis_policy={}), "at_rule",
+                     "a row with cells and no snap is read from its cells")
+        checks.equal(group({market: "5.0000"}, {"market": "5.00"}), "needs_you",
+                     "a snap with no low, on the low basis, is no market price")
+    with _case(checks, "worklist group: row with no cells"):
+        checks.equal(worklist.new_copy_groups([{"sku": "S"}], {}, "2026-11-02"), {"S": "needs_you"},
+                     "a row with neither cells nor snap is no market price")
+
+
 CHECKS = (
     check_worklist_carries_live_listings,
     check_worklist_without_runs_reads_newest_export,
@@ -828,4 +1007,7 @@ CHECKS = (
     check_send_held_suggestion_left_out,
     check_send_zero_run_only_held_suggestion_refuses_naming_it,
     check_worklist_no_runs_corrupt_corpus,
+    check_worklist_live_listing_card_facts,
+    check_worklist_new_copy_group,
+    check_worklist_group_follows_rule_price,
 )
