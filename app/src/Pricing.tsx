@@ -7,6 +7,7 @@ import {
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  type RefObject,
 } from 'react'
 
 import {
@@ -742,7 +743,9 @@ function PricingThumb({
 }: {
   at: PricingSku['positions'][number] | null
   name: string
-  onOpen: () => void
+  /** Opens the owner's photograph. Null where there is none of ours (a live listing): the thumbnail is
+   *  then a picture only, with no press. */
+  onOpen: (() => void) | null
   /** The stock photo (`D301`), the MAIN view here per the owner's own ask — "if
    *  it'd be easy to live pull all the photos without much lag I'd be happy to have the
    *  stock photos show as the main view". `null` on a join miss, and a load failure falls
@@ -754,8 +757,8 @@ function PricingThumb({
   const crop = useCardCropWhenSeen(at, host)
   const [stockFailed, setStockFailed] = useState(false)
   const showStock = imageUrl !== null && !stockFailed
-  return (
-    <button ref={host} type="button" className="pricing-thumb" aria-label={`Photograph of ${name}`} onClick={onOpen}>
+  const picture = (
+    <>
       {showStock ? (
         <img
           className="bn-crop pricing-stock-img"
@@ -788,6 +791,18 @@ function PricingThumb({
           }}
         />
       )}
+    </>
+  )
+  if (onOpen === null) {
+    return (
+      <span ref={host as unknown as RefObject<HTMLSpanElement>} className="pricing-thumb" aria-hidden="true">
+        {picture}
+      </span>
+    )
+  }
+  return (
+    <button ref={host} type="button" className="pricing-thumb" aria-label={`Photograph of ${name}`} onClick={onOpen}>
+      {picture}
     </button>
   )
 }
@@ -3363,7 +3378,7 @@ export function Pricing() {
                       if (on) hovered.current = sku.sku
                       else if (hovered.current === sku.sku) hovered.current = null
                     }}
-                    onPhoto={() => (listed.has(sku.sku) ? openProduct(sku) : openPhoto(sku))}
+                    onPhoto={listed.has(sku.sku) ? null : () => openPhoto(sku)}
                     onHold={() => toggleHold(sku)}
                     onUnhold={() => void unhold(sku)}
                     unholding={unholding === sku.sku}
@@ -3572,7 +3587,7 @@ function PricingRow({
   registerInput: (node: HTMLInputElement | null) => void
   registerHold: (node: HTMLButtonElement | null) => void
   onHover: (on: boolean) => void
-  onPhoto: () => void
+  onPhoto: (() => void) | null
   onHold: () => void
   /** Put the copies the owner removed by hand back on the list. */
   onUnhold: () => void
@@ -3617,7 +3632,7 @@ function PricingRow({
       data-flag={flag?.kind}
       data-hold={holding ? 'open' : undefined}
     >
-      {/* A LIVE LISTING HAS NO PHOTOGRAPH OF OURS: its thumbnail is the stock photo alone. */}
+      {/* A LIVE LISTING HAS NO PHOTOGRAPH OF OURS: its thumbnail is the stock photo alone, with no press. */}
       {!source.copies ? null : <PricingThumb at={first} name={sku.name} onOpen={onPhoto} imageUrl={sku.image_url ?? null} />}
 
       <div className="pricing-id">
