@@ -1,4 +1,4 @@
-# D-waiting-page-export — The waiting page's data is a committed record
+# D327 — The waiting page's data is a committed record
 
 The page writer exports the waiting page's database to `docs/waiting/` at each wake, so any account can read it.
 

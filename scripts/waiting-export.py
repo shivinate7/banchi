@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""The waiting page's database, as a committed record (D-waiting-page-export).
+"""The waiting page's database, as a committed record (D327).
 
 Protects: any account can read the page's items, answers and groups from the repo, and no secret reaches it.
-Governs: D-waiting-page-export
+Governs: D327
 
 THE PAGE'S DATA LIVES IN THE ARTIFACT'S DATABASE, AND ONLY CLAUDE CAN READ IT. ArtifactData is a
 tool call, not an API a script can reach. So the export is two halves. The page writer reads each

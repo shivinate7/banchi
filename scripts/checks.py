@@ -379,7 +379,7 @@ CHECKS = (
         "why_off_commit_path": "D18, it writes temp files. Same standing as "
                                "hand-search-selftest above: `make check` only.",
         "gates": True,
-        "governed_by": ("D-waiting-page-export", "D18"),
+        "governed_by": ("D327", "D18"),
     },
     {
         "target": "token-literal-check",
