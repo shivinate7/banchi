@@ -26,7 +26,7 @@ DEFAULT_VALUE_LINE = Decimal("25")
 
 #: Trigger edges (spec section 4b). MOVE is inclusive, PREMIUM is "more than", as the cases pin.
 MOVE = Decimal("0.15")
-UNSOLD_DAYS = 30
+UNSOLD_DAYS = 14
 PREMIUM = Decimal("0.10")
 UNDERCUT = Decimal("0.10")
 
