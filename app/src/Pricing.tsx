@@ -869,7 +869,7 @@ export function Pricing() {
   /* A NUMBER ON A CARD'S ROW, THIS PRESS ONLY (D7, amended 2026-09-11): the copies that go in
      this file, as typed. Blank is blank and not zero. Spent by the write. */
   const [sendQty, setSendQty] = useState<Record<string, string>>({})
-  const askedFor = useCallback(
+  const askedByHand = useCallback(
     (sku: string): number | undefined => {
       const text = sendQty[sku]
       if (text === undefined || text === '') return undefined
@@ -887,17 +887,7 @@ export function Pricing() {
     })
   }, [])
   const clearAsked = useCallback(() => setSendQty({}), [])
-  /* WHAT THE PRESS SENDS: every drawn row with a figure typed on it, as SKU -> copies. */
   const latestRows = useRef<readonly PricingSku[]>([])
-  const quantitiesAsked = useCallback((): Record<string, number> => {
-    const out: Record<string, number> = {}
-    for (const row of latestRows.current) {
-      if (row.at_cap) continue
-      const asked = askedFor(row.sku)
-      if (asked !== undefined) out[row.sku] = asked
-    }
-    return out
-  }, [askedFor])
 
   const toggleRun = useCallback((name: string) => {
     setPicked((held) => {
@@ -1048,9 +1038,21 @@ export function Pricing() {
         markdown === null ? Promise.resolve(null) : getMarkdownTable(markdown),
         getPricingCorpus(),
       ])
+      /* THE NEWEST READ IS ASKED FOR ONLY WHEN THE WORKLIST HAS NOTHING TO DRAW (no new copy and no live
+         listing, as from a server that sends none) or a visit came back to the screen by its link. It lends the
+         rows nothing: a live row draws from the worklist. */
+      const wantsRead =
+        markdown === null &&
+        worked !== null &&
+        runsInHash().length === 0 &&
+        ((worked.runs.length === 0 && (worked.live?.length ?? 0) === 0) || visited.current)
+      const reads = wantsRead ? await getMarkdowns().catch(() => null) : null
+      const newestRead = reads?.markdowns[0]
+      const newestTable = newestRead === undefined ? null : await getMarkdownTable(newestRead.stamp).catch(() => null)
       if (mine !== loadWalk.current) return
       const answer = worked
-      const table = readTable
+      const table = markdown === null ? newestTable : readTable
+      if (reads !== null) setMarkdowns(reads.markdowns)
       setWork(answer)
       setSheet(table)
       setBook(held.corpus)
@@ -1401,6 +1403,57 @@ export function Pricing() {
     [answers, unpriced, isListed, listedTyped],
   )
 
+  /* A NEW COPY UNDER NEEDS YOU WAITS FOR A TICK (the mockup's list notes, item 9: nothing there goes by
+     accident). It is held out of the send as a quantity of 0, the way a typed 0 is, until the owner ticks it or
+     types a price. A copy with no price to send is not waiting on a tick: it waits on a price. */
+  const tickableFresh = useCallback(
+    (row: PricingSku): boolean => {
+      if (readView || source.kind !== 'run' || listed.has(row.sku) || row.at_cap || serverGroup(row) !== 'needs_you') return false
+      const standing = answerFor(row)
+      if (isWithheld(standing) || typeof standing === 'string' || source.locked(row.sku) !== null) return false
+      return !rowShare(row, standing).needsPrice
+    },
+    [readView, source, listed, answerFor],
+  )
+  const waitsForTick = useCallback((row: PricingSku): boolean => tickableFresh(row) && ticks[row.sku] !== true, [tickableFresh, ticks])
+  const askedFor = useCallback(
+    (row: PricingSku): number | undefined => (waitsForTick(row) ? 0 : askedByHand(row.sku)),
+    [askedByHand, waitsForTick],
+  )
+  /* WHAT THE PRESS SENDS: every drawn row with a figure typed on it, as SKU -> copies. */
+  const quantitiesAsked = useCallback((): Record<string, number> => {
+    const out: Record<string, number> = {}
+    for (const row of latestRows.current) {
+      if (row.at_cap) continue
+      const asked = askedFor(row)
+      if (asked !== undefined) out[row.sku] = asked
+    }
+    return out
+  }, [askedFor])
+
+  /** THE OWNER'S VALUE LINE, off the store's price settings (`policy.value_line`), or null where the server sends none. */
+  const valueLine = useMemo((): string | null => {
+    const raw = (book?.policy as Record<string, unknown> | undefined)?.['value_line']
+    return typeof raw === 'string' || typeof raw === 'number' ? moneyField(String(raw)) : null
+  }, [book])
+
+  /** Where a row's price comes from, in the mockup's words. Nothing on a lens, which has no such column. */
+  const fromWord = useCallback(
+    (row: MergedSku): string | null => {
+      if (readView) return null
+      const standing = answerFor(row)
+      const one = listed.get(row.sku)
+      if (one !== undefined) {
+        const typed = typeof standing === 'string' && standing.trim() !== '' ? (moneyField(standing) ?? standing.trim()) : null
+        return typed !== null && centsOf(typed) !== centsOf(one.asking) ? 'You' : one.source
+      }
+      if (typeof standing === 'string') return 'You'
+      if (rowShare(row, standing).needsPrice) return 'No price yet'
+      return row.bucket === 'sub_threshold' ? 'Floor' : 'Rule'
+    },
+    [readView, answerFor, listed],
+  )
+
   /* THE ARRIVAL ORDER, TAKEN ONCE PER LOAD. It orders the new copies; a live listing sits in the
      group the server put it in. */
   const [arrival, setArrival] = useState<Arrival | null>(null)
@@ -1557,7 +1610,7 @@ export function Pricing() {
          and no answer is left out of the send, so it is never among the ready copies (Q3). */
       const share = rowShare(row, standing)
       if (share.needsPrice) continue
-      const asked = askedFor(row.sku)
+      const asked = askedFor(row)
       if (asked !== undefined) byHand += 1
       const going = asked === undefined ? share.ready : Math.min(asked, share.ready)
       if (going === 0) continue
@@ -1575,7 +1628,7 @@ export function Pricing() {
      press adds no copy of, already live, whose TYPED price is not the live one. The server
      applies `pipeline/sendguard.py:price_changes` against a fresh read; this only gives the
      press its words. */
-  const addsNoCopy = useCallback((row: PricingSku) => row.at_cap || askedFor(row.sku) === 0, [askedFor])
+  const addsNoCopy = useCallback((row: PricingSku) => row.at_cap || askedFor(row) === 0, [askedFor])
   const priceChanges = useMemo(() => {
     const out: { sku: string; price: string; was: string | null }[] = []
     if (source.kind !== 'run') return out
@@ -1639,6 +1692,47 @@ export function Pricing() {
     [cut, ruleFigure, listed],
   )
 
+  /* THE SEND BAR'S FIGURES, as the mockup's `tally` counts them, in whole cents: new copies at their price,
+     live prices that rise or fall, and prices the owner typed. A copy waiting on a tick, a kept-off copy and a
+     copy with no price are not in it. Only the one list has them. */
+  const figures = useMemo(() => {
+    const t = { fresh: 0, freshCents: 0, up: 0, upCents: 0, down: 0, downCents: 0, typed: 0, typedCents: 0 }
+    if (source.kind !== 'run' || listed.size === 0) return null
+    for (const row of rows) {
+      if (listed.has(row.sku) || row.at_cap) continue
+      const standing = answerFor(row)
+      if (isWithheld(standing)) continue
+      const share = rowShare(row, standing)
+      if (share.needsPrice) continue
+      const asked = askedFor(row)
+      const going = asked === undefined ? share.ready : Math.min(asked, share.ready)
+      if (going <= 0) continue
+      const price = centsOf(typeof standing === 'string' ? (moneyField(standing) ?? standing) : suggestionFor(row)) ?? 0
+      if (typeof standing === 'string') {
+        t.typed += going
+        t.typedCents += going * price
+      } else {
+        t.fresh += going
+        t.freshCents += going * price
+      }
+    }
+    for (const change of [...priceChanges, ...listedChanges]) {
+      const price = centsOf(change.price) ?? 0
+      const before = centsOf(change.was)
+      if (!('source' in change && change.source === 'suggested') || before === null) {
+        t.typed += 1
+        t.typedCents += price
+      } else if (price > before) {
+        t.up += 1
+        t.upCents += price - before
+      } else if (price < before) {
+        t.down += 1
+        t.downCents += before - price
+      }
+    }
+    return { ...t, units: t.fresh + t.up + t.down + t.typed }
+  }, [source.kind, listed, rows, answerFor, askedFor, suggestionFor, priceChanges, listedChanges])
+
   /* THE LIVE COPIES A LISTING ROW MOVES (the owner's ruling, round 7): a new copy of a card
      already live carries the stored price, and the live copies move with it. */
   const liveMoves = useMemo(() => {
@@ -1646,7 +1740,7 @@ export function Pricing() {
     if (source.kind !== 'run') return out
     for (const row of rows) {
       if (row.at_cap) continue
-      const asked = askedFor(row.sku)
+      const asked = askedFor(row)
       const going = asked === undefined ? row.add_to_quantity : Math.min(asked, row.add_to_quantity)
       if (going <= 0) continue
       const standing = answerFor(row)
@@ -2860,6 +2954,29 @@ export function Pricing() {
     !readView && !staleRead && (barLoading || loaded.length > 0 || listed.size > 0 || owedTakeOffs.owed.length > 0) ? (
       <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send to TCGplayer" aria-busy={barLoading ? 'true' : undefined}>
         {tally}
+        {barLoading || figures === null ? null : (
+          /* THE FIGURES THE PRESS WILL CARRY, in the mockup's words: copies in all, then each kind with its total. */
+          <div className="pricing-figures" role="complementary" aria-label="Send to TCGplayer">
+            <p className="pricing-figures-head">{figures.units === 1 ? '1 copy' : `${figures.units} copies`} ready to send.</p>
+            <p className="pricing-figures-parts">
+              <span>
+                <b>{figures.fresh}</b> new, listing for <Money value={figures.freshCents / 100} />
+              </span>
+              <span>
+                <b>{figures.up}</b> {figures.up === 1 ? 'rise' : 'rises'}, up <Money value={figures.upCents / 100} /> in all
+              </span>
+              <span>
+                <b>{figures.down}</b> {figures.down === 1 ? 'fall' : 'falls'}, down <Money value={figures.downCents / 100} /> in all
+              </span>
+              <span>
+                <b>{figures.typed}</b> typed by you, listing for <Money value={figures.typedCents / 100} />
+              </span>
+              <span>
+                <b>{progress.held}</b> kept off TCGplayer, not in this send
+              </span>
+            </p>
+          </div>
+        )}
         {barLoading ? (
           /* THE PENDING BAR DRAWS THE CARD'S OWN CLASSES AND NOTHING ELSE: the same press and doors, off, so the bar is the
              height it will be, and no read starts for a card that has no worklist yet (the mount stays inside its budget). */
@@ -2883,6 +3000,7 @@ export function Pricing() {
             copies={progress.outCopies}
             skus={progress.outRows}
             priceChanges={priceChanges}
+            units={figures?.units}
             listed={listedChanges}
             liveMoves={liveMoves}
             settled={!dirty && !saving}
@@ -3098,6 +3216,11 @@ export function Pricing() {
           return readView ? moves : <PricesAsOf state={refresh.state} refused={refresh.refused} onPress={refresh.press}>{moves}</PricesAsOf>
         })()}
         {ruleLine}
+        {valueLine === null || readView ? null : (
+          <p className="pricing-value-line">
+            Value line <Money value={Number(valueLine)} />. A card worth this or more waits for you.
+          </p>
+        )}
         {readOnly || sheet === null ? null : readLine}
         {/* UN-11: outlives the toast, and a reload. Gone once a send has carried a cleared
             SKU (`clear_built_on`) — the next read finds no `last_clear`. */}
@@ -3160,9 +3283,9 @@ export function Pricing() {
               <span />
             </div>
             {drawn.map((group) => (
-              <section className="pricing-group" key={group.head || 'ready'} aria-label={group.head || 'Ready'}>
+              <section className="pricing-group" key={`${group.head}${filtering ? ':filtered' : ''}`} aria-label={group.head}>
                 {group.head === '' ? null : (
-                  <h2 className="pricing-group-head">
+                  <h2 className="pricing-group-head" data-empty={group.rows.length === 0 ? 'true' : undefined}>
                     <span className="pricing-group-why">{group.head}</span>
                     <span className="pricing-group-count">{group.rows.length}</span>
                     {group.lede === undefined ? null : <span className="pricing-group-lede">{group.lede}</span>}
@@ -3177,6 +3300,27 @@ export function Pricing() {
                     standing={answerFor(sku)}
                     flag={liveFlag(flagOf(sku, answerFor(sku), source.locked(sku.sku) !== null, cut), readView || oneList)}
                     suggestion={suggestionFor(sku)}
+                    from={fromWord(sku)}
+                    was={(() => {
+                      const one = listed.get(sku.sku)
+                      if (one === undefined) return null
+                      const standing = answerFor(sku)
+                      const shown = typeof standing === 'string' && standing.trim() !== '' ? (moneyField(standing) ?? standing.trim()) : moneyField(one.price)
+                      return shown !== null && centsOf(shown) !== centsOf(one.asking) ? moneyField(one.asking) : null
+                    })()}
+                    fresh={
+                      readView || listed.has(sku.sku)
+                        ? undefined
+                        : {
+                            reason:
+                              valueLine !== null && tickableFresh(sku) ? (
+                                <>
+                                  Worth <Money value={Number(valueLine)} /> or more. Check the price before it goes.
+                                </>
+                              ) : null,
+                            tick: tickableFresh(sku) ? { on: ticks[sku.sku] === true, onChange: (on: boolean) => setTicks((held) => ({ ...held, [sku.sku]: on })) } : null,
+                          }
+                    }
                     listed={(() => {
                       const one = listed.get(sku.sku)
                       if (one === undefined) return undefined
@@ -3363,6 +3507,9 @@ function PricingRow({
   flag,
   suggestion,
   listed,
+  fresh,
+  from,
+  was,
   asking,
   note,
   readAge,
@@ -3393,6 +3540,12 @@ function PricingRow({
   /** Set on a live listing of the one list: the server's reason for its price, and the tick that keeps
    *  a suggestion in the next send (`null` where there is no suggestion to keep). */
   listed?: { reason: string; tone: 'warn' | 'quiet'; tick: { on: boolean; onChange: (on: boolean) => void } | null }
+  /** Set on a new copy of the one list: the reason it waits for the owner, if it has one, and the tick that lets it go. */
+  fresh?: { reason: ReactNode; tick: { on: boolean; onChange: (on: boolean) => void } | null }
+  /** Where the price in the field comes from (Rule, Floor, You, Suggested, Live, or No price yet), or null. */
+  from: string | null
+  /** The price TCGplayer holds now, drawn before the arrow when the field holds a different one. */
+  was: string | null
   asking: string | null | undefined
   note: string | null
   readAge: string | null
@@ -3474,6 +3627,16 @@ function PricingRow({
           <ProductLink sku={sku.sku} name={sku.name} className="pricing-name">
             {displayName(sku.name, sku.row['Number'] ?? '')}
           </ProductLink>
+          {fresh?.tick == null ? null : (
+            <label className="bn-check pricing-tick pricing-tick-fresh">
+              <input
+                type="checkbox"
+                checked={fresh.tick.on}
+                aria-label={`Send the new price for ${sku.name}`}
+                onChange={(event) => fresh.tick?.onChange(event.currentTarget.checked)}
+              />
+            </label>
+          )}
         </span>
         {/* A REASON ONLY WHERE IT TELLS THE OWNER SOMETHING THE ROW DOES NOT ALREADY SHOW (the
             owner's review, 2026-09-26, and the add-on that followed it). "Worth $5 or more"
@@ -3536,11 +3699,26 @@ function PricingRow({
             </span>
           )}
           {why === null ? null : <span className="pricing-why">“{why}”</span>}
+          {from === null || lockedWhy !== null || withheld ? null : (
+            <Pill outline size="sm" className="pricing-from">
+              {from}
+            </Pill>
+          )}
+          {was === null || lockedWhy !== null || withheld ? null : (
+            <span className="pricing-was">
+              Now <Money value={Number(was)} />
+            </span>
+          )}
         </span>
         {/* WHY THE SERVER SUGGESTS THIS PRICE, on its own line under the name and the facts, in its own words (D59). */}
         {listed === undefined || listed.reason === '' ? null : (
           <span className="pricing-reason" data-tone={listed.tone}>
             {listed.reason}
+          </span>
+        )}
+        {fresh === undefined || fresh.reason === null ? null : (
+          <span className="pricing-reason" data-tone="warn">
+            {fresh.reason}
           </span>
         )}
       </div>

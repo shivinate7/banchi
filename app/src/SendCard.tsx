@@ -806,6 +806,7 @@ export function SendCard({
   copies,
   skus,
   priceChanges = [],
+  units,
   listed = [],
   liveMoves = [],
   settled,
@@ -823,6 +824,8 @@ export function SendCard({
   /** Cards already live whose typed price this press changes (the mixed send). The server
    *  decides against a fresh read; this is the worklist's count, for the button's words. */
   readonly priceChanges?: readonly PriceChange[]
+  /** On the one list: the copies in all this press carries (new copies and price changes), which the press names. */
+  readonly units?: number
   /** Price changes on listings that are already live and add no copy: each kept suggestion (marked
    *  `source: 'suggested'`) and each price typed on one. They ride the same press, and name it
    *  "to TCGplayer" once there is one. */
@@ -1014,6 +1017,10 @@ export function SendCard({
                 <MovesPhrase moves={liveMoves} />
               </>
             )
+          : units !== undefined
+            ? units > 0
+              ? `Send ${count(units, 'copy', 'copies')} to TCGplayer`
+              : 'Send to TCGplayer'
           : listed.length > 0
             ? `Send ${pressCarries(skus, copies ?? 0, priceChanges.length + listed.length)} to TCGplayer`
             : priceChanges.length > 0

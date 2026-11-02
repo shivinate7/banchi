@@ -160,7 +160,9 @@
 }
 .pricing-group-count { font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
 /* THE GROUP'S ONE SENTENCE, after its count: what the owner does with the rows below. */
-.pricing-group-lede { font-weight: 400; color: var(--bn-ink-3); }
+.pricing-group-lede { font-weight: 400; color: var(--bn-ink-3); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* AN EMPTY GROUP STILL DRAWS, ON ONE QUIET LINE: it takes no more of the column than its words need, so the first row stays in view. */
+.pricing-group-head[data-empty='true'] { padding-block: 0; line-height: var(--bn-lh-tight); font-weight: 600; color: var(--bn-ink-3); }
 
 .pricing-row {
   position: relative;
@@ -573,3 +575,14 @@
 /* F3: the filter bar sits over the list. The send press names every SKU, so no note is needed. */
 .pricing-filterbar { margin-bottom: var(--bn-3); }
 .pricing-photo-frame .absent-photo { padding: var(--bn-6) var(--bn-4); }
+
+/* ---- the one list: send figures, value line, price source, tick on a new copy ---------------------------- */
+.pricing-figures { flex: 1 1 100%; min-width: 0; display: flex; flex-direction: column; gap: var(--bn-1); }
+.pricing-figures-head { margin: 0; font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 800; color: var(--bn-ink); }
+.pricing-figures-parts { margin: 0; display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-5); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+.pricing-figures-parts b { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pricing-value-line { margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+.pricing-from { flex: none; }
+.pricing-was { flex: none; font-size: var(--bn-fs-sm); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+/* A NEW COPY'S TICK SITS BESIDE ITS NAME, the label being the 40px target. */
+.pricing-tick-fresh { margin-inline-start: var(--bn-2); flex: none; }
