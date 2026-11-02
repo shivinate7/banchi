@@ -749,8 +749,8 @@ class Ledger:
     def claim_label(self, order: str, marker: str, in_flight: Container[str]) -> bool:
         """Take `order` for a create, or say it is not ours to take (D326).
 
-        False when a label is already made, or when a press in THIS process is still making it
-        (`in_flight` names those orders). Any other claim is replaced: a claim from another process
+        False when a label is already made, or when a press in THIS process is still making it or
+        holds its unwritten answer (`in_flight` names those orders). Any other claim is replaced: a claim from another process
         belongs to a press that died, and so does one of this process's whose release write
         failed. A retried create is safe because TCGTracking dedups on `source_order_id`.
         """

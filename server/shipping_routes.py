@@ -60,7 +60,7 @@ THE LABEL ROUTES (D326, T4 and T5). Every shape below is the contract the screen
     -> 200 {"batch", "stopping": int}
         Ends the confirms running on this batch after the create in flight: that create finishes and
         its label is kept (a label is never voided), and the orders after it are left over, in the
-        receipt of that confirm. `stopping` is how many confirms were running. A stop with none
+        receipt of that confirm. A confirm waiting for its turn to create sends nothing. `stopping` is how many confirms were running. A stop with none
         running changes nothing and leaves no mark, so the next confirm is not stopped.
 
   GET /shipping/batches/BATCH/labels/pdf
@@ -660,8 +660,14 @@ _IN_FLIGHT: set = set()
 _PRESS_LOCK = threading.Lock()
 # One create at a time across every press of this process: paid calls go one by one. Held around the
 # create call alone, NEVER around a `Store.write` (the store lock has four request slots to share).
+# So no thread waits on the store lock while it holds `_CREATE_LOCK`, and the two never form a cycle.
 _CREATE_LOCK = threading.Lock()
 _PRESSES: Dict[str, List[threading.Event]] = {}
+# Order -> `(answer, pdf base64 or None, insured)`: a paid create's answer whose store write failed.
+# `_write_held` writes it at the next confirm, listing or PDF read. `_HELD_LOCK` guards the dict
+# alone and is never held across a `Store.write`.
+_HELD: Dict[str, Tuple[Dict[str, Any], Optional[str], bool]] = {}
+_HELD_LOCK = threading.Lock()
 
 _TOKEN = re.compile(r"[0-9a-f]{32}")
 
@@ -725,13 +731,46 @@ def _orders_named(raw: Any, field_name: str) -> List[str]:
     return list(dict.fromkeys(item.strip() for item in raw))
 
 
+class _Stopped(Exception):
+    """A stop arrived while a press waited for `_CREATE_LOCK`: nothing was sent for its order."""
+
+
+def _ours() -> set:
+    """The orders this process must not create again: a create in flight, or one whose answer is held."""
+    with _HELD_LOCK:
+        return _IN_FLIGHT | set(_HELD)
+
+
+def _write_held() -> bool:
+    """Write each held create answer to the store, in one write; True when none is left held. On a
+    store error the answers stay held, and their orders stay ours, so this process never creates
+    them again. With none held it writes nothing."""
+    with _HELD_LOCK:
+        held = dict(_HELD)
+    if not held:
+        return True
+    try:
+        with Store().write() as snap:
+            for order, (answer, pdf, insured) in held.items():
+                row = snap.ledger.labels.get(order)
+                if row is None or not row.made:
+                    snap.ledger.record_label(order, answer, pdf, insured)
+    except files.StoreError:
+        return False
+    with _HELD_LOCK:
+        for order in held:
+            _HELD.pop(order, None)
+    return True
+
+
 def _label_state() -> Tuple[set, set]:
     """`(made, pending)`: the orders with a made label, and the orders a press of THIS process is making
-    now. A claim left by a dead press, or by this process after a failed release, is neither: it is
+    now or holds an unwritten answer for. A claim left by a dead press, or by this process after a failed release, is neither: it is
     eligible, and the confirm retries it (TCGTracking dedups on `source_order_id`)."""
     rows = list(Store().read().ledger.labels.values())
+    ours = _ours()
     made = {row.order for row in rows if row.made}
-    pending = {row.order for row in rows if not row.made and row.claim == PROCESS_MARK and row.order in _IN_FLIGHT}
+    pending = {row.order for row in rows if not row.made and row.claim == PROCESS_MARK and row.order in ours}
     return made, pending
 
 
@@ -825,20 +864,24 @@ def _fill_pdfs(rows: Sequence[Any]) -> Optional[tcgtracking.TrackingRefused]:
     return refused
 
 
-def _make_one(order: str, shipment: shipping.Shipment, insured: bool) -> Optional[dict]:
+def _make_one(order: str, shipment: shipping.Shipment, insured: bool, stop: threading.Event) -> Optional[dict]:
     """Make one order's label. Returns the receipt entry for `made`, or None when the order is
-    already labeled or in flight. Raises TrackingRefused with no claim left behind, unless the create
-    had answered: then the label is bought, and its answer is stored BEFORE the PDF is fetched.
+    already labeled, in flight or held. Raises TrackingRefused, or `_Stopped` when `stop` is set once
+    `_CREATE_LOCK` is taken, with nothing sent and no claim left behind. Once a create has answered,
+    the label is bought, and its answer is stored BEFORE the PDF is fetched.
 
     THE STORE LOCK IS NEVER HELD ACROSS A CALL: the claim is one `Store.write`, the create runs
     outside it, and the answer is a second `Store.write`. `REQUEST_SLOTS` is four.
 
-    ONCE A CREATE HAS ANSWERED, THE CLAIM IS NEVER RELEASED. The label is paid for. If the answer's
-    write or the PDF fetch fails, the row (or the claim) stays, and a later `_fill_pdfs` or confirm
-    gets the PDF by the answer's `order_id`. It never creates again.
+    ONCE A CREATE HAS ANSWERED, THE CLAIM IS NEVER RELEASED. The label is paid for. The answer goes
+    into `_HELD` as soon as it is in hand, and its write is tried twice. If both fail, it stays held,
+    the order is reported made, and the next confirm, listing or PDF read writes it. A held order is ours to `claim_label`, so this process
+    never creates it again. A PDF fetch that fails leaves a made row, and a later `_fill_pdfs` gets the
+    PDF by the answer's `order_id`. Only a restart loses a held answer: its claim is then a dead
+    press's, and the retried create is answered by TCGTracking's dedup on `source_order_id`.
     """
     with Store().write() as snap:
-        took = snap.ledger.claim_label(order, PROCESS_MARK, _IN_FLIGHT)
+        took = snap.ledger.claim_label(order, PROCESS_MARK, _ours())
         if took:
             _IN_FLIGHT.add(order)
     if not took:
@@ -851,6 +894,9 @@ def _make_one(order: str, shipment: shipping.Shipment, insured: bool) -> Optiona
     answered = False
     try:
         with _CREATE_LOCK:
+            # A stop that arrived while this press waited for the lock: nothing is sent.
+            if stop.is_set():
+                raise _Stopped()
             answer = tcgtracking.create(_label_body(shipment, insured))
         answered = True
         kept = {key: value for key, value in answer.items() if key != "pdf_base64"}
@@ -858,9 +904,13 @@ def _make_one(order: str, shipment: shipping.Shipment, insured: bool) -> Optiona
             blob = tcgtracking.decode_pdf(answer) if answer.get("pdf_base64") else None
         except tcgtracking.TrackingRefused:
             blob = None
-        with Store().write() as snap:
-            snap.ledger.record_label(order, kept, base64.b64encode(blob).decode("ascii") if blob else None, insured)
+        pdf = base64.b64encode(blob).decode("ascii") if blob else None
         entry = {"order": order, "tracking_number": answer.get("tracking_number"), "insured": insured}
+        # Held first, so the answer is in hand before any write can fail, then written; tried twice.
+        with _HELD_LOCK:
+            _HELD[order] = (kept, pdf, insured)
+        if not _write_held() and not _write_held():
+            return entry
         if blob is None:
             stored = Store().read().ledger.labels.get(order)
             refused = _fill_pdfs([stored] if stored is not None else [])
@@ -906,6 +956,7 @@ def _confirm(batch: str, held: _Batch, payload: dict) -> Dict[str, Any]:
     existing: List[dict] = []
     refused: List[dict] = []
     left_over: List[dict] = []
+    _write_held()
     stop = threading.Event()
     with _PRESS_LOCK:
         _PRESSES.setdefault(batch, []).append(stop)
@@ -916,7 +967,10 @@ def _confirm(batch: str, held: _Batch, payload: dict) -> Dict[str, Any]:
                 left_over = [{"order": rest} for rest in orders[at:]]
                 break
             try:
-                entry = _make_one(order, envelope[order], order in insured)
+                entry = _make_one(order, envelope[order], order in insured, stop)
+            except _Stopped:
+                left_over = [{"order": rest} for rest in orders[at:]]
+                break
             except tcgtracking.TrackingRefused as exc:
                 # STOP AT THE FIRST ERROR. A 401 or a 429 on the third order will be the same on the
                 # fourth, and creates are paid. The orders after it are untouched.
@@ -976,6 +1030,7 @@ def do_shipping_labels_pdf(batch: str) -> Tuple[bytes, str, str]:
     """The combined file route for a batch: its stored labels as one PDF. Calls TCGTracking only for a
     made label that has no PDF yet. A batch that is gone refuses before the store is read."""
     held = _recall(batch)
+    _write_held()
     named = list(dict.fromkeys(str(row["order"]) for row in held.rows))
     ledger = Store().read().ledger
     mine = [ledger.labels[o] for o in named if o in ledger.labels]
@@ -1028,6 +1083,7 @@ def _scan_status(scan: Optional[dict]) -> Optional[dict]:
 def do_shipping_labels_list() -> dict:
     """`GET /shipping/labels` — one row per label row, read from the store. No PDF bytes. A claim
     with no answer yet is listed `pending`."""
+    _write_held()
     rows = list(Store().read().ledger.labels.values())
     if any(row.made and not row.pdf for row in rows):
         _fill_pdfs(rows)  # best effort: a refusal leaves the row listed, and the next read tries again
@@ -1054,7 +1110,8 @@ def do_shipping_labels_list() -> dict:
 def do_shipping_label_pdf(token: str) -> Tuple[bytes, str, str]:
     """The stored label for a `pdf_token`: bytes, content type, a safe file name. An order number
     is no key: only the random token finds a row, by one indexed read."""
-    found = Store().read().ledger.labels.where(pdf_token=token) if _TOKEN.fullmatch(token) else []
+    _write_held()
+    found =Store().read().ledger.labels.where(pdf_token=token) if _TOKEN.fullmatch(token) else []
     row = found[0] if found else None
     if row is not None and row.made and not row.pdf:
         refused = _fill_pdfs([row])

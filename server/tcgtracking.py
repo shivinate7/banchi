@@ -16,8 +16,8 @@ EVERY FAILURE IS A `TrackingRefused` WITH A `tracking_` CODE: key or shipper num
 (raised before any request), host refused (the default host under `BANCHI_HARNESS` or `CI`, or
 plain http beyond loopback; no socket), rejected (401), invalid (400), rate limited (429),
 not found (404), unreachable (no connection, a server error, or an answer this module cannot
-read). A 500 whose body carries an `order_id` is a label that was bought, and `create` returns
-it: the label exists and the caller must keep it.
+read). A create answer is a bought label only when it carries an `order_id`, a 500's included:
+`create` returns it, and the caller must keep it.
 """
 
 from __future__ import annotations
@@ -157,11 +157,12 @@ def _call(method: str, path: str, *, query: Optional[Dict[str, str]] = None, bod
     return status, (parsed if isinstance(parsed, dict) else None)
 
 
-def _answer(status: int, parsed: Optional[dict], *, bought_on_500: bool = False) -> dict:
-    """The answer dict for a good status, else the refusal for the status."""
-    if status in (200, 201) and parsed is not None:
+def _answer(status: int, parsed: Optional[dict], *, bought: bool = False) -> dict:
+    """The answer dict for a good status, else the refusal for the status. With `bought`, an answer
+    is good only when it names an `order_id`: a 2xx without one bought nothing."""
+    if status in (200, 201) and parsed is not None and (not bought or parsed.get("order_id")):
         return parsed
-    if bought_on_500 and status == 500 and parsed is not None and parsed.get("order_id"):
+    if bought and status == 500 and parsed is not None and parsed.get("order_id"):
         # The label was bought. The error text is dropped: an error body is never kept.
         return {k: v for k, v in parsed.items() if k != "error"}
     codes = {401: "tracking_auth_rejected", 400: "tracking_invalid", 429: "tracking_rate_limited", 404: "tracking_not_found"}
@@ -173,9 +174,10 @@ def _answer(status: int, parsed: Optional[dict], *, bought_on_500: bool = False)
 
 def create(body: dict) -> dict:
     """Buy one label. Returns TCGTracking's answer: 201, or 200 with `duplicate: true` and no PDF, or the
-    answer of a 500 that carries an `order_id`."""
+    answer of a 500 that carries an `order_id`. An answer with no `order_id` is `tracking_unreachable`:
+    nothing was bought, so the caller releases its claim and a later press creates again."""
     status, parsed = _call("POST", "/orders", body=body)
-    return _answer(status, parsed, bought_on_500=True)
+    return _answer(status, parsed, bought=True)
 
 
 def track(*, order_number: Optional[str] = None, tracking_number: Optional[str] = None) -> dict:
