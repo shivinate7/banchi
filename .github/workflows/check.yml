@@ -690,7 +690,7 @@ jobs:
           SHARD: ${{ matrix.shard }}
         run: |
           n="$(python3 -c "import json; print(json.load(open('.serve/design-check.json')).get('counts', {}).get('skipped', 'unknown'))" 2>/dev/null || echo 'unknown (no verdict file)')"
-          echo "skipped in design-check shard $SHARD: $n case(s)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "skipped in design-check shard $SHARD: $n" | tee -a "$GITHUB_STEP_SUMMARY"
 
       # Every full-suite run keeps each shard's per-file seconds, for `browser-scope.py shard-refresh` (a narrowed run times only some specs, so it keeps none).
       - name: Keep the shard's timings
