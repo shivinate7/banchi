@@ -1057,7 +1057,9 @@ function BoxRow({
  *  it scrolls itself into view so it cannot land off screen. */
 function Answer({ children, above }: { readonly children: ReactNode; readonly above?: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => ref.current?.scrollIntoView({ block: 'nearest' }), [])
+  useEffect(() => {
+    ref.current?.scrollIntoView({ block: 'nearest' })
+  }, [])
   return (
     <div className="shelf-answer" data-above={above ? 'true' : undefined} ref={ref} role="alert">
       {children}

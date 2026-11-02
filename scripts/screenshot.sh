@@ -31,7 +31,7 @@ set -uo pipefail
 # @playwright/test — what `make design-check` runs — so this constant no longer selects a
 # second download; it is the claim screenshot.mjs checks app/package.json against, and a
 # disagreement fails the render rather than waiting to be noticed in a diff.
-PLAYWRIGHT_VERSION="1.58.0"
+PLAYWRIGHT_VERSION="1.64.1"
 VIEWPORT="1280,900"
 WAIT_MS=600
 
