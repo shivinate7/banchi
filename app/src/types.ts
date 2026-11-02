@@ -4530,6 +4530,9 @@ export type MarkdownSku = {
   /** Sealed product: the row's condition is `Unopened` (`pipeline/reprice.py:is_sealed`). Absent
    *  on a survey written before 2026-09-26, which reads as a single. */
   sealed?: boolean
+  /** Whether the row needs the owner or goes at the rule (`worklist.new_copy_groups`, the worklist's
+   *  own rule). Absent when the corpus could not be read, which files the row nowhere. */
+  group?: 'needs_you' | 'at_rule'
 }
 
 /** The lens's whole input — `survey.json` as `GET /pipeline/markdowns/<stamp>/table` serves it. */
