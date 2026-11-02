@@ -42,15 +42,20 @@ PATTERNS = (
     ("private key", r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     ("bearer token", r"(?i)\b(?:bearer|basic)\s+[\w.~+/=-]{20,}"),
     # No leading \b: a .env name such as TCG_TRACKING_KEY ends the word on `_`, not before it.
+    # After `:` the value needs a digit, so prose like "the join key: number_index_key" passes.
+    # A `$NAME` or `{expr}` value is a reference, not a secret.
     ("password or key value",
      r"(?i)(?:password|passwd|secret|key|token|cookie|clearance)"
-     r"\s*[:=]\s*['\"]?[^\s'\"<>]{8,}"),
+     r"(?:\s*=\s*['\"]?(?![$\{])|\s*:\s*['\"]?(?![$\{])(?=[^\s'\"<>]*\d))[^\s'\"<>]{8,}"),
     ("cookie", r"(?i)(?:\bset-cookie\s*:|\bcookie\s*:\s*\w+=|\b(?:sessionid|csrftoken|sid)=[\w%.-]{16,})"),
     ("email address", r"[\w.+-]+@[A-Za-z0-9-]+\.[A-Za-z0-9.-]*[A-Za-z]"),
     ("phone number", r"(?<![\w.-])(?:\+1[-. ]?)?\(?\d{3}\)?[-. ]\d{3}[-. ]\d{4}(?![\w.-])"),
+    # Case-sensitive: street words are capitalized or all caps, so "3 records in place" and
+    # "5 cards in this lane" pass.
     ("street address",
-     r"(?i)\b\d{1,6}\s+(?:[nsew]\.?\s+)?(?:[a-z0-9]+\s+){1,3}"
-     r"(?:st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|ct|court|pl|place)\b"
+     r"\b\d{1,6}\s+(?:[NSEW]\.?\s+)?(?:(?:[A-Z][a-z]+|[A-Z]+|\d+(?:st|nd|rd|th))\s+){1,3}"
+     r"(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Ln|Lane|Ct|Court|Pl|Place"
+     r"|ST|STREET|AVE|AVENUE|RD|ROAD|BLVD|DR|DRIVE|LN|LANE|CT|COURT|PL|PLACE)\b"
      r"|\bP\.?O\.? Box \d+|\b[A-Z][a-z]+, [A-Z]{2} \d{5}\b"),
 )
 COMPILED = tuple((name, re.compile(rx)) for name, rx in PATTERNS)
@@ -149,9 +154,23 @@ def selftest() -> int:
                             ("address", "ship to 12 Elm Street"), ("password", "password: hunter22"),
                             (".env line", "TCG_TRACKING_KEY=" + "a1" * 8),
                             ("upper-case address", "123 N MAIN ST APT 4"),
-                            ("city line", "Austin, TX 78701"), ("phone", "+1-512-555-0142")):
+                            ("city line", "Austin, TX 78701"), ("phone", "+1-512-555-0142"),
+                            ("ordinal address", "400 W 5th St"), ("po box", "PO Box 1234"),
+                            ("basic auth", "Authorization: Basic " + "dXNlcjpw" * 3),
+                            ("stripe key", "sk_" + "live_" + "a1" * 8),
+                            ("google key", "AIza" + "B2" * 17),
+                            ("bare cookie", "cf_clearance=" + "c3" * 8)):
             if export(fixture(tmp_path / label.replace(" ", "-"), text), tmp_path / "x", "u") != 1:
                 failures.append(f"a fake {label} did not stop the export")
+
+        # This repo's own idioms, each once a false alarm.
+        for text in ("Rewrite 3 records in place", "5 cards in this lane", "Back up 5 files to iCloud Drive",
+                     "The join key: number_index_key", "cache key: sku:game:number", "API_KEY=$TCG_KEY", "key={selectedRow.key}",
+                     "Order 12345 shipped, so 12345 items remain", "token budget per lane"):
+            hits: List[str] = []
+            scan(text, "idiom", hits)
+            if hits:
+                failures.append(f"ordinary text {text!r} raised {hits}")
 
         green_records = tmp_path / "green-out"
         if export(fixture(tmp_path / "green", "Pick a price source; see item 70 and PR 971."),
