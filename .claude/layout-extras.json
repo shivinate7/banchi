@@ -19,5 +19,6 @@
     "vendor": {"path": "vendor"}
   },
   "rolled-out": true,
-  "waiting-page": "https://claude.ai/artifact/6NU1FeyGMvhyrQr7ga3tQe"
+  "waiting-page": "https://claude.ai/artifact/6NU1FeyGMvhyrQr7ga3tQe",
+  "visibility": "public"
 }

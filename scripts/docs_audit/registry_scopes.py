@@ -95,14 +95,156 @@ def _checks_registry() -> Optional[Tuple[List[dict], dict]]:
     return [dict(entry) for entry in entries], dict(needs)
 
 
+# The one step shape a shard's `run:` may take. Make's own exit code reaches the job (`rc`), the
+# skip count is read by `scripts/ci-skip-count.sh`, and nothing else can run in the block: a
+# make line in dead code (`if`, a heredoc, after an `exit`) or an `|| true` would let a red
+# shard read green. `{target}` is the make target as the step writes it (`ci-check-static`, or
+# MATRIX_TARGET in the matrix step) and `{log}` is that target's name in the log path.
+SKIP_COUNT_STEP = (
+    "set -o pipefail",
+    'log="$RUNNER_TEMP/make-{log}.log"',
+    "rc=0",
+    'make {target} 2>&1 | tee "$log" || rc=$?',
+    'scripts/ci-skip-count.sh {target} "$log"',
+    'exit "$rc"',
+)
+MATRIX_TARGET = '"$TARGET"'
+# The only `if:` such a job may carry, and the step and job keys that could end a red run green.
+SHARD_JOB_GUARD = "${{ !github.event.pull_request.draft }}"
+_STEP_BAD_KEYS = ("if", "continue-on-error", "shell")
+_JOB_BAD_KEYS = ("continue-on-error", "defaults")
+
+
+def _is_skippable(line: str) -> bool:
+    return not line.strip() or line.lstrip().startswith("#")
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def _key_of(line: str) -> Tuple[int, str, str]:
+    """(column, key, value) of a `key: value` line, past any `- ` list dash."""
+    stripped = line.lstrip()
+    col = _indent(line)
+    dash = re.match(r"-\s+", stripped)
+    if dash:
+        col, stripped = col + dash.end(), stripped[dash.end():]
+    key = re.match(r"([\w-]+)\s*:\s*(.*?)\s*$", stripped)
+    return (col, key.group(1), key.group(2)) if key else (col, "", "")
+
+
+def _expected_step(target: str) -> List[str]:
+    log = "$TARGET" if target == MATRIX_TARGET else target
+    return [ln.format(target=target, log=log) for ln in SKIP_COUNT_STEP]
+
+
+def _run_body(lines: List[str], i: int, col: int, rest: str) -> List[str]:
+    """The command lines of the `run:` key at line i: its block scalar, or its inline value.
+    Blank and comment lines are dropped. A folded `>` block joins its lines into one command
+    line, so make never runs as the shape says: its body leads with the indicator, which no
+    shape holds, and the caller reports it."""
+    if rest[:1] not in ("|", ">"):
+        return [rest] if rest else []
+    body: List[str] = [rest] if rest[:1] == ">" else []
+    for follow in lines[i + 1:]:
+        if follow.strip() and _indent(follow) <= col:
+            break
+        if not _is_skippable(follow):
+            body.append(follow.strip())
+    return body
+
+
+def _step_start(lines: List[str], i: int, col: int) -> Optional[int]:
+    """The line of the list dash that opens the step holding the key at line i."""
+    if re.match(r"\s*-\s", lines[i]):
+        return i
+    for j in range(i - 1, -1, -1):
+        if not _is_skippable(lines[j]) and re.match(r"\s*-\s", lines[j]) and _key_of(lines[j])[0] == col:
+            return j
+    return None
+
+
+def _context_problems(lines: List[str], i: int, col: int, where: str) -> List[str]:
+    """What in the step and job around the `run:` at line i could end a red run green."""
+    start = _step_start(lines, i, col)
+    if start is None:
+        return ["{0} is not inside a step of a job.".format(where)]
+    dash = _indent(lines[start])
+    end = next((j for j in range(start + 1, len(lines))
+                if not _is_skippable(lines[j]) and _indent(lines[j]) <= dash), len(lines))
+    found = ["{0}: its step sets `{1}:`, which can end a red run green.".format(where, key)
+             for kcol, key, _ in (_key_of(lines[j]) for j in range(start, end) if not _is_skippable(lines[j]))
+             if kcol == col and key in _STEP_BAD_KEYS]
+    steps = next((j for j in range(start - 1, -1, -1)
+                  if re.match(r"\s*steps:\s*$", lines[j]) and _indent(lines[j]) <= dash), None)
+    if steps is None:
+        return found + ["{0} is not inside a job's `steps:`.".format(where)]
+    scol = _indent(lines[steps])
+    head = next((j for j in range(steps - 1, -1, -1)
+                 if not _is_skippable(lines[j]) and _indent(lines[j]) < scol), None)
+    if head is None:
+        return found + ["{0} is not inside a job.".format(where)]
+    for j in range(head + 1, len(lines)):
+        if _is_skippable(lines[j]):
+            continue
+        if _indent(lines[j]) <= _indent(lines[head]):
+            break
+        kcol, key, value = _key_of(lines[j])
+        if kcol != scol:
+            continue
+        if key == "if" and value != SHARD_JOB_GUARD:
+            found.append("{0}: its job's `if:` is `{1}`; only `{2}` may stand there.".format(
+                where, value, SHARD_JOB_GUARD))
+        elif key in _JOB_BAD_KEYS:
+            found.append("{0}: its job sets `{1}:`, which can end a red run green.".format(where, key))
+    return found
+
+
+def _scan_shard_steps(workflow: str) -> Tuple[Set[str], List[str]]:
+    """(shards run as a job of their own, problems). A `run:` whose command names a
+    `make ci-check-*` target, or MATRIX_TARGET, must be exactly SKIP_COUNT_STEP, in a step with
+    no `if:`, `continue-on-error` or `shell:`, in a job whose only `if:` is SHARD_JOB_GUARD and
+    with no `continue-on-error`. Anything else is a problem and the target is no shard."""
+    lines = workflow.splitlines()
+    shards: Set[str] = set()
+    problems: List[str] = []
+    for i, line in enumerate(lines):
+        col, name, rest = _key_of(line)
+        if name != "run" or line.lstrip().startswith("#"):
+            continue
+        body = _run_body(lines, i, col, rest)
+        targets = sorted(set(re.findall(r'\bmake\s+(ci-check-[\w-]+|"\$TARGET")', "\n".join(body))))
+        if not targets:
+            continue
+        where = "`run:` at line {0}".format(i + 1)
+        bad: List[str] = []
+        if len(targets) != 1 or body != _expected_step(targets[0]):
+            bad.append("{0} runs {1} but is not the counted-skip step. Expected exactly, blank and "
+                       "comment lines aside:\n{2}".format(
+                           where, targets, "\n".join("      " + ln for ln in _expected_step(targets[0]))))
+        bad += _context_problems(lines, i, col, where)
+        problems += bad
+        if not bad and MATRIX_TARGET not in targets:
+            shards |= set(targets)
+    return shards, problems
+
+
+def workflow_step_problems(workflow: str) -> List[str]:
+    """What is wrong with a shard step in `check.yml`: not the counted-skip shape, or in a step or
+    job that can end a red run green. See SKIP_COUNT_STEP."""
+    return _scan_shard_steps(workflow)[1]
+
+
 def workflow_shards(workflow: str) -> Set[str]:
-    """The shards `check.yml` runs: the matrix targets, and any job that runs one as a real
-    `run:` key. A commented line is not a run."""
+    """The shards `check.yml` runs: the matrix targets, and each job that runs one as a
+    `make ci-check-*` step of the exact counted-skip shape (`workflow_step_problems` names the
+    rest). A commented line is not a run."""
     live = "\n".join(ln for ln in workflow.splitlines() if not ln.lstrip().startswith("#"))
     matrix = re.search(r"target:\s*\[([^\]]*)\]", live)
     listed = {t.strip() for t in matrix.group(1).split(",")} if matrix else set()
     # a shard that runs as a job of its own (`ci-static`, so `design-check` can wait on it alone)
-    return listed | set(re.findall(r"^\s*run: make (ci-check-[\w-]+)\s*$", live, flags=re.M))
+    return listed | _scan_shard_steps(workflow)[0]
 
 
 def _check_registry() -> Row:
@@ -196,6 +338,8 @@ def _check_registry() -> Row:
             "the `ci-check` job's matrix lists {0}, and the shards are {1}.\n"
             "  A shard in no job gates nothing on a pull request."
         ).format(sorted(listed) or "nothing", sorted(CI_SHARD_RULES))))
+    for problem in workflow_step_problems(workflow):
+        findings.append(Finding(rel(CHECK_WORKFLOW), problem))
 
     # NEEDS is a section of this file in D80's sense, and the same rule applies one level
     # down: a vocabulary entry no check claims is a definition with no reader.
@@ -892,7 +1036,7 @@ def check_suite_lock(report: Report) -> None:
 # AND THE WIRING IS READ, because a list nothing consults is a list. The workflow must run the
 # classifier from some job, `design-check` must need that job and read its answer in the
 # FAIL-OPEN spelling — `!= 'false'` under `!cancelled()` — the `on:` block may carry no path
-# filter (that would gate `check`, `revert-guard` and `already-passed` too, which D141
+# filter (that would gate `ci-check`, `revert-guard` and `already-passed` too, which D141
 # forbids), and `design-check-passed` may not run on a skipped matrix, or a tree no browser
 # saw would earn D136's pass record.
 #
@@ -1004,7 +1148,7 @@ def browser_gate_findings(text: str) -> List[Tuple[str, str]]:
         out.append((where, "has no `on:` block."))
     elif re.search(r"^\s*paths(?:-ignore)?:", on, re.M):
         out.append((where, (
-            "the `on:` block carries a `paths` filter. That gates EVERY job — `check`,\n"
+            "the `on:` block carries a `paths` filter. That gates EVERY job — `ci-check`,\n"
             "  `revert-guard` and `already-passed` included — and D141 scopes the browser\n"
             "  matrix alone. The filter is `browser-scope`'s output, read by one job's `if:`.")))
 
@@ -1244,9 +1388,9 @@ _ALWAYS_DRAFT_GUARD = "${{ always() && !github.event.pull_request.draft }}"
 #: Jobs the rollup does not need, each with its reason. A job missing here AND from the rollup's
 #: `needs` is a finding, so a new job cannot quietly sit outside the required check.
 EXCLUDED = {
-    "check": "a thin alias for the old required name; it reads the rollup and is deleted after protection flips",
     "design-check-passed": "a recorder: it skips on purpose unless the browser matrix really ran",
     "nightly-alarm": "a reporter: it skips unless a nightly run failed, and a skip is its normal answer",
+    "ci-done": "the last job: it reads every other job's result and comments on a red pull request run; it needs the rollup, so the rollup cannot need it",
 }
 
 _BLOCK_HEADER_RE = re.compile(r"^[|>][+-]?[0-9]?[+-]?$")
@@ -1552,7 +1696,7 @@ def _rollup_findings(where: str, text: str, files: Dict[str, str],
     # `continue-on-error` turns a failed job or step into a success, so the rollup would read green
     # over it. Only a literal `false` is allowed: an expression or `true` can hide a failure.
     # A flow-style step (`- { name: x, continue-on-error: true }`) puts the key after `{` or `,`.
-    watched = needed_jobs + [ROLLUP_JOB] + (["check"] if "check" in names else [])
+    watched = needed_jobs + [ROLLUP_JOB]
     for name in watched:
         for line in _job_lines(jobs, name) or []:
             if line.lstrip().startswith("#"):
@@ -1564,16 +1708,6 @@ def _rollup_findings(where: str, text: str, files: Dict[str, str],
                     f"`{name}` sets `continue-on-error: {value}`, which turns a failure\n"
                     f"  into a success the rollup cannot see. Only `false` is allowed on a job `{ROLLUP_JOB}` reads.")))
                 break
-
-    # The alias reads the rollup and nothing else, or it is a second required check with its own
-    # wiring, which is the defect the rollup exists to remove.
-    if "check" in names:
-        alias_needs = _job_needs(_job_lines(jobs, "check") or [])
-        if alias_needs is None:
-            out.append((where, f"`check` has no `needs:`, so it passes without reading `{ROLLUP_JOB}`."))
-        elif alias_needs != [ROLLUP_JOB]:
-            out.append((where, (
-                f"`check` needs [{', '.join(alias_needs)}], and the alias may need only [{ROLLUP_JOB}].")))
     return out
 
 
