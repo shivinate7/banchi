@@ -140,10 +140,11 @@ A rule that governs one folder lives in `.claude/rules/` and loads when a matchi
 (`app/**`: screens, design system, shell, verifying a screen), `server.md` (`server/**`: concurrency figures),
 `pipeline.md` (`pipeline/`, `store/`, `cli/`, `identify/`, `server/`, `harness/`, and `Pricing.tsx`,
 `CaptureScreen.tsx`, `BoxOps.tsx` and `BoxBrowse.tsx` in `app/src/`: join, pricing, emit, store, boxes)
-and `code-cards.md`. Codex does not read that folder. A folder one rule file governs holds an `AGENTS.md`
-link to it, which Codex loads for a session started there (D135, Codex reads the same rules).
-`server/AGENTS.md` is a real file instead: the bodies of `server.md` and `pipeline.md`, written by
-`python3 scripts/agents_gen.py --write`. The `agent links` row checks them all.
+and `code-cards.md`. Codex does not read that folder. It loads the `AGENTS.md` of the folder a session
+starts in (D135, Codex reads the same rules). `app/`, `pipeline/`, `store/`, `cli/`, `identify/` and
+`codes/` hold an `AGENTS.md` link to their rule file. `server/AGENTS.md` is a real file instead: the
+bodies of `server.md` and `pipeline.md`, written by `python3 scripts/agents_gen.py --write`. `harness/`
+holds none. The `agent links` row checks them all.
 
 ## Code cards (dormant feature) — DORMANT
 

@@ -21,4 +21,5 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - No row checks the `paths:` globs in `.claude/rules/`. A glob that matches no file stops its rule from loading, and nothing says so.
 - `rules.folder_rule_roster_findings` has no self-test. Only the live `CLAUDE.md` exercises it.
 - `make docs-audit` reads a symlinked `AGENTS.md` or `CLAUDE.md` as its own file, so one defect can be reported up to six times, once per path to the same text.
+- `pipeline.md` governs `harness/` and four `app/src/` screens, but no `AGENTS.md` there reaches it, so Codex in `harness/` never reads it.
 - `hygiene.check_agent_links` has no self-test. Only the live tree exercises its composed-file branch.
