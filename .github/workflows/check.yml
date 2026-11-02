@@ -571,7 +571,7 @@ jobs:
     # skip was tried and zizmor refuses it (`unpinned-images` cannot read an image inside
     # `fromJSON`), so the pin stays literal and a skipped job pays the pull and runs no step.
     container:
-      image: mcr.microsoft.com/playwright:v1.58.0-noble@sha256:35c7d48b4ccaf3aca5018f5f1bf7f50c7da7d61d176c530741f4f2e9ca336c34
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
       options: --ipc=host
     strategy:
       fail-fast: false
