@@ -55,7 +55,7 @@
     .frame[data-w='820'] .asof .today { bottom: auto; top: 2px; right: auto; left: calc(100% + var(--bn-2)); }
   body.nonotes .today, body.nonotes .gone-note { display: none; }
   .placeholder-ring { outline: 1px dashed var(--bn-warn); outline-offset: -1px; }
-  .ph { font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs); letter-spacing: var(--bn-tracking-caps);
+  .ph { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); letter-spacing: var(--bn-tracking-caps);
         text-transform: uppercase; color: var(--bn-warn); font-weight: 700; }
 
   /* ---------- the shell: sidebar at 1440, rail at 820 ---------- */
@@ -127,7 +127,6 @@
   .group-count { font-size: var(--bn-fs-sm); font-weight: 700; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
   .group-lede { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-left: var(--bn-2); }
   .group[data-g='needs'] .group-title { color: var(--bn-warn); }
-  .group[data-g='first'] { margin-top: var(--bn-5); padding: var(--bn-3) 0 0; outline: 1px dashed var(--bn-warn); outline-offset: var(--bn-1); }
   .group[hidden], .row[hidden], [data-opt][hidden] { display: none; }
 
   /* A row is two lines: the name line with its figures, then the reason under them. */
@@ -243,13 +242,13 @@
             <span class="set-val"><span class="bn-money">$0.49</span></span>
             <span class="set-says">Nothing lists for less.</span>
           </button>
-          <button class="set placeholder-ring" type="button" data-opt="cap">
-            <span class="set-top"><span class="bn-label">Suggestion limit</span><span class="ph">Placeholder</span></span>
+          <button class="set" type="button" data-opt="cap">
+            <span class="set-top"><span class="bn-label">Suggestion limit</span><span class="ph">You set it</span></span>
             <span class="set-val">25% either way</span>
             <span class="set-says">A bigger move waits for you in Needs you.</span>
           </button>
-          <button class="set placeholder-ring" type="button" data-opt="value">
-            <span class="set-top"><span class="bn-label">Value line</span><span class="ph">Placeholder</span></span>
+          <button class="set" type="button" data-opt="value">
+            <span class="set-top"><span class="bn-label">Value line</span><span class="ph">You set it</span></span>
             <span class="set-val"><span class="bn-money">$25.00</span></span>
             <span class="set-says">A card worth this or more waits for you.</span>
           </button>
@@ -268,7 +267,7 @@
         </aside>
 
         <p class="gone-note">Not drawn: today's <b>PriceMovers</b> block. Its read becomes the market moved suggestions in the list below.
-          Inside each row, today's parts stay: <b>PricingThumb</b> (photo), <b>ProductLink</b> (the name, and the history door opens the same product sheet), <b>TrendCell</b> (trend), and the lock opens <b>HoldPanel</b>. New: the tick, the From chip and the reason line.</p>
+          Inside each row, today's parts stay: <b>PricingThumb</b> (photo), <b>ProductLink</b> (the name; the history door opens the floating history card), <b>TrendCell</b> (trend), and the lock opens <b>HoldPanel</b>. New: the tick, the From chip and the reason line. Today's kept-off tile (<b>Tile</b> held) becomes the last send figure and the <b>Show kept off</b> press.</p>
 
         <div class="filters mark">
           <span class="today">Today: FilterBar</span>
@@ -276,6 +275,7 @@
           <button class="bn-btn chip" type="button">Game</button>
           <button class="bn-btn chip" type="button">Set</button>
           <button class="bn-btn chip" type="button">Market price</button>
+          <button class="bn-btn chip" type="button" data-kept></button>
           <span class="count" data-count></span>
         </div>
 
@@ -324,7 +324,7 @@
   const OPTIONS = [
     ['moved', 'Market moved'], ['fast', 'Units sold, as evidence'], ['unsold', 'Unsold and above market'],
     ['undercut', 'Undercut by others'], ['signal', 'Outside signal'], ['cap', 'Suggestion limit'],
-    ['value', 'Value line'], ['first', 'As first drawn'],
+    ['value', 'Value line'],
   ]
   const hidden = new Set((HASH.get('hide') || '').split(',').filter(Boolean))
 
@@ -338,7 +338,7 @@
       { kind: 'new', name: 'Mew ex', set: 'Paldean Fates', no: '232/091', market: null, low: null, price: null, src: 'none',
         why: 'No market price yet. Type a price to send it.', tone: 'warn', tick: null, spark: null },
       { kind: 'live', name: 'Iono', set: 'Paldea Evolved', no: '254/193', market: 12.41, low: 12.95, now: 8.80, price: 12.41, src: 'Suggested', opt: 'cap',
-        why: 'Market up 41% since listed, past your 25% limit.', ev: ev(9, 11.80, 12.90), tone: 'warn', tick: false, spark: [5, 5, 6, 6, 7, 8, 9, 9], pct: '+22.4%' },
+        why: 'Market up 41% since listed, capped at your 25%.', ev: ev(9, 11.80, 12.90), tone: 'warn', tick: false, spark: [5, 5, 6, 6, 7, 8, 9, 9], pct: '+22.4%' },
       { kind: 'live', name: 'Pikachu ex', set: 'Surging Sparks', no: '057/191', market: 2.31, low: 2.49, now: 3.30, price: 2.31, src: 'Suggested', opt: 'cap',
         why: 'Market down 30% since listed, past your 25% limit.', ev: ev(31, 2.05, 2.60), tone: 'warn', tick: false, spark: [9, 9, 8, 7, 6, 5, 4, 4], pct: '−18.6%' },
       { kind: 'new', name: 'Umbreon VMAX', set: 'Evolving Skies', no: '215/203', market: 38.20, low: 39.10, price: 36.29, src: 'Rule', opt: 'value',
@@ -357,33 +357,30 @@
         ring: 'Placeholder: another session’s research fills this signal',
         why: 'Played in a winning deck this week.', tick: true, spark: [3, 3, 3, 3, 4, 4, 4, 5], pct: '+9.2%' },
     ] },
-    { g: 'rule', title: 'Going at the rule', lede: 'These go at your rule, at the floor, or at a price you typed.', rows: [
+    { g: 'rule', title: 'Going at the rule', lede: 'New copies go at your rule, the floor or a price you typed. Live listings here keep their price.', rows: [
       { kind: 'new', name: 'Pecharunt ex', set: 'Shrouded Fable', no: '039/064', market: 7.49, low: 7.80, price: 7.12, src: 'Rule', tick: null, spark: [7, 7, 7, 6, 7, 7, 7, 7], pct: '+0.4%' },
       { kind: 'new', name: 'Bulbasaur', set: '151', no: '001/165', copies: 3, market: 0.82, low: 1.05, price: 0.78, src: 'Rule', tick: null, spark: [5, 5, 5, 5, 5, 5, 5, 5], pct: '0.0%' },
       { kind: 'new', name: 'Nidoran', set: '151', no: '029/165', market: 0.06, low: 0.99, price: 0.49, src: 'Floor', tick: null, spark: null },
       { kind: 'new', name: 'Professor’s Research', set: 'Scarlet and Violet', no: '189/198', market: 1.52, low: 1.69, price: 1.75, src: 'You', tick: null, spark: [5, 5, 5, 5, 4, 5, 5, 5], pct: '−0.7%' },
-      { kind: 'live', name: 'Squawkabilly ex', set: 'Paldea Evolved', no: '169/193', market: 2.98, low: 3.10, now: 2.85, price: 2.85, src: 'Rule', tick: null, still: true,
-        why: 'Live at your rule. Nothing to change.', spark: [6, 6, 6, 6, 6, 6, 6, 6], pct: '+0.3%' },
-    ] },
-    { g: 'first', title: 'As first drawn', opt: 'first', lede: 'To compare only. These two triggers as the first mockup drew them. They count toward no send.', rows: [
-      { kind: 'live', name: 'Arven', set: 'Obsidian Flames', no: '186/197', market: 1.99, low: 2.15, now: 2.10, price: 1.89, src: 'Suggested', alt: true,
-        why: 'Unsold 34 days.', tick: true, spark: [5, 5, 5, 4, 5, 4, 4, 4], pct: '−2.1%' },
-      { kind: 'live', name: 'Miraidon ex', set: 'Scarlet and Violet', no: '081/198', market: 5.31, low: 5.60, now: 4.75, price: 5.04, src: 'Suggested', alt: true,
-        why: 'Selling fast: 212 sold across TCGplayer in 30 days.', tick: true, spark: [4, 4, 5, 5, 5, 5, 6, 6], pct: '+6.1%' },
+      { kind: 'live', name: 'Squawkabilly ex', set: 'Paldea Evolved', no: '169/193', market: 2.98, low: 3.10, now: 2.85, price: 2.85, src: 'Live', tick: null, still: true,
+        why: 'Live at the price it listed at. Nothing to change.', spark: [6, 6, 6, 6, 6, 6, 6, 6], pct: '+0.3%' },
     ] },
   ]
   const FLOOR = 49
+  const CAP = 0.25
+  const KEPT = 2
   const rulePrice = (market) => Math.max(FLOOR, Math.floor((Math.round(market * 100) * 95 + 50) / 100)) / 100
   for (const r of G.flatMap((g) => g.rows)) {
     if (r.market === null || !['Rule', 'Suggested', 'Floor'].includes(r.src)) continue
     r.price = rulePrice(r.market)
-    if (r.still) r.now = r.price
+    /* A raise stops at the suggestion limit. A fall past it keeps its full depth and waits for a tick. */
+    if (r.src === 'Suggested' && r.price > r.now * (1 + CAP)) r.price = Math.floor(r.now * (1 + CAP) * 100) / 100
   }
   const ROWS = G.flatMap((g) => g.rows.map((r) => Object.assign(r, { group: g })))
   ROWS.forEach((r, i) => { r.id = `r${i}` })
   const off = (r) => (r.opt && hidden.has(r.opt)) || (r.group.opt && hidden.has(r.group.opt))
 
-  const SRC_WORD = { Rule: 'Rule', You: 'You', Floor: 'Floor', Suggested: 'Suggested', none: 'No price yet' }
+  const SRC_WORD = { Rule: 'Rule', You: 'You', Floor: 'Floor', Suggested: 'Suggested', Live: 'Live', none: 'No price yet' }
 
   function spark(points) {
     if (!points) return '<span class="dash">—</span>'
@@ -399,7 +396,7 @@
     const was = r.kind === 'live' && !r.still ? `<span class="was">Now ${$(r.now)}</span><svg class="to" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${PATH.arrow}"/></svg>` : ''
     const what = r.kind === 'live' ? 'Live' : r.copies ? `${r.copies} new copies` : 'New'
     const chip = `<span class="bn-pill bn-pill-outline">${SRC_WORD[r.src]}</span>`
-    return `<div class="cols row${r.ring || r.alt ? ' ringed' : ''}${r.ring ? ' placeholder-ring mark' : ''}" data-src="${r.src}" data-opt="${r.opt || ''}">
+    return `<div class="cols row${r.ring ? ' ringed' : ''}${r.ring ? ' placeholder-ring mark' : ''}" data-src="${r.src}" data-opt="${r.opt || ''}">
       ${r.ring ? `<span class="today new">${r.ring}</span>` : ''}
       ${tick}
       <span class="thumb" aria-hidden="true"></span>
@@ -423,7 +420,7 @@
   function tally() {
     const t = { fresh: 0, freshCash: 0, up: 0, upCash: 0, down: 0, downCash: 0, typed: 0, typedCash: 0 }
     for (const r of ROWS) {
-      if (off(r) || r.alt || r.still || r.price === null) continue
+      if (off(r) || r.still || r.price === null) continue
       if (r.tick === false) continue
       const n = r.copies || 1
       if (r.src === 'You') { t.typed += n; t.typedCash += r.price * n }
@@ -443,9 +440,11 @@
       `<span><b>${t.fresh}</b> new, listing for ${$(t.freshCash)}</span>` +
       `<span><b>${t.up}</b> ${t.up === 1 ? 'rise' : 'rises'}, up ${$(t.upCash)} in all</span>` +
       `<span><b>${t.down}</b> ${t.down === 1 ? 'fall' : 'falls'}, down ${$(-t.downCash)} in all</span>` +
-      `<span><b>${t.typed}</b> typed by you, listing for ${$(t.typedCash)}</span>`
+      `<span><b>${t.typed}</b> typed by you, listing for ${$(t.typedCash)}</span>` +
+      `<span><b>${KEPT}</b> kept off TCGplayer, not in this send</span>`
     root.querySelector('[data-send-press]').innerHTML = `${svg('send', 18)}Send ${copies(t.units)} to TCGplayer`
-    root.querySelector('[data-count]').textContent = `${ROWS.filter((r) => !off(r) && !r.alt).length} items`
+    root.querySelector('[data-kept]').textContent = `Show kept off (${KEPT})`
+    root.querySelector('[data-count]').textContent = `${ROWS.filter((r) => !off(r)).length} items`
     for (const el of root.querySelectorAll('[data-opt]')) el.hidden = hidden.has(el.dataset.opt)
     for (const g of root.querySelectorAll('.group')) {
       g.hidden = g.dataset.opt !== undefined && hidden.has(g.dataset.opt)
