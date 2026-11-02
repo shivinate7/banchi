@@ -95,36 +95,154 @@ def _checks_registry() -> Optional[Tuple[List[dict], dict]]:
     return [dict(entry) for entry in entries], dict(needs)
 
 
-def _run_commands(workflow: str) -> List[str]:
-    """Each command line of every `run:` key: the inline value, or the body of a `|`/`>` block
-    (every following line indented deeper than the key). Comment lines are dropped first."""
-    lines = [ln for ln in workflow.splitlines() if not ln.lstrip().startswith("#")]
-    commands: List[str] = []
+# The one step shape a shard's `run:` may take. Make's own exit code reaches the job (`rc`), the
+# skip count is read by `scripts/ci-skip-count.sh`, and nothing else can run in the block: a
+# make line in dead code (`if`, a heredoc, after an `exit`) or an `|| true` would let a red
+# shard read green. `{target}` is the make target as the step writes it (`ci-check-static`, or
+# MATRIX_TARGET in the matrix step) and `{log}` is that target's name in the log path.
+SKIP_COUNT_STEP = (
+    "set -o pipefail",
+    'log="$RUNNER_TEMP/make-{log}.log"',
+    "rc=0",
+    'make {target} 2>&1 | tee "$log" || rc=$?',
+    'scripts/ci-skip-count.sh {target} "$log"',
+    'exit "$rc"',
+)
+MATRIX_TARGET = '"$TARGET"'
+# The only `if:` such a job may carry, and the step and job keys that could end a red run green.
+SHARD_JOB_GUARD = "${{ !github.event.pull_request.draft }}"
+_STEP_BAD_KEYS = ("if", "continue-on-error", "shell")
+_JOB_BAD_KEYS = ("continue-on-error", "defaults")
+
+
+def _is_skippable(line: str) -> bool:
+    return not line.strip() or line.lstrip().startswith("#")
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def _key_of(line: str) -> Tuple[int, str, str]:
+    """(column, key, value) of a `key: value` line, past any `- ` list dash."""
+    stripped = line.lstrip()
+    col = _indent(line)
+    dash = re.match(r"-\s+", stripped)
+    if dash:
+        col, stripped = col + dash.end(), stripped[dash.end():]
+    key = re.match(r"([\w-]+)\s*:\s*(.*?)\s*$", stripped)
+    return (col, key.group(1), key.group(2)) if key else (col, "", "")
+
+
+def _expected_step(target: str) -> List[str]:
+    log = "$TARGET" if target == MATRIX_TARGET else target
+    return [ln.format(target=target, log=log) for ln in SKIP_COUNT_STEP]
+
+
+def _run_body(lines: List[str], i: int, col: int, rest: str) -> List[str]:
+    """The command lines of the `run:` key at line i: its block scalar, or its inline value.
+    Blank and comment lines are dropped."""
+    if rest[:1] not in ("|", ">"):
+        return [rest] if rest else []
+    body: List[str] = []
+    for follow in lines[i + 1:]:
+        if follow.strip() and _indent(follow) <= col:
+            break
+        if not _is_skippable(follow):
+            body.append(follow.strip())
+    return body
+
+
+def _step_start(lines: List[str], i: int, col: int) -> Optional[int]:
+    """The line of the list dash that opens the step holding the key at line i."""
+    if re.match(r"\s*-\s", lines[i]):
+        return i
+    for j in range(i - 1, -1, -1):
+        if not _is_skippable(lines[j]) and re.match(r"\s*-\s", lines[j]) and _key_of(lines[j])[0] == col:
+            return j
+    return None
+
+
+def _context_problems(lines: List[str], i: int, col: int, where: str) -> List[str]:
+    """What in the step and job around the `run:` at line i could end a red run green."""
+    start = _step_start(lines, i, col)
+    if start is None:
+        return ["{0} is not inside a step of a job.".format(where)]
+    dash = _indent(lines[start])
+    end = next((j for j in range(start + 1, len(lines))
+                if not _is_skippable(lines[j]) and _indent(lines[j]) <= dash), len(lines))
+    found = ["{0}: its step sets `{1}:`, which can end a red run green.".format(where, key)
+             for kcol, key, _ in (_key_of(lines[j]) for j in range(start, end) if not _is_skippable(lines[j]))
+             if kcol == col and key in _STEP_BAD_KEYS]
+    steps = next((j for j in range(start - 1, -1, -1)
+                  if re.match(r"\s*steps:\s*$", lines[j]) and _indent(lines[j]) <= dash), None)
+    if steps is None:
+        return found + ["{0} is not inside a job's `steps:`.".format(where)]
+    scol = _indent(lines[steps])
+    head = next((j for j in range(steps - 1, -1, -1)
+                 if not _is_skippable(lines[j]) and _indent(lines[j]) < scol), None)
+    if head is None:
+        return found + ["{0} is not inside a job.".format(where)]
+    for j in range(head + 1, len(lines)):
+        if _is_skippable(lines[j]):
+            continue
+        if _indent(lines[j]) <= _indent(lines[head]):
+            break
+        kcol, key, value = _key_of(lines[j])
+        if kcol != scol:
+            continue
+        if key == "if" and value != SHARD_JOB_GUARD:
+            found.append("{0}: its job's `if:` is `{1}`; only `{2}` may stand there.".format(
+                where, value, SHARD_JOB_GUARD))
+        elif key in _JOB_BAD_KEYS:
+            found.append("{0}: its job sets `{1}:`, which can end a red run green.".format(where, key))
+    return found
+
+
+def _scan_shard_steps(workflow: str) -> Tuple[Set[str], List[str]]:
+    """(shards run as a job of their own, problems). A `run:` whose command names a
+    `make ci-check-*` target, or MATRIX_TARGET, must be exactly SKIP_COUNT_STEP, in a step with
+    no `if:`, `continue-on-error` or `shell:`, in a job whose only `if:` is SHARD_JOB_GUARD and
+    with no `continue-on-error`. Anything else is a problem and the target is no shard."""
+    lines = workflow.splitlines()
+    shards: Set[str] = set()
+    problems: List[str] = []
     for i, line in enumerate(lines):
-        key = re.match(r"^(\s*)(?:-\s+)?run:\s*(.*?)\s*$", line)
-        if not key:
+        col, name, rest = _key_of(line)
+        if name != "run" or line.lstrip().startswith("#"):
             continue
-        indent, rest = len(key.group(1)), key.group(2)
-        if rest[:1] not in ("|", ">"):
-            commands.append(rest)
+        body = _run_body(lines, i, col, rest)
+        targets = sorted(set(re.findall(r'\bmake\s+(ci-check-[\w-]+|"\$TARGET")', "\n".join(body))))
+        if not targets:
             continue
-        for body in lines[i + 1:]:
-            if body.strip() and len(body) - len(body.lstrip()) <= indent:
-                break
-            commands.append(body.strip())
-    return commands
+        where = "`run:` at line {0}".format(i + 1)
+        bad: List[str] = []
+        if len(targets) != 1 or body != _expected_step(targets[0]):
+            bad.append("{0} runs {1} but is not the counted-skip step. Expected exactly, blank and "
+                       "comment lines aside:\n{2}".format(
+                           where, targets, "\n".join("      " + ln for ln in _expected_step(targets[0]))))
+        bad += _context_problems(lines, i, col, where)
+        problems += bad
+        if not bad and MATRIX_TARGET not in targets:
+            shards |= set(targets)
+    return shards, problems
+
+
+def workflow_step_problems(workflow: str) -> List[str]:
+    """What is wrong with a shard step in `check.yml`: not the counted-skip shape, or in a step or
+    job that can end a red run green. See SKIP_COUNT_STEP."""
+    return _scan_shard_steps(workflow)[1]
 
 
 def workflow_shards(workflow: str) -> Set[str]:
-    """The shards `check.yml` runs: the matrix targets, and any job that runs one as a real
-    `make ci-check-*` command of a `run:` key, alone on its line or inside a multi-line block
-    (a step that also counts skips). A commented line is not a run."""
+    """The shards `check.yml` runs: the matrix targets, and each job that runs one as a
+    `make ci-check-*` step of the exact counted-skip shape (`workflow_step_problems` names the
+    rest). A commented line is not a run."""
     live = "\n".join(ln for ln in workflow.splitlines() if not ln.lstrip().startswith("#"))
     matrix = re.search(r"target:\s*\[([^\]]*)\]", live)
     listed = {t.strip() for t in matrix.group(1).split(",")} if matrix else set()
     # a shard that runs as a job of its own (`ci-static`, so `design-check` can wait on it alone)
-    found = {m.group(1) for cmd in _run_commands(live) for m in [re.match(r"make (ci-check-[\w-]+)(?:\s|$)", cmd)] if m}
-    return listed | found
+    return listed | _scan_shard_steps(workflow)[0]
 
 
 def _check_registry() -> Row:
@@ -218,6 +336,8 @@ def _check_registry() -> Row:
             "the `ci-check` job's matrix lists {0}, and the shards are {1}.\n"
             "  A shard in no job gates nothing on a pull request."
         ).format(sorted(listed) or "nothing", sorted(CI_SHARD_RULES))))
+    for problem in workflow_step_problems(workflow):
+        findings.append(Finding(rel(CHECK_WORKFLOW), problem))
 
     # NEEDS is a section of this file in D80's sense, and the same rule applies one level
     # down: a vocabulary entry no check claims is a definition with no reader.

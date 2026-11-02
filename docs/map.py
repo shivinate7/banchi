@@ -3592,7 +3592,7 @@ COMPONENTS = [
                         "its `ci-static` job call it over the shard's log. It prints "
                         "`skipped in <target>: ...` to the job log and the step summary, and "
                         "never fails: the calling step keeps make's exit code.",
-                "governed_by": ["D161"],
+                "governed_by": ["D136"],
             },
             "ignore-check.sh": {"does": "the other half of D47: `git check-ignore` over every path "
                                         "a worktree provisions, asserting each is ignored WHATEVER "
