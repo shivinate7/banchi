@@ -115,7 +115,7 @@
      `.pricetrend-mini`, `.pricetrend { gap: var(--bn-2) }`) — 120px, not 64 — so the column was
      narrower than what it draws, and `overflow: hidden` cropped it flush against Lowest's own
      right edge with none of the caption's gap visible past it. */
-  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 128px 60px var(--pricing-now-w) 136px 84px 40px;
+  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 128px [reason-end] 60px 136px 84px 40px;
   align-items: center;
   column-gap: var(--bn-3);
   padding: 0 var(--bn-3);
@@ -128,7 +128,16 @@
    its template is its own and the narrow rules below never meet it. */
 .pricing-list[data-range='some'] .pricing-caption,
 .pricing-list[data-range='some'] .pricing-row {
-  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 116px 128px 60px var(--pricing-now-w) 136px 84px 40px;
+  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 116px 128px [reason-end] 60px 136px 84px 40px;
+}
+/* A LIST WITH LIVE LISTINGS has a track for what TCGplayer holds now, before the price. */
+.pricing-list[data-now='some'] .pricing-caption,
+.pricing-list[data-now='some'] .pricing-row {
+  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 40px;
+}
+.pricing-list[data-range='some'][data-now='some'] .pricing-caption,
+.pricing-list[data-range='some'][data-now='some'] .pricing-row {
+  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 116px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 40px;
 }
 .pricing-list[data-range='some'][data-copies='none'] .pricing-caption,
 .pricing-list[data-range='some'][data-copies='none'] .pricing-row {
@@ -262,7 +271,10 @@
 .pricing-list[data-copies='some'] .pricing-row > .pricing-id,
 .pricing-list[data-copies='some'] .pricing-row > .pricing-ref,
 .pricing-list[data-copies='some'] .pricing-row > .pricing-col-trend { grid-row: 1; }
-.pricing-list[data-copies='some'] .pricing-row > .pricing-reason { grid-row: 2; grid-column: 2 / -6; }
+.pricing-list[data-copies='some'] .pricing-row > .pricing-reason { grid-row: 2; grid-column: 2 / reason-end; }
+/* A row with no reason gives its second line to the name and figures, so the price source under the
+   price on a narrow desk adds no height. */
+.pricing-list[data-copies='some'] .pricing-row:not(:has(> .pricing-reason)) > :is(.pricing-id, .pricing-ref, .pricing-col-trend) { grid-row: 1 / 3; }
 .pricing-reason[data-tone='warn'] { color: var(--bn-warn); }
 
 .pricing-ref { position: relative; text-align: center; font-size: var(--bn-fs-md); color: var(--bn-ink); white-space: nowrap; }
@@ -483,7 +495,9 @@
 /* ---- 720 and narrower desks: Lowest and the trend leave the row (the product view has both) -- */
 @container bn-page (max-width: 899px) {
   .pricing-caption,
-  .pricing-row { --pricing-now-w: 72px; grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 60px var(--pricing-now-w) 128px 40px; }
+  .pricing-row { --pricing-now-w: 72px; grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 60px [reason-end] 128px 40px; }
+  .pricing-list[data-now='some'] .pricing-caption,
+  .pricing-list[data-now='some'] .pricing-row { grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 60px var(--pricing-now-w) [reason-end] 128px 40px; }
   .pricing-to,
   .pricing-caption .pricing-col-src { display: none; }
   .pricing-list[data-copies='none'] .pricing-caption,
@@ -498,7 +512,6 @@
   .pricing-list[data-copies='some'] .pricing-row > .pricing-now { grid-row: 1; align-self: end; }
   /* The reason runs under Qty and Now too, so they keep to the name line. */
   .pricing-list[data-copies='some'] .pricing-row > .pricing-col-qty { grid-row: 1; align-self: end; height: calc(var(--bn-8) + var(--bn-4)); padding-bottom: var(--bn-4); align-items: center; }
-  .pricing-list[data-copies='some'] .pricing-row > .pricing-reason { grid-column: 2 / -3; }
   .pricing-list[data-copies='some'] .pricing-row > .pricing-col-src { grid-row: 2; grid-column: -3 / -2; justify-self: end; align-self: start; }
 }
 

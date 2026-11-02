@@ -3271,7 +3271,7 @@ export function Pricing() {
           {filtering && order.length === 0 ? (
             <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." didYouMean={{ name: nearName, onPick: setQuery }} />
           ) : null}
-          <div className="pricing-list" ref={measureList} data-copies={source.copies ? 'some' : 'none'} data-range={rangeOn ? 'some' : undefined}>
+          <div className="pricing-list" ref={measureList} data-copies={source.copies ? 'some' : 'none'} data-range={rangeOn ? 'some' : undefined} data-now={oneList ? 'some' : undefined}>
             <div className="pricing-caption" role="row">
               {source.copies ? <span /> : null}
               {/* "ITEM", NOT "CARD" (the owner's add-on, 2026-09-26): the rows include sealed
@@ -3284,7 +3284,7 @@ export function Pricing() {
               ) : null}
               <span className="pricing-col-trend" role="columnheader">Trend</span>
               {source.copies ? <span className="pricing-col-qty" role="columnheader">Qty</span> : null}
-              {source.copies ? <span /> : null}
+              {oneList ? <span /> : null}
               <SortHeader grid className="pricing-col-price" sortKey="asking" value={sort} onChange={setSort} rest={SORT_AT_REST}>{readView ? 'New price' : 'Price'}</SortHeader>
               {source.copies ? <span className="pricing-col-src" role="columnheader">From</span> : null}
               <span />
@@ -3311,7 +3311,7 @@ export function Pricing() {
                     flag={liveFlag(flagOf(sku, answerFor(sku), source.locked(sku.sku) !== null, cut), readView || oneList)}
                     suggestion={suggestionFor(sku)}
                     from={fromWord(sku)}
-                    was={(() => {
+                    was={!oneList ? undefined : (() => {
                       const one = listed.get(sku.sku)
                       if (one === undefined) return null
                       const standing = answerFor(sku)
@@ -3554,8 +3554,9 @@ function PricingRow({
   fresh?: { reason: ReactNode; tick: { on: boolean; onChange: (on: boolean) => void } | null }
   /** Where the price in the field comes from (Rule, Floor, You, Suggested, Live, or No price yet), or null. */
   from: string | null
-  /** The price TCGplayer holds now, drawn before the arrow when the field holds a different one. */
-  was: string | null
+  /** The price TCGplayer holds now, drawn before the arrow when the field holds a different one. Undefined
+   *  where the list has no live listing, and so no track for it. */
+  was: string | null | undefined
   asking: string | null | undefined
   note: string | null
   readAge: string | null
@@ -3778,7 +3779,7 @@ function PricingRow({
 
       {/* WHAT TCGPLAYER HOLDS NOW, before the field, where the field holds a different price. Its own
           track, so the field keeps its place in the price cell. */}
-      {!source.copies ? null : (
+      {was === undefined ? null : (
         <span className="pricing-now">
           {was === null || lockedWhy !== null || withheld ? null : (
             <>
