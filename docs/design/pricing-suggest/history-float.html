@@ -15,7 +15,10 @@
        f=1440 | f=820                    one frame, edge to edge (default: both, stacked)
        state=top                         the focused row is the list's second row, with no room above
                                          (default: Gardevoir ex's price field has focus, mid-list)
+       state=long                        the focused row has a long name, so the card's name truncates
+       state=loading                     the card before its history arrives, at its loaded size
        fb=next                           with no room above, the card opens under the next row instead
+       try=add | try=fold | try=add,fold the list above the open card changed: a row added, Needs you folded
        hide=moved,unsold,...             options the owner culled (see the cull strip)
        notes=off                         hides the "Today:" component tags */
   const HASH = new Map(location.hash.slice(1).split('&').filter(Boolean).map((p) => {
@@ -222,7 +225,7 @@
   /* ---------- price history: shared by the three options ---------- */
   .mock-ribbon { z-index: 70; }
   .hx-chart { display: block; overflow: visible; }
-  .hx-chart text { font-family: var(--bn-font-ui); font-size: 10px; fill: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+  .hx-chart text { font-family: var(--bn-font-ui); font-size: var(--bn-fs-2xs); fill: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
   .hx-guide { stroke: var(--bn-line); stroke-width: 1; }
   .hx-listed { stroke: var(--bn-ink-4); stroke-width: 1; stroke-dasharray: 2 3; }
   .hx-spread { stroke: var(--bn-ink-4); stroke-width: 2; stroke-linecap: round; }
@@ -274,7 +277,20 @@
   .fl-caret[hidden] { display: none; }
   .fl-none { display: flex; align-items: center; color: var(--bn-ink-3); }
   .fl-head { display: flex; align-items: center; gap: var(--bn-3); }
-  .fl-head .hx-name { flex: 1; font-family: var(--bn-font-display); font-size: var(--bn-fs-h3); font-weight: 800; }
+  /* One line. A long name ends in an ellipsis, and its title holds the whole name. */
+  .fl-head .hx-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                      font-family: var(--bn-font-display); font-size: var(--bn-fs-h3); font-weight: 800; }
+  /* Loading: the name, the chart and the four prices hold their loaded size. */
+  .fl[data-load] [data-fl-name] { color: var(--bn-ink-3); }
+  .fl-wait { display: block; border-radius: var(--bn-r); background: var(--bn-surface-2); }
+  /* Mockup-only: changes to the list above the open card, to show the card stays on its row. */
+  .try { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); padding: var(--bn-3) var(--bn-6);
+         border-bottom: 1px dashed var(--bn-line-strong); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .try > span { margin-right: var(--bn-2); }
+  .try button { --btn-h: 40px; }
+  .try button[aria-pressed='true'] { color: var(--bn-accent); box-shadow: inset 0 0 0 1px var(--bn-accent); }
+  .row[data-added] { box-shadow: inset 0 0 0 1px var(--bn-warn); }
+  .group[data-folded] .row { display: none; }
   .fl-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--bn-4); }
   .fl .hx-facts { grid-template-columns: repeat(4, auto); justify-content: start; gap: var(--bn-1) var(--bn-5); }
   .frame[data-w='820'] .fl-foot { flex-direction: column; align-items: stretch; }
@@ -290,6 +306,9 @@
 <template id="page">
   <div class="mock-ribbon"><span class="bn-pill bn-pill-warn">Sample</span>Every price, count, date and chart point on this page is a sample. None is a real price.</div>
   <div class="cull" data-cull></div>
+  <div class="try" data-try-strip><span>Change the list above the open card. The card stays on its row.</span>
+    <button class="bn-btn bn-btn-sm" type="button" data-try="add" aria-pressed="false">Add a row above</button>
+    <button class="bn-btn bn-btn-sm" type="button" data-try="fold" aria-pressed="false">Fold Needs you</button></div>
   <div class="app">
     <nav class="side" aria-label="Main" data-side></nav>
     <div class="main">
@@ -435,7 +454,7 @@
       { kind: 'new', name: 'Pecharunt ex', set: 'Shrouded Fable', no: '039/064', market: 7.49, low: 7.80, price: 7.12, src: 'Rule', tick: null, spark: [7, 7, 7, 6, 7, 7, 7, 7], pct: '+0.4%' },
       { kind: 'new', name: 'Bulbasaur', set: '151', no: '001/165', copies: 3, market: 0.82, low: 1.05, price: 0.78, src: 'Rule', tick: null, spark: [5, 5, 5, 5, 5, 5, 5, 5], pct: '0.0%' },
       { kind: 'new', name: 'Nidoran', set: '151', no: '029/165', market: 0.06, low: 0.99, price: 0.49, src: 'Floor', tick: null, spark: null },
-      { kind: 'new', name: 'Professor’s Research', set: 'Scarlet and Violet', no: '189/198', market: 1.52, low: 1.69, price: 1.75, src: 'You', tick: null, spark: [5, 5, 5, 5, 4, 5, 5, 5], pct: '−0.7%' },
+      { kind: 'new', name: 'Professor’s Research (Professor Turo) (Full Art)', set: 'Scarlet and Violet', no: '189/198', market: 1.52, low: 1.69, price: 1.75, src: 'You', tick: null, spark: [5, 5, 5, 5, 4, 5, 5, 5], pct: '−0.7%' },
       { kind: 'live', name: 'Squawkabilly ex', set: 'Paldea Evolved', no: '169/193', market: 2.98, low: 3.10, now: 2.85, price: 2.85, src: 'Rule', tick: null, still: true,
         why: 'Live at your rule. Nothing to change.', spark: [6, 6, 6, 6, 6, 6, 6, 6], pct: '+0.3%' },
     ] },
@@ -636,9 +655,10 @@
     const narrow = w === '820', GAP = 8, W = narrow ? 384 : 560
     f.querySelector('.gone-note').insertAdjacentHTML('afterend', `<p class="press-note"><b>New:</b> a floating card that opens when a price field takes focus, and from the history door.
       It sits above the focused row, so the row and the next price stay clear. With no room above, it opens below the row and left of the price column.
+      It stays open while focus is anywhere in the list, and stays on its row when the list above it changes.
       <b>Width:</b> 560px at 1440, so its chart is 520px wide; 384px at 820, so its chart is 344px wide. Today's sheet draws it 380px wide.
       The reason and the sold range stay on the row, so each shows once. The daily copies-sold bars are left out.</p>`)
-    f.insertAdjacentHTML('beforeend', `<section class="fl mark" role="dialog" tabindex="-1" data-fl hidden>
+    f.insertAdjacentHTML('beforeend', `<section class="fl mark" role="group" tabindex="-1" data-fl hidden>
       <span class="fl-caret" aria-hidden="true"></span>
       <header class="fl-head"><span class="bn-overlay-icon">${svg('history', 18)}</span><p class="hx-name" data-fl-name></p>
         <button class="bn-icon-btn iconb" type="button" aria-label="Close" data-fl-close>${svg('close', 18)}</button></header>
@@ -650,15 +670,22 @@
     const doorOf = (row) => row.querySelector('[aria-label^="Price history"]')
     const fieldOf = (row) => row.querySelector('.field')
     const dataOf = (row) => ROWS.find((r) => r.name === row.querySelector('.name').textContent)
+    const loading = HASH.get('state') === 'loading'
     const fill = (row, width) => {
-      const r = dataOf(row), D = hxFor(r)
+      const r = dataOf(row), D = hxFor(r), name = card.querySelector('[data-fl-name]')
       card.style.width = `${width}px`
-      card.setAttribute('aria-label', `Price history for ${r.name}`)
-      card.querySelector('[data-fl-name]').textContent = r.name
-      card.querySelector('[data-fl-chart]').innerHTML = `<h3 class="hx-h">Last 90 days</h3>` + (D
-        ? hxLegend() + hxChart(width - 40, 170, D)
+      card.setAttribute('aria-label', `Price history for ${loading ? 'this card' : r.name}`)
+      card.toggleAttribute('data-load', loading)
+      /* The title is the whole name, so a name cut short by the ellipsis can still be read. None while loading. */
+      name.textContent = loading ? 'Price history' : r.name
+      if (loading) name.removeAttribute('title'); else name.title = r.name
+      /* Loading holds the legend's line, the chart box and the four prices, with a dash for each figure. */
+      const dashes = `<dl class="hx-facts">${['Market', 'Lowest', 'Lowest, shipped', 'Direct Low'].map((t) => `<div><dt>${t}</dt><dd class="dash">—</dd></div>`).join('')}</dl>`
+      card.querySelector('[data-fl-chart]').innerHTML = `<h3 class="hx-h">Last 90 days</h3>` + (loading
+        ? hxLegend() + `<span class="fl-wait" style="height:170px" aria-hidden="true"></span>`
+        : D ? hxLegend() + hxChart(width - 40, 170, D)
         : `<p class="fl-none" style="height:${170 + 24}px">No price history yet. It starts with the first market price.</p>`)
-      card.querySelector('[data-fl-facts]').innerHTML = D ? hxFacts(D.facts) : ''
+      card.querySelector('[data-fl-facts]').innerHTML = loading ? dashes : D ? hxFacts(D.facts) : ''
     }
     let open = null, mode = null, quiet = false
     const place = (row, how = mode) => {
@@ -670,6 +697,8 @@
       row.dataset.picked = ''
       if (how === 'door') doorOf(row).dataset.on = ''
       else fieldOf(row).classList.add('is-focus')
+      /* Opened by focus, the card's buttons are out of the tab order, so Tab goes on down the list. */
+      for (const b of card.querySelectorAll('button')) b.tabIndex = how === 'door' ? 0 : -1
       const fr = f.getBoundingClientRect(), rr = row.getBoundingClientRect(), dr = doorOf(row).getBoundingClientRect()
       const pr = row.querySelector('.price').getBoundingClientRect(), fd = fieldOf(row).getBoundingClientRect()
       /* Room above ends at the list's column captions, or under the sticky send bar once that bar has stuck. */
@@ -705,23 +734,28 @@
       if (was && how === 'door') doorOf(was).focus({ preventScroll: true })
       else if (was && inCard) { quiet = true; fieldOf(was).querySelector('input').focus({ preventScroll: true }); quiet = false }
     }
-    const startName = HASH.get('state') === 'top' ? 'Iono' : 'Gardevoir ex'
+    const startName = { top: 'Iono', long: ROWS.find((r) => r.src === 'You').name }[HASH.get('state')] || 'Gardevoir ex'
     document.fonts.ready.then(() => place(rowsOf().find((r) => r.querySelector('.name').textContent === startName), 'focus'))
+    /* The card is re-placed whenever the list's layout changes under it (a row added, a group folded), not
+       only on resize or scroll. A row folded away closes it. */
     f.replace = () => { if (open) open.offsetParent ? place(open) : place(null) }
     addEventListener('resize', f.replace)
+    new ResizeObserver(() => f.replace()).observe(f.querySelector('.list'))
+    /* Only a price field moves the card. The door, the lock, the next tick and the next name leave it on its row. */
     f.addEventListener('focusin', (e) => {
       if (e.target.closest('.field') && !quiet) place(e.target.closest('.row'), 'focus')
     })
-    f.addEventListener('focusout', (e) => {
-      const to = e.relatedTarget
-      if (mode === 'focus' && !(to && (to.closest('.field') || to.closest('[data-fl]')))) place(null)
-    })
+    /* It stays open while focus is anywhere in the list or in the card, and closes when focus leaves both. */
+    const keeps = (el) => el && el.closest('.list, [data-fl], [data-try-strip]')
+    f.addEventListener('focusout', (e) => { if (open && !keeps(e.relatedTarget)) place(null) })
     f.addEventListener('click', (e) => {
       const door = e.target.closest('.row [aria-label^="Price history"]')
       if (door) return place(door.closest('.row'), 'door')
       if (e.target.closest('[data-fl-close]')) return close()
-      if (open && !e.target.closest('[data-fl]') && !e.target.closest('.field')) place(null)
+      if (open && !keeps(e.target)) place(null)
     })
+    /* The mockup's list changes take no focus, as a change from elsewhere would not. */
+    f.querySelector('[data-try-strip]').addEventListener('mousedown', (e) => e.preventDefault())
     f.addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) close() })
   }
 
@@ -745,7 +779,35 @@
     frames.appendChild(f)
   }
   const all = () => document.querySelectorAll('.frame').forEach(paint)
-  all()
+
+  /* ---- mockup-only list changes above the open card: a row added, Needs you folded ---- */
+  const ADDED = Object.assign({ kind: 'new', name: 'Charizard ex', set: 'Obsidian Flames', no: '125/197', market: null, low: null, price: null,
+    src: 'none', why: 'No market price yet. Type a price to send it.', tone: 'warn', tick: null, spark: null }, { group: G[0], id: 'added' })
+  const tries = new Set((HASH.get('try') || '').split(',').filter(Boolean))
+  function applyTries() {
+    if (tries.has('add') && !ROWS.includes(ADDED)) ROWS.push(ADDED)
+    if (!tries.has('add') && ROWS.includes(ADDED)) ROWS.splice(ROWS.indexOf(ADDED), 1)
+    for (const f of document.querySelectorAll('.frame')) {
+      const needs = f.querySelector('.group[data-g="needs"]'), have = needs.querySelector('.row[data-added]')
+      if (tries.has('add') && !have) {
+        needs.querySelector('.group-head').insertAdjacentHTML('afterend', row(ADDED))
+        needs.querySelector('.group-head').nextElementSibling.dataset.added = ''
+      }
+      if (!tries.has('add') && have) have.remove()
+      needs.toggleAttribute('data-folded', tries.has('fold'))
+      for (const b of f.querySelectorAll('[data-try]')) b.setAttribute('aria-pressed', tries.has(b.dataset.try))
+    }
+    all()
+  }
+  applyTries()
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-try]')
+    if (!b) return
+    tries.has(b.dataset.try) ? tries.delete(b.dataset.try) : tries.add(b.dataset.try)
+    HASH.set('try', [...tries].join(',')); if (!HASH.get('try')) HASH.delete('try')
+    history.replaceState(null, '', '#' + [...HASH].map(([k, v]) => (v === '' ? k : `${k}=${v}`)).join('&'))
+    applyTries()
+  })
 
   document.addEventListener('change', (e) => {
     const id = e.target.dataset.tick
