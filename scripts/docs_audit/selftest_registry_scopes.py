@@ -314,9 +314,9 @@ def run(ok) -> None:
     DEMO = ".github/workflows/demo.yml"
     CHECK_PATH = rel(registry_scopes.CHECK_WORKFLOW)
     WANTED = {
-        "check": "a thin alias",
-        "design-check-passed": "a recorder",
-        "nightly-alarm": "a reporter",
+        "design-check-passed": "a recorder: it skips on purpose unless the browser matrix really ran",
+        "nightly-alarm": "a reporter: it skips unless a nightly run failed, and a skip is its normal answer",
+        "ci-done": "the last job: it reads every other job's result and comments on a red pull request run; it needs the rollup, so the rollup cannot need it",
     }
     GREEN_STAMP = '{"merge": {"requiredChecks": "protection"}}'
 
@@ -376,12 +376,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo alarm
-  check:
-    needs: [all-jobs-passed]
-    if: ${{ always() && !github.event.pull_request.draft }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo alias
   all-jobs-passed:
     needs: [ci-check, ci-static, already-passed, records, design-check]
     if: ${{ always() && !github.event.pull_request.draft }}
@@ -391,6 +385,12 @@ jobs:
       - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@
         with:
           needs: ${{ toJSON(needs) }}
+  ci-done:
+    needs: [all-jobs-passed]
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo recorded
 """)
     DEMO_TEXT = fill("""jobs:
   playwright:
@@ -420,7 +420,7 @@ jobs:
 
     expected_jobs = [
         "ci-check", "ci-static", "already-passed", "records", "design-check",
-        "design-check-passed", "nightly-alarm", "check", "all-jobs-passed",
+        "design-check-passed", "nightly-alarm", "all-jobs-passed", "ci-done",
     ]
     names = names_fn(jobs_fn(FIXTURE)) if names_fn and jobs_fn else None
     ok(
@@ -430,7 +430,7 @@ jobs:
     )
     ok(
         registry_scopes.__dict__.get("EXCLUDED") is not None and set(registry_scopes.EXCLUDED) == set(WANTED),
-        "EXCLUDED names exactly check, design-check-passed and nightly-alarm, each with a reason",
+        "EXCLUDED names exactly design-check-passed, nightly-alarm and ci-done, each with a reason",
         NOT_BUILT if not hasattr(registry_scopes, "EXCLUDED") else str(sorted(registry_scopes.EXCLUDED)),
     )
 
@@ -498,10 +498,16 @@ jobs:
         "does not need `design-check`",
     )
     red(
-        "an excluded job named in needs is a finding (check would be a cycle)",
+        "an excluded job named in needs is a finding (ci-done would be a cycle)",
         "needs: [ci-check, ci-static, already-passed, records, design-check]",
-        "needs: [ci-check, ci-static, already-passed, records, design-check, check]",
-        "needs `check`, which is excluded",
+        "needs: [ci-check, ci-static, already-passed, records, design-check, ci-done]",
+        "needs `ci-done`, which is excluded",
+    )
+    got = findings_for(FIXTURE, excluded={k: v for k, v in WANTED.items() if k != "ci-done"})
+    ok(
+        got is not None and any("does not need `ci-done`" in m for _, m in got),
+        "ci-done left out of the exclusion and absent from needs is a finding that names it",
+        NOT_BUILT if got is None else str(got),
     )
     red(
         "design-check's job-level if that reads needs outputs is a finding",
@@ -539,21 +545,9 @@ jobs:
         "  records:\n    if: >-\n      ${{ !github.event.pull_request.draft }}",
         "`records` has the job-level `if:",
     )
-    red(
-        "a check job needing more than the rollup is a finding (rule 8)",
-        "  check:\n    needs: [all-jobs-passed]",
-        "  check:\n    needs: [all-jobs-passed, ci-check]",
-        "`check` needs [all-jobs-passed, ci-check]",
-    )
-    red(
-        "a check job with no needs is a finding (rule 8)",
-        "  check:\n    needs: [all-jobs-passed]",
-        "  check:\n    runs-on: ubuntu-latest",
-        "`check` has no `needs:`",
-    )
     # CONTINUE-ON-ERROR HIDES A FAILURE FROM THE ROLLUP. A failed step or job that cannot fail its
-    # job reads green to the action, so it is a finding on a needed job, on one of its steps, on the
-    # rollup itself, and on the alias. `continue-on-error: false` is the default and is not one.
+    # job reads green to the action, so it is a finding on a needed job, on one of its steps and on
+    # the rollup itself. `continue-on-error: false` is the default and is not one.
     red(
         "continue-on-error on a needed job is a finding that names it",
         "  ci-static:\n    if: ${{ !github.event.pull_request.draft }}",
@@ -576,12 +570,6 @@ jobs:
         "continue-on-error on the all-jobs-passed step is a finding that names it",
         "      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n        with:",
         "      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n        continue-on-error: true\n        with:",
-        "continue-on-error",
-    )
-    red(
-        "continue-on-error on the check alias is a finding that names it",
-        "  check:\n    needs: [all-jobs-passed]",
-        "  check:\n    needs: [all-jobs-passed]\n    continue-on-error: true",
         "continue-on-error",
     )
     got = findings_for(FIXTURE.replace(
