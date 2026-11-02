@@ -36,6 +36,10 @@ THE BUILDER MEETS THESE NAMES, NOT A GUESS. Only what the cases below read is pi
       .price_date                     the newest bucket start used, `str()` of it `YYYY-MM-DD`.
       .render()                       the report text. The spec names no renderer; this is the
                                        one method, and `str(report)` is not pinned.
+  `read_roster` raises `ValueError`, naming the row, on a kept row whose `Total Amount` is
+  blank, whose `Quantity` is zero or negative, or that is too short to hold its columns. An
+  excluded row is never parsed for either. A product whose SKUs are all `Unopened` is priced
+  from its `Unopened` SKU's month market, for any finish.
   Not pinned: `gain` (the spec does not say dollars or percent), the order and wording of
   report sections 2 to 9, and the `(P%)` format. Money compares as `Decimal(str(value))`, ids
   as `str(value)`, so `Decimal` against `str` and `int` against `str` both pass.
@@ -53,14 +57,18 @@ through `scripts/guard-scope.py`.
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import sys
+import types
 from decimal import Decimal
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from cli import cmd_holdingsroster  # noqa: E402
+from harness.tests.home import isolated_home, run_folder  # noqa: E402
 from pipeline import rosterholdings  # noqa: E402
 from pipeline.rosterholdings import (  # noqa: E402
     RosterReport,
@@ -69,6 +77,8 @@ from pipeline.rosterholdings import (  # noqa: E402
     read_roster,
 )
 from store.pricearchive import RANGE_WIDTH_DAYS, Bucket, PriceArchive  # noqa: E402
+from store.session import Store  # noqa: E402
+from store.skus import SkuRow as StoreSkuRow  # noqa: E402
 
 PASS = 0
 FAIL = 0
@@ -109,6 +119,8 @@ HERALD = {"pid": 9008, "set": SET_CINDER, "name": "Gale Herald"}  # holo printin
 PHANTOM = {"pid": 9100, "set": SET_CINDER, "name": "Phantom Quill"}  # not in the store
 ALMANAC = {"pid": 9101, "set": SET_CINDER, "name": "Lost Almanac"}  # not in the store
 NEARMISS = {"pid": 9102, "set": SET_FROST, "name": "Ember Wisps"}  # one letter off EMBER
+SEALED = {"pid": 9009, "set": SET_CINDER, "name": "Cinder Hollow Booster Box"}  # only an Unopened SKU
+GHOST = {"pid": 9014, "set": SET_CINDER, "name": "Ghost Page"}  # not in the store, id priced by it
 
 # The roster spells the same two products differently from the store: case, runs of space,
 # punctuation in the set label, and a trailing " - 012/100"-style number on the name.
@@ -116,7 +128,8 @@ EMBER_SPELLED = {**EMBER, "set": "frostmere rift - tide edition", "name": "  emb
 FOX_SPELLED = {**FOX, "set": "Cinder  Hollow", "name": "brindle fox,  elder - 7/50"}
 
 ALL_NAMES = ("Ember Wisp", "Brindle Fox", "Wren Archivist", "Ashen Lantern", "Tide Sprite",
-             "Moss Courier", "Gale Herald", "Phantom Quill", "Lost Almanac", "Frostmere", "Cinder Hollow")
+             "Moss Courier", "Gale Herald", "Phantom Quill", "Lost Almanac", "Ghost Page",
+             "Frostmere", "Cinder Hollow")
 
 
 def line(product, *, finish="non-foil", qty=1, total="1.00", **over) -> dict:
@@ -199,6 +212,7 @@ def world():
         ("month", "2026-08-02", "9.00"))
     add("HERALD-NMR", HERALD, "060/050", "Near Mint Reverse Holofoil", "Reverse Holofoil", 9008,
         ("month", "2026-08-02", "11.00"))
+    add("BOX-U", SEALED, "", "Unopened", None, 9009, ("month", "2026-08-02", "45.00"))
 
     archive = PriceArchive()
     archive.upsert(buckets)
@@ -281,6 +295,38 @@ def test_read_keeps_tcg_purchases_only() -> None:
     ok(isinstance(report, RosterReport), "build_roster_report returns a RosterReport")
     ok(report.excluded.get("sale") == 1, "the report carries the read's excluded counts",
        str(report.excluded))
+
+
+def raised(text: str):
+    """The exception `read_roster` raises on a roster text, or `None`."""
+    try:
+        read_roster(io.StringIO(text))
+    except Exception as exc:  # noqa: BLE001 - the cases compare the class
+        return exc
+    return None
+
+
+def test_read_refuses_unreadable_kept_rows() -> None:
+    for label, row in (
+        ("a blank Total Amount", line(EMBER, total="")),
+        ("a zero Quantity", line(EMBER, qty=0)),
+        ("a negative Quantity", line(EMBER, qty=-2)),
+    ):
+        exc = raised(roster_csv(row))
+        ok(isinstance(exc, ValueError), f"a kept row with {label} raises ValueError, never a default",
+           repr(exc))
+    exc = raised(roster_csv(
+        line(WREN, Type="sale", total="", qty=0),
+        line(LANTERN, total="", qty=0, **{"Shipping Status": "canceled"}),
+        line(COURIER, Vendor="Other Shop", total="", qty=-1)))
+    ok(exc is None, "an excluded row is never parsed for amount or quantity, so a blank one is no error",
+       repr(exc))
+    # Ten good rows first, so the short row's file line (12) and row number (11) are not
+    # numbers an error message carries by accident.
+    exc = raised(roster_csv(*[line(EMBER)] * 10) + "purchase,TCG,delivered,9777\n")
+    ok(isinstance(exc, ValueError), "a short kept row raises ValueError, not AttributeError", repr(exc))
+    ok(exc is not None and any(token in str(exc) for token in ("9777", "11", "12")),
+       "the error names the short row: its file line, its row number or its product id", str(exc))
 
 
 def test_privacy() -> None:
@@ -398,6 +444,65 @@ def test_printing_pick() -> None:
        "two kept SKUs with a market: unpriced, printing", str(dict(report.unpriced)))
 
 
+def test_sealed_product_prices_from_its_unopened_sku() -> None:
+    """A product whose SKUs are all Unopened has no Near Mint SKU, and the finish means nothing
+    to it. Its one Unopened SKU with a month market prices the line, for any finish."""
+    for finish in ("non-foil", "foil", ""):
+        _roster, report = report_for(line(SEALED, finish=finish, qty=2, total="80.00"))
+        row = by_pid(report.priced).get("9009")
+        ok(row is not None and D(row.market_each) == D("45.00") and D(row.market_total) == D("90.00"),
+           f"a sealed line with finish {finish!r} is priced at its Unopened SKU's month market",
+           str(dict(report.unpriced)) if row is None else f"{row.market_each} each, {row.market_total} total")
+        ok(sum(report.unpriced.values()) == 0, f"a sealed line with finish {finish!r} is not unpriced",
+           str(dict(report.unpriced)))
+
+
+def fingerprint(db_path: Path) -> dict:
+    """Size, mtime and SHA-256 of the store file and of its WAL when the WAL holds anything.
+    SQLite makes an empty WAL on a read-only open of a WAL store; that is no write."""
+    found = {}
+    for suffix in ("", "-wal"):
+        path = Path(str(db_path) + suffix)
+        if path.exists() and (not suffix or path.stat().st_size):
+            stat = path.stat()
+            found[suffix] = (stat.st_size, stat.st_mtime_ns, hashlib.sha256(path.read_bytes()).hexdigest())
+    return found
+
+
+def test_verb_reads_a_store_and_writes_nothing() -> None:
+    """`cli.cmd_holdingsroster.run` over a real store file, on a throwaway home. The store holds
+    `world()`'s SKUs and buckets, so the verb's text must equal the in-memory report's."""
+    skus, archive = world()
+    ids = {bucket.product_id for bucket in archive.entries.values()}
+    rows = (line(EMBER, qty=2, total="6.00"), line(FOX), line(WREN),
+            line(PHANTOM, qty=2, total="5.00"), line(GHOST))
+    _roster, report = report_for(*rows, ids=ids)
+    with run_folder() as folder, isolated_home(folder) as home:
+        store = Store()
+        with store.write() as snapshot:
+            for sku in skus:
+                snapshot.skus.fold(sku.key, StoreSkuRow(
+                    product_line="synthetic", set_name=sku.set_name, product_name=sku.product_name,
+                    number=sku.number, rarity="", condition=sku.condition, grade=None,
+                    printing=sku.printing, first_seen=1, last_seen=1, source="selftest", raw={}))
+            snapshot.archive.upsert(dict(archive.entries))
+        roster_path = home / "roster.csv"
+        roster_path.write_text(roster_csv(*rows), encoding="utf-8")
+        before = fingerprint(store.db_path)
+        said: list = []
+        code = cmd_holdingsroster.run(
+            types.SimpleNamespace(csv=str(roster_path), store=str(store.db_path)), said.append)
+        after = fingerprint(store.db_path)
+    text = "\n".join(said)
+    ok(code == 0, "the verb exits 0 on a readable roster and a store", str(code))
+    ok(text.splitlines()[:2] == ["units received unknown", "units sold unknown"],
+       "the verb's output opens with the two unknowns", text[:120])
+    ok(text == report.render(), "the verb reads the store's SKUs, buckets and priced ids as the "
+       "in-memory report does", text[:600])
+    ok(bool(before) and before == after, "the verb leaves the store file's bytes and mtime unchanged",
+       f"{before} -> {after}")
+
+
 def roster_of_every_bucket() -> tuple:
     """Seven kept lines: two priced, two unpriced, one ambiguous, two unmatched. Two more rows
     (a sale, a canceled purchase) are excluded and must not move any count."""
@@ -466,8 +571,10 @@ def mutation_printing_pick_skipped() -> None:
 def main() -> int:
     print("pipeline/rosterholdings.py:")
     for case in (
-        test_read_keeps_tcg_purchases_only, test_privacy, test_name_fold, test_ambiguous,
+        test_read_keeps_tcg_purchases_only, test_read_refuses_unreadable_kept_rows,
+        test_privacy, test_name_fold, test_ambiguous,
         test_unmatched_roster_side, test_unmatched_store_side, test_printing_pick,
+        test_sealed_product_prices_from_its_unopened_sku, test_verb_reads_a_store_and_writes_nothing,
         test_every_line_in_one_bucket, test_report_text,
     ):
         try:
