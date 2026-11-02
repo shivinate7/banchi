@@ -60,7 +60,7 @@
   ],
   "walk": {
     "textSuffixes": [".md", ".py", ".ts", ".tsx", ".css", ".html", ".json", ".txt", ".yml", ".yaml", ".sh", ".js", ".mjs", ".toml"],
-    "skipDirs": [".git", "node_modules", "dist", "dist-demo", "captures", "inventory", "runs", "__pycache__", ".venv", "venv", "test-results", "playwright-report", ".serve", "worktrees", ".pytest_cache", ".ruff_cache", ".mypy_cache", ".cache", ".vite", "demo-assets", "harness/images"],
+    "skipDirs": [".git", ".github", "node_modules", "dist", "dist-demo", "captures", "inventory", "runs", "__pycache__", ".venv", "venv", "test-results", "playwright-report", ".serve", "worktrees", ".pytest_cache", ".ruff_cache", ".mypy_cache", ".cache", ".vite", "demo-assets", "harness/images"],
     "skipDotDirs": false,
     "extensionlessDirs": ["scripts/githooks"]
   },
