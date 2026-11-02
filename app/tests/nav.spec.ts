@@ -1067,7 +1067,12 @@ test('ux-wave1: the palette input shows a focus indicator when focused', async (
       return { self: pick(el), wrap: pick(el.parentElement ?? el) }
     })
 
+  // The palette's first-focus frame refocuses the input if the blur lands before it, so wait it out.
+  await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))))
   await input.blur()
+  await expect(input).not.toBeFocused()
+  await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))))
+  await expect(input).not.toBeFocused()
   const blurred = await snap()
   await input.focus()
   await expect(input).toBeFocused()

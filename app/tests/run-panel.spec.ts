@@ -3015,9 +3015,9 @@ test('a failed poll elsewhere flips the offline banner before the next status ch
  * asserted by its OWN words, never by a substring of a stub's `log`/`reason` value.
  */
 
-function rescueStub(page: Page, wire: Wire[], answers: unknown[]) {
+async function rescueStub(page: Page, wire: Wire[], answers: unknown[]): Promise<void> {
   let call = 0
-  return page.route(/\/pipeline\/runs\/[^/]+\/rescue$/, async (route) => {
+  await page.route(/\/pipeline\/runs\/[^/]+\/rescue$/, async (route) => {
     const body = route.request().postDataJSON()
     wire.push({ method: 'POST', path: new URL(route.request().url()).pathname, body })
     const answer = answers[Math.min(call, answers.length - 1)]
