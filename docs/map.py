@@ -4016,7 +4016,7 @@ COMPONENTS = [
             "docs_audit/hygiene.py": {
                 "does": "The doc-hygiene, route-roster, recorded-deletion, spec-seal, design-check verdict and "
                         "positional-reference rows.",
-                "governed_by": ["D69", "D70", "D90", "D97", "D110", "D113", "D119", "D132", "D144",
+                "governed_by": ["D69", "D70", "D90", "D97", "D110", "D113", "D119", "D132", "D135", "D144",
                                 "D149", "D155"]},
             "docs_audit/paths_commands.py": {
                 "does": "The rows that read paths, line anchors, `make` targets, the commands roster and "
@@ -4751,6 +4751,14 @@ COMPONENTS = [
                         "`--write` applies. It gates nothing: the `readme blocks` row "
                         "renders in memory and compares.",
                 "governed_by": ["D18"],
+            },
+            "agents_gen.py": {
+                "does": "Writes each composed `AGENTS.md` (today the root one): `CLAUDE.md`, then the bodies of "
+                        "every `.claude/rules/*.md` file, through `composed_agents_text` in "
+                        "`docs_audit/hygiene.py`, the one home for that text. Previews by default, "
+                        "`--write` applies. It gates nothing: the `agent links` row composes in "
+                        "memory and compares.",
+                "governed_by": ["D18", "D135"],
             },
             "tests_page.py": {
                 "does": "`make tests-page` — writes `docs/TESTS.md`, one page of what "
@@ -5575,9 +5583,33 @@ COMPONENTS = [
     {
         "path": ".claude/rules/README.md",
         "status": "built",
-        "does": "the shared rules-folder note, copied verbatim from claude-settings. Its "
+        "does": "the rules-folder note: where a folder rule lives and who checks the roster. Its "
                 "paths frontmatter keeps it out of every session's context.",
         "governed_by": [],
+    },
+    {
+        "path": ".claude/rules/app.md",
+        "status": "built",
+        "does": "the front end's rules (screens, design system, shell, verifying a screen), moved out of CLAUDE.md. Loads when a file under app/ is read. Codex reaches it through the root AGENTS.md, which scripts/agents_gen.py composes.",
+        "governed_by": ["D135", "D275"],
+    },
+    {
+        "path": ".claude/rules/server.md",
+        "status": "built",
+        "does": "the capture server's concurrency figures, read by the `server concurrency` row. Loads when a file under server/ is read. Codex reaches it through the root AGENTS.md, which scripts/agents_gen.py composes.",
+        "governed_by": ["D135"],
+    },
+    {
+        "path": ".claude/rules/pipeline.md",
+        "status": "built",
+        "does": "the join, pricing, emit, store and box rules, moved out of CLAUDE.md. Loads when a file under pipeline/, store/, cli/, identify/, server/ or harness/ is read, or app/src's Pricing.tsx, CaptureScreen.tsx, BoxOps.tsx or BoxBrowse.tsx. Codex reaches it through the root AGENTS.md, which scripts/agents_gen.py composes.",
+        "governed_by": ["D135", "D35", "D86", "D88"],
+    },
+    {
+        "path": ".claude/rules/code-cards.md",
+        "status": "built",
+        "does": "the dormant code-card feature's four rules. Loads when a file under codes/ or the code-card spec is read. Codex reaches it through the root AGENTS.md, which scripts/agents_gen.py composes.",
+        "governed_by": ["D135", "D248"],
     },
     {
         "path": "docs/specs/home-assistant.md",

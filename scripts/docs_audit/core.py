@@ -381,6 +381,16 @@ def _walk(root: Path, suffixes: Tuple[str, ...]) -> List[Path]:
     return sorted(found)
 
 
+def rule_files() -> List[Path]:
+    """Each path-scoped rule file, at any depth, the folder's own `README.md` excluded.
+
+    Claude Code loads `.claude/rules/` recursively, so the roster row and the composed
+    `AGENTS.md` check both read this one list. A nested file is a rule too.
+    """
+    folder = ROOT / ".claude" / "rules"
+    return [p for p in _walk(folder, (".md",)) if p != folder / "README.md"]
+
+
 def markdown_files() -> List[Path]:
     """Every TRACKED markdown file: the index in staged mode, `git ls-files` otherwise.
 

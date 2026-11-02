@@ -18,3 +18,7 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - `send_routes._send`: the `nothing_to_send` branch re-parses the live CSV through `_names`. A file deleted mid-press turns the 409 into a 500.
 - `send_routes._name_held`: a refusal carries `held` at `error.data.held`, a sent answer at top level. No client reads either yet. A held suggestion dropped from a press refused `under_cut_off` or `needs_price` is not named; nothing is sent then.
 - The T7 contract's `Pass` line must equal `PASS_CRITERIA` in `harness/tests/t7_store_and_seams.py`, and that string runs 36 words. The line carries an `ste-disable-next-line STE001` comment. Shorten the string, then the line, and drop the comment.
+- No row checks the `paths:` globs in `.claude/rules/`. A glob that matches no file stops its rule from loading, and nothing says so.
+- `rules.folder_rule_roster_findings` has no self-test. Only the live `CLAUDE.md` exercises it.
+- `make docs-audit` reads a symlinked `AGENTS.md` or `CLAUDE.md` as its own file, so one defect can be reported up to three times, once per path to the same text.
+- `hygiene.check_agent_links` has no self-test. Only the live tree exercises its composed-file branch.

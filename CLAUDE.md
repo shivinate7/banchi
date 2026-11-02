@@ -9,10 +9,12 @@ D14 (two tracks, one rig) still stands in structure. `codes/` is its own package
 carries a `TRACKS` list. `scripts/decision-context.py` prints a track banner. Repeal needs the
 owner's word.
 
-Codex reads this file, not a copy (D135, Codex reads the same rules). `AGENTS.md`,
-`code-card-fork/AGENTS.md` and `code-card-fork/CLAUDE.md` are relative symlinks to it.
+Codex reads this file's text, not a copy (D135, Codex reads the same rules). Root `AGENTS.md` is
+generated: this file, then each `.claude/rules/*.md` body, written by `python3 scripts/agents_gen.py --write`.
+`code-card-fork/AGENTS.md` and `code-card-fork/CLAUDE.md` are relative symlinks to this file.
 `.agents/skills` links to `.claude/skills`. `.codex/hooks.json` mirrors `.claude/settings.json`.
-The `agent links` and `codex hooks` rows of `make docs-audit` check both.
+The `agent links` and `codex hooks` rows of `make docs-audit` check both. "Folder rules" below covers the
+rules that moved out of this file.
 
 ## Banchi names everything (D94, Banchi names everything)
 
@@ -133,86 +135,18 @@ make catalog-mirror # fills the image mirror (about 16.7 GB). ARGS=--dry-run sam
 ./banchi reprice  apply <worklist.csv> [--corpus-revision <digest>] [--write]  # `#/pricing` modal.
 ```
 
-## The front end
+## Folder rules
 
-Vite + React 19 + TypeScript over the capture server and nothing else, save one Bluetooth link to the dispenser (D316 (A Capture button starts and stops)). No pipeline logic in the
-browser. No second store. No auth. `app/src/server.ts` is the only client-call file.
-`app/src/types.ts` is the only wire-shape file.
-
-### The screens
-
-`ROUTES` in `app/src/App.tsx` is the one table of screens. Read counts and the off-nav set from it,
-never from prose. The `route rosters` row of `make docs-audit` reconciles README's route table with
-it. `#/fulfillment` is the Fulfiller's whole product, with no shell (D5, two personas).
-
-- **A new screen is one `ROUTES` entry plus a view that returns `<Page>`** (D275, every screen inherits
-  the page scaffold). `make kit-adoption` fails a view that skips `<Page>` or hand-rolls a kit
-  primitive. `app/tests/scaffold.spec.ts` asserts the frame at 1440, 820, 720 and 390. Exceptions
-  live in `scripts/kit-adoption-allow.json`, a list that only shrinks. A lane that moves a
-  screen onto `Page` deletes its entries in the same commit.
-- `#/orders` and `#/shipping` are two stages of one screen (`OrdersHub`), joined client-side on order number.
-- `#/inventory` is the one owner-side view of stored cards (D31, one owner-side view). `#/boxes` and `#/pull` are not routes.
-  Sold cards are hidden by default (D132, sold is folded away). Order under a search is frozen once taken, and a sale
-  may not re-rank it (D181, the order is taken once).
-- `#/runs` is off-nav and opens Review's runs sheet (D291, the fold).
-- `#/product` is off-nav and deep-linked by SKU (D227, a route not a lens).
-- `#/revenue` is a nav row on purpose (D214, gross-revenue retrospective). It is gross only, leaves out canceled orders and never claims profit.
-
-### The design system
-
-`app/src/tokens.css` is the only file in `app/` that names a color. `app/src/kit/markPalettes.ts`
-is the one exception (D102, mark palette). It is generated, never hand-edited. Every token is `--bn-*`.
-The legacy aliases at the foot of tokens.css are dead. A new rule may not read one.
-
-- **Both themes are real.** A screen not looked at in dark is not verified. The `raw color` row of `make docs-audit` reads for hex literals.
-- **Type has three roles.** `--bn-font-display` (Manrope, headings), `--bn-font-ui` (Inter),
-  `--bn-font-mono` (JetBrains Mono, machine strings only: SKUs, run names, reason codes, key caps,
-  card numbers). Tables use Inter tabular-nums. Money uses `.bn-money` (D221, money stays mono), asserted by
-  `app/tests/text-checks.spec.ts`. Body is 14px.
-- **The kit is `app/src/kit/` and `app/src/kit.css`.** `#/gallery` renders it. Reach for the kit before
-  you write a primitive.
-- **Register.** Sentences on screen, not machine strings. Enum values are labeled. An empty state is a
-  sentence and one action. No user-visible string names a decision, a path or a pipeline noun (D196, no user-visible string may name a decision).
-  The `no mechanism on screen` row of `make docs-audit` enforces it.
-- **No typed middle dot or bullet (U+00B7, U+2022) in a user-visible string** (D218, a typed dot is a defect).
-  CSS draws the separator. The `typed interpunct` row of `make docs-audit` enforces it, with a shrinking list (D280, lists of offenders).
-- **Text shape is three checks, none a count** (D284, three checks replace one ceiling):
-  all in `app/tests/text-checks.spec.ts`, one sweep. Each reads
-  a shrinking allow list in `app/tests/`, keyed to the finding.
-- **The mark is generated** (D102, the mark has its own palette). `scripts/build-mark.mjs` writes it. Never put a `border-radius` on it.
-- **`base.css` sets four floors** (D50, feedback is the product's; D118, a press changes what is on screen):
-  cursor, response, press and stability. `app/tests/cursor.spec.ts` and `app/tests/inventory.spec.ts` assert them.
-- **Nothing on screen moves unless the person moved it** (D313 (Nothing on screen moves unless the)). A loading area holds its
-  loaded size from the first paint, by construction and never by a tuned pixel. `app/tests/stability.spec.ts`
-  asserts it, one row per case, over every nav screen read from `ROUTES`, plus the Fulfiller's.
-- **One left edge, and only width varies** (D197, a page is anchored to the shell inset). `.bn-page` margin is `0`.
-  `app/tests/page-edge.spec.ts` asserts it.
-- **Same-role stacked buttons share a width** (D195, same-role buttons share a width). `app/tests/button-stack.spec.ts` asserts it.
-- **Three silent motion rules.** A component's own `transition` replaces the floor's, so name every animated
-  property. `background-image` cannot animate, so use an inset `box-shadow`. The press dip is `translate`.
-  A screen's own emphasis is `transform: scale()`, never `translateY`. A control may not ease its own `:active` movement.
-- **Motion is tokens.** Durations and easing are tokens. List rows stagger off `--bn-stagger`.
-  `prefers-reduced-motion` is honored. Only loops that carry meaning keep turning.
-
-### The shell
-
-`App.tsx` is a hand-written hash router and the shell. It renders for every screen except the
-Fulfiller's. The shell has these parts:
-
-- A sidebar that folds to a rail (⌘.), a top bar and bottom tab bar on phones.
-- A command palette (⌘K, the only way to `#/gallery`), `,` then a letter to jump, ⌘←/⌘→ to step the workflow ring.
-- A keyboard sheet on `?`. A new key binding is not done until it is in `SHORTCUTS` (`app/src/App.tsx`).
-- An error boundary per route. The Fulfiller's `plain` variant offers one button and no error text.
-- A toast stack, an offline banner and the document title.
-
-### Verifying a screen
-
-- `cd app && npx tsc --noEmit` prints nothing.
-- Look at it at 1440 and 820, in both themes. Look at 390 only on an owner phone report.
-  The specs that assert phone layout are off by the owner's word: DEBT77 (every phone-width spec is off). One switch turns them back on:
-  `PHONE_SPECS_ON` in `app/tests/phoneSwitch.ts`.
-- Anything a thumb presses is 40px or more.
-- `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a real browser.
+A rule that governs one folder lives in `.claude/rules/` and loads when a matching file is read: `app.md`
+(`app/**`: screens, design system, shell, verifying a screen), `server.md` (`server/**`: concurrency figures),
+`pipeline.md` (`pipeline/`, `store/`, `cli/`, `identify/`, `server/`, `harness/`, and `Pricing.tsx`,
+`CaptureScreen.tsx`, `BoxOps.tsx` and `BoxBrowse.tsx` in `app/src/`: join, pricing, emit, store, boxes)
+and `code-cards.md`. Codex does not read that folder, so root `AGENTS.md` holds each rule body after this
+file's text (D135, Codex reads the same rules). No folder holds an `AGENTS.md` of its own: Codex
+concatenates from the root down. After you edit this file or a rule body, or add a rule file (also add it to
+`AGENT_RULE_ORDER` in `scripts/docs_audit/hygiene.py`), run `python3 scripts/agents_gen.py --write`. The
+`agent links` row fails until you do. Codex cuts the combined file at `project_doc_max_bytes` (32 KiB by
+default), and the generated file is over it. The tail is what a cut loses, so the order puts `code-cards.md` last.
 
 ## Code cards (dormant feature) — DORMANT
 
@@ -220,28 +154,14 @@ DORMANT means that the owner has not run this feature. No session treats it as a
 owner names it. `codes/`, `#/codes`, harness test T8 and the QR decode stay in the build. This is
 the one place that marks the dormancy. `docs/specs/code-cards.md` is the spec. Read it before
 you build here. The track's settled decisions, C1 to C11, are sections of that spec.
-
-- Never guess a code. No decode goes to the paid vision read, then a human.
-- A QR that does not decode is a stop.
-- Separate non-`BST` codes on sight. They are the scarce ones.
-- No real code-card photo or code string in any tracked file. The pre-commit hook enforces it. The
-  gitignored `inventory/` is the sanctioned place.
+Its rules are in `.claude/rules/code-cards.md`.
 
 ## Things you will get wrong without being told
 
-- **The capture server is threaded. Restart it only after the owner says yes.** It is `class CaptureServer(ThreadingHTTPServer)` in
-  `server/capture_server.py`, with `request_queue_size = 128` and `CaptureHandler.timeout = 15`.
-  `REQUEST_SLOTS = 4` bounds executing requests. `PHOTO_SLOTS = 4` bounds `/photo/` and `/assets/`
-  GETs and the cheap lock-free reads in `PHOTO_LANE_EXACT`, `/status` first (refusal `photo_busy`). The pool is safe over HTTP/1.1 only because every response sends
-  `Connection: close` (DEBT11, a parked writer still holds a request slot). A burst of clients kills it. Run the full
-  suite once, at the end. Ask the owner before `make up ARGS=--restart`, `make down` or `make up`, and name the reason.
-  The `server concurrency` row of `make docs-audit` reads these figures.
-- **The join key is per game and normalized on both sides** (`pipeline/games.py`,
-  `pipeline/join.py:number_index_key`). Never join on Product Name. D35 (Product Name join) allows it only as a last
-  resort, when the number key finds nothing. A name that resolves to one card is listed. A name that resolves to
-  more than one queues for review. `zfill` is composition only, never matching.
-- **A run's slot numbers are not the truth. The photograph is** (D36, the store says which slot).
-  `cli/resolve.py:realign` re-binds records. It refuses on ambiguity and on a reallocated box.
+- **The capture server is threaded. Restart it only after the owner says yes.** Ask the owner before
+  `make up ARGS=--restart`, `make down` or `make up`, and name the reason. Run the full suite once, at the end.
+  Its concurrency figures and the
+  `server concurrency` row of `make docs-audit` are in `.claude/rules/server.md`.
 - Only two columns are ever written: `Add to Quantity`, `TCG Marketplace Price`. `TCGplayer Id` is never modified.
 - **Batch API, not sequential calls.** Model: `claude-haiku-5-5`.
 - **Every checkout has its own store and ports** (D43, the port follows the store). An empty inventory in a
@@ -260,32 +180,8 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 
   `sessionStorage` is a separate store. It holds `banchi.session.captureId`, `banchi.session.homeDeck` (the Home deck already played this sitting) and `banchi.run-scope` (D39, a run's scope is a selection handed off).
   The `storage keys` row of `make docs-audit` reconciles this roster (D27, session state is device-local).
-- **No duplicate SKU rows in an import file.** Aggregate by SKU. `Add to Quantity` equals the copy count. There is no standing
-  cap (D7, duplicates aggregate by SKU). A send may ask for one (`emit --cap N`) or for a quantity (`emit --quantity SKU=N`).
-  `uncommitted_positions` stops a copy going out twice.
 - **The pipeline is reachable from a screen** (D33, reachable from a screen). It lives in Review's runs sheet. A run's scope is a selection
   (D180, a press names the cards): `pipeline/selection.py` is one grammar for the screen, the route and the CLI.
-- **A card's number counts the cards in the box, not the slots** (D58, a card's number counts the cards). The stored index never moves. A departed card
-  renders `pipeline/join.departed_label`.
-- **A set hint on some cards narrows nothing** (D76, how wide to ask is per game). Widening needs every card hinted and
-  every hint resolved. A Pokemon run that would widen is refused (`export_needs_hint` in `pipeline/games.py`, D170, a Pokemon run names its sets)
-  unless the operator named `set_ids` or `scope`. A widening is never silent: every fetch carries a `width` block.
-  Fix an unhinted card in Manage box, under Set claims.
-- **The catalog export belongs to the game, not the drawer** (D166, the catalog export is a property of the game). It lands in `inventory/.exports/<game>/`.
-  A covering export downloaded on the same US Central day is reused. `refresh: true` forces a new one; 900 s (`REFRESH_DEBOUNCE_S`) is only the double-press guard on a finished "Refresh now".
-- **The pricing answer is one file, keyed by SKU** (D86, one file for the store): `pipeline/corpus.py` over
-  `inventory/prices.json`. `policy.threshold` is also the floor, and the owner sets it. Its default is $0.49 (`pipeline/corpus.py:DEFAULT_CUTOFF`). `sub_threshold` also defaults to $0.49, a default and not the floor (D9, threshold and floor).
-  `banchi prices adopt` migrates legacy run files. `join` and `emit` refuse over an unadopted one.
-- **The store of record is one SQLite file** (D88, SQLite and one transaction per write). `inventory.json` is
-  legacy and read by nothing.
-- **A sold card's photograph is reclaimed on purpose** (D89, reclaimed on purpose): `POST /boxes/<box>/photos/reclaim` deletes sold
-  photographs and keeps every record.
-- **`emit` over several runs writes one file, and a cap is spent once** (D86, one pricing file for the store; `pipeline/join.py:add_to_quantity`).
-  `#/pricing` lands on every unsent copy in the store (D156, one worklist), read live.
-- **No automatic sectioning** (D10, inventory model). A divider is put in with `S` on the capture screen
-  (`store/master.py:open_section`, inside the store lock).
-- **A box is addressed by name, and names are unique** (D20, a box is an object). `Box.bid` is a never-reused
-  index drawn on no screen (D145, a box has an index nobody sees). A run records `bid`, never the name (D56, a run names the drawer).
 
 ## Hard rules
 

@@ -22,6 +22,7 @@ from .core import (
     markdown_files,
     read,
     rel,
+    rule_files,
 )
 from .paths_commands import _MAKE_REF_RE, _MAKE_RULE_RE, iter_code_lines
 from .records import _corpus, _debts_corpus
@@ -211,8 +212,35 @@ def _gloss_after(rest: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def bare_id_findings(text: str) -> List[Finding]:
-    """Each decision or debt id in `CLAUDE.md`, at its first use in a paragraph, needs a gloss.
+_FOLDER_RULES_RE = re.compile(r"^## Folder rules\n(.*?)(?=^## |\Z)", re.M | re.S)
+
+
+def folder_rule_roster_findings(text: str, files: Sequence[Path]) -> List[Finding]:
+    """`CLAUDE.md`'s `## Folder rules` section against the rule files on disk, both ways.
+
+    The roster is what keeps a deleted or unnamed rule file from leaving this row's gloss
+    check reading nothing and printing `ok`.
+    """
+    section = _FOLDER_RULES_RE.search(text)
+    named = set(re.findall(r"`([a-z][a-z/-]*\.md)`", section.group(1))) if section else set()
+    rules_dir = ROOT / ".claude" / "rules"
+    on_disk = {p.relative_to(rules_dir).as_posix() for p in files}
+    found: List[Finding] = []
+    for name in sorted(named - on_disk):
+        found.append(Finding(
+            "CLAUDE.md",
+            f"`## Folder rules` names `{name}` and `.claude/rules/{name}` does not exist. Its prose "
+            "is gone from every reader here. Restore the file or drop the name."))
+    for name in sorted(on_disk - named):
+        found.append(Finding(
+            f".claude/rules/{name}",
+            "is a rule file that `CLAUDE.md`'s `## Folder rules` section does not name. A session "
+            "reading root `CLAUDE.md` cannot tell the rule exists."))
+    return found
+
+
+def bare_id_findings(text: str, where: str = "CLAUDE.md") -> List[Finding]:
+    """Each decision or debt id in `CLAUDE.md` or a rule file, at its first use in a paragraph, needs a gloss.
 
     The gloss is `D43 (short words)` or `D43, short words` (parent rule
     `speak-cite-id-plus-gloss`). A paragraph is a run of lines with no blank line, and each
@@ -238,12 +266,12 @@ def bare_id_findings(text: str) -> List[Finding]:
             headings = [_entry_heading(kind, n) for n in range(lo, hi + 1)]
             if gloss is None:
                 found.append(Finding(
-                    f"CLAUDE.md:{number}",
+                    f"{where}:{number}",
                     f"`{ident}` has no gloss. Write `{ident} (<2-6 words from its heading>)` "
                     "at its first use in the paragraph."))
             elif not any(h and _gloss_matches(gloss, h) for h in headings):
                 found.append(Finding(
-                    f"CLAUDE.md:{number}",
+                    f"{where}:{number}",
                     f"the gloss `{gloss}` for `{ident}` shares no word with the entry's own "
                     "heading. Take the gloss from the heading."))
     return found
@@ -307,6 +335,10 @@ def check_rule_enforcement(report: Report) -> None:
     rows = audit_row_names()
 
     findings.extend(bare_id_findings(text))
+    folder_rules = rule_files()
+    for rule_file in folder_rules:
+        findings.extend(bare_id_findings(read(rule_file), rel(rule_file)))
+    findings.extend(folder_rule_roster_findings(text, folder_rules))
 
     prose_only: List[str] = []
     for line, block in blocks:
@@ -372,7 +404,8 @@ def check_rule_enforcement(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(blocks)} hard rules: {len(blocks) - len(prose_only)} name a mechanism that "
-        f"resolves, {len(prose_only)} argue why none can (pinned at {PROSE_ONLY_EXPECTED})",
+        f"resolves, {len(prose_only)} argue why none can (pinned at {PROSE_ONLY_EXPECTED}); "
+        f"{len(folder_rules)} folder rule files read for bare ids",
         scanned=len(blocks),
     )
 

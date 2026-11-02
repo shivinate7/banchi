@@ -26,6 +26,7 @@ from .core import (
     python_files,
     read,
     rel,
+    rule_files,
 )
 from .design import _POSITIONAL_RE
 from .records import _corpus, decisions_text
@@ -339,30 +340,131 @@ def _route_prose_findings() -> List[Finding]:
     return out
 
 
-# CLAUDE.md's "Codex reads this same file" paragraph names these four links.
+# CLAUDE.md's "Codex reads this same file" paragraph names these links. Root `AGENTS.md` is not one:
+# it is the composed file below, so Codex, which reads no `.claude/rules/`, sees every rule from the
+# root down. No folder holds an `AGENTS.md` of its own: Codex concatenates root down, so one
+# would repeat the root. `code-card-fork/AGENTS.md` stays because D135 (Codex reads the same rules)
+# names it as the code-card track's door, and `code-card-fork/CLAUDE.md` because Claude Code
+# auto-loads it there. The door adds only `CLAUDE.md`'s text, which root `AGENTS.md` already holds.
 AGENT_LINKS: Tuple[Tuple[str, str], ...] = (
-    ("AGENTS.md", "CLAUDE.md"),
     (".agents/skills", "../.claude/skills"),
     ("code-card-fork/AGENTS.md", "CLAUDE.md"),
     ("code-card-fork/CLAUDE.md", "../CLAUDE.md"),
 )
 
 
+# `.claude/rules/*.md` in the order the composed root `AGENTS.md` holds them, README excluded
+# because it is not a rule. Codex cuts a combined `AGENTS.md` at `project_doc_max_bytes`, so the
+# order puts the dormant feature last: the tail is what a cut loses.
+AGENT_RULE_ORDER: Tuple[str, ...] = ("app.md", "server.md", "pipeline.md", "code-cards.md")
+
+# The one composed file: `CLAUDE.md`, then each rule file's body, frontmatter stripped, joined by
+# one blank line. Each body after the first has its headings demoted one level, so the file keeps
+# one title and the `doc hygiene` row stays quiet. `scripts/agents_gen.py --write` writes it;
+# nothing else does.
+AGENT_COMPOSED: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+    ("AGENTS.md", ("CLAUDE.md",) + tuple(f".claude/rules/{name}" for name in AGENT_RULE_ORDER)),
+)
+
+AGENTS_GEN_COMMAND = "python3 scripts/agents_gen.py --write"
+
+
+def _demote_headings(text: str) -> str:
+    """Each ATX heading outside a fenced block, one level deeper. A `#` in a fence is code."""
+    out: List[str] = []
+    fenced = False
+    for line in text.split("\n"):
+        if line.startswith("```"):
+            fenced = not fenced
+        elif not fenced and re.match(r"#{1,5} ", line):
+            line = "#" + line
+        out.append(line)
+    return "\n".join(out)
+
+
+def composed_agents_text(sources: Tuple[str, ...]) -> Optional[str]:
+    """The text a composed `AGENTS.md` must hold, or None when a source is missing."""
+    bodies: List[str] = []
+    for source in sources:
+        path = ROOT / source
+        if not exists(path):
+            return None
+        text = read(path)
+        if text.startswith("---\n"):
+            text = text.split("\n---\n", 1)[1] if "\n---\n" in text else text
+        text = text.strip("\n")
+        bodies.append(_demote_headings(text) if bodies else text)
+    return "\n\n".join(bodies) + "\n"
+
+
+def first_line_difference(have: str, want: str) -> Optional[Tuple[int, str, str]]:
+    """The first line where two texts differ: its number, the line held, the line expected.
+
+    A text that ends early reads as `<end of file>` at that line. Texts whose lines all agree
+    differ in line endings alone, named at the line after the last. None when the two are equal.
+    """
+    if have == want:
+        return None
+    held, wanted = have.splitlines(), want.splitlines()
+    for number in range(1, max(len(held), len(wanted)) + 1):
+        a = held[number - 1] if number <= len(held) else "<end of file>"
+        b = wanted[number - 1] if number <= len(wanted) else "<end of file>"
+        if a != b:
+            return number, a, b
+    return len(held) + 1, "<other line endings>", "<one newline after each line>"
+
+
 def check_agent_links(report: Report) -> None:
-    """Each link CLAUDE.md names is a relative symlink to its stated target."""
+    """Each link CLAUDE.md names is a relative symlink; root `AGENTS.md` holds every rule file."""
     findings: List[Finding] = []
+    composed_sources = {source for _, sources in AGENT_COMPOSED for source in sources}
+    for rule in rule_files():
+        relative = rel(rule)
+        if relative not in composed_sources:
+            findings.append(Finding(
+                relative,
+                "is a rule file the composed `AGENTS.md` does not hold, so Codex would never read it. "
+                f"Add `{relative.removeprefix('.claude/rules/')}` to `AGENT_RULE_ORDER` in `scripts/docs_audit/hygiene.py`, then "
+                f"run `{AGENTS_GEN_COMMAND}`."))
     for link, target in AGENT_LINKS:
         path = ROOT / link
         if not path.is_symlink():
             findings.append(Finding(link, f"is not a symlink; CLAUDE.md says it links to `{target}`."))
         elif os.readlink(path) != target:
             findings.append(Finding(link, f"links to `{os.readlink(path)}`; CLAUDE.md says `{target}`."))
+        elif not path.exists():
+            findings.append(Finding(link, f"links to `{target}`, which does not exist."))
+    for link, sources in AGENT_COMPOSED:
+        path = ROOT / link
+        want = composed_agents_text(sources)
+        if want is None:
+            gone = [source for source in sources if not exists(ROOT / source)]
+            findings.append(Finding(
+                link,
+                f"is composed from {', '.join(sources)}, and {', '.join(gone)} does not exist. "
+                f"Restore it, or drop it from `AGENT_COMPOSED` (and `AGENT_RULE_ORDER`) in "
+                f"`scripts/docs_audit/hygiene.py`, then run `{AGENTS_GEN_COMMAND}`."))
+            continue
+        if path.is_symlink() or not exists(path):
+            findings.append(Finding(link, "must be a real file holding the bodies of " + ", ".join(sources) + ". "
+                                    f"Run `{AGENTS_GEN_COMMAND}`."))
+            continue
+        difference = first_line_difference(read(path), want)
+        if difference:
+            number, held, wanted = difference
+            findings.append(Finding(
+                f"{link}:{number}",
+                "differs from the bodies of " + ", ".join(sources) + " (frontmatter stripped, later "
+                f"headings demoted, joined by one blank line). It holds {held[:70]!r}; the sources give "
+                f"{wanted[:70]!r}. Codex reads this file and not its sources, so it would act on a stale "
+                f"copy. Run `{AGENTS_GEN_COMMAND}`."))
     report.add(
         "agent links",
         MECHANICAL,
         findings,
-        f"{len(AGENT_LINKS)} relative symlinks resolve to CLAUDE.md or .claude/skills",
-        scanned=len(AGENT_LINKS),
+        f"{len(AGENT_LINKS)} relative symlinks resolve; "
+        f"{len(AGENT_COMPOSED)} composed file matches its sources and every rule file is in it",
+        scanned=len(AGENT_LINKS) + len(AGENT_COMPOSED),
     )
 
 

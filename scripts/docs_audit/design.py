@@ -651,7 +651,7 @@ def check_raw_color(report: Report) -> None:
 
 # ------------------------------------------------------------------------- raw motion
 #
-# MOTION IS TOKENS (CLAUDE.md), AND `docs/specs/motion.md` IS THE ROLE TABLE. A duration or an
+# MOTION IS TOKENS (`.claude/rules/app.md`), AND `docs/specs/motion.md` IS THE ROLE TABLE. A duration or an
 # easing written as a literal in a stylesheet is a surface that no retune of `app/src/tokens.css`
 # will ever reach, which is how 7 different stagger steps and 4 "live" loops grew. This row reads
 # every `transition` and `animation` declaration (and their -duration, -delay and

@@ -47,7 +47,7 @@
  * notion of "visible" than D196's mechanism-naming policy needs:
  *
  *   - `--include-code-attr` adds `code` to the tracked attribute set for this run only —
- *     `Notice`'s own `code` prop (CLAUDE.md's Register paragraph: "the pipeline's own string
+ *     `Notice`'s own `code` prop (`.claude/rules/app.md`'s Register paragraph: "the pipeline's own string
  *     stays available on hover and in the run log"). That prop DOES render, on hover and in
  *     the run log, so a typed dot inside it reaches a person exactly the way JSX text does,
  *     even though D196 deliberately does not police what mechanism-shaped words it may carry.
