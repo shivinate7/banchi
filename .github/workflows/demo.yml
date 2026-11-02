@@ -103,7 +103,9 @@ jobs:
   build:
     needs: hold
     if: ${{ needs.hold.outputs.publish == 'true' }}
-    runs-on: ubuntu-latest
+    # Pinned: on ubuntu-latest (26.04) the "Install the browser" step fails, because Playwright has
+    # no chromium for ubuntu26.04-x64. Back to ubuntu-latest once the shared playwright-setup is proven there.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
