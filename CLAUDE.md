@@ -351,9 +351,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   One standing exception (D42, main moves by pull request):
   the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
   GitHub branch protection has 0 reviews and `strict: false`. The one check it is to require is `all-jobs-passed`,
-  which rolls up every job, `revert-guard` included (claude-settings decision same-check-kinds). `check` is its
-  alias; a follow-up deletes it after the owner flips protection to it (same-check-kinds). The list protection
-  holds changes only by that flip.
+  which rolls up every job, `revert-guard` included (claude-settings decision same-check-kinds). Protection holds that one check and no other.
   It catches the remote half. The local hook is the only cover for a local fast-forward.
   `scripts/githooks/reference-transaction` and `scripts/githooks/pre-push` refuse, armed by `make hooks`.
   `BANCHI_MAIN=off` is the hatch. The primary checkout syncs itself (D176, the primary checkout syncs):
