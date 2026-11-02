@@ -36,10 +36,10 @@
 # platform that ever looked. That is not a platform bug and it was not fixed with a tolerance —
 # `BoxBrowse.css` reserves the key's width now — but a second platform is what found it.
 #
-# IT IS A SEPARATE JOB, NOT A STEP IN `check`. A chromium install is a real cost and the two
-# failures should be attributable to different things — a red `check` is a claim about the tree,
+# IT IS A SEPARATE JOB, NOT A STEP IN `ci-check`. A chromium install is a real cost and the two
+# failures should be attributable to different things — a red `ci-check` is a claim about the tree,
 # a red `design-check` is a claim about what a browser draws. The two run in parallel, so a red
-# `check` still lands in about ninety seconds; this one takes twelve to fifteen minutes and is
+# `ci-check` still lands in about ninety seconds; this one takes twelve to fifteen minutes and is
 # the last word rather than the first. And it stays out of `make check` and `make ci-check` for
 # the reason the Makefile already gives: it starts a browser and a dev server, which is a
 # different weight of check. It therefore gets no `scripts/checks.py` entry either — `check
@@ -61,8 +61,8 @@
 # below records a green PR run as an artifact named for that tree, `already-passed` looks the
 # name up on the push, and the browser matrix runs on main only when nothing is found — which
 # is precisely the case the paragraph above is about: main moved between the PR's test and
-# the merge, and the tree that landed is one no browser has seen. The `check` job and
-# demo.yml run on every push to main as before. What the old coverage was actually worth is
+# the merge, and the tree that landed is one no browser has seen. The `ci-check` shards, the other
+# jobs and demo.yml run on every push to main as before. What the old coverage was actually worth is
 # worth saying: the `concurrency` group below cancelled four main runs between 2026-09-07 and
 # 2026-09-11, every time two merges landed inside fifteen minutes, so the post-merge verdict
 # was already partial. No write to git, no commit status, nothing D42 forbids — an artifact

@@ -892,7 +892,7 @@ def check_suite_lock(report: Report) -> None:
 # AND THE WIRING IS READ, because a list nothing consults is a list. The workflow must run the
 # classifier from some job, `design-check` must need that job and read its answer in the
 # FAIL-OPEN spelling — `!= 'false'` under `!cancelled()` — the `on:` block may carry no path
-# filter (that would gate `check`, `revert-guard` and `already-passed` too, which D141
+# filter (that would gate `ci-check`, `revert-guard` and `already-passed` too, which D141
 # forbids), and `design-check-passed` may not run on a skipped matrix, or a tree no browser
 # saw would earn D136's pass record.
 #
@@ -1004,7 +1004,7 @@ def browser_gate_findings(text: str) -> List[Tuple[str, str]]:
         out.append((where, "has no `on:` block."))
     elif re.search(r"^\s*paths(?:-ignore)?:", on, re.M):
         out.append((where, (
-            "the `on:` block carries a `paths` filter. That gates EVERY job — `check`,\n"
+            "the `on:` block carries a `paths` filter. That gates EVERY job — `ci-check`,\n"
             "  `revert-guard` and `already-passed` included — and D141 scopes the browser\n"
             "  matrix alone. The filter is `browser-scope`'s output, read by one job's `if:`.")))
 
