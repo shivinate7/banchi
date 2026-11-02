@@ -9,8 +9,9 @@ D14 (two tracks, one rig) still stands in structure. `codes/` is its own package
 carries a `TRACKS` list. `scripts/decision-context.py` prints a track banner. Repeal needs the
 owner's word.
 
-Codex reads this file, not a copy (D135, Codex reads the same rules). `AGENTS.md`,
-`code-card-fork/AGENTS.md` and `code-card-fork/CLAUDE.md` are relative symlinks to it.
+Codex reads this file's text, not a copy (D135, Codex reads the same rules). Root `AGENTS.md` is
+generated: this file, then each `.claude/rules/*.md` body, written by `python3 scripts/agents_gen.py --write`.
+`code-card-fork/AGENTS.md` and `code-card-fork/CLAUDE.md` are relative symlinks to this file.
 `.agents/skills` links to `.claude/skills`. `.codex/hooks.json` mirrors `.claude/settings.json`.
 The `agent links` and `codex hooks` rows of `make docs-audit` check both. "Folder rules" below covers the
 rules that moved out of this file.
@@ -140,11 +141,12 @@ A rule that governs one folder lives in `.claude/rules/` and loads when a matchi
 (`app/**`: screens, design system, shell, verifying a screen), `server.md` (`server/**`: concurrency figures),
 `pipeline.md` (`pipeline/`, `store/`, `cli/`, `identify/`, `server/`, `harness/`, and `Pricing.tsx`,
 `CaptureScreen.tsx`, `BoxOps.tsx` and `BoxBrowse.tsx` in `app/src/`: join, pricing, emit, store, boxes)
-and `code-cards.md`. Codex does not read that folder. It loads the `AGENTS.md` of the folder a session
-starts in (D135, Codex reads the same rules). `app/`, `pipeline/`, `store/`, `cli/`, `identify/` and
-`codes/` hold an `AGENTS.md` link to their rule file. `server/AGENTS.md` is a real file instead: the
-bodies of `server.md` and `pipeline.md`, written by `python3 scripts/agents_gen.py --write`. `harness/`
-holds none. The `agent links` row checks them all.
+and `code-cards.md`. Codex does not read that folder, so root `AGENTS.md` holds each rule body after this
+file's text (D135, Codex reads the same rules). No folder holds an `AGENTS.md` of its own: Codex
+concatenates from the root down. After you edit this file or a rule body, or add a rule file (also add it to
+`AGENT_RULE_ORDER` in `scripts/docs_audit/hygiene.py`), run `python3 scripts/agents_gen.py --write`. The
+`agent links` row fails until you do. Codex cuts the combined file at `project_doc_max_bytes` (32 KiB by
+default), and the generated file is over it. The tail is what a cut loses, so the order puts `code-cards.md` last.
 
 ## Code cards (dormant feature) — DORMANT
 

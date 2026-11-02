@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Writes each composed `AGENTS.md`: a folder two rule files govern, so it cannot link one.
+"""Writes each composed `AGENTS.md`: today the root one, `CLAUDE.md` then every `.claude/rules/*.md` body.
+
+Codex reads no `.claude/rules/`, so the root file carries the rules to it.
 
 `AGENT_COMPOSED` in `docs_audit/hygiene.py` names each file and its sources, and
 `composed_agents_text` there says what the file must hold. This script writes that text and

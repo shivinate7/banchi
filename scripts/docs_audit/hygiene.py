@@ -339,28 +339,30 @@ def _route_prose_findings() -> List[Finding]:
     return out
 
 
-# CLAUDE.md's "Codex reads this same file" paragraph and its "Folder rules" section name these
-# links. Codex reads no `.claude/rules/`, so each rule file's folder holds an `AGENTS.md` link to it.
+# CLAUDE.md's "Codex reads this same file" paragraph names these links. Root `AGENTS.md` is not one:
+# it is the composed file below, so Codex, which reads no `.claude/rules/`, sees every rule from the
+# root down. No folder holds an `AGENTS.md` of its own: Codex concatenates root down, so one
+# would repeat the root. `code-card-fork/AGENTS.md` stays because D135 (Codex reads the same rules)
+# names it as the code-card track's door, and `code-card-fork/CLAUDE.md` because Claude Code
+# auto-loads it there. The door adds only `CLAUDE.md`'s text, which root `AGENTS.md` already holds.
 AGENT_LINKS: Tuple[Tuple[str, str], ...] = (
-    ("AGENTS.md", "CLAUDE.md"),
     (".agents/skills", "../.claude/skills"),
     ("code-card-fork/AGENTS.md", "CLAUDE.md"),
     ("code-card-fork/CLAUDE.md", "../CLAUDE.md"),
-    ("app/AGENTS.md", "../.claude/rules/app.md"),
-    ("pipeline/AGENTS.md", "../.claude/rules/pipeline.md"),
-    ("store/AGENTS.md", "../.claude/rules/pipeline.md"),
-    ("cli/AGENTS.md", "../.claude/rules/pipeline.md"),
-    ("identify/AGENTS.md", "../.claude/rules/pipeline.md"),
-    ("codes/AGENTS.md", "../.claude/rules/code-cards.md"),
 )
 
 
-# A folder two rule files govern cannot link both, so its `AGENTS.md` is a real file: the bodies
-# of those rule files, frontmatter stripped, in this order, joined by one blank line. Each body
-# after the first has its headings demoted one level, so the file keeps one title and the
-# `doc hygiene` row stays quiet. `scripts/agents_gen.py --write` writes it; nothing else does.
+# `.claude/rules/*.md` in the order the composed root `AGENTS.md` holds them, README excluded
+# because it is not a rule. Codex cuts a combined `AGENTS.md` at `project_doc_max_bytes`, so the
+# order puts the dormant feature last: the tail is what a cut loses.
+AGENT_RULE_ORDER: Tuple[str, ...] = ("app.md", "server.md", "pipeline.md", "code-cards.md")
+
+# The one composed file: `CLAUDE.md`, then each rule file's body, frontmatter stripped, joined by
+# one blank line. Each body after the first has its headings demoted one level, so the file keeps
+# one title and the `doc hygiene` row stays quiet. `scripts/agents_gen.py --write` writes it;
+# nothing else does.
 AGENT_COMPOSED: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
-    ("server/AGENTS.md", (".claude/rules/server.md", ".claude/rules/pipeline.md")),
+    ("AGENTS.md", ("CLAUDE.md",) + tuple(f".claude/rules/{name}" for name in AGENT_RULE_ORDER)),
 )
 
 AGENTS_GEN_COMMAND = "python3 scripts/agents_gen.py --write"
@@ -412,8 +414,17 @@ def first_line_difference(have: str, want: str) -> Optional[Tuple[int, str, str]
 
 
 def check_agent_links(report: Report) -> None:
-    """Each link CLAUDE.md names is a relative symlink to its stated target."""
+    """Each link CLAUDE.md names is a relative symlink; root `AGENTS.md` holds every rule file."""
     findings: List[Finding] = []
+    composed_sources = {source for _, sources in AGENT_COMPOSED for source in sources}
+    for rule in glob_files(ROOT / ".claude" / "rules", "*.md"):
+        relative = rel(rule)
+        if rule.name != "README.md" and relative not in composed_sources:
+            findings.append(Finding(
+                relative,
+                "is a rule file the composed `AGENTS.md` does not hold, so Codex would never read it. "
+                f"Add `{rule.name}` to `AGENT_RULE_ORDER` in `scripts/docs_audit/hygiene.py`, then "
+                f"run `{AGENTS_GEN_COMMAND}`."))
     for link, target in AGENT_LINKS:
         path = ROOT / link
         if not path.is_symlink():
@@ -439,14 +450,14 @@ def check_agent_links(report: Report) -> None:
                 f"{link}:{number}",
                 "differs from the bodies of " + ", ".join(sources) + " (frontmatter stripped, later "
                 f"headings demoted, joined by one blank line). It holds {held[:70]!r}; the sources give "
-                f"{wanted[:70]!r}. Codex reads only this file in that folder, so it would act on a stale "
+                f"{wanted[:70]!r}. Codex reads this file and not its sources, so it would act on a stale "
                 f"copy. Run `{AGENTS_GEN_COMMAND}`."))
     report.add(
         "agent links",
         MECHANICAL,
         findings,
-        f"{len(AGENT_LINKS)} relative symlinks resolve to CLAUDE.md, .claude/skills or .claude/rules; "
-        f"{len(AGENT_COMPOSED)} composed file matches its sources",
+        f"{len(AGENT_LINKS)} relative symlinks resolve; "
+        f"{len(AGENT_COMPOSED)} composed file matches its sources and every rule file is in it",
         scanned=len(AGENT_LINKS) + len(AGENT_COMPOSED),
     )
 
