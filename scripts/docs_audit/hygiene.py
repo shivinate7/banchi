@@ -356,10 +356,27 @@ AGENT_LINKS: Tuple[Tuple[str, str], ...] = (
 
 
 # A folder two rule files govern cannot link both, so its `AGENTS.md` is a real file: the bodies
-# of those rule files, frontmatter stripped, in this order, joined by one blank line.
+# of those rule files, frontmatter stripped, in this order, joined by one blank line. Each body
+# after the first has its headings demoted one level, so the file keeps one title and the
+# `doc hygiene` row stays quiet. `scripts/agents_gen.py --write` writes it; nothing else does.
 AGENT_COMPOSED: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
     ("server/AGENTS.md", (".claude/rules/server.md", ".claude/rules/pipeline.md")),
 )
+
+AGENTS_GEN_COMMAND = "python3 scripts/agents_gen.py --write"
+
+
+def _demote_headings(text: str) -> str:
+    """Each ATX heading outside a fenced block, one level deeper. A `#` in a fence is code."""
+    out: List[str] = []
+    fenced = False
+    for line in text.split("\n"):
+        if line.startswith("```"):
+            fenced = not fenced
+        elif not fenced and re.match(r"#{1,5} ", line):
+            line = "#" + line
+        out.append(line)
+    return "\n".join(out)
 
 
 def composed_agents_text(sources: Tuple[str, ...]) -> Optional[str]:
@@ -372,8 +389,26 @@ def composed_agents_text(sources: Tuple[str, ...]) -> Optional[str]:
         text = read(path)
         if text.startswith("---\n"):
             text = text.split("\n---\n", 1)[1] if "\n---\n" in text else text
-        bodies.append(text.strip("\n"))
+        text = text.strip("\n")
+        bodies.append(_demote_headings(text) if bodies else text)
     return "\n\n".join(bodies) + "\n"
+
+
+def first_line_difference(have: str, want: str) -> Optional[Tuple[int, str, str]]:
+    """The first line where two texts differ: its number, the line held, the line expected.
+
+    A text that ends early reads as `<end of file>` at that line. Texts whose lines all agree
+    differ in line endings alone, named at the line after the last. None when the two are equal.
+    """
+    if have == want:
+        return None
+    held, wanted = have.splitlines(), want.splitlines()
+    for number in range(1, max(len(held), len(wanted)) + 1):
+        a = held[number - 1] if number <= len(held) else "<end of file>"
+        b = wanted[number - 1] if number <= len(wanted) else "<end of file>"
+        if a != b:
+            return number, a, b
+    return len(held) + 1, "<other line endings>", "<one newline after each line>"
 
 
 def check_agent_links(report: Report) -> None:
@@ -392,13 +427,20 @@ def check_agent_links(report: Report) -> None:
         want = composed_agents_text(sources)
         if want is None:
             findings.append(Finding(link, f"is composed from {', '.join(sources)}, and one does not exist."))
-        elif path.is_symlink() or not exists(path):
-            findings.append(Finding(link, "must be a real file holding the bodies of " + ", ".join(sources) + "."))
-        elif read(path) != want:
+            continue
+        if path.is_symlink() or not exists(path):
+            findings.append(Finding(link, "must be a real file holding the bodies of " + ", ".join(sources) + ". "
+                                    f"Run `{AGENTS_GEN_COMMAND}`."))
+            continue
+        difference = first_line_difference(read(path), want)
+        if difference:
+            number, held, wanted = difference
             findings.append(Finding(
-                link,
-                "differs from the bodies of " + ", ".join(sources) + " (frontmatter stripped, joined by "
-                "one blank line). Codex reads only this file in that folder, so it would act on a stale copy."))
+                f"{link}:{number}",
+                "differs from the bodies of " + ", ".join(sources) + " (frontmatter stripped, later "
+                f"headings demoted, joined by one blank line). It holds {held[:70]!r}; the sources give "
+                f"{wanted[:70]!r}. Codex reads only this file in that folder, so it would act on a stale "
+                f"copy. Run `{AGENTS_GEN_COMMAND}`."))
     report.add(
         "agent links",
         MECHANICAL,

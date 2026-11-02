@@ -7,7 +7,7 @@
   `Connection: close` (DEBT11, a parked writer still holds a request slot). A burst of clients kills it.
   The `server concurrency` row of `make docs-audit` reads these figures.
 
-# The pipeline and the store
+## The pipeline and the store
 
 - **The join key is per game and normalized on both sides** (`pipeline/games.py`,
   `pipeline/join.py:number_index_key`). Never join on Product Name. D35 (Product Name join) allows it only as a last

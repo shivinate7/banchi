@@ -4752,6 +4752,14 @@ COMPONENTS = [
                         "renders in memory and compares.",
                 "governed_by": ["D18"],
             },
+            "agents_gen.py": {
+                "does": "Writes each composed `AGENTS.md` (today `server/AGENTS.md`): the bodies of "
+                        "the rule files that govern its folder, through `composed_agents_text` in "
+                        "`docs_audit/hygiene.py`, the one home for that text. Previews by default, "
+                        "`--write` applies. It gates nothing: the `agent links` row composes in "
+                        "memory and compares.",
+                "governed_by": ["D18", "D135"],
+            },
             "tests_page.py": {
                 "does": "`make tests-page` — writes `docs/TESTS.md`, one page of what "
                         "each test file protects. It reads the `Protects:` and `Governs:` lines "
@@ -5588,13 +5596,13 @@ COMPONENTS = [
     {
         "path": ".claude/rules/server.md",
         "status": "built",
-        "does": "the capture server's concurrency figures, read by the `server concurrency` row. Loads when a file under server/ is read.",
+        "does": "the capture server's concurrency figures, read by the `server concurrency` row. Loads when a file under server/ is read. Codex reaches it through server/AGENTS.md, a composed file of this body and pipeline.md's that scripts/agents_gen.py writes.",
         "governed_by": ["D135"],
     },
     {
         "path": ".claude/rules/pipeline.md",
         "status": "built",
-        "does": "the join, pricing, emit, store and box rules, moved out of CLAUDE.md. Loads when a file under pipeline/, store/, cli/, identify/ or server/ is read.",
+        "does": "the join, pricing, emit, store and box rules, moved out of CLAUDE.md. Loads when a file under pipeline/, store/, cli/, identify/, server/ or harness/ is read, or app/src's Pricing.tsx, CaptureScreen.tsx, BoxOps.tsx or BoxBrowse.tsx. Codex reaches it through the AGENTS.md link in pipeline/, store/, cli/ and identify/, and through server/AGENTS.md, a composed file that scripts/agents_gen.py writes.",
         "governed_by": ["D135", "D35", "D86", "D88"],
     },
     {

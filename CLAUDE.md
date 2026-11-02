@@ -138,9 +138,12 @@ make catalog-mirror # fills the image mirror (about 16.7 GB). ARGS=--dry-run sam
 
 A rule that governs one folder lives in `.claude/rules/` and loads when a matching file is read: `app.md`
 (`app/**`: screens, design system, shell, verifying a screen), `server.md` (`server/**`: concurrency figures),
-`pipeline.md` (`pipeline/`, `store/`, `cli/`, `identify/`, `server/`: join, pricing, emit, store, boxes) and
-`code-cards.md`. Codex does not read that folder. Each folder holds an `AGENTS.md` link to its rule file, which
-Codex loads for a session started there (D135, Codex reads the same rules). The `agent links` row checks them.
+`pipeline.md` (`pipeline/`, `store/`, `cli/`, `identify/`, `server/`, `harness/`, and `Pricing.tsx`,
+`CaptureScreen.tsx`, `BoxOps.tsx` and `BoxBrowse.tsx` in `app/src/`: join, pricing, emit, store, boxes)
+and `code-cards.md`. Codex does not read that folder. A folder one rule file governs holds an `AGENTS.md`
+link to it, which Codex loads for a session started there (D135, Codex reads the same rules).
+`server/AGENTS.md` is a real file instead: the bodies of `server.md` and `pipeline.md`, written by
+`python3 scripts/agents_gen.py --write`. The `agent links` row checks them all.
 
 ## Code cards (dormant feature) — DORMANT
 
