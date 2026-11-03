@@ -86,6 +86,9 @@ async function listGeometry(page: Page): Promise<Box[]> {
  * (`.bn-banner-slot`) covers the bottom 144px when a banner shows, and Playwright answers a covered
  * click by scrolling the row somewhere else, which flips the placement the case set up. */
 async function placeRow(page: Page, top: number) {
+  /* SETTLED BEFORE THE FIRST READ, NOT ONLY AFTER THE SCROLL: `.bn-page` still runs `bn-page-in`, a 6px rise, when the
+   * scroll offset is taken off `getBoundingClientRect().top`, so the scroll lands 2.3 to 2.9px off under load. */
+  await settleMotion(page)
   await row(page, 1).evaluate((el, t) => window.scrollBy({ top: el.getBoundingClientRect().top - t, behavior: 'instant' }), top)
   await settleMotion(page)
   expect(Math.abs((await boxOf(row(page, 1))).y - top), `row 1 sits ${top}px from the top`).toBeLessThanOrEqual(2)
