@@ -4657,6 +4657,16 @@ for (const [how, takeItBack] of [
   })
 }
 
+/* A PRESS THAT LEAVES THE SCREEN DROPS NO FOCUS. The one held row is released with the press on, so pressing it off leaves no held row and the press goes from
+ * the filter row. Focus was on the press, so it moves to the filter row's search field and not to the page: a keyboard user keeps their place. */
+test('pressing Show Kept Off off, when no held row is left, puts focus on the search field and not on the page', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: THREE_ROWS, decisions: STORED_HOLD })
+  await releaseStoredHoldThenPressOff(page)
+  await expect(anyKeptOffPress(page), 'no held row is left, so the press is gone').toHaveCount(0)
+  await expect(page.getByRole('searchbox', { name: 'Search This List' }), 'focus is on the search field').toBeFocused()
+})
+
 /* A STORED HOLD IS NEVER DRAWN IN A GROUP, NOT EVEN FOR ONE FRAME. The watcher is installed before the page is and reads every record of every change to the page, so a
  * commit that draws the held row inside the groups is seen even when the next commit takes it out again before a paint. The press is off while it watches. */
 async function watchHeldRowsDrawn(page: Page): Promise<void> {
@@ -4843,6 +4853,44 @@ test('keeping a row off TCGplayer leaves its history card closed, with focus on 
   await settleMotion(page)
   await expect(page.locator('[data-history-float]'), 'no card opened').toHaveCount(0)
 })
+
+/* THE HOLD PANEL'S OTHER WAYS OUT OPEN NO CARD EITHER (spec 9c: only a focused price field or a door press opens it). Cancel, Escape and a press outside the
+ * panel each close it without a hold. The watcher counts every draw of a card, even one a blur takes away again before the case looks: a mouse press on the page
+ * title moves focus to the page, which closes a card that the press had opened, so a card that showed and went is not seen at rest. Cancel and Escape also hand
+ * focus back to the lock that opened the panel, as Keep it off does. A press on a plain spot cannot, because the browser moves focus to the page after it. */
+async function watchFloatDraws(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const seen = { cards: 0 }
+    ;(window as unknown as { __floatDrawn: { cards: number } }).__floatDrawn = seen
+    new MutationObserver((records) => {
+      for (const record of records) {
+        for (const added of record.addedNodes) {
+          if (added instanceof Element && (added.matches('[data-history-float]') || added.querySelector('[data-history-float]') !== null)) seen.cards += 1
+        }
+      }
+    }).observe(document, { subtree: true, childList: true })
+  })
+}
+const floatDraws = (page: Page) => page.evaluate(() => (window as unknown as { __floatDrawn: { cards: number } }).__floatDrawn.cards)
+for (const [how, leave, backOnLock] of [
+  ['Cancel', (page: Page) => page.locator('.pricing-holdpanel').getByRole('button', { name: 'Cancel', exact: true }).click(), true],
+  ['Escape', (page: Page) => page.keyboard.press('Escape'), true],
+  ['a press outside the panel', (page: Page) => page.locator(`${VIEW} h1`).click(), false],
+] as const) {
+  test(`closing the hold panel with ${how} draws no history card${backOnLock ? ', and focus is back on the lock' : ''}`, async ({ page }) => {
+    await setViewport(page, { width: 1440, height: 900 })
+    await watchFloatDraws(page)
+    await open(page, { skus: THREE_ROWS })
+    const lock = page.getByRole('button', { name: 'Keep Dunsparce off TCGplayer', exact: true })
+    await lock.click()
+    await expect(page.locator('.pricing-holdpanel'), 'the panel is open').toBeVisible()
+    await leave(page)
+    await expect(page.locator('.pricing-holdpanel'), 'the panel is closed').toHaveCount(0)
+    await settleMotion(page)
+    expect.soft(await floatDraws(page), 'no history card was drawn, not even for a frame').toBe(0)
+    if (backOnLock) await expect.soft(lock, 'focus is back on the lock').toBeFocused()
+  })
+}
 
 test('every control that answers a row is on the row, and the caption shares its tracks', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
@@ -7687,6 +7735,92 @@ test('one list: a tick does not carry over to a new suggested price from Refresh
     ticked: true,
   })
 })
+
+/* THE TICK IS IN A COLUMN OF ITS OWN, headed Send, left of the item (list.html: the first track of the row and of its caption). Drawn after the name, a tick is
+ * pushed to a line of its own by a name that fills its column, and even a short name grows by the tick's own height, so a ticked row stands taller than an
+ * unticked one. The fixture is four suggestions that differ in one thing: two long names, a short one, and a short one that carries no tick (source Live), whose
+ * row is the height every ticked row must have. A name is cut and never wraps, so a name alone adds no height. */
+const tickRow = (n: number, name: string, over: Partial<LiveStub> = {}): LiveStub => ({
+  sku: String(9100000 + n),
+  name,
+  set_name: 'Scarlet and Violet',
+  image_url: null,
+  market: '4.22',
+  low: '4.35',
+  asking: '4.01',
+  last_sold_at: null,
+  group: 'suggested',
+  price: '4.01',
+  source: 'Suggested',
+  reason: 'Market up 18% since listed.',
+  ...over,
+})
+const TICK_LIVE: LiveStub[] = [
+  tickRow(1, 'Umbreon VMAX'),
+  tickRow(2, "Professor's Research"),
+  tickRow(3, 'Mew'),
+  tickRow(4, 'Eevee', { source: 'Live' }),
+]
+for (const width of [1440, 820]) {
+  test(`the tick has its own Send column left of the item, and a long name does not make its row taller, at ${width}`, async ({ page }) => {
+    await setViewport(page, { width, height: 900 })
+    await open(page, { live: TICK_LIVE })
+    await expect(page.getByRole('checkbox', { name: /^Send the new price for / }), 'the three suggestions with a source of Suggested carry a tick').toHaveCount(3)
+    await settleFonts(page)
+    await settleMotion(page)
+    const seen = await page.locator('.pricing-row').evaluateAll((rows) =>
+      rows.map((row) => {
+        const tick = row.querySelector('input[type="checkbox"]')
+        const name = row.querySelector('.pricing-name')!.getBoundingClientRect()
+        const at = tick?.getBoundingClientRect()
+        return {
+          name: row.querySelector('.pricing-name')?.textContent ?? '',
+          ticked: tick !== null,
+          height: row.getBoundingClientRect().height,
+          tickLeft: at?.left ?? null,
+          tickRight: at?.right ?? null,
+          nameLeft: name.left,
+        }
+      }),
+    )
+    const ticked = seen.filter((one) => one.ticked)
+    const plain = seen.find((one) => one.name === 'Eevee')!
+    for (const one of ticked) {
+      expect.soft(one.tickRight!, `${one.name}: the tick ends at ${one.tickRight}px and the name starts at ${one.nameLeft}px, so the tick is in a column left of the item`).toBeLessThanOrEqual(one.nameLeft)
+      expect.soft(Math.abs(one.height - plain.height), `${one.name}: its row is ${one.height}px high and a row with no tick is ${plain.height}px`).toBeLessThanOrEqual(0.5)
+    }
+    const lefts = new Set(ticked.map((one) => Math.round(one.tickLeft!)))
+    expect.soft([...lefts], 'every tick starts at the same x, one column down the list').toHaveLength(1)
+
+    /* THE COLUMN HAS ITS HEADER: Send, over the tick. */
+    const send = page.locator('.pricing-caption').first().getByRole('columnheader', { name: 'Send', exact: true })
+    await expect.soft(send, 'the caption names the column Send').toHaveCount(1)
+    if ((await send.count()) === 1) {
+      const [head, box] = await Promise.all([send.boundingBox(), page.getByRole('checkbox', { name: 'Send the new price for Umbreon VMAX' }).boundingBox()])
+      const middle = box!.x + box!.width / 2
+      expect.soft(middle, `the tick's centre (${middle}px) is under the Send header (${head!.x}px to ${head!.x + head!.width}px)`).toBeGreaterThanOrEqual(head!.x)
+      expect.soft(middle).toBeLessThanOrEqual(head!.x + head!.width)
+    }
+  })
+}
+
+/* THE NOW COLUMN TAKES THE RANGE 7D COLUMN'S ROOM. Range 7d is drawn where the list is `RANGE_ROOM_PX` wide, a width that leaves the item column about 220px with
+ * nothing else added. A list with live listings also draws Now and the Send column, which would cut a name to a few letters, so Range 7d folds there, as it does
+ * below that width, and the item column keeps 220px. A list with no live listing keeps Range 7d (the 7b-15 case above holds that side). The mockup draws no Range
+ * column at all. */
+test('at 1440 a list with live listings folds Range 7d, and the item column is at least 220px wide', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { live: ONE_LIST_LIVE })
+  await expect(page.locator('.pricing-row').filter({ hasText: 'Now $8.80' }), 'the Now column is drawn').toHaveCount(1)
+  await settleFonts(page)
+  await settleMotion(page)
+  await expect.soft(page.locator('.pricing-caption').first().getByText('Range 7d', { exact: true }), 'no Range 7d header').toHaveCount(0)
+  await expect.soft(page.locator('.pricing-row .pricing-col-range'), 'no Range 7d cell').toHaveCount(0)
+  const widths = await page.locator('.pricing-row .pricing-id').evaluateAll((cells) => cells.map((cell) => cell.getBoundingClientRect().width))
+  expect(widths.length, 'the rows are drawn').toBeGreaterThan(0)
+  expect.soft(Math.min(...widths), `the narrowest item column is ${Math.min(...widths)}px`).toBeGreaterThanOrEqual(220)
+})
+
 
 /* LABELS TAKE TITLE CASE (docs/DESIGN.md R5). Neither string below is a sentence (`isSentence` needs a closing . ? or !), so each is a label: a sheet heading and an
  * empty state's title. The copy sweep does not open the mark-down sheet or reach this empty state, so the exact case is matched here. */
