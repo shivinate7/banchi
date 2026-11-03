@@ -4788,8 +4788,8 @@ test('the kept-off press sits in the filter row beside the search box, not in th
  * ends where the eye sees it end: the end of its text, or the edge of whatever clips it, whichever is nearer. At 820 the references take their own line
  * (list-notes item 16), so only the name is held against the figure there, and 820 is otherwise as it is. */
 const LONG_ROW = sku({ sku: '4', name: 'Charizard ex Special Illustration Rare Prismatic Evolutions Pokemon Center Exclusive Elite Trainer Box', set_name: 'SV: Prismatic Evolutions Surging Sparks Paradox Rift Extended Edition' })
-async function itemAgainstMarket(page: Page): Promise<{ name: string; nameEnd: number; setEnd: number; marketStart: number; ellipsis: boolean; clipped: boolean }[]> {
-  return page.locator('.pricing-row').evaluateAll((rows) =>
+async function itemAgainstMarket(page: Page, width: number): Promise<{ name: string; nameEnd: number; setEnd: number; marketStart: number; ellipsis: boolean; clipped: boolean }[]> {
+  return page.locator('.pricing-row').evaluateAll((rows, at) =>
     rows.map((row) => {
       const seenEnd = (el: Element): number => {
         let end = Number.NEGATIVE_INFINITY
@@ -4813,15 +4813,20 @@ async function itemAgainstMarket(page: Page): Promise<{ name: string; nameEnd: n
       const cs = getComputedStyle(name)
       const whole = document.createRange()
       whole.selectNodeContents(name)
+      /* AT 820 ONLY: a figure folded under the item (list-notes item 16) is not beside the name at all, so the name is held against the Price column, the
+         next thing to its right. At 1440, and at 820 while the figure is in a column right of the item, the name is held against the figure itself. */
+      const figureLeft = figure.getBoundingClientRect().left
+      const folded = at === 820 && figureLeft < (row.querySelector('.pricing-id') as HTMLElement).getBoundingClientRect().right - 0.5
       return {
         name: name.textContent ?? '',
         nameEnd: seenEnd(name),
         setEnd: seenEnd(meta),
-        marketStart: figure.getBoundingClientRect().left,
+        marketStart: folded ? (row.querySelector('.pricing-col-price') as HTMLElement).getBoundingClientRect().left : figureLeft,
         ellipsis: cs.textOverflow === 'ellipsis' || (cs as unknown as { webkitLineClamp?: string }).webkitLineClamp !== 'none',
         clipped: whole.getBoundingClientRect().right > seenEnd(name) + 0.5,
       }
     }),
+    width,
   )
 }
 for (const width of [1440, 820]) {
@@ -4830,7 +4835,7 @@ for (const width of [1440, 820]) {
     await open(page, { skus: [...THREE_ROWS, LONG_ROW], live: ONE_LIST_LIVE })
     await expect(page.locator('.pricing-row')).toHaveCount(7)
     await settleFonts(page)
-    const rows = await itemAgainstMarket(page)
+    const rows = await itemAgainstMarket(page, width)
     for (const row of rows) {
       expect(row.nameEnd, `${row.name}: the name ends at ${row.nameEnd}px and the Market figure starts at ${row.marketStart}px`).toBeLessThanOrEqual(row.marketStart - 8)
       if (width === 1440) {
@@ -7910,5 +7915,144 @@ for (const width of [1440, 820]) {
     await settleMotion(page)
     const says = ((await row.innerText()).match(/needs a price|no price yet/gi) ?? []).map((one) => one.toLowerCase())
     expect(says, 'the row says it has no price exactly once').toHaveLength(1)
+  })
+}
+
+/* AT 820 THE REFERENCES TAKE THEIR OWN LINE (list-notes item 16; list.html: `refs-inline` is grid row 2 under the item, from the item's left edge to the row's
+ * end, and the reason is row 3 under it). Market and Lowest are one labelled line: they share a line, it starts under the item's left edge, it sits below the
+ * facts line (condition, set, number), and the reason sits below it. They are not columns right of the item, and Lowest is no longer dropped. A label is found by
+ * its text, drawn and not in the reason ("Market up 18% since listed." starts with the same word). */
+const refsAt820 = (page: Page) =>
+  page.locator('.pricing-row').evaluateAll((rows) =>
+    rows.map((row) => {
+      const labelRect = (word: RegExp) => {
+        const words = document.createTreeWalker(row, NodeFilter.SHOW_TEXT)
+        for (let text = words.nextNode(); text !== null; text = words.nextNode()) {
+          if (!word.test(text.textContent ?? '') || text.parentElement?.closest('.pricing-reason') != null) continue
+          const range = document.createRange()
+          range.selectNodeContents(text)
+          const box = range.getBoundingClientRect()
+          if (box.width > 0 && box.height > 0) return { left: box.left, top: box.top, bottom: box.bottom }
+        }
+        return null
+      }
+      const box = (selector: string) => row.querySelector(selector)?.getBoundingClientRect() ?? null
+      return {
+        name: row.querySelector('.pricing-name')?.textContent ?? '',
+        market: labelRect(/^\s*Market\b/),
+        low: labelRect(/^\s*Lowest\b/),
+        idLeft: box('.pricing-id')!.left,
+        factsBottom: box('.pricing-id .pricing-meta:not(.pricing-where)')!.bottom,
+        reasonTop: box('.pricing-reason')?.top ?? null,
+      }
+    }),
+  )
+test('at 820 Market and Lowest are one labelled line under the meta line, from the item\'s left edge, with the reason under them', async ({ page }) => {
+  await setViewport(page, { width: 820, height: 900 })
+  await open(page, { live: ONE_LIST_LIVE })
+  await expect(page.locator('.pricing-row').first()).toBeVisible()
+  await settleFonts(page)
+  await settleMotion(page)
+  const rows = await refsAt820(page)
+  expect(rows.length, 'rows are drawn').toBeGreaterThan(0)
+  for (const one of rows) {
+    expect.soft(one.market, `${one.name}: a "Market" label is drawn in the row`).not.toBeNull()
+    expect.soft(one.low, `${one.name}: a "Lowest" label is drawn in the row`).not.toBeNull()
+    if (one.market === null || one.low === null) continue
+    expect.soft(Math.abs((one.market.top + one.market.bottom) / 2 - (one.low.top + one.low.bottom) / 2), `${one.name}: Market and Lowest share a line`).toBeLessThanOrEqual(4)
+    expect.soft(one.low.left, `${one.name}: Lowest follows Market on the line`).toBeGreaterThan(one.market.left)
+    expect.soft(one.market.top, `${one.name}: the line starts at ${one.market.top}px, under the facts line that ends at ${one.factsBottom}px`).toBeGreaterThanOrEqual(one.factsBottom - 1)
+    expect.soft(Math.abs(one.market.left - one.idLeft), `${one.name}: the line starts at ${one.market.left}px, the item at ${one.idLeft}px`).toBeLessThanOrEqual(2)
+    if (one.reasonTop !== null) {
+      expect.soft(one.reasonTop, `${one.name}: the reason starts at ${one.reasonTop}px, under the references that end at ${Math.max(one.market.bottom, one.low.bottom)}px`).toBeGreaterThanOrEqual(Math.max(one.market.bottom, one.low.bottom) - 1)
+    }
+  }
+})
+
+/* AT 820 THE ITEM COLUMN IS AT LEAST 180px, so a new copy's set name ("SV: Prismatic Evolutions") is not cut with an ellipsis. With the references on their own
+ * line (the case above) the two columns they took give their room to the item. Every row's item column is held to the width, and the set name of each row is
+ * whole: the text is not wider than its box. */
+test('at 820 the item column is at least 180px wide and a new copy\'s set name is not cut', async ({ page }) => {
+  await setViewport(page, { width: 820, height: 900 })
+  await open(page, { live: ONE_LIST_LIVE })
+  await expect(page.locator('.pricing-row').first()).toBeVisible()
+  await settleFonts(page)
+  await settleMotion(page)
+  const seen = await page.locator('.pricing-row').evaluateAll((rows) =>
+    rows.map((row) => {
+      const set = row.querySelector('.pricing-set') as HTMLElement | null
+      return {
+        name: row.querySelector('.pricing-name')?.textContent ?? '',
+        id: (row.querySelector('.pricing-id') as HTMLElement).getBoundingClientRect().width,
+        set: set?.textContent ?? '',
+        setCut: set === null ? false : set.scrollWidth > set.clientWidth + 0.5,
+      }
+    }),
+  )
+  expect(seen.some((one) => one.set === 'SV: Prismatic Evolutions'), 'the new copy with the long set name is drawn').toBe(true)
+  for (const one of seen) {
+    expect.soft(one.id, `${one.name}: its item column is ${one.id}px`).toBeGreaterThanOrEqual(180)
+    expect.soft(one.setCut, `${one.name}: the set name "${one.set}" is cut`).toBe(false)
+  }
+})
+
+/* AT 1440 A LIST WITH NO LIVE LISTING BUT A ROW THAT WAITS FOR A TICK DRAWS THE SEND COLUMN, and the item column keeps 220px and its facts line two lines or
+ * fewer. The live-listing case above (Range 7d folds where Now is drawn) does not reach this list: the Send column is on, the Now column is not, and Range 7d
+ * stays and takes the room. The mockup draws no Range column. The case holds the outcome, not the fold: the item column and the facts line. A line is a cluster
+ * of children whose tops differ by less than half a text line. The fixture's facts are "Near Mint Holofoil" (102px) and the set (136px), which need 250px to
+ * share a line, so a column of exactly 220px still runs over 3 lines; folding Range 7d gives the item column about 330px. */
+test('at 1440 a list with no live listing but a row that waits for a tick keeps the item column at 220px or more and its facts line to two lines', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: [inGroup(sku(), 'needs_you'), inGroup(sku({ sku: '2', name: 'Dunsparce' }), 'at_rule')] })
+  await expect(page.getByRole('checkbox', { name: /^Send the new price for / }), 'a row waits for a tick, so the Send column is drawn').toHaveCount(1)
+  await expect(page.locator('.pricing-row .pricing-now'), 'no live listing, so no Now column').toHaveCount(0)
+  await settleFonts(page)
+  await settleMotion(page)
+  const seen = await page.locator('.pricing-row').evaluateAll((rows) =>
+    rows.map((row) => {
+      const tops = Array.from(row.querySelectorAll('.pricing-id .pricing-meta:not(.pricing-where) > *'))
+        .map((one) => one.getBoundingClientRect().top)
+        .sort((a, b) => a - b)
+      const lines = tops.reduce((count, top, at) => (at === 0 || top - tops[at - 1]! > 8 ? count + 1 : count), 0)
+      return {
+        name: row.querySelector('.pricing-name')?.textContent ?? '',
+        id: (row.querySelector('.pricing-id') as HTMLElement).getBoundingClientRect().width,
+        lines,
+        parts: Array.from(row.querySelectorAll('.pricing-id .pricing-meta:not(.pricing-where) > *')).map((one) => `${one.textContent}=${Math.round(one.getBoundingClientRect().width)}`).join(' | '),
+      }
+    }),
+  )
+  expect(seen.length, 'rows are drawn').toBeGreaterThan(0)
+  for (const one of seen) {
+    expect.soft(one.id, `${one.name}: its item column is ${one.id}px`).toBeGreaterThanOrEqual(220)
+    expect.soft(one.lines, `${one.name}: its facts line runs over ${one.lines} lines (${one.parts})`).toBeLessThanOrEqual(2)
+  }
+})
+
+/* A NAME CUT BY AN ELLIPSIS CARRIES A TITLE WITH THE WHOLE NAME, so the owner can read what the column cut. The name is cut where its text is wider than its
+ * box. One new copy and one live listing carry a name too long for any column at both widths; a name that fits is left out of the read. The title may sit on the
+ * name or on a wrapper of it inside the row. */
+const LONG_NAME = 'Charizard ex Special Illustration Rare Prismatic Evolutions Pokemon Center Exclusive Elite Trainer Box'
+for (const width of [1440, 820]) {
+  test(`a row name cut by an ellipsis carries a title with the full name, at ${width}`, async ({ page }) => {
+    await setViewport(page, { width, height: 900 })
+    await open(page, { skus: [LONG_ROW], live: [tickRow(5, LONG_NAME)] })
+    await expect(page.locator('.pricing-row').first()).toBeVisible()
+    await settleFonts(page)
+    await settleMotion(page)
+    const seen = await page.locator('.pricing-row').evaluateAll((rows) =>
+      rows.map((row) => {
+        const name = row.querySelector('.pricing-name') as HTMLElement
+        const holder = name.closest('[title]')
+        return {
+          shown: (name.textContent ?? '').trim(),
+          cut: name.scrollWidth > name.clientWidth + 0.5,
+          title: holder !== null && row.contains(holder) ? holder.getAttribute('title') : null,
+        }
+      }),
+    )
+    const cut = seen.filter((one) => one.cut)
+    expect(cut.length, 'both long names are cut at this width').toBe(2)
+    for (const one of cut) expect.soft(one.title ?? '', `"${one.shown}" is cut and its title is ${JSON.stringify(one.title)}`).toContain(one.shown)
   })
 }

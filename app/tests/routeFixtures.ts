@@ -933,6 +933,8 @@ export async function seedPopulatedPricing(
   live?: LiveListing[] | (() => LiveListing[]),
   /** SKUs the owner has kept off TCGplayer: each is a stored `withheld` answer in the corpus, there from the first read. */
   keptOff: readonly string[] = [],
+  /** The group the server files a new copy under, by SKU (`PricingSku.group`). A row named nowhere here arrives with none. */
+  groups: Readonly<Record<string, 'needs_you' | 'suggested' | 'at_rule'>> = {},
 ): Promise<void> {
   await page.route(/\/pricing$/, (route) =>
     route.fulfill({
@@ -961,7 +963,7 @@ export async function seedPopulatedPricing(
           ...Array.from({ length: extra }, (_, i) =>
             pricingRow(`86090${String(i).padStart(2, '0')}`, `Filler ${i + 1}`, '1.50', '1.10', { box: 4, index: i + 1, label: `Box 4, Section 1, Card ${i + 1}`, cid: NAME_A, capture_id: `cap-4-${i + 1}` }),
           ),
-        ],
+        ].map((row) => (groups[row.sku] === undefined ? row : { ...row, group: groups[row.sku] })),
         written_at: {},
         skipped: [],
         asked: [],
