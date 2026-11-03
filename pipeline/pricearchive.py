@@ -71,7 +71,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Protocol, Tuple
 
-from pipeline import games, join, tcgcsv
+from pipeline import games, join, pricehistory, tcgcsv
 from store import files
 from store import orders as order_store
 from store.pricearchive import RANGE_WIDTH_DAYS, Bucket, PriceArchive, Source, _key
@@ -106,8 +106,8 @@ CATALOG_SKUS_PER_PASS = 600
 RESUME_TTL_SECONDS = 6 * 24 * 60 * 60
 
 # `pipeline/pricehistory.py:COURTESY_DELAY_SECONDS`, copied rather than imported — this
-# module still takes no hard dependency on `pricehistory` (the `market` argument stays
-# duck-typed throughout), so the naive first guess has to live here too, for a checkout
+# module takes `pricehistory` for its refusal-text constants only (the `market` argument stays
+# duck-typed throughout), so the naive first guess still lives here too, for a checkout
 # that has never measured a real throttle yet.
 DEFAULT_COURTESY_DELAY_SECONDS = 0.15
 
@@ -118,13 +118,14 @@ DEFAULT_COURTESY_DELAY_SECONDS = 0.15
 # never going to get from a constant somebody typed.
 THROTTLE_BACKOFF_FACTOR = 2.0
 
-# The one sentence `pipeline/pricehistory.py:fetch_json` raises `Blocked` with for an HTTP
-# 403 (see its own docstring). Matched by substring rather than by exception type, because
-# `readings_for_rows` already folds `Blocked` into a plain string per SKU before this
-# module ever sees it (see the header above) — this file may not change
-# `pipeline/pricehistory.py`'s exceptions, and a fixed substring of an already-fixed
-# sentence is a fact this module can rely on without a second, drifting copy of it.
-BLOCKED_SIGNATURE = "answered HTTP 403"
+# What `classify_refusals` writes in place of a 403 that came after a success. A reader of the
+# rewritten text (`cli/archive_review.py:_NETWORK_SIGNATURES`) points at this constant.
+THROTTLE_REWRITE = (
+    "the host answered HTTP 403 after this pass had already read other "
+    "SKUs successfully — a throttle, not an authorization problem. Re-run "
+    "`archive sweep --write` later; it will not re-read what this pass "
+    "already archived."
+)
 
 
 class _MarketLike(Protocol):
@@ -470,8 +471,8 @@ def _ledger_export_rows(
                 category_id = market.category_id(product_line)
                 groups_by_line[product_line] = market.groups(category_id)
             except Exception as exc:  # the mirror's own refusal shape, duck-typed (see
-                # the header — this module takes no hard dependency on
-                # `pipeline/pricehistory.py`'s exception types)
+                # the header — this module reads no exception type of
+                # `pipeline/pricehistory.py`, only its message constants)
                 groups_by_line[product_line] = None
                 _ = exc
         groups = groups_by_line[product_line]
@@ -944,15 +945,13 @@ def classify_refusals(
     rewritten: Dict[str, str] = {}
     blocked = 0
     for sku, message in refusals.items():
-        if BLOCKED_SIGNATURE in message:
+        # `pricehistory.BLOCKED_MESSAGE` whole, by substring rather than exception type:
+        # `readings_for_rows` folded `Blocked` to a plain string before this module saw it. Never
+        # its opening words, which a 500's text shares (`pricehistory.STATUS_MESSAGE_PREFIX`).
+        if pricehistory.BLOCKED_MESSAGE in message:
             blocked += 1
             if had_earlier_success:
-                rewritten[sku] = (
-                    "the host answered HTTP 403 after this pass had already read other "
-                    "SKUs successfully — a throttle, not an authorization problem. Re-run "
-                    "`archive sweep --write` later; it will not re-read what this pass "
-                    "already archived."
-                )
+                rewritten[sku] = THROTTLE_REWRITE
                 continue
         rewritten[sku] = message
     return rewritten, blocked
