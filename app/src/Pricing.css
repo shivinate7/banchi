@@ -102,7 +102,7 @@
 /* THE THUMBNAIL IS A BUTTON, SO ON A THUMB IT IS 40px WIDE (F8: it drew 36). One variable feeds the
    caption, the row and the photo button, so the columns can never disagree with the control. */
 .pricing-caption,
-.pricing-row { --pricing-thumb-w: 36px; --pricing-now-w: 96px; }
+.pricing-row { --pricing-thumb-w: 36px; --pricing-now-w: 72px; }
 @media (hover: none) and (pointer: coarse) {
   .pricing-caption,
   .pricing-row { --pricing-thumb-w: 40px; }
@@ -511,7 +511,7 @@ span.pricing-thumb { cursor: default; }
    The history door takes 40px beside the lock, so the price column gives 16px back and the gap 4px: the name keeps the width its meta line needs. */
 @container bn-page (max-width: 899px) {
   .pricing-caption,
-  .pricing-row { --pricing-now-w: 72px; grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 60px [reason-end] 112px 80px; column-gap: var(--bn-2); }
+  .pricing-row { grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 60px [reason-end] 112px 80px; column-gap: var(--bn-2); }
   .pricing-to,
   .pricing-caption .pricing-col-src { display: none; }
   .pricing-list[data-copies='none'] .pricing-caption,
