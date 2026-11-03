@@ -1001,9 +1001,9 @@ const strip = (page: Page) => page.locator('.pricing-row .pricetrend')
 const field = (page: Page) => page.getByRole('textbox', { name: /^Price for / })
 
 /** THE ONE KEPT-OFF PRESS (`list-notes.md`, item 12: "Kept-off rows are not in the three groups"). A row the store already holds is drawn only
- *  behind it, labelled "Show Kept off (N)". Pressing it swaps the three groups for the kept-off rows. This is the one home of that press: a case
+ *  behind it, labelled "Show Kept Off (N)": one casing for the phrase, the group heading's own (R5). Pressing it swaps the three groups for the kept-off rows. This is the one home of that press: a case
  *  that seeds a stored hold calls it, then asserts what it asserted before. A hold taken THIS visit keeps its row in place and needs no press. */
-const keptOffPress = (page: Page, count: number) => page.getByRole('button', { name: `Show Kept off (${count})`, exact: true })
+const keptOffPress = (page: Page, count: number) => page.getByRole('button', { name: `Show Kept Off (${count})`, exact: true })
 async function showKeptOff(page: Page, count: number): Promise<void> {
   const press = keptOffPress(page, count)
   await press.click()
@@ -4605,6 +4605,245 @@ test('Kept off shows only the kept-off rows, and its count is the bar’s count'
   await expect(page.locator('.pricing-name')).toHaveText(['Articuno'])
 })
 
+/* ---- THE KEPT-OFF PRESS AND THE HOLDS (D313; `list-notes.md`, items 12 and 17; spec section 9c) -----------------------------------------------
+ * A row the store held at load is in none of the three groups. A hold taken THIS visit keeps its row where it is, whatever the row's history, and a
+ * stored hold is never drawn inside a group, not even for the frame before the load is read. These cases are about the edges of that rule. */
+const THREE_ROWS = [sku({ sku: '1', name: 'Articuno' }), sku({ sku: '2', name: 'Dunsparce' }), sku({ sku: '3', name: 'Wattrel' })]
+const STORED_HOLD = { rule: 'match', basis: 'market', overrides: { '2': { withheld: 'keeping' } } }
+/** The press whatever its count, for a case that reads the count off it. */
+const anyKeptOffPress = (page: Page) => page.getByRole('button', { name: /^Show Kept Off \(\d+\)$/ })
+const rowNamed = (page: Page, name: string) => page.locator('.pricing-row', { has: page.getByRole('link', { name, exact: true }) })
+/** One hold, taken with the lock and the panel's one confirm. */
+async function keepOff(page: Page, name: string): Promise<void> {
+  await page.getByRole('button', { name: `Keep ${name} off TCGplayer`, exact: true }).click()
+  await page.getByRole('button', { name: 'Keep it off' }).click()
+}
+/** THE ROW HELD AT LOAD IS RELEASED WITH THE PRESS ON, THEN THE PRESS GOES OFF: the row is in its group, as a row nobody holds. */
+async function releaseStoredHoldThenPressOff(page: Page): Promise<void> {
+  await showKeptOff(page, 1)
+  await expect(page.locator('.pricing-name')).toHaveText(['Dunsparce'])
+  await page.getByRole('button', { name: 'Release Dunsparce', exact: true }).click()
+  await expect(page.locator('.bn-toast', { hasText: 'Released Dunsparce' })).toBeVisible()
+  await anyKeptOffPress(page).click()
+  await expect(page.locator('.pricing-name'), 'the released row is in its group').toHaveText(['Articuno', 'Dunsparce', 'Wattrel'])
+}
+
+for (const [how, takeItBack] of [
+  ['the lock and its panel', (page: Page) => keepOff(page, 'Dunsparce')],
+  ['the release toast’s Undo', (page: Page) => page.locator('.bn-toast', { hasText: 'Released Dunsparce' }).getByRole('button', { name: 'Undo' }).click()],
+  [
+    'the U key',
+    async (page: Page) => {
+      await page.locator(`${VIEW} h1`).click() // a key press in a field types, so leave the field first
+      await page.keyboard.press('u')
+    },
+  ],
+] as const) {
+  test(`a hold taken this visit keeps its row, even a row held at load: released, filed in its group, then kept off again with ${how}`, async ({ page }) => {
+    await setViewport(page, { width: 1440, height: 900 })
+    await open(page, { skus: THREE_ROWS, decisions: STORED_HOLD })
+    await expect(page.locator('.pricing-name'), 'the stored hold is behind the press').toHaveText(['Articuno', 'Wattrel'])
+    await releaseStoredHoldThenPressOff(page)
+
+    await takeItBack(page)
+    const row = rowNamed(page, 'Dunsparce')
+    await expect(row.locator('.pricing-held'), 'the row is drawn kept off, where it was').toBeVisible()
+    await expect(page.locator('.pricing-name'), 'the row keeps its place among the rest').toHaveText(['Articuno', 'Dunsparce', 'Wattrel'])
+    if (how === 'the lock and its panel') {
+      await expect
+        .poll(() => row.evaluate((el) => el.contains(document.activeElement)), 'focus stays on the row, and is not dropped to the page')
+        .toBe(true)
+    }
+  })
+}
+
+/* A STORED HOLD IS NEVER DRAWN IN A GROUP, NOT EVEN FOR ONE FRAME. The watcher is installed before the page is and reads every record of every change to the page, so a
+ * commit that draws the held row inside the groups is seen even when the next commit takes it out again before a paint. The press is off while it watches. */
+async function watchHeldRowsDrawn(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const seen: string[] = []
+    ;(window as unknown as { __heldDrawn: string[] }).__heldDrawn = seen
+    const HELD = '.pricing-row[data-answer="held"]'
+    const note = (row: Element) => seen.push(row.querySelector('.pricing-name')?.textContent ?? '?')
+    new MutationObserver((records) => {
+      if ([...document.querySelectorAll('button[aria-pressed="true"]')].some((one) => /kept off/i.test(one.textContent ?? ''))) return
+      for (const record of records) {
+        if (record.type === 'attributes' && record.target instanceof Element && record.target.matches(HELD)) note(record.target)
+        for (const added of record.addedNodes) {
+          if (!(added instanceof Element)) continue
+          if (added.matches(HELD)) note(added)
+          added.querySelectorAll(HELD).forEach(note)
+        }
+      }
+    }).observe(document, { subtree: true, childList: true, attributes: true })
+  })
+}
+const heldRowsDrawn = (page: Page) => page.evaluate(() => (window as unknown as { __heldDrawn: string[] }).__heldDrawn)
+
+/* A STORE WITH NO RUN OPEN: the worklist names no run, and one live listing is kept off in the store. Three loads: the first, a reload of the page, and the Reload
+ * button after the store gained a second hold from elsewhere. The arrival that files a hold behind the press is taken after the commit that has the new rows, so on
+ * the Reload button a hold the old arrival has not seen is drawn in a group for that one commit. The first load and the page reload hold on the branch head too. */
+const LIVE_HELD = { rule: 'match', basis: 'market', overrides: { '9000003': { withheld: 'keeping' } } }
+test('a row held in the store is never drawn inside the three groups, on first load, on a page reload, nor when Reload brings a hold in, not even for one frame', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await watchHeldRowsDrawn(page)
+  await open(page, { noRun: true, worklist: { runs: [], skus: [] }, live: ONE_LIST_LIVE, decisions: LIVE_HELD })
+  await expect(page.locator('.pricing-name'), 'first load: the rest of the list is drawn').toHaveText(['Iono', 'Gardevoir ex'])
+  await settleMotion(page)
+  expect(await heldRowsDrawn(page), 'first load: no commit drew the held row').toEqual([])
+
+  await page.reload()
+  await expect(page.locator('.pricing-name'), 'page reload: the rest of the list is drawn').toHaveText(['Iono', 'Gardevoir ex'])
+  await settleMotion(page)
+  expect(await heldRowsDrawn(page), 'page reload: no commit drew the held row').toEqual([])
+
+  /* THE STORE GAINS A HOLD FROM ELSEWHERE (the corpus route only: the worklist route has the same tail). */
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() === 'PUT' || new URL(route.request().url()).pathname !== '/pricing') return route.fallback()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: { version: 1, policy: { rule: 'match', basis: 'market', sub_threshold: { flat: '0.49' } }, skus: { '9000002': { value: { withheld: 'keeping' } }, '9000003': { value: { withheld: 'keeping' } } } },
+        path: '/tmp/prices.json',
+        revision: 'rev-2',
+      }),
+    })
+  })
+  await page.getByRole('button', { name: 'Reload', exact: true }).click()
+  await expect(page.locator('.pricing-name'), 'the Reload button: the new hold leaves the list').toHaveText(['Iono'])
+  await settleMotion(page)
+  expect(await heldRowsDrawn(page), 'the Reload button: no commit drew the held rows in a group').toEqual([])
+  await showKeptOff(page, 2)
+  await expect(page.locator('.pricing-name'), 'the press draws both').toHaveText(['Gardevoir ex', 'Pecharunt ex'])
+})
+
+/* THE PRESS KEEPS ITS PROMISE UNDER A CHIP. "Show Kept Off (N)" counts rows, so the rows it draws are N, whether the lens or the kind was on before the press.
+ * The read judges Roaring Moon (offered, sealed) and Pecharunt ex (passed over, a single); Gardevoir ex is not in it, so it is under no chip. All three are
+ * kept off at load. */
+const lensChip = (page: Page, name: RegExp) => page.getByRole('group', { name: 'Which live listings to show' }).getByRole('button', { name })
+const kindChip = (page: Page, name: string) => page.getByRole('group', { name: 'Singles or sealed' }).getByRole('button', { name, exact: true })
+for (const [said, chip] of [
+  ['Not Selling', (page: Page) => lensChip(page, /^Not Selling/)],
+  ['Passed Over', (page: Page) => lensChip(page, /^Passed Over/)],
+  ['Singles', (page: Page) => kindChip(page, 'Singles')],
+  ['Sealed', (page: Page) => kindChip(page, 'Sealed')],
+] as const) {
+  test(`the kept-off press promises as many rows as it draws, with ${said} on before the press`, async ({ page }) => {
+    await setViewport(page, { width: 1440, height: 900 })
+    await openLiveWithRead(page, {
+      open: {
+        live: BESIDE_READ,
+        decisions: { rule: 'match', basis: 'market', overrides: { '9000002': { withheld: 'keeping' }, '9000003': { withheld: 'keeping' }, '9000004': { withheld: 'keeping' } } },
+      },
+      read: [readRow({ sku: '9000004', name: 'Roaring Moon', standing: 'offered', sealed: true }), readRow({ sku: '9000003', name: 'Pecharunt ex', standing: 'refused' })],
+    })
+    await chip(page).click()
+    await expect(chip(page), `${said} is pressed`).toHaveAttribute('aria-pressed', 'true')
+    const press = anyKeptOffPress(page)
+    await expect(press, 'a kept-off row is under the chip, so the press is drawn').toBeVisible()
+    const promised = Number(/\((\d+)\)$/.exec((await press.innerText()).trim())?.[1])
+    expect(Number.isInteger(promised), 'the press names its count').toBe(true)
+    await press.click()
+    await expect(press, 'the press is down').toHaveAttribute('aria-pressed', 'true')
+    await expect(page.locator('.pricing-row'), `the press promised ${promised} rows`).toHaveCount(promised)
+  })
+}
+
+/* THE CASING OF THE PHRASE IS ONE (docs/DESIGN.md R5, through `titleCase`): the press reads "Show Kept Off (N)" and the group heading it opens reads "Kept Off". */
+test('the kept-off press and the group heading it opens say the phrase in one casing', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: THREE_ROWS, decisions: STORED_HOLD })
+  await showKeptOff(page, 1)
+  await expect(page.getByRole('heading', { name: /^Kept Off\b/ }), 'the group heading').toBeVisible()
+  const named = (await keptOffPress(page, 1).innerText()).replace(/\s+/g, ' ').trim()
+  expect(named, 'the press names the phrase as the heading does, then its count').toMatch(/^Show Kept Off\b/)
+})
+
+/* THE PRESS SITS IN THE FILTER ROW, beside the search and the filter chips (`list.html`: the press is `.filters`' own child; list-notes item 12). */
+test('the kept-off press sits in the filter row beside the search box, not in the toolbar above it', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: THREE_ROWS, decisions: STORED_HOLD })
+  const [search, press] = [await page.getByRole('searchbox', { name: 'Search This List' }).boundingBox(), await keptOffPress(page, 1).boundingBox()]
+  expect(search, 'the search box is drawn').not.toBeNull()
+  expect(press, 'the press is drawn').not.toBeNull()
+  const middle = press!.y + press!.height / 2
+  expect(middle, `the press (centre ${middle}px) is on the search box's row (${search!.y}px to ${search!.y + search!.height}px)`).toBeGreaterThanOrEqual(search!.y)
+  expect(middle).toBeLessThanOrEqual(search!.y + search!.height)
+  expect(press!.x, 'the press follows the search box').toBeGreaterThan(search!.x + search!.width)
+})
+
+/* THE ITEM COLUMN ENDS BEFORE THE MARKET FIGURE STARTS. On the one list at 1440 the set line "SV: Prismatic Evolutions" ends at 465px and the Market figure starts
+ * at 462px. The name and the set line end at least 8px before the figure starts on every row, and a name too long for its column is cut with an ellipsis. A text
+ * ends where the eye sees it end: the end of its text, or the edge of whatever clips it, whichever is nearer. At 820 the references take their own line
+ * (list-notes item 16), so only the name is held against the figure there, and 820 is otherwise as it is. */
+const LONG_ROW = sku({ sku: '4', name: 'Charizard ex Special Illustration Rare Prismatic Evolutions Pokemon Center Exclusive Elite Trainer Box', set_name: 'SV: Prismatic Evolutions Surging Sparks Paradox Rift Extended Edition' })
+async function itemAgainstMarket(page: Page): Promise<{ name: string; nameEnd: number; setEnd: number; marketStart: number; ellipsis: boolean; clipped: boolean }[]> {
+  return page.locator('.pricing-row').evaluateAll((rows) =>
+    rows.map((row) => {
+      const seenEnd = (el: Element): number => {
+        let end = Number.NEGATIVE_INFINITY
+        const words = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+        for (let text = words.nextNode(); text !== null; text = words.nextNode()) {
+          if ((text.textContent ?? '').trim() === '') continue
+          const range = document.createRange()
+          range.selectNodeContents(text)
+          let right = range.getBoundingClientRect().right
+          for (let up = text.parentElement; up !== null && up !== row; up = up.parentElement) {
+            if (getComputedStyle(up).overflowX !== 'visible') right = Math.min(right, up.getBoundingClientRect().right)
+          }
+          end = Math.max(end, right)
+        }
+        return end
+      }
+      const name = row.querySelector('.pricing-name') as HTMLElement
+      const meta = row.querySelector('.pricing-meta') as HTMLElement
+      const market = row.querySelector('.pricing-col-market') as HTMLElement
+      const figure = market.querySelector('.bn-money') ?? market
+      const cs = getComputedStyle(name)
+      const whole = document.createRange()
+      whole.selectNodeContents(name)
+      return {
+        name: name.textContent ?? '',
+        nameEnd: seenEnd(name),
+        setEnd: seenEnd(meta),
+        marketStart: figure.getBoundingClientRect().left,
+        ellipsis: cs.textOverflow === 'ellipsis' || (cs as unknown as { webkitLineClamp?: string }).webkitLineClamp !== 'none',
+        clipped: whole.getBoundingClientRect().right > seenEnd(name) + 0.5,
+      }
+    }),
+  )
+}
+for (const width of [1440, 820]) {
+  test(`the item column ends at least 8px before the Market figure starts on every row, and a long name is cut with an ellipsis, at ${width}`, async ({ page }) => {
+    await setViewport(page, { width, height: 900 })
+    await open(page, { skus: [...THREE_ROWS, LONG_ROW], live: ONE_LIST_LIVE })
+    await expect(page.locator('.pricing-row')).toHaveCount(7)
+    await settleFonts(page)
+    const rows = await itemAgainstMarket(page)
+    for (const row of rows) {
+      expect(row.nameEnd, `${row.name}: the name ends at ${row.nameEnd}px and the Market figure starts at ${row.marketStart}px`).toBeLessThanOrEqual(row.marketStart - 8)
+      if (width === 1440) {
+        expect(row.setEnd, `${row.name}: the set line ends at ${row.setEnd}px and the Market figure starts at ${row.marketStart}px`).toBeLessThanOrEqual(row.marketStart - 8)
+      }
+    }
+    const long = rows.find((row) => row.name.startsWith('Charizard'))!
+    if (long.clipped) expect(long.ellipsis, 'a name cut short says so with an ellipsis').toBe(true)
+  })
+}
+
+/* THE HISTORY CARD OPENS ON A FOCUSED PRICE FIELD OR A DOOR PRESS, and on nothing else (spec 9c). Keeping a row off TCGplayer leaves focus on that row's Release
+ * button, which is neither, so the card stays closed. */
+test('keeping a row off TCGplayer leaves its history card closed, with focus on the Release button', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { skus: THREE_ROWS })
+  await keepOff(page, 'Dunsparce')
+  await expect(rowNamed(page, 'Dunsparce').locator('.pricing-held'), 'the row is kept off').toBeVisible()
+  await expect(page.getByRole('button', { name: 'Release Dunsparce', exact: true }), 'focus is on the Release button').toBeFocused()
+  await settleMotion(page)
+  await expect(page.locator('[data-history-float]'), 'no card opened').toHaveCount(0)
+})
+
 test('every control that answers a row is on the row, and the caption shares its tracks', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   await open(page)
@@ -6403,7 +6642,7 @@ test('ux-wave1: the Send button does not move when the last-send warning arrives
  *   [data-tile="priced" | "held" | "ready"]  one tile each, inside the send bar, on the one list
  *   [data-tone="warn"]                        on the priced tile, while rows still need a price
  * The action is found by its words: "Price Them" on the priced tile. The held tile is a figure; the one
- * press that shows the kept-off rows is the filter bar's "Show Kept off (N)" (`showKeptOff`). Counts are
+ * press that shows the kept-off rows is the filter bar's "Show Kept Off (N)" (`showKeptOff`). Counts are
  * read off each tile's own text. */
 const tile = (page: Page, which: 'priced' | 'held' | 'ready') => page.locator(`[data-tile="${which}"]`)
 const pricedRow = (n: number) => sku({ sku: String(200 + n), name: `Priced ${n}` })
@@ -6651,7 +6890,7 @@ test('send tiles: a row held as unlisted is not counted in the typed figure', as
 
 /* THE SEARCH AND A FACET ARE NARROWED FIRST, so the press under test has something to clear.
    Articuno (Pokemon, priced) is the only row the search finds, and Riftbound is the facet, so the
-   list is empty until the press runs. The press is the one "Show Kept off (N)": its count promises
+   list is empty until the press runs. The press is the one "Show Kept Off (N)": its count promises
    N rows, so it shows them whatever the search and the facet had narrowed to. */
 test('send tiles: Show kept off after a search and a game facet clears both, and shows every kept-off row', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })

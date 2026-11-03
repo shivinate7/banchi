@@ -1210,8 +1210,9 @@ test("pricing: the owner's hold is one name, and no rendered string says Held, H
 // "becomes the send bar's last figure ... and a filter press, 'Show kept off (2)'"; docs/DESIGN.md R5: a button takes Title Case).
 // Today three controls open the same filter: a chip in the filter bar, the tile's press and, once the bar carries figures, the
 // figures' press. The sweep reads the landing state of a store that keeps nothing off, so none of them is graded there. The label
-// is graded by the sweep's own rule (`casingProblems`), so the form it accepts is the form asked for: with a count after it,
-// "off" stays lower case. The row's own lock ("Keep X off TCGplayer") says "Keep", not "kept", so it is not counted.
+// is graded by the sweep's own rule (`casingProblems`). The press reads "Show Kept Off (N)", the casing of the group heading "Kept Off"
+// (R5, one casing for the phrase), so its count is a value phrase (`data-value`) and the label around it ends on "Off". The row's own
+// lock ("Keep X off TCGplayer") says "Keep", not "kept", so it is not counted.
 const LIVE_LISTING = {
   sku: '9000002', name: 'Gardevoir ex', set_name: 'Scarlet and Violet', image_url: null, market: '4.22', low: '4.35',
   asking: '3.40', last_sold_at: null, group: 'suggested', price: '4.01', source: 'Suggested', reason: 'Market up 18% since listed.',
@@ -1232,7 +1233,7 @@ for (const [state, withLive] of [['the send tiles', false], ['the send figures',
       .filter((one) => one.role === 'button' && /kept off/i.test(one.lines.join(' ')))
       .flatMap((one) => labelsOf(one.lines, one.keyCaps).map((text) => stripTyped(text, one.marked)))
     expect(labels, 'the press has one label').toHaveLength(1)
-    expect(labels[0], 'the press says what it does').toMatch(/^Show Kept /)
+    expect(labels[0], 'the press says what it does, in the heading\'s casing').toMatch(/^Show Kept Off\b/)
     expect(casingProblems(labels[0]!), `"${labels[0]}" takes Title Case`).toEqual([])
   })
 }
