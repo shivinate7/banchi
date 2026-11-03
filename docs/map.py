@@ -2069,10 +2069,14 @@ COMPONENTS = [
                                   "applies on top of `unfulfilled`; an unrecognised status "
                                   "answers False and changes nothing, the fail-safe direction. "
                                   "`scripts/docs-audit.py:check_terminal_statuses` reconciles "
-                                  "the set against its own published copy in the D63 entry.",
+                                  "the set against its own published copy in the D63 entry. "
+                                  "`Ledger.labels` (D326) is a third mapping, one `LabelRow` per "
+                                  "TCGplayer order number: a claim written before a TCGTracking "
+                                  "create, replaced by the whole answer, the label PDF, the "
+                                  "insurance switch and the last scan.",
                           "governed_by": ["D7", "D10", "D13", "D16", "D20", "D21", "D24", "D26",
                                           "D29", "D36", "D138", "D63", "D69", "D88", "D113",
-                                          "D193"],
+                                          "D193", "D326"],
                           "tested_by": ["T7"]},
             "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88", "D317"],
                          "tested_by": ["T7"]},
@@ -2279,10 +2283,11 @@ COMPONENTS = [
                               "into it — under the lock, files moved to legacy-json/ with a receipt. "
                               "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
-                              "migration to add one to a store already on disk.",
+                              "migration to add one to a store already on disk. The `labels` table (D326) is "
+                              "created on every open that lacks it, with no version of its own.",
                       "governed_by": ["D20", "D26", "D58", "D86", "D88", "D134", "D140", "D145",
                                       "D166", "D172", "D174", "D189", "D192", "D213", "D219",
-                                      "D243", "D294", "D273", "D299", "D320"],
+                                      "D243", "D294", "D273", "D299", "D320", "D326"],
                       "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
@@ -5235,7 +5240,7 @@ COMPONENTS = [
                 # D70 is the QR test the photograph step reuses from demo-photos.py. D61 is
                 # why the shipping export is written fresh rather than read (the store holds
                 # no address at all). D216 is why the recording runs offline.
-                "governed_by": ["D61", "D70", "D193", "D216", "D295", "D301"],
+                "governed_by": ["D61", "D70", "D193", "D216", "D295", "D301", "D326"],
             },
             "launchagent.py": {
                 "does": "the shared launchd install and remove for a daily job on the owner's "
@@ -5815,7 +5820,7 @@ COMPONENTS = [
                                 "D192", "D193", "D196", "D203", "D212", "D213", "D219", "D225",
                                 "D227", "D231", "D251", "D252", "D258", "D259", "D260", "D261",
                                 "D262", "D264", "D271", "D273", "D277", "D278", "D294", "D298",
-                                "D299", "D301", "D320"],
+                                "D299", "D301", "D320", "D326"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -6013,41 +6018,56 @@ COMPONENTS = [
             "shipping_routes.py": {
                 "does": "the shipping seam (D69's second route): POST /shipping/batches reads "
                         "TCGplayer's Orders -> Export Shipping CSV into D61's three lanes and "
-                        "renders a Pirate Ship import file, GET .../file?name= hands those "
-                        "bytes to the browser, and DELETE .../<batch> drops the batch now "
-                        "rather than in half an hour. THE ONLY MODULE IN THIS SERVER THAT EVER "
+                        "renders a Pirate Ship import file for the parcel lane, GET .../file?name= "
+                        "hands those bytes to the browser, and DELETE .../<batch> drops the batch "
+                        "now rather than in half an hour. THE ONLY MODULE IN THIS SERVER THAT "
                         "HOLDS A BUYER'S REAL NAME AND STREET ADDRESS, AND THE ONLY ONE THAT "
                         "EMITS THEM — its own file for the mirror image of tcg_export.py's "
                         "reason, so 'where does the PII go' has one file to check. The batch "
-                        "table is an OrderedDict in this process's memory with a "
-                        "half-hour TTL and a four-batch cap; it touches no disk, which is what "
-                        "D61's pass-through-and-do-not-persist rule requires and what "
-                        "pipeline/pirateship.py returning bytes rather than a path exists to "
-                        "make possible. The batch id is 128 random bits because the file route "
-                        "is a GET and therefore not behind the origin gate. Two devices do not "
-                        "share a batch and a server restart drops every one — recorded rather "
-                        "than discovered, because make up reloads on any Python edit here. "
-                        "Nothing in it writes a file, opens a socket, reads a key, starts a "
-                        "child or takes the store lock. POST .../stamps is BUILT as of "
-                        "2026-09-05 — `do_shipping_stamps`, a client function, and a control "
-                        "on #/shipping, because a route is not a feature. Its blocker was an "
-                        "empty order ledger and the 2026-09-03 pulls cleared it. The wire "
-                        "already carried `stamp` per row and `stamps` per batch as nulls, so "
-                        "it changed no type and no component, exactly as predicted. MEASURED "
-                        "on the 20 real orders: 12 fit the three label corners and 8 do not, "
-                        "so a stamp register that stops per box is the reopening condition.",
+                        "table is an OrderedDict in this process's memory with a half-hour TTL "
+                        "and a four-batch cap; the batch holds the parcel blob, the parcels and "
+                        "the envelope-lane shipments, and touches no disk. The batch id is 128 "
+                        "random bits because the file route is a GET and therefore not behind "
+                        "the origin gate. Two devices do not share a batch and a server restart "
+                        "drops every one. POST .../stamps fills the three Rubber Stamp corners "
+                        "from the ledger. THE LABEL ROUTES (D326, T4 and T5): POST "
+                        ".../<batch>/labels previews for free and, on a confirm, buys one "
+                        "TCGTracking label per envelope-lane order through tcgtracking.py, "
+                        "claiming each order in the store before its create so a double press "
+                        "or a reload buys once; GET /shipping/labels lists the label rows; "
+                        "GET /shipping/labels/<order>/pdf serves the stored label; POST "
+                        "/shipping/labels/scans stores each label's scan status. It opens the "
+                        "store for the label rows only, never across a network call.",
                 # D61 is the lanes, the abstention, the weight and the PII rule; D63 is the
                 # ledger the stamps route reads; D69 is why the lane got a surface of its own
                 # rather than a badge on the order screen; D69 is the route. D58 is the stored
                 # index the stamps route speaks — its labels are `join.Position`'s, joined with
                 # " / " and never " · ", which would make a card boundary read as a section one.
-                "governed_by": ["D58", "D61", "D63", "D69"],
+                # D326 is the label routes and lifts D61's no-store rule for TCGTracking's answers;
+                # D33 is the money gate on a confirm; D88 is one Store.write per change.
+                "governed_by": ["D33", "D58", "D61", "D63", "D69", "D88", "D326"],
                 "tested_by": ["T7"],
                 "note": "T7 reaches it because that test imports the `server` package, and "
-                        "every refusal path is exercisable with no network. WHAT T7 CANNOT "
-                        "PROVE is that Pirate Ship's importer accepts the file this renders — "
-                        "that is on the far side of a seam no committed fixture can hold, and "
-                        "it is one upload by the owner.",
+                        "every refusal path is exercisable with no network; the label routes run "
+                        "against a loopback fake of TCGTracking (harness/tests/t7/labels.py). "
+                        "WHAT T7 CANNOT PROVE is that Pirate Ship's importer accepts the file "
+                        "this renders, or that the live TCGTracking answers as the fake does — "
+                        "both are on the far side of a seam no committed fixture can hold.",
+            },
+            "tcgtracking.py": {
+                "does": "THE ONE CLIENT OF TCGTracking (D326): create(body) buys a label, "
+                        "track(order_number=|tracking_number=) reads scan status, pdf(order_id) "
+                        "re-renders a label as bytes. Every call goes through pipeline/net.open "
+                        "(D319), a create as a write that is never retried after it may have "
+                        "been sent and follows no redirect. The key and the shipper number are "
+                        "read on every call through envfile.get_live, sent as headers, and "
+                        "appear in no answer, refusal, log line or store row; an upstream body "
+                        "is never quoted. Each failure is a TrackingRefused with a tracking_ "
+                        "code. The only file that names the TCGTracking host; an override is "
+                        "https or loopback http, and the default host is refused under the "
+                        "harness and CI.",
+                "governed_by": ["D326", "D319", "D65"],
+                "tested_by": ["T7"],
             },
             "slabs_routes.py": {
                 "does": "the My Slabs routes: POST /slabs adds a slab by cert (Card Ladder reads "
