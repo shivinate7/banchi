@@ -682,7 +682,7 @@ for (const size of SIZES) {
 
 /* ---- `#/pricing`: THE HISTORY DOOR (`list.html` notes, item 17; `history-float.html`; spec section 9c) ----
  *
- * Each row has a chart button, "Price history for <name>", and it opens the card for that row. It is the only way in on a
+ * Each row has a chart button, "Price History for <name>" (Title Case, docs/DESIGN.md R5), and it opens the card for that row. It is the only way in on a
  * row with no price field: a card the owner kept off TCGplayer draws no field, so focus can never open its history.
  * The door carries `data-float-door`, which the card reads to put its right edge on it (the contract at the top). A card
  * the door opens takes focus, and gives it back to the door when it closes (9c). Two widths: the row's layout differs.
@@ -708,7 +708,7 @@ for (const size of [SIZES[0], SIZES[2]]) {
 
     /** The door of `scope`, pressed: the card opens for `sku` in door mode, holds focus, and gives it back on Esc. */
     async function expectDoorOpensCard(page: Page, scope: Locator, sku: string) {
-      const door = scope.getByRole('button', { name: /^Price history for / })
+      const door = scope.getByRole('button', { name: /^Price History for / })
       await expect(door, 'the row has a history door').toHaveCount(1)
       await expect(door, 'the door is the mark the card sits against').toHaveAttribute('data-float-door', '')
       await door.click()

@@ -1000,6 +1000,16 @@ const strip = (page: Page) => page.locator('.pricing-row .pricetrend')
 
 const field = (page: Page) => page.getByRole('textbox', { name: /^Price for / })
 
+/** THE ONE KEPT-OFF PRESS (`list-notes.md`, item 12: "Kept-off rows are not in the three groups"). A row the store already holds is drawn only
+ *  behind it, labelled "Show Kept off (N)". Pressing it swaps the three groups for the kept-off rows. This is the one home of that press: a case
+ *  that seeds a stored hold calls it, then asserts what it asserted before. A hold taken THIS visit keeps its row in place and needs no press. */
+const keptOffPress = (page: Page, count: number) => page.getByRole('button', { name: `Show Kept off (${count})`, exact: true })
+async function showKeptOff(page: Page, count: number): Promise<void> {
+  const press = keptOffPress(page, count)
+  await press.click()
+  await expect(press, 'the press is down').toHaveAttribute('aria-pressed', 'true')
+}
+
 /** The answers the last `PUT /pricing` carried, as `{sku: value}`.
  *
  *  ONE SHAPE READ IN ONE PLACE. Every case below used to reach into `body.decisions.overrides`
@@ -2626,6 +2636,7 @@ test('a hold with no earlier answer releases to no answer', async ({ page }) => 
     skus: [sku({ sku: '5', name: 'Void Assault', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
     decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: { '5': { withheld: 'bullish' } } },
   })
+  await showKeptOff(page, 1)
   await expect(page.locator('.pricing-row')).toHaveAttribute('data-answer', 'held')
   await page.locator('.pricing-hold').first().click()
   const released = page.locator('.bn-toast', { hasText: 'Released Void Assault' })
@@ -2644,6 +2655,7 @@ test('a hold stored as unlisted on the no-market channel is really released', as
     skus: [sku({ sku: '5', name: 'Void Assault', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
     decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {}, no_market_data: { '5': 'unlisted' } },
   })
+  await showKeptOff(page, 1)
   await expect(page.locator('.pricing-row')).toHaveAttribute('data-answer', 'held')
   await page.locator('.pricing-hold').first().click()
   await expect(page.locator('.pricing-holdpanel')).toHaveCount(0)
@@ -2661,6 +2673,7 @@ test('a kept-off row says so, in both registers, and has no price field', async 
     },
   })
 
+  await showKeptOff(page, 1)
   await expect(page.locator('.pricing-row')).toHaveAttribute('data-answer', 'held')
   /* ONE STATUS WORD FOR THE OWNER'S HOLD (spec section 6). The caption shows that status, never the imperative. */
   await expect(page.locator('.pricing-held')).toContainText('Kept off TCGplayer')
@@ -2919,19 +2932,25 @@ test('a row is the same height whether or not it carries a note', async ({ page 
      row that every zone but the card leaves empty by construction, so a row that acquires a
      sentence costs no height and a hundred-row list cannot reflow when one does.
 
+     THE PRICED ROW IS READ BEFORE THE PRESS AND THE NOTED ONE AFTER IT: a stored hold is drawn only behind
+     the one kept-off press, so the two rows are never on screen together, and each is the only row of its view.
+
      THE NOTE IS A HOLD'S NOW AND NOT `at_cap`'s. The run's reason for adding nothing moved to
      the group heading, so the only string that still lands on this line per-row is the
      operator's own — which is the string this invariant has to survive, because it is the one
      nothing bounds the length of. */
   const rows = page.locator('.pricing-row')
-  await expect(rows.nth(1).locator('.pricing-why')).toBeVisible()
   /* `clientHeight` RATHER THAN THE BORDER BOX, and it is a confound removed rather than a
      tolerance introduced: the list draws a 1px rule between rows and drops it on the last one,
      so a border-box comparison of a row against the final row is off by exactly that pixel
      whatever the note does. Content plus padding is the thing this invariant is about — a row
      that gained a line would gain a line's worth of it, and that still fails here. */
-  const heights = await rows.evaluateAll((nodes) => nodes.map((node) => node.clientHeight))
-  expect(heights[0]).toBe(heights[1])
+  await expect(rows).toHaveCount(1)
+  const priced = await rows.first().evaluate((node) => node.clientHeight)
+  await showKeptOff(page, 1)
+  await expect(rows).toHaveCount(1)
+  await expect(rows.first().locator('.pricing-why')).toBeVisible()
+  expect(await rows.first().evaluate((node) => node.clientHeight)).toBe(priced)
 })
 
 /* THE STATE THAT BROKE THE INVARIANT WHILE THE CASE ABOVE STAYED GREEN, and the gap is the
@@ -2975,16 +2994,21 @@ test('a held row is the same height as a priced one, and nothing overlaps', asyn
     },
   })
 
+  /* THE PRICED ROW IS READ BEFORE THE PRESS AND THE TWO HELD ROWS AFTER IT: the stored holds are drawn only behind
+     the one kept-off press (`list-notes.md`, item 12), so the held rows are never beside the priced one. */
   const rows = page.locator('.pricing-row')
-  await expect(rows).toHaveCount(3)
+  await expect(rows).toHaveCount(1)
+  const priced = await rows.first().evaluate((node) => node.clientHeight)
+  await showKeptOff(page, 2)
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0).locator('.pricing-state')).toHaveAttribute('title', 'withheld: next_batch')
   await expect(rows.nth(1).locator('.pricing-state')).toHaveAttribute('title', 'withheld: next_batch')
-  await expect(rows.nth(2).locator('.pricing-state')).toHaveAttribute('title', 'withheld: next_batch')
 
   /* `clientHeight`, for the reason the case above gives: the last row carries no separator. */
   const heights = await rows.evaluateAll((nodes) => nodes.map((node) => node.clientHeight))
   /* A HOLD COSTS NOTHING, which is the half of the invariant this branch still keeps: the
      held cell draws in the price column's own box and the row does not move under it. */
-  expect(heights[1]).toBe(heights[0])
+  expect(heights[0]).toBe(priced)
 
   /* THE THIRD ROW IS NOT COMPARED, AND THAT IS A DEFECT REPORTED RATHER THAN ACCOMMODATED.
      The operator's note is appended to the row's meta line now instead of occupying the
@@ -3011,7 +3035,7 @@ test('a held row is the same height as a priced one, and nothing overlaps', asyn
       }
     }),
   )
-  for (const box of boxes.slice(1)) {
+  for (const box of boxes) {
     expect(box.held).not.toBeNull()
     expect(box.held?.top).toBeGreaterThanOrEqual(box.row?.top ?? 0)
     expect(box.held?.bottom).toBeLessThanOrEqual(box.row?.bottom ?? 0)
@@ -4501,7 +4525,7 @@ test('a row hold button is named Keep off TCGplayer, and no row says Hold Back',
   await expect(page.getByRole('button', { name: /Hold Back/ }), 'no row hold button says Hold Back').toHaveCount(0)
 })
 
-test('a hold taken now keeps its row where it is, and so does the next load', async ({ page }) => {
+test('a hold taken now keeps its row where it is, and the next load files it behind the one kept-off press', async ({ page }) => {
   const skus = [
     sku({ sku: '1', name: 'Articuno', snap: { market: '3.00', direct_low: null, low: '2.80', low_with_shipping: '3.80', now: null } }),
     sku({ sku: '2', name: 'Dunsparce', snap: { market: '2.00', direct_low: null, low: '1.80', low_with_shipping: '2.80', now: null } }),
@@ -4516,7 +4540,8 @@ test('a hold taken now keeps its row where it is, and so does the next load', as
   await expect(page.locator('.pricing-row').nth(1).locator('.pricing-held')).toContainText('Kept off TCGplayer')
   await expect(page.locator('.pricing-row').nth(1)).not.toContainText('Keep off TCGplayer')
   await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Dunsparce', 'Wattrel'])
-  /* A HELD ROW IS RANKED BY VALUE LIKE EVERY OTHER (UX-071): it does not sink on the reload. */
+  /* A ROW HELD THIS VISIT STAYS WHERE IT IS UNTIL THE NEXT LOAD. The next load reads the hold from the store, and a stored hold is in none
+     of the three groups (`list-notes.md`, item 12): it is drawn behind the one press. */
   await page.route(/\/pricing$/, async (route) => {
     if (route.request().method() === 'PUT') return route.fallback()
     await route.fulfill({
@@ -4531,7 +4556,9 @@ test('a hold taken now keeps its row where it is, and so does the next load', as
   })
   await page.reload()
   await settleFonts(page)
-  await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Dunsparce', 'Wattrel'])
+  await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Wattrel'])
+  await showKeptOff(page, 1)
+  await expect(page.locator('.pricing-name')).toHaveText(['Dunsparce'])
 })
 
 test('a kept-off row says Kept off TCGplayer once, so the pill and the caption do not repeat it', async ({ page }) => {
@@ -4539,6 +4566,7 @@ test('a kept-off row says Kept off TCGplayer once, so the pill and the caption d
     skus: [sku({ sku: '1', name: 'Articuno' }), sku({ sku: '2', name: 'Dunsparce' })],
     decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '2': { withheld: 'keeping' } } },
   })
+  await showKeptOff(page, 1)
   const held = page.locator('.pricing-row', { has: page.locator('.pricing-held') })
   await expect(held).toHaveCount(1)
   const text = (await held.textContent()) ?? ''
@@ -4552,6 +4580,7 @@ for (const width of [1440, 820]) {
       skus: [sku({ sku: '1', name: 'Articuno' }), sku({ sku: '2', name: 'Dunsparce' })],
       decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '2': { withheld: 'keeping' } } },
     })
+    await showKeptOff(page, 1)
     const pill = page.locator('.pricing-held')
     await expect(pill).toHaveCount(1)
     const { scroll, client } = await pill.evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }))
@@ -4566,12 +4595,14 @@ test('Kept off shows only the kept-off rows, and its count is the bar’s count'
   })
   await expect(page.locator('[data-tile="held"]')).toContainText(/\b1\b/)
   await expect(page.locator('[data-tile="held"]')).not.toContainText('held back')
-  const held = page.getByRole('button', { name: 'Kept off 1' })
-  await held.click()
-  await expect(held).toHaveAttribute('aria-pressed', 'true')
+  /* A KEPT-OFF ROW IS IN NONE OF THE THREE GROUPS: before the press the list holds the one row that is not kept off. */
+  await expect(page.locator('.pricing-name')).toHaveText(['Articuno'])
+  const held = keptOffPress(page, 1)
+  await showKeptOff(page, 1)
   await expect(page.locator('.pricing-name')).toHaveText(['Dunsparce'])
   await held.click()
-  await expect(page.locator('.pricing-row')).toHaveCount(2)
+  await expect(held).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('.pricing-name')).toHaveText(['Articuno'])
 })
 
 test('every control that answers a row is on the row, and the caption shares its tracks', async ({ page }) => {
@@ -5291,7 +5322,7 @@ test('F3: the held count on the button and in the bar are one number, a sent row
     ],
     decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608459': { withheld: 'keeping' }, '8608460': { withheld: 'bullish' } } },
   })
-  await expect(page.getByRole('button', { name: 'Kept off 2' })).toBeVisible()
+  await expect(keptOffPress(page, 2)).toBeVisible()
   await expect(page.locator('[data-tile="held"]')).toContainText('2 kept off TCGplayer')
   await expect(page.locator('[data-tile="held"]')).toContainText(/\b2\b/)
   await expect(page.locator('[data-tile="held"]')).not.toContainText('held back')
@@ -5631,6 +5662,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme })
     await setViewport(page, { width: 1440, height: 900 })
     await open(page, { decisions: NOTED_ROW, saved: savedWithFacts(AGO(3600), ['8608859']) })
+    await showKeptOff(page, 1)
     const row = page.locator('.pricing-row').first()
     await expect(row.locator('.pricing-why')).toBeVisible()
     await expect(row.locator('.pricing-col-range')).toBeVisible()
@@ -5993,9 +6025,11 @@ test('7b-21: the age lines under Market and Range overlap no other cell and no n
   await setViewport(page, { width: 1440, height: 900 })
   await open(page, {
     worklist: STALE_AND_FRESH(),
-    decisions: { rule: 'match', basis: 'market', overrides: { '111': { withheld: 'bullish', note: 'waiting on rotation' } } },
+    /* TWO ROWS ARE KEPT OFF, so the press draws a stale row and a neighbor under it: the "no neighboring row" read has a row to meet. */
+    decisions: { rule: 'match', basis: 'market', overrides: { '111': { withheld: 'bullish', note: 'waiting on rotation' }, '222': { withheld: 'bullish' } } },
     saved: savedWithFacts(AGO(3600), ['111', '222', '333']),
   })
+  await showKeptOff(page, 2)
   const rows = page.locator('.pricing-row')
   const first = rows.filter({ hasText: 'Stale card' })
   await expect(first.locator('.pricing-why')).toBeVisible()
@@ -6368,9 +6402,9 @@ test('ux-wave1: the Send button does not move when the last-send warning arrives
  * reads, named so the build and this file agree:
  *   [data-tile="priced" | "held" | "ready"]  one tile each, inside the send bar, on the one list
  *   [data-tone="warn"]                        on the priced tile, while rows still need a price
- * The actions are found by their words: "Price Them" on the priced tile, and the held tile's one
- * control, which opens the existing kept-off filter (the `Kept off N` chip). Counts are read off each
- * tile's own text. */
+ * The action is found by its words: "Price Them" on the priced tile. The held tile is a figure; the one
+ * press that shows the kept-off rows is the filter bar's "Show Kept off (N)" (`showKeptOff`). Counts are
+ * read off each tile's own text. */
 const tile = (page: Page, which: 'priced' | 'held' | 'ready') => page.locator(`[data-tile="${which}"]`)
 const pricedRow = (n: number) => sku({ sku: String(200 + n), name: `Priced ${n}` })
 const unpricedRow = (n: number) =>
@@ -6462,7 +6496,7 @@ test('send tiles: Price Them filters the list to the rows that owe a price', asy
   expect(names.sort()).toEqual(['Unpriced 1', 'Unpriced 2', 'Unpriced 3'])
 })
 
-test('send tiles: the kept-off tile opens the Kept off filter, and the list keeps only the kept-off rows', async ({ page }) => {
+test('send tiles: the one kept-off press shows only the kept-off rows', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   const sleeper = heldRow(1)
   await open(page, {
@@ -6472,9 +6506,10 @@ test('send tiles: the kept-off tile opens the Kept off filter, and the list keep
   await expect(tile(page, 'held')).toContainText(/\b1\b/)
   await expect(tile(page, 'held')).not.toContainText('held back')
 
-  await tile(page, 'held').locator('a, button').first().click()
+  await expect(page.locator('.pricing-name'), 'a kept-off row is in none of the three groups').toHaveText(['Articuno'])
 
-  await expect(page.getByRole('button', { name: 'Kept off 1' })).toHaveAttribute('aria-pressed', 'true')
+  await showKeptOff(page, 1)
+
   await expect(page.locator('.pricing-name')).toHaveText(['Sleeper 1'])
 })
 
@@ -6616,7 +6651,8 @@ test('send tiles: a row held as unlisted is not counted in the typed figure', as
 
 /* THE SEARCH AND A FACET ARE NARROWED FIRST, so the press under test has something to clear.
    Articuno (Pokemon, priced) is the only row the search finds, and Riftbound is the facet, so the
-   list is empty until the press runs. */
+   list is empty until the press runs. The press is the one "Show Kept off (N)": its count promises
+   N rows, so it shows them whatever the search and the facet had narrowed to. */
 test('send tiles: Show kept off after a search and a game facet clears both, and shows every kept-off row', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   const sleeper = heldRow(1)
@@ -6629,7 +6665,7 @@ test('send tiles: Show kept off after a search and a game facet clears both, and
   await pickFilter(page, 'Game', /Riftbound/)
   await expect(page.getByText('Nothing matches')).toBeVisible()
 
-  await tile(page, 'held').locator('a, button', { hasText: /^Show kept off$/ }).click()
+  await showKeptOff(page, 2)
 
   await expect(page.getByRole('searchbox', { name: 'Search This List' })).toHaveValue('')
   const names = await page.locator('.pricing-name').allTextContents()
@@ -7438,6 +7474,7 @@ for (const theme of ['light', 'dark'] as const) {
         skus: [sku({ sku: '1', name: 'Articuno' }), sku({ sku: '2', name: 'Dunsparce' })],
         decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '2': { withheld: 'keeping' } } },
       })
+      await showKeptOff(page, 1)
       const pill = page.locator('.pricing-held')
       await expect(pill).toHaveCount(1)
       const seen = await pill.evaluate((el) => {
