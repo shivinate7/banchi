@@ -26,7 +26,7 @@ DEFAULT_VALUE_LINE = Decimal("25")
 
 #: Trigger edges (spec section 4b). MOVE is inclusive, PREMIUM is "more than", as the cases pin.
 MOVE = Decimal("0.15")
-UNSOLD_DAYS = 30
+UNSOLD_DAYS = 14
 PREMIUM = Decimal("0.10")
 UNDERCUT = Decimal("0.10")
 
@@ -147,6 +147,11 @@ def review(listings: list, policy: dict, today: str) -> dict:
                 out["at_rule"].append(_row(listing, "Rule", priced, ""))
             continue
 
+        # No market price to price from: the owner types one, nothing here guesses it.
+        if not pricing.has_market_data(market):
+            out["needs_you"].append(_row(listing, "Live", None, "no market price"))
+            continue
+
         triggers = fired(listing, today)
         # A trigger that leaves the price where it is has nothing to suggest. No asking price fires
         # no trigger. A suggestion moves in its reason's direction: only a market move UP may raise
@@ -159,7 +164,7 @@ def review(listings: list, policy: dict, today: str) -> dict:
         reason = _reason(listing, triggers, today)
         move = abs(priced - listing["asking"]) / listing["asking"]
         if move > limit:
-            group, reason = "needs_you", "{0}; moves {1}% from your price".format(reason, _pct(move))
+            group, reason = "needs_you", "{0}; capped at your {1}%".format(reason, _pct(limit))
         elif priced >= value_line:
             group, reason = "needs_you", "{0}; at or above {1}".format(reason, pricing.money(value_line))
         else:

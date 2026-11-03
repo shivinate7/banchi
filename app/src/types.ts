@@ -4530,6 +4530,9 @@ export type MarkdownSku = {
   /** Sealed product: the row's condition is `Unopened` (`pipeline/reprice.py:is_sealed`). Absent
    *  on a survey written before 2026-09-26, which reads as a single. */
   sealed?: boolean
+  /** The live row's group, the one `/pipeline/pricing` gives the same SKU (`pipeline_routes._live_wire`).
+   *  Absent when the corpus could not be read, which files the row nowhere. */
+  group?: LiveGroup
 }
 
 /** The lens's whole input — `survey.json` as `GET /pipeline/markdowns/<stamp>/table` serves it. */
@@ -4847,8 +4850,8 @@ export type SendSummary = {
  *  price the row drew beside it. The server sends no price it was not named (round 6).
  *  `source: 'suggested'` marks a kept suggestion: it posts as "suggested", may ride a send that
  *  names no run, and is refused `suggestion_past_cap` when it moves the live price past the
- *  owner's limit. Leave `source` out for a typed price. */
-export type PriceChange = { sku: string; price: string; was: string | null; source?: 'suggested' }
+ *  owner's limit, unless `ticked` is true. Leave `source` out for a typed price. */
+export type PriceChange = { sku: string; price: string; was: string | null; source?: 'suggested'; ticked?: boolean }
 
 /** Live copies a listing row moves, as the button names them: the new copy carries Banchi's
  *  stored price, and every live copy of the card moves with it (the owner's ruling, round 7). */
