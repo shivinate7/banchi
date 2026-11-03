@@ -498,14 +498,15 @@ span.pricing-thumb { cursor: default; }
 .pricing-photo-frame img { display: block; width: 100%; height: auto; aspect-ratio: auto 9 / 16; }
 .pricing-photo-caption { display: flex; justify-content: space-between; gap: var(--bn-2); margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
 
-/* ---- 720 and narrower desks: Lowest and the trend leave the row (the product view has both) -- */
+/* ---- 720 and narrower desks: Lowest and the trend leave the row (the product view has both) --
+   The history door takes 40px beside the lock, so the price column gives 16px back and the gap 4px: the name keeps the width its meta line needs. */
 @container bn-page (max-width: 899px) {
   .pricing-caption,
-  .pricing-row { --pricing-now-w: 72px; grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 60px [reason-end] 128px 80px; }
+  .pricing-row { --pricing-now-w: 72px; grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 60px [reason-end] 112px 80px; column-gap: var(--bn-2); }
   .pricing-to,
   .pricing-caption .pricing-col-src { display: none; }
   .pricing-list[data-copies='none'] .pricing-caption,
-  .pricing-list[data-copies='none'] .pricing-row { grid-template-columns: minmax(0, 1fr) 76px 128px 80px; }
+  .pricing-list[data-copies='none'] .pricing-row { grid-template-columns: minmax(0, 1fr) 76px 112px 80px; }
   .pricing-col-low,
   .pricing-col-trend { display: none; }
 }
@@ -513,7 +514,7 @@ span.pricing-thumb { cursor: default; }
 /* ---- a narrow desk: the price source sits under the price, as its own grid line ---------- */
 @container bn-page (min-width: 560px) and (max-width: 899px) {
   .pricing-list[data-now='some'] .pricing-caption,
-  .pricing-list[data-now='some'] .pricing-row { grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 60px var(--pricing-now-w) [reason-end] 128px 80px; }
+  .pricing-list[data-now='some'] .pricing-row { grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 60px var(--pricing-now-w) [reason-end] 112px 80px; }
   .pricing-list[data-copies='some'] .pricing-row > .pricing-col-price,
   .pricing-list[data-copies='some'] .pricing-row > .pricing-now { grid-row: 1; align-self: end; }
   /* The reason runs under Qty and Now too, so they keep to the name line. */
