@@ -87,7 +87,7 @@ def folded_history_refusal(outcome=None, *, sku: str = "652771", product_id: int
     return refusals.get(sku)
 
 
-def _catalogue(url: str) -> Dict:
+def _catalog(url: str) -> Dict:
     """A stub fetcher for the catalogue walk. The product line `Riftbound` and the set `Vendetta`
     exist; no product is listed in the set, so the walk finds nothing and refuses."""
     if url.endswith("/categories"):
@@ -104,7 +104,7 @@ def not_resolvable_refusals() -> Dict[str, Optional[BaseException]]:
     stage answered. `ProductIndex.find` returns None and never raises, so its refusal reaches a
     caller as the one `Market.product_id_for_row` writes after the find misses: the `product` entry.
     """
-    market = pricehistory.Market(cache_dir=None, fetcher=_catalogue, courtesy_delay=0.0)
+    market = pricehistory.Market(cache_dir=None, fetcher=_catalog, courtesy_delay=0.0)
     row = {
         tcgcsv.PRODUCT_LINE_COLUMN: "Riftbound",
         tcgcsv.SET_COLUMN: "Vendetta",
