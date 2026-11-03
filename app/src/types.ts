@@ -2510,6 +2510,10 @@ export type PricingSku = {
    *  nothing auditing the two against each other — the drift D16 exists to catch. The
    *  client performs no arithmetic on money and none on the cap either (D59). */
   nothing_to_add: string | null
+  /** The engine's own call on this new copy (`suggest.review` for a listing that is not live):
+   *  `needs_you` with no market price or a rule price at or above the value line, else `at_rule`.
+   *  Only the pricing worklist answers it; a run's own table does not. */
+  group?: 'needs_you' | 'at_rule'
   condition: string
   set_name: string
   name: string
@@ -2880,6 +2884,13 @@ export type LiveListing = {
   sku: string
   asking: string | null
   last_sold_at: string | null
+  /** The card's facts, all off the one reading the engine used for the SKU. `image_url` is the
+   *  stock photo for the reading's set and the export row's game and number, `null` on a miss. */
+  name: string | null
+  set_name: string | null
+  market: string | null
+  low: string | null
+  image_url: string | null
   group: LiveGroup
   price: string | null
   source: 'Rule' | 'Live' | 'Suggested'

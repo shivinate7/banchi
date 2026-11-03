@@ -1004,6 +1004,8 @@ refuses "\`| head\`, the same loss from the other end" "$tmp/main" "make merge A
 refuses "stdout to /dev/null" "$tmp/main" "make merge ARGS=\"437 --confirm\" >/dev/null"
 refuses "into a file nothing in the command reads back" "$tmp/main" "make merge ARGS=\"437 --confirm\" > merge.log"
 refuses "\`tail\` with no count" "$tmp/main" "make merge ARGS=\"437 --confirm\" 2>&1 | tail"
+# The tilde is the command's own text, handed to the guard unexpanded on purpose.
+# shellcheck disable=SC2088
 refuses "the script run directly, which is the same act" "$tmp/main" "~/.claude/bin/merge 437 --confirm | tail -5"
 refuses "buried mid-script behind a \`&&\`" "$tmp/main" "git fetch origin && make merge ARGS=\"437 --confirm\" | tail -30"
 refuses "an env prefix does not launder it" "$tmp/main" "BANCHI_MAIN=off make merge ARGS=\"437 --confirm\" | tail -5"

@@ -362,6 +362,26 @@ CHECKS = (
         "governed_by": ("D18", "D271"),
     },
     {
+        "target": "waiting-export-selftest",
+        "shard": "guards-2",
+        "runs": "python3 scripts/waiting-export.py --selftest",
+        "asserts": "scripts/waiting-export.py's scan stops the export and writes nothing on "
+                   "each fake secret or personal-data shape it names (tokens, keys, a "
+                   "settings-file line, basic auth, a bare cookie, addresses, a PO box, a city "
+                   "line, phones), each built at run time. This repo's own idioms (\"in "
+                   "place\", \"this lane\", \"join key:\", `key={...}`) raise nothing. A clean "
+                   "export writes all four files, an empty collection as {}, and a second run "
+                   "over the same data rewrites nothing.",
+        "needs": ("python3",),
+        "writes": "fixture folders and their output under `tempfile.TemporaryDirectory()`; "
+                  "never `docs/waiting/`.",
+        "commit_path": False,
+        "why_off_commit_path": "D18, it writes temp files. Same standing as "
+                               "hand-search-selftest above: `make check` only.",
+        "gates": True,
+        "governed_by": ("D327", "D18"),
+    },
+    {
         "target": "token-literal-check",
         "shard": "static",
         "runs": "python3 scripts/token-literal-check.py",
@@ -741,6 +761,30 @@ CHECKS = (
         "gates": True,
         "governed_by": ("D278", "D277", "D189", "D212", "D219", "D225", "D236", "D247",
                         ),
+    },
+    {
+        "target": "rosterholdings-selftest",
+        "shard": "guards-1",
+        "runs": "python3 scripts/rosterholdings-selftest.py",
+        "asserts": "pipeline/rosterholdings.py against an in-memory roster CSV, SKU list and "
+                   "archive (D324) — no store on disk, no network. Only TCG purchases that "
+                   "are not canceled are kept, with excluded rows counted by reason; no "
+                   "seller, account, order id or url reaches a line or the report text; set "
+                   "and name join on the folded keys; two products under one key are "
+                   "ambiguous and never valued; an unmatched line is listed by product id on "
+                   "both sides; the price is the one Near Mint SKU of the right finish with a "
+                   "month market, else unpriced as no_price or printing; every kept line is "
+                   "in exactly one bucket; the report opens with the two unknown-units lines "
+                   "and carries a priced X of N lines coverage line.",
+        "needs": ("python3",),
+        "writes": "nothing — the roster is a string, the SKUs a list and the PriceArchive "
+                  "is built in memory, never a store on disk.",
+        "commit_path": False,
+        "why_off_commit_path": "Not D18 — this self-test writes nothing. Off the commit "
+                               "path for the same reason as holdings-selftest beside it: "
+                               "PATH GATED into `make check` alone (D247), never the hook.",
+        "gates": True,
+        "governed_by": ("D247", "D324"),
     },
     {
         "target": "identity-checks-selftest",

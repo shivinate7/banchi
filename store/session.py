@@ -133,6 +133,7 @@ class Snapshot:
             self.parked.entries,
             self.ledger.orders,
             self.ledger.fulfilment,
+            self.ledger.labels,
             self.submissions.entries,
             self.send_claims.entries,
             self.readings.entries,
@@ -188,6 +189,7 @@ class Store:
             ledger=Ledger(
                 orders=bound(Ledger.ORDERS, "orders"),
                 fulfilment=bound(Ledger.FULFILMENT, "fulfilment"),
+                labels=bound(Ledger.LABELS, "labels"),
             ),
             submissions=Submissions(entries=bound(Submissions.ENTRIES, "submissions")),
             send_claims=SendClaims(entries=bound(SendClaims.ENTRIES, "send_claims")),

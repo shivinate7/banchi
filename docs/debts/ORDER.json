@@ -68,6 +68,16 @@
     "102-send-file-outside-lock.md",
     "103-throttled-nightly-sweep.md",
     "104-unhold-death-gap.md",
-    "notes.md"
+    "notes.md",
+    "105-add-a-slab-focus.md",
+    "106-apt-install-timeout.md",
+    "107-browser-scope-self-test.md",
+    "108-capture-freeze-timing.md",
+    "109-escape-runner-red.md",
+    "110-merge-speed-backstop.md",
+    "111-palette-focus-red.md",
+    "112-request-budget-leave.md",
+    "113-single-reds-on-main.md",
+    "114-waiting-scan-misses.md"
   ]
 }

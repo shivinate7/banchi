@@ -1,0 +1,1687 @@
+{
+  "access-risk-code-scope": {
+    "added": "2026-10-27T16:40:00Z",
+    "context": "Your ruling: drop one concern from the repo's prose. A records lane removed those sentences from the docs. This item asked whether the related code guards go too.",
+    "home": "the records lane removing the concern",
+    "id": "access-risk-code-scope",
+    "kind": "decision",
+    "n": 72,
+    "options": [
+      {
+        "gain": "Nothing that works today changes. No test changes.",
+        "how": "Remove the sentences. Leave the code as it is, with comments reworded to say what it does.",
+        "key": "prose-only",
+        "label": "Docs only, keep the code",
+        "lose": "The code keeps its guards as behaviour."
+      },
+      {
+        "gain": "Nothing of it is left.",
+        "how": "A builder lane removes the code guards and their tests.",
+        "key": "code-too",
+        "label": "Remove the code guards too",
+        "lose": "Faster calls may get your Card Ladder login throttled. Tests change."
+      }
+    ],
+    "owner": "orchestrator",
+    "pick": "prose-only",
+    "ref": "D216 and D320 (the price-history and Card Ladder reads)",
+    "status": "closed",
+    "title": "Prose only, or the code guards too?",
+    "why": "The pacing keeps your paid login working. That is a product outcome."
+  },
+  "batch-2-merge": {
+    "added": "2026-10-27T18:36:00Z",
+    "context": "PR 971 adds up to 600 Riftbound catalog cards a night to the price-history sweep, after your own cards, stalest first. It passed 3 review rounds and CI is green on its own (13 checks). The nightly sweep runs longer, by at most 2,400 requests.\nThe next batch is ready: PR 969 (reviewed, type check clean), PR 973 and PR 974 (decision records, docs audit passes), PR 975 (backup guard, review round 2 says merge). They go in one integration PR with one CI run.",
+    "home": "make merge",
+    "id": "batch-2-merge",
+    "kind": "decision",
+    "n": 93,
+    "options": [
+      {
+        "gain": "Whole-set sold history starts tonight; five PRs land.",
+        "how": "Merge 971 now; build one integration PR with 969, 973, 974, 975 and merge it if CI passes.",
+        "key": "both",
+        "label": "Merge 971, then batch the four on green",
+        "lose": "None beyond the longer nightly sweep."
+      },
+      {
+        "gain": "The sweep starts tonight.",
+        "how": "Merge 971; the other four wait.",
+        "key": "971-only",
+        "label": "Only 971",
+        "lose": "Four PRs stay open."
+      },
+      {
+        "gain": "You look first.",
+        "how": "Nothing merges.",
+        "key": "hold",
+        "label": "Hold all",
+        "lose": "The PRs drift from main."
+      }
+    ],
+    "owner": "orchestrator",
+    "pick": "both",
+    "ref": "PR 971 (Riftbound sweep), PR 969 (DEBT61 typed table specs), PR 973 (backup decision), PR 974 (holdings watch decision), PR 975 (backup guard)",
+    "status": "closed",
+    "title": "Merge PR 971 now, and batch the next four on green?",
+    "why": "Each passed its review and checks; one run for the four is cheapest."
+  },
+  "batch-merge-debt61": {
+    "added": "2026-10-27T16:34:00Z",
+    "context": "PR 963 and PR 969 passed review (Sonnet reviewer). PR 958 is already green. PRs 966, 968 and 970 are docs and config only, and their docs audit passes.\nDraft PRs skip CI, so none of the six has a full run yet. The batch makes one integration branch with one CI run, then merges only if it is green. A lane whose job fails is dropped and fixed apart.",
+    "home": "the integration PR; make merge",
+    "id": "batch-merge-debt61",
+    "kind": "decision",
+    "n": 90,
+    "options": [
+      {
+        "gain": "All six land in one CI run.",
+        "how": "One integration PR with the six lanes, one CI run, then `make merge` on green.",
+        "key": "batch-all",
+        "label": "Batch all six, merge on green",
+        "lose": "One red lane delays the rest by one re-run."
+      },
+      {
+        "gain": "The smallest batch.",
+        "how": "Batch only the two DEBT61 PRs; the other four wait.",
+        "key": "debt61-only",
+        "label": "Only 963 and 969",
+        "lose": "958, 966, 968 and 970 stay open."
+      },
+      {
+        "gain": "You look first.",
+        "how": "Nothing merges for now.",
+        "key": "hold",
+        "label": "Hold all merges",
+        "lose": "The PRs drift from main."
+      }
+    ],
+    "owner": "orchestrator",
+    "pick": "batch-all",
+    "ref": "PR 963 (DEBT61 card-field typo guard), PR 969 (DEBT61 typed table specs), PR 958 (Vite upgrade), PR 966 (waiting-page link), PR 968 (ask before a server restart), PR 970 (TCGCSV decision; access-risk wording removed)",
+    "status": "closed",
+    "title": "Batch these six PRs and merge them once CI is green?",
+    "why": "Each has passed its review or its checks, and one CI run is cheapest."
+  },
+  "cull-runs-boxes-scope": {
+    "added": "2026-10-28T04:55:00Z",
+    "context": "The sweep you asked for is done. No old branch retires 'run' or 'box', and none picks replacement words or bans them. The glossary draft (PR 961) keeps 'Box', and the term-audit spec on main says 'Box everywhere', which is the opposite of this cull. So the lane starts fresh. It rewrites the glossary's Box row and term-audit clash 14 to your words first, so the records do not contradict the cull. Options are as before.",
+    "home": "a new decision record for the retired words",
+    "id": "cull-runs-boxes-scope",
+    "kind": "decision",
+    "n": 94,
+    "options": [
+      {
+        "gain": "You never see the words, and no rename touches stored data.",
+        "how": "One lane culls screen text, server messages and the top docs, and adds both words to the on-screen word ban so they stay out. Other records change as each is next touched. Code keeps 'box' as an internal address.",
+        "key": "screen-docs",
+        "label": "Screen and docs; keep code names",
+        "lose": "Code and old records still say them internally."
+      },
+      {
+        "gain": "The words are gone everywhere.",
+        "how": "As above, plus rename the table, wire routes, CLI flags and folders, split by seam.",
+        "key": "full",
+        "label": "Full rename, code too",
+        "lose": "The largest change by far: stored data, the wire and the CLI all move. Slow, and risky for live data."
+      },
+      {
+        "gain": "Smallest lane.",
+        "how": "Cull only what you see on screen, plus the word ban.",
+        "key": "screen-only",
+        "label": "Screen only",
+        "lose": "Docs and agent briefs keep teaching the old words."
+      }
+    ],
+    "owner": "banchi-coordinator",
+    "pick": "screen-docs",
+    "rank": 1,
+    "ref": "Your note on item 37; D180 (a press names the cards), D291 (runs fold into Review), D259 (boxes show names only)",
+    "status": "open",
+    "title": "How far should the 'run' and 'box' clean-up go?",
+    "why": "It removes the words from everything you and the agents read, and keeps stored data and the wire stable."
+  },
+  "cull-runs-boxes-words": {
+    "added": "2026-10-28T04:55:00Z",
+    "context": "The sweep found no earlier pick of replacement words. The glossary draft and term-audit spec lean the other way ('Box everywhere', 'Run price table'), so whatever you pick here overrides them. Options are as before.",
+    "home": "a new decision record for the retired words",
+    "id": "cull-runs-boxes-words",
+    "kind": "decision",
+    "n": 95,
+    "options": [
+      {
+        "gain": "Both words are already in the records, so less to teach.",
+        "how": "Box becomes drawer. A run becomes the selection it covers, or the send when it lists.",
+        "key": "drawer-selection",
+        "label": "Drawer, and selection or send",
+        "lose": "'Drawer' may not fit how you think of your storage."
+      },
+      {
+        "gain": "Neutral words with no history.",
+        "how": "Box becomes location. A run becomes a batch.",
+        "key": "location-batch",
+        "label": "Location, and batch",
+        "lose": "New words to teach, and 'batch' also means the merge batches."
+      }
+    ],
+    "owner": "banchi-coordinator",
+    "pick": "drawer-selection",
+    "rank": 2,
+    "ref": "Item 94; D56 and D153 (drawer); D180 (selection); D273 (send)",
+    "status": "open",
+    "title": "Which words replace 'box' and 'run'?",
+    "why": "Both are already settled terms in the records."
+  },
+  "debt61-getattr-typos": {
+    "added": "2026-10-27T09:25:00-05:00",
+    "context": "store/master.py and server/capture_server.py read and write card fields by string with getattr and setattr. A typo is a silent no-op or a runtime AttributeError that nothing catches first. Not measured: how often it has bitten.",
+    "home": "docs/debts/061-advances-carryover.md (item 5)",
+    "id": "debt61-getattr-typos",
+    "kind": "decision",
+    "n": 1,
+    "options": [
+      {
+        "gain": "A typo fails loudly at once.",
+        "how": "Name the fields in one list and check each string against it.",
+        "key": "build",
+        "label": "Build, small",
+        "lose": "A little churn in two files."
+      },
+      {
+        "gain": "No change to the store code.",
+        "how": "Keep item 5 open as it is.",
+        "key": "leave",
+        "label": "Leave it",
+        "lose": "A typo stays silent until it bites."
+      }
+    ],
+    "owner": "debt61",
+    "pick": "build",
+    "ref": "DEBT61 item 5, string-keyed field access on cards",
+    "status": "closed",
+    "title": "Build a guard against typos in card field names?",
+    "why": "Small fix on the store, and the failure is silent."
+  },
+  "debt61-hook-per-screen": {
+    "added": "2026-10-27T09:25:00-05:00",
+    "context": "CaptureScreen.tsx, ReviewQueue.tsx and BoxBrowse.tsx each mix polling, derived state and markup in one file. The idea: one hook per screen so the component holds only markup.",
+    "home": "docs/debts/061-advances-carryover.md (item 7)",
+    "id": "debt61-hook-per-screen",
+    "kind": "decision",
+    "n": 3,
+    "options": [
+      {
+        "gain": "No screen risk.",
+        "how": "Keep item 7 open.",
+        "key": "leave",
+        "label": "Leave it",
+        "lose": "The files stay mixed."
+      },
+      {
+        "gain": "No stand-alone refactor lane; each is checked in both themes anyway.",
+        "how": "Split a screen's hook in the lane that already edits it.",
+        "key": "when-touched",
+        "label": "Do it per screen when next touched",
+        "lose": "Slow, uneven progress."
+      },
+      {
+        "gain": "Done at once.",
+        "how": "Three refactor lanes.",
+        "key": "all",
+        "label": "Build all three now",
+        "lose": "Three large diffs, each needing both-theme checks."
+      }
+    ],
+    "owner": "debt61",
+    "pick": "when-touched",
+    "ref": "DEBT61 item 7, one hook per screen",
+    "status": "closed",
+    "title": "Move polling and state out of three screen files?",
+    "why": "Gets the gain without a dedicated refactor."
+  },
+  "debt61-python-typecheck": {
+    "added": "2026-10-27T09:25:00-05:00",
+    "context": "No mypy or pyright is configured. Ruff is adopted (D82). Cheap first step: mypy --strict on store/orders.py or codes/qr.py. Not measured: how many errors it would find.",
+    "home": "docs/debts/061-advances-carryover.md (item 8)",
+    "id": "debt61-python-typecheck",
+    "kind": "decision",
+    "n": 4,
+    "options": [
+      {
+        "gain": "A real signal on type errors for little work.",
+        "how": "One module, one CI step.",
+        "key": "try-one",
+        "label": "Try mypy --strict on store/orders.py",
+        "lose": "One more tool to keep green."
+      },
+      {
+        "gain": "No new tool.",
+        "how": "Keep item 8 open.",
+        "key": "leave",
+        "label": "Leave it",
+        "lose": "No type checking in Python."
+      }
+    ],
+    "owner": "debt61",
+    "pick": "try-one",
+    "ref": "DEBT61 item 8, Python type checker",
+    "status": "closed",
+    "title": "Try a Python type checker on one module?",
+    "why": "Cheapest way to measure the value before committing."
+  },
+  "debt61-split-capture-server": {
+    "added": "2026-10-27T14:39:00Z",
+    "context": "server/capture_server.py is the largest backend file, about 16,000 lines. You ruled that sessions may restart the server after asking you, so a split can now be checked on a real server. No pain from the file's size has been measured.",
+    "home": "docs/debts/061-advances-carryover.md (item 6)",
+    "id": "debt61-split-capture-server",
+    "kind": "decision",
+    "n": 2,
+    "options": [
+      {
+        "gain": "You see the cost before choosing. The plan names which steps need a restart you approve.",
+        "how": "A lane writes the seams, the order and the cost. No code.",
+        "key": "plan",
+        "label": "Ask for a split plan",
+        "lose": "Planning time with no code change."
+      },
+      {
+        "gain": "Proves the method on a small piece.",
+        "how": "Move one self-contained group of routes, such as shipping or sets, into its own file. One restart with your yes, then the test harness and one live check.",
+        "key": "one-route-group",
+        "label": "Split one small piece now",
+        "lose": "One restart request, and a half-split file until later steps."
+      },
+      {
+        "gain": "No risk to the most fragile file.",
+        "how": "Keep DEBT61 item 6 open.",
+        "key": "leave",
+        "label": "Leave it",
+        "lose": "The file keeps growing."
+      }
+    ],
+    "owner": "debt61",
+    "pick": "plan",
+    "ref": "DEBT61 item 6, capture_server.py size",
+    "status": "closed",
+    "title": "Split capture_server.py?",
+    "why": "No pain is measured, so learn the cost first."
+  },
+  "holdings-sales-export": {
+    "added": "2026-10-27T17:11:00Z",
+    "context": "The holdings value report must subtract what you already sold, or it overstates your holdings. The lane checked Downloads: the July order list there is Banchi's own sales, and the OrderWand sale rows are all Banchi's (892 of 892). Neither has your investment-buy sales.\nWithout the right file, the report can still ship, labeled 'units sold unknown'.",
+    "home": "the value report lane's brief",
+    "id": "holdings-sales-export",
+    "kind": "task",
+    "minutes": 5,
+    "n": 21,
+    "owner": "banchi-coordinator",
+    "rank": 5,
+    "ref": "item 20 (holdings watch), mailaudit holdings value report",
+    "status": "open",
+    "steps": [
+      "Find or download the TCGplayer sales export that covers your investment-buy sales.",
+      "Put it in ~/Downloads, and say its file name in the note.",
+      "Or say 'ship it labeled' to run the report without it."
+    ],
+    "title": "Which TCGplayer sales export holds the sales of your investment buys?"
+  },
+  "mailaudit-synergy-pick": {
+    "added": "2026-10-27T16:30:00Z",
+    "context": "Redone on your premise: the mailaudit roster is your investment buys.\nHoldings: 1,175 units, $65.6k paid. Singles $43.7k, sealed $22.0k. 117 lines at $100+ a unit are 68% of the money.\nBanchi's prices match 376 of 893 lines by exact name: $32.2k paid, $34.2k at market today (+6%, rough: no printing or condition match).\nAll 892 sale orders in the OrderWand export are already in Banchi, so that file holds Banchi's own sales only. Sales of the investment buys are in sales exports the lane does not have, so units already sold are not netted out yet.",
+    "home": "a brief from the Banchi orchestrator to a builder lane; the ruling goes in a new decision entry",
+    "id": "mailaudit-synergy-pick",
+    "kind": "decision",
+    "n": 20,
+    "options": [
+      {
+        "gain": "Paid vs now for $65.6k of holdings, using prices Banchi already refreshes.",
+        "how": "A one-off report outside the app: received units minus units sold (from your sales exports) times Banchi's market price, against price paid, per line.",
+        "key": "value",
+        "label": "Holdings value report",
+        "lose": "Covers 42% of lines today. Needs your sales exports. A one-off that goes stale."
+      },
+      {
+        "gain": "Tells you when a big line moves.",
+        "how": "The value report, then flag $100+ lines when the price-TA signals fire.",
+        "key": "watch",
+        "label": "Value plus sell signals",
+        "lose": "Needs the report first. Matching and signal quality are unproven. Couples two repos' data."
+      },
+      {
+        "gain": "No coupling, no private data in Banchi.",
+        "how": "Banchi stays for cards that run through a machine.",
+        "key": "nothing",
+        "label": "Nothing",
+        "lose": "The price pipeline is not used on your largest holdings."
+      }
+    ],
+    "owner": "mailaudit-synergy",
+    "pick": "value",
+    "ref": "cost next to sales = lot-level spend beside gross on #/revenue (D214, gross-revenue retrospective); received-but-not-scanned = mailaudit ledger vs Banchi captured cards",
+    "status": "closed",
+    "title": "Should Banchi's prices be used to value your investment holdings?",
+    "why": "Smallest step, uses prices that exist, and shows whether anything deeper is worth building. Seller and buyer names stay out."
+  },
+  "master-set-last-copy-scope": {
+    "added": "2026-10-27T14:23:00Z",
+    "context": "The Sets view reads identified cards only. A fresh capture of the same card does not count until it is identified, so a card can show Last copy while a second copy waits to be identified.",
+    "home": "docs/specs/master-set.md section 7.3, PR 965",
+    "id": "master-set-last-copy-scope",
+    "kind": "decision",
+    "n": 12,
+    "options": [
+      {
+        "gain": "No change; a count is never a guess.",
+        "how": "Keep today's rule.",
+        "key": "identified-only",
+        "label": "Identified only",
+        "lose": "Last copy can show while a second copy waits."
+      },
+      {
+        "gain": "Fewer false Last copy marks.",
+        "how": "Count unidentified captures where the store already holds a SKU for them.",
+        "key": "include-captured",
+        "label": "Count captured too",
+        "lose": "Most captures have no SKU yet, so it rarely helps, and it adds a rule."
+      }
+    ],
+    "owner": "sets-pull",
+    "pick": "identified-only",
+    "ref": "PR 965, draft master-set spec",
+    "status": "closed",
+    "title": "Should Last copy count new captures that are not identified yet?",
+    "why": "An unidentified capture has no name to match on, so counting it would be a guess."
+  },
+  "master-set-live-takeoff": {
+    "added": "2026-10-27T14:23:00Z",
+    "context": "Today emit writes negative quantity rows only for SKUs you hold back. One pulled copy shows on the reconcile phantoms list, which only reports it.",
+    "home": "docs/specs/master-set.md section 7.2, PR 965",
+    "id": "master-set-live-takeoff",
+    "kind": "decision",
+    "n": 11,
+    "options": [
+      {
+        "gain": "No new build.",
+        "how": "Keep today's path: the phantoms list names it, and you lower it.",
+        "key": "phantoms",
+        "label": "The phantoms list is enough",
+        "lose": "An extra step per pull of a live card."
+      },
+      {
+        "gain": "The listing follows the pull with no extra step.",
+        "how": "The pull receipt offers a press that queues a minus-one row for that SKU in the next send.",
+        "key": "one-press",
+        "label": "One press after the pull",
+        "lose": "More build, and it touches the send path (D54, re-emit adds, never subtracts)."
+      }
+    ],
+    "owner": "sets-pull",
+    "pick": "phantoms",
+    "ref": "PR 965, draft master-set spec; D100, never delete to lower a price",
+    "status": "closed",
+    "title": "After you pull a card that is live on TCGplayer, should taking the listing down be one press?",
+    "why": "Ship the checklist first; add the press if the extra step bites."
+  },
+  "master-set-merge": {
+    "added": "2026-10-27T23:07:00Z",
+    "context": "It holds the store work, the TCGplayer take-off at the pull with the owed list behind it, the Sets screen, the mockups, and the Take All removal you asked for. Each owed entry has its own press.\nEvery lane went through its review rounds, and the screens passed design review at 1440 and 820 in light and dark. The local checks pass. CI is running again.\\nOne wording change: the filter you agreed as 'Hide my master set' now reads 'Hide your master set', because a copy rule bars 'my' on screen. Same meaning.",
+    "home": "PR 965",
+    "id": "master-set-merge",
+    "kind": "decision",
+    "n": 16,
+    "options": [
+      {
+        "gain": "The Sets view, pulls for your master set and the take-off land.",
+        "how": "Merge once CI passes.",
+        "key": "merge",
+        "label": "Merge on green",
+        "lose": "Banchi starts writing take-offs to TCGplayer on live pulls."
+      },
+      {
+        "gain": "Time to try it first.",
+        "how": "Leave it open.",
+        "key": "hold",
+        "label": "Hold",
+        "lose": "It waits, and later work rebases on it."
+      }
+    ],
+    "owner": "sets-pull",
+    "pick": "merge",
+    "ref": "PR 965 (master set: freshness and pull one of each)",
+    "status": "closed",
+    "title": "Merge the master set once CI is green?",
+    "why": "Every lane passed review, and the take-off follows your ruling for master-set pulls."
+  },
+  "master-set-pulled-counts": {
+    "added": "2026-10-27T14:23:00Z",
+    "context": "Your master list is the cards you retire with reason pulled. Your store already has 10 Riftbound cards retired as pulled. If they count, they show as collected on day one.",
+    "home": "docs/specs/master-set.md section 7.1, PR 965",
+    "id": "master-set-pulled-counts",
+    "kind": "decision",
+    "n": 10,
+    "options": [
+      {
+        "gain": "Nothing new to learn; one press means one thing.",
+        "how": "Every pulled retirement is a master-set card, old ones included.",
+        "key": "count",
+        "label": "Yes, count them",
+        "lose": "Any of the 10 pulled for another reason shows as collected."
+      },
+      {
+        "gain": "Pulled for other reasons stays separate.",
+        "how": "Add a fifth retire reason, such as master set. Only that reason counts.",
+        "key": "own-reason",
+        "label": "Add a master-set reason",
+        "lose": "One more reason to pick at each retire; the 10 old ones do not count."
+      }
+    ],
+    "owner": "sets-pull",
+    "pick": "count",
+    "ref": "PR 965, draft master-set spec; D26, retired is a terminal card state",
+    "status": "closed",
+    "title": "Do cards already retired as pulled count toward your master set?",
+    "why": "Fewest new parts. You can undo any of the 10 that should not count."
+  },
+  "master-set-take-all": {
+    "added": "2026-10-27T20:38:00Z",
+    "context": "The take-off code passed review round 3, but the reviewer held one part: a 'Take all' press on the owed list that takes every owed listing off TCGplayer on one confirm.\nIn item 14 you picked 'both'. The owed-list option you combined into it said 'one press for all of them', but the 'both' option itself named only a press per entry. So it is not clear you ruled 'Take all'.\nEach listing in a Take all is sized from a fresh live read and takes off only the extra copies. A normal send undoes it. The screen already draws it, and the whole batch waits on this.",
+    "home": "docs/specs/master-set.md section 5 and D100, PR 965",
+    "id": "master-set-take-all",
+    "kind": "decision",
+    "n": 15,
+    "options": [
+      {
+        "gain": "One press clears many pulls; nothing more to build.",
+        "how": "Merge as built.",
+        "key": "keep",
+        "label": "Keep 'Take all'",
+        "lose": "One press lowers several listings at once."
+      },
+      {
+        "gain": "Each listing comes down only on its own press.",
+        "how": "Remove the Take all button and route, then merge.",
+        "key": "drop",
+        "label": "One press per entry only",
+        "lose": "One more round of building, testing and review before anything merges."
+      }
+    ],
+    "owner": "sets-pull",
+    "pick": "keep",
+    "ref": "PR 965 (master-set spec); item 14 (both: press at the pull, owed list behind it); D100, never delete to lower a price",
+    "status": "closed",
+    "title": "Should the owed take-off list on Pricing have a 'Take all' press?",
+    "why": "Each listing is still sized to its own extra copies from a fresh read, and you asked for a quick way through owed take-offs."
+  },
+  "master-set-takeoff-how": {
+    "added": "2026-10-27T14:41:00Z",
+    "context": "You asked for the take-off to be automatic. That bends one ruling: D100 says a card that is live but no longer on hand is taken off only after your yes for that card, with no screen control.\nThe parts mostly exist: the hold take-off (a fresh live read, one take-off pending per card, checked after it lands). TCGplayer never goes below 0, so a doubled take-off does no harm.\nThis applies only to the master-set retire reason. Widening it to other reasons is a separate question.",
+    "home": "docs/specs/master-set.md section 5, PR 965",
+    "id": "master-set-takeoff-how",
+    "kind": "decision",
+    "n": 13,
+    "options": [
+      {
+        "gain": "No extra step, and the card cannot sell after you pull it.",
+        "how": "The pull reads TCGplayer. If more copies are live than on hand, it lowers the count at once and checks that the change landed.",
+        "key": "push-now",
+        "label": "Take it off at the pull",
+        "lose": "Banchi writes to TCGplayer by itself on each live pull, and needs your seller login to be valid. A failed write leaves the pull standing and says so."
+      },
+      {
+        "gain": "Every TCGplayer change still rides a send you started.",
+        "how": "The pull records the take-off as owed. The next send you start includes it.",
+        "key": "next-send",
+        "label": "Take it off on the next send",
+        "lose": "The listing stays up until then, so the pulled card can sell meanwhile."
+      },
+      {
+        "gain": "An explicit yes per card, closest to today's rule.",
+        "how": "The receipt offers 'Take it off TCGplayer'.",
+        "key": "receipt-press",
+        "label": "One press on the pull receipt",
+        "lose": "One press per live pull."
+      }
+    ],
+    "owner": "sets-pull",
+    "pick": "push-now",
+    "ref": "master-set spec section 5, PR 965; D100, never delete to lower a price",
+    "status": "closed",
+    "title": "When you pull a live card for your master set, how should TCGplayer's count come down?",
+    "why": "It is what you asked for, and it closes the window in which a pulled card can sell."
+  },
+  "master-set-takeoff-press-home": {
+    "added": "2026-10-27T17:10:00Z",
+    "context": "You asked for a place that keeps failed commands for later review. Banchi already has one: every send to TCGplayer writes a receipt before it starts and updates it at each step. Pricing and Home show the receipts, a failed or unclear one stays until you dismiss it, and sessions can read them. The take-off is being built as one of these receipts.\nWhat is missing: nothing lists a take-off you owe but have not pressed yet.",
+    "home": "docs/specs/master-set.md section 5, PR 965",
+    "id": "master-set-takeoff-press-home",
+    "kind": "decision",
+    "links": [
+      {
+        "label": "Take-off press mockups",
+        "url": "https://claude.ai/artifact/VjS1JtjbD7TMo1wDKJibqL"
+      }
+    ],
+    "n": 14,
+    "options": [
+      {
+        "gain": "One log for every write to TCGplayer, already built and readable by sessions.",
+        "how": "The press sits on the pulled copy's row. Each try writes a send receipt; a failure stays on the Pricing and Home send card with Try again until dismissed.",
+        "key": "log",
+        "label": "Every take-off is a send receipt",
+        "lose": "A failure shows on Pricing and Home, not where you pulled. A take-off you never pressed is listed nowhere."
+      },
+      {
+        "gain": "Works later without a sign-in. One press for many pulls.",
+        "how": "Pulling a live card records the take-off as owed. The Pricing send card lists owed and failed take-offs, with one press for all of them.",
+        "key": "owed",
+        "label": "An owed list on Pricing",
+        "lose": "The listing stays live until you press, so the card can sell meanwhile."
+      },
+      {
+        "gain": "Seamless when it works, and nothing is lost when it does not.",
+        "how": "The pull receipt offers the press at once. Anything not pressed, or failed, lands on the owed list on the Pricing send card. Every try is a send receipt.",
+        "key": "both",
+        "label": "Press at the pull, owed list behind it",
+        "lose": "The most to build. Two places show the same take-off."
+      }
+    ],
+    "owner": "sets-pull",
+    "pick": "both",
+    "ref": "PR 965 (master-set spec), item 13 (one press on the pull receipt)",
+    "status": "closed",
+    "title": "Where do master-set take-offs and their failures live?",
+    "why": "It gives you the press that confirms the take-off went out, plus the backlog of failed commands you asked for, on the log that already exists."
+  },
+  "photo-storage-direction": {
+    "added": "2026-10-27T16:32:00Z",
+    "context": "No nightly job, as you asked. `make backup` runs the backup once; only a separate command installs the nightly job.\nThe iCloud folder is empty today, so a first run overwrites nothing. The risk starts at the second run: today a changed or corrupted photo replaces the good copy, and the store copy is replaced each run with no check.\nThe guard is three changes in one script:\n- A photo already backed up is never overwritten. A difference is counted and reported.\n- Each store copy is dated and kept, and checked for corruption before it lands.\n- A verify pass compares every file's fingerprint, source against backup (one read of 7.9 GB).\nCost: about 0.16 GB per store copy kept. A real re-shoot shows as 'differs' until you accept it.",
+    "home": "docs/specs/lean-server.md section 6, and DEBT67",
+    "id": "photo-storage-direction",
+    "kind": "decision",
+    "n": 60,
+    "options": [
+      {
+        "gain": "A copy exists today. The first run cannot overwrite anything.",
+        "how": "Run `make backup` once today, then one builder lane adds all three changes before any second run.",
+        "key": "now-and-guard",
+        "label": "Back up now, build the guard next",
+        "lose": "This first copy is not fingerprint-checked until the verify pass lands."
+      },
+      {
+        "gain": "The first copy is checked from the start.",
+        "how": "One builder lane adds all three changes; the backup runs once after it merges.",
+        "key": "guard-first",
+        "label": "Build the guard, then back up",
+        "lose": "No backup exists until the lane merges."
+      },
+      {
+        "gain": "A smaller change.",
+        "how": "Build only the never-overwrite and dated-store changes, then back up once.",
+        "key": "guard-no-verify",
+        "label": "Guard without the verify pass",
+        "lose": "No way to prove the backup matches your photos."
+      }
+    ],
+    "owner": "photo-storage",
+    "pick": "now-and-guard",
+    "ref": "lean-server spec section 6; DEBT67, capture photographs exist in one place",
+    "status": "closed",
+    "title": "One-time backup: run it now, or after the guard is built?",
+    "why": "The first run is safe because the folder is empty, so waiting buys nothing. The guard matters only from the second run on."
+  },
+  "price-source-next": {
+    "added": "2026-10-27T14:40:00Z",
+    "context": "Built and on screen: Card Ladder (slab values, through your paid login), TCGplayer's own sold-price history, TCGCSV raw prices, and the TCGplayer export.\nIdea only: PriceCharting. The slabs spec promises PSA 10 and Japanese/Chinese prices from it, but no code exists, so those fields stay blank.\nGated: eBay. DEBT72 says no eBay work without a decision entry.",
+    "home": "a new decision entry, or the anchor section of the pricing-suggest spec",
+    "id": "price-source-next",
+    "kind": "decision",
+    "n": 70,
+    "options": [
+      {
+        "gain": "Free and already in use. Removes the bias toward only cards you stocked, which the price study needs.",
+        "how": "Download it once, check Riftbound coverage, and backfill price history.",
+        "key": "tcgcsv",
+        "label": "TCGCSV daily archive",
+        "lose": "No sold prices from other markets."
+      },
+      {
+        "gain": "Completes slab values.",
+        "how": "Decide API or scraping, then wire the slabs spec's promise.",
+        "key": "pricecharting",
+        "label": "PriceCharting for slabs and Japanese cards",
+        "lose": "Paid or terms risk, both unchecked."
+      },
+      {
+        "gain": "No new risk.",
+        "how": "Strike the PriceCharting promise from the slabs spec.",
+        "key": "close",
+        "label": "Nothing new",
+        "lose": "PSA 10 and Japanese/Chinese values stay blank."
+      }
+    ],
+    "owner": "price-sources",
+    "pick": "tcgcsv",
+    "ref": "price-sources survey; my-slabs spec 4.6; DEBT72, eBay work needs a decision first",
+    "status": "closed",
+    "title": "Which outside price source comes next?",
+    "why": "Free, already in use, and fills a measured gap."
+  },
+  "price-source-research-pick": {
+    "added": "2026-10-27T16:40:00Z",
+    "context": "Web research, read-only. Prices and limits marked third-party are unconfirmed.\n- PriceCharting: an official paid API gives current prices by TCGplayer id, including PSA 10 and Japanese/Chinese raw. About $49 a month (third-party figure). Whether it gives price history is unconfirmed.\n- PSA: a public lookup by cert number, with a daily quota that sources disagree on. Population by set needs scraping. Card Ladder already gives you population, so PSA adds little.\n- eBay: sold-item data needs eBay's approval, which may never come. Other routes show live listings only, or your own sales.",
+    "home": "a new decision record (slug), by a records lane",
+    "id": "price-source-research-pick",
+    "kind": "decision",
+    "n": 71,
+    "options": [
+      {
+        "gain": "Fills the blank PSA 10 and Japanese/Chinese price fields the slabs screen promises.",
+        "how": "Wire its paid API by TCGplayer id once TCGCSV lands.",
+        "key": "pricecharting",
+        "label": "PriceCharting for slabs and Japanese cards",
+        "lose": "A paid subscription. History is unconfirmed."
+      },
+      {
+        "gain": "Population without Card Ladder.",
+        "how": "Read population by cert from PSA or GemRate.",
+        "key": "psa",
+        "label": "PSA population",
+        "lose": "Low value, since Card Ladder already has it. Quota unclear."
+      },
+      {
+        "gain": "Real sold prices.",
+        "how": "Apply for eBay's sold-item API.",
+        "key": "ebay",
+        "label": "eBay sold prices",
+        "lose": "Approval may never come."
+      },
+      {
+        "gain": "No cost, no new code.",
+        "how": "Stop at TCGCSV.",
+        "key": "nothing-yet",
+        "label": "Nothing yet",
+        "lose": "PSA 10 and Japanese price fields stay blank."
+      }
+    ],
+    "owner": "price-sources",
+    "pick": "pricecharting",
+    "ref": "spec my-slabs section 4.6 (PSA 10 and Japanese/Chinese prices), DEBT72 (no eBay work without a decision)",
+    "status": "closed",
+    "title": "After TCGCSV, which of PriceCharting, PSA or eBay is worth wiring?",
+    "why": "It is the only one that fills a field already on screen, through an official API."
+  },
+  "price-ta-archive-withdrawn": {
+    "added": "2026-10-27T16:45:00Z",
+    "context": "Your ruling on item 51 could not run. The first test file was refused: the site's owner removed the past-days archive over server costs, with no workaround. The lane stopped there. Nothing was downloaded or installed.\nTCGCSV's current prices are still open.",
+    "home": "PR 964, README 'The data' table",
+    "id": "price-ta-archive-withdrawn",
+    "kind": "decision",
+    "n": 52,
+    "options": [
+      {
+        "gain": "Real sales with volume, one year back, for whole sets, free.",
+        "how": "A builder lane adds every Riftbound card to the price-history sweep, which today covers only cards you held or sold.",
+        "key": "sweep",
+        "label": "Widen the price sweep to every Riftbound card",
+        "lose": "One year only. The source slows it after about 800 requests, so it fills over days. A code change."
+      },
+      {
+        "gain": "A whole-market history, free, growing from today.",
+        "how": "A daily job reads Riftbound's 14 groups (about 30 small requests) into a local table.",
+        "key": "daily",
+        "label": "Read TCGCSV's current prices each day",
+        "lose": "No past data. Months before it supports a backtest. No sales."
+      },
+      {
+        "gain": "A year of sales now, and listing history growing from today.",
+        "how": "Two lanes.",
+        "key": "both",
+        "label": "Both, the sweep first",
+        "lose": "Two lanes of work."
+      },
+      {
+        "gain": "No cost.",
+        "how": "No more work.",
+        "key": "stop",
+        "label": "Stop the backtest here",
+        "lose": "Findings stay limited to your own cards."
+      }
+    ],
+    "owner": "price-ta",
+    "pick": "both",
+    "ref": "PR 964 (price-pattern research), D222 (the archive sweep paces itself)",
+    "status": "closed",
+    "title": "TCGCSV's past-price archive is gone. Where should backtest history come from?",
+    "why": "The sweep is the only large free past history left, and the daily read is the only route to whole-market listing data."
+  },
+  "price-ta-daily-read-merge": {
+    "added": "2026-10-27T21:41:00Z",
+    "context": "It saves Riftbound's current prices once each time TCGCSV updates, so a whole-market price history builds from now on. It is a free download and changes no price.\nIt passed three review rounds. A failed read goes to a note file and the job log; no screen shows it yet.\nThe full CI run starts when it is marked ready.",
+    "home": "PR 977",
+    "id": "price-ta-daily-read-merge",
+    "kind": "decision",
+    "n": 53,
+    "options": [
+      {
+        "gain": "Price history starts building today; every day of delay is a day of history lost.",
+        "how": "Mark it ready, then merge once CI passes.",
+        "key": "merge",
+        "label": "Merge on green",
+        "lose": "A failed read shows on no screen yet."
+      },
+      {
+        "gain": "Time to look first, or to wait for a screen that shows failures.",
+        "how": "Leave it open.",
+        "key": "hold",
+        "label": "Hold",
+        "lose": "No history builds meanwhile."
+      }
+    ],
+    "owner": "price-ta",
+    "pick": "merge",
+    "ref": "PR 977 (daily read of TCGCSV's Riftbound prices); D322, TCGCSV is the next price source",
+    "status": "closed",
+    "title": "Merge the daily Riftbound price read once CI is green?",
+    "why": "History only builds forward, so each day held is lost, and the read spends nothing."
+  },
+  "price-ta-history-fetch": {
+    "added": "2026-10-27T14:44:00Z",
+    "context": "TCGCSV is the only large free price history found. It has 992 daily files, from 2024-02-08 to yesterday (about 2.7 years), covering every Pokemon set back to Base Set and all 14 Riftbound groups. Each day holds market price and the lowest, median and highest listing for every product, but no sales or volume.\nSize is unmeasured: its docs say about 1 GB, but 2-4 MB a day comes to 1-4 GB, and the site refused a size check. The Mac has 124 GB free.\nCost: free. It asks that each file be downloaded once, slowly, and its FAQ calls card-game copyright a gray area. Unpacking needs a small 7-Zip tool from Homebrew (p7zip, a few MB). Files stay on this Mac, outside the repo.\nItem 70 also leans to TCGCSV, so one download can serve both. Widening Banchi's own price sweep for real sold prices is a separate question for later.",
+    "home": "PR 964, docs/research/price-ta/README.md, 'The data' table",
+    "id": "price-ta-history-fetch",
+    "kind": "decision",
+    "n": 51,
+    "options": [
+      {
+        "gain": "Measured size and coverage before the full pull.",
+        "how": "Fetch one day's file (2-4 MB) and install p7zip. Report its true size and whether Riftbound is in it, then ask again.",
+        "key": "one-file",
+        "label": "One file first",
+        "lose": "One more round trip before the backtest starts."
+      },
+      {
+        "gain": "About 2.7 years of daily prices for every Pokemon and Riftbound product.",
+        "how": "Check one file first, then fetch the rest once each with a pause between files. Install p7zip. Keep the files under ~/.banchi/research/.",
+        "key": "yes",
+        "label": "Yes, download it all",
+        "lose": "1-4 GB of disk, a p7zip install, and still no sales volume."
+      },
+      {
+        "gain": "Nothing changes.",
+        "how": "Download nothing.",
+        "key": "no",
+        "label": "No",
+        "lose": "The backtest stays at your store's own year of cards."
+      }
+    ],
+    "owner": "price-ta",
+    "pick": "one-file",
+    "ref": "PR 964, price-pattern research; D222, the archive sweep paces itself",
+    "status": "closed",
+    "title": "Download the TCGCSV daily price archive for backtesting?",
+    "why": "Size and access are unmeasured, and one 2-4 MB file settles both."
+  },
+  "price-ta-next": {
+    "added": "2026-10-27T14:36:00Z",
+    "context": "You said a backtest needs far more data. The price-ta lane is finding sources with a lot of history and will bring new options.",
+    "home": "PR 964, docs/research/price-ta/README.md",
+    "id": "price-ta-next",
+    "kind": "decision",
+    "n": 50,
+    "options": [
+      {
+        "gain": "No spend and no download. A firmer answer before anything touches pricing.",
+        "how": "The daily price job keeps collecting. Re-test the sealed signal at about a dozen windows.",
+        "key": "wait",
+        "label": "Wait for more data",
+        "lose": "The sealed signal stays unused until then."
+      },
+      {
+        "gain": "A chance to test whole sets from launch, not only cards you stocked.",
+        "how": "Read its site to see whether it carries Riftbound and how big its daily files are, then ask you before any download.",
+        "key": "tcgcsv",
+        "label": "Check TCGCSV first",
+        "lose": "One more download decision for you, and the coverage may come to nothing."
+      },
+      {
+        "gain": "You see the signal today.",
+        "how": "Sealed rows show the low-listing-vs-market gap as a hint. No price changes by itself.",
+        "key": "feed",
+        "label": "Show it on Pricing now",
+        "lose": "It rests on 3 windows. A hint that later fails misleads you."
+      }
+    ],
+    "owner": "price-ta",
+    "pick": "wait",
+    "ref": "PR 964, research on price patterns",
+    "status": "closed",
+    "title": "Where does the price-pattern study go next?",
+    "why": "3 windows is too few to put on a pricing screen. The data arrives for free."
+  },
+  "pricing-batch1-merge": {
+    "added": "2026-10-27T21:20:00Z",
+    "context": "Batch 1 holds the pricing spec and mockups, the floor text, and the suggestion engine. The engine had three review rounds, and the test suite passes.\nThe Floor and hold wording lane was dropped: CI was red on 4 stale checks and a badge 2px too wide at 820. It is being fixed in its own lane and joins batch 2.\nCI is green: 11 checks pass, none fail. Nothing on screen changes yet; no screen calls the engine until batch 2.",
+    "home": "PR 980",
+    "id": "pricing-batch1-merge",
+    "kind": "decision",
+    "n": 36,
+    "options": [
+      {
+        "gain": "The suggestion engine and spec land; batch 2 builds on them.",
+        "how": "The pricing session merges once CI passes.",
+        "key": "merge",
+        "label": "Merge on green",
+        "lose": "Nothing known."
+      },
+      {
+        "gain": "Time to look first.",
+        "how": "Leave it open.",
+        "key": "hold",
+        "label": "Hold",
+        "lose": "Batch 2 waits."
+      }
+    ],
+    "owner": "pricing-tools",
+    "pick": "merge",
+    "ref": "PR 980 (pricing by suggestion, batch 1), which replaces PR 967",
+    "status": "closed",
+    "title": "Merge pricing batch 1 once CI is green?",
+    "why": "Every lane in it passed review, and only CI is left."
+  },
+  "pricing-comparable-sales": {
+    "added": "2026-10-27T14:24:00Z",
+    "context": "The price source gives per-period figures only: copies sold, and the lowest and highest sale price. It never gives single sales.",
+    "home": "docs/specs/pricing-suggest.md section 9",
+    "id": "pricing-comparable-sales",
+    "kind": "decision",
+    "n": 31,
+    "options": [
+      {
+        "gain": "Real sales evidence from data already stored.",
+        "how": "A suggestion reads like: 14 sold in 30 days, $3.10 to $4.25 (sample numbers).",
+        "key": "range",
+        "label": "Show the sold range",
+        "lose": "No single-sale prices."
+      },
+      {
+        "gain": "Exact comparable sales.",
+        "how": "A research lane hunts for a source of single sales.",
+        "key": "research",
+        "label": "Look for single sales",
+        "lose": "Likely scraping or a paid service, and no build until a source is found."
+      },
+      {
+        "gain": "Nothing to build.",
+        "how": "No sales evidence on the row.",
+        "key": "skip",
+        "label": "Market price only",
+        "lose": "You price without sales evidence."
+      }
+    ],
+    "owner": "pricing-tools",
+    "pick": "range",
+    "ref": "pricing-suggest spec section 9",
+    "status": "closed",
+    "title": "How should comparable sales show?",
+    "why": "The data is already stored."
+  },
+  "pricing-drift-loudness": {
+    "added": "2026-10-27T16:50:00Z",
+    "context": "Drift helps one decision: should this live price change now? A count over your 832 live listings with a market price:\n- 7 are more than 10% under market. Together they lose $0.46.\n- 444 are more than 10% over market, $3,124 in all.\n- 11 cards are each $5 or more over market, and hold $2,845.\nSo drift never costs money by selling too cheap. It costs sales by pricing over what buyers pay, and it sits in 11 cards. The count cannot tell which of those you hold high on purpose.",
+    "home": "docs/specs/pricing-suggest.md section 9",
+    "id": "pricing-drift-loudness",
+    "kind": "decision",
+    "n": 32,
+    "options": [
+      {
+        "gain": "Nothing new to learn; the 11 cards show first.",
+        "how": "The one pricing list carries it: an over-market listing shows as a suggested cut, and a high-value one lands on top in Needs you.",
+        "key": "cut",
+        "label": "Cut drift as a separate tool",
+        "lose": "You see drift only when you open Pricing."
+      },
+      {
+        "gain": "You see it without opening Pricing.",
+        "how": "As above, and Home says e.g. '11 listings priced $2,845 over market' with one press to them, only when a high-value card is past the limit.",
+        "key": "home",
+        "label": "One list plus a Home line",
+        "lose": "One more line on Home."
+      },
+      {
+        "gain": "Narrow and named.",
+        "how": "Only cards above the value line are watched on the daily price refresh; each crossing names the card.",
+        "key": "watch",
+        "label": "Expensive-card watch",
+        "lose": "A new alert surface; cheap cards wait for the list."
+      }
+    ],
+    "owner": "banchi-coordinator",
+    "pick": "cut",
+    "rank": 4,
+    "ref": "pricing-suggest spec section 9",
+    "status": "open",
+    "title": "What should drift alerts do?",
+    "why": "The measured cost is 11 cards, and the one list already puts those on top. A separate alert would repeat it."
+  },
+  "pricing-history-where": {
+    "added": "2026-10-27T16:50:00Z",
+    "context": "You asked to see the mockups to decide. They are now drawn on this card: page through them with the arrows. Option 4, the floating card, covers only the right side of the rows under it at tablet width, never a name. No product code is built until you pick.",
+    "designs": [
+      {
+        "label": "Keep the card's sheet (desktop)",
+        "slug": "h30-sheet"
+      },
+      {
+        "label": "The row expands (desktop)",
+        "slug": "h30-inline"
+      },
+      {
+        "label": "Side panel (desktop)",
+        "slug": "h30-panel"
+      },
+      {
+        "label": "Floating card (desktop)",
+        "slug": "h30-float"
+      },
+      {
+        "label": "Floating card (tablet)",
+        "slug": "h30-float-820"
+      }
+    ],
+    "home": "docs/specs/pricing-suggest.md section 9",
+    "id": "pricing-history-where",
+    "kind": "decision",
+    "links": [
+      {
+        "label": "Price history: four options",
+        "url": "https://claude.ai/artifact/Q4sdkANufjQ546n8y8rgLN"
+      }
+    ],
+    "n": 30,
+    "options": [
+      {
+        "gain": "Room for a full chart.",
+        "how": "History opens in a panel beside the list.",
+        "key": "panel",
+        "label": "Side panel",
+        "lose": "The list narrows."
+      },
+      {
+        "gain": "Nothing new to learn.",
+        "how": "History stays in the card's own sheet.",
+        "key": "sheet",
+        "label": "Keep the card's sheet",
+        "lose": "Covers the list."
+      },
+      {
+        "gain": "History sits with its row.",
+        "how": "The row grows to show history.",
+        "key": "inline",
+        "label": "The row expands",
+        "lose": "Rows below move."
+      },
+      {
+        "gain": "The list never moves or gets covered whole, and it behaves the same at both widths.",
+        "how": "A small card floats over the row; nothing dims or moves.",
+        "key": "float",
+        "label": "Floating card over the row",
+        "lose": "Less room for the chart."
+      }
+    ],
+    "owner": "pricing-tools",
+    "pick": "float",
+    "ref": "pricing-suggest spec section 9, pricing by suggestion",
+    "status": "closed",
+    "title": "Where should a card's price history show while you price?",
+    "why": "The only option where the list never moves or gets covered whole."
+  },
+  "pricing-mockup-signoff": {
+    "added": "2026-10-27T14:24:00Z",
+    "context": "No build starts until you sign off a mockup. The designer is on round 2. Reply with your answers in the note, or to the orchestrator.",
+    "home": "docs/specs/pricing-suggest.md",
+    "id": "pricing-mockup-signoff",
+    "kind": "task",
+    "minutes": 10,
+    "n": 34,
+    "owner": "pricing-tools",
+    "ref": "pricing-suggest mockup, docs/design/pricing-suggest/list.html",
+    "status": "closed",
+    "steps": [
+      "Open docs/design/pricing-suggest/list.html on branch worktree-pricing-tools-9031c8, or ask the orchestrator for the screenshots.",
+      "For each trigger, keep it or cut it.",
+      "Set the cap on a suggested change (sample: 25% either way) and the value line (sample: $25).",
+      "Say whether rows marked Needs you start unticked.",
+      "Pick a word for 'keep off TCGplayer' (the working name)."
+    ],
+    "title": "Look at the pricing mockup and answer its sign-off asks"
+  },
+  "pricing-more-tools": {
+    "added": "2026-10-27T14:24:00Z",
+    "context": "Four candidates: (1) a slot for an outside reason, such as the Riftbound meta, (2) net after fees, (3) select many rows and apply one change, (4) a watch list with a price alert. Pick a set below, or name your own mix in the note.",
+    "home": "docs/specs/pricing-suggest.md section 9",
+    "id": "pricing-more-tools",
+    "kind": "decision",
+    "n": 33,
+    "options": [
+      {
+        "gain": "Room for the Riftbound work later, at no cost now.",
+        "how": "Rows get room for a reason such as 'meta-dependent'.",
+        "key": "signal",
+        "label": "Outside-reason slot only",
+        "lose": "No other new tools."
+      },
+      {
+        "gain": "Real margin on every row.",
+        "how": "Each row also shows what you keep after TCGplayer fees.",
+        "key": "signal-fees",
+        "label": "Reason slot plus net after fees",
+        "lose": "Needs your real fee rate."
+      },
+      {
+        "gain": "Fast edits and spike alerts.",
+        "how": "Also bulk edit and a watch list.",
+        "key": "all",
+        "label": "All four",
+        "lose": "A second way to set prices, and the watch list overlaps today's hold watch."
+      }
+    ],
+    "owner": "pricing-tools",
+    "pick": "signal",
+    "ref": "pricing-suggest spec section 9",
+    "status": "closed",
+    "title": "Which extra pricing tools should be built?",
+    "why": "The rest add surface with no measured need."
+  },
+  "pricing-raise-and-merge": {
+    "added": "2026-10-27T14:43:00Z",
+    "context": "The mockup draws suggested raises and one merged list. Three settled decisions say otherwise:\n- D107: the automatic rule never proposes a raise. D107 itself says to reopen it with a market rule that has a raise ceiling.\n- D105: the mark-down sheet opens from the pricing header.\n- D277: keeps a separate Live tab.\nYou already ruled 'a cap both ways' (spec section 1).",
+    "home": "docs/specs/pricing-suggest.md section 5, step 4, PR 967",
+    "id": "pricing-raise-and-merge",
+    "kind": "decision",
+    "n": 35,
+    "options": [
+      {
+        "gain": "The mockup as drawn.",
+        "how": "A suggestion may raise up to the cap, and the cap is D107's ceiling. The mark-down sheet and the Live tab fold into the one list.",
+        "key": "reopen",
+        "label": "Allow raises up to the cap, one list",
+        "lose": "Three records to rewrite before the build."
+      },
+      {
+        "gain": "No raise goes out unseen.",
+        "how": "As above, but every raise lands in Needs you, never in the one-press batch.",
+        "key": "raise-needs-you",
+        "label": "Allow raises, each needs its own tick",
+        "lose": "More ticks per send."
+      },
+      {
+        "gain": "No risk from a raise.",
+        "how": "D107 stands, and market moves never raise. The list still merges.",
+        "key": "lower-only",
+        "label": "Lower only, one list",
+        "lose": "Cards that went up stay underpriced until you type a new price."
+      }
+    ],
+    "owner": "pricing-tools",
+    "pick": "reopen",
+    "ref": "PR 967, pricing-suggest spec section 5 step 4; D107, a typed price goes either direction; D105, mark-downs live where prices are decided; D277, pricing lists all rows, needs first",
+    "status": "closed",
+    "title": "Should suggestions be allowed to raise prices, with the Live tab merged into one list?",
+    "why": "The cap is the ceiling D107 asked for, and you already ruled a cap both ways."
+  },
+  "pricing-wire-held": {
+    "added": "2026-10-28T01:51:00Z",
+    "context": "The wire lane passed all three reviews, and the full test suite passes. After round 3, the shared rule weighs safety holes closed against holes opened. It found one opened and none closed, so it scored zero and the lane is held for you.\nThe opened hole: today Banchi refuses a send that names no run. This lane allows one, but only when the send holds only suggestions you kept, and each passes four gates: priced from today's reading, within 25% of the fresh live price, equal to the server's own rebuild, and with held cards left out.\nThat send is the one-list send you ruled for. Claude cannot trigger it by mistake; you press it on the Pricing screen.\nThe floating history card depends on this lane. It passed design review and waits with it.",
+    "home": "pricing-suggest spec section 5",
+    "id": "pricing-wire-held",
+    "kind": "decision",
+    "n": 37,
+    "options": [
+      {
+        "gain": "The one pricing list and its history card can reach the screen next.",
+        "how": "Batch the wire lane, then the history card, and merge on green.",
+        "key": "merge",
+        "label": "Merge both",
+        "lose": "A send with no run named is now possible, behind the four gates."
+      },
+      {
+        "gain": "No new kind of send.",
+        "how": "Neither merges until you say.",
+        "key": "park",
+        "label": "Keep both parked",
+        "lose": "The one-list screen and the history card wait."
+      }
+    ],
+    "owner": "pricing-tools",
+    "pick": "merge",
+    "ref": "Pricing one-list wire lane (head 62b31dde4); your one-list ruling (item 35, spec pricing-suggest section 5 step 4); net-value hold after 3 review rounds",
+    "status": "closed",
+    "title": "May the one-list send lane merge? It opens the send you ruled for",
+    "why": "The opened act is the send you ruled for. You press it, behind four gates, so Claude cannot hit it by mistake."
+  },
+  "records-rollout-shared-fix": {
+    "added": "2026-10-27T17:32:00Z",
+    "context": "The planner measured it. All 253 Banchi decisions fail because the shared tool only reads a top-level title or a 'Ruling' section, and Banchi titles are one level down. No per-file edit fixes that: adding a 'Ruling' heading cuts each Banchi decision short, and changing the title level breaks about 20 Banchi readers and the merge tool's own number claim.\nThe 65 debts can be fixed in Banchi: 53 by script (add a 'What.' lead), 12 by hand.\nSmall extras either way: rewrite D218 and D245 to drop superseded text, reword D299's lead, rename the debt notes file to lowercase, and handle the two preamble files.",
+    "home": "a claude-settings PR, then PR 966",
+    "id": "records-rollout-shared-fix",
+    "kind": "decision",
+    "n": 92,
+    "options": [
+      {
+        "gain": "251 of 253 decisions work with no edit. Smallest total change.",
+        "how": "A one-line change in claude-settings: read a second-level title when there is no top-level one, and skip files starting with '_'. Then a Sonnet workflow does the 65 debts and the extras in Banchi.",
+        "key": "shared",
+        "label": "Fix the shared tool, then fan out in Banchi",
+        "lose": "A change in another repo; every repo using the shared tool gets the fallback."
+      },
+      {
+        "gain": "No change outside Banchi.",
+        "how": "Move every decision title to top level and update about 20 readers, the merge claim, and decisions D60 and D160.",
+        "key": "banchi-only",
+        "label": "Change Banchi's titles instead",
+        "lose": "Overturns how Banchi's decision files are built; large and risky."
+      },
+      {
+        "gain": "No work.",
+        "how": "Close PR 966 for now.",
+        "key": "park",
+        "label": "Park the roll-out",
+        "lose": "The waiting-page link file stays out of Banchi."
+      }
+    ],
+    "owner": "orchestrator",
+    "pick": "shared",
+    "ref": "item 91 (records roll-out), PR 966, claude-settings records page builder",
+    "status": "closed",
+    "title": "Records roll-out: fix the shared tool to read Banchi's titles?",
+    "why": "One line in the shared tool fixes 251 decisions; the Banchi-only route rewrites its record model."
+  },
+  "riftbound-sort-home": {
+    "added": "2026-10-27T16:46:00Z",
+    "context": "The walkthrough page is up. It covers all 221 cards in five groups (11 staple, 103 meta-dependent, 33 outclassed, 72 unknown, 2 banned), how to read each group for selling or holding, four places where play and price part, the method, a filterable table, and nine known gaps.\nNothing went into the repo. Mark done when reviewed, with a note if you want it kept somewhere.",
+    "home": "the research sheet's header, or a decision entry if pricing takes it up",
+    "id": "riftbound-sort-home",
+    "kind": "task",
+    "links": [
+      {
+        "label": "Spiritforged sort walkthrough",
+        "url": "https://claude.ai/artifact/5MSYHu2MgPN2A9yT28YpJW"
+      }
+    ],
+    "minutes": 15,
+    "n": 40,
+    "owner": "riftbound-meta",
+    "ref": "riftbound-meta, the Spiritforged card sort",
+    "status": "closed",
+    "steps": [
+      "Open the page and read it.",
+      "Note anything wrong or missing, or where it should live."
+    ],
+    "title": "Review the Spiritforged card sort walkthrough"
+  },
+  "tcgt-canceled": {
+    "added": "2026-10-28T03:04:00Z",
+    "context": "A label cannot be voided once bought.",
+    "home": "D-tcgtracking-pipe",
+    "id": "tcgt-canceled",
+    "kind": "decision",
+    "n": 111,
+    "options": [
+      {
+        "gain": "No fee lost on a canceled order.",
+        "how": "The preview checks each order's status on TCGplayer before you confirm.",
+        "key": "recheck",
+        "label": "Re-check live",
+        "lose": "Your TCGplayer login must be fresh."
+      },
+      {
+        "gain": "Works without a fresh login.",
+        "how": "The preview trusts the uploaded file.",
+        "key": "none",
+        "label": "No re-check",
+        "lose": "A canceled order can still get a paid label."
+      }
+    ],
+    "owner": "tcgtracking",
+    "pick": "recheck",
+    "ref": "TCGTracking pipe plan",
+    "status": "closed",
+    "title": "Should the preview re-check for canceled orders?",
+    "why": "A bought label cannot be undone, so the check prevents lost money."
+  },
+  "tcgt-cost-line": {
+    "added": "2026-10-28T03:04:00Z",
+    "context": "TCGTracking's API reports no fee and no count of free labels left.",
+    "home": "D-tcgtracking-pipe",
+    "id": "tcgt-cost-line",
+    "kind": "decision",
+    "n": 109,
+    "options": [
+      {
+        "gain": "You see a dollar figure before you confirm.",
+        "how": "You enter the per-label fee once as a setting. The preview shows the total, marked as an estimate.",
+        "key": "setting",
+        "label": "A fee you set",
+        "lose": "It goes stale if TCGTracking changes its fee."
+      },
+      {
+        "gain": "Never wrong.",
+        "how": "The preview shows how many labels, with 'fee per your TCGTracking account'.",
+        "key": "count",
+        "label": "Count only",
+        "lose": "No dollar figure before you confirm."
+      }
+    ],
+    "owner": "tcgtracking",
+    "pick": "setting",
+    "ref": "TCGTracking API docs: first 100 labels free, then a fee shown only in the dashboard",
+    "status": "closed",
+    "title": "How should the label preview show cost?",
+    "why": "A dollar figure before a spend is what a preview is for."
+  },
+  "tcgt-insurance": {
+    "added": "2026-10-28T03:04:00Z",
+    "context": "Envelope orders are under $50.",
+    "home": "D-tcgtracking-pipe",
+    "id": "tcgt-insurance",
+    "kind": "decision",
+    "n": 110,
+    "options": [
+      {
+        "gain": "No surprise charge.",
+        "how": "Insurance is never sent.",
+        "key": "never",
+        "label": "Never",
+        "lose": "No cover for a lost envelope."
+      },
+      {
+        "gain": "Cover when you want it.",
+        "how": "The preview has an insurance switch on each order, off by default.",
+        "key": "toggle",
+        "label": "A switch per order",
+        "lose": "One more control on the preview."
+      }
+    ],
+    "owner": "tcgtracking",
+    "pick": "never",
+    "ref": "TCGTracking pipe plan",
+    "status": "closed",
+    "title": "Should labels ever buy insurance?",
+    "why": "Envelopes are under $50, and TCGplayer's own cover applies once you pass 1,000 orders."
+  },
+  "tcgt-label-receipt": {
+    "added": "2026-10-28T03:04:00Z",
+    "context": "D193 keeps tracking off the order ledger today.",
+    "home": "D193 and D-tcgtracking-pipe",
+    "id": "tcgt-label-receipt",
+    "kind": "decision",
+    "n": 107,
+    "options": [
+      {
+        "gain": "Reprints work, a reload never buys a label twice, and scans show on screen.",
+        "how": "Keep TCGTracking's label id, the masked tracking number and the scan status. Never an address or the label file.",
+        "key": "receipt",
+        "label": "A label receipt per order",
+        "lose": "Some tracking data lives in the store."
+      },
+      {
+        "gain": "The store stays as it is.",
+        "how": "Banchi stores no label data.",
+        "key": "nothing",
+        "label": "Keep nothing",
+        "lose": "A reload could buy a second label."
+      }
+    ],
+    "owner": "tcgtracking",
+    "pick": "receipt",
+    "ref": "D193 (the ledger names the buyer); TCGTracking pipe plan",
+    "status": "closed",
+    "title": "What should Banchi keep about each label?",
+    "why": "It is the only option that stops a double purchase."
+  },
+  "tcgt-mark-shipped": {
+    "added": "2026-10-28T03:04:00Z",
+    "context": "TCGTracking has no way to mark an order shipped, and the tracking number it returns is masked.",
+    "home": "D-tcgtracking-pipe",
+    "id": "tcgt-mark-shipped",
+    "kind": "decision",
+    "n": 108,
+    "options": [
+      {
+        "gain": "Nothing is built on a guess.",
+        "how": "You keep marking orders shipped as today. Decide after the first live lookup shows whether the full number comes back.",
+        "key": "later",
+        "label": "You, for now; decide later",
+        "lose": "A manual step stays for now."
+      },
+      {
+        "gain": "No manual step.",
+        "how": "Banchi writes tracking to TCGplayer as part of this build.",
+        "key": "now",
+        "label": "Banchi, in this lane",
+        "lose": "It is built on an unknown: the number may be masked."
+      }
+    ],
+    "owner": "tcgtracking",
+    "pick": "later",
+    "ref": "TCGTracking API docs",
+    "status": "closed",
+    "title": "Who tells TCGplayer an order shipped?",
+    "why": "The full tracking number is unproven until the first live lookup."
+  },
+  "tcgt-money-rule": {
+    "added": "2026-10-28T03:04:00Z",
+    "context": "Three planners agree: labels are made on Shipping's envelope lane, behind a free preview and an explicit confirm, and take buyer addresses from the shipping file you already upload.\nToday D33 says exactly one route in Banchi can spend money. Labels would make a second.",
+    "home": "D33 and D-tcgtracking-pipe",
+    "id": "tcgt-money-rule",
+    "kind": "decision",
+    "n": 106,
+    "options": [
+      {
+        "gain": "Labels can ship from Banchi.",
+        "how": "Rewrite D33: two routes spend, each behind its own preview and confirm.",
+        "key": "two",
+        "label": "Two routes, each gated",
+        "lose": "One more place money leaves."
+      },
+      {
+        "gain": "Spending stays in one place.",
+        "how": "D33 stays as it is.",
+        "key": "one",
+        "label": "Keep one route",
+        "lose": "No labels in Banchi."
+      }
+    ],
+    "owner": "tcgtracking",
+    "pick": "two",
+    "ref": "D33 (the money gate); TCGTracking pipe plan",
+    "status": "closed",
+    "title": "May labels become a second place where Banchi spends money?",
+    "why": "Labels are the point of the pipe, and each spend still needs your preview and confirm."
+  },
+  "tcgt-shipper-env": {
+    "added": "2026-11-02T16:05:00Z",
+    "command": "echo 'TCG_TRACKING_SHIPPER_NUMBER=<your number>' >> /Users/shivinate/Developer/banchi/.env",
+    "context": "The label lanes need your TCGTracking shipper number in the main checkout's settings file.\nWhy yours: the env-file guard refuses every agent write to .env (tcgtracking session, 2026-10-27 23:51 CDT, and this session's read was refused 2026-11-02), and Claude in Chrome was not connected on two tries to look the number up in your TCGTracking account.",
+    "home": "D326, the TCGTracking pipe",
+    "id": "tcgt-shipper-env",
+    "kind": "task",
+    "links": [
+      {
+        "label": "TCGTracking",
+        "url": "https://tcgtracking.com"
+      }
+    ],
+    "minutes": 2,
+    "n": 113,
+    "owner": "banchi-coordinator",
+    "rank": 6,
+    "ref": "Item 105 (shipper number); D326, the TCGTracking pipe",
+    "short": "Shipper number in .env",
+    "status": "open",
+    "steps": [
+      "Find your shipper number in your TCGTracking account settings.",
+      "Paste the command below in a terminal, with your number in place of <your number>."
+    ],
+    "title": "Add your TCGTracking shipper number to Banchi's settings file"
+  },
+  "tcgtracking-direction": {
+    "added": "2026-10-27T19:40:00Z",
+    "context": "TCGplayer covers untracked envelopes up to $49.99 for orders from Aug 17, but only for sellers with 1,000+ lifetime orders. Your store holds 912 (850 not canceled), so that cover is close but not yet yours.",
+    "home": "docs/specs/order-pipeline.md",
+    "id": "tcgtracking-direction",
+    "kind": "decision",
+    "n": 101,
+    "options": [
+      {
+        "gain": "No spend.",
+        "how": "No tracked envelopes; nothing is bought or built now.",
+        "key": "stand-down",
+        "label": "Stand down envelope tracking",
+        "lose": "Untracked envelopes have no TCGplayer cover until you pass 1,000 orders."
+      },
+      {
+        "gain": "Parcels get tracking on TCGplayer with no typing.",
+        "how": "Banchi turns Pirate Ship tracking into TCGplayer's Import Shipping Info file, for parcels only. Free.",
+        "key": "parcels",
+        "label": "Build tracking-back for parcels",
+        "lose": "Needs one real Pirate Ship round from you to build against."
+      },
+      {
+        "gain": "Every envelope tracked.",
+        "how": "Pay for tracked envelopes, behind the money gate.",
+        "key": "buy",
+        "label": "Buy TCGTracking envelopes",
+        "lose": "The fee was never measured."
+      }
+    ],
+    "owner": "tcgtracking",
+    "pick": "stand-down",
+    "ref": "TCGTracking review, order-pipeline spec step 13",
+    "status": "closed",
+    "title": "Which way for shipping and tracking now?",
+    "why": "No spend now; you are close to the 1,000-order cover. Parcels can follow as a second step."
+  },
+  "tcgtracking-first-half": {
+    "added": "2026-10-27T20:50:00Z",
+    "context": "Reading tracking back moves no money. Labels cost a fee per label after your first 100 orders.",
+    "home": "docs/specs/order-pipeline.md",
+    "id": "tcgtracking-first-half",
+    "kind": "decision",
+    "n": 103,
+    "options": [
+      {
+        "gain": "No spend.",
+        "how": "Orders and Shipping show each order's tracking status, looked up by TCGplayer order number.",
+        "key": "read",
+        "label": "Read tracking back first",
+        "lose": "Labels stay in TCGTracking's own dashboard for now."
+      },
+      {
+        "gain": "Labels without leaving Banchi.",
+        "how": "Shipping's light lane makes labels, behind approve-before-spend.",
+        "key": "labels",
+        "label": "Labels first",
+        "lose": "Costs money, and needs a live buyer-address fetch nobody has proven yet."
+      },
+      {
+        "gain": "Done sooner.",
+        "how": "Build both halves together.",
+        "key": "both-one",
+        "label": "Both in one lane",
+        "lose": "A bigger, slower review."
+      }
+    ],
+    "owner": "tcgtracking",
+    "pick": "read",
+    "ref": "TCGTracking review round 2",
+    "status": "closed",
+    "title": "Which half of the TCGTracking pipe first?",
+    "why": "No spend, and it proves the connection before money moves."
+  },
+  "tcgtracking-pipe-routing": {
+    "added": "2026-10-27T20:50:00Z",
+    "context": "TCGTracking has a documented API: your key plus shipper number, label create, tracking lookup by TCGplayer order number, no push notices. 'Token routing' fits more than one build.",
+    "home": "docs/specs/order-pipeline.md",
+    "id": "tcgtracking-pipe-routing",
+    "kind": "decision",
+    "n": 102,
+    "options": [
+      {
+        "gain": "No browser extension in the middle.",
+        "how": "Banchi's server holds your key from its local settings file and calls TCGTracking directly.",
+        "key": "server",
+        "label": "Banchi's server calls the API",
+        "lose": "A second place that can spend money, so it needs an approve-before-spend screen."
+      },
+      {
+        "gain": "Less to build.",
+        "how": "The Bridge extension keeps importing orders; Banchi only reads tracking back.",
+        "key": "extension",
+        "label": "Keep the extension, Banchi reads back",
+        "lose": "Rests on a beta extension."
+      }
+    ],
+    "owner": "tcgtracking",
+    "pick": "server",
+    "ref": "TCGTracking review round 2; your words: 'a stronger pipe to and from banchi and tcgtracking'",
+    "status": "closed",
+    "title": "How should Banchi and TCGTracking connect?",
+    "why": "One pipe you control, and spending stays behind a screen you approve."
+  },
+  "tcgtracking-probe": {
+    "added": "2026-10-27T20:50:00Z",
+    "context": "No call has ever reached TCGTracking from Banchi. The test: one tracking lookup for one recent envelope order. The key is loaded from the settings file and never shown or printed. The docs bill only label creation, so a lookup should cost nothing; that is read from the docs, not measured.",
+    "home": "docs/specs/order-pipeline.md",
+    "id": "tcgtracking-probe",
+    "kind": "decision",
+    "n": 104,
+    "options": [
+      {
+        "gain": "Proves the key and the API today.",
+        "how": "One read-only lookup, key loaded from the settings file.",
+        "key": "agent",
+        "label": "An agent runs it",
+        "lose": "An agent uses your key once."
+      },
+      {
+        "gain": "The key never touches an agent.",
+        "how": "You get the exact command and paste it into your terminal.",
+        "key": "owner",
+        "label": "You run it",
+        "lose": "A step for you."
+      },
+      {
+        "gain": "Nothing touches the API now.",
+        "how": "No call until the build starts.",
+        "key": "later",
+        "label": "Not yet",
+        "lose": "The design rests on the docs alone."
+      }
+    ],
+    "owner": "tcgtracking",
+    "pick": "agent",
+    "ref": "TCGTracking review round 2",
+    "status": "closed",
+    "title": "May an agent make one test call to TCGTracking?",
+    "why": "A read-only lookup costs nothing per the docs, and it settles the unknowns before building."
+  },
+  "tcgtracking-shipper-number": {
+    "added": "2026-10-28T02:59:00Z",
+    "context": "The key check stopped before any call. Banchi's settings file (.env in the main checkout) holds your TCGTracking key but no shipper number, and TCGTracking needs both on every call. Only you can see the number: it is in your TCGTracking dashboard. No call was made, and the key was never printed.",
+    "home": "D-tcgtracking-pipe (TCGTracking pipe decision)",
+    "id": "tcgtracking-shipper-number",
+    "kind": "task",
+    "links": [],
+    "minutes": 2,
+    "n": 105,
+    "owner": "tcgtracking",
+    "ref": "Item 104 (one read-only key check by an agent)",
+    "status": "closed",
+    "steps": [
+      "Open your TCGTracking dashboard and copy your shipper number.",
+      "Open .env in the main Banchi checkout (/Users/shivinate/Developer/banchi/.env).",
+      "Add a line: TCG_TRACKING_SHIPPER=<your number>",
+      "Save, then press Done here. The agent then runs the one read-only lookup."
+    ],
+    "title": "Add your TCGTracking shipper number to Banchi's settings file"
+  },
+  "tcgtracking-who-ships": {
+    "added": "2026-10-27T19:40:00Z",
+    "context": "Banchi's spec bans writing tracking back to TCGplayer because 'TCGTracking owns mark-shipped'. If that is no longer true, the ban rests on nothing.\nQuick check: open one recent shipped order in the seller portal and see whether it carries a carrier and tracking number.",
+    "home": "docs/specs/order-pipeline.md",
+    "id": "tcgtracking-who-ships",
+    "kind": "decision",
+    "n": 100,
+    "options": [
+      {
+        "gain": "The spec's ban stays right.",
+        "how": "It marks orders shipped and enters tracking.",
+        "key": "tcgtracking",
+        "label": "TCGTracking's extension",
+        "lose": "Nothing changes."
+      },
+      {
+        "gain": "Banchi could send Pirate Ship tracking back to TCGplayer.",
+        "how": "Labels and tracking come from Pirate Ship.",
+        "key": "pirateship",
+        "label": "Pirate Ship",
+        "lose": "The ban needs rewriting."
+      },
+      {
+        "gain": "A clear job for Banchi to take over.",
+        "how": "You mark shipped and type tracking yourself.",
+        "key": "hand",
+        "label": "By hand",
+        "lose": "The ban needs rewriting."
+      }
+    ],
+    "owner": "tcgtracking",
+    "pick": "tcgtracking",
+    "ref": "order-pipeline spec T5 (no writing tracking back), D61 (shipping three lanes)",
+    "status": "closed",
+    "title": "Who marks your orders shipped and enters tracking today?",
+    "why": "The spec assumes it; your answer confirms or retires that premise."
+  },
+  "typed-live-price": {
+    "added": "2026-10-28T04:55:00Z",
+    "context": "Goal: price a live listing by typing it on the one list.\nProblem: today a typed price on a live listing, sent with no new copy, is refused. Item 37 approved kept suggestions only, so allowing typed prices opens that refusal again for an act you have not named.\nBased on: your item 37 'merge' answer (ruling); the spec line 'one send takes new copies, kept suggestions and typed prices' (spec).\nPricing builds it as a separate commit, held out of the batch until you answer.",
+    "home": "pricing-suggest spec and the one-list wire lane",
+    "id": "typed-live-price",
+    "kind": "decision",
+    "n": 112,
+    "options": [
+      {
+        "gain": "The one list does what the spec says.",
+        "how": "A typed live price goes out like a kept suggestion, under the same checks: a fresh price reading and the cap.",
+        "key": "allow",
+        "label": "Allow it",
+        "lose": "One more way past the refusal."
+      },
+      {
+        "gain": "No new path.",
+        "how": "Typed live prices go out only with new copies in the same send.",
+        "key": "refuse",
+        "label": "Keep the refusal",
+        "lose": "Repricing one listing needs a new copy alongside, or a kept suggestion instead."
+      }
+    ],
+    "owner": "banchi-coordinator",
+    "pick": "allow",
+    "rank": 3,
+    "ref": "Item 37 (one-list merge); pricing-suggest spec section 5",
+    "status": "open",
+    "title": "May a typed price on a live listing go out by itself?",
+    "why": "Same checks as kept suggestions, and it is what the spec already promises."
+  },
+  "waiting-page-link-rollout": {
+    "added": "2026-10-27T17:20:00Z",
+    "context": "PR 966 writes this page's link into Banchi's layout extras file. That same file tells the shared tools Banchi uses the shared record layout. Then the merge tool rebuilds a records page, which needs a one-line summary in every decision and debt record. About 300 decisions and 90 debts have none, so every merge would be refused.\nI dropped PR 966 from the batch so the other four can merge. Nothing else needs the link file: lanes bring their questions to me, and I know the page.",
+    "home": "PR 966",
+    "id": "waiting-page-link-rollout",
+    "kind": "decision",
+    "n": 91,
+    "options": [
+      {
+        "gain": "No work, and merges keep working.",
+        "how": "Close it for now. The page keeps working; the link lives in my handoff.",
+        "key": "park",
+        "label": "Park PR 966",
+        "lose": "Shared tools that look up a repo's waiting page find none for Banchi."
+      },
+      {
+        "gain": "Banchi's records show on the shared records page, and the link is found by every tool.",
+        "how": "A records lane adds a summary line to every decision and debt record, then PR 966 merges.",
+        "key": "rollout",
+        "label": "Move Banchi to the shared record layout",
+        "lose": "A large records-only change touching about 390 files."
+      }
+    ],
+    "owner": "orchestrator",
+    "pick": "park",
+    "ref": "PR 966 (waiting-page link in the layout extras file)",
+    "status": "closed",
+    "title": "Park the waiting-page link file, or move Banchi's records to the shared layout?",
+    "why": "The link file buys little today, and the roll-out is a large change nobody asked for yet."
+  }
+}

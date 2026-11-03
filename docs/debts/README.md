@@ -94,4 +94,14 @@ DEBT101 a sent copy whose SKU left the live export is refused every time
 DEBT102 a send writes its import file outside the store lock
 DEBT103 A nightly sweep that stops still ends the job with exit 0
 DEBT104 a death between an Unhold's receipt write and its store commit leaves the mark without the change
+DEBT105 focus does not land on Add a Slab after Remove on an empty list
+DEBT106 a package install in design-check can fail a shard on a mirror stall
+DEBT107 the browser-scope self-test went red on main in three runs
+DEBT108 two capture timing checks go red on design-check shard 4
+DEBT109 the assertion after Escape goes red on the CI runner, and the cause is unread
+DEBT110 the merge-speed guard's 10 s wall-clock backstop can fail on a loaded machine
+DEBT111 the palette input's focus check goes red on design-check shard 8
+DEBT112 the Capture screen's sweep read is counted as still asking after the screen is left
+DEBT113 three design-check tests went red once on main, with no cause read
+DEBT114 the waiting-page export scan misses some address and key shapes
 ```

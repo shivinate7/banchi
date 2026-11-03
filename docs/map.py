@@ -1,6 +1,6 @@
 """The repo, as data. One Read answers "what is built, what is TBD, what governs this file".
 
-Written because that question kept costing a subagent sweep and a quarter-million tokens to
+Written because that question kept costing an agent sweep and a quarter-million tokens to
 re-derive from prose that already knew the answer. `docs/GATES.md` has the build order,
 `docs/decisions/` has the rulings, `README.md` has the layout — but all three are prose,
 and prose has to be read in full before it can be trusted.
@@ -370,7 +370,7 @@ COMPONENTS = [
                                             "D87", "D100", "D145", "D172", "D189", "D210",
                                             "D213", "D219", "D239", "D242",
                                             "D259",
-                                            "D273"],
+                                            "D273", "D324"],
                             "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
@@ -465,6 +465,16 @@ COMPONENTS = [
             # THE BACKFILL PRESS OVER EVERY EXPORT ALREADY ON DISK (identity-follows-sku.md
             # §3.2, lane 0). `store/skus.py`'s never-delete argument means this is a FOLD
             # onto whatever the table already holds, never `readings adopt`'s full replace.
+            "cmd_holdingsroster.py": {
+                "does": "`banchi holdings-roster <csv>` — the owner's investment roster valued at "
+                        "this store's prices (D324). One-off and read-only: opens the store "
+                        "through `store/db.py:open_read_only` (or `--store PATH`), reads the "
+                        "`skus` rows and `price_history` through their `TableSpec` parse, and "
+                        "prints `pipeline/rosterholdings.py`'s report. A malformed roster "
+                        "prints the reason and exits 1. No screen, on D324's word.",
+                "governed_by": ["D324"],
+                "tested_by": [],
+            },
             "cmd_skus.py": {"does": "`banchi skus adopt` runs `pipeline/skus.py:fill` "
                                     "against an in-memory copy of the table for a preview, "
                                     "or against the real, lock-held snapshot on `--write` — "
@@ -1413,6 +1423,21 @@ COMPONENTS = [
             # (D212); quantity is the `cards` table's own state, never the marketplace
             # mirror. The series source is the archive (D219), one range at a time,
             # never merged (D278).
+            "rosterholdings.py": {
+                "does": "`read_roster` keeps a roster CSV's TCG purchases that are not canceled "
+                        "and drops every counterparty column at read, counting the rest by "
+                        "reason. `build_roster_report` joins each line to a product on its "
+                        "product id, through a crosswalk read from the archive's own "
+                        "`product_id` column (any range, id 0 never a key), then prices a "
+                        "matched line from the one Near Mint SKU of its finish with a latest "
+                        "`month` market (`PriceArchive.for_sku` only). `pipeline/join.py`'s set "
+                        "and name folds stay as a cross-check that lists store-side lines. "
+                        "Every kept line lands in exactly one of priced, unpriced or "
+                        "unmatched; the report names product ids, counts and money only. Sits beside `holdings.py`, which values "
+                        "the store's own stock.",
+                "governed_by": ["D324"],
+                "note": "PROVED BY `make rosterholdings-selftest`, PATH GATED (D247).",
+            },
             "holdings.py": {"does": "`on_hand_quantities`/`on_hand_names` walk the `cards` "
                                     "table once for every SKU not in `TERMINAL_STATES`. "
                                     "`sealed_excluded_count` counts a distinct ledger SKU "
@@ -2044,10 +2069,14 @@ COMPONENTS = [
                                   "applies on top of `unfulfilled`; an unrecognised status "
                                   "answers False and changes nothing, the fail-safe direction. "
                                   "`scripts/docs-audit.py:check_terminal_statuses` reconciles "
-                                  "the set against its own published copy in the D63 entry.",
+                                  "the set against its own published copy in the D63 entry. "
+                                  "`Ledger.labels` (D326) is a third mapping, one `LabelRow` per "
+                                  "TCGplayer order number: a claim written before a TCGTracking "
+                                  "create, replaced by the whole answer, the label PDF, the "
+                                  "insurance switch and the last scan.",
                           "governed_by": ["D7", "D10", "D13", "D16", "D20", "D21", "D24", "D26",
                                           "D29", "D36", "D138", "D63", "D69", "D88", "D113",
-                                          "D193"],
+                                          "D193", "D326"],
                           "tested_by": ["T7"]},
             "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88", "D317"],
                          "tested_by": ["T7"]},
@@ -2254,10 +2283,11 @@ COMPONENTS = [
                               "into it — under the lock, files moved to legacy-json/ with a receipt. "
                               "`events_named` (D134) is an unindexed `WHERE event = ?` scan over "
                               "that same table — no new index, because this repo has no schema "
-                              "migration to add one to a store already on disk.",
+                              "migration to add one to a store already on disk. The `labels` table (D326) is "
+                              "created on every open that lacks it, with no version of its own.",
                       "governed_by": ["D20", "D26", "D58", "D86", "D88", "D134", "D140", "D145",
                                       "D166", "D172", "D174", "D189", "D192", "D213", "D219",
-                                      "D243", "D294", "D273", "D299", "D320"],
+                                      "D243", "D294", "D273", "D299", "D320", "D326"],
                       "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
@@ -2770,7 +2800,7 @@ COMPONENTS = [
                         "root, and `_ownership_verdict` decides whether THIS caller — read from "
                         "`CLAUDE_CODE_SESSION_ID` — may stop a pid tagged that way. A bare "
                         "`--confirm` from the top-level session is D127's original sweep, "
-                        "untouched; the same bare `--confirm` from a subagent stops only pids "
+                        "untouched; the same bare `--confirm` from an agent stops only pids "
                         "tagged with its OWN session id, and an explicit `pid:`/`port:`/"
                         "`match:` may still take an UNTAGGED pid but never one tagged to another "
                         "session, for either caller.",
@@ -3301,6 +3331,16 @@ COMPONENTS = [
                         "`getHoldingsValue`.",
                 "governed_by": ["D18", "D278", "D277", "D189", "D212", "D219", "D236", "D247"],
             },
+            "rosterholdings-selftest.py": {
+                "does": "proves pipeline/rosterholdings.py against a roster CSV string, a "
+                        "SKU list and a PriceArchive built in the file (`D324`) — no store "
+                        "on disk, no network. Covers the TCG-purchase filter and excluded "
+                        "counts, the privacy floor, the product-id join, the set and name "
+                        "cross-check, unmatched lines on both sides, the Near Mint printing pick, one "
+                        "bucket per kept line, and the report's opening lines and coverage "
+                        "line. PATH GATED (`D247`).",
+                "governed_by": ["D247", "D324"],
+            },
             "reap-selftest.sh": {
                 "does": "proves reap.py by pointing it at processes it must not kill. A "
                         "throwaway checkout, a throwaway sibling standing in for "
@@ -3587,6 +3627,13 @@ COMPONENTS = [
                         "is deleted, an unmerged one is kept.",
                 "governed_by": ["D18", "D138"],
             },
+            "ci-skip-count.sh": {
+                "does": "the one reader of a CI shard's skip count: `check.yml`'s matrix step and "
+                        "its `ci-static` job call it over the shard's log. It prints "
+                        "`skipped in <target>: ...` to the job log and the step summary, and "
+                        "never fails: the calling step keeps make's exit code.",
+                "governed_by": ["D136"],
+            },
             "ignore-check.sh": {"does": "the other half of D47: `git check-ignore` over every path "
                                         "a worktree provisions, asserting each is ignored WHATEVER "
                                         "kind of thing is at it. That entry's own reopening "
@@ -3658,6 +3705,17 @@ COMPONENTS = [
                                             "directory, because the runner installs no browser "
                                             "binaries. Never in the git hook: D18, it writes.",
                                     "governed_by": ["D16", "D18"]},
+            "waiting-export.py": {
+                "does": "turns the waiting page's database, read by the page writer with "
+                        "ArtifactData `list` and `out_dir` into a scratch folder, into "
+                        "`docs/waiting/`'s four files. Scans every string for tokens, keys, "
+                        "passwords, cookies, emails, phone numbers and street addresses "
+                        "first, and writes nothing on a hit. `--calls` prints the page URL "
+                        "and the reads to make. `--selftest` is `make waiting-export-selftest`: "
+                        "red on a fake token, email, key, address and password, green on a "
+                        "clean export, and no rewrite when nothing changed.",
+                "governed_by": ["D327", "D18"],
+            },
             "port-agreement.py": {
                 "does": "proves `server/ports.py` and `app/devPort.ts` still answer the same "
                         "numbers. One algorithm in two languages that cannot import each "
@@ -4752,13 +4810,6 @@ COMPONENTS = [
                         "renders in memory and compares.",
                 "governed_by": ["D18"],
             },
-            "readme_links.py": {
-                "does": "Lists every external http(s) link in README.md and exits 1 naming "
-                        "each dead one (HEAD, then GET, one retry). Run weekly by "
-                        "`.github/workflows/readme-links.yml`, never by a pull request, so a "
-                        "flaky site cannot turn one red. It gates nothing in `make check`.",
-                "governed_by": ["D18"],
-            },
             "tests_page.py": {
                 "does": "`make tests-page` — writes `docs/TESTS.md`, one page of what "
                         "each test file protects. It reads the `Protects:` and `Governs:` lines "
@@ -5002,18 +5053,17 @@ COMPONENTS = [
                 # Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D7", "D16", "D17", "D18", "D25", "D26", "D36", "D42", "D43",
-                                "D47", "D180", "D138", "D54", "D58", "D60", "D278", "D63", "D65",
-                                "D67", "D68", "D74", "D76", "D80", "D82", "D83", "D86",
-                                "D87", "D88", "D89", "D92", "D104", "D122", "D123", "D127",
-                                "D133", "D135", "D137", "D158", "D140", "D141",
-                                "D23", "D149", "D277", "D160", "D162", "D166", "D167",
-                                "D171", "D172", "D173", "D176", "D178", "D183", "D189", "D212",
-                                "D213", "D215", "D219", "D222", "D231", "D224", "D225",
-                                "D227", "D280", "D234", "D236", "D239", "D240",
-                                "D242", "D243", "D247", "D252", "D253", "D254",
-                                "D256", "D261", "D271", "D275", "D193", "D269", "D295", "D301",
-                                "D320", "D196"],
+                "governed_by": ["D7", "D16", "D17", "D18", "D23", "D25", "D26", "D36", "D42", "D43",
+                                "D47", "D54", "D58", "D60", "D63", "D65", "D67", "D68", "D74",
+                                "D76", "D80", "D82", "D83", "D86", "D87", "D88", "D89", "D92",
+                                "D104", "D122", "D123", "D127", "D133", "D135", "D137", "D138",
+                                "D140", "D141", "D149", "D158", "D160", "D162", "D166", "D167",
+                                "D171", "D172", "D173", "D176", "D178", "D180", "D183", "D189",
+                                "D193", "D196", "D212", "D213", "D215", "D219", "D222", "D224",
+                                "D225", "D227", "D231", "D234", "D236", "D239", "D240", "D242",
+                                "D243", "D247", "D252", "D253", "D254", "D256", "D261", "D269",
+                                "D271", "D275", "D277", "D278", "D280", "D295", "D301", "D320", "D324",
+                                "D327"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -5190,7 +5240,7 @@ COMPONENTS = [
                 # D70 is the QR test the photograph step reuses from demo-photos.py. D61 is
                 # why the shipping export is written fresh rather than read (the store holds
                 # no address at all). D216 is why the recording runs offline.
-                "governed_by": ["D61", "D70", "D193", "D216", "D295", "D301"],
+                "governed_by": ["D61", "D70", "D193", "D216", "D295", "D301", "D326"],
             },
             "launchagent.py": {
                 "does": "the shared launchd install and remove for a daily job on the owner's "
@@ -5566,6 +5616,40 @@ COMPONENTS = [
         "governed_by": ["D16"],
     },
     {
+        "path": "docs/todo.md",
+        "status": "built",
+        "does": "the shared todo list: tasks a session caught and did not do, one line each. "
+                "Known gaps stay in docs/debts/.",
+        "governed_by": [],
+    },
+    {
+        "path": "docs/plans/README.md",
+        "status": "built",
+        "does": "the plans folder's short index: a plan holds the open lanes for work "
+                "too big for one pull request, one file per plan. None open.",
+        "governed_by": [],
+    },
+    {
+        "path": "docs/waiting/",
+        "status": "built",
+        "does": "the waiting page's database as a committed record: items.json, "
+                "answers.json, groups.json and meta.json, each keyed by document id. "
+                "Written only by `scripts/waiting-export.py`, never by hand, so any account "
+                "can read the page's questions and answers from the repo.",
+        "governed_by": ["D327"],
+        "note": "Only its README until the page writer's first export, after it removes the one closed "
+                "item that restates a concern the owner ruled out of the repo. No per-file "
+                "entries: this component declares no source_suffixes, so the orphan rule does "
+                "not scan it, the same arrangement `fixtures/` uses.",
+    },
+    {
+        "path": ".claude/rules/README.md",
+        "status": "built",
+        "does": "the shared rules-folder note, copied verbatim from claude-settings. Its "
+                "paths frontmatter keeps it out of every session's context.",
+        "governed_by": [],
+    },
+    {
         "path": "docs/specs/home-assistant.md",
         "status": "tbd",
         "does": "PROPOSAL, nothing built: the home tier. The always-on HA Green, its 2 TB drive, "
@@ -5736,7 +5820,7 @@ COMPONENTS = [
                                 "D192", "D193", "D196", "D203", "D212", "D213", "D219", "D225",
                                 "D227", "D231", "D251", "D252", "D258", "D259", "D260", "D261",
                                 "D262", "D264", "D271", "D273", "D277", "D278", "D294", "D298",
-                                "D299", "D301", "D320"],
+                                "D299", "D301", "D320", "D326"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -5934,41 +6018,56 @@ COMPONENTS = [
             "shipping_routes.py": {
                 "does": "the shipping seam (D69's second route): POST /shipping/batches reads "
                         "TCGplayer's Orders -> Export Shipping CSV into D61's three lanes and "
-                        "renders a Pirate Ship import file, GET .../file?name= hands those "
-                        "bytes to the browser, and DELETE .../<batch> drops the batch now "
-                        "rather than in half an hour. THE ONLY MODULE IN THIS SERVER THAT EVER "
+                        "renders a Pirate Ship import file for the parcel lane, GET .../file?name= "
+                        "hands those bytes to the browser, and DELETE .../<batch> drops the batch "
+                        "now rather than in half an hour. THE ONLY MODULE IN THIS SERVER THAT "
                         "HOLDS A BUYER'S REAL NAME AND STREET ADDRESS, AND THE ONLY ONE THAT "
                         "EMITS THEM — its own file for the mirror image of tcg_export.py's "
                         "reason, so 'where does the PII go' has one file to check. The batch "
-                        "table is an OrderedDict in this process's memory with a "
-                        "half-hour TTL and a four-batch cap; it touches no disk, which is what "
-                        "D61's pass-through-and-do-not-persist rule requires and what "
-                        "pipeline/pirateship.py returning bytes rather than a path exists to "
-                        "make possible. The batch id is 128 random bits because the file route "
-                        "is a GET and therefore not behind the origin gate. Two devices do not "
-                        "share a batch and a server restart drops every one — recorded rather "
-                        "than discovered, because make up reloads on any Python edit here. "
-                        "Nothing in it writes a file, opens a socket, reads a key, starts a "
-                        "child or takes the store lock. POST .../stamps is BUILT as of "
-                        "2026-09-05 — `do_shipping_stamps`, a client function, and a control "
-                        "on #/shipping, because a route is not a feature. Its blocker was an "
-                        "empty order ledger and the 2026-09-03 pulls cleared it. The wire "
-                        "already carried `stamp` per row and `stamps` per batch as nulls, so "
-                        "it changed no type and no component, exactly as predicted. MEASURED "
-                        "on the 20 real orders: 12 fit the three label corners and 8 do not, "
-                        "so a stamp register that stops per box is the reopening condition.",
+                        "table is an OrderedDict in this process's memory with a half-hour TTL "
+                        "and a four-batch cap; the batch holds the parcel blob, the parcels and "
+                        "the envelope-lane shipments, and touches no disk. The batch id is 128 "
+                        "random bits because the file route is a GET and therefore not behind "
+                        "the origin gate. Two devices do not share a batch and a server restart "
+                        "drops every one. POST .../stamps fills the three Rubber Stamp corners "
+                        "from the ledger. THE LABEL ROUTES (D326, T4 and T5): POST "
+                        ".../<batch>/labels previews for free and, on a confirm, buys one "
+                        "TCGTracking label per envelope-lane order through tcgtracking.py, "
+                        "claiming each order in the store before its create so a double press "
+                        "or a reload buys once; GET /shipping/labels lists the label rows; "
+                        "GET /shipping/labels/<order>/pdf serves the stored label; POST "
+                        "/shipping/labels/scans stores each label's scan status. It opens the "
+                        "store for the label rows only, never across a network call.",
                 # D61 is the lanes, the abstention, the weight and the PII rule; D63 is the
                 # ledger the stamps route reads; D69 is why the lane got a surface of its own
                 # rather than a badge on the order screen; D69 is the route. D58 is the stored
                 # index the stamps route speaks — its labels are `join.Position`'s, joined with
                 # " / " and never " · ", which would make a card boundary read as a section one.
-                "governed_by": ["D58", "D61", "D63", "D69"],
+                # D326 is the label routes and lifts D61's no-store rule for TCGTracking's answers;
+                # D33 is the money gate on a confirm; D88 is one Store.write per change.
+                "governed_by": ["D33", "D58", "D61", "D63", "D69", "D88", "D326"],
                 "tested_by": ["T7"],
                 "note": "T7 reaches it because that test imports the `server` package, and "
-                        "every refusal path is exercisable with no network. WHAT T7 CANNOT "
-                        "PROVE is that Pirate Ship's importer accepts the file this renders — "
-                        "that is on the far side of a seam no committed fixture can hold, and "
-                        "it is one upload by the owner.",
+                        "every refusal path is exercisable with no network; the label routes run "
+                        "against a loopback fake of TCGTracking (harness/tests/t7/labels.py). "
+                        "WHAT T7 CANNOT PROVE is that Pirate Ship's importer accepts the file "
+                        "this renders, or that the live TCGTracking answers as the fake does — "
+                        "both are on the far side of a seam no committed fixture can hold.",
+            },
+            "tcgtracking.py": {
+                "does": "THE ONE CLIENT OF TCGTracking (D326): create(body) buys a label, "
+                        "track(order_number=|tracking_number=) reads scan status, pdf(order_id) "
+                        "re-renders a label as bytes. Every call goes through pipeline/net.open "
+                        "(D319), a create as a write that is never retried after it may have "
+                        "been sent and follows no redirect. The key and the shipper number are "
+                        "read on every call through envfile.get_live, sent as headers, and "
+                        "appear in no answer, refusal, log line or store row; an upstream body "
+                        "is never quoted. Each failure is a TrackingRefused with a tracking_ "
+                        "code. The only file that names the TCGTracking host; an override is "
+                        "https or loopback http, and the default host is refused under the "
+                        "harness and CI.",
+                "governed_by": ["D326", "D319", "D65"],
+                "tested_by": ["T7"],
             },
             "slabs_routes.py": {
                 "does": "the My Slabs routes: POST /slabs adds a slab by cert (Card Ladder reads "
@@ -8257,7 +8356,9 @@ COMPONENTS = [
                                                "`history_begins` states where the source's own "
                                                "data starts; a fill older than that is listed "
                                                "separately as having no market data at all, "
-                                               "never plotted.",
+                                               "never plotted. `ProductChart` is exported and also takes "
+                                               "the owner's asking postings (a dashed step) and "
+                                               "a suggestion (one dot) for the floating card.",
                                        "governed_by": ["D50", "D196", "D212", "D218", "D219",
                                                        "D227", "D278", "D313"],
                                        "note": "No harness test -- a Playwright spec would be "
@@ -8278,6 +8379,19 @@ COMPONENTS = [
             # questions. D8 governs it for PriceHistory.tsx's reason, and harder — a reading
             # drawn one column from the field a listing price is typed into is one keystroke
             # from becoming a price, which is why no figure here is denominated in money.
+            "src/HistoryFloat.tsx": {"does": "the floating price-history card (spec pricing-suggest "
+                                             "9c): opens above a row when a price field takes "
+                                             "focus or its history door is pressed, draws "
+                                             "`ProductHistory.tsx:ProductChart` with the "
+                                             "owner's asking step line and the suggestion dot, "
+                                             "holds its size while history loads, takes focus "
+                                             "only in door mode. Also the `#/gallery` "
+                                             "`history-float` specimen.",
+                                     "governed_by": ["D313", "D278", "D227"]},
+            "src/HistoryFloat.css": {"does": "the card at `--bn-*` tokens only: fixed, "
+                                             "fixed-height chart box, 560px wide at 1440 and "
+                                             "384px below.",
+                                     "governed_by": ["D313", "D278", "D227"]},
             "src/PriceTrend.tsx": {"does": "the trend strip in a #/pricing row: a daily and a "
                                            "weekly sparkline with a signed percentage under "
                                            "each, in a real 168px column between the card and "
@@ -10226,6 +10340,15 @@ COMPONENTS = [
                         "payload); no real request is made and no store is touched. Not a "
                         "harness test; `make design-check` runs it.",
                 "governed_by": ["D278", "D212", "D219", "D227"],
+            },
+            "tests/history-float.spec.ts": {
+                "does": "the floating price-history card on `#/gallery`'s `history-float` "
+                        "section: opens by focus or by its door, sits above its row by default "
+                        "and below when there is no room, covers neither its row nor a price "
+                        "field, takes focus only in door mode, holds its size while history "
+                        "loads, and draws the product chart with the asking step line and the "
+                        "suggestion dot, in tokens and `.bn-money`. Two sizes, 11 cases each.",
+                "governed_by": ["D313", "D278", "D227"],
             },
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
