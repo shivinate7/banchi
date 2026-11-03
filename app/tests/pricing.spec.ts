@@ -4884,6 +4884,7 @@ for (const [how, leave, backOnLock] of [
     const lock = page.getByRole('button', { name: 'Keep Dunsparce off TCGplayer', exact: true })
     await lock.click()
     await expect(page.locator('.pricing-holdpanel'), 'the panel is open').toBeVisible()
+    expect(await floatDraws(page), 'no card was drawn before the panel closed').toBe(0)
     await leave(page)
     await expect(page.locator('.pricing-holdpanel'), 'the panel is closed').toHaveCount(0)
     await settleMotion(page)
