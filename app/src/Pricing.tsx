@@ -3372,7 +3372,7 @@ export function Pricing() {
               ) : null}
               <span className="pricing-col-trend" role="columnheader">Trend</span>
               {source.copies ? <span className="pricing-col-qty" role="columnheader">Qty</span> : null}
-              {oneList ? <span /> : null}
+              {oneList ? <span className="pricing-now-ghost" aria-hidden="true" /> : null}
               <SortHeader grid className="pricing-col-price" sortKey="asking" value={sort} onChange={setSort} rest={SORT_AT_REST}>{readView ? 'New price' : 'Price'}</SortHeader>
               {source.copies ? <span className="pricing-col-src" role="columnheader">From</span> : null}
               <span />
@@ -3930,13 +3930,14 @@ function PricingRow({
           track, so the field keeps its place in the price cell. */}
       {was === undefined ? null : (
         <span className="pricing-now">
+          <span className="pricing-now-ghost" aria-hidden="true" />
           {was === null || lockedWhy !== null || withheld ? null : (
-            <>
+            <span className="pricing-now-line">
               <span className="pricing-was">
                 Now <Money value={Number(was)} />
               </span>
               <Icon name="arrowRight" size={14} className="pricing-to" />
-            </>
+            </span>
           )}
         </span>
       )}
