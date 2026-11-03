@@ -18,12 +18,12 @@ owner's Mac, so it installs that committed output and builds the page (`--instal
 
 THE SCRUB IS BY CONSTRUCTION, NOT BY SEARCH. The order ledger holds one fact about a person,
 the buyer's display name (`store/orders.py:OrderRecord.buyer`, D193), and the owner's ruling
-keeps it whole. The store holds no address, email or phone, but for its label rows. The one file with addresses is
-TCGplayer's shipping export, which is not in the store at all, so this script WRITES one for
-the mirror's open orders, with every address field blank. The one table that does hold an
-address is `labels` (D326: TCGTracking's answers and label PDFs), and `build` empties it. One
-plain assert over the finished bundle, that file and the label table is the only check (the
-owner's ruling).
+keeps it whole. Outside the `labels` table the store holds no address, email or phone. That
+table holds TCGTracking's answers and label PDFs, which carry addresses (D326), so `build`
+empties it. The one file with addresses is TCGplayer's shipping export, which is not in the
+store at all, so this script WRITES one for the mirror's open orders, with every address field
+blank. One plain assert covers the finished bundle, that file and the label table, so a buyer's
+address that reaches any of the three stops the mirror before it is published.
 
 NOTHING HERE CONTACTS A NETWORK OR SPENDS MONEY. The recorder runs its server `--offline`.
 """
