@@ -115,34 +115,34 @@
      `.pricetrend-mini`, `.pricetrend { gap: var(--bn-2) }`) — 120px, not 64 — so the column was
      narrower than what it draws, and `overflow: hidden` cropped it flush against Lowest's own
      right edge with none of the caption's gap visible past it. */
-  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) minmax(0, 1fr) 72px 72px 128px [reason-end] 60px 136px 84px 80px;
+  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 128px [reason-end] 60px 136px 84px 80px;
   align-items: center;
   column-gap: var(--bn-2);
   padding: 0 var(--bn-3);
 }
 .pricing-list[data-copies='none'] .pricing-caption,
 .pricing-list[data-copies='none'] .pricing-row {
-  grid-template-columns: var(--pricing-send,) minmax(0, 1fr) 72px 72px 128px 136px 80px;
+  grid-template-columns: var(--pricing-send,) [item] minmax(0, 1fr) 72px 72px 128px 136px 80px;
 }
 /* THE RANGE 7D COLUMN IS DRAWN ONLY WHERE THE LIST HAS ROOM FOR IT (`RANGE_ROOM_PX` in Pricing.tsx), so
    its template is its own and the narrow rules below never meet it. */
 .pricing-list[data-range='some'] .pricing-caption,
 .pricing-list[data-range='some'] .pricing-row {
-  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) minmax(0, 1fr) 72px 72px 116px 128px [reason-end] 60px 136px 84px 80px;
+  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 116px 128px [reason-end] 60px 136px 84px 80px;
 }
 /* A LIST WITH LIVE LISTINGS has a track for what TCGplayer holds now, before the price. The narrow desk
    has its own below; a phone column has none. */
 .pricing-list[data-now='some'] .pricing-caption,
 .pricing-list[data-now='some'] .pricing-row {
-  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) minmax(0, 1fr) 72px 72px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 80px;
+  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 80px;
 }
 .pricing-list[data-range='some'][data-now='some'] .pricing-caption,
 .pricing-list[data-range='some'][data-now='some'] .pricing-row {
-  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) minmax(0, 1fr) 72px 72px 116px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 80px;
+  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 116px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 80px;
 }
 .pricing-list[data-range='some'][data-copies='none'] .pricing-caption,
 .pricing-list[data-range='some'][data-copies='none'] .pricing-row {
-  grid-template-columns: var(--pricing-send,) minmax(0, 1fr) 72px 72px 116px 128px 136px 80px;
+  grid-template-columns: var(--pricing-send,) [item] minmax(0, 1fr) 72px 72px 116px 128px 136px 80px;
 }
 .pricing-caption {
   min-height: var(--bn-8);
@@ -279,16 +279,18 @@ span.pricing-thumb { cursor: default; }
   .pricing-list[data-copies='some'] .pricing-row { grid-template-rows: auto auto; }
   .pricing-list[data-copies='some'] .pricing-row > * { grid-row: 1 / 3; }
   .pricing-list[data-copies='some'] .pricing-row > .pricing-id,
-  .pricing-list[data-copies='some'] .pricing-row > .pricing-ref,
+  .pricing-list[data-copies='some'] .pricing-refs > .pricing-ref,
   .pricing-list[data-copies='some'] .pricing-row > .pricing-col-trend { grid-row: 1; }
-  .pricing-list[data-copies='some'] .pricing-row > .pricing-reason { grid-row: 2; grid-column: 2 / reason-end; }
-  .pricing-list[data-send='some'][data-copies='some'] .pricing-row > .pricing-reason { grid-column: 3 / reason-end; }
+  .pricing-list[data-copies='some'] .pricing-row > .pricing-reason { grid-row: 2; grid-column: item / reason-end; }
   /* A row with no reason gives its second line to the name and figures, so the price source under the
      price on a narrow desk adds no height. */
-  .pricing-list[data-copies='some'] .pricing-row:not(:has(> .pricing-reason)) > :is(.pricing-id, .pricing-ref, .pricing-col-trend) { grid-row: 1 / 3; }
+  .pricing-list[data-copies='some'] .pricing-row:not(:has(> .pricing-reason)) > :is(.pricing-id, .pricing-col-trend),
+  .pricing-list[data-copies='some'] .pricing-row:not(:has(> .pricing-reason)) .pricing-refs > .pricing-ref { grid-row: 1 / 3; }
 }
 .pricing-reason[data-tone='warn'] { color: var(--bn-warn); }
 
+/* MARKET AND LOWEST ARE COLUMNS ON A DESK: the wrapper draws no box, so its two cells are the row's own. A narrow desk gives it a line under the facts (below). */
+.pricing-refs { display: contents; }
 .pricing-ref { position: relative; text-align: center; font-size: var(--bn-fs-md); color: var(--bn-ink); white-space: nowrap; }
 .pricing-ref[data-empty='true'] { color: var(--bn-ink-3); }
 .pricing-ref-label { display: none; }
@@ -505,28 +507,42 @@ span.pricing-thumb { cursor: default; }
 .pricing-photo-frame img { display: block; width: 100%; height: auto; aspect-ratio: auto 9 / 16; }
 .pricing-photo-caption { display: flex; justify-content: space-between; gap: var(--bn-2); margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
 
-/* ---- 720 and narrower desks: Lowest and the trend leave the row (the product view has both) --
+/* ---- 899 and narrower: the trend leaves the row (the product view has it), and Market and Lowest stop being columns --
    The history door takes 40px beside the lock, so the price column gives 16px back and the gap 4px: the name keeps the width its meta line needs. */
 @container bn-page (max-width: 899px) {
   .pricing-caption,
-  .pricing-row { --pricing-now-w: 72px; grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) minmax(0, 1fr) 76px 60px [reason-end] 112px 80px; column-gap: var(--bn-2); }
+  .pricing-row { --pricing-now-w: 72px; grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 60px [reason-end] 112px 80px; column-gap: var(--bn-2); }
   .pricing-to,
   .pricing-caption .pricing-col-src { display: none; }
   .pricing-list[data-copies='none'] .pricing-caption,
-  .pricing-list[data-copies='none'] .pricing-row { grid-template-columns: var(--pricing-send,) minmax(0, 1fr) 76px 112px 80px; }
+  .pricing-list[data-copies='none'] .pricing-row { grid-template-columns: var(--pricing-send,) [item] minmax(0, 1fr) 112px 80px; }
   .pricing-col-low,
-  .pricing-col-trend { display: none; }
+  .pricing-col-trend,
+  .pricing-caption .pricing-col-market { display: none; }
 }
 
-/* ---- a narrow desk: the price source sits under the price, as its own grid line ---------- */
+/* ---- a narrow desk: the price source sits under the price, as its own grid line ----------
+   Market and Lowest are one labelled line under the facts, from the item's left edge (list notes item 16), and the reason is the line under them.
+   Their sort is reached through the sort menu, since their headers went with their columns. */
 @container bn-page (min-width: 560px) and (max-width: 899px) {
+  .pricing-list .pricing-row > .pricing-refs { display: flex; flex-wrap: wrap; column-gap: var(--bn-3); grid-row: 2; grid-column: item / reason-end; min-width: 0; align-self: start; font-size: var(--bn-fs-sm); }
+  .pricing-list[data-copies='none'] .pricing-row > .pricing-refs { grid-column: item / -1; }
+  .pricing-refs .pricing-ref { display: block; text-align: left; font-size: var(--bn-fs-sm); }
+  .pricing-refs .pricing-col-low { display: block; }
+  .pricing-refs .pricing-ref-label { display: inline; color: var(--bn-ink-3); }
+  .pricing-refs .pricing-ref-age { position: static; display: inline; margin-left: var(--bn-1); }
   .pricing-list[data-now='some'] .pricing-caption,
-  .pricing-list[data-now='some'] .pricing-row { grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) minmax(0, 1fr) 76px 60px var(--pricing-now-w) [reason-end] 112px 80px; }
+  .pricing-list[data-now='some'] .pricing-row { grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 60px var(--pricing-now-w) [reason-end] 112px 80px; }
   .pricing-list[data-copies='some'] .pricing-row > .pricing-col-price,
   .pricing-list[data-copies='some'] .pricing-row > .pricing-now { grid-row: 1; align-self: end; }
   /* The reason runs under Qty and Now too, so they keep to the name line. */
   .pricing-list[data-copies='some'] .pricing-row > .pricing-col-qty { grid-row: 1; align-self: end; height: calc(var(--bn-8) + var(--bn-4)); padding-bottom: var(--bn-4); align-items: center; }
   .pricing-list[data-copies='some'] .pricing-row > .pricing-col-src { grid-row: 2; grid-column: -3 / -2; justify-self: end; align-self: start; }
+  /* THREE LINES A ROW: the item, the references, the reason. The tick and the photograph span them; the id and the buttons keep the first. */
+  .pricing-list[data-copies='some'] .pricing-row > :is(.pricing-send, .pricing-thumb) { grid-row: 1 / 4; }
+  .pricing-list[data-copies='some'] .pricing-row:not(:has(> .pricing-reason)) > :is(.pricing-id, .pricing-col-trend) { grid-row: 1; }
+  .pricing-list[data-copies='some'] .pricing-row > .pricing-reason { grid-row: 3; }
+  .pricing-list[data-copies='some'] .pricing-row > .pricing-acts { grid-row: 1; align-self: end; height: calc(var(--bn-8) + var(--bn-4)); padding-bottom: var(--bn-4); }
 }
 
 /* ---- a phone column: two lines a row, the field on the right with Market under it ---------- */

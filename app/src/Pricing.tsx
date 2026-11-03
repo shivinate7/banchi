@@ -1152,8 +1152,6 @@ export function Pricing() {
     return oneListSource(work, run, SECTIONS, { history: getPriceHistory, trends: getPriceTrends })
   }, [stamp, sheet, work, run])
   const oneList = listed.size > 0
-  /* THE NOW COLUMN TAKES THE RANGE COLUMN'S ROOM: with both, the item column would shrink to a few letters. */
-  const rangeOn = listWidth >= RANGE_ROOM_PX && !oneList
   /** Live listings are drawn in the one list under the server's groups, and they price from what the
    *  server suggests: the field opens on it, a typed price is held here until a send, and only a hold
    *  is ever stored for one. */
@@ -1430,20 +1428,28 @@ export function Pricing() {
     [answers, unpriced, isListed, listedTyped],
   )
 
+  /* A NEW COPY THAT CAN CARRY A TICK, by what it is, never by what is typed on it: the Send column's track exists while any such row is drawn, so
+     typing a price into the last waiting row (which stops it waiting) moves no other column (D313). */
+  const canTick = useCallback(
+    (row: PricingSku): boolean => !readView && source.kind === 'run' && !listed.has(row.sku) && !row.at_cap && serverGroup(row) === 'needs_you',
+    [readView, source, listed],
+  )
   /* A NEW COPY UNDER NEEDS YOU WAITS FOR A TICK (the mockup's list notes, item 9: nothing there goes by
      accident). It is held out of the send as a quantity of 0, the way a typed 0 is, until the owner ticks it or
      types a price. A copy with no price to send is not waiting on a tick: it waits on a price. */
   const tickableFresh = useCallback(
     (row: PricingSku): boolean => {
-      if (readView || source.kind !== 'run' || listed.has(row.sku) || row.at_cap || serverGroup(row) !== 'needs_you') return false
+      if (!canTick(row)) return false
       const standing = answerFor(row)
       if (isWithheld(standing) || typeof standing === 'string' || source.locked(row.sku) !== null) return false
       return !rowShare(row, standing).needsPrice
     },
-    [readView, source, listed, answerFor],
+    [canTick, source, answerFor],
   )
-  /** THE SEND COLUMN is drawn where any row can carry a tick: a live listing's suggestion, or a new copy that waits for one. */
-  const sendOn = useMemo(() => oneList || rows.some(tickableFresh), [oneList, rows, tickableFresh])
+  /** THE SEND COLUMN is drawn where any row can carry a tick: a live listing's suggestion, or a new copy that can wait for one. */
+  const sendOn = useMemo(() => oneList || rows.some(canTick), [oneList, rows, canTick])
+  /* THE SEND AND NOW COLUMNS TAKE THE RANGE COLUMN'S ROOM: with either, the item column would shrink to a few letters and its facts line run over three. */
+  const rangeOn = listWidth >= RANGE_ROOM_PX && !sendOn
   const waitsForTick = useCallback((row: PricingSku): boolean => tickableFresh(row) && ticks[row.sku] !== true, [tickableFresh, ticks])
   const askedFor = useCallback(
     (row: PricingSku): number | undefined => (waitsForTick(row) ? 0 : askedByHand(row.sku)),
@@ -3770,7 +3776,8 @@ function PricingRow({
       {!source.copies ? null : <PricingThumb at={first} name={sku.name} onOpen={onPhoto} imageUrl={sku.image_url ?? null} />}
 
       <div className="pricing-id">
-        <span className="pricing-name-line">
+        {/* THE WHOLE NAME, for the column that cuts it with an ellipsis. */}
+        <span className="pricing-name-line" title={displayName(sku.name, sku.row['Number'] ?? '')}>
           <ProductLink sku={sku.sku} name={sku.name} className="pricing-name">
             {displayName(sku.name, sku.row['Number'] ?? '')}
           </ProductLink>
@@ -3852,16 +3859,19 @@ function PricingRow({
         </span>
       )}
 
-      <span className="pricing-ref pricing-col-market" data-empty={sku.snap.market === null ? 'true' : undefined}>
-        <span className="pricing-ref-label">Market </span>
-        {/* The exact string `m` writes into the field; `Money` draws it to the same two places. */}
-        {sku.snap.market === null ? '—' : <Money value={Number(sku.snap.market)} />}
-        {/* THE AGE HAS ITS LINE ON EVERY ROW, drawn or not, so a refresh moves no row (D313). */}
-        <span className="pricing-ref-age">{age}</span>
-      </span>
-      <span className="pricing-ref pricing-col-low" data-empty={sku.snap.low === null ? 'true' : undefined}>
-        <span className="pricing-ref-label">Lowest </span>
-        {sku.snap.low === null ? '—' : <Money value={Number(sku.snap.low)} />}
+      {/* MARKET AND LOWEST ARE TWO COLUMNS ON A DESK AND ONE LABELLED LINE UNDER THE FACTS ON A NARROW ONE (list notes item 16): `display: contents` on a desk, a grid item of their own below it. */}
+      <span className="pricing-refs">
+        <span className="pricing-ref pricing-col-market" data-empty={sku.snap.market === null ? 'true' : undefined}>
+          <span className="pricing-ref-label">Market </span>
+          {/* The exact string `m` writes into the field; `Money` draws it to the same two places. */}
+          {sku.snap.market === null ? '—' : <Money value={Number(sku.snap.market)} />}
+          {/* THE AGE HAS ITS LINE ON EVERY ROW, drawn or not, so a refresh moves no row (D313). */}
+          <span className="pricing-ref-age">{age}</span>
+        </span>
+        <span className="pricing-ref pricing-col-low" data-empty={sku.snap.low === null ? 'true' : undefined}>
+          <span className="pricing-ref-label">Lowest </span>
+          {sku.snap.low === null ? '—' : <Money value={Number(sku.snap.low)} />}
+        </span>
       </span>
       {range === false ? null : (
         <span className="pricing-ref pricing-col-range" data-empty={typeof range === 'object' && range !== null ? undefined : 'true'}>
