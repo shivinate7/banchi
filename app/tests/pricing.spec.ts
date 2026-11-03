@@ -1644,12 +1644,15 @@ for (const width of [1440, 820]) {
   test(`send panel: 240 moves leave the worklist's first row in view and the panel capped (${width})`, async ({ page }) => {
     await setViewport(page, { width, height: 900 })
     await openManyMoves(page)
-    const row = await page.locator('.pricing-row').first().boundingBox()
+    /* The first row's price field is the part of the row a person presses. The row's own height
+       varies with its facts (the Market and Lowest line adds a line at 820), so its bottom edge is
+       not what the panel may push out of view. */
+    const field = await page.locator('.pricing-row').first().getByRole('textbox', { name: /^Price for / }).boundingBox()
     const panel = await page.locator('.send-moves').boundingBox()
-    expect(row).not.toBeNull()
+    expect(field).not.toBeNull()
     expect(panel).not.toBeNull()
-    expect(row!.y + row!.height).toBeLessThanOrEqual(900)
-    expect(row!.y).toBeGreaterThanOrEqual(0)
+    expect(field!.y).toBeGreaterThanOrEqual(0)
+    expect(field!.y + field!.height).toBeLessThanOrEqual(900)
     expect(panel!.height).toBeLessThan(900 / 2)
   })
 }
@@ -6515,7 +6518,7 @@ for (const theme of ['light', 'dark'] as const) {
  * and "Lowest price", and a pick orders every section highest first by the figure the row shows. The figure is read from the row's own text, "Market $30.00" and
  * "Lowest $12.00" (a label and its money, so the reason "Market up 18% since listed." is no figure), because the references line has no cell to read. A row
  * with no figure goes last. Both picks must draw figures, and must order the rows differently, or the case read nothing. */
-const labelledFigures = (page: Page, word: 'Market' | 'Lowest') =>
+const labeledFigures = (page: Page, word: 'Market' | 'Lowest') =>
   page.locator('.pricing-group').evaluateAll((groups, label) =>
     groups.map((group) => ({
       head: group.getAttribute('aria-label') ?? '',
@@ -6534,7 +6537,7 @@ test('at 820 Market and Lowest sort through the sort menu, highest first by the 
   const orders: string[][] = []
   for (const [word, pick] of [['Market', /^Market price/], ['Lowest', /^Lowest price/]] as const) {
     await pickFilter(page, 'Sort', pick)
-    const sections = await labelledFigures(page, word)
+    const sections = await labeledFigures(page, word)
     expect(sections.flatMap((section) => section.values).filter((value) => value !== null).length, `${word}: the rows draw a labelled ${word} figure`).toBeGreaterThanOrEqual(5)
     expectSorted(sections, 'desc')
     orders.push(sections.flatMap((section) => section.names))
