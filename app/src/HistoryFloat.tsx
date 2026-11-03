@@ -28,6 +28,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { titleCase } from './CardHero'
 import { describeFailure, failureTone, floatReadsKept, getFloatHistory, getFloatPriceFacts, type Failure } from './server'
 import type { PriceFacts, ProductHistoryPayload, ProductHistoryRange } from './types'
 import { Button, CardThumb, Icon, IconButton, Money, Notice, Section } from './kit'
@@ -278,8 +279,8 @@ export function HistoryFloatSpecimen() {
             />
             <IconButton
               icon="history"
-              label="Price history"
-              name={`Price history for ${r.name}`}
+              label={titleCase('Price history', true)}
+              name={`${titleCase('Price history', true)} for ${r.name}`}
               tabIndex={-1}
               onClick={(e) => setOpen({ row: i, mode: 'door', door: e.currentTarget })}
               {...{ 'data-float-door': '' }}

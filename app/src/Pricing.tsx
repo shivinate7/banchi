@@ -625,9 +625,9 @@ function byValue(a: PricingSku, b: PricingSku): number {
 
 /** THE ORDER IS TAKEN ONCE, ON ARRIVAL (D118, D181). A price typed on a row may give it a flag,
  *  and the chip appears on the row; the row does not move under the hand. The next load re-ranks. */
-type Arrival = { key: object; needs: ReadonlySet<string>; order: ReadonlyMap<string, number> }
+type Arrival = { key: object; needs: ReadonlySet<string>; order: ReadonlyMap<string, number>; keptAtLoad: ReadonlySet<string> }
 
-function takeArrival(key: object, rows: readonly PricingSku[]): Arrival {
+function takeArrival(key: object, rows: readonly PricingSku[], keptAtLoad: ReadonlySet<string>): Arrival {
   const needs = new Set<string>()
   const flagged: PricingSku[] = []
   const rest: PricingSku[] = []
@@ -644,7 +644,7 @@ function takeArrival(key: object, rows: readonly PricingSku[]): Arrival {
   closed.sort(byValue)
   const order = new Map<string, number>()
   for (const row of [...flagged, ...rest, ...closed]) order.set(row.sku, order.size)
-  return { key, needs, order }
+  return { key, needs, order, keptAtLoad }
 }
 
 /* ------------------------------------------------------------------------ small parts */
@@ -1485,8 +1485,10 @@ export function Pricing() {
   useEffect(() => {
     if (table === null || book === null) return
     if (arrival !== null && arrival.key === table) return
-    setArrival(takeArrival(table, partitioned.filter((row) => !listed.has(row.sku))))
-  }, [table, book, arrival, partitioned, listed])
+    /* THE HOLDS THE STORE ALREADY HAD: only these rows are filed behind the one kept-off press. A hold taken later keeps its row where it is (D313). */
+    const keptAtLoad = new Set(partitioned.filter((row) => isWithheld(answerFor(row))).map((row) => row.sku))
+    setArrival(takeArrival(table, partitioned.filter((row) => !listed.has(row.sku)), keptAtLoad))
+  }, [table, book, arrival, partitioned, listed, answerFor])
 
   /** THE PAIRS THE LIVE TAB WOULD SEND, and nothing else. A price written ON THIS VISIT (typed,
    *  a preset, or "Mark down") that is not the price the read showed. And a price stored on an
@@ -1843,8 +1845,8 @@ export function Pricing() {
         const group = closed.get(why)
         if (group === undefined) closed.set(why, [row])
         else group.push(row)
-      } else if (isWithheld(answerFor(row))) {
-        /* A KEPT-OFF ROW IS IN NONE OF THE THREE GROUPS (list-notes item 12): it draws only behind the one press, in a group of its own. */
+      } else if (isWithheld(answerFor(row)) && (filterHeld || arrival?.keptAtLoad.has(row.sku))) {
+        /* A ROW KEPT OFF BEFORE THIS LOAD IS IN NONE OF THE THREE GROUPS (list-notes item 12): it draws only behind the one press, in a group of its own. */
         if (filterHeld) kept.push(row)
       } else {
         /* THE SERVER'S WORD ON THE GROUP, never worked out here. */
@@ -2820,7 +2822,7 @@ export function Pricing() {
           icon="lock"
           variant={filterHeld ? 'primary' : 'default'}
           aria-pressed={filterHeld}
-          onClick={() => setFilterHeld((on) => !on)}
+          onClick={() => (filterHeld ? setFilterHeld(false) : showRows({}, true))}
         >
           {titleCase(`Show kept off (${held.length})`, true)}
         </Button>
@@ -3977,8 +3979,8 @@ function PricingRow({
       <span className="pricing-acts">
         <IconButton
           icon="history"
-          label="Price history"
-          name={`Price history for ${sku.name}`}
+          label={titleCase('Price history', true)}
+          name={`${titleCase('Price history', true)} for ${sku.name}`}
           className="pricing-door"
           tabIndex={withheld || lockedWhy !== null ? undefined : -1}
           onClick={(event) => {
