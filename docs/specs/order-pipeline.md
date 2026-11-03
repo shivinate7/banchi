@@ -314,8 +314,9 @@ call. `shipping_routes` keeps the envelope-lane shipments it parses today and dr
   insurance switch (off) and "Fee per your TCGTracking account"; then the confirm, progress read
   from the label list during the press, and a receipt with Print All and a per-order Reprint
   (`GET /shipping/labels/<pdf_token>/pdf`, the row's token, never the order number; the
-  stored file, free). A Labels list, read from the store, sits last on the page with Check Scans. `#/orders` shows one label word per order, read
-  with the orders, never on a buyer row (D69). `#/fulfillment` does not change. Mockups:
+  stored file, free). A Labels list, read from the store, sits last on the page with Check
+  Scans. `#/orders` shows one label word per order, read with the orders, never on a buyer row
+  (D69). `#/fulfillment` does not change. Mockups:
   `docs/design/shipping-labels.html` and `docs/design/orders-labels.html`, with their notes.
 
 **Done:** harness T7 (`harness/tests/t7/labels.py`) runs against a loopback fake that counts
