@@ -3610,7 +3610,12 @@ COMPONENTS = [
                         "`git worktree add` at `.claude/worktrees/<name>` on `worktree-<name>`, "
                         "cut from a fresh origin/main with --no-track (no shared .git/config write, so parallel "
                         "Agents do not race on its lock; the branch has no upstream), so githooks/post-checkout provisions it. "
-                        "Claude Code's own creation never fires post-checkout. Prints only the "
+                        "Claude Code's own creation never fires post-checkout. The add runs under a "
+                        "mkdir lock at `<git common dir>/banchi-worktree-add.lock` (`take_lock`, "
+                        "`release_lock`), so adds in one clone run one at a time: git reads a "
+                        "sibling's half-written worktree record otherwise. A live holder's pid "
+                        "in the lock makes it wait and say so, a dead pid is taken over, 120 s "
+                        "fails the creation. Prints only the "
                         "path on stdout; exits non-zero only when git cannot make the tree.",
                 "governed_by": ["D18"],
             },
@@ -3618,7 +3623,10 @@ COMPONENTS = [
                 "does": "`make worktree-create-selftest`: runs worktree-create.sh for four "
                         "names at once, five rounds, in a throwaway repo with an origin. Every "
                         "tree and branch must exist and no config.lock may remain. Red on the "
-                        "hook without --no-track.",
+                        "hook without --no-track. Arms for the add lock: a free lock, a lock "
+                        "held by a live pid (the add waits and says so), a lock with a dead "
+                        "pid (taken over); red on the hook without the lock. A sweep arm "
+                        "proves an old sibling run folder is removed and a new one stays.",
                 "governed_by": ["D18"],
             },
             "session-teardown-selftest.sh": {
