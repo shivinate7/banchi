@@ -2741,6 +2741,8 @@ export async function getPricing(name: string): Promise<PricingPayload> {
 /** Drops every kept table: a person pressed Reread, so the next ask goes to the server. */
 export function forgetPricing(): void {
   pricingTables.clear()
+  floatHistories.clear()
+  floatFacts.clear()
 }
 
 const PRICING_TABLE_TTL_MS = 5 * 60_000
