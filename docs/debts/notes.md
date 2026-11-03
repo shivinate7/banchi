@@ -31,3 +31,8 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - `server/send_routes.py`: a typed price with no new copy, on a SKU with no stored reading, skips the stale-reading check. The cap still holds against the live price.
 - `harness/tests/t7/one_list_wire.py` comments near the live-listing fixtures still say "30-day trigger"; the trigger is 14 days.
 - `app/src/HistoryFloat.tsx` `move()`: in a viewport with room neither above nor below, the card can sit under the send bar or over its row.
+- `#/pricing` at 820: a new copy's details take 2 lines ("Near Mint, set" then "number, rarity") where the mockup draws one, so rows are about 101px, not 90.
+- `#/pricing`: while a price is typed and its field keeps focus, the From chip and the send bar's "typed by you" figure keep their old words until blur.
+- `app/src/Pricing.css` `.pricing-refs .pricing-ref-age` at 820: a stale date pushes Lowest right and can wrap the line on a narrow item column with a $1,000+ price. Unmeasured.
+- `app/tests/pricing.spec.ts` "send panel: 240 moves": at 1440 it now bounds the first row's price field, not the row's bottom edge.
+- `#/pricing`: the Send column leaves after a reload once the owner's send clears the last waiting new copy.
