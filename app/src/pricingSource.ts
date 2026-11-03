@@ -26,6 +26,8 @@
 
 import type { IconName } from './kit'
 import type {
+  LiveGroup,
+  LiveListing,
   MarkdownSku,
   MarkdownTable,
   MergedSku,
@@ -166,6 +168,9 @@ function asRow(entry: MarkdownSku): MergedSku {
     game: '',
     row: entry.row,
     bucket: 'listable',
+    // THE SERVER'S GROUP. Absent only where it could not read the owner's settings: the row then
+    // waits for the owner, since going at the rule would be a guess.
+    group: entry.group ?? 'needs_you',
     name: entry.name,
     condition: entry.condition,
     set_name: cell('Set Name') ?? '',
@@ -281,6 +286,80 @@ export function markdownSource(
   }
 }
 
+/** A price off the wire, or null where there is none. The wire sends "0.00" for a figure it has no
+ *  reading for (as `pipeline/pricing.py:has_market_data` treats it), and a zero is never drawn as a price. */
+function pricedOrNull(value: string | null | undefined): string | null {
+  return value !== null && value !== undefined && Number(value) > 0 ? value : null
+}
+
+/** The group the server put a row in: a live listing's `group`, a new copy's `group`, or a markdown
+ *  entry's (`asRow` fills an absent one with Needs You). A row that arrives with none is not known to
+ *  be safe to send, so it files under Needs You and waits for a tick. The screen never works a group out itself. */
+export function serverGroup(row: PricingSku): LiveGroup {
+  return row.group ?? 'needs_you'
+}
+
+/** One live listing of the worklist as the row draws it, from the listing's own facts (name, set,
+ *  market, lowest) and nothing else: the wire carries them, so no second read is joined in. */
+function listedRow(listing: LiveListing): MergedSku {
+  const set = listing.set_name ?? ''
+  const named: MarkdownSku = {
+    sku: listing.sku,
+    standing: 'offered',
+    skip: null,
+    name: listing.name ?? `Listing ${listing.sku}`,
+    condition: '',
+    live: 0,
+    asking: listing.asking,
+    market: pricedOrNull(listing.market),
+    above_market: null,
+    at_risk: '0.00',
+    proposed: null,
+    presets: {},
+    cut: null,
+    given_up: null,
+    owned_since: null,
+    listed_since: null,
+    held_here: false,
+    last_sold: null,
+    priced_at: null,
+    row: { 'Set Name': set },
+  }
+  const row = asRow(named)
+  return {
+    ...row,
+    group: listing.group,
+    image_url: listing.image_url,
+    snap: { ...row.snap, now: listing.asking, low: pricedOrNull(listing.low) },
+  } as unknown as MergedSku
+}
+
+/** The one list's source: the worklist's new copies, then its live listings, one row per SKU.
+ *
+ *  A SKU that is both a new copy and a live listing is drawn once, as the new copy: its row already
+ *  carries what is live (`live_now`) and the price change a send names. Which group a row sits in is the
+ *  server's word (`group` on a new copy, `LiveListing.group` on a listing) and is never worked out here. */
+export function oneListSource(
+  work: PricingWorklist | null,
+  run: string | null,
+  sections: readonly SectionSpec[],
+  fetchers: {
+    history: (run: string, sku: string) => Promise<PriceHistoryPayload>
+    trends: (run: string, skus: string[]) => Promise<TrendsPayload>
+  },
+): { source: PricingSource; listed: ReadonlyMap<string, LiveListing> } {
+  const base = runSource(work, run, sections, fetchers)
+  const copies = new Set(base.rows.map((row) => row.sku))
+  const listed = new Map<string, LiveListing>()
+  const rows: MergedSku[] = [...base.rows]
+  for (const listing of work?.live ?? []) {
+    if (copies.has(listing.sku) || listed.has(listing.sku)) continue
+    listed.set(listing.sku, listing)
+    rows.push(listedRow(listing))
+  }
+  return { source: { ...base, rows }, listed }
+}
+
 /** The runs named on the hash. `run` repeats rather than carrying a comma list. */
 export function runsInHash(): string[] {
   return query().getAll('run').filter((name) => name !== '')
@@ -302,13 +381,6 @@ export function runsInHash(): string[] {
 export function markdownInHash(): string | null {
   const stamp = query().get('markdown') ?? ''
   return /^\d{8}-\d{6}$/.test(stamp) ? stamp : null
-}
-
-/** Whether the hash asks for the Live tab (D277, Q6): `?live`, or a markdown stamp. The tab
- *  with no stamp yet opens the newest read, or says there is none. */
-export function liveInHash(): boolean {
-  const asked = query()
-  return asked.has('live') || markdownInHash() !== null
 }
 
 function query(): URLSearchParams {

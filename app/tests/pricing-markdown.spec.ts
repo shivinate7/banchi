@@ -1,14 +1,15 @@
-// Protects: The Pricing Live tab reprices live TCGplayer listings and leaves the run-based Pricing flow untouched.
+// Protects: The one list on Pricing reprices live TCGplayer listings and leaves the new-copy flow untouched.
 // Governs: D28, D278, D103, D107, D118, D218, D273, D277
-import { HEAD_CENTER_PX, headOffsets, valueMeasures, VALUE_CENTER_PX, KEPT_LEFT_PX, KEPT_RIGHT_ZERO } from './shell'
+import { HEAD_CENTER_PX, headOffsets, refsBesideItem, valueMeasures, VALUE_CENTER_PX, KEPT_LEFT_PX, KEPT_RIGHT_ZERO } from './shell'
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleMotion } from './motionSettled'
+import { stubHistoryCard } from './routeFixtures'
 
 import type { MarkdownSku } from '../src/types'
 import { setViewport } from './phoneSwitch'
 
-/* `#/pricing` AS A LENS OVER LIVE TCGPLAYER LISTINGS (D103): the Live tab (D277, Q6).
+/* `#/pricing` AS A LENS OVER LIVE TCGPLAYER LISTINGS (D103): live listings are rows of the one list, with no tab (pricing-suggest spec, section 2; D277, Q6).
  *
  * ITS OWN FILE, AND `pricing.spec.ts` IS NOT TOUCHED. That suite is the gate the source seam
  * was built against: the run path had to keep passing it UNEDITED through every commit of this
@@ -222,7 +223,30 @@ async function open(
     })
   })
 
-  /* THE LIVE TAB READS THE LIST OF READS (D277, Q6): it names the newest one on its line. */
+  /* THE ONE LIST READS THE WORKLIST (pricing-suggest spec, section 2): no new copies here, and one live row
+     per fixture listing at the rule, in the shape `PricingWorklist.live` carries it. Registered after the
+     `/pricing$` stub above, which also matches this path, so this one answers. */
+  await page.route(
+    (url) => url.pathname === '/pipeline/pricing',
+    async (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          runs: [],
+          roster: [],
+          skus: [],
+          written_at: {},
+          skipped: [],
+          asked: [],
+          threshold: '0.49',
+          floor: '0.49',
+          live: skus.map((one) => ({ sku: one.sku, asking: one.asking, last_sold_at: null, group: 'at_rule', price: one.asking, source: 'Live', reason: '' })),
+        }),
+      }),
+  )
+
+  /* THE ONE LIST READS THE LIST OF READS (D277, Q6): it names the newest one on its line. */
   await page.route(/\/pipeline\/markdowns$/, async (route) =>
     route.fulfill({
       status: 200,
@@ -236,6 +260,9 @@ async function open(
   await page.route(/\/pipeline\/runs$/, async (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runs: [] }) }),
   )
+
+  /* THE PRICE-HISTORY CARD'S TWO READS: a price field in focus opens the card, which reads them. Not recorded in `wire`. */
+  await stubHistoryCard(page)
 
   await page.goto(options.route ?? ROUTE)
   await page.locator(VIEW).waitFor()
@@ -318,7 +345,7 @@ test('staleness is a filter and All is the default, which is the whole of the le
   await expect(page.locator('.pricing-row')).toHaveCount(2)
 })
 
-test('the Live tab draws the strips of the rows on screen, and asks no market host', async ({ page }) => {
+test('the one list draws the strips of the rows on screen, and asks no market host', async ({ page }) => {
   const at = Math.floor(Date.now() / 1000) - 3600
   const range = (name: string) => ({ range: name, from: '2026-08-01', to: '2026-08-30', fraction: '0.1', points: ['13.5', '15.2', '18.4'] })
   const entry = { at, ranges: [range('month'), range('annual')] }
@@ -746,9 +773,9 @@ for (const width of [390, 820]) {
 }
 
 
-/* THE LIVE TAB (D277, Q6): the Mark-down sheet is gone, and the lens is a tab on Pricing. */
+/* THE ONE LIST (D277, Q6; pricing-suggest spec, section 2): the Mark-down sheet is gone, and live listings are rows of the one list. */
 
-test('the Live tab with no read yet says so and offers the read, and nothing is fetched by itself', async ({ page }) => {
+test('the one list with no read yet says so and offers the read, and nothing is fetched by itself', async ({ page }) => {
   const wire: Wire[] = []
   await page.route(/\/pipeline\/markdowns$/, async (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ markdowns: [] }) }),
@@ -760,9 +787,23 @@ test('the Live tab with no read yet says so and offers the read, and nothing is 
   await page.route(/\/pipeline\/runs$/, async (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runs: [] }) }),
   )
-  await page.goto('/#/pricing?live')
+  await page.route(/\/pricing$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ corpus: { version: 1, policy: { rule: 'match', basis: 'market', sub_threshold: { flat: '0.49' }, threshold: '0.49' }, skus: {} }, path: '/tmp/prices.json', revision: 'rev-1' }) }),
+  )
+  /* THE WORKLIST HOLDS NOTHING: no new copies and no live listing. */
+  await page.route(
+    (url) => url.pathname === '/pipeline/pricing',
+    async (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ runs: [], roster: [], skus: [], written_at: {}, skipped: [], asked: [], threshold: '0.49', floor: '0.49', live: [] }),
+      }),
+  )
+  await page.goto('/#/pricing')
   await expect(page.getByText('Empty').first()).toBeVisible()
-  await expect(page.locator('.pricing-tabs').getByRole('button', { name: 'Live' })).toHaveAttribute('aria-pressed', 'true')
+  /* NO TAB BAR: live listings are rows of the one list, so there is no tab to press. */
+  await expect(page.locator('.pricing-tabs')).toHaveCount(0)
   /* THE READ IS A PRESS (D278's rule for anything that asks a remote host): opening the tab
      asks TCGplayer for nothing. */
   expect(wire).toHaveLength(0)
@@ -773,19 +814,19 @@ test('the Live tab with no read yet says so and offers the read, and nothing is 
   expect(wire).toHaveLength(0)
 })
 
-test('the Live tab opens the newest read, and its line says how the read was taken', async ({ page }) => {
+test('the one list opens the newest read, and its line says how the read was taken', async ({ page }) => {
   await open(page)
-  await page.goto('/#/pricing?live')
-  /* THE TAB WITH NO STAMP LANDS ON THE NEWEST READ, which is the only one `open` lists. */
-  await expect(page).toHaveURL(new RegExp(`markdown=${STAMP}`))
+  await page.goto('/#/pricing')
+  /* THE LIST WITH NO STAMP SHOWS THE NEWEST READ, which is the only one `open` lists, and draws no tab bar. */
+  await expect(page.locator('.pricing-tabs')).toHaveCount(0)
   await expect(page.locator('.pricing-rule-line')).toContainText('Not sold in 7 days, 10% under your asking price')
 })
 
-/* SPEC 7B, CHECK 19 (the Live tab half). The saved strips draw at first paint here too, with no
+/* SPEC 7B, CHECK 19 (the one list half). The saved strips draw at first paint here too, with no
  * press and no request at the market host. `Pricing.tsx` reads `savedRead` on the run tab only
  * (`trend={trends[sku] ?? (liveTab ? undefined : ...)}`), so a Live tab shows no strip until the
  * Trends press is made. */
-test('7b-19: the Live tab draws the saved strips of its own SKUs at first paint, with no press', async ({ page }) => {
+test('7b-19: the one list draws the saved strips of its own SKUs at first paint, with no press', async ({ page }) => {
   const at = Math.floor(Date.now() / 1000) - 3600
   const range = (name: string, points: string[]) => ({ range: name, from: '2026-08-01', to: '2026-08-30', fraction: '0.1', points })
   const strips = (sku: string) => ({ at, ranges: [range('month', ['13.5', '15.2', '18.4']), range('annual', ['29.1', '24.0', '19.2'])], sku })
@@ -821,7 +862,7 @@ test('Read again keeps its words and its place while it reads', async ({ page })
   }
 })
 
-test('the Live tab’s Download keeps its words and its place while it writes', async ({ page }) => {
+test('the one list’s Download keeps its words and its place while it writes', async ({ page }) => {
   await open(page)
   await page.route(/\/pipeline\/markdowns\/[^/]+\/apply$/, async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 1500)) // keep: stubbed answer held 1500 ms on purpose, a latency fixture
@@ -928,7 +969,8 @@ test('a card with no market price is never marked down, and leads the list for t
   await open(page, {
     skus: [
       live({ sku: '8608859', name: 'Articuno' }),
-      live({
+      /* STUB: the server's word on the row's group, as the field `group` (values of `LiveListing.group`). */
+      { ...live({
         sku: '9000001',
         name: 'Kai Sa',
         asking: '6000.0000',
@@ -937,12 +979,12 @@ test('a card with no market price is never marked down, and leads the list for t
         skip: 'no_market',
         proposed: null,
         row: { 'TCG Market Price': '' },
-      }),
+      }), group: 'needs_you' } as MarkdownSku,
     ],
     counts: { considered: 2, offered: 1, deferred: 0, refused: 1 },
   })
   const groups = page.locator('.pricing-group-head')
-  await expect(groups.first()).toContainText('No market price')
+  await expect(groups.first()).toContainText('Needs You')
   await expect(page.getByRole('textbox', { name: 'Price for Kai Sa' })).toHaveAttribute('placeholder', '6000.00')
   await page.getByRole('button', { name: 'Mark down 1' }).click()
   await expect(page.getByRole('textbox', { name: 'Price for Kai Sa' })).toHaveValue('')
@@ -1042,7 +1084,7 @@ test('an earlier stored price rides only when it is above the live price, and is
 })
 
 /* THE OWNER'S RULING, LEFT-BOX ROWS SIT LOWER (spec 7b-29; the Send tab's cases are in pricing.spec.ts).
- * On the Live tab, lens All, a row whose copies have ALL left the box (`on_hand` 0, from orders) sorts below
+ * In the one list, lens All, a row whose copies have ALL left the box (`on_hand` 0, from orders) sorts below
  * every row that still has a copy in a box, in the default order. Inside each half the old order holds
  * (market high to low, ties by name) and the No market price group stays on top. A header sort ignores the
  * rule. `on_hand` is the field the Send tab's worklist row already carries; a live row has none today.
@@ -1064,14 +1106,14 @@ function liveLeftBoxExpected(): [string, string[]][] {
     const rows = byMarket.filter((row) => (row.market === null) === needs)
     return [...rows.filter((row) => row.on_hand > 0), ...rows.filter((row) => row.on_hand === 0)].map((row) => row.name)
   }
-  return [['No market price', group(true)], ['With a market price', group(false)]]
+  return [['Needs You', group(true)], ['Suggested Changes', []], ['Going at the Rule', group(false)]]
 }
 async function openLiveLeftBox(page: Page): Promise<void> {
   await setViewport(page, { width: 1440, height: 900 })
   await open(page, {
     skus: LEFT_BOX_LIVE.map((row) =>
       // `on_hand` is not on `MarkdownSku` yet: the cast is the fixture stating the wire the rule needs.
-      ({ ...live({ sku: row.sku, name: row.name, market: row.market, row: { 'TCG Market Price': row.market ?? '' } as Record<string, string> }), on_hand: row.on_hand }) as MarkdownSku,
+      ({ ...live({ sku: row.sku, name: row.name, market: row.market, row: { 'TCG Market Price': row.market ?? '' } as Record<string, string> }), on_hand: row.on_hand, group: row.market === null ? 'needs_you' : 'at_rule' }) as MarkdownSku,
     ),
   })
   await expect(page.locator('.pricing-row')).toHaveCount(LEFT_BOX_LIVE.length)
@@ -1082,7 +1124,7 @@ const liveGroups = (page: Page) =>
   )
 const liveHead = (page: Page) => page.locator('.pricing-caption').getByRole('button', { name: /^Market/i })
 
-test('7b-29: Live tab, All lens: a row with every copy gone sorts below every row with a copy on hand, and the order inside each half holds', async ({ page }) => {
+test('7b-29: one list, All lens: a row with every copy gone sorts below every row with a copy on hand, and the order inside each half holds', async ({ page }) => {
   await openLiveLeftBox(page)
   const groups = await liveGroups(page)
   for (const [head, names] of groups) {
@@ -1092,17 +1134,17 @@ test('7b-29: Live tab, All lens: a row with every copy gone sorts below every ro
   expect(groups).toEqual(liveLeftBoxExpected())
 })
 
-test('7b-29: Live tab: the Market header sort ignores the left-box rule', async ({ page }) => {
+test('7b-29: one list: the Market header sort ignores the left-box rule', async ({ page }) => {
   await openLiveLeftBox(page)
   await liveHead(page).click()
-  const [, names] = (await liveGroups(page)).find(([head]) => head === 'With a market price')!
+  const [, names] = (await liveGroups(page)).find(([head]) => head === 'Going at the Rule')!
   const market = (name: string) => Number(LEFT_BOX_LIVE.find((row) => row.name === name)!.market)
   expect(names.map(market)).toEqual([...names.map(market)].sort((a, b) => b - a))
   const hands = names.map(liveHandOf)
   expect(hands.some((value, at) => value === 0 && hands.slice(at + 1).some((later) => later > 0)), 'the sort was reordered by the rule').toBe(true)
 })
 
-test('7b-29: Live tab: the default order, back from a sort and after a reload, keeps the rule', async ({ page }) => {
+test('7b-29: one list: the default order, back from a sort and after a reload, keeps the rule', async ({ page }) => {
   await openLiveLeftBox(page)
   for (let press = 0; press < 3; press += 1) await liveHead(page).click()
   expect(await liveGroups(page)).toEqual(liveLeftBoxExpected())
@@ -1113,14 +1155,22 @@ test('7b-29: Live tab: the default order, back from a sort and after a reload, k
 
 for (const theme of ['light', 'dark'] as const) {
   for (const width of [1440, 820]) {
-    test(`7b-30: every header label but Item is centered over its column on the Live tab at ${width} in ${theme}`, async ({ page }) => {
+    test(`7b-30: every header label but Item is centered over its column in the one list at ${width} in ${theme}`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: theme })
       await setViewport(page, { width, height: 900 })
       await open(page)
-      await page.goto('/#/pricing?live')
+      await page.goto('/#/pricing')
       await expect(page.locator('.pricing-row').first()).toBeVisible()
-      for (const { column, off } of await headOffsets(page)) {
+      const heads = await headOffsets(page)
+      for (const { column, off } of heads) {
         expect.soft(Math.abs(off), `${column}: label is ${off.toFixed(1)}px off`).toBeLessThanOrEqual(HEAD_CENTER_PX)
+      }
+      /* AT 820 THE LABELS LEFT TO CENTER ARE PRICE AND ITEM: Market and Lowest are one labelled line under the facts line, not columns (list notes item 16). */
+      if (width === 820) {
+        const measured = heads.map((one) => one.column)
+        expect(measured, 'the Price label is measured at 820').toContain('price')
+        expect(measured, 'no Market label is a column header at 820').not.toContain('market')
+        expect(measured, 'no Lowest label is a column header at 820').not.toContain('low')
       }
     })
   }
@@ -1128,14 +1178,21 @@ for (const theme of ['light', 'dark'] as const) {
 
 for (const theme of ['light', 'dark'] as const) {
   for (const width of [1440, 820]) {
-    test(`7b-31: Live tab Market, Lowest and Range 7d values are centered in their cell, the others have not moved, at ${width} in ${theme}`, async ({ page }) => {
+    test(`7b-31: one list Market, Lowest and Range 7d values are centered in their cell, the others have not moved, at ${width} in ${theme}`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: theme })
       await setViewport(page, { width, height: 900 })
       await open(page)
-      await page.goto('/#/pricing?live')
+      await page.goto('/#/pricing')
       await expect(page.locator('.pricing-row').first()).toBeVisible()
-      const seen = await valueMeasures(page)
-      expect(seen.some((m) => m.column.startsWith('market'))).toBe(true)
+      const seen = await valueMeasures(page, width)
+      if (width === 820) {
+        /* AT 820 MARKET AND LOWEST ARE NOT CELLS (list notes item 16): `valueMeasures` leaves them out, no row draws either as a column beside the item,
+           and what is left to hold is Price, which keeps its place. */
+        expect(await refsBesideItem(page), 'Market and Lowest sit under the facts line, not in columns beside the item').toEqual([])
+        expect(seen.some((m) => m.column.startsWith('price')), 'a Price value is measured at 820').toBe(true)
+      } else {
+        expect(seen.some((m) => m.column.startsWith('market'))).toBe(true)
+      }
       for (const m of seen) {
         const column = m.column.split('#')[0]!
         if (['market', 'low', 'range'].includes(column)) {
@@ -1145,6 +1202,46 @@ for (const theme of ['light', 'dark'] as const) {
           if (KEPT_RIGHT_ZERO.includes(column)) expect.soft(Math.abs(m.right), `${m.column}: value moved, ${m.right.toFixed(1)}px from the cell's right`).toBeLessThanOrEqual(VALUE_CENTER_PX)
         }
       }
+    })
+  }
+}
+
+
+/* THE LOCKED PILL TAKES THE HELD PILL'S SHAPE (pricing-suggest spec, section 10): no icon, `--bn-2` side padding, and its words
+ * never clip. It clipped at 1440 and 820 in both themes before. A listing TCGplayer holds no copies of is the locked row. */
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [1440, 820]) {
+    test(`the locked pill has no icon, --bn-2 side padding and no clipping at ${width} in ${theme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: theme })
+      await setViewport(page, { width, height: 900 })
+      await open(page, {
+        skus: [live(), live({ sku: '8608464', name: 'Dunsparce', standing: 'refused', skip: 'sold_out' })],
+        counts: { considered: 2, offered: 1, deferred: 0, refused: 1 },
+      })
+      const pill = page.locator('.pricing-locked')
+      await expect(pill, 'the sold-out listing draws its locked pill').toHaveCount(1)
+      const seen = await pill.evaluate((el) => {
+        const style = getComputedStyle(el)
+        const probe = document.createElement('i')
+        probe.style.width = 'var(--bn-2)'
+        document.body.append(probe)
+        const side = getComputedStyle(probe).width
+        probe.remove()
+        return {
+          icons: el.querySelectorAll('svg').length,
+          left: style.paddingLeft,
+          right: style.paddingRight,
+          side,
+          sw: el.scrollWidth,
+          cw: el.clientWidth,
+          sh: el.scrollHeight,
+          ch: el.clientHeight,
+        }
+      })
+      expect.soft(seen.icons, 'the locked pill draws no icon').toBe(0)
+      expect.soft([seen.left, seen.right], 'side padding is --bn-2').toEqual([seen.side, seen.side])
+      expect.soft(seen.sw, `locked pill scrollWidth ${seen.sw} against clientWidth ${seen.cw}`).toBeLessThanOrEqual(seen.cw)
+      expect.soft(seen.sh, `locked pill scrollHeight ${seen.sh} against clientHeight ${seen.ch}`).toBeLessThanOrEqual(seen.ch)
     })
   }
 }

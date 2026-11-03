@@ -383,6 +383,9 @@ function worklistSku(sku: string, name: string) {
       { box: 7, index: 3, label: 'Box 7, Section 1, Card 3' },
     ],
     listing: null,
+    /* THE SERVER NAMES A GROUP ON EVERY NEW COPY (`worklist.new_copy_groups`); a copy that arrives with none files under Needs You and
+       waits for a tick, so a stub without one never draws `Send all`. */
+    group: 'at_rule',
     in: [{ run: RUN, add_to_quantity: 3 }],
     claimed_add: 3,
     over_cap: false,
@@ -889,10 +892,12 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await expect(page.getByRole('button', { name: /^Send all 2 SKUs, 5 live copies move to new prices$/i }), 'the press names the moved copies').toBeVisible()
   read(hashOf('pricing'), await page.evaluate(scanCopy))
 
-  // THE EMPTY WORKLIST: nothing to price yet, and the button that opens the Live tab. Asserted drawn first.
+  // THE EMPTY WORKLIST: nothing to price yet. Live listings are rows of the one list, so there is no tab to open and no button for one. Asserted drawn first.
   await page.route(PRICING_WORKLIST, (route) => route.fulfill(answer(worklistOf([]))))
   await visit(page, hashOf('pricing'))
-  await expect(page.getByRole('button', { name: /^Price your live listings$/i }), 'the empty worklist offers the Live tab').toBeVisible()
+  await expect(page.locator('main.pricing'), 'the empty worklist draws the screen').toBeVisible()
+  await expect(page.locator('.pricing-tabs'), 'the empty worklist draws no tab bar').toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Price your live listings$/i }), 'the empty worklist offers no tab to open').toHaveCount(0)
   read(hashOf('pricing'), await page.evaluate(scanCopy))
 
   // THE ORDERS STAND-DOWN PRESSES. A line no copy can reach (`no_copies_on_hand`) draws `Already sent it` and `It isn't shipping`;
@@ -919,19 +924,19 @@ test('one sweep: every screen is read once by the copy-voice and copy-casing che
   await expect(page.getByRole('heading', { name: /^3-day$/i }), 'the quarter range draws its heading').toBeVisible()
   read(PRODUCT_SKU_ROUTE, await page.evaluate(scanCopy))
 
-  // THE LIVE TAB WITH A FRESH READ: `Read Again` is drawn, and the lens chips carry their counts. Asserted drawn first.
+  // THE ONE LIST WITH A FRESH READ: `Read Again` is drawn, and the lens chips carry their counts. Asserted drawn first.
   await stubLiveRead(page, readAt(60_000))
-  await visit(page, `${hashOf('pricing')}?live`)
-  await expect(page.getByRole('group', { name: 'Which live listings to show' }), 'the Live tab draws its lens chips').toBeVisible()
+  await visit(page, hashOf('pricing'))
+  await expect(page.getByRole('group', { name: 'Which live listings to show' }), 'the one list draws its lens chips').toBeVisible()
   await expect(page.getByRole('button', { name: /^read again$/i }), 'a fresh read draws its Read Again press').toBeVisible()
-  read(`${hashOf('pricing')}?live`, await page.evaluate(scanCopy))
+  read(hashOf('pricing'), await page.evaluate(scanCopy))
 
-  // THE LIVE TAB WITH A STALE READ: the read is older than a day, so the chips drop their counts, and its bar offers Read Again in place of Send.
+  // THE ONE LIST WITH A STALE READ: the read is older than a day, so the chips drop their counts, and its bar offers Read Again in place of Send.
   await stubLiveRead(page, readAt(3 * DAY_MS))
-  await visit(page, `${hashOf('pricing')}?live`)
+  await visit(page, hashOf('pricing'))
   await expect(page.getByRole('button', { name: /^not selling$/i }), 'a stale read draws its chips without counts').toBeVisible()
   await expect(page.getByRole('region', { name: 'Send these prices' }).getByRole('button', { name: /^read again$/i }), 'a stale read offers Read Again in its bar').toBeVisible()
-  read(`${hashOf('pricing')}?live`, await page.evaluate(scanCopy))
+  read(hashOf('pricing'), await page.evaluate(scanCopy))
 
   const casingTotal = reads.reduce((sum, one) => sum + one.casing, 0)
   expect(casingTotal, `the sweep read ${casingTotal} labels, under the floor of ${CASING_FLOOR}`).toBeGreaterThan(CASING_FLOOR)
@@ -1164,13 +1169,13 @@ test.describe('reader: a stat caption is prose, a press stat is a label', () => 
   })
 })
 
-// THE PRICE LINE IS NAMED FLOOR. The Live tab's rule line drew "Cut-off" before the words lane (docs/specs/pricing-suggest.md
+// THE PRICE LINE IS NAMED FLOOR. The one list's rule line drew "Cut-off" before the words lane (docs/specs/pricing-suggest.md
 // section 6), so the name is read off the drawn input and off every rendered string on the screen.
-test('pricing: the live tab names the price line Floor, and no rendered string says cut-off', async ({ page }) => {
+test('pricing: the one list names the price line Floor, and no rendered string says cut-off', async ({ page }) => {
   await stubLiveRead(page, readAt(60_000))
-  await visit(page, `${hashOf('pricing')}?live`)
-  await expect(page.getByRole('group', { name: 'Which live listings to show' }), 'the Live tab is drawn').toBeVisible()
-  /* THE LIVE SETTINGS SHEET HOLDS THE FLOOR, so the Live tab's Change opens it first. It says what the floor is. */
+  await visit(page, hashOf('pricing'))
+  await expect(page.getByRole('group', { name: 'Which live listings to show' }), 'the one list is drawn').toBeVisible()
+  /* THE LIVE SETTINGS SHEET HOLDS THE FLOOR, so the one list's Change opens it first. It says what the floor is. */
   await page.getByRole('button', { name: 'Change' }).click()
   const sheet = page.getByRole('dialog', { name: 'What to mark down' })
   await expect(sheet.locator('.pricing-sheet-says', { hasText: 'The floor is' }), 'the Live settings sheet names its price line Floor').toBeVisible()
@@ -1200,3 +1205,35 @@ test("pricing: the owner's hold is one name, and no rendered string says Held, H
   expect(panel.text, 'the panel confirms with Keep it off').toContain('Keep it off')
   expect(panel.text, 'the panel never says Hold it').not.toMatch(/\bhold it\b/i)
 })
+
+// ONE PRESS SHOWS THE KEPT-OFF ROWS, AND IT IS A LABEL (docs/design/pricing-suggest/list-notes.md item 12: the kept-off tile
+// "becomes the send bar's last figure ... and a filter press, 'Show kept off (2)'"; docs/DESIGN.md R5: a button takes Title Case).
+// Today three controls open the same filter: a chip in the filter bar, the tile's press and, once the bar carries figures, the
+// figures' press. The sweep reads the landing state of a store that keeps nothing off, so none of them is graded there. The label
+// is graded by the sweep's own rule (`casingProblems`). The press reads "Show Kept Off (N)", the casing of the group heading "Kept Off"
+// (R5, one casing for the phrase), so its count is a value phrase (`data-value`) and the label around it ends on "Off". The row's own
+// lock ("Keep X off TCGplayer") says "Keep", not "kept", so it is not counted.
+const LIVE_LISTING = {
+  sku: '9000002', name: 'Gardevoir ex', set_name: 'Scarlet and Violet', image_url: null, market: '4.22', low: '4.35',
+  asking: '3.40', last_sold_at: null, group: 'suggested', price: '4.01', source: 'Suggested', reason: 'Market up 18% since listed.',
+}
+for (const [state, withLive] of [['the send tiles', false], ['the send figures', true]] as const) {
+  test(`pricing: one press shows the kept-off rows, in Title Case, beside ${state}`, async ({ page }) => {
+    await page.route(PRICING_WORKLIST, (route) => route.fulfill(answer(withLive ? { ...worklist(), live: [LIVE_LISTING] } : worklist())))
+    await page.route(SENDS, (route) => route.fulfill(answer(SENDS_NONE)))
+    await stubRun(page)
+    await stubCorpus(page, { '8608859': { withheld: 'keeping' } })
+    await visit(page, hashOf('pricing'))
+    const press = page.getByRole('button', { name: /kept off/i })
+    await expect(press.first(), 'a press shows the kept-off rows').toBeVisible()
+    await expect(press, 'one press shows them, not one in each place').toHaveCount(1)
+    /* THE LABEL AS THE SWEEP READS IT: `scanCopy`'s lines (a `data-value` count stays out), `labelsOf` and `stripTyped`, then `casingProblems`. */
+    const scan = await page.evaluate(scanCopy)
+    const labels = scan.casing
+      .filter((one) => one.role === 'button' && /kept off/i.test(one.lines.join(' ')))
+      .flatMap((one) => labelsOf(one.lines, one.keyCaps).map((text) => stripTyped(text, one.marked)))
+    expect(labels, 'the press has one label').toHaveLength(1)
+    expect(labels[0], 'the press says what it does, in the heading\'s casing').toMatch(/^Show Kept Off\b/)
+    expect(casingProblems(labels[0]!), `"${labels[0]}" takes Title Case`).toEqual([])
+  })
+}

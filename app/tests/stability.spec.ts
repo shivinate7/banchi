@@ -8,7 +8,7 @@ import { card, sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
 import { afterPaint, settleMotion } from './motionSettled'
 import { routesFromNav } from './routes'
-import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, line, order, pricingRow, seedPopulatedOrders, severalOrders, severalOrdersWalkPlan } from './routeFixtures'
+import { POPULATED_ROUTE_SEEDS, PRODUCT_ROUTE, line, order, pricingRow, seedPopulatedOrders, seedPopulatedPricing, severalOrders, severalOrdersWalkPlan } from './routeFixtures'
 import { EXCLUDED_FROM_SWEEP } from './routeExclusions'
 import { setViewport } from './phoneSwitch'
 import { stubMatched } from './routeFixtures'
@@ -1676,4 +1676,58 @@ test('image probe control: a block above a pending photograph moves the measured
   const after = await readFrame(page, '.inventory-confirm-photo', 0)
   expect(movedPx(before, after), 'the frame measure saw no move from a 200px block above the photograph').toBeGreaterThan(0)
 })
+
+/* A TYPED PRICE MOVES NO COLUMN (D313). The Send column is drawn while any row can carry a tick. A new copy that waits
+ * for a tick stops waiting the moment a price is typed into it, so typing into the last waiting row used to take the column away and
+ * shift every column right of it left by the column's width. The width is reserved by construction: with no live listing and one waiting
+ * row (Articuno, filed under Needs you), the left edge of every column, in the caption and in each row, is the same before and after
+ * the price is typed. Dunsparce goes at the rule, so the case also reads a row that never carried a tick. The Send column itself is
+ * left out of the read: whether its header stays is not this case's claim. The From chip is left out too: at 820 it hugs the right edge
+ * of its track, so its left edge follows its own text and is no column edge. The case sits here, not in pricing.spec.ts, because
+ * `seedPopulatedPricing` states the whole state (it takes the group of a new copy as its fifth option). */
+const COLUMN_PARTS = ['.pricing-thumb', '.pricing-id', '.pricing-col-market', '.pricing-col-low', '.pricing-col-range', '.pricing-col-trend', '.pricing-col-qty', '.pricing-col-price'] as const
+async function columnLefts(page: Page): Promise<Record<string, number | null>> {
+  return page.evaluate((parts) => {
+    const left = (el: Element | null): number | null => (el === null ? null : el.getBoundingClientRect().left)
+    const lefts: Record<string, number | null> = {}
+    const caption = document.querySelector('.pricing-caption')!
+    Array.from(caption.children)
+      .filter((cell) => !cell.classList.contains('pricing-send'))
+      .forEach((cell, at) => {
+        lefts[`caption ${at} ${(cell.textContent ?? '').trim()}`] = left(cell)
+      })
+    for (const name of ['Articuno', 'Dunsparce']) {
+      const row = Array.from(document.querySelectorAll('.pricing-row')).find((one) => one.querySelector(`input[aria-label^="Price for ${name}"]`) !== null)!
+      for (const part of parts) lefts[`${name} ${part}`] = left(row.querySelector(part))
+    }
+    return lefts
+  }, COLUMN_PARTS)
+}
+for (const width of [1440, 820]) {
+  test(`pricing: typing a price into the last waiting row moves no other column, at ${width}`, async ({ page }) => {
+    await seedPopulatedPricing(page, 0, undefined, [], { '8608859': 'needs_you', '8608459': 'at_rule' })
+    /* A focused price field opens the history card, which reads the product's history. The read is refused: the case is about columns. */
+    await page.route(/\/pipeline\/products\/[^/]+\/history$/, (route) =>
+      route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'refused', message: 'not asked for' } }) }),
+    )
+    await setViewport(page, { width, height: 1000 })
+    await page.goto(screen('pricing'))
+    const tick = page.getByRole('checkbox', { name: /^Send the new price for Articuno/ })
+    await expect(tick, 'the last waiting row shows a tick').toBeVisible()
+    await expect(page.getByRole('checkbox', { name: /^Send the new price for / }), 'it is the only row that shows one').toHaveCount(1)
+    await settleFonts(page)
+    await settleMotion(page)
+    const before = await columnLefts(page)
+    const field = page.getByRole('textbox', { name: /^Price for Articuno/ })
+    await field.fill('19.99')
+    await field.press('Tab')
+    await expect(field).toHaveValue('19.99')
+    await settleMotion(page)
+    await afterPaint(page)
+    const after = await columnLefts(page)
+    expect(Object.keys(after), 'the same columns are drawn').toEqual(Object.keys(before))
+    const moved = Object.keys(before).filter((key) => before[key] !== after[key] && !(before[key] !== null && after[key] !== null && Math.abs(before[key]! - after[key]!) < 0.5))
+    expect(moved.map((key) => `${key}: ${before[key]}px to ${after[key]}px`), 'columns whose left edge moved when the price was typed').toEqual([])
+  })
+}
 

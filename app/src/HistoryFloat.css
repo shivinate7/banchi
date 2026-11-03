@@ -31,6 +31,8 @@
   font-size: var(--bn-fs-h3);
   font-weight: 800;
 }
+/* BEFORE THE HISTORY ARRIVES the name reads "Price history", in a quieter ink (history-notes item 10). */
+.hfloat[data-state='loading'] .hfloat-name { color: var(--bn-ink-3); }
 .hfloat-legend {
   display: flex;
   flex-wrap: wrap;

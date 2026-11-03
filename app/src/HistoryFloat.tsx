@@ -7,8 +7,9 @@
  * FOCUS BY MODE. `focus`: opened by a price field, the card takes no focus (its close button is
  * out of the tab order), so Tab goes on to the next price and the caller moves `anchor`/`sku`.
  * `door`: opened by the history door, the card takes focus and `restoreFocus` (the door) gets it
- * back when it closes. Esc and the close button call `onClose` in both modes. Focus leaving the
- * price fields is the caller's to see (`HistoryFloatSpecimen` shows how).
+ * back when it closes. Esc and the close button call `onClose` in both modes. The card stays open
+ * while focus is anywhere in the caller's list, and focus leaving the list is the caller's to see
+ * (`HistoryFloatSpecimen` shows how).
  *
  * NOTHING MOVES (D313). The card is `position: fixed`, so the list under it never shifts. Its
  * size is the same while the history loads: the chart box and the four prices are held, and a
@@ -18,8 +19,8 @@
  * listing price, so Lowest, Lowest shipped and Direct Low come off `getPriceFacts` (the figures
  * the product sheet's "Prices Now" draws). A price neither read carries shows "not carried".
  *
- * PLACEMENT. Above the row when the viewport has room there, else on the side with more room,
- * held inside the viewport. Wholly above the row, its right edge sits on the row's
+ * PLACEMENT. Above the row when the viewport has room there, under any `[data-float-ceiling]` (the
+ * page's stuck bar), else on the side with more room, held inside the viewport. Wholly above the row, its right edge sits on the row's
  * `[data-float-door]` (the row itself when it has none). Anywhere else it may overlap a price
  * column, its own row's or the next row's, so its right edge sits left of the row's
  * `[data-float-price]`, read off the real row and never a fixed offset.
@@ -27,7 +28,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { describeFailure, failureTone, getPriceFacts, getProductHistory, type Failure } from './server'
+import { titleCase } from './CardHero'
+import { describeFailure, failureTone, floatReadsKept, getFloatHistory, getFloatPriceFacts, type Failure } from './server'
 import type { PriceFacts, ProductHistoryPayload, ProductHistoryRange } from './types'
 import { Button, CardThumb, Icon, IconButton, Money, Notice, Section } from './kit'
 import { ProductChart, type Fill } from './ProductHistory'
@@ -59,6 +61,11 @@ function pickRange(payload: ProductHistoryPayload): ProductHistoryRange | null {
   return payload.ranges.find((r) => r.range === 'quarter') ?? payload.ranges[0] ?? null
 }
 
+/** How long focus must rest on a row before its card reads (D278: no request per arrow key). Held
+ * ArrowDown repeats about every 30 ms, and a quick tapping walk steps every 100 to 150 ms, so 250 ms
+ * skips both and still starts the read before the owner has looked at the card. */
+const REST_MS = 250
+
 type Answer = { readonly sku: string; readonly payload: ProductHistoryPayload | null; readonly failure: Failure | null }
 
 export function HistoryFloat({
@@ -80,24 +87,22 @@ export function HistoryFloat({
   const [place, setPlace] = useState<{ top: number; left: number; side: 'above' | 'below' }>({ top: 0, left: 0, side: 'above' })
 
   // Read only this card's history. `ProductHistory.tsx:useProductHistory` also reads every order,
-  // and the caller already hands this card its fills.
+  // and the caller already hands this card its fills. The reads wait for focus to rest (`REST_MS`)
+  // unless both are already held. A failed price read leaves the prices as dashes; the history
+  // read reports its own failure. `server.ts` keeps both answers per SKU until a write.
   useEffect(() => {
     let alive = true
-    getProductHistory(sku)
-      .then((payload) => alive && setAnswer({ sku, payload, failure: null }))
-      .catch((error) => alive && setAnswer({ sku, payload: null, failure: describeFailure(error) }))
+    const timer = window.setTimeout(() => {
+      getFloatHistory(sku)
+        .then((payload) => alive && setAnswer({ sku, payload, failure: null }))
+        .catch((error) => alive && setAnswer({ sku, payload: null, failure: describeFailure(error) }))
+      getFloatPriceFacts(sku)
+        .then((f) => alive && setFacts({ sku, prices: f.prices }))
+        .catch(() => alive && setFacts({ sku, prices: null }))
+    }, floatReadsKept(sku) ? 0 : REST_MS)
     return () => {
       alive = false
-    }
-  }, [sku])
-  // A failed price read leaves the prices as dashes; the history read above reports its own failure.
-  useEffect(() => {
-    let alive = true
-    getPriceFacts(sku)
-      .then((f) => alive && setFacts({ sku, prices: f.prices }))
-      .catch(() => alive && setFacts({ sku, prices: null }))
-    return () => {
-      alive = false
+      window.clearTimeout(timer)
     }
   }, [sku])
   const mine = answer?.sku === sku ? answer : null
@@ -109,15 +114,34 @@ export function HistoryFloat({
   const prices = read ? facts.prices : null
   const price = (v: string | null | undefined) => (!read ? '—' : v ? <Money value={Number(v)} /> : <span className="hfloat-quiet">not carried</span>)
 
+  const close = () => {
+    onClose()
+    if (mode === 'door') restoreFocus?.focus({ preventScroll: true })
+  }
+  const closeRef = useRef(close)
+  closeRef.current = close
+
   useLayoutEffect(() => {
     const move = () => {
       const card = cardRef.current
       if (card === null) return
+      // The row went away (a sale, a filter): there is nothing to sit beside, so close.
+      if (!anchor.isConnected) {
+        closeRef.current()
+        return
+      }
       const r = anchor.getBoundingClientRect()
       const h = card.offsetHeight
       const w = card.offsetWidth
-      const clear = r.top - GAP - EDGE >= h
-      const above = clear || (r.bottom + GAP + h + EDGE > window.innerHeight && r.top >= window.innerHeight - r.bottom)
+      // Room above ends under anything the page marks `[data-float-ceiling]` above the row (a stuck bar), read now,
+      // since such a bar sticks and remounts.
+      let ceiling = 0
+      for (const el of document.querySelectorAll('[data-float-ceiling]')) {
+        const b = el.getBoundingClientRect()
+        if (b.top <= r.top) ceiling = Math.max(ceiling, b.bottom)
+      }
+      const clear = r.top - GAP - Math.max(EDGE, ceiling) >= h
+      const above = clear || (r.bottom + GAP + h + EDGE > window.innerHeight && r.top - ceiling >= window.innerHeight - r.bottom)
       const right = clear
         ? (anchor.querySelector('[data-float-door]') ?? anchor).getBoundingClientRect().right
         : (anchor.querySelector('[data-float-price]') ?? anchor).getBoundingClientRect().left - GAP
@@ -131,9 +155,14 @@ export function HistoryFloat({
     move()
     window.addEventListener('resize', move)
     window.addEventListener('scroll', move, true)
+    // A row added above or a group folded moves the row without a scroll or a resize. Every
+    // ancestor of the row grows or shrinks with the list, so watching them all catches it.
+    const watch = new ResizeObserver(move)
+    for (let el: HTMLElement | null = anchor; el !== null; el = el.parentElement) watch.observe(el)
     return () => {
       window.removeEventListener('resize', move)
       window.removeEventListener('scroll', move, true)
+      watch.disconnect()
     }
   }, [anchor, wide])
 
@@ -141,12 +170,6 @@ export function HistoryFloat({
     if (mode === 'door') cardRef.current?.focus({ preventScroll: true })
   }, [mode])
 
-  const close = () => {
-    onClose()
-    if (mode === 'door') restoreFocus?.focus({ preventScroll: true })
-  }
-  const closeRef = useRef(close)
-  closeRef.current = close
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeRef.current()
@@ -175,7 +198,7 @@ export function HistoryFloat({
     >
       <header className="hfloat-head">
         <span className="bn-overlay-icon"><Icon name="history" size={18} /></span>
-        <p className="hfloat-name">{payload?.name ?? 'Price history'}</p>
+        <p className="hfloat-name" title={payload?.name ?? undefined}>{payload?.name ?? 'Price history'}</p>
         <IconButton icon="x" label="Close" onClick={close} tabIndex={mode === 'focus' ? -1 : undefined} {...{ 'data-history-float-close': '' }} />
       </header>
       <h3 className="hfloat-h">Last 90 days</h3>
@@ -202,7 +225,7 @@ export function HistoryFloat({
           <div><dt>Lowest, shipped</dt><dd>{price(prices?.low_with_shipping)}</dd></div>
           <div><dt>Direct Low</dt><dd>{price(prices?.direct_low)}</dd></div>
         </dl>
-        <Button icon="external" tabIndex={mode === 'focus' ? -1 : undefined} onClick={() => { window.location.hash = `#/product?sku=${encodeURIComponent(sku)}` }}>Full history</Button>
+        <Button icon="external" tabIndex={mode === 'focus' ? -1 : undefined} onClick={() => { window.location.hash = `#/product?sku=${encodeURIComponent(sku)}` }}>Full History</Button>
       </footer>
     </section>,
     document.body,
@@ -246,15 +269,18 @@ export function HistoryFloatSpecimen() {
               defaultValue={r.price}
               data-float-price=""
               onFocus={() => setOpen({ row: i, mode: 'focus', door: null })}
-              // Focus going to another price field moves the card (its onFocus); anywhere else closes it.
+              // Focus going to another price field moves the card (its onFocus); anywhere else in the
+              // list leaves it where it is; focus leaving the list closes it.
               onBlur={(e) => {
-                if (!e.relatedTarget?.matches('[data-float-price]')) setOpen((o) => (o?.mode === 'focus' ? null : o))
+                if (!e.currentTarget.closest('.hfloat-specimen')?.contains(e.relatedTarget as Node | null)) {
+                  setOpen((o) => (o?.mode === 'focus' ? null : o))
+                }
               }}
             />
             <IconButton
               icon="history"
-              label="Price history"
-              name={`Price history for ${r.name}`}
+              label={titleCase('Price history', true)}
+              name={`${titleCase('Price history', true)} for ${r.name}`}
               tabIndex={-1}
               onClick={(e) => setOpen({ row: i, mode: 'door', door: e.currentTarget })}
               {...{ 'data-float-door': '' }}

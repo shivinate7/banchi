@@ -4,6 +4,7 @@ import { stubStore } from './shell'
 import type {
   CodeEntry,
   CodeLedger,
+  LiveListing,
   MatchState,
   OrderRow,
   OrdersPayload,
@@ -749,6 +750,21 @@ export function productHistory(): ProductHistoryPayload {
   }
 }
 
+/** THE FLOATING PRICE-HISTORY CARD'S TWO READS, which every price-field focus on `#/pricing` opens on first use:
+ *  `GET /pipeline/products/<sku>/history` and `GET /orders` (the owner's sale marks), the same pair
+ *  `ProductHistory.tsx` reads. The answers are `productHistory()` and `payloadOf([], [])`, the empty orders
+ *  `shell.ts:stubStore` also gives. THE ONE HOME of this pair for the specs that mount `#/pricing` without
+ *  `{ store: true }` (`pricing.spec.ts`, `pricing-markdown.spec.ts`). It records nothing: the card is not that
+ *  screen's wire. A case that asserts the card's own reads stubs them after this, and the later route wins. */
+export async function stubHistoryCard(page: Page): Promise<void> {
+  await page.route(/\/pipeline\/products\/[^/]+\/history$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(productHistory()) }),
+  )
+  await page.route(/\/orders$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payloadOf([], [])) }),
+  )
+}
+
 /** Stub the product's own history read. Its fills come off `seedPopulatedOrders`'s `/orders`,
  *  and its printings switch reads `/search`, which `shell.ts:stubStore` already answers. */
 export async function seedPopulatedProduct(page: Page): Promise<void> {
@@ -924,14 +940,26 @@ export function pricingRow(
 /** `#/pricing` WITH ROWS, so the sweep reads its Market and Lowest figures (the coordinator's
  *  R7 note: money-face drew no Market figure, so a Market chip in Inter was never seen). The
  *  corpus is registered first, because `/\/pricing$/` also matches the worklist's path and the
- *  newest handler wins. */
-export async function seedPopulatedPricing(page: Page): Promise<void> {
+ *  newest handler wins. `extra` appends that many more listable rows after the two, each with
+ *  its own SKU, name and place, for a case that walks a long list. */
+export async function seedPopulatedPricing(
+  page: Page,
+  extra = 0,
+  live?: LiveListing[] | (() => LiveListing[]),
+  /** SKUs the owner has kept off TCGplayer: each is a stored `withheld` answer in the corpus, there from the first read. */
+  keptOff: readonly string[] = [],
+  /** The group the server files a new copy under, by SKU (`PricingSku.group`). A row named nowhere here arrives with none. */
+  groups: Readonly<Record<string, 'needs_you' | 'suggested' | 'at_rule'>> = {},
+): Promise<void> {
   await page.route(/\/pricing$/, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        corpus: { policy: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' } }, skus: {} },
+        corpus: {
+          policy: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' } },
+          skus: Object.fromEntries(keptOff.map((one) => [one, { value: { withheld: 'keeping' } }])),
+        },
         path: 'inventory/prices.json',
         revision: 'r0',
       }),
@@ -947,15 +975,55 @@ export async function seedPopulatedPricing(page: Page): Promise<void> {
         skus: [
           pricingRow('8608859', 'Articuno', '22.03', '21.98', { box: 2, index: 1, label: 'Box 2, Section 1, Card 1', cid: NAME_A, capture_id: 'cap-2-1' }),
           pricingRow('8608459', 'Dunsparce', '2.06', '1.48', { box: 3, index: 4, label: 'Box 3, Section 2, Card 4', cid: NAME_B, capture_id: 'cap-3-4' }),
-        ],
+          ...Array.from({ length: extra }, (_, i) =>
+            pricingRow(`86090${String(i).padStart(2, '0')}`, `Filler ${i + 1}`, '1.50', '1.10', { box: 4, index: i + 1, label: `Box 4, Section 1, Card ${i + 1}`, cid: NAME_A, capture_id: `cap-4-${i + 1}` }),
+          ),
+        ].map((row) => (groups[row.sku] === undefined ? row : { ...row, group: groups[row.sku] })),
         written_at: {},
         skipped: [],
         asked: [],
         threshold: '0.49',
         floor: '0.49',
+        ...(live === undefined ? {} : { live: typeof live === 'function' ? live() : live }),
       }),
     }),
   )
+}
+
+/** One send receipt as `server/send_routes.py:_summary` shapes it. */
+export function sendSummary(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    stamp: '20260924-120000',
+    kind: 'send',
+    state: 'waiting',
+    at: '2026-09-24T12:00:00+00:00',
+    copies: 3,
+    prices: 0,
+    price_check: null,
+    rows: 2,
+    published_at: '2026-09-24T12:00:05+00:00',
+    check_after: '2026-09-24T12:15:05+00:00',
+    checked_at: null,
+    check: null,
+    trimmed: [],
+    trimmed_copies: 0,
+    accepted: 2,
+    turned_away: 0,
+    failure: null,
+    unknown: null,
+    held: false,
+    takeable: 0,
+    take_back_after: null,
+    files: ['import.csv'],
+    taken_back_at: null,
+    warning: null,
+    prices_left: [],
+    moves: [],
+    ...over,
+    /* THE SERVER SAYS `staged` WHENEVER `unknown.staged` DOES (`_maybe_staged`), and also for a
+       press that died mid-push with no `unknown` (round 6, S2). A case names it only for that. */
+    staged: over.staged ?? Boolean((over.unknown as { staged?: boolean } | null | undefined)?.staged),
+  }
 }
 
 /* ------------------------------------------------------------------------- #/slabs */
