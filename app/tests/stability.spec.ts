@@ -1677,7 +1677,7 @@ test('image probe control: a block above a pending photograph moves the measured
   expect(movedPx(before, after), 'the frame measure saw no move from a 200px block above the photograph').toBeGreaterThan(0)
 })
 
-/* A TYPED PRICE MOVES NO COLUMN (D313, coordinator ruling). The Send column is drawn while any row can carry a tick. A new copy that waits
+/* A TYPED PRICE MOVES NO COLUMN (D313). The Send column is drawn while any row can carry a tick. A new copy that waits
  * for a tick stops waiting the moment a price is typed into it, so typing into the last waiting row used to take the column away and
  * shift every column right of it left by the column's width. The width is reserved by construction: with no live listing and one waiting
  * row (Articuno, filed under Needs you), the left edge of every column, in the caption and in each row, is the same before and after

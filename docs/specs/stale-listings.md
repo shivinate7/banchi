@@ -596,8 +596,8 @@ where it is (`LiveCount`) and on T.
   strips. The age draws as a date, in the warn tone, under the figure. A fresh figure draws no
   age, so a normal morning adds no noise. Range 7d draws its `through` date by the same
   rule.
-- **Width.** The new column needs room for about 76 px. Under 900, Lowest, the trend and the new
-  column leave, as Lowest and the trend do now. T keeps every figure at every width. Whether the
+- **Width.** The new column needs room for about 76 px. Under 900, Market and Lowest draw as a
+  labelled line under the card's details, and the trend and the new column leave. T keeps every figure at every width. Whether the
   1440 desk with the sidebar open keeps the name column wide enough is unmeasured. The build
   measures it before it picks the breakpoint.
 - **Empty states.** No saved history: the cell draws "—" with a title that says so. Nothing sold
