@@ -927,13 +927,22 @@ export function pricingRow(
  *  corpus is registered first, because `/\/pricing$/` also matches the worklist's path and the
  *  newest handler wins. `extra` appends that many more listable rows after the two, each with
  *  its own SKU, name and place, for a case that walks a long list. */
-export async function seedPopulatedPricing(page: Page, extra = 0, live?: LiveListing[] | (() => LiveListing[])): Promise<void> {
+export async function seedPopulatedPricing(
+  page: Page,
+  extra = 0,
+  live?: LiveListing[] | (() => LiveListing[]),
+  /** SKUs the owner has kept off TCGplayer: each is a stored `withheld` answer in the corpus, there from the first read. */
+  keptOff: readonly string[] = [],
+): Promise<void> {
   await page.route(/\/pricing$/, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        corpus: { policy: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' } }, skus: {} },
+        corpus: {
+          policy: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' } },
+          skus: Object.fromEntries(keptOff.map((one) => [one, { value: { withheld: 'keeping' } }])),
+        },
         path: 'inventory/prices.json',
         revision: 'r0',
       }),

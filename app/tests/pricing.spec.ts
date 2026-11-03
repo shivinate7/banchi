@@ -7450,3 +7450,54 @@ for (const theme of ['light', 'dark'] as const) {
     })
   }
 }
+
+/* KEPT-OFF ROWS ARE NOT IN THE THREE GROUPS (`list-notes.md`, item 12: "Kept-off rows are not in the three groups"). The
+ * mockup draws a kept-off card as a figure on the send bar and as the one press that shows it. Where the card then draws is
+ * not fixed (behind that press, or in a place of its own), so the case asks the one thing the note rules out: a kept-off
+ * row under Needs you, Suggested changes or Going at the rule, shown or not. Two kept-off cards, one the server filed at the
+ * rule and one it filed under Needs you, so no group can hold one by accident. The hold is already in the corpus at load.
+ * THE PRESS IS FOUND BY WHAT IT SAYS, not by its place, and its presence is the signal the corpus has landed: without that
+ * wait, the "none in a group" reads would pass over a list that has not drawn the hold yet. */
+test('one list: a kept-off row draws in none of the three groups, before and after the press that shows it', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const keptA = heldRow(1)
+  const keptB = heldRow(2)
+  await open(page, {
+    live: ONE_LIST_LIVE,
+    skus: [inGroup(sku(), 'at_rule'), inGroup(keptA, 'at_rule'), inGroup(keptB, 'needs_you')],
+    decisions: { rule: 'match', basis: 'market', overrides: holding([keptA, keptB]) },
+  })
+  const press = page.getByRole('button', { name: /kept off/i }).first()
+  await expect(press, 'the kept-off press is drawn, so the hold has landed').toBeVisible()
+  await expect(listGroup(page, 'Going at the Rule').getByRole('textbox', { name: 'Price for Articuno - 161/159' }), 'the unheld new copy is in its group').toHaveCount(1)
+  const keptRows = page.locator('.pricing-row', { has: page.locator('.pricing-held') })
+  const expectNoneInAGroup = async (when: string) => {
+    for (const title of GROUP_TITLES) {
+      await expect(
+        listGroup(page, title).locator('.pricing-row', { has: page.locator('.pricing-held') }),
+        `${when}: no kept-off row under ${title}`,
+      ).toHaveCount(0)
+    }
+  }
+  await expectNoneInAGroup('before the press')
+
+  await press.click()
+  await expect(keptRows, 'the press shows both kept-off rows').toHaveCount(2)
+  await expectNoneInAGroup('after the press')
+})
+
+/* A ROW WITH NO PRICE SAYS SO ONCE. The design review saw "Needs a price" under the price field and "No price yet" in the
+ * From column of one row. The From column's "No price yet" is the mockup's (`list.html`, `SRC_WORD`, and its Mew ex row);
+ * the line under the field is not in the mockup's price cell. innerText, so only what is drawn counts; two widths, because
+ * the From chip moves under the price at 820. */
+for (const width of [1440, 820]) {
+  test(`one list: a row with no price says so once at ${width}`, async ({ page }) => {
+    await setViewport(page, { width, height: 900 })
+    await open(page, { skus: [inGroup(unpricedRow(1), 'needs_you'), pricedRow(1)], decisions: NO_PRICE_DECISIONS })
+    const row = page.locator('.pricing-row', { has: page.getByRole('textbox', { name: 'Price for Unpriced 1' }) })
+    await expect(row, 'the row with no price is drawn').toBeVisible()
+    await settleMotion(page)
+    const says = ((await row.innerText()).match(/needs a price|no price yet/gi) ?? []).map((one) => one.toLowerCase())
+    expect(says, 'the row says it has no price exactly once').toHaveLength(1)
+  })
+}

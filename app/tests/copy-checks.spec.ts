@@ -1205,3 +1205,34 @@ test("pricing: the owner's hold is one name, and no rendered string says Held, H
   expect(panel.text, 'the panel confirms with Keep it off').toContain('Keep it off')
   expect(panel.text, 'the panel never says Hold it').not.toMatch(/\bhold it\b/i)
 })
+
+// ONE PRESS SHOWS THE KEPT-OFF ROWS, AND IT IS A LABEL (docs/design/pricing-suggest/list-notes.md item 12: the kept-off tile
+// "becomes the send bar's last figure ... and a filter press, 'Show kept off (2)'"; docs/DESIGN.md R5: a button takes Title Case).
+// Today three controls open the same filter: a chip in the filter bar, the tile's press and, once the bar carries figures, the
+// figures' press. The sweep reads the landing state of a store that keeps nothing off, so none of them is graded there. The label
+// is graded by the sweep's own rule (`casingProblems`), so the form it accepts is the form asked for: with a count after it,
+// "off" stays lower case. The row's own lock ("Keep X off TCGplayer") says "Keep", not "kept", so it is not counted.
+const LIVE_LISTING = {
+  sku: '9000002', name: 'Gardevoir ex', set_name: 'Scarlet and Violet', image_url: null, market: '4.22', low: '4.35',
+  asking: '3.40', last_sold_at: null, group: 'suggested', price: '4.01', source: 'Suggested', reason: 'Market up 18% since listed.',
+}
+for (const [state, withLive] of [['the send tiles', false], ['the send figures', true]] as const) {
+  test(`pricing: one press shows the kept-off rows, in Title Case, beside ${state}`, async ({ page }) => {
+    await page.route(PRICING_WORKLIST, (route) => route.fulfill(answer(withLive ? { ...worklist(), live: [LIVE_LISTING] } : worklist())))
+    await page.route(SENDS, (route) => route.fulfill(answer(SENDS_NONE)))
+    await stubRun(page)
+    await stubCorpus(page, { '8608859': { withheld: 'keeping' } })
+    await visit(page, hashOf('pricing'))
+    const press = page.getByRole('button', { name: /kept off/i })
+    await expect(press.first(), 'a press shows the kept-off rows').toBeVisible()
+    await expect(press, 'one press shows them, not one in each place').toHaveCount(1)
+    /* THE LABEL AS THE SWEEP READS IT: `scanCopy`'s lines (a `data-value` count stays out), `labelsOf` and `stripTyped`, then `casingProblems`. */
+    const scan = await page.evaluate(scanCopy)
+    const labels = scan.casing
+      .filter((one) => one.role === 'button' && /kept off/i.test(one.lines.join(' ')))
+      .flatMap((one) => labelsOf(one.lines, one.keyCaps).map((text) => stripTyped(text, one.marked)))
+    expect(labels, 'the press has one label').toHaveLength(1)
+    expect(labels[0], 'the press says what it does').toMatch(/^Show Kept /)
+    expect(casingProblems(labels[0]!), `"${labels[0]}" takes Title Case`).toEqual([])
+  })
+}

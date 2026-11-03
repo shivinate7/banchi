@@ -1,4 +1,4 @@
-// Protects: The floating price-history card opens by focus or by its door, sits above its row by default, covers neither the row nor the next price field, keeps focus where its mode says, holds its size while history loads, and draws the product chart with the owner's asking step line and the suggestion dot. Its name carries the full card name as a title. On `#/pricing` it opens above the focused row, follows that row when the list above changes, and stays open while focus is in the list. It reads a row's history and prices once, only for the row where focus rests, and tries a failed sales read again on the next open. A send ends its kept reads, so the next open reads again, and a read begun before the send is not served after it. With no room above a row it opens below, inside the list, ending 8px left of the price column and clear of the sidebar or rail, and opened above it never overlaps the Send bar. Its title names the row whose price field has focus. Esc closes it and leaves focus in the price field.
+// Protects: The floating price-history card opens by focus or by its door, sits above its row by default, covers neither the row nor the next price field, keeps focus where its mode says, holds its size while history loads, and draws the product chart with the owner's asking step line and the suggestion dot. Its name carries the full card name as a title. On `#/pricing` it opens above the focused row, follows that row when the list above changes, and stays open while focus is in the list. It reads a row's history and prices once, only for the row where focus rests, and tries a failed sales read again on the next open. A send ends its kept reads, so the next open reads again, and a read begun before the send is not served after it. With no room above a row it opens below, inside the list, ending 8px left of the price column and clear of the sidebar or rail, and opened above it never overlaps the Send bar. Its title names the row whose price field has focus. Esc closes it and leaves focus in the price field. Each `#/pricing` row, a kept-off one too, has a history door that opens the card for that row, takes focus and gives it back on Esc.
 // Governs: D313, D278, D227
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
@@ -26,7 +26,7 @@ import type { AskingPosting, LiveListing, ProductHistoryPayload } from '../src/t
  *   data-row        the index of the row it is anchored to
  * A focus-opened card has no tab stop, so its close button is `tabIndex={-1}`.
  * Its close button is `[data-history-float-close]`. Its right edge sits on the row's history door.
- * Its legend holds "Low to high, each week". Its heading is "Last 90 days". "Full history" is a
+ * Its legend holds "Low to high, each week". Its heading is "Last 90 days". "Full History" (a button takes Title Case, docs/DESIGN.md R5) is a
  * text button (`role=button`), and its facts are four `dt` labels: Market, Lowest, Lowest,
  * shipped, and Direct Low.
  *
@@ -245,7 +245,7 @@ for (const size of SIZES) {
       }
     })
 
-    test('in a short viewport the card takes the side with more room, fits the viewport and keeps Full history reachable', async ({ page }) => {
+    test('in a short viewport the card takes the side with more room, fits the viewport and keeps Full History reachable', async ({ page }) => {
       await row(page, 1).evaluate((el) => el.scrollIntoView({ block: 'center' }))
       await openByFocus(page)
       const c = await boxOf(card(page))
@@ -258,9 +258,9 @@ for (const size of SIZES) {
       const roomAbove = anchor.y
       const roomBelow = view.height - (anchor.y + anchor.height)
       await expect(card(page)).toHaveAttribute('data-placement', roomAbove >= roomBelow ? 'above' : 'below')
-      const full = await boxOf(card(page).getByRole('button', { name: 'Full history', exact: true }))
-      expect(full.y + full.height, 'Full history is inside the viewport').toBeLessThanOrEqual(view.height)
-      expect(full.y, 'Full history is inside the viewport').toBeGreaterThanOrEqual(0)
+      const full = await boxOf(card(page).getByRole('button', { name: 'Full History', exact: true }))
+      expect(full.y + full.height, 'Full History is inside the viewport').toBeLessThanOrEqual(view.height)
+      expect(full.y, 'Full History is inside the viewport').toBeGreaterThanOrEqual(0)
       expect(meets(c, await boxOf(priceOf(page, 1))), 'the card does not cover the anchor price field').toBe(false)
     })
 
@@ -423,9 +423,9 @@ for (const size of SIZES) {
       await expect(card(page).getByRole('heading', { name: 'Last 90 days', exact: true })).toHaveCount(1)
     })
 
-    test('Full history is a text button in the card', async ({ page }) => {
+    test('Full History is a text button in the card, in Title Case (R5)', async ({ page }) => {
       await openByFocus(page)
-      await expect(card(page).getByRole('button', { name: 'Full history', exact: true })).toHaveText('Full history')
+      await expect(card(page).getByRole('button', { name: 'Full History', exact: true })).toHaveText('Full History')
     })
 
     test('the card shows four prices: Market, Lowest, Lowest, shipped, and Direct Low', async ({ page }) => {
@@ -676,6 +676,68 @@ for (const size of SIZES) {
       await expect(card(page)).toHaveAttribute('data-placement', 'above')
       const c = await boxOf(card(page))
       expect(meets(c, await boxOf(barOf(page))), 'the card does not overlap the Send bar').toBe(false)
+    })
+  })
+}
+
+/* ---- `#/pricing`: THE HISTORY DOOR (`list.html` notes, item 17; `history-float.html`; spec section 9c) ----
+ *
+ * Each row has a chart button, "Price history for <name>", and it opens the card for that row. It is the only way in on a
+ * row with no price field: a card the owner kept off TCGplayer draws no field, so focus can never open its history.
+ * The door carries `data-float-door`, which the card reads to put its right edge on it (the contract at the top). A card
+ * the door opens takes focus, and gives it back to the door when it closes (9c). Two widths: the row's layout differs.
+ *
+ * THE KEPT-OFF ROW IS FOUND BY ITS PILL, and by the one kept-off press when the list does not draw it, so the case
+ * stands whether kept-off rows sit in the list or behind that press. */
+for (const size of [SIZES[0], SIZES[2]]) {
+  test.describe(`#/pricing history door at ${size.width} wide`, () => {
+    const KEPT_OFF = '8608459'
+    let asked: string[]
+    test.beforeEach(async ({ page }) => {
+      asked = []
+      await setViewport(page, size)
+      await seedPopulatedPricing(page, 0, undefined, [KEPT_OFF])
+      await page.route(HISTORY, (route) => {
+        asked.push(/\/products\/([^/]+)\/history$/.exec(new URL(route.request().url()).pathname)?.[1] ?? '')
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payloadWithAsking()) })
+      })
+      await page.goto(PRICING)
+      await expect(page.locator('.pricing-row').first()).toBeVisible()
+      await settleMotion(page)
+    })
+
+    /** The door of `scope`, pressed: the card opens for `sku` in door mode, holds focus, and gives it back on Esc. */
+    async function expectDoorOpensCard(page: Page, scope: Locator, sku: string) {
+      const door = scope.getByRole('button', { name: /^Price history for / })
+      await expect(door, 'the row has a history door').toHaveCount(1)
+      await expect(door, 'the door is the mark the card sits against').toHaveAttribute('data-float-door', '')
+      await door.click()
+      await expect(card(page), 'the door opened the card').toHaveAttribute('data-mode', 'door')
+      await expect.poll(() => asked.at(-1), "the card asked for this row's history").toBe(sku)
+      await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-history-float]')), 'a card the door opens takes focus').toBe(true)
+      if ((await card(page).getAttribute('data-placement')) === 'above') {
+        const c = await boxOf(card(page))
+        const d = await boxOf(door)
+        expect(Math.abs(c.x + c.width - (d.x + d.width)), "the card's right edge sits on the door").toBeLessThanOrEqual(1)
+      }
+      await page.keyboard.press('Escape')
+      await expect(card(page)).toHaveCount(0)
+      await expect(door, 'Esc gives focus back to the door').toBeFocused()
+    }
+
+    test("a row's history door opens the card for that row", async ({ page }) => {
+      const row = page.locator('.pricing-row', { has: page.getByRole('textbox', { name: 'Price for Articuno' }) })
+      await expectDoorOpensCard(page, row, '8608859')
+    })
+
+    test('a kept-off row has no price field, and its door opens the card for that row', async ({ page }) => {
+      const kept = page.locator('.pricing-row', { has: page.locator('.pricing-held') })
+      const press = page.getByRole('button', { name: /kept off/i })
+      await expect(kept.or(press).first(), 'the kept-off row, or the press that shows it, is drawn').toBeVisible()
+      if ((await kept.count()) === 0) await press.first().click()
+      await expect(kept, 'the kept-off row is drawn').toHaveCount(1)
+      await expect(kept.getByRole('textbox', { name: /^Price for / }), 'a kept-off row has no price field').toHaveCount(0)
+      await expectDoorOpensCard(page, kept, KEPT_OFF)
     })
   })
 }
