@@ -84,7 +84,7 @@ export type Fill = {
  *  `Revenue.tsx:salesOf`'s own filter (canceled dropped, an unparseable price or date
  *  dropped) but keyed on `line.sku` rather than grouped by name, because a name can cover
  *  more than one printing and this page is about one product. */
-function fillsFor(sku: string, orders: readonly OrderRow[]): Fill[] {
+export function fillsFor(sku: string, orders: readonly OrderRow[]): Fill[] {
   const fills: Fill[] = []
   for (const order of orders) {
     if (isCanceled(order.status)) continue

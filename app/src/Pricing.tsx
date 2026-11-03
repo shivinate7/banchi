@@ -1,13 +1,17 @@
 import {
   useCallback,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  type Ref,
+  type RefObject,
 } from 'react'
+import { flushSync } from 'react-dom'
 
 import {
   describeFailure,
@@ -15,6 +19,7 @@ import {
   fetchLiveExport,
   getMarkdownTable,
   getMarkdowns,
+  getOrders,
   getPriceHistory,
   getPriceTrends,
   getSavedTrends,
@@ -43,6 +48,7 @@ import type {
   DecisionsDocument,
   CorpusAnswer,
   MergedSku,
+  OrderRow,
   RosterRun,
   PricingCorpus,
   PricingClearable,
@@ -53,7 +59,9 @@ import type {
   MarkdownTable,
   PricingWorklist,
   Unreachable,
+  LiveListing,
   LiveMove,
+  PriceChange,
   PricingSku,
   SavedTrendsPayload,
   RunDetail,
@@ -69,10 +77,10 @@ import { PricesAsOf, asOfOf, usePricesRefresh } from './PricesAsOf'
 import { ClearPrices } from './ClearPrices'
 import { runBoxLabel } from './runScope'
 import {
-  liveInHash,
   markdownInHash,
   markdownSource,
-  runSource,
+  oneListSource,
+  serverGroup,
   runsInHash,
   type PricingSource,
   type SectionSpec,
@@ -122,17 +130,19 @@ import {
 import type { FilterFacet, SortOption, SortValue } from './kit'
 import { dismissToast, toast } from './kit/toast'
 import { PriceMovers } from './PriceMovers'
+import { HistoryFloat } from './HistoryFloat'
+import { fillsFor } from './ProductHistory'
 import './Pricing.css'
 import { SendCard, useOwedTakeOffs } from './SendCard'
 import { useLeaveWarning } from './useLeaveWarning'
-import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence } from './CardHero'
+import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence, titleCase } from './CardHero'
 
 /* #/pricing — THE HAND-PRICING WORKLIST (D86), REBUILT TO THE OWNER'S RE-INTERVIEW (D277).
  *
  * Every row, the rows that need the owner on top, then the rest by value (Q1, Q2). One slim bar
  * holds Send, sticky at the top on a desk and pinned above the tab bar on a phone (Q4). The rule
- * and the floor are one line with "Change" (Q5). Mark-downs are the Live tab, same rows, one
- * press (Q6, Q7). The value list is an Inventory sort now (Q8). Every product name opens the one
+ * and the floor are one line with "Change" (Q5). New copies and live listings are rows of one list under three groups, sent in one
+ * press (Q6, Q7; the pricing-suggest spec, section 2). The value list is an Inventory sort now (Q8). Every product name opens the one
  * product view (D278), which is where the old drawer went.
  *
  * The client performs no arithmetic on money beyond the comparisons that pick a flag: every
@@ -618,28 +628,14 @@ function byValue(a: PricingSku, b: PricingSku): number {
  *  and the chip appears on the row; the row does not move under the hand. The next load re-ranks. */
 type Arrival = { key: object; needs: ReadonlySet<string>; order: ReadonlyMap<string, number> }
 
-function takeArrival(
-  key: object,
-  rows: readonly PricingSku[],
-  answerOf: (row: PricingSku) => unknown,
-  locked: (sku: string) => string | null,
-  cut: string,
-  live = false,
-): Arrival {
+function takeArrival(key: object, rows: readonly PricingSku[]): Arrival {
   const needs = new Set<string>()
   const flagged: PricingSku[] = []
   const rest: PricingSku[] = []
   const closed: PricingSku[] = []
-  /* ON THE LIVE TAB ONLY A ROW WITH NO MARKET PRICE NEEDS THE OWNER (the owner's ruling,
-     2026-09-26, "Skip no-market cards"): the rule never lowers it, so a price there is the
-     owner's to type. A live listing worth $5 or more already carries a price somebody chose. */
-  const needsOwner = (row: PricingSku): boolean =>
-    live
-      ? row.snap.market === null && locked(row.sku) === null && !isWithheld(answerOf(row))
-      : flagOf(row, answerOf(row), locked(row.sku) !== null, cut) !== null
   for (const row of rows) {
     if (row.at_cap) closed.push(row)
-    else if (needsOwner(row)) {
+    else if (serverGroup(row) === 'needs_you') {
       needs.add(row.sku)
       flagged.push(row)
     } else rest.push(row)
@@ -673,7 +669,7 @@ function PickRuns({
   })
   const open = runs.filter((row) => row.open).length
   return (
-    <div className="pricing-runs" role="group" aria-label="Which runs to price">
+    <div className="pricing-runs" role="group" aria-label="Which cards to price">
       <p className="pricing-runs-count">
         {picked.size === 0 ? `Showing all ${open} with work left` : `${picked.size} picked`}
       </p>
@@ -754,7 +750,9 @@ function PricingThumb({
 }: {
   at: PricingSku['positions'][number] | null
   name: string
-  onOpen: () => void
+  /** Opens the owner's photograph. Null where there is none of ours (a live listing): the thumbnail is
+   *  then a picture only, with no press. */
+  onOpen: (() => void) | null
   /** The stock photo (`D301`), the MAIN view here per the owner's own ask — "if
    *  it'd be easy to live pull all the photos without much lag I'd be happy to have the
    *  stock photos show as the main view". `null` on a join miss, and a load failure falls
@@ -766,8 +764,8 @@ function PricingThumb({
   const crop = useCardCropWhenSeen(at, host)
   const [stockFailed, setStockFailed] = useState(false)
   const showStock = imageUrl !== null && !stockFailed
-  return (
-    <button ref={host} type="button" className="pricing-thumb" aria-label={`Photograph of ${name}`} onClick={onOpen}>
+  const picture = (
+    <>
       {showStock ? (
         <img
           className="bn-crop pricing-stock-img"
@@ -800,6 +798,18 @@ function PricingThumb({
           }}
         />
       )}
+    </>
+  )
+  if (onOpen === null) {
+    return (
+      <span ref={host as unknown as RefObject<HTMLSpanElement>} className="pricing-thumb" aria-hidden="true">
+        {picture}
+      </span>
+    )
+  }
+  return (
+    <button ref={host} type="button" className="pricing-thumb" aria-label={`Photograph of ${name}`} onClick={onOpen}>
+      {picture}
     </button>
   )
 }
@@ -857,10 +867,17 @@ export function Pricing() {
   /** Which runs the worklist is over; EMPTY means "whatever still has work in it" (D86, D156). */
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set(runsInHash()))
   const [work, setWork] = useState<PricingWorklist | null>(null)
-  /** THE MARKDOWN STAMP ON THE HASH, and the table it names (D103). Null is the Unsent tab. */
-  const [stamp, setStamp] = useState<string | null>(() => markdownInHash())
-  const [liveTab, setLiveTab] = useState<boolean>(() => liveInHash())
+  /** THE MARKDOWN STAMP ON THE HASH, and the table it names (D103). Null is the one list, which reads no
+   *  mark-down table: every live row draws from the worklist itself. */
+  const [hashStamp, setStamp] = useState<string | null>(() => markdownInHash())
   const [sheet, setSheet] = useState<MarkdownTable | null>(null)
+  /** THE STAMP THAT HOLDS ROWS. A link to a read with nothing in it lands on the one list, the same as no
+   *  link at all, rather than on an empty lens. */
+  const stamp = hashStamp !== null && (sheet?.skus?.length ?? 0) > 0 ? hashStamp : null
+  /** A read opened by its stamp: the lens over live listings, with its own bar and its own rows. */
+  const readView = stamp !== null
+  /** Bumped when the hash comes back to the screen, so the one list reads again (the sidebar press). */
+  const [visit, setVisit] = useState(0)
   const [push, setPush] = useState<'idle' | 'sending' | 'writing'>('idle')
   const [applied, setApplied] = useState<MarkdownAnswer | null>(null)
   const [wroteUpload, setWroteUpload] = useState(false)
@@ -874,7 +891,7 @@ export function Pricing() {
   /* A NUMBER ON A CARD'S ROW, THIS PRESS ONLY (D7, amended 2026-09-11): the copies that go in
      this file, as typed. Blank is blank and not zero. Spent by the write. */
   const [sendQty, setSendQty] = useState<Record<string, string>>({})
-  const askedFor = useCallback(
+  const askedByHand = useCallback(
     (sku: string): number | undefined => {
       const text = sendQty[sku]
       if (text === undefined || text === '') return undefined
@@ -892,17 +909,7 @@ export function Pricing() {
     })
   }, [])
   const clearAsked = useCallback(() => setSendQty({}), [])
-  /* WHAT THE PRESS SENDS: every drawn row with a figure typed on it, as SKU -> copies. */
   const latestRows = useRef<readonly PricingSku[]>([])
-  const quantitiesAsked = useCallback((): Record<string, number> => {
-    const out: Record<string, number> = {}
-    for (const row of latestRows.current) {
-      if (row.at_cap) continue
-      const asked = askedFor(row.sku)
-      if (asked !== undefined) out[row.sku] = asked
-    }
-    return out
-  }, [askedFor])
 
   const toggleRun = useCallback((name: string) => {
     setPicked((held) => {
@@ -983,13 +990,22 @@ export function Pricing() {
   const touched = useRef(new Set<string>())
   const phone = usePhone()
 
+  const hashRuns = useRef(runsInHash().join('\n'))
+  /** Set once the owner has come back to this screen by its link: the one list then reads the newest read again. */
+  const visited = useRef(false)
   useEffect(() => {
     const fromHash = () => {
       if (!window.location.hash.startsWith('#/pricing')) return
       const named = runsInHash()
       if (named.length > 0) setPicked(new Set(named))
       setStamp(markdownInHash())
-      setLiveTab(liveInHash())
+      /* THE RUNS ON THE HASH CHANGED, so the one list reads again. A search or a sort rewrites the
+         hash too and must not. */
+      if (named.join('\n') !== hashRuns.current) {
+        hashRuns.current = named.join('\n')
+        visited.current = true
+        setVisit((count) => count + 1)
+      }
     }
     window.addEventListener('hashchange', fromHash)
     return () => window.removeEventListener('hashchange', fromHash)
@@ -1013,17 +1029,15 @@ export function Pricing() {
     }
   }, [])
 
-  /* THE LIVE TAB WITH NO STAMP OPENS THE NEWEST READ, or says there is none (D277, Q6). */
+  /* THE LIST OF READS: a read opened by its stamp asks for it here; the one list takes it with its
+     own load, so the newest read arrives with the worklist. */
   const [markdowns, setMarkdowns] = useState<readonly MarkdownSummary[] | null>(null)
   useEffect(() => {
-    if (!liveTab) return
+    if (!readView) return
     let live = true
     void getMarkdowns()
       .then((answer) => {
-        if (!live) return
-        setMarkdowns(answer.markdowns)
-        const newest = answer.markdowns[0]
-        if (stamp === null && newest !== undefined) window.location.hash = `#/pricing?markdown=${newest.stamp}`
+        if (live) setMarkdowns(answer.markdowns)
       })
       .catch((err) => {
         if (live) setFailure(describeFailure(err))
@@ -1031,27 +1045,36 @@ export function Pricing() {
     return () => {
       live = false
     }
-  }, [liveTab, stamp])
+  }, [readView, stamp])
 
-  /** Fetch the rows and the corpus together. One read whatever the tab (D103). */
-  const load = useCallback(async (wanted: ReadonlySet<string>, markdown: string | null, live: boolean) => {
+  /** Fetch the worklist and the corpus together (D103). A read opened by its stamp is fetched beside the
+   *  worklist, so a link to a read with nothing in it can land on the one list. A read that cannot be had
+   *  leaves the one list drawn without it. */
+  const load = useCallback(async (wanted: ReadonlySet<string>, markdown: string | null) => {
     loadWalk.current += 1
     const mine = loadWalk.current
-    if (live && markdown === null) {
-      setWork(null)
-      setSheet(null)
-      setLoading(false)
-      return
-    }
     setLoading(true)
     try {
-      const [rowsFrom, held] = await Promise.all([
-        markdown === null ? getPricingWorklist([...wanted].sort()) : getMarkdownTable(markdown),
+      const [worked, readTable, held] = await Promise.all([
+        markdown === null ? getPricingWorklist([...wanted].sort()) : getPricingWorklist([...wanted].sort()).catch(() => null),
+        markdown === null ? Promise.resolve(null) : getMarkdownTable(markdown),
         getPricingCorpus(),
       ])
+      /* THE NEWEST READ IS ASKED FOR ONLY WHEN THE WORKLIST HAS NOTHING TO DRAW (no new copy and no live
+         listing, as from a server that sends none) or a visit came back to the screen by its link. It lends the
+         rows nothing: a live row draws from the worklist. */
+      const wantsRead =
+        markdown === null &&
+        worked !== null &&
+        runsInHash().length === 0 &&
+        ((worked.runs.length === 0 && (worked.live?.length ?? 0) === 0) || visited.current)
+      const reads = wantsRead ? await getMarkdowns().catch(() => null) : null
+      const newestRead = reads?.markdowns[0]
+      const newestTable = newestRead === undefined ? null : await getMarkdownTable(newestRead.stamp).catch(() => null)
       if (mine !== loadWalk.current) return
-      const answer = markdown === null ? (rowsFrom as PricingWorklist) : null
-      const table = markdown === null ? null : (rowsFrom as MarkdownTable)
+      const answer = worked
+      const table = markdown === null ? newestTable : readTable
+      if (reads !== null) setMarkdowns(reads.markdowns)
       setWork(answer)
       setSheet(table)
       setBook(held.corpus)
@@ -1085,14 +1108,14 @@ export function Pricing() {
     }
   }, [])
 
-  const reload = useCallback(() => void load(picked, stamp, liveTab), [load, picked, stamp, liveTab])
+  const reload = useCallback(() => void load(picked, hashStamp), [load, picked, hashStamp])
 
   /* "Refresh now" brings the rows and the saved strips current; when a run ends both are read again.
      A visit only reads where it is, and presses nothing. */
   const refresh = usePricesRefresh(() => {
     reload()
     readSaved()
-  }, !liveTab && work !== null && (saved !== null || savedFailed)) /* NOT AT MOUNT: the worklist and the saved strips are read first, so the mount holds no more reads open at once than it did. */
+  }, !readView && work !== null && (saved !== null || savedFailed)) /* NOT AT MOUNT: the worklist and the saved strips are read first, so the mount holds no more reads open at once than it did. */
   const asOf = asOfOf(refresh.state)
 
   /* THE LIST'S OWN WIDTH, measured: the Range 7d column needs room the name column would lose. */
@@ -1107,22 +1130,45 @@ export function Pricing() {
     listObserver.current = new ResizeObserver(publish)
     listObserver.current.observe(node)
   }, [])
-  const rangeOn = listWidth >= RANGE_ROOM_PX
   const narrow = listWidth > 0 && listWidth < NARROW_PX
 
   useEffect(() => {
-    void load(picked, stamp, liveTab)
-  }, [picked, stamp, liveTab, load])
+    void load(picked, hashStamp)
+  }, [picked, hashStamp, visit, load])
 
   const loaded = useMemo(() => (work?.runs ?? []).map((row) => row.run), [work])
   const run = loaded.length === 1 ? (loaded[0] as string) : null
 
-  const source: PricingSource = useMemo(
-    () =>
-      stamp === null
-        ? runSource(work, run, SECTIONS, { history: getPriceHistory, trends: getPriceTrends })
-        : markdownSource(stamp, sheet, LIVE_SECTIONS, { history: markdownHistory, trends: markdownTrends }),
-    [stamp, sheet, work, run],
+  /** THE ONE LIST'S SOURCE, or a read's own when one is opened by its stamp. `listed` is the live
+   *  listings among the rows, by SKU: what the server said about each (its group, its suggested price
+   *  and the reason). Empty on a read opened by its stamp. */
+  const { source, listed } = useMemo((): { source: PricingSource; listed: ReadonlyMap<string, LiveListing> } => {
+    if (stamp !== null) {
+      return {
+        source: markdownSource(stamp, sheet, LIVE_SECTIONS, { history: markdownHistory, trends: markdownTrends }),
+        listed: new Map(),
+      }
+    }
+    return oneListSource(work, run, SECTIONS, { history: getPriceHistory, trends: getPriceTrends })
+  }, [stamp, sheet, work, run])
+  const oneList = listed.size > 0
+  /** Live listings are drawn in the one list under the server's groups, and they price from what the
+   *  server suggests: the field opens on it, a typed price is held here until a send, and only a hold
+   *  is ever stored for one. */
+  const isListed = useCallback((sku: string) => listed.has(sku), [listed])
+  const [listedTyped, setListedTyped] = useState<Readonly<Record<string, string>>>({})
+  /** Which suggestions are ticked, where the owner has pressed one. Absent is the group's own start:
+   *  ticked in Suggested changes, unticked in Needs you. A live listing's tick is keyed to the suggested
+   *  price it was given for (`tickKey`), so a new figure (a refresh) starts unticked again. A new copy's
+   *  tick is keyed by its SKU alone. */
+  const [ticks, setTicks] = useState<Readonly<Record<string, boolean>>>({})
+  const tickKey = useCallback((sku: string): string => `${sku}@${centsOf(listed.get(sku)?.price ?? '') ?? ''}`, [listed])
+  const tickedOf = useCallback(
+    (sku: string): boolean => {
+      const one = listed.get(sku)
+      return ticks[tickKey(sku)] ?? (one !== undefined && one.group === 'suggested')
+    },
+    [listed, ticks, tickKey],
   )
   const doc = useMemo(() => corpusAsDoc(book, run), [book, run])
 
@@ -1213,8 +1259,8 @@ export function Pricing() {
       const was = book?.policy?.per_run?.[run]
       recordUndo(
         { kind: 'runcut', run, before: { threshold: writtenCut(was) ?? undefined, sub_threshold: was?.['sub_threshold'] as never } },
-        figure === undefined ? 'Run follows the store floor' : 'Floor changed for this run',
-        figure === undefined ? 'This run now uses the store-wide floor.' : `This run's floor now reads ${figure}.`,
+        figure === undefined ? 'Batch follows the store floor' : 'Floor changed for this run',
+        figure === undefined ? 'This batch now uses the store-wide floor.' : `This batch's floor now reads ${figure}.`,
       )
       const patch =
         figure === undefined
@@ -1234,6 +1280,10 @@ export function Pricing() {
   const afterSend = useCallback(() => {
     clearAsked()
     setTypedHere(new Set())
+    /* WHAT WAS SENT IS NO LONGER A CHANGE TO MAKE: the prices typed on listings and the ticks leave
+       with the send, and the list reads again, so a sent suggestion stops reading as one. */
+    setListedTyped({})
+    setTicks({})
     reload()
   }, [clearAsked, reload])
 
@@ -1284,7 +1334,8 @@ export function Pricing() {
     [writeMany],
   )
 
-  const table = source.rows.length > 0 || stamp !== null ? source.rows : null
+  /* A READ ON HAND KEEPS THE LIST DRAWN EVEN WITH NO ROW IN IT, so its chips and its bar stay. */
+  const table = source.rows.length > 0 || stamp !== null || sheet !== null ? source.rows : null
   const answers = useMemo(() => (doc?.overrides ?? {}) as Record<string, unknown>, [doc])
   const unpriced = useMemo(() => (doc?.no_market_data ?? {}) as Record<string, unknown>, [doc])
   const standingOf = useMemo(() => {
@@ -1317,27 +1368,32 @@ export function Pricing() {
     (sku: string) => kind === '' || (sealedOf.get(sku) === true) === (kind === 'sealed'),
     [kind, sealedOf],
   )
-  const rows = useMemo(
-    () =>
-      standingOf.size === 0
-        ? partitioned
-        : partitioned.filter(
-            (sku) => kindOk(sku.sku) && (lens === 'all' || liveLens(standingOf.get(sku.sku)) === lens),
-          ),
-    [partitioned, lens, standingOf, kindOk],
+  /* THE LENS AND THE KIND NARROW WHAT IS DRAWN, NEVER WHAT IS SENT, and only live listings: a new copy is never
+     a listing the read judged. A listing the read never judged is under no chip (it is neither passed over nor a single). */
+  const lensed = useCallback((sku: string) => stamp !== null || listed.has(sku), [stamp, listed])
+  const chipKeeps = useCallback(
+    (sku: string) =>
+      standingOf.size === 0 ||
+      !lensed(sku) ||
+      ((lens === 'all' && kind === '') || (standingOf.has(sku) && kindOk(sku) && (lens === 'all' || liveLens(standingOf.get(sku)) === lens))),
+    [standingOf, lensed, lens, kind, kindOk],
   )
+  /* ON A READ OPENED BY ITS STAMP THE CHIPS ALSO NARROW WHAT THE MARK-DOWN SENDS (the apply carries the kind); on the live list they never do. */
+  const rows = useMemo(() => (readView ? partitioned.filter((sku) => chipKeeps(sku.sku)) : partitioned), [readView, partitioned, chipKeeps])
+  /** The rows that are new copies: the ones the rule, the floor and the send's copies are about. */
+  const copyRows = useMemo(() => rows.filter((row) => !listed.has(row.sku)), [rows, listed])
   /** THE LENS COUNTS, OFF THE ROWS THE KIND FILTER KEEPS, so All is always Not selling plus
    *  Passed over. The survey's own `counts.refused` also counts sold-out rows it never draws. */
   const lensCounts = useMemo(() => {
     let offered = 0
     let refused = 0
     for (const row of sheet?.skus ?? []) {
-      if (!kindOk(row.sku)) continue
+      if (!lensed(row.sku) || !kindOk(row.sku)) continue
       if (liveLens(row.standing) === 'offered') offered += 1
       else refused += 1
     }
     return { all: offered + refused, offered, refused }
-  }, [sheet, kindOk])
+  }, [sheet, kindOk, lensed])
 
   /** WHETHER THIS READ IS TOO OLD TO SEND FROM (the owner's ruling, 2026-09-26: "require a fresh
    *  read"). The limit is the server's own constant (`reprice.fresh_for_s`, the seconds since today began); a table that does
@@ -1358,18 +1414,89 @@ export function Pricing() {
     /* `standing.ts:corpusAnswer`'s rule: an answer on the `price` channel is read on every
      * row, a hold or a typed price (the owner's ruling). A no-market row reads the `unknown`
      * channel only when nothing sits on the `price` one. One SKU holds one answer. */
-    (sku: PricingSku): unknown =>
-      targetOf(sku.bucket) === 'overrides' ? answers[sku.sku] : (answers[sku.sku] ?? unpriced[sku.sku]),
-    [answers, unpriced],
+    (sku: PricingSku): unknown => {
+      /* A LIVE LISTING'S ANSWER IS THE HOLD THE OWNER PUT ON IT, else the price typed on it this visit.
+         The hold is read first: a held row has no price field, so no typed price can stand under it,
+         whatever order the clock put them in (an undone release puts a hold back over a later price).
+         A price stored for it on an earlier visit is no answer here: its field opens on the suggestion. */
+      if (isListed(sku.sku)) {
+        if (isWithheld(answers[sku.sku])) return answers[sku.sku]
+        return listedTyped[sku.sku]
+      }
+      return targetOf(sku.bucket) === 'overrides' ? answers[sku.sku] : (answers[sku.sku] ?? unpriced[sku.sku])
+    },
+    [answers, unpriced, isListed, listedTyped],
   )
 
-  /* THE ARRIVAL ORDER, TAKEN ONCE PER LOAD. */
+  /* A NEW COPY THAT CAN CARRY A TICK, by what it is, never by what is typed on it: the Send column's track exists while any such row is drawn, so
+     typing a price into the last waiting row (which stops it waiting) moves no other column (D313). */
+  const canTick = useCallback(
+    (row: PricingSku): boolean => !readView && source.kind === 'run' && !listed.has(row.sku) && !row.at_cap && serverGroup(row) === 'needs_you',
+    [readView, source, listed],
+  )
+  /* A NEW COPY UNDER NEEDS YOU WAITS FOR A TICK (the mockup's list notes, item 9: nothing there goes by
+     accident). It is held out of the send as a quantity of 0, the way a typed 0 is, until the owner ticks it or
+     types a price. A copy with no price to send is not waiting on a tick: it waits on a price. */
+  const tickableFresh = useCallback(
+    (row: PricingSku): boolean => {
+      if (!canTick(row)) return false
+      const standing = answerFor(row)
+      if (isWithheld(standing) || typeof standing === 'string' || source.locked(row.sku) !== null) return false
+      return !rowShare(row, standing).needsPrice
+    },
+    [canTick, source, answerFor],
+  )
+  /** THE SEND COLUMN is drawn where any row can carry a tick: a live listing's suggestion, or a new copy that can wait for one. */
+  const sendOn = useMemo(() => oneList || rows.some(canTick), [oneList, rows, canTick])
+  /* THE SEND AND NOW COLUMNS TAKE THE RANGE COLUMN'S ROOM: with either, the item column would shrink to a few letters and its facts line run over three. */
+  const rangeOn = listWidth >= RANGE_ROOM_PX && !sendOn
+  const waitsForTick = useCallback((row: PricingSku): boolean => tickableFresh(row) && ticks[row.sku] !== true, [tickableFresh, ticks])
+  const askedFor = useCallback(
+    (row: PricingSku): number | undefined => (waitsForTick(row) ? 0 : askedByHand(row.sku)),
+    [askedByHand, waitsForTick],
+  )
+  /* WHAT THE PRESS SENDS: every drawn row with a figure typed on it, as SKU -> copies. */
+  const quantitiesAsked = useCallback((): Record<string, number> => {
+    const out: Record<string, number> = {}
+    for (const row of latestRows.current) {
+      if (row.at_cap) continue
+      const asked = askedFor(row)
+      if (asked !== undefined) out[row.sku] = asked
+    }
+    return out
+  }, [askedFor])
+
+  /** THE OWNER'S VALUE LINE, off the store's price settings (`policy.value_line`), or null where the server sends none. */
+  const valueLine = useMemo((): string | null => {
+    const raw = (book?.policy as Record<string, unknown> | undefined)?.['value_line']
+    return typeof raw === 'string' || typeof raw === 'number' ? moneyField(String(raw)) : null
+  }, [book])
+
+  /** Where a row's price comes from, in the mockup's words. Nothing on a lens, which has no such column. */
+  const fromWord = useCallback(
+    (row: MergedSku): string | null => {
+      if (readView) return null
+      const standing = answerFor(row)
+      const one = listed.get(row.sku)
+      if (one !== undefined) {
+        const typed = typeof standing === 'string' && standing.trim() !== '' ? (moneyField(standing) ?? standing.trim()) : null
+        return typed !== null && centsOf(typed) !== centsOf(one.asking) ? 'You' : one.source
+      }
+      if (typeof standing === 'string') return 'You'
+      if (rowShare(row, standing).needsPrice) return 'No price yet'
+      return row.bucket === 'sub_threshold' ? 'Floor' : 'Rule'
+    },
+    [readView, answerFor, listed],
+  )
+
+  /* THE ARRIVAL ORDER, TAKEN ONCE PER LOAD. It orders the new copies; a live listing sits in the
+     group the server put it in. */
   const [arrival, setArrival] = useState<Arrival | null>(null)
   useEffect(() => {
     if (table === null || book === null) return
     if (arrival !== null && arrival.key === table) return
-    setArrival(takeArrival(table, partitioned, answerFor, source.locked, cut, stamp !== null))
-  }, [table, book, arrival, partitioned, answerFor, source.locked, cut, stamp])
+    setArrival(takeArrival(table, partitioned.filter((row) => !listed.has(row.sku))))
+  }, [table, book, arrival, partitioned, listed])
 
   /** THE PAIRS THE LIVE TAB WOULD SEND, and nothing else. A price written ON THIS VISIT (typed,
    *  a preset, or "Mark down") that is not the price the read showed. And a price stored on an
@@ -1435,7 +1562,7 @@ export function Pricing() {
         if (sending && result.wrote) {
           await sendMarkdown(stamp)
           setTypedHere(new Set())
-          void load(picked, stamp, liveTab)
+          void load(picked, hashStamp)
           toast({
             kind: 'ok',
             title: `${pushable.length} ${pushable.length === 1 ? 'price is' : 'prices are'} live`,
@@ -1450,7 +1577,7 @@ export function Pricing() {
         setPush('idle')
       }
     })()
-  }, [push, stamp, pushable, dirty, saving, book, load, picked, liveTab, kind, typedHere])
+  }, [push, stamp, hashStamp, pushable, dirty, saving, book, load, picked, kind, typedHere])
 
   /* A NEW WRITE IS OWED THE MOMENT A PRICE MOVES. */
   useEffect(() => {
@@ -1459,6 +1586,30 @@ export function Pricing() {
   }, [pushable])
 
   const held = useMemo(() => rows.filter((sku) => isWithheld(answerFor(sku))), [rows, answerFor])
+  /** The press counts the rows it draws: a lens or a kind pick stays on through the press, so the held rows under it are all it can promise. */
+  const heldUnderChips = useMemo(() => held.filter((row) => chipKeeps(row.sku)), [held, chipKeeps])
+
+  /* THE HOLDS THE STORE ALREADY HAD: only these rows are filed behind the one kept-off press. They are read in the render that
+     reads the load, so a stored hold is never drawn in a group, not for one commit. A hold taken later keeps its row where it is (D313). */
+  const storedHolds = useMemo(
+    () => new Set(book === null ? [] : partitioned.filter((row) => isWithheld(answerFor(row))).map((row) => row.sku)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- taken once per load: a later write is not a stored hold
+    [table, book === null],
+  )
+  /* A RELEASE DROPS ITS ROW FROM THEM, so a hold taken again this visit keeps the row where it is. */
+  const [released, setReleased] = useState<{ of: ReadonlySet<string>; skus: ReadonlySet<string> }>({ of: new Set(), skus: new Set() })
+  useEffect(() => {
+    const now = new Set(partitioned.filter((row) => isWithheld(answerFor(row))).map((row) => row.sku))
+    setReleased((was) => {
+      const base = was.of === storedHolds ? was.skus : new Set<string>()
+      const gone = [...storedHolds].filter((sku) => !now.has(sku) && !base.has(sku))
+      return gone.length === 0 && was.of === storedHolds ? was : { of: storedHolds, skus: new Set([...base, ...gone]) }
+    })
+  }, [partitioned, answerFor, storedHolds])
+  const keptAtLoad = useMemo(
+    () => (released.of === storedHolds ? new Set([...storedHolds].filter((sku) => !released.skus.has(sku))) : storedHolds),
+    [storedHolds, released],
+  )
 
   /* F3: THE VIEW'S OWN FILTERS. Search, sort and the facets live in the URL (`?q=`, `?sort=`, `?game=`),
      narrow what is DRAWN and touch nothing else: Send, the presets and the counts read every row. */
@@ -1480,9 +1631,10 @@ export function Pricing() {
   const nearName = useMemo(() => (query.trim() === '' ? null : didYouMean(query, new Set(rows.map((row) => row.name)))), [rows, query])
   const keepRow = useCallback(
     (row: MergedSku) =>
+      chipKeeps(row.sku) &&
       (!filterHeld || isWithheld(answerFor(row))) &&
       matchQuery(query, { text: [row.name, row.set_name, gameLabel(row.game), row.condition], numbers: [row.row['Number']], skus: [row.sku] }),
-    [filterHeld, answerFor, query],
+    [chipKeeps, filterHeld, answerFor, query],
   )
   /** The facets, each option counted under the OTHER picks and the search; a band nothing is in is not offered. */
   const facets = useMemo(
@@ -1518,7 +1670,7 @@ export function Pricing() {
          and no answer is left out of the send, so it is never among the ready copies (Q3). */
       const share = rowShare(row, standing)
       if (share.needsPrice) continue
-      const asked = askedFor(row.sku)
+      const asked = askedFor(row)
       if (asked !== undefined) byHand += 1
       const going = asked === undefined ? share.ready : Math.min(asked, share.ready)
       if (going === 0) continue
@@ -1536,7 +1688,7 @@ export function Pricing() {
      press adds no copy of, already live, whose TYPED price is not the live one. The server
      applies `pipeline/sendguard.py:price_changes` against a fresh read; this only gives the
      press its words. */
-  const addsNoCopy = useCallback((row: PricingSku) => row.at_cap || askedFor(row.sku) === 0, [askedFor])
+  const addsNoCopy = useCallback((row: PricingSku) => row.at_cap || askedFor(row) === 0, [askedFor])
   const priceChanges = useMemo(() => {
     const out: { sku: string; price: string; was: string | null }[] = []
     if (source.kind !== 'run') return out
@@ -1551,6 +1703,32 @@ export function Pricing() {
     }
     return out
   }, [rows, answerFor, addsNoCopy, typedHere, source.kind])
+
+  /* THE PRICE CHANGES ON LIVE LISTINGS THIS PRESS CARRIES: each kept suggestion, and each price typed on
+     a listing that is not the one TCGplayer holds. A typed price on a suggested row goes as typed, never
+     as the suggestion. A held or locked row goes nowhere. The server rebuilds each suggestion and holds
+     it to the owner's limit; this only names what the button counts. */
+  const listedChanges = useMemo(() => {
+    const out: PriceChange[] = []
+    for (const row of rows) {
+      const one = listed.get(row.sku)
+      if (one === undefined || source.locked(row.sku) !== null) continue
+      const standing = answerFor(row)
+      if (isWithheld(standing)) continue
+      const was = moneyField(one.asking)
+      if (typeof standing === 'string' && standing.trim() !== '') {
+        const price = moneyField(standing) ?? standing.trim()
+        if (centsOf(price) !== centsOf(one.asking)) out.push({ sku: row.sku, price, was })
+        continue
+      }
+      const suggested = moneyField(one.price)
+      /* A TICKED ROW UNDER NEEDS YOU CARRIES ITS TICK: it may sit past the owner's limit, and the tick is how the server knows the owner said yes. */
+      if (one.source === 'Suggested' && suggested !== null && tickedOf(row.sku)) {
+        out.push({ sku: row.sku, price: suggested, was, source: 'suggested', ...(one.group === 'needs_you' ? { ticked: true } : {}) })
+      }
+    }
+    return out
+  }, [rows, listed, source, answerFor, tickedOf])
 
   useEffect(() => {
     latestRows.current = rows
@@ -1569,9 +1747,54 @@ export function Pricing() {
   )
 
   const suggestionFor = useCallback(
-    (sku: PricingSku): string => (sku.bucket === 'sub_threshold' ? cut : ruleFigure(sku)),
-    [cut, ruleFigure],
+    (sku: PricingSku): string => {
+      const one = listed.get(sku.sku)
+      if (one !== undefined) return moneyField(one.price) ?? ''
+      return sku.bucket === 'sub_threshold' ? cut : ruleFigure(sku)
+    },
+    [cut, ruleFigure, listed],
   )
+
+  /* THE SEND BAR'S FIGURES, as the mockup's `tally` counts them, in whole cents: new copies at their price,
+     live prices that rise or fall, and prices the owner typed. A copy waiting on a tick, a kept-off copy and a
+     copy with no price are not in it. Only the one list has them. */
+  const figures = useMemo(() => {
+    const t = { fresh: 0, freshCents: 0, up: 0, upCents: 0, down: 0, downCents: 0, typed: 0, typedCents: 0 }
+    if (source.kind !== 'run' || listed.size === 0) return null
+    for (const row of rows) {
+      if (listed.has(row.sku) || row.at_cap) continue
+      const standing = answerFor(row)
+      if (isWithheld(standing)) continue
+      const share = rowShare(row, standing)
+      if (share.needsPrice) continue
+      const asked = askedFor(row)
+      const going = asked === undefined ? share.ready : Math.min(asked, share.ready)
+      if (going <= 0) continue
+      const price = centsOf(typeof standing === 'string' ? (moneyField(standing) ?? standing) : suggestionFor(row)) ?? 0
+      if (typeof standing === 'string') {
+        t.typed += going
+        t.typedCents += going * price
+      } else {
+        t.fresh += going
+        t.freshCents += going * price
+      }
+    }
+    for (const change of [...priceChanges, ...listedChanges]) {
+      const price = centsOf(change.price) ?? 0
+      const before = centsOf(change.was)
+      if (!('source' in change && change.source === 'suggested') || before === null) {
+        t.typed += 1
+        t.typedCents += price
+      } else if (price > before) {
+        t.up += 1
+        t.upCents += price - before
+      } else if (price < before) {
+        t.down += 1
+        t.downCents += before - price
+      }
+    }
+    return { ...t, units: t.fresh + t.up + t.down + t.typed }
+  }, [source.kind, listed, rows, answerFor, askedFor, suggestionFor, priceChanges, listedChanges])
 
   /* THE LIVE COPIES A LISTING ROW MOVES (the owner's ruling, round 7): a new copy of a card
      already live carries the stored price, and the live copies move with it. */
@@ -1580,7 +1803,7 @@ export function Pricing() {
     if (source.kind !== 'run') return out
     for (const row of rows) {
       if (row.at_cap) continue
-      const asked = askedFor(row.sku)
+      const asked = askedFor(row)
       const going = asked === undefined ? row.add_to_quantity : Math.min(asked, row.add_to_quantity)
       if (going <= 0) continue
       const standing = answerFor(row)
@@ -1645,6 +1868,8 @@ export function Pricing() {
     )
     const needs: MergedSku[] = []
     const ready: MergedSku[] = []
+    const suggested: MergedSku[] = []
+    const kept: MergedSku[] = []
     const closed = new Map<string, MergedSku[]>()
     for (const row of sorted) {
       const why = groupOf(row)
@@ -1652,23 +1877,37 @@ export function Pricing() {
         const group = closed.get(why)
         if (group === undefined) closed.set(why, [row])
         else group.push(row)
-      } else if (arrival?.needs.has(row.sku)) needs.push(row)
-      else ready.push(row)
+      } else if (isWithheld(answerFor(row)) && (filterHeld || keptAtLoad.has(row.sku))) {
+        /* A ROW KEPT OFF BEFORE THIS LOAD IS IN NONE OF THE THREE GROUPS (list-notes item 12): it draws only behind the one press, in a group of its own. */
+        if (filterHeld) kept.push(row)
+      } else {
+        /* THE SERVER'S WORD ON THE GROUP, never worked out here. */
+        const group = serverGroup(row)
+        if (group === 'needs_you') needs.push(row)
+        else if (group === 'suggested') suggested.push(row)
+        else ready.push(row)
+      }
     }
-    const groups: { head: string; rows: MergedSku[] }[] = []
-    /* ON THE LIVE TAB THE HEADS SAY WHAT THEY HOLD: the rows with no market price, which the rule
-       never lowers and the owner prices by hand, then every other live listing. */
-    const live = stamp !== null
-    if (needs.length > 0) groups.push({ head: live ? 'No market price' : 'Needs You', rows: needs })
-    if (ready.length > 0) {
-      groups.push({ head: needs.length > 0 ? (live ? 'With a market price' : 'Ready') : '', rows: ready })
-    }
+    /* THE THREE GROUPS IN THE SPEC'S ORDER, each named for what the owner does there. An empty one still
+       draws, with its count of 0 and its sentence. A heading is Chicago Title Case (docs/DESIGN.md R5). */
+    const groups: { head: string; rows: MergedSku[]; lede?: string }[] = filterHeld
+      ? [{ head: titleCase('Kept off', true), lede: 'Not in this send. Release one to put it back.', rows: kept }]
+      : [
+          { head: titleCase('Needs you', true), lede: 'Nothing here goes until you tick it or type a price.', rows: needs },
+          { head: titleCase('Suggested changes', true), lede: 'Ticked rows go with the next send. Untick one to keep its live price.', rows: suggested },
+          { head: titleCase('Going at the rule', true), lede: 'These go at your rule, at the floor, or at a price you typed.', rows: ready },
+        ]
     /* THE SERVER'S SENTENCE, VERBATIM (D59): the client never composes a reason. */
     for (const [why, group] of closed) groups.push({ head: why, rows: group })
     return groups
-  }, [arrival, rows, facetShape, facetPicks, keepRow, sort, stamp, saved, askingAtSort])
+  }, [arrival, rows, facetShape, facetPicks, keepRow, sort, saved, askingAtSort, filterHeld, answerFor, keptAtLoad])
 
   const order = useMemo(() => drawn.flatMap((group) => group.rows.map((row) => row.sku)), [drawn])
+
+  /* THE HISTORY CARD (spec 9c): a price field taking focus opens it on that row, and it stays open while focus
+     is anywhere in `.pricing-list`. Its state lives in `PricingFloat`, so moving it re-renders the card alone. */
+  const floatOpener = useRef<FloatOpener>(null)
+  const setFloat = useCallback((open: FloatOpen | null) => floatOpener.current?.(open), [])
 
   const move = useCallback(
     (sku: string, by: number) => {
@@ -1689,15 +1928,26 @@ export function Pricing() {
       let text = raw.trim()
       /* ON THE LIVE TAB A TYPED PRICE IS KEPT TO THE CENT (D221): `17.5` is written, shown
          and sent as `17.50`, so the field shows exactly what the press sends. */
-      if (source.kind === 'markdown' && text !== '') {
+      if ((source.kind === 'markdown' || isListed(sku.sku)) && text !== '') {
         text = moneyField(text) ?? text
         const input = inputs.current.get(sku.sku)
         if (input && input.value !== text) input.value = text
       }
-      write(sku.sku, sku.bucket, text === '' ? undefined : text)
+      if (isListed(sku.sku)) {
+        /* A PRICE TYPED ON A LIVE LISTING RIDES THE NEXT SEND AND IS SAVED NOWHERE: it is a change to
+           what TCGplayer holds, not an answer for a card still to be listed. */
+        setListedTyped((held) => {
+          const next = { ...held }
+          if (text === '') delete next[sku.sku]
+          else next[sku.sku] = text
+          return next
+        })
+      } else {
+        write(sku.sku, sku.bucket, text === '' ? undefined : text)
+      }
       touched.current.delete(sku.sku)
     },
-    [write, source.kind],
+    [write, source.kind, isListed],
   )
 
   const snap = useCallback((sku: PricingSku, field: keyof PricingSku['snap']) => {
@@ -1723,7 +1973,7 @@ export function Pricing() {
       if (table === null) return
       const chosen = PRESETS.find((row) => row.key === key)
       if (chosen === undefined) return
-      const missing = rows.filter((row) => row.presets[key] === null)
+      const missing = (source.proposes ? copyRows : rows).filter((row) => row.presets[key] === null)
       if (source.proposes) {
         if (book?.policy?.rule !== chosen.rule || book?.policy?.basis !== chosen.basis) {
           recordUndo(
@@ -1735,7 +1985,7 @@ export function Pricing() {
         setBook((current) =>
           current === null ? current : { ...current, policy: { ...current.policy, rule: chosen.rule, basis: chosen.basis } },
         )
-        for (const row of rows) {
+        for (const row of copyRows) {
           const input = inputs.current.get(row.sku)
           if (input && answerFor(row) === undefined && row.bucket !== 'sub_threshold') {
             const next = row.presets[key] ?? ''
@@ -1748,7 +1998,7 @@ export function Pricing() {
         setNote(
           missing.length === 0
             ? null
-            : { sku: '', text: `${missing.length} of ${rows.length} rows have no price in that column and were left alone.` },
+            : { sku: '', text: `${missing.length} of ${copyRows.length} rows have no price in that column and were left alone.` },
         )
         return
       }
@@ -1802,7 +2052,7 @@ export function Pricing() {
         },
       })
     },
-    [rows, table, answerFor, source, book, recordUndo],
+    [rows, copyRows, table, answerFor, source, book, recordUndo],
   )
 
   /** The live rows a floor press would move: under the line, and nobody answered them. */
@@ -1960,7 +2210,7 @@ export function Pricing() {
         `${customSays(draft)}.`,
       )
       setBook((current) => (current === null ? current : { ...current, policy: { ...current.policy, rule, basis: draft.basis } }))
-      for (const row of rows) {
+      for (const row of copyRows) {
         if (row.bucket === 'sub_threshold' || answerFor(row) !== undefined) continue
         const input = inputs.current.get(row.sku)
         if (!input || input.value === '') continue
@@ -1969,7 +2219,7 @@ export function Pricing() {
       }
       setNote(null)
     },
-    [doc, rows, answerFor, book, recordUndo],
+    [doc, copyRows, answerFor, book, recordUndo],
   )
 
   /** Reverses one entry, whichever kind it is — shared by `undoLast` (`U`, the toolbar) and
@@ -1999,7 +2249,7 @@ export function Pricing() {
         setCustomDraft(parseCustomRule(top.before.rule, top.before.basis) ?? { kind: 'undercut', pct: '', basis: 'market' })
         /* The unanswered fields show the rule's figure, so they go back to the old rule's. */
         const was = PRESETS.find((p) => p.rule === top.before.rule && p.basis === top.before.basis)
-        for (const row of rows) {
+        for (const row of copyRows) {
           const input = inputs.current.get(row.sku)
           if (!input || answerFor(row) !== undefined || row.bucket === 'sub_threshold') continue
           const next = was === undefined ? '' : (row.presets[was.key] ?? '')
@@ -2026,6 +2276,12 @@ export function Pricing() {
         for (const w of top.writes) next.delete(w.sku)
         return next
       })
+      /* A HOLD PUT BACK TAKES THE TYPED PRICE WITH IT, as `setHold` does, so a later release does not bring it back. */
+      setListedTyped((held) => {
+        const next = { ...held }
+        for (const w of top.writes) if (isWithheld(w.before?.value)) delete next[w.sku]
+        return next
+      })
       for (const w of top.writes) {
         const row = rows.find((one) => one.sku === w.sku)
         const input = inputs.current.get(w.sku)
@@ -2037,7 +2293,7 @@ export function Pricing() {
         touched.current.delete(w.sku)
       }
     },
-    [rows, suggestionFor, answerFor],
+    [rows, copyRows, suggestionFor, answerFor],
   )
 
   /* THE NEWEST, AND ONLY THE NEWEST (`U` and the toolbar's own Undo): `docs/specs/undo.md`
@@ -2071,7 +2327,7 @@ export function Pricing() {
   /* THE CHEAP ROWS FOLLOW THE FLOOR on a run: the field shows what the send will write. */
   useEffect(() => {
     if (!source.proposes) return
-    for (const row of rows) {
+    for (const row of copyRows) {
       if (row.bucket !== 'sub_threshold') continue
       if (touched.current.has(row.sku)) continue
       const standing = answerFor(row)
@@ -2081,7 +2337,7 @@ export function Pricing() {
       input.value = cut
       flash(input)
     }
-  }, [cut, rows, answerFor, source])
+  }, [cut, copyRows, answerFor, source])
 
   const openHold = useCallback((sku: PricingSku) => {
     holdAnchor.current = holdButtons.current.get(sku.sku) ?? null
@@ -2153,11 +2409,8 @@ export function Pricing() {
     [reload],
   )
 
-  const closeHold = useCallback(() => {
-    const at = holdFor
-    setHoldFor(null)
-    if (at !== null) inputs.current.get(at)?.focus()
-  }, [holdFor])
+  /* THE PANEL GIVES FOCUS BACK TO THE LOCK THAT OPENED IT (`useReturnFocus`), so a way out never lands on the price field, whose focus opens the history card. */
+  const closeHold = useCallback(() => setHoldFor(null), [])
 
   const setHold = useCallback(
     (sku: PricingSku, reason: WithholdReason, watch: string, text: string) => {
@@ -2181,6 +2434,13 @@ export function Pricing() {
        * and `join.prices_for` skips a held SKU before it reads `no_market_data`, so a no-market
        * row is left out exactly as 'unlisted' left it out. `answerFor` reads it back. */
       const id = write(sku.sku, 'listable', record)
+      /* THE HOLD IS THE LATER WORD: a price typed on a live listing earlier this visit goes with it. */
+      setListedTyped((held) => {
+        if (held[sku.sku] === undefined) return held
+        const next = { ...held }
+        delete next[sku.sku]
+        return next
+      })
       setHoldFor(null)
       toast({
         kind: 'receipt',
@@ -2189,7 +2449,6 @@ export function Pricing() {
         ttlMs: 8000,
         action: { label: 'Undo', kbd: 'U', onPress: () => undoByIdRef.current(id) },
       })
-      inputs.current.get(sku.sku)?.focus()
     },
     [write, book],
   )
@@ -2252,7 +2511,8 @@ export function Pricing() {
         const standing = answerFor(sku)
         event.currentTarget.value = typeof standing === 'string' ? standing : source.proposes ? suggestionFor(sku) : ''
         touched.current.delete(sku.sku)
-        event.currentTarget.blur()
+        // Esc closes the card and focus stays in the field (spec 9c).
+        setFloat(null)
         return
       }
       if (key === 'ArrowDown' || key === 'ArrowUp') {
@@ -2295,7 +2555,7 @@ export function Pricing() {
         snap(sku, 'now')
       }
     },
-    [answerFor, commit, move, snap, suggestionFor, toggleHold, undoLast, openPhoto, openProduct, source],
+    [answerFor, commit, move, snap, suggestionFor, toggleHold, undoLast, openPhoto, openProduct, source, setFloat],
   )
 
   const photoSku = useMemo(() => (photoFor === null ? null : rows.find((row) => row.sku === photoFor.sku) ?? null), [photoFor, rows])
@@ -2322,7 +2582,7 @@ export function Pricing() {
     return row === undefined ? null : runBoxLabel(row)
   }, [stamp, run, detail, runs])
   const worklistName =
-    scopeName ?? (loaded.length === 0 ? 'the cards on this screen' : `${loaded.length} run${loaded.length === 1 ? '' : 's'}`)
+    scopeName ?? 'the cards on this screen'
 
   /** Re-read what may still be cleared, and the digest — NOT the answers (StrictMode runs an
    *  updater twice, and adopting them there re-dirtied the screen; see D168's receipt case). */
@@ -2477,20 +2737,21 @@ export function Pricing() {
     return out
   }, [partitioned])
 
-  const subCount = subThresholdSkus(rows).length
+  const subCount = subThresholdSkus(copyRows).length
   const roster = work?.roster ?? []
   const cutFrom: 'run' | 'store' | 'default' = thisRunCut !== undefined ? 'run' : storeCut !== null ? 'store' : 'default'
   const stranded = strandedFlat(doc, cut)
 
-  /* ---------------------------------------------------------------------- the Live tab */
+  /* ------------------------------------------------------------------------ the read */
 
   const [liveSettings, setLiveSettings] = useState(false)
   const [liveBusy, setLiveBusy] = useState(false)
   const [liveFailure, setLiveFailure] = useState<Failure | null>(null)
   const newest = markdowns?.find((one) => one.stamp === stamp) ?? markdowns?.[0] ?? null
 
-  /** READ WHAT IS LIVE AGAIN: fetch the live export, then write a new read with these settings,
-   *  and open it. The Mark-down sheet's two presses, as one (D277, Q6). */
+  /** READ WHAT IS LIVE AGAIN: fetch the live export, then write a new read with these settings.
+   *  A read opened by its stamp opens the new one; the one list reads its rows again. The
+   *  Mark-down sheet's two presses, as one (D277, Q6). */
   const readLive = useCallback(
     async (ask: LiveAsk, file: File | null) => {
       setLiveBusy(true)
@@ -2511,19 +2772,18 @@ export function Pricing() {
         setLiveSettings(false)
         const list = await getMarkdowns()
         setMarkdowns(list.markdowns)
-        if (answer.stamp !== null) window.location.hash = `#/pricing?markdown=${answer.stamp}`
+        if (answer.stamp !== null) {
+          if (readView) window.location.hash = `#/pricing?markdown=${answer.stamp}`
+          else reload()
+        }
       } catch (err) {
         setLiveFailure(describeFailure(err))
       } finally {
         setLiveBusy(false)
       }
     },
-    [],
+    [readView, reload],
   )
-
-  const goTab = useCallback((tab: 'send' | 'live') => {
-    window.location.hash = tab === 'live' ? '#/pricing?live' : '#/pricing'
-  }, [])
 
   /* ------------------------------------------------------------------------ the chrome */
 
@@ -2542,19 +2802,29 @@ export function Pricing() {
     </>
   )
 
+  /* THE ONE PRESS THAT SHOWS THE KEPT-OFF ROWS, in the filter row (list.html). Its count is the rows it draws: the lens and the kind stay on through it. */
+  const keptPress =
+    heldUnderChips.length === 0 && !filterHeld ? null : (
+      <Button
+        size="sm"
+        icon="lock"
+        variant={filterHeld ? 'primary' : 'default'}
+        aria-pressed={filterHeld}
+        onClick={(event) => {
+          if (!filterHeld) return showRows({}, true)
+          /* THE PRESS LEAVES WITH NO HELD ROW LEFT: focus moves to the search field beside it, so a keyboard user keeps their place. */
+          const bar = event.currentTarget.closest('.pricing-filterbar')
+          flushSync(() => setFilterHeld(false))
+          if (heldUnderChips.length === 0) bar?.querySelector<HTMLInputElement>('.bn-filterbar-search input')?.focus()
+        }}
+      >
+        {titleCase('Show kept off', true)} <span data-value>({heldUnderChips.length})</span>
+      </Button>
+    )
+
   const toolbar = (
     <div className="pricing-tools">
-      <Segmented<'send' | 'live'>
-        className="pricing-tabs"
-        label="Which list"
-        value={liveTab ? 'live' : 'send'}
-        options={[
-          { value: 'send', label: 'Unsent' },
-          { value: 'live', label: 'Live' },
-        ]}
-        onChange={goTab}
-      />
-      {liveTab || roster.length === 0 ? null : (
+      {readView || roster.length === 0 ? null : (
         <Button
           ref={runsAnchor}
           size="sm"
@@ -2564,10 +2834,10 @@ export function Pricing() {
           aria-haspopup="dialog"
           onClick={() => setRunsOpen((open) => !open)}
         >
-          {picked.size === 0 ? 'All' : `${picked.size} ${picked.size === 1 ? 'run' : 'runs'}`}
+          {picked.size === 0 ? 'All' : `${picked.size} picked`}
         </Button>
       )}
-      {!liveTab || sheet === null ? null : (
+      {sheet === null ? null : (
         <Segmented<'all' | 'offered' | 'refused'>
           size="sm"
           value={lens}
@@ -2581,7 +2851,7 @@ export function Pricing() {
           onChange={setLens}
         />
       )}
-      {!liveTab || sheet === null ? null : (
+      {sheet === null ? null : (
         <Segmented<'both' | 'singles' | 'sealed'>
           size="sm"
           value={kind === '' ? 'both' : kind}
@@ -2593,17 +2863,6 @@ export function Pricing() {
           ]}
           onChange={(next) => setKindParam(next === 'both' ? '' : next)}
         />
-      )}
-      {held.length === 0 && !filterHeld ? null : (
-        <Button
-          size="sm"
-          icon="lock"
-          variant={filterHeld ? 'primary' : 'default'}
-          aria-pressed={filterHeld}
-          onClick={() => setFilterHeld((on) => !on)}
-        >
-          {`Kept off ${held.length}`}
-        </Button>
       )}
     </div>
   )
@@ -2619,8 +2878,11 @@ export function Pricing() {
       },
       null,
     )
-  const ruleLine = liveTab ? (
-    <p className="pricing-rule-line">
+  /* WITH NO NEW COPY ON THE LIST, THE READ IS THE RULE LINE: its words, and its own Change. With new
+     copies the rule line is the rule's, and the read keeps a line of its own beneath it. */
+  const readOnly = readView || (loaded.length === 0 && sheet !== null)
+  const readLine = (
+    <p className={readOnly ? 'pricing-rule-line' : 'pricing-read-line'}>
       <span>
         {newest === null ? (
           'Nothing read from TCGplayer yet.'
@@ -2634,13 +2896,13 @@ export function Pricing() {
         )}{' '}
         {newest?.at ? <span className="pricing-rule-when">Read {clockTime(newest.at)}, {absoluteDate(newest.at)}.</span> : null}
       </span>
-      {ruleRows.length === 0 ? null : (
+      {!readView || ruleRows.length === 0 ? null : (
         <Button size="sm" icon="trendDown" onClick={markDown}>
           {`Mark down ${ruleRows.length}`}
         </Button>
       )}
       <Button size="sm" variant="quiet" onClick={() => setLiveSettings(true)}>
-        Change
+        {readOnly ? 'Change' : 'Read settings'}
       </Button>
       {readStale ? null : (
         <Button size="sm" icon="refresh" busy={liveBusy} disabled={liveBusy} onClick={readAgain}>
@@ -2651,7 +2913,8 @@ export function Pricing() {
         {liveBusy ? 'Reading what is live at TCGplayer…' : ''}
       </span>
     </p>
-  ) : (
+  )
+  const ruleLine = readOnly ? readLine : (
     <p className="pricing-rule-line">
       <span>
         {/* F5 verbiage cut: "Nothing lists under the floor" restated the number that
@@ -2694,8 +2957,8 @@ export function Pricing() {
 
   /* THE MASTER-SET TAKE-OFFS STILL OWED are read with the worklist, so the bar's first paint holds their line (D313). */
   const owedTakeOffs = useOwedTakeOffs()
-  /* THE WORKLIST, OR THE OWED LIST, IS STILL IN FLIGHT on the Unsent tab. */
-  const barLoading = !liveTab && ((loading && table === null) || owedTakeOffs.loading)
+  /* THE WORKLIST, OR THE OWED LIST, IS STILL IN FLIGHT on the one list. */
+  const barLoading = !readView && ((loading && table === null) || owedTakeOffs.loading)
 
   /* THE SEND BAR'S THREE TILES (the owner's Preflight pick): where pricing stands before the one
      press, from the same figures the line said. Each link shows the rows its tile counts, so it
@@ -2742,17 +3005,8 @@ export function Pricing() {
   const tally = (
     <div className="pricing-tally">
       {pricedTile}
-      <Tile data-tile="held" pending={barLoading} icon="lock" tone="info" title={`${progress.held} kept off TCGplayer`} room="Not in this send. Show kept off">
-        {progress.held > 0 ? (
-          <>
-            Not in this send.{' '}
-            <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => showRows({}, true)}>
-              Show kept off
-            </Button>
-          </>
-        ) : (
-          'None kept off.'
-        )}
+      <Tile data-tile="held" pending={barLoading} icon="lock" tone="info" title={`${progress.held} kept off TCGplayer`} room="Not in this send.">
+        {progress.held > 0 ? 'Not in this send.' : 'None kept off.'}
       </Tile>
       <Tile
         data-tile="ready"
@@ -2777,10 +3031,36 @@ export function Pricing() {
   /* THE FIRST PAINT HOLDS THE BAR'S ROOM (D313): while the worklist is in flight the tiles are drawn
      pending and the press is the card's own, off with nothing to send, so the bar is the height it
      will be and the list lands under it, not over it. */
+  /* A READ OLDER THAN A DAY OFFERS READ AGAIN IN PLACE OF SEND: on a read opened by its stamp, and on the
+     one list when no new copy waits to go and nothing is owed (a new copy can always be sent). */
+  const staleRead = readStale && (readView || (loaded.length === 0 && listed.size === 0 && owedTakeOffs.owed.length === 0))
   const bar =
-    !liveTab && (barLoading || loaded.length > 0 || owedTakeOffs.owed.length > 0) ? (
-      <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send to TCGplayer" aria-busy={barLoading ? 'true' : undefined}>
-        {tally}
+    !readView && !staleRead && (barLoading || loaded.length > 0 || listed.size > 0 || owedTakeOffs.owed.length > 0) ? (
+      <aside className="pricing-bar" data-float-ceiling="" ref={measureBar} role="region" aria-label="Send to TCGplayer" aria-busy={barLoading ? 'true' : undefined}>
+        {figures === null ? tally : null}
+        {barLoading || figures === null ? null : (
+          /* THE FIGURES THE PRESS WILL CARRY, in the mockup's words: copies in all, then each kind with its total. */
+          <div className="pricing-figures" role="complementary" aria-label="Send to TCGplayer">
+            <p className="pricing-figures-head">{figures.units === 1 ? '1 copy' : `${figures.units} copies`} ready to send.</p>
+            <p className="pricing-figures-parts">
+              <span>
+                <b>{figures.fresh}</b> new, listing for <Money value={figures.freshCents / 100} />
+              </span>
+              <span>
+                <b>{figures.up}</b> {figures.up === 1 ? 'rise' : 'rises'}, up <Money value={figures.upCents / 100} /> in all
+              </span>
+              <span>
+                <b>{figures.down}</b> {figures.down === 1 ? 'fall' : 'falls'}, down <Money value={figures.downCents / 100} /> in all
+              </span>
+              <span>
+                <b>{figures.typed}</b> typed by you, listing for <Money value={figures.typedCents / 100} />
+              </span>
+              <span>
+                <b>{progress.held}</b> kept off TCGplayer, not in this send
+              </span>
+            </p>
+          </div>
+        )}
         {barLoading ? (
           /* THE PENDING BAR DRAWS THE CARD'S OWN CLASSES AND NOTHING ELSE: the same press and doors, off, so the bar is the
              height it will be, and no read starts for a card that has no worklist yet (the mount stays inside its budget). */
@@ -2804,6 +3084,8 @@ export function Pricing() {
             copies={progress.outCopies}
             skus={progress.outRows}
             priceChanges={priceChanges}
+            units={figures?.units}
+            listed={listedChanges}
             liveMoves={liveMoves}
             settled={!dirty && !saving}
             saveFailed={saveFailed}
@@ -2813,8 +3095,8 @@ export function Pricing() {
           />
         )}
       </aside>
-    ) : liveTab && stamp !== null && readStale ? (
-      <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send these prices">
+    ) : staleRead ? (
+      <aside className="pricing-bar" data-float-ceiling="" ref={measureBar} role="region" aria-label="Send these prices">
         <p className="pricing-bar-says">
           {sheet?.at ? `This read was taken on an earlier day, ${absoluteDate(sheet.at)}. ` : 'This read has no date. '}
           Read again to see what would change.
@@ -2827,8 +3109,8 @@ export function Pricing() {
           </div>
         </div>
       </aside>
-    ) : liveTab && stamp !== null ? (
-      <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send these prices">
+    ) : readView ? (
+      <aside className="pricing-bar" data-float-ceiling="" ref={measureBar} role="region" aria-label="Send these prices">
         <p className="pricing-bar-says">
           {pushable.length === 0 ? 'Type a price on a listing to change it.' : `${pushable.length} new ${pushable.length === 1 ? 'price' : 'prices'} ready`}
         </p>
@@ -2916,7 +3198,7 @@ export function Pricing() {
         </Notice>
       )}
       {(work?.skipped ?? []).length === 0 ? null : (
-        <Notice tone="warn" compact title={`${(work?.skipped ?? []).length} run(s) could not be read, and are left out of this list.`} />
+        <Notice tone="warn" compact title={`${(work?.skipped ?? []).length} ${(work?.skipped ?? []).length === 1 ? 'batch' : 'batches'} could not be read, and ${(work?.skipped ?? []).length === 1 ? 'is' : 'are'} left out of this list.`} />
       )}
       {queued === 0 ? null : (
         <Notice tone="warn" compact title={`${queued} ${queued === 1 ? 'card waits' : 'cards wait'} in Review, and a send now leaves them out.`} />
@@ -2943,25 +3225,15 @@ export function Pricing() {
           /* THE SERVER'S OWN SENTENCE NAMES THE CAUSE (UX-126), and the retry looks like every
              other retry. No claim about the runs is drawn under it. */
           <Retry title={failure.message} code={failure.code} detail={failure.message} busy={loading} onRetry={reload} />
-        ) : liveTab ? (
-          <EmptyState
-            icon="tag"
-            title="Empty"
-            actions={
-              <Button variant="primary" icon="refresh" busy={liveBusy} disabled={liveBusy} onClick={() => setLiveSettings(true)}>
-                Refresh
-              </Button>
-            }
-          />
         ) : roster.length === 0 ? (
           <EmptyState
             icon="tag"
-            title="Nothing to Price Yet"
-            body="Price your live listings on the Live tab, or read a box on Review."
+            title="Empty"
+            body="Read what is live at TCGplayer, or add cards in Review."
             actions={
               <>
-                <Button variant="primary" icon="tag" onClick={() => goTab('live')}>
-                  Price Your Live Listings
+                <Button variant="primary" icon="refresh" busy={liveBusy} disabled={liveBusy} onClick={() => setLiveSettings(true)}>
+                  Refresh
                 </Button>
                 <Button icon="play" onClick={() => (window.location.hash = '#/review')}>
                   Go to Review
@@ -2972,7 +3244,7 @@ export function Pricing() {
         ) : picked.size > 0 ? (
           <EmptyState
             icon="filter"
-            title="Nothing to price in those runs"
+            title={titleCase('Nothing to price in that pick', true)}
             body="Every card there already has an answer."
             actions={
               <Button variant="primary" icon="x" onClick={clearPicked}>
@@ -2981,10 +3253,10 @@ export function Pricing() {
             }
           />
         ) : (
-          <EmptyState icon="check" title="Everything is sent" body="Every copy is at TCGplayer, kept off it, or has left its box." />
+          <EmptyState icon="check" title="Everything is sent" body="Every copy is at TCGplayer, kept off it, or gone from your cards." />
         )
 
-  const showList = table !== null && (table.length > 0 || liveTab)
+  const showList = table !== null
 
   /* THE OVERLAYS SIT BESIDE THE PAGE, NOT IN IT: `Page` draws `empty` in place of its children,
      and the empty states have presses that open these sheets. */
@@ -2999,7 +3271,7 @@ export function Pricing() {
       status={hasStatus ? status : undefined}
       loading={loading && table === null && !barLoading}
       empty={
-        showList || empty === null || liveTab || owedTakeOffs.owed.length === 0 ? (showList ? undefined : empty) : (
+        showList || empty === null || owedTakeOffs.owed.length === 0 ? (showList ? undefined : empty) : (
           /* A TAKE-OFF OWED KEEPS THE BAR, even with nothing else to send: the empty state sits under it. */
           <div className="pricing-body">
             {bar}
@@ -3008,26 +3280,32 @@ export function Pricing() {
         )
       }
     >
-      <div className="pricing-body" data-live={liveTab ? 'true' : undefined}>
+      <div className="pricing-body" data-live={readView ? 'true' : undefined}>
         {bar}
         {/* THE LIST'S OWN LOADING SHAPE SITS UNDER THE BAR, which `Page` would otherwise draw alone. */}
         {barLoading ? <Loading /> : (
         <>
         {/* ONE BLOCK SAYS HOW FRESH EVERYTHING IS: the time, the press, and under them the price moves and
-            how the daily and trends reads ended. The Live tab has no refresh, so it draws the moves alone. */}
+            how the daily and trends reads ended. A read opened by its stamp has no refresh, so it draws the moves alone. */}
         {(() => {
           const moves = (
             <PriceMovers
-              bare={!liveTab}
-              trendsNote={liveTab || saved === null ? null : saved.note}
-              trendsLoading={liveTab || (saved === null && !savedFailed)}
+              bare={!readView}
+              trendsNote={readView || saved === null ? null : saved.note}
+              trendsLoading={readView || (saved === null && !savedFailed)}
               trendsFailed={savedFailed}
               narrow={narrow}
             />
           )
-          return liveTab ? moves : <PricesAsOf state={refresh.state} refused={refresh.refused} onPress={refresh.press}>{moves}</PricesAsOf>
+          return readView ? moves : <PricesAsOf state={refresh.state} refused={refresh.refused} onPress={refresh.press}>{moves}</PricesAsOf>
         })()}
         {ruleLine}
+        {valueLine === null || readView ? null : (
+          <p className="pricing-value-line">
+            Value line <Money value={Number(valueLine)} />. A card worth this or more waits for you.
+          </p>
+        )}
+        {readOnly || sheet === null ? null : readLine}
         {/* UN-11: outlives the toast, and a reload. Gone once a send has carried a cleared
             SKU (`clear_built_on`) — the next read finds no `last_clear`. */}
         {kept.length === 0 ? null : (
@@ -3048,10 +3326,14 @@ export function Pricing() {
             ) : null}
           </Notice>
         )}
-        {liveTab ? null : <UnreachableLine at={work?.unreachable ?? null} />}
+        {readView ? null : <UnreachableLine at={work?.unreachable ?? null} />}
 
-        {table !== null && table.length === 0 && liveTab ? (
-          <EmptyState icon="tag" title="Nothing live in that read" body="Every row TCGplayer returned was sold out." />
+        {table !== null && table.length === 0 ? (
+          readView ? (
+            <EmptyState icon="tag" title="Nothing live in that read" body="Every row TCGplayer returned was sold out." />
+          ) : (
+            <EmptyState icon="check" title="Nothing to Price Yet" body="Every copy is at TCGplayer, kept off it, or gone from your cards." />
+          )
         ) : (
           <>
           {rows.length === 0 ? null : (
@@ -3062,14 +3344,23 @@ export function Pricing() {
               onChange={setFacetPicks}
               count={{ shown: drawn.reduce((sum, group) => sum + group.rows.length, 0), total: rows.length, noun: { one: 'item', many: 'items' } }}
               search={{ query, onChange: setQuery, placeholder: 'Name, set, number or SKU…', label: 'Search This List' }}
+              action={keptPress}
               sort={{ options: sortOptions, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
             />
           )}
-          {filtering && drawn.length === 0 ? (
+          {filtering && order.length === 0 ? (
             <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." didYouMean={{ name: nearName, onPick: setQuery }} />
           ) : null}
-          <div className="pricing-list" ref={measureList} data-copies={source.copies ? 'some' : 'none'} data-range={rangeOn ? 'some' : undefined}>
+          <div className="pricing-list" ref={measureList} data-copies={source.copies ? 'some' : 'none'} data-range={rangeOn ? 'some' : undefined} data-now={oneList ? 'some' : undefined} data-send={sendOn ? 'some' : undefined}
+            // Focus leaving the list closes the card. The card takes no focus in this mode, so the list is all there is to stay in.
+            onBlur={(event) => {
+              const to = event.relatedTarget as Element | null
+              // The card a door opens takes focus; that is still the list's card.
+              if (!event.currentTarget.contains(to) && to?.closest('[data-history-float]') == null) setFloat(null)
+            }}
+          >
             <div className="pricing-caption" role="row">
+              {sendOn ? <span className="pricing-send" role="columnheader">Send</span> : null}
               {source.copies ? <span /> : null}
               {/* "ITEM", NOT "CARD" (the owner's add-on, 2026-09-26): the rows include sealed
                   product too, which is not a card. */}
@@ -3081,15 +3372,18 @@ export function Pricing() {
               ) : null}
               <span className="pricing-col-trend" role="columnheader">Trend</span>
               {source.copies ? <span className="pricing-col-qty" role="columnheader">Qty</span> : null}
-              <SortHeader grid className="pricing-col-price" sortKey="asking" value={sort} onChange={setSort} rest={SORT_AT_REST}>{liveTab ? 'New price' : 'Price'}</SortHeader>
+              {oneList ? <span className="pricing-now-ghost" aria-hidden="true" /> : null}
+              <SortHeader grid className="pricing-col-price" sortKey="asking" value={sort} onChange={setSort} rest={SORT_AT_REST}>{readView ? 'New price' : 'Price'}</SortHeader>
+              {source.copies ? <span className="pricing-col-src" role="columnheader">From</span> : null}
               <span />
             </div>
             {drawn.map((group) => (
-              <section className="pricing-group" key={group.head || 'ready'} aria-label={group.head || 'Ready'}>
+              <section className="pricing-group" key={group.head} aria-label={group.head}>
                 {group.head === '' ? null : (
-                  <h2 className="pricing-group-head">
+                  <h2 className="pricing-group-head" data-empty={group.rows.length === 0 ? 'true' : undefined}>
                     <span className="pricing-group-why">{group.head}</span>
                     <span className="pricing-group-count">{group.rows.length}</span>
+                    {group.lede === undefined ? null : <span className="pricing-group-lede">{group.lede}</span>}
                   </h2>
                 )}
                 {group.rows.map((sku, index) => (
@@ -3098,10 +3392,42 @@ export function Pricing() {
                     sku={sku}
                     index={index}
                     source={source}
+                    send={sendOn}
                     standing={answerFor(sku)}
-                    flag={liveFlag(flagOf(sku, answerFor(sku), source.locked(sku.sku) !== null, cut), liveTab)}
+                    flag={liveFlag(flagOf(sku, answerFor(sku), source.locked(sku.sku) !== null, cut), readView || oneList)}
                     suggestion={suggestionFor(sku)}
-                    asking={liveTab ? (askingOf.get(sku.sku) ?? null) : undefined}
+                    from={fromWord(sku)}
+                    was={!oneList ? undefined : (() => {
+                      const one = listed.get(sku.sku)
+                      if (one === undefined) return null
+                      const standing = answerFor(sku)
+                      const shown = typeof standing === 'string' && standing.trim() !== '' ? (moneyField(standing) ?? standing.trim()) : moneyField(one.price)
+                      return shown !== null && centsOf(shown) !== centsOf(one.asking) ? moneyField(one.asking) : null
+                    })()}
+                    fresh={
+                      readView || listed.has(sku.sku)
+                        ? undefined
+                        : {
+                            reason:
+                              valueLine !== null && tickableFresh(sku) ? (
+                                <>
+                                  Worth <Money value={Number(valueLine)} /> or more. Check the price before it goes.
+                                </>
+                              ) : null,
+                            tick: tickableFresh(sku) ? { on: ticks[sku.sku] === true, onChange: (on: boolean) => setTicks((held) => ({ ...held, [sku.sku]: on })) } : null,
+                          }
+                    }
+                    listed={(() => {
+                      const one = listed.get(sku.sku)
+                      if (one === undefined) return undefined
+                      const ticking = one.source === 'Suggested' && source.locked(sku.sku) === null && !isWithheld(answerFor(sku))
+                      return {
+                        reason: one.reason,
+                        tone: one.group === 'needs_you' ? ('warn' as const) : ('quiet' as const),
+                        tick: ticking ? { on: tickedOf(sku.sku), onChange: (on: boolean) => setTicks((held) => ({ ...held, [tickKey(sku.sku)]: on })) } : null,
+                      }
+                    })()}
+                    asking={readView ? (askingOf.get(sku.sku) ?? null) : listed.get(sku.sku) === undefined ? undefined : (listed.get(sku.sku)?.asking ?? null)}
                     note={note !== null && note.sku === sku.sku ? note.text : null}
                     readAge={(() => { const at = source.readAtOf(sku); return typeof at === 'number' && Number.isFinite(at) && at > 0 ? relativeDate(at * 1000) : null })()}
                     trend={savedRead(saved, sku.sku)}
@@ -3111,6 +3437,8 @@ export function Pricing() {
                     asked={sendQty[sku.sku] ?? ''}
                     onAsked={(text) => setAsked(sku.sku, text)}
                     holding={holdFor === sku.sku}
+                    onPriceFocus={(rowEl) => setFloat({ sku: sku.sku, anchor: rowEl })}
+                    onDoor={(rowEl, door) => setFloat({ sku: sku.sku, anchor: rowEl, door })}
                     registerInput={(node) => {
                       if (node) inputs.current.set(sku.sku, node)
                       else inputs.current.delete(sku.sku)
@@ -3123,7 +3451,7 @@ export function Pricing() {
                       if (on) hovered.current = sku.sku
                       else if (hovered.current === sku.sku) hovered.current = null
                     }}
-                    onPhoto={() => openPhoto(sku)}
+                    onPhoto={listed.has(sku.sku) ? null : () => openPhoto(sku)}
                     onHold={() => toggleHold(sku)}
                     onUnhold={() => void unhold(sku)}
                     unholding={unholding === sku.sku}
@@ -3146,7 +3474,15 @@ export function Pricing() {
       </div>
       </Page>
 
-      <Popover open={runsOpen} onClose={() => setRunsOpen(false)} anchor={runsAnchor} label="Which runs to price" className="pricing-runs-pop">
+      <PricingFloat
+        opener={floatOpener}
+        suggestionOf={(sku) => {
+          const row = rows.find((one) => one.sku === sku)
+          return row === undefined ? '' : suggestionFor(row)
+        }}
+      />
+
+      <Popover open={runsOpen} onClose={() => setRunsOpen(false)} anchor={runsAnchor} label="Which cards to price" className="pricing-runs-pop">
         <PickRuns runs={roster} picked={picked} onToggle={toggleRun} onClear={clearPicked} />
       </Popover>
 
@@ -3187,7 +3523,7 @@ export function Pricing() {
         cut={cut}
         from={cutFrom}
         under={subCount}
-        above={rows.length - subCount}
+        above={copyRows.length - subCount}
         stranded={stranded}
         runName={run === null ? null : (scopeName ?? run)}
         onCut={cutFrom === 'run' ? setRunCut : setCut}
@@ -3204,7 +3540,7 @@ export function Pricing() {
         cut={cut}
         note={note !== null && note.sku === '' ? note.text : null}
         onApplyCut={stamp === null ? null : applyCut}
-        onPreset={stamp === null ? null : applyPreset}
+        onPreset={applyPreset}
         onRead={(ask, file) => void readLive(ask, file)}
       />
 
@@ -3264,18 +3600,59 @@ function fieldState(
   /* A TYPED PRICE ON A ROW WITH NO MARKET PRICE IS WHAT THE SEND LISTS AT (the owner's ruling), so
      the row says only that there is no market to compare it with. */
   if (sku.bucket === 'no_market_data') {
-    return typeof standing === 'string' ? { text: 'No market price', tone: 'quiet' } : { text: 'Needs a price', tone: 'warn' }
+    /* A ROW WITH NO PRICE SAYS SO ONCE, in the From column ("No price yet", `fromWord`), not again under the field. */
+    return typeof standing === 'string' ? { text: 'No market price', tone: 'quiet' } : null
   }
   return null
+}
+
+/** `door` is the history door that opened the card: the card takes focus and gives it back to the door. */
+type FloatOpen = { readonly sku: string; readonly anchor: HTMLElement; readonly door?: HTMLElement }
+type FloatOpener = (open: FloatOpen | null) => void
+
+/** The history card's host (spec 9c). `opener` moves or closes it. The owner's sales for its chart come from the
+ *  orders, read on the first open. */
+function PricingFloat({ opener, suggestionOf }: { readonly opener: Ref<FloatOpener>; readonly suggestionOf: (sku: string) => string }) {
+  const [float, setFloat] = useState<FloatOpen | null>(null)
+  useImperativeHandle(opener, () => (open) => setFloat((was) => (was?.sku === open?.sku && was?.anchor === open?.anchor && was?.door === open?.door ? was : open)), [])
+  const [orders, setOrders] = useState<readonly OrderRow[]>([])
+  const ordersAsked = useRef(false)
+  useEffect(() => {
+    if (float === null || ordersAsked.current) return
+    ordersAsked.current = true
+    // A failed read leaves the chart without sale marks; the card draws the rest.
+    // It also clears the ask, so the next open tries again.
+    getOrders().then((payload) => setOrders(payload.orders)).catch(() => { ordersAsked.current = false })
+  }, [float])
+  const floatSku = float?.sku
+  const fills = useMemo(() => (floatSku === undefined ? [] : fillsFor(floatSku, orders)), [floatSku, orders])
+  if (float === null || !float.anchor.isConnected) return null
+  const suggestion = suggestionOf(float.sku)
+  return (
+    <HistoryFloat
+      sku={float.sku}
+      anchor={float.anchor}
+      mode={float.door === undefined ? 'focus' : 'door'}
+      restoreFocus={float.door}
+      fills={fills}
+      suggestion={suggestion === '' ? undefined : suggestion}
+      onClose={() => setFloat(null)}
+    />
+  )
 }
 
 function PricingRow({
   sku,
   index,
   source,
+  send,
   standing,
   flag,
   suggestion,
+  listed,
+  fresh,
+  from,
+  was,
   asking,
   note,
   readAge,
@@ -3286,6 +3663,8 @@ function PricingRow({
   asked,
   onAsked,
   holding,
+  onPriceFocus,
+  onDoor,
   registerInput,
   registerHold,
   onHover,
@@ -3300,9 +3679,21 @@ function PricingRow({
   sku: MergedSku
   index: number
   source: PricingSource
+  /** The list draws a Send column: every row draws its cell, with the tick in it or empty. */
+  send: boolean
   standing: unknown
   flag: Flag | null
   suggestion: string
+  /** Set on a live listing of the one list: the server's reason for its price, and the tick that keeps
+   *  a suggestion in the next send (`null` where there is no suggestion to keep). */
+  listed?: { reason: string; tone: 'warn' | 'quiet'; tick: { on: boolean; onChange: (on: boolean) => void } | null }
+  /** Set on a new copy of the one list: the reason it waits for the owner, if it has one, and the tick that lets it go. */
+  fresh?: { reason: ReactNode; tick: { on: boolean; onChange: (on: boolean) => void } | null }
+  /** Where the price in the field comes from (Rule, Floor, You, Suggested, Live, or No price yet), or null. */
+  from: string | null
+  /** The price TCGplayer holds now, drawn before the arrow when the field holds a different one. Undefined
+   *  where the list has no live listing, and so no track for it. */
+  was: string | null | undefined
   asking: string | null | undefined
   note: string | null
   readAge: string | null
@@ -3315,10 +3706,14 @@ function PricingRow({
   asked: string
   onAsked: (text: string) => void
   holding: boolean
+  /** The price field took focus: the row it sits in, which the history card floats above. */
+  onPriceFocus: (row: HTMLElement) => void
+  /** The history door was pressed: the row it sits in and the door itself, which gets focus back. */
+  onDoor: (row: HTMLElement, door: HTMLElement) => void
   registerInput: (node: HTMLInputElement | null) => void
   registerHold: (node: HTMLButtonElement | null) => void
   onHover: (on: boolean) => void
-  onPhoto: () => void
+  onPhoto: (() => void) | null
   onHold: () => void
   /** Put the copies the owner removed by hand back on the list. */
   onUnhold: () => void
@@ -3332,6 +3727,8 @@ function PricingRow({
   const why = withheld && standing !== 'unlisted' && standing.note ? standing.note : null
   const first = sku.positions[0] ?? null
   const state = fieldState(sku, standing, asking)
+  /* THE TICK THAT LETS A SUGGESTION OR A NEW COPY THAT NEEDS THE OWNER GO, by its name. */
+  const tick = listed?.tick ?? fresh?.tick ?? null
   /* THE QTY FIELD SHOWS ONLY WHERE IT CAN SAY SOMETHING (UX-084, TXT-08): more than one copy, or a
      figure already typed. A single copy goes, or is held; there is no quantity to choose. */
   const showQty = source.copies && !sku.at_cap && (sku.copies > 1 || asked !== '')
@@ -3341,7 +3738,9 @@ function PricingRow({
      contradiction when the two are really different questions (what is on hand, and what a
      cap still lets go out). */
   const copiesLine =
-    sku.on_hand === undefined
+    listed !== undefined
+      ? null
+      : sku.on_hand === undefined
       ? [sku.copies > 1 ? `${sku.copies} copies` : null, sku.over_cap ? `${sku.add_to_quantity} can be sent` : null]
           .filter((part): part is string => part !== null)
           .join(', ') || null
@@ -3359,12 +3758,26 @@ function PricingRow({
       data-flag={flag?.kind}
       data-hold={holding ? 'open' : undefined}
     >
-      {!source.copies ? null : (
-        <PricingThumb at={first} name={sku.name} onOpen={onPhoto} imageUrl={sku.image_url} />
-      )}
+      {send ? (
+        <span className="pricing-send">
+          {tick === null ? null : (
+            <label className="bn-check pricing-tick">
+              <input
+                type="checkbox"
+                checked={tick.on}
+                aria-label={`Send the new price for ${sku.name}`}
+                onChange={(event) => tick.onChange(event.currentTarget.checked)}
+              />
+            </label>
+          )}
+        </span>
+      ) : null}
+      {/* A LIVE LISTING HAS NO PHOTOGRAPH OF OURS: its thumbnail is the stock photo alone, with no press. */}
+      {!source.copies ? null : <PricingThumb at={first} name={sku.name} onOpen={onPhoto} imageUrl={sku.image_url ?? null} />}
 
       <div className="pricing-id">
-        <span className="pricing-name-line">
+        {/* THE WHOLE NAME, for the column that cuts it with an ellipsis. */}
+        <span className="pricing-name-line" title={displayName(sku.name, sku.row['Number'] ?? '')}>
           <ProductLink sku={sku.sku} name={sku.name} className="pricing-name">
             {displayName(sku.name, sku.row['Number'] ?? '')}
           </ProductLink>
@@ -3388,8 +3801,8 @@ function PricingRow({
         )}
         <span className="pricing-meta">
           {/* "NEAR MINT" STAYS ON EVERY ROW (the owner's ruling, D137). */}
-          <span className="pricing-cond">{sku.condition}</span>
-          <span>{sku.set_name}</span>
+          {sku.condition === '' ? null : <span className="pricing-cond">{sku.condition}</span>}
+          <span className="pricing-set" title={sku.set_name}>{sku.set_name}</span>
           {/* THE NUMBER ALWAYS DRAWS HERE, NEVER IN THE NAME (the owner's review, 2026-09-26:
               "Garganacl - 084/132" carried its number in the name while every other row carried
               it here — one fact, stated in two different places depending on the name). The
@@ -3433,16 +3846,32 @@ function PricingRow({
         </span>
       </div>
 
-      <span className="pricing-ref pricing-col-market" data-empty={sku.snap.market === null ? 'true' : undefined}>
-        <span className="pricing-ref-label">Market </span>
-        {/* The exact string `m` writes into the field; `Money` draws it to the same two places. */}
-        {sku.snap.market === null ? '—' : <Money value={Number(sku.snap.market)} />}
-        {/* THE AGE HAS ITS LINE ON EVERY ROW, drawn or not, so a refresh moves no row (D313). */}
-        <span className="pricing-ref-age">{age}</span>
-      </span>
-      <span className="pricing-ref pricing-col-low" data-empty={sku.snap.low === null ? 'true' : undefined}>
-        <span className="pricing-ref-label">Lowest </span>
-        {sku.snap.low === null ? '—' : <Money value={Number(sku.snap.low)} />}
+      {/* WHY THE SERVER SUGGESTS THIS PRICE, in its own words (D59): the row's second line, under the name
+          and the figures, so it reads on one line. A row has a live listing's reason or a new copy's, never both. */}
+      {listed === undefined || listed.reason === '' ? null : (
+        <span className="pricing-reason" data-tone={listed.tone}>
+          {listed.reason}
+        </span>
+      )}
+      {fresh === undefined || fresh.reason === null ? null : (
+        <span className="pricing-reason" data-tone="warn">
+          {fresh.reason}
+        </span>
+      )}
+
+      {/* MARKET AND LOWEST ARE TWO COLUMNS ON A DESK AND ONE LABELLED LINE UNDER THE FACTS ON A NARROW ONE (list notes item 16): `display: contents` on a desk, a grid item of their own below it. */}
+      <span className="pricing-refs">
+        <span className="pricing-ref pricing-col-market" data-empty={sku.snap.market === null ? 'true' : undefined}>
+          <span className="pricing-ref-label">Market </span>
+          {/* The exact string `m` writes into the field; `Money` draws it to the same two places. */}
+          {sku.snap.market === null ? '—' : <Money value={Number(sku.snap.market)} />}
+          {/* THE AGE HAS ITS LINE ON EVERY ROW, drawn or not, so a refresh moves no row (D313). */}
+          <span className="pricing-ref-age">{age}</span>
+        </span>
+        <span className="pricing-ref pricing-col-low" data-empty={sku.snap.low === null ? 'true' : undefined}>
+          <span className="pricing-ref-label">Lowest </span>
+          {sku.snap.low === null ? '—' : <Money value={Number(sku.snap.low)} />}
+        </span>
       </span>
       {range === false ? null : (
         <span className="pricing-ref pricing-col-range" data-empty={typeof range === 'object' && range !== null ? undefined : 'true'}>
@@ -3497,13 +3926,29 @@ function PricingRow({
         </span>
       )}
 
+      {/* WHAT TCGPLAYER HOLDS NOW, before the field, where the field holds a different price. Its own
+          track, so the field keeps its place in the price cell. */}
+      {was === undefined ? null : (
+        <span className="pricing-now">
+          <span className="pricing-now-ghost" aria-hidden="true" />
+          {was === null || lockedWhy !== null || withheld ? null : (
+            <span className="pricing-now-line">
+              <span className="pricing-was">
+                Now <Money value={Number(was)} />
+              </span>
+              <Icon name="arrowRight" size={14} className="pricing-to" />
+            </span>
+          )}
+        </span>
+      )}
+
       <div
         className="pricing-price pricing-col-price"
+        data-float-price=""
         data-answer={lockedWhy !== null ? 'locked' : withheld ? 'held' : typeof standing === 'string' ? 'typed' : 'suggested'}
       >
         {lockedWhy !== null ? (
           <span className="pricing-locked" title={lockedWhy}>
-            <Icon name="lock" size={13} />
             {lockedWhy}
           </span>
         ) : withheld ? (
@@ -3540,7 +3985,11 @@ function PricingRow({
                     : ''
               }
               ref={registerInput}
-              onFocus={(event) => event.currentTarget.select()}
+              onFocus={(event) => {
+                event.currentTarget.select()
+                const rowEl = event.currentTarget.closest<HTMLElement>('.pricing-row')
+                if (rowEl !== null) onPriceFocus(rowEl)
+              }}
               onBeforeInput={(event) => {
                 const native = event.nativeEvent as InputEvent
                 const insert = native.data ?? ''
@@ -3566,16 +4015,43 @@ function PricingRow({
         )}
       </div>
 
-      <IconButton
-        ref={registerHold}
-        icon={withheld ? 'unlock' : 'lock'}
-        label={withheld ? 'Release' : 'Keep off TCGplayer'}
-        name={withheld ? `Release ${sku.name}` : `Keep ${sku.name} off TCGplayer`}
-        kbd="H"
-        pressed={withheld}
-        className="pricing-hold"
-        onClick={onHold}
-      />
+      {/* WHERE THE PRICE COMES FROM, in its own column (under the price on a narrow desk). */}
+      {!source.copies ? null : (
+        <span className="pricing-src pricing-col-src">
+          {from === null || lockedWhy !== null || withheld ? null : (
+            <Pill outline size="sm" className="pricing-from">
+              {from}
+            </Pill>
+          )}
+        </span>
+      )}
+
+      {/* THE HISTORY DOOR (list.html item 17, spec 9c), BESIDE THE LOCK: the only way to a card that draws no price field. A row with a
+          field is reached from the field, so its door keeps out of the tab order. */}
+      <span className="pricing-acts">
+        <IconButton
+          icon="history"
+          label={titleCase('Price history', true)}
+          name={`${titleCase('Price history', true)} for ${sku.name}`}
+          className="pricing-door"
+          tabIndex={withheld || lockedWhy !== null ? undefined : -1}
+          onClick={(event) => {
+            const rowEl = event.currentTarget.closest<HTMLElement>('.pricing-row')
+            if (rowEl !== null) onDoor(rowEl, event.currentTarget)
+          }}
+          {...{ 'data-float-door': '' }}
+        />
+        <IconButton
+          ref={registerHold}
+          icon={withheld ? 'unlock' : 'lock'}
+          label={withheld ? 'Release' : 'Keep off TCGplayer'}
+          name={withheld ? `Release ${sku.name}` : `Keep ${sku.name} off TCGplayer`}
+          kbd="H"
+          pressed={withheld}
+          className="pricing-hold"
+          onClick={onHold}
+        />
+      </span>
     </div>
   )
 }
@@ -3804,10 +4280,10 @@ function RuleSheet({
 
       <section className="pricing-sheet-part" aria-labelledby="pricing-cut-head">
         <h3 className="pricing-sheet-head" id="pricing-cut-head">
-          The floor{overridden ? ', this run only' : ''}
+          The floor{overridden ? ', this batch only' : ''}
         </h3>
         <div className="pricing-cheap-figure">
-          <BigMoney value={cut} onCommit={onCut} label={overridden ? 'Floor for this run' : 'Floor'} />
+          <BigMoney value={cut} onCommit={onCut} label={overridden ? 'Floor for this batch' : 'Floor'} />
           <span className="pricing-cheap-caption">
             Cards worth less list at this price. {under} under, {above} above.
           </span>
@@ -3942,7 +4418,7 @@ function LiveSheet({
       </div>
       {onPreset === null ? null : (
         <div className="pricing-sheet-part">
-          <h3 className="pricing-sheet-head">Price every listing you have not typed</h3>
+          <h3 className="pricing-sheet-head">{titleCase(onApplyCut === null ? 'Rule for new prices' : 'Price every listing you have not typed', true)}</h3>
           <div className="pricing-sheet-presets">
             {PRESETS.map((preset) => (
               <Button key={preset.key} size="sm" onClick={() => onPreset(preset.key)}>

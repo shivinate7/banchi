@@ -10,7 +10,6 @@
   /* THE TOOLBAR FOLDS AS ONE UNIT (UX-146): it wraps whole rows of controls, never one control
      under another with a ragged edge. */
 }
-.pricing-tabs { flex: none; }
 
 .pricing-body {
   display: flex;
@@ -62,7 +61,8 @@
 .pricing-bar .send-card { flex: 1 1 0; min-width: min-content; }
 
 /* ---- the rule line (Q5) -------------------------------------------------------------------- */
-.pricing-rule-line {
+.pricing-rule-line,
+.pricing-read-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -102,7 +102,7 @@
 /* THE THUMBNAIL IS A BUTTON, SO ON A THUMB IT IS 40px WIDE (F8: it drew 36). One variable feeds the
    caption, the row and the photo button, so the columns can never disagree with the control. */
 .pricing-caption,
-.pricing-row { --pricing-thumb-w: 36px; }
+.pricing-row { --pricing-thumb-w: 36px; --pricing-price-w: 112px; --pricing-to-w: calc(14px + var(--bn-2)); }
 @media (hover: none) and (pointer: coarse) {
   .pricing-caption,
   .pricing-row { --pricing-thumb-w: 40px; }
@@ -114,25 +114,37 @@
      touch"). Its content is two 56px minis plus their own gap (`PriceTrend.css`'s
      `.pricetrend-mini`, `.pricetrend { gap: var(--bn-2) }`) — 120px, not 64 — so the column was
      narrower than what it draws, and `overflow: hidden` cropped it flush against Lowest's own
-     right edge with none of the caption's gap visible past it. */
-  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 128px 60px 136px 40px;
+     right edge with none of the caption's gap visible past it.
+     THE PRICE COLUMN IS 112px (list.html draws the field 104px): the width the narrow desk already gives it.
+     THE NOW TRACK IS `auto`: it takes the width of the longest "Now $x" a row can draw (`.pricing-now-ghost`), so the item column keeps the rest. */
+  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 128px [reason-end] 60px var(--pricing-price-w) 84px 80px;
   align-items: center;
-  column-gap: var(--bn-3);
+  column-gap: var(--bn-2);
   padding: 0 var(--bn-3);
 }
 .pricing-list[data-copies='none'] .pricing-caption,
 .pricing-list[data-copies='none'] .pricing-row {
-  grid-template-columns: minmax(0, 1fr) 76px 76px 128px 136px 40px;
+  grid-template-columns: var(--pricing-send,) [item] minmax(0, 1fr) 72px 72px 128px var(--pricing-price-w) 80px;
 }
 /* THE RANGE 7D COLUMN IS DRAWN ONLY WHERE THE LIST HAS ROOM FOR IT (`RANGE_ROOM_PX` in Pricing.tsx), so
    its template is its own and the narrow rules below never meet it. */
 .pricing-list[data-range='some'] .pricing-caption,
 .pricing-list[data-range='some'] .pricing-row {
-  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 116px 128px 60px 136px 40px;
+  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 116px 128px [reason-end] 60px var(--pricing-price-w) 84px 80px;
+}
+/* A LIST WITH LIVE LISTINGS has a track for what TCGplayer holds now, before the price. The narrow desk
+   has its own below; a phone column has none. */
+.pricing-list[data-now='some'] .pricing-caption,
+.pricing-list[data-now='some'] .pricing-row {
+  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 128px [reason-end] 60px auto var(--pricing-price-w) 84px 80px;
+}
+.pricing-list[data-range='some'][data-now='some'] .pricing-caption,
+.pricing-list[data-range='some'][data-now='some'] .pricing-row {
+  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 116px 128px [reason-end] 60px auto var(--pricing-price-w) 84px 80px;
 }
 .pricing-list[data-range='some'][data-copies='none'] .pricing-caption,
 .pricing-list[data-range='some'][data-copies='none'] .pricing-row {
-  grid-template-columns: minmax(0, 1fr) 76px 76px 116px 128px 136px 40px;
+  grid-template-columns: var(--pricing-send,) [item] minmax(0, 1fr) 72px 72px 116px 128px var(--pricing-price-w) 80px;
 }
 .pricing-caption {
   min-height: var(--bn-8);
@@ -159,6 +171,10 @@
   color: var(--bn-ink-2);
 }
 .pricing-group-count { font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+/* THE GROUP'S ONE SENTENCE, after its count: what the owner does with the rows below. */
+.pricing-group-lede { font-weight: 400; color: var(--bn-ink-3); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* AN EMPTY GROUP STILL DRAWS, ON ONE QUIET LINE: it takes no more of the column than its words need, so the first row stays in view. */
+.pricing-group-head[data-empty='true'] { padding-block: 0; line-height: var(--bn-lh-tight); font-weight: 600; color: var(--bn-ink-3); }
 
 .pricing-row {
   position: relative;
@@ -192,7 +208,8 @@
   transition: box-shadow var(--bn-t) var(--bn-ease);
 }
 .pricing-thumb img { object-position: 50% 40%; }
-.pricing-thumb:hover { box-shadow: var(--bn-shadow-2); }
+button.pricing-thumb:hover { box-shadow: var(--bn-shadow-2); }
+span.pricing-thumb { cursor: default; }
 
 .pricing-id { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
 .pricing-name-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-0-5) var(--bn-2); min-width: 0; min-height: var(--bn-6); }
@@ -228,6 +245,8 @@
   color: var(--bn-ink-3);
 }
 .pricing-meta > * { flex: none; white-space: nowrap; }
+/* THE SET GIVES WAY FIRST: a set name wider than the column ends in an ellipsis at the column's edge, never under the Market figure. */
+.pricing-meta > .pricing-set { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .pricing-number { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); }
 /* THE SINGLE BOX/SECTION/CARD LOCATION IS GONE FROM THIS LINE (the owner's review, 2026-09-26:
    "why would I need to see one location for only one copy of a card when I'm handling pricing
@@ -248,6 +267,32 @@
 .pricing-live[data-none='true'] { color: var(--bn-ink-3); }
 .pricing-why { font-style: italic; color: var(--bn-ink-2); max-width: 24ch; overflow: hidden; text-overflow: ellipsis; }
 
+/* THE TICK IS IN A COLUMN OF ITS OWN, headed Send, before the photograph (list.html). The track is a variable so every template above takes it
+   or leaves it; the label is the target (40px) and the box inside it stays the kit's. A row with no tick still draws the cell, so the tracks never shift. */
+.pricing-list[data-send='some'] { --pricing-send: 40px; }
+.pricing-send { display: flex; justify-content: center; }
+.pricing-caption .pricing-send { text-align: center; }
+.pricing-tick { justify-content: center; min-width: var(--bn-8); min-height: var(--bn-8); cursor: pointer; flex: none; }
+/* WHY THE PRICE IS SUGGESTED, one line under the facts. A move that needs the owner reads in the warn tone. */
+.pricing-reason { font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2); min-width: 0; }
+/* A ROW IS TWO LINES on a desk: the name line with its figures, then the reason across the columns up to
+   Trend. A phone column places its cells by area instead. */
+@container bn-page (min-width: 560px) {
+  .pricing-list[data-copies='some'] .pricing-row { grid-template-rows: auto auto; }
+  .pricing-list[data-copies='some'] .pricing-row > * { grid-row: 1 / 3; }
+  .pricing-list[data-copies='some'] .pricing-row > .pricing-id,
+  .pricing-list[data-copies='some'] .pricing-refs > .pricing-ref,
+  .pricing-list[data-copies='some'] .pricing-row > .pricing-col-trend { grid-row: 1; }
+  .pricing-list[data-copies='some'] .pricing-row > .pricing-reason { grid-row: 2; grid-column: item / reason-end; }
+  /* A row with no reason gives its second line to the name and figures, so the price source under the
+     price on a narrow desk adds no height. */
+  .pricing-list[data-copies='some'] .pricing-row:not(:has(> .pricing-reason)) > :is(.pricing-id, .pricing-col-trend),
+  .pricing-list[data-copies='some'] .pricing-row:not(:has(> .pricing-reason)) .pricing-refs > .pricing-ref { grid-row: 1 / 3; }
+}
+.pricing-reason[data-tone='warn'] { color: var(--bn-warn); }
+
+/* MARKET AND LOWEST ARE COLUMNS ON A DESK: the wrapper draws no box, so its two cells are the row's own. A narrow desk gives it a line under the facts (below). */
+.pricing-refs { display: contents; }
 .pricing-ref { position: relative; text-align: center; font-size: var(--bn-fs-md); color: var(--bn-ink); white-space: nowrap; }
 .pricing-ref[data-empty='true'] { color: var(--bn-ink-3); }
 .pricing-ref-label { display: none; }
@@ -332,32 +377,31 @@
   0% { background-color: var(--bn-accent-tint-2); border-color: var(--bn-accent); }
   100% { background-color: var(--bn-surface-2); }
 }
+/* THE LOCKED PILL AND THE HELD PILL ARE ONE SHAPE, and only their tint differs: no icon, `--bn-2` side padding,
+   words that may wrap to a second line inside the 128px column so a wider font never clips them. Two lines of
+   --bn-fs-sm at --bn-lh-snug fit the pill's fixed height, so the row stays still. `flex: none` keeps the pill
+   from growing or shrinking inside its column. */
 .pricing-locked,
 .pricing-held {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  gap: var(--bn-1-5);
   height: var(--bn-8);
-  padding: 0 var(--bn-3);
+  padding: 0 var(--bn-2);
   border-radius: var(--bn-r);
   font-size: var(--bn-fs-sm);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-.pricing-locked { background: var(--bn-surface-2); color: var(--bn-ink-3); }
-/* The held pill's words may wrap to a second line inside the 128px column, so a wider font never
-   clips them. Two lines of --bn-fs-sm at --bn-lh-snug fit the pill's fixed height, so the row stays still. */
-.pricing-held {
-  padding: 0 var(--bn-2);
-  background: var(--bn-warn-tint);
-  color: var(--bn-ink-2);
-  font-weight: 600;
   white-space: normal;
   text-align: center;
   line-height: var(--bn-lh-snug);
+  overflow: hidden;
+  max-width: 100%;
+}
+.pricing-locked { background: var(--bn-surface-2); color: var(--bn-ink-3); }
+.pricing-held {
+  background: var(--bn-warn-tint);
+  color: var(--bn-ink-2);
+  font-weight: 600;
 }
 /* THE NOTE NEVER MOVES THE PILL (D118, and the owner's review, 2026-09-26): `.pricing-price`
    reserves ONE FIXED HEIGHT for every answer state — locked, held, typed, suggested — so the
@@ -375,6 +419,7 @@
    held row draws two matching tinted chips in a row and the ready row draws none, and the
    control itself looks like a different shape depending on the card. Bare in both states; the
    icon alone (lock vs unlock) already says which one this is. */
+.pricing-acts { display: flex; align-items: center; justify-content: flex-end; }
 .pricing-row .pricing-hold[aria-pressed='true'] { background: transparent; color: var(--bn-ink-2); }
 
 /* ---- the popovers and sheets ----------------------------------------------------------------- */
@@ -464,41 +509,85 @@
 .pricing-photo-frame img { display: block; width: 100%; height: auto; aspect-ratio: auto 9 / 16; }
 .pricing-photo-caption { display: flex; justify-content: space-between; gap: var(--bn-2); margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
 
-/* ---- 720 and narrower desks: Lowest and the trend leave the row (the product view has both) -- */
+/* ---- 899 and narrower: the trend leaves the row (the product view has it), and Market and Lowest stop being columns --
+   The history door takes 40px beside the lock, so the price column gives 16px back and the gap 4px: the name keeps the width its meta line needs. */
 @container bn-page (max-width: 899px) {
   .pricing-caption,
-  .pricing-row { grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 60px 128px 40px; }
+  .pricing-row { grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 60px [reason-end] 112px 80px; column-gap: var(--bn-2); }
+  .pricing-caption,
+  .pricing-row { --pricing-to-w: 0px; }
+  .pricing-to,
+  .pricing-caption .pricing-col-src { display: none; }
   .pricing-list[data-copies='none'] .pricing-caption,
-  .pricing-list[data-copies='none'] .pricing-row { grid-template-columns: minmax(0, 1fr) 76px 128px 40px; }
+  .pricing-list[data-copies='none'] .pricing-row { grid-template-columns: var(--pricing-send,) [item] minmax(0, 1fr) 112px 80px; }
   .pricing-col-low,
-  .pricing-col-trend { display: none; }
+  .pricing-col-trend,
+  .pricing-caption .pricing-col-market { display: none; }
+}
+
+/* ---- a narrow desk: the price source sits under the price, as its own grid line ----------
+   Market and Lowest are one labelled line under the facts, from the item's left edge (list notes item 16), and the reason is the line under them.
+   Their sort is reached through the sort menu, since their headers went with their columns. */
+@container bn-page (min-width: 560px) and (max-width: 899px) {
+  .pricing-list .pricing-row > .pricing-refs { display: flex; flex-wrap: wrap; column-gap: var(--bn-3); grid-row: 2; grid-column: item / reason-end; min-width: 0; align-self: start; font-size: var(--bn-fs-sm); }
+  .pricing-list[data-copies='none'] .pricing-row > .pricing-refs { grid-column: item / -1; }
+  .pricing-refs .pricing-ref { display: block; text-align: left; font-size: var(--bn-fs-sm); }
+  .pricing-refs .pricing-col-low { display: block; }
+  .pricing-refs .pricing-ref-label { display: inline; color: var(--bn-ink-3); }
+  .pricing-refs .pricing-ref-age { position: static; display: inline; margin-left: var(--bn-1); }
+  .pricing-list[data-now='some'] .pricing-caption,
+  .pricing-list[data-now='some'] .pricing-row { grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 60px auto [reason-end] 112px 80px; }
+  .pricing-list[data-copies='some'] .pricing-row > .pricing-col-price,
+  .pricing-list[data-copies='some'] .pricing-row > .pricing-now { grid-row: 1; align-self: end; }
+  /* The reason runs under Qty and Now too, so they keep to the name line. */
+  .pricing-list[data-copies='some'] .pricing-row > .pricing-col-qty { grid-row: 1; align-self: end; height: calc(var(--bn-8) + var(--bn-4)); padding-bottom: var(--bn-4); align-items: center; }
+  .pricing-list[data-copies='some'] .pricing-row > .pricing-col-src { grid-row: 2; grid-column: -3 / -2; justify-self: end; align-self: start; }
+  /* THREE LINES A ROW: the item, the references, the reason. The tick and the photograph span them; the id and the buttons keep the first. */
+  .pricing-list[data-copies='some'] .pricing-row > :is(.pricing-send, .pricing-thumb) { grid-row: 1 / 4; }
+  .pricing-list[data-copies='some'] .pricing-row:not(:has(> .pricing-reason)) > :is(.pricing-id, .pricing-col-trend) { grid-row: 1; }
+  .pricing-list[data-copies='some'] .pricing-row > .pricing-reason { grid-row: 3; }
+  .pricing-list[data-copies='some'] .pricing-row > .pricing-acts { grid-row: 1; align-self: end; height: calc(var(--bn-8) + var(--bn-4)); padding-bottom: var(--bn-4); }
 }
 
 /* ---- a phone column: two lines a row, the field on the right with Market under it ---------- */
 @container bn-page (max-width: 559px) {
   .pricing-caption { display: none; }
   .pricing-row,
-  .pricing-list[data-copies='none'] .pricing-row {
-    grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 112px 40px;
+  .pricing-list[data-copies='none'] .pricing-row,
+  .pricing-list[data-now='some'] .pricing-row {
+    grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 112px 80px;
     grid-template-areas:
       'thumb id price hold'
-      'thumb id market qty';
+      'thumb id market qty'
+      'thumb id src src'
+      'thumb reason reason reason';
     row-gap: var(--bn-0-5);
     column-gap: var(--bn-2);
     padding-inline: var(--bn-2);
   }
+  .pricing-list[data-send='some'] .pricing-row {
+    grid-template-areas:
+      'tick id price hold'
+      'thumb id market qty'
+      'thumb id src src'
+      'thumb reason reason reason';
+  }
   .pricing-list[data-copies='none'] .pricing-row {
-    grid-template-columns: minmax(0, 1fr) 112px 40px;
+    grid-template-columns: minmax(0, 1fr) 112px 80px;
     grid-template-areas:
       'id price hold'
       'id market market';
   }
   .pricing-thumb { grid-area: thumb; }
+  .pricing-send { grid-area: tick; }
   .pricing-id { grid-area: id; }
   .pricing-col-price { grid-area: price; }
-  .pricing-row .pricing-hold { grid-area: hold; }
+  .pricing-row .pricing-acts { grid-area: hold; }
   .pricing-col-market { grid-area: market; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
   .pricing-col-qty { grid-area: qty; }
+  .pricing-col-src { grid-area: src; }
+  .pricing-row > .pricing-reason { grid-area: reason; }
+  .pricing-now { display: none; }
   .pricing-ref-label { display: inline; }
   .pricing-ref-age { position: static; min-height: 1.25em; }
   .pricing-qty .pricing-qty-input { width: 40px; padding: 0 var(--bn-1); }
@@ -564,3 +653,38 @@
 /* F3: the filter bar sits over the list. The send press names every SKU, so no note is needed. */
 .pricing-filterbar { margin-bottom: var(--bn-3); }
 .pricing-photo-frame .absent-photo { padding: var(--bn-6) var(--bn-4); }
+
+/* ---- the one list: send figures, value line, price source, tick on a new copy ---------------------------- */
+.pricing-figures { flex: 1 1 100%; min-width: 0; display: flex; flex-direction: column; gap: var(--bn-1); }
+.pricing-figures-head { margin: 0; font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 800; color: var(--bn-ink); }
+.pricing-figures-parts { margin: 0; display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-5); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+.pricing-figures-parts b { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pricing-value-line { margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+/* WHAT TCGPLAYER HOLDS NOW and an arrow, up to the field, on the field's line. The track is `auto`, and every row draws the same
+   hidden ghost of the widest price a row shows ("$9,999.99", mono as `.bn-money`), plus the arrow where it is drawn, so the track is
+   as wide as the text needs and one width down the list: no column moves, and nothing is cut. The caption's cell draws the ghost alone. */
+.pricing-now {
+  display: grid;
+  grid-template-columns: max-content;
+  justify-content: end;
+  align-items: center;
+  /* The price cell's own height, with the field's line on top, so "Now" sits level with the field. */
+  height: calc(var(--bn-8) + var(--bn-4));
+  padding-bottom: var(--bn-4);
+}
+.pricing-now > * { grid-area: 1 / 1; }
+.pricing-now-line { display: flex; align-items: center; justify-content: flex-end; gap: var(--bn-2); }
+.pricing-now-ghost {
+  visibility: hidden;
+  white-space: pre;
+  padding-inline-end: var(--pricing-to-w);
+  font: 400 var(--bn-fs-sm) / 1 var(--bn-font-ui);
+  letter-spacing: normal;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+.pricing-now-ghost::before { content: 'Now '; }
+.pricing-now-ghost::after { content: '$9,999.99'; font-family: var(--bn-font-mono); font-weight: 600; }
+.pricing-was { flex: none; white-space: nowrap; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+.pricing-to { flex: none; color: var(--bn-ink-4); }
+.pricing-src { display: flex; justify-self: start; min-width: 0; }

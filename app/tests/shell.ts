@@ -964,13 +964,16 @@ export async function headOffsets(page: Page): Promise<{ column: string; off: nu
 /** The owner's ruling for Pricing row values: Market, Lowest and Range 7d values are centered in their cell;
  *  Trend, Qty and Price values keep the place they had (`gaps` reports it as the space left and right of the
  *  shown content inside the cell, so a guard can pin it). The shown content leaves out the age line and hidden
- *  parts. Item is not measured. One entry per row and column; a column the screen drops is skipped. */
+ *  parts. Item is not measured. One entry per row and column; a column the screen drops is skipped.
+ *  AT 820 (`width`) MARKET AND LOWEST ARE NOT CELLS: they are one labelled line under the facts line (list notes
+ *  item 16), so they are not measured here and `refsBesideItem` holds the rule that they are not a column. */
 export const VALUE_CENTER_PX = 1
-export async function valueMeasures(page: Page): Promise<{ column: string; off: number; left: number; right: number }[]> {
-  return page.locator('.pricing-row').evaluateAll((rows) => {
+export async function valueMeasures(page: Page, width = 1440): Promise<{ column: string; off: number; left: number; right: number }[]> {
+  const columns = width === 820 ? ['range', 'trend', 'qty', 'price'] : ['market', 'low', 'range', 'trend', 'qty', 'price']
+  return page.locator('.pricing-row').evaluateAll((rows, kept) => {
     const out: { column: string; off: number; left: number; right: number }[] = []
     rows.forEach((row, at) => {
-      for (const column of ['market', 'low', 'range', 'trend', 'qty', 'price']) {
+      for (const column of kept) {
         const cell = row.querySelector(`.pricing-col-${column}`)
         if (cell === null || cell.getBoundingClientRect().width === 0) continue
         const box = cell.getBoundingClientRect()
@@ -1005,7 +1008,26 @@ export async function valueMeasures(page: Page): Promise<{ column: string; off: 
       }
     })
     return out
-  })
+  }, columns)
+}
+
+/** AT 820 MARKET AND LOWEST ARE NOT COLUMNS (list notes item 16): they share one labelled line under the facts line. One finding per row and per cell
+ *  (`.pricing-col-market`, `.pricing-col-low`) that is drawn as a column beside the item: it starts at or right of the item's right edge AND its top is above
+ *  the end of the facts line. A cell under the facts line, a hidden cell and no cell at all are not findings. An empty list passes. */
+export async function refsBesideItem(page: Page): Promise<string[]> {
+  return page.locator('.pricing-row').evaluateAll((rows) =>
+    rows.flatMap((row) => {
+      const id = row.querySelector('.pricing-id')!.getBoundingClientRect()
+      const facts = (row.querySelector('.pricing-id .pricing-meta:not(.pricing-where)') ?? row.querySelector('.pricing-id .pricing-name'))!.getBoundingClientRect()
+      const name = row.querySelector('.pricing-name')?.textContent ?? ''
+      return ['market', 'low'].flatMap((column) => {
+        const box = row.querySelector(`.pricing-col-${column}`)?.getBoundingClientRect()
+        return box !== undefined && box.width > 0 && box.left >= id.right - 0.5 && box.top < facts.bottom - 1
+          ? [`${name}: ${column} is a column, starting at ${box.left}px beside the item that ends at ${id.right}px`]
+          : []
+      })
+    }),
+  )
 }
 
 /** Where Trend, Qty and Price values sit today, as the space left of the shown content in the cell. Right gaps

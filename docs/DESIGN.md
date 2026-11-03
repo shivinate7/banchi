@@ -611,7 +611,7 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
   orders  560   Orders — the buyer list moves beside the card and the walk
   orders  1000  Orders — the card pane moves beside the walk, sticky, and its photograph grows
   bn-page 559   Pricing — the row becomes two lines, the price on the right with Market under it
-  bn-page 899   Pricing — Lowest and the trend leave the row (the product view carries both)
+  bn-page 899   Pricing — the trend leaves the row (the product view has it), and Market and Lowest become one labelled line under the facts
   (unnamed) 520, 640   RunPanel — the run detail's own steps, on `.runs-detail`
   runs    699   RunPanel — the run list and an opened run stay one pushed-nav column below this
   runs    700   RunPanel — the run list and the opened run split into a master and a detail pane

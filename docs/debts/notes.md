@@ -25,5 +25,18 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - `scripts/waiting-export.py` scan false alarms, each costing one reword before an export: `key=str.lower`, `idempotency key: 8f3a2c91`, `TOKEN=xxxxxxxxxx`, "Round 3 Review Lane", `react@19.0.0-rc`, and a phone-shaped run of digits.
 - `pipeline/rosterholdings.py`'s `read_roster`: a bad roster row that spans lines is named by its last line, a missing header column gets an error with no line, and an amount of `-0` reads as `Decimal('-0')`.
 - `pipeline/rosterholdings.py` has its own `SkuRow`, beside `store/skus.py`'s; the totals line shows one price date, the newest, so an older price on another line is not shown.
+- `app/src/Pricing.tsx` `tickKey` leaves the group out of the key: a Suggested row the owner re-ticked, whose same figure later crosses the cap, shows ticked under Needs You and sends `ticked: true`. The server still holds the figure to its own rebuild (`suggestion_changed`).
+- `app/src/Pricing.tsx`: a hold that arrives from another session's store leaves a typed price in `listedTyped`. `answerFor` reads the hold first, so it is never sent while held; it returns on a plain release.
+- D278 still says the history card opens on "a press or a hold rather than follow-focus". Queue item 30 and spec 9c now open it on price focus.
+- The card's 250 ms rest before a read (`REST_MS`, `app/src/HistoryFloat.tsx`) and its read cache (`app/src/server.ts`, cleared on every write) are in code only; spec 9c does not name them.
+- `server/send_routes.py`: a typed price with no new copy, on a SKU with no stored reading, skips the stale-reading check. The cap still holds against the live price.
+- `harness/tests/t7/one_list_wire.py` comments near the live-listing fixtures still say "30-day trigger"; the trigger is 14 days.
+- `app/src/HistoryFloat.tsx` `move()`: in a viewport with room neither above nor below, the card can sit under the send bar or over its row.
+- `#/pricing` at 820: a new copy's details take 2 lines ("Near Mint, set" then "number, rarity") where the mockup draws one, so rows are about 101px, not 90.
+- `#/pricing`: while a price is typed and its field keeps focus, the From chip and the send bar's "typed by you" figure keep their old words until blur.
+- `app/src/Pricing.css` `.pricing-refs .pricing-ref-age` at 820: a stale date pushes Lowest right and can wrap the line on a narrow item column with a $1,000+ price. Unmeasured.
+- `app/tests/pricing.spec.ts` "send panel: 240 moves": at 1440 it now bounds the first row's price field, not the row's bottom edge.
+- `#/pricing`: the Send column leaves after a reload once the owner's send clears the last waiting new copy.
 - `pipeline/rosterholdings.py`'s `build_roster_report`: a product id whose archive SKUs are only partly in `skus` prices from the ones present, so a foil line can take a non-foil price. `no_sku_row` covers only all-missing. `skus` has no delete path today.
 - `pipeline/rosterholdings.py`'s `_id_of` reads ids with `int()`, so `09001` and `+9001` become separate rows. Roster ids are plain integers today.
+- `#/pricing` Now column: its width comes from a hidden "Now $9,999.99" in each row, so a live price of $10,000 or more widens only its own row (about 7px at $12,345), and that row's Market column drifts left. Nothing clips.
