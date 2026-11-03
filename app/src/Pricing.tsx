@@ -625,9 +625,9 @@ function byValue(a: PricingSku, b: PricingSku): number {
 
 /** THE ORDER IS TAKEN ONCE, ON ARRIVAL (D118, D181). A price typed on a row may give it a flag,
  *  and the chip appears on the row; the row does not move under the hand. The next load re-ranks. */
-type Arrival = { key: object; needs: ReadonlySet<string>; order: ReadonlyMap<string, number>; keptAtLoad: ReadonlySet<string> }
+type Arrival = { key: object; needs: ReadonlySet<string>; order: ReadonlyMap<string, number> }
 
-function takeArrival(key: object, rows: readonly PricingSku[], keptAtLoad: ReadonlySet<string>): Arrival {
+function takeArrival(key: object, rows: readonly PricingSku[]): Arrival {
   const needs = new Set<string>()
   const flagged: PricingSku[] = []
   const rest: PricingSku[] = []
@@ -644,7 +644,7 @@ function takeArrival(key: object, rows: readonly PricingSku[], keptAtLoad: Reado
   closed.sort(byValue)
   const order = new Map<string, number>()
   for (const row of [...flagged, ...rest, ...closed]) order.set(row.sku, order.size)
-  return { key, needs, order, keptAtLoad }
+  return { key, needs, order }
 }
 
 /* ------------------------------------------------------------------------ small parts */
@@ -1485,10 +1485,8 @@ export function Pricing() {
   useEffect(() => {
     if (table === null || book === null) return
     if (arrival !== null && arrival.key === table) return
-    /* THE HOLDS THE STORE ALREADY HAD: only these rows are filed behind the one kept-off press. A hold taken later keeps its row where it is (D313). */
-    const keptAtLoad = new Set(partitioned.filter((row) => isWithheld(answerFor(row))).map((row) => row.sku))
-    setArrival(takeArrival(table, partitioned.filter((row) => !listed.has(row.sku)), keptAtLoad))
-  }, [table, book, arrival, partitioned, listed, answerFor])
+    setArrival(takeArrival(table, partitioned.filter((row) => !listed.has(row.sku))))
+  }, [table, book, arrival, partitioned, listed])
 
   /** THE PAIRS THE LIVE TAB WOULD SEND, and nothing else. A price written ON THIS VISIT (typed,
    *  a preset, or "Mark down") that is not the price the read showed. And a price stored on an
@@ -1578,6 +1576,30 @@ export function Pricing() {
   }, [pushable])
 
   const held = useMemo(() => rows.filter((sku) => isWithheld(answerFor(sku))), [rows, answerFor])
+  /** The press counts the rows it draws: a lens or a kind pick stays on through the press, so the held rows under it are all it can promise. */
+  const heldUnderChips = useMemo(() => held.filter((row) => chipKeeps(row.sku)), [held, chipKeeps])
+
+  /* THE HOLDS THE STORE ALREADY HAD: only these rows are filed behind the one kept-off press. They are read in the render that
+     reads the load, so a stored hold is never drawn in a group, not for one commit. A hold taken later keeps its row where it is (D313). */
+  const storedHolds = useMemo(
+    () => new Set(book === null ? [] : partitioned.filter((row) => isWithheld(answerFor(row))).map((row) => row.sku)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- taken once per load: a later write is not a stored hold
+    [table, book === null],
+  )
+  /* A RELEASE DROPS ITS ROW FROM THEM, so a hold taken again this visit keeps the row where it is. */
+  const [released, setReleased] = useState<{ of: ReadonlySet<string>; skus: ReadonlySet<string> }>({ of: new Set(), skus: new Set() })
+  useEffect(() => {
+    const now = new Set(partitioned.filter((row) => isWithheld(answerFor(row))).map((row) => row.sku))
+    setReleased((was) => {
+      const base = was.of === storedHolds ? was.skus : new Set<string>()
+      const gone = [...storedHolds].filter((sku) => !now.has(sku) && !base.has(sku))
+      return gone.length === 0 && was.of === storedHolds ? was : { of: storedHolds, skus: new Set([...base, ...gone]) }
+    })
+  }, [partitioned, answerFor, storedHolds])
+  const keptAtLoad = useMemo(
+    () => (released.of === storedHolds ? new Set([...storedHolds].filter((sku) => !released.skus.has(sku))) : storedHolds),
+    [storedHolds, released],
+  )
 
   /* F3: THE VIEW'S OWN FILTERS. Search, sort and the facets live in the URL (`?q=`, `?sort=`, `?game=`),
      narrow what is DRAWN and touch nothing else: Send, the presets and the counts read every row. */
@@ -1845,7 +1867,7 @@ export function Pricing() {
         const group = closed.get(why)
         if (group === undefined) closed.set(why, [row])
         else group.push(row)
-      } else if (isWithheld(answerFor(row)) && (filterHeld || arrival?.keptAtLoad.has(row.sku))) {
+      } else if (isWithheld(answerFor(row)) && (filterHeld || keptAtLoad.has(row.sku))) {
         /* A ROW KEPT OFF BEFORE THIS LOAD IS IN NONE OF THE THREE GROUPS (list-notes item 12): it draws only behind the one press, in a group of its own. */
         if (filterHeld) kept.push(row)
       } else {
@@ -1868,7 +1890,7 @@ export function Pricing() {
     /* THE SERVER'S SENTENCE, VERBATIM (D59): the client never composes a reason. */
     for (const [why, group] of closed) groups.push({ head: why, rows: group })
     return groups
-  }, [arrival, rows, facetShape, facetPicks, keepRow, sort, saved, askingAtSort, filterHeld, answerFor])
+  }, [arrival, rows, facetShape, facetPicks, keepRow, sort, saved, askingAtSort, filterHeld, answerFor, keptAtLoad])
 
   const order = useMemo(() => drawn.flatMap((group) => group.rows.map((row) => row.sku)), [drawn])
 
@@ -2420,7 +2442,6 @@ export function Pricing() {
         ttlMs: 8000,
         action: { label: 'Undo', kbd: 'U', onPress: () => undoByIdRef.current(id) },
       })
-      inputs.current.get(sku.sku)?.focus()
     },
     [write, book],
   )
@@ -2774,6 +2795,20 @@ export function Pricing() {
     </>
   )
 
+  /* THE ONE PRESS THAT SHOWS THE KEPT-OFF ROWS, in the filter row (list.html). Its count is the rows it draws: the lens and the kind stay on through it. */
+  const keptPress =
+    heldUnderChips.length === 0 && !filterHeld ? null : (
+      <Button
+        size="sm"
+        icon="lock"
+        variant={filterHeld ? 'primary' : 'default'}
+        aria-pressed={filterHeld}
+        onClick={() => (filterHeld ? setFilterHeld(false) : showRows({}, true))}
+      >
+        {titleCase('Show kept off', true)} <span data-value>({heldUnderChips.length})</span>
+      </Button>
+    )
+
   const toolbar = (
     <div className="pricing-tools">
       {readView || roster.length === 0 ? null : (
@@ -2815,17 +2850,6 @@ export function Pricing() {
           ]}
           onChange={(next) => setKindParam(next === 'both' ? '' : next)}
         />
-      )}
-      {held.length === 0 && !filterHeld ? null : (
-        <Button
-          size="sm"
-          icon="lock"
-          variant={filterHeld ? 'primary' : 'default'}
-          aria-pressed={filterHeld}
-          onClick={() => (filterHeld ? setFilterHeld(false) : showRows({}, true))}
-        >
-          {titleCase(`Show kept off (${held.length})`, true)}
-        </Button>
       )}
     </div>
   )
@@ -3307,6 +3331,7 @@ export function Pricing() {
               onChange={setFacetPicks}
               count={{ shown: drawn.reduce((sum, group) => sum + group.rows.length, 0), total: rows.length, noun: { one: 'item', many: 'items' } }}
               search={{ query, onChange: setQuery, placeholder: 'Name, set, number or SKU…', label: 'Search This List' }}
+              action={keptPress}
               sort={{ options: sortOptions, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
             />
           )}
@@ -3754,7 +3779,7 @@ function PricingRow({
         <span className="pricing-meta">
           {/* "NEAR MINT" STAYS ON EVERY ROW (the owner's ruling, D137). */}
           {sku.condition === '' ? null : <span className="pricing-cond">{sku.condition}</span>}
-          <span>{sku.set_name}</span>
+          <span className="pricing-set" title={sku.set_name}>{sku.set_name}</span>
           {/* THE NUMBER ALWAYS DRAWS HERE, NEVER IN THE NAME (the owner's review, 2026-09-26:
               "Garganacl - 084/132" carried its number in the name while every other row carried
               it here — one fact, stated in two different places depending on the name). The

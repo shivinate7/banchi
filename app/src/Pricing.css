@@ -115,34 +115,40 @@
      `.pricetrend-mini`, `.pricetrend { gap: var(--bn-2) }`) — 120px, not 64 — so the column was
      narrower than what it draws, and `overflow: hidden` cropped it flush against Lowest's own
      right edge with none of the caption's gap visible past it. */
-  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 128px [reason-end] 60px 136px 84px 80px;
+  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 72px 72px 128px [reason-end] 60px 136px 84px 80px;
   align-items: center;
   column-gap: var(--bn-3);
   padding: 0 var(--bn-3);
 }
 .pricing-list[data-copies='none'] .pricing-caption,
 .pricing-list[data-copies='none'] .pricing-row {
-  grid-template-columns: minmax(0, 1fr) 76px 76px 128px 136px 80px;
+  grid-template-columns: minmax(0, 1fr) 72px 72px 128px 136px 80px;
 }
 /* THE RANGE 7D COLUMN IS DRAWN ONLY WHERE THE LIST HAS ROOM FOR IT (`RANGE_ROOM_PX` in Pricing.tsx), so
    its template is its own and the narrow rules below never meet it. */
 .pricing-list[data-range='some'] .pricing-caption,
 .pricing-list[data-range='some'] .pricing-row {
-  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 116px 128px [reason-end] 60px 136px 84px 80px;
+  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 72px 72px 116px 128px [reason-end] 60px 136px 84px 80px;
 }
 /* A LIST WITH LIVE LISTINGS has a track for what TCGplayer holds now, before the price. The narrow desk
    has its own below; a phone column has none. */
 .pricing-list[data-now='some'] .pricing-caption,
 .pricing-list[data-now='some'] .pricing-row {
-  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 80px;
+  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 72px 72px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 80px;
 }
 .pricing-list[data-range='some'][data-now='some'] .pricing-caption,
 .pricing-list[data-range='some'][data-now='some'] .pricing-row {
-  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 116px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 80px;
+  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 72px 72px 116px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 80px;
 }
 .pricing-list[data-range='some'][data-copies='none'] .pricing-caption,
 .pricing-list[data-range='some'][data-copies='none'] .pricing-row {
-  grid-template-columns: minmax(0, 1fr) 76px 76px 116px 128px 136px 80px;
+  grid-template-columns: minmax(0, 1fr) 72px 72px 116px 128px 136px 80px;
+}
+/* ON THE DESK THE TRACKS SHARE THE ROOM CLOSELY: with every column on, the item column is what the rest leave, so the gap is the
+   narrow desk's and the Market and Lowest tracks take their figure's width. */
+@container bn-page (min-width: 900px) {
+  .pricing-caption,
+  .pricing-row { column-gap: var(--bn-2); }
 }
 .pricing-caption {
   min-height: var(--bn-8);
@@ -243,6 +249,8 @@ span.pricing-thumb { cursor: default; }
   color: var(--bn-ink-3);
 }
 .pricing-meta > * { flex: none; white-space: nowrap; }
+/* THE SET GIVES WAY FIRST: a set name wider than the column ends in an ellipsis at the column's edge, never under the Market figure. */
+.pricing-meta > .pricing-set { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .pricing-number { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); }
 /* THE SINGLE BOX/SECTION/CARD LOCATION IS GONE FROM THIS LINE (the owner's review, 2026-09-26:
    "why would I need to see one location for only one copy of a card when I'm handling pricing
