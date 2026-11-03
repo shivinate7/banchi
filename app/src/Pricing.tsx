@@ -11,6 +11,7 @@ import {
   type Ref,
   type RefObject,
 } from 'react'
+import { flushSync } from 'react-dom'
 
 import {
   describeFailure,
@@ -1129,7 +1130,6 @@ export function Pricing() {
     listObserver.current = new ResizeObserver(publish)
     listObserver.current.observe(node)
   }, [])
-  const rangeOn = listWidth >= RANGE_ROOM_PX
   const narrow = listWidth > 0 && listWidth < NARROW_PX
 
   useEffect(() => {
@@ -1152,6 +1152,8 @@ export function Pricing() {
     return oneListSource(work, run, SECTIONS, { history: getPriceHistory, trends: getPriceTrends })
   }, [stamp, sheet, work, run])
   const oneList = listed.size > 0
+  /* THE NOW COLUMN TAKES THE RANGE COLUMN'S ROOM: with both, the item column would shrink to a few letters. */
+  const rangeOn = listWidth >= RANGE_ROOM_PX && !oneList
   /** Live listings are drawn in the one list under the server's groups, and they price from what the
    *  server suggests: the field opens on it, a typed price is held here until a send, and only a hold
    *  is ever stored for one. */
@@ -1440,6 +1442,8 @@ export function Pricing() {
     },
     [readView, source, listed, answerFor],
   )
+  /** THE SEND COLUMN is drawn where any row can carry a tick: a live listing's suggestion, or a new copy that waits for one. */
+  const sendOn = useMemo(() => oneList || rows.some(tickableFresh), [oneList, rows, tickableFresh])
   const waitsForTick = useCallback((row: PricingSku): boolean => tickableFresh(row) && ticks[row.sku] !== true, [tickableFresh, ticks])
   const askedFor = useCallback(
     (row: PricingSku): number | undefined => (waitsForTick(row) ? 0 : askedByHand(row.sku)),
@@ -2399,11 +2403,8 @@ export function Pricing() {
     [reload],
   )
 
-  const closeHold = useCallback(() => {
-    const at = holdFor
-    setHoldFor(null)
-    if (at !== null) inputs.current.get(at)?.focus()
-  }, [holdFor])
+  /* THE PANEL GIVES FOCUS BACK TO THE LOCK THAT OPENED IT (`useReturnFocus`), so a way out never lands on the price field, whose focus opens the history card. */
+  const closeHold = useCallback(() => setHoldFor(null), [])
 
   const setHold = useCallback(
     (sku: PricingSku, reason: WithholdReason, watch: string, text: string) => {
@@ -2803,7 +2804,13 @@ export function Pricing() {
         icon="lock"
         variant={filterHeld ? 'primary' : 'default'}
         aria-pressed={filterHeld}
-        onClick={() => (filterHeld ? setFilterHeld(false) : showRows({}, true))}
+        onClick={(event) => {
+          if (!filterHeld) return showRows({}, true)
+          /* THE PRESS LEAVES WITH NO HELD ROW LEFT: focus moves to the search field beside it, so a keyboard user keeps their place. */
+          const bar = event.currentTarget.closest('.pricing-filterbar')
+          flushSync(() => setFilterHeld(false))
+          if (heldUnderChips.length === 0) bar?.querySelector<HTMLInputElement>('.bn-filterbar-search input')?.focus()
+        }}
       >
         {titleCase('Show kept off', true)} <span data-value>({heldUnderChips.length})</span>
       </Button>
@@ -3338,7 +3345,7 @@ export function Pricing() {
           {filtering && order.length === 0 ? (
             <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." didYouMean={{ name: nearName, onPick: setQuery }} />
           ) : null}
-          <div className="pricing-list" ref={measureList} data-copies={source.copies ? 'some' : 'none'} data-range={rangeOn ? 'some' : undefined} data-now={oneList ? 'some' : undefined}
+          <div className="pricing-list" ref={measureList} data-copies={source.copies ? 'some' : 'none'} data-range={rangeOn ? 'some' : undefined} data-now={oneList ? 'some' : undefined} data-send={sendOn ? 'some' : undefined}
             // Focus leaving the list closes the card. The card takes no focus in this mode, so the list is all there is to stay in.
             onBlur={(event) => {
               const to = event.relatedTarget as Element | null
@@ -3347,6 +3354,7 @@ export function Pricing() {
             }}
           >
             <div className="pricing-caption" role="row">
+              {sendOn ? <span className="pricing-send" role="columnheader">Send</span> : null}
               {source.copies ? <span /> : null}
               {/* "ITEM", NOT "CARD" (the owner's add-on, 2026-09-26): the rows include sealed
                   product too, which is not a card. */}
@@ -3378,6 +3386,7 @@ export function Pricing() {
                     sku={sku}
                     index={index}
                     source={source}
+                    send={sendOn}
                     standing={answerFor(sku)}
                     flag={liveFlag(flagOf(sku, answerFor(sku), source.locked(sku.sku) !== null, cut), readView || oneList)}
                     suggestion={suggestionFor(sku)}
@@ -3630,6 +3639,7 @@ function PricingRow({
   sku,
   index,
   source,
+  send,
   standing,
   flag,
   suggestion,
@@ -3663,6 +3673,8 @@ function PricingRow({
   sku: MergedSku
   index: number
   source: PricingSource
+  /** The list draws a Send column: every row draws its cell, with the tick in it or empty. */
+  send: boolean
   standing: unknown
   flag: Flag | null
   suggestion: string
@@ -3740,14 +3752,8 @@ function PricingRow({
       data-flag={flag?.kind}
       data-hold={holding ? 'open' : undefined}
     >
-      {/* A LIVE LISTING HAS NO PHOTOGRAPH OF OURS: its thumbnail is the stock photo alone, with no press. */}
-      {!source.copies ? null : <PricingThumb at={first} name={sku.name} onOpen={onPhoto} imageUrl={sku.image_url ?? null} />}
-
-      <div className="pricing-id">
-        <span className="pricing-name-line">
-          <ProductLink sku={sku.sku} name={sku.name} className="pricing-name">
-            {displayName(sku.name, sku.row['Number'] ?? '')}
-          </ProductLink>
+      {send ? (
+        <span className="pricing-send">
           {tick === null ? null : (
             <label className="bn-check pricing-tick">
               <input
@@ -3758,6 +3764,16 @@ function PricingRow({
               />
             </label>
           )}
+        </span>
+      ) : null}
+      {/* A LIVE LISTING HAS NO PHOTOGRAPH OF OURS: its thumbnail is the stock photo alone, with no press. */}
+      {!source.copies ? null : <PricingThumb at={first} name={sku.name} onOpen={onPhoto} imageUrl={sku.image_url ?? null} />}
+
+      <div className="pricing-id">
+        <span className="pricing-name-line">
+          <ProductLink sku={sku.sku} name={sku.name} className="pricing-name">
+            {displayName(sku.name, sku.row['Number'] ?? '')}
+          </ProductLink>
         </span>
         {/* A REASON ONLY WHERE IT TELLS THE OWNER SOMETHING THE ROW DOES NOT ALREADY SHOW (the
             owner's review, 2026-09-26, and the add-on that followed it). "Worth $5 or more"
