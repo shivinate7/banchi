@@ -20,11 +20,12 @@ pass. It is the wrong remedy once this pass already read other SKUs with the sam
 Every one of the 689 refused lines carried that message on 2026-09-19. Each one sent the
 operator to fix something the run had already disproved.
 
-`pipeline/pricearchive.py:classify_refusals` tells the two cases apart. It cannot change
-`Blocked`'s exception type. That file is outside this task's fence. So it matches the fixed
-substring `Blocked` always raises with: `"answered HTTP 403"`. Given evidence this pass
-already read something successfully, it rewrites the message to name a throttle. It leaves
-the User-Agent alone. With no such evidence, the message stays exactly as `Blocked` phrased
+`pipeline/pricearchive.py:classify_refusals` tells the two cases apart. By the time it sees
+a refusal, `readings_for_rows` has folded `Blocked` to a plain string. So it matches the
+whole text `pipeline/pricehistory.py:BLOCKED_MESSAGE`, the constant `fetch_json` raises with,
+never its opening words, which a 500's text shares. Given evidence this pass
+already read something successfully, it rewrites the message to `THROTTLE_REWRITE`, a
+throttle. It leaves the User-Agent alone. With no such evidence, the message stays exactly as `Blocked` phrased
 it. There is no evidence yet that authorization is not the real problem.
 
 ### The pace is measured, and never guessed

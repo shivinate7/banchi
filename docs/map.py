@@ -1365,7 +1365,8 @@ COMPONENTS = [
                                         "and IN `make check` as of D247's sixteenth entry "
                                         "(owner's word, 2026-09-23) — no network call. A "
                                         "FakeMarket and a RecordingMarket stand in for the "
-                                        "network; 106 assertions, including the D278 "
+                                        "network; refusal texts come from the reader's own raise "
+                                        "path (`harness/tests/price_refusals.py`). Includes the D278 "
                                         "collision arm run both ways, an interrupted "
                                         "one-shot sweep proven to lose everything BEFORE the "
                                         "chunked fix is proven to keep what it already "
@@ -3091,7 +3092,8 @@ COMPONENTS = [
                         "(identity-follows-sku.md lane 4, moved off a disk walk), and "
                         "`pipeline/productview.py:row_for_sku` preferring the skus-table row "
                         "over a misread stored name, each with its own mutation guard. "
-                        "106 assertions.",
+                        "Its refusal cases take their texts from the reader's own raise "
+                        "path, `harness/tests/price_refusals.py`.",
                 "governed_by": ["D18", "D21", "D35", "D278", "D219", "D222", "D231", "D224",
                                 "D234", "D247", "D254"],
             },
@@ -3167,9 +3169,10 @@ COMPONENTS = [
             },
             "archive-review-selftest.py": {
                 "does": "proves cli/archive_review.py against a throwaway store, no "
-                        "network. Fabricates refusal strings shaped exactly like "
-                        "pipeline/pricehistory.py:NotResolvable/Unreachable's own "
-                        "messages, never calls a market. Proves: an identification "
+                        "network. Its refusal cases take their texts from the reader's own "
+                        "raise path (`harness/tests/price_refusals.py`), with only "
+                        "pipeline/net.py:request stubbed, and never call a market. "
+                        "Proves: an identification "
                         "refusal reaches the review queue with its photograph; a "
                         "network-shaped refusal never does; a card sharing the refused "
                         "SKU but carrying a DIFFERENT stored number is never queued (the "
