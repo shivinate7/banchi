@@ -18,10 +18,12 @@ owner's Mac, so it installs that committed output and builds the page (`--instal
 
 THE SCRUB IS BY CONSTRUCTION, NOT BY SEARCH. The order ledger holds one fact about a person,
 the buyer's display name (`store/orders.py:OrderRecord.buyer`, D193), and the owner's ruling
-keeps it whole. The store holds no address, email or phone. The one file with addresses is
-TCGplayer's shipping export, which is not in the store at all, so this script WRITES one for
-the mirror's open orders, with every address field blank. One plain assert over the finished
-bundle and that file is the only check (the owner's ruling).
+keeps it whole. Outside the `labels` table the store holds no address, email or phone. That
+table holds TCGTracking's answers and label PDFs, which carry addresses (D326), so `build`
+empties it. The one file with addresses is TCGplayer's shipping export, which is not in the
+store at all, so this script WRITES one for the mirror's open orders, with every address field
+blank. One plain assert covers the finished bundle, that file and the label table, so a buyer's
+address that reaches any of the three stops the mirror before it is published.
 
 NOTHING HERE CONTACTS A NETWORK OR SPENDS MONEY. The recorder runs its server `--offline`.
 """
@@ -202,6 +204,9 @@ def build(home: Path, jobs: int) -> None:
 
     with Store().write() as snap:
         shipped = write_shipping_export(home, snap.ledger.orders.values())
+        # D326: a label row holds a buyer's address and the label itself. The mirror keeps none.
+        for key in list(snap.ledger.labels):
+            del snap.ledger.labels[key]
 
         # THE SELECTION RULE, under the 512 MB cap: cards still on hand first, then the rest,
         # each by (box, index). Every photograph is taken until the next would pass the cap.
@@ -314,9 +319,16 @@ def drop_stale_positions(bundle: Path, home: Path) -> int:
     return dropped
 
 
-def assert_scrubbed(bundle: Path, shipping: Path) -> None:
-    """THE ONE CHECK: every address field, in the bundle and the shipping export, is blank."""
+def assert_scrubbed(bundle: Path, shipping: Path, home: Optional[Path] = None) -> None:
+    """THE ONE CHECK: every address field, in the bundle and the shipping export, is blank, and the
+    demo store at `home` holds no label row (D326)."""
     bad: List[str] = []
+    if home is not None:
+        os.environ["BANCHI_HOME"] = str(home)
+        from store import Store
+
+        if len(Store().read().ledger.labels):
+            bad.append("label row")
 
     def walk(value) -> None:
         if isinstance(value, dict):
@@ -455,7 +467,7 @@ def main() -> int:
     if dropped:
         print("positions %d stale (box, index) pair(s) dropped, no longer any card there"
               % dropped)
-    assert_scrubbed(APP_BUNDLE, home / "shipping-export.csv")
+    assert_scrubbed(APP_BUNDLE, home / "shipping-export.csv", home)
     commit_output()
     return 0
 

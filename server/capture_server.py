@@ -235,7 +235,7 @@ on every route meant any page in any other tab of the owner's browser could send
 `DELETE /inventory/3/17` — D10's hard delete of a record, a sidecar and a photo, with no
 backup — and nothing here could tell it from the capture app. POST, PUT and DELETE now
 require an `Origin` this server knows (or none at all, which is what a non-browser client
-sends); GET is unchanged and still `*`, because `GET /photo` is loaded as an image by two
+sends); GET is unchanged and still `*` (but for the label reads), because `GET /photo` is loaded as an image by two
 screens. The argument, the allowlist and the environment variable that extends it are at
 `SAFE_METHODS` below. It is a CSRF gate, NOT authentication, and it still adds none.
 
@@ -498,6 +498,13 @@ JPEG_MAGIC = b"\xff\xd8\xff"
 # queue and the pull preview load it as an image; an `<img>` sends no `Origin` at all, and
 # narrowing the read side would break the two screens the photo service exists for while
 # protecting nothing — a read of a photo of a card is not a write.
+#
+# THE ONE EXCEPTION IS THE LABEL READS (`_PRIVATE_READ_RES`), and the reason is that a label is
+# not a photo of a card: it is a buyer's name and street address. Under `*`, a page in another
+# tab could read `GET /shipping/labels`, take a `pdf_token` from it and read the label PDF. Those
+# three GETs answer `Access-Control-Allow-Origin` for an allowed origin only (the app's own
+# pages, which read them) and none for any other, so the browser keeps the answer from the page
+# that asked. A client with no `Origin` is untouched, as everywhere above.
 #
 # WHY THIS IS WORTH MORE THAN IT LOOKS: the roadmap puts this server on the LAN so the
 # Fulfiller can reach it from his phone (D5, D13). At that point `*` is not exposed to the
@@ -811,6 +818,19 @@ _SHIPPING_FILE_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/file$")
 # collide however they are ordered.
 _SHIPPING_STAMPS_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/stamps$")
 _SHIPPING_ITEM_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})$")
+# D326's labels. The preview and the confirm are one POST on the batch. A stored pdf is read by its
+# random token and the combined file by batch; neither takes an order number.
+_SHIPPING_LABELS_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/labels$")
+_SHIPPING_LABEL_PDF_RE = re.compile(r"^/shipping/labels/([^/]+)/pdf$")
+_SHIPPING_BATCH_LABELS_PDF_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/labels/pdf$")
+_SHIPPING_BATCH_LABELS_STOP_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/labels/stop$")
+# The label GETs that hand out a buyer's address or the token that does: the listing, the stored label
+# by token and the batch's combined file. `_cors_headers` answers them to an allowed origin only.
+_PRIVATE_READ_RES = (
+    re.compile(r"^/shipping/labels$"),
+    _SHIPPING_LABEL_PDF_RE,
+    _SHIPPING_BATCH_LABELS_PDF_RE,
+)
 # One slab, by grader and cert. Both are percent-decoded by the route. `/slabs/sweep` matches nothing: the owner deferred the sweep.
 _SLABS_ITEM_RE = re.compile(r"^/slabs/([^/]+)/([^/]+)$")
 
@@ -16111,7 +16131,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
                            not mix and because echoing is what makes the browser's own check
                            agree with this server's. An unknown origin still gets `*`, which
                            keeps `GET /photo` embeddable — see the CORS block above for why
-                           reads are deliberately open.
+                           reads are deliberately open. The label reads
+                           (`_PRIVATE_READ_RES`) get no ACAO at all for an unknown origin.
           the method list  an unknown origin is told GET and OPTIONS only, so its preflight
                            for a DELETE fails IN THE BROWSER and the request is never sent.
                            The dispatcher refuses it as well; this is the belt to that
@@ -16124,8 +16145,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
         origin = self._origin()
         known = origin is not None and origin in allowed_origins()
         methods = ALL_METHODS if (origin is None or known) else SAFE_METHODS
-        return (
-            ("Access-Control-Allow-Origin", origin if known else "*"),
+        path = urlparse(self.path).path.rstrip("/") or "/"
+        private = any(pattern.match(path) for pattern in _PRIVATE_READ_RES)
+        allow = ((("Access-Control-Allow-Origin", origin),) if known
+                 else () if private else (("Access-Control-Allow-Origin", "*"),))
+        return allow + (
             ("Access-Control-Allow-Methods", ", ".join(methods)),
             ("Access-Control-Allow-Headers", "Content-Type"),
             # WITHOUT THIS THE BOOT HEADER IS INVISIBLE TO THE APP. A cross-origin response
@@ -16403,7 +16427,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # up: it cannot import `BadRequest` from here because this file imports IT, and
             # the reverse import would be a cycle. One `except` clause is the whole seam,
             # and every refusal already carries the status and the code it wants.
-            self._fail(exc.status, exc.code, str(exc))
+            self._fail(exc.status, exc.code, str(exc), getattr(exc, "data", None))
         except files.LockTimeout:
             self._fail(
                 HTTPStatus.SERVICE_UNAVAILABLE,
@@ -16976,6 +17000,28 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     kind,
                     (("Content-Disposition", 'attachment; filename="pirateship-import.csv"'),),
                 )
+            # D326's combined label file for a batch, the label list and the stored label. A pdf holds a
+            # buyer's address, so it is never cached.
+            match = _SHIPPING_BATCH_LABELS_PDF_RE.match(path)
+            if match:
+                blob, kind, name = shipping_routes.do_shipping_labels_pdf(match.group(1))
+                return self._send(
+                    HTTPStatus.OK,
+                    blob,
+                    kind,
+                    (("Content-Disposition", 'inline; filename="{}"'.format(name)), ("Cache-Control", "no-store")),
+                )
+            if path == "/shipping/labels":
+                return self._json(HTTPStatus.OK, shipping_routes.do_shipping_labels_list())
+            match = _SHIPPING_LABEL_PDF_RE.match(path)
+            if match:
+                blob, kind, name = shipping_routes.do_shipping_label_pdf(unquote(match.group(1)))
+                return self._send(
+                    HTTPStatus.OK,
+                    blob,
+                    kind,
+                    (("Content-Disposition", 'inline; filename="{}"'.format(name)), ("Cache-Control", "no-store")),
+                )
             # THE APP ITSELF, AND IT IS THE LAST THING TRIED (D138). Every route above is
             # matched first, so nothing in `app/dist/` can shadow a route; what reaches here
             # is `/`, an asset, or an address somebody typed. `parsed.path` rather than the
@@ -17493,6 +17539,21 @@ class CaptureHandler(BaseHTTPRequestHandler):
                         match.group(1), self._body(), _order_stamps
                     ),
                 )
+            # D326: the preview is free, the confirm buys. One create at a time, each claimed in the
+            # store first, so a double press buys once.
+            match = _SHIPPING_LABELS_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK, shipping_routes.do_shipping_labels(match.group(1), self._body())
+                )
+            match = _SHIPPING_BATCH_LABELS_STOP_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK, shipping_routes.do_shipping_labels_stop(match.group(1), self._body())
+                )
+            # T5: one press, one scan lookup per made label. On demand, never on a timer.
+            if path == "/shipping/labels/scans":
+                return self._json(HTTPStatus.OK, shipping_routes.do_shipping_labels_scans(self._body()))
             if app_owns(path):
                 # The app is served here and is read-only (D138). 405 and not 404,
                 # because the resource exists — saying "no such route" about a path

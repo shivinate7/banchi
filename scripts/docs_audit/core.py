@@ -910,12 +910,14 @@ LOOP_EXPENSIVE_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("server/send_routes.py", "_write_and_send", "_copies"),   # one read per import file this press wrote, at most one per game
     ("server/send_routes.py", "_write_and_send", "_names"),   # one read per import file this press wrote, at most one per game
     ("server/send_routes.py", "_write_and_send", "_price_rows"),   # one read per import file this press wrote, at most one per game
+    ("server/shipping_routes.py", "_confirm", "_make_one"),   # one claim write, one paid create and one answer write per order, by design: the store lock is never held across a call and the press stops at the first refusal
+    ("server/shipping_routes.py", "do_shipping_labels_scans", "Store.write"),   # one write per scanned label, so a refusal part-way keeps the rows already read; bounded by the made labels
     ("store/master.py", "place", "_respace"),   # the loop is `range(2)`, a fixed two passes
     ("store/master.py", "place", "_try_place"),   # the loop is `range(2)`, a fixed two passes
     ("store/master.py", "section_tail_key", "_respace"),   # the loop is `range(2)`, a fixed two passes
     ("store/orders.py", "record_pull", "holder_of"),   # CANDIDATE: `holder_of` walks the open orders once per capture id pulled
 })
-LOOP_EXPENSIVE_EXPECTED = 36
+LOOP_EXPENSIVE_EXPECTED = 38
 
 
 # ---------------------------------------------------------------- the package's shared state

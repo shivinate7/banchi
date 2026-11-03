@@ -223,6 +223,9 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     "queues": ("box", "idx", "reason", "cleared_by_human", "first_seen"),
     "orders": ("source", "number", "status"),
     "fulfilment": (),
+    # D326: the TCGTracking labels, one row per TCGplayer order number. Added WITHOUT a version bump:
+    # see `_add_labels`.
+    "labels": ("pdf_token",),
     # D174: the cards a live run has claimed and is about to pay to read.
     # `keys` is the claim itself and is NOT a column — it is a set, and a column holds one
     # value; the intersection is computed in Python over the handful of live rows, which is
@@ -314,6 +317,8 @@ _INDEXES = (
     ("slab_snapshots", "cert"),
     # D320: `Slabs.sales_for` reads one slab's links by key, never a scan of `slab_sales`.
     ("slab_sale_links", "slab"),
+    # D326: `GET /shipping/labels/<pdf_token>/pdf` reads one label row by its token, never a scan of `labels`.
+    ("labels", "pdf_token"),
 )
 
 # D172'S TWO INDEXES, DELIBERATELY NOT IN `_INDEXES` BECAUSE NEITHER IS A PLAIN ONE.
@@ -382,13 +387,13 @@ def _stored_version(conn: sqlite3.Connection, seen: Optional[set] = None) -> Opt
     version 0, which routes it through every upgrade step — the safe direction, since each
     step below is written to be a no-op against a file that already has its column.
 
-    `seen`, when given, is filled with which of `meta`, `cards_run` and `events_event` exist:
-    the one catalogue read answers all three, so the open pays no extra statement for them.
+    `seen`, when given, is filled with which of `meta`, `cards_run`, `events_event` and `labels`
+    exist: the one catalogue read answers all four, so the open pays no extra statement for them.
     """
     names = {
         row[0]
         for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE name IN ('meta', 'cards_run', 'events_event')"
+            "SELECT name FROM sqlite_master WHERE name IN ('meta', 'cards_run', 'events_event', 'labels')"
         )
     }
     if seen is not None:
@@ -452,6 +457,7 @@ def _ensure_schema(
         )
     if stored == SCHEMA_VERSION:
         _ensure_run_event_indexes(conn, seen, directory=directory, locked=locked)
+        _ensure_labels(conn, seen, directory=directory, locked=locked)
         _repair(conn, directory=directory, locked=locked)
         return
     if stored is not None:
@@ -583,6 +589,7 @@ def _upgrade(
             if stored < 16:
                 _add_daily_prices(conn)      # the daily TCGCSV read
             _add_run_event_indexes(conn)
+            _add_labels(conn)                # D326, no version
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -1096,6 +1103,30 @@ def _add_daily_prices(conn: sqlite3.Connection) -> None:
     `_add_slabs`'s case: two tables nothing older has, so nothing to backfill."""
     for table in ("daily_prices", "daily_price_updates"):
         conn.execute(_ddl(table, TABLES[table]))
+
+
+def _add_labels(conn: sqlite3.Connection) -> None:
+    """`labels` (D326, `store/orders.py:LabelRow`): the TCGTracking label rows.
+
+    `_add_slabs`'s case, a table nothing older has, but WITHOUT A VERSION OF ITS OWN, on
+    `_add_run_event_indexes`' precedent: `_upgrade` runs it on every upgrade and `_ensure_labels` on
+    every open at the current version, so a store stamped 16 gains the table with no bump. A store
+    that is opened by an older build keeps the table and that build reads nothing from it.
+    """
+    conn.execute(_ddl("labels", TABLES["labels"]))
+    conn.execute("CREATE INDEX IF NOT EXISTS labels_pdf_token ON labels(pdf_token)")
+
+
+def _ensure_labels(
+    conn: sqlite3.Connection, seen: set, *, directory: Optional[Path], locked: bool
+) -> None:
+    """At the current version, create `labels` if `_stored_version` did not see it. The DDL runs
+    under the store lock, and only on the open that finds it missing."""
+    if "labels" in seen:
+        return
+    guard = _already_locked() if (locked or directory is None) else files.exclusive(directory)
+    with guard:
+        _add_labels(conn)
 
 
 def _add_captured_at_index(conn: sqlite3.Connection) -> None:

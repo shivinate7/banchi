@@ -29,5 +29,6 @@ orders pulled from TCGplayer, and labels from TCGTracking while orders are fulfi
   canceled order is not lost. TCGTracking's API documents no void call, so a void happens in its dashboard.
 - **One read-only lookup was granted** (item 104). It found `TCG_TRACKING_KEY` and no shipper
   number, so no call was made.
+- **pypdf is a dependency** so one press prints a batch's labels as one file; the stdlib cannot join PDFs.
 
 **Reopen** if TCGplayer ships its own envelope tracking, or TCGTracking's API drops `source_order_id`.
