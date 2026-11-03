@@ -174,6 +174,11 @@ ROUTE_URLS = {
     "_RUN_SCOPE_RE": "/pipeline/runs/{run}/scope",
     "_RUN_ITEM_RE": "/pipeline/runs/{run}",
     "_SHIPPING_FILE_RE": "/shipping/batches/abc/file",
+    # The label routes (D326) are budgeted on their miss path, as DEBT85 is: the fixture holds no label row and no held
+    # batch, and a label row scales with the labels bought, never with the cards. The token is 32 hex that no row owns.
+    "/shipping/labels": "/shipping/labels",
+    "_SHIPPING_LABEL_PDF_RE": "/shipping/labels/0123456789abcdef0123456789abcdef/pdf",
+    "_SHIPPING_BATCH_LABELS_PDF_RE": "/shipping/batches/abc/labels/pdf",
     "/stock/mix": "/stock/mix",
     "/slabs": "/slabs",
     "_SLABS_ITEM_RE": "/slabs/psa/12345678",
@@ -348,6 +353,10 @@ BUDGET = {
     '_RUN_SCOPE_RE': {"status": 200},
     '_RUN_ITEM_RE': {"status": 200, 'sql': 16, 'json_loads': 5, 'store_read': 1},
     '_SHIPPING_FILE_RE': {"status": 400},
+    '/shipping/labels': {"status": 200, 'sql': 12, 'store_read': 1},
+    '_SHIPPING_LABEL_PDF_RE': {"status": 404, 'sql': 11, 'store_read': 1},
+    # A batch that is not held refuses before any store read.
+    '_SHIPPING_BATCH_LABELS_PDF_RE': {"status": 404},
     'POST /pipeline/waiting': {"status": 200, 'sql': 11, 'store_read': 1, 'read_sidecar': 21},
     'POST /inventory/copies': {"status": 200, 'sql': 53, 'json_loads': 28, 'places': 1, 'store_read': 1},
     'POST /pipeline/preflight': {"status": 200, 'sql': 21, 'store_read': 2, 'read_sidecar': 21},
@@ -383,6 +392,7 @@ SCAN_ALLOWED = frozenset({
     'boxes',
     'cards',
     'identifications.json_extract',
+    'labels',  # GET /shipping/labels is the full list, the same shape as boxes and cards
     'listings',
     'orders',
     'readings',

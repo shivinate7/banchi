@@ -21,6 +21,7 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - No `scope` job: scope lives in make targets, env vars and the browser-scope job, and skips at steps; a restructure is lane-sized.
 - `registry_scopes._scan_shard_steps` (and main's `workflow_shards` before it) read a shard target named after the word make anywhere in a `run:` block, so a `cd app` line that runs one, or an echo that names one, is read as a shard step. No such step exists now.
 - `.github/workflows/check.yml`: the "Image matches" step compares the Playwright image tag only, not its digest. A wrong digest fails loudly at browser launch.
+- `labels_guards.check_labels_answer_write_once` fails the label answer write once, and `shipping_routes._make_one`'s second try absorbs it, so no red check covers an answer held in `_HELD` after two failed writes. A reviewer probe proved that path.
 - `scripts/waiting-export.py` scan false alarms, each costing one reword before an export: `key=str.lower`, `idempotency key: 8f3a2c91`, `TOKEN=xxxxxxxxxx`, "Round 3 Review Lane", `react@19.0.0-rc`, and a phone-shaped run of digits.
 - `pipeline/rosterholdings.py`'s `read_roster`: a bad roster row that spans lines is named by its last line, a missing header column gets an error with no line, and an amount of `-0` reads as `Decimal('-0')`.
 - `pipeline/rosterholdings.py` has its own `SkuRow`, beside `store/skus.py`'s; the totals line shows one price date, the newest, so an older price on another line is not shown.
@@ -36,3 +37,5 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - `app/src/Pricing.css` `.pricing-refs .pricing-ref-age` at 820: a stale date pushes Lowest right and can wrap the line on a narrow item column with a $1,000+ price. Unmeasured.
 - `app/tests/pricing.spec.ts` "send panel: 240 moves": at 1440 it now bounds the first row's price field, not the row's bottom edge.
 - `#/pricing`: the Send column leaves after a reload once the owner's send clears the last waiting new copy.
+- `pipeline/rosterholdings.py`'s `build_roster_report`: a product id whose archive SKUs are only partly in `skus` prices from the ones present, so a foil line can take a non-foil price. `no_sku_row` covers only all-missing. `skus` has no delete path today.
+- `pipeline/rosterholdings.py`'s `_id_of` reads ids with `int()`, so `09001` and `+9001` become separate rows. Roster ids are plain integers today.

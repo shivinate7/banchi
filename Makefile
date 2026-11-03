@@ -1060,7 +1060,7 @@ holdings-selftest:
 	fi
 
 # pipeline/rosterholdings.py, proved against an in-memory roster CSV, SKU list and archive,
-# no store, no network: the TCG-purchase filter, the privacy floor, the name join, the Near Mint
+# no store, no network: the TCG-purchase filter, the privacy floor, the product id join, the Near Mint
 # printing pick, one bucket per line. PATH GATED (D247).
 rosterholdings-selftest:
 	@python3 scripts/guard-scope.py classify --target rosterholdings-selftest --base origin/main; rc=$$?; \

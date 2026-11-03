@@ -33,7 +33,7 @@ was typed. Old live listings drift from market and nothing says so. The owner ca
 - **One rule** prices both. It starts from Market, the measured anchor (section 5, step 1), and
   clamps to the owner's floor.
 - **A suggestion** is a proposed price for a live listing. A trigger raises it. It carries a
-  reason in words, such as "market up 18% since listed" or "unsold 30 days".
+  reason in words, such as "market up 18% since listed" or "unsold 14 days".
 - **Every row says where its price came from**: Rule, You (typed), Floor, Suggested or Live. "Live"
   marks a live listing with no reason to change: its price is the one set when it was listed. "Live"
   is the orchestrator's pick, reversible, not an owner ruling.
@@ -91,6 +91,8 @@ recommendations.
 - **Unsold for N days: do not keep alone.** By age alone it fires on 745 of 914 at 30 days, and
   a whole wave crosses any threshold on the same day. It says "time passed", not "price is wrong". Keep
   it as a qualifier: unsold N days AND our price above market. Then it names a real lowering.
+  **N is 14 days (owner's answer, queue item 117).** A listing is unsold once 14 days pass with
+  no sale here since it went live.
 - **Undercut by others: keep, quiet.** It fires on 20 of 498 at 10%. Low With Shipping is already
   stored. It is cheap and rare, so it adds little noise. The row must say the price includes
   shipping.
