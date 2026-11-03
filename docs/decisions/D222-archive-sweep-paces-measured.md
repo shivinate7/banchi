@@ -24,9 +24,9 @@ operator to fix something the run had already disproved.
 a refusal, `readings_for_rows` has folded `Blocked` to a plain string. So it matches the
 whole text `pipeline/pricehistory.py:BLOCKED_MESSAGE`, the constant `fetch_json` raises with,
 never its opening words, which a 500's text shares. Given evidence this pass
-already read something successfully, it rewrites the message to `THROTTLE_REWRITE`, a
-throttle. It leaves the User-Agent alone. With no such evidence, the message stays exactly as `Blocked` phrased
-it. There is no evidence yet that authorization is not the real problem.
+already read something successfully, it rewrites the message to `pipeline.pricearchive.THROTTLE_REWRITE`, a
+throttle. It leaves the User-Agent alone. With no such evidence, the message stays exactly as
+`Blocked` phrased it. There is no evidence yet that authorization is not the real problem.
 
 ### The pace is measured, and never guessed
 

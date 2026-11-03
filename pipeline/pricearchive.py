@@ -105,10 +105,10 @@ CATALOG_SKUS_PER_PASS = 600
 # again within the same week always advances onto ground the last one had not covered.
 RESUME_TTL_SECONDS = 6 * 24 * 60 * 60
 
-# `pipeline/pricehistory.py:COURTESY_DELAY_SECONDS`, copied rather than imported — this
-# module takes `pricehistory` for its refusal-text constants only (the `market` argument stays
-# duck-typed throughout), so the naive first guess still lives here too, for a checkout
-# that has never measured a real throttle yet.
+# The naive first guess, for a checkout that has never measured a real throttle yet. Its own
+# value, equal to `pipeline/pricehistory.py:COURTESY_DELAY_SECONDS` but not read from it: this
+# module imports `pricehistory` for its refusal-text constants only, and the `market` argument
+# stays duck-typed throughout.
 DEFAULT_COURTESY_DELAY_SECONDS = 0.15
 
 # How much slower than the rate that just got a session blocked the next attempt goes.

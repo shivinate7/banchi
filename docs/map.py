@@ -3169,9 +3169,9 @@ COMPONENTS = [
             },
             "archive-review-selftest.py": {
                 "does": "proves cli/archive_review.py against a throwaway store, no "
-                        "network. Its refusal cases take their texts from the reader's own "
+                        "network. Its real-text cases take their texts from the reader's own "
                         "raise path (`harness/tests/price_refusals.py`), with only "
-                        "pipeline/net.py:request stubbed, and never call a market. "
+                        "pipeline/net.py:request stubbed; no case calls a market. "
                         "Proves: an identification "
                         "refusal reaches the review queue with its photograph; a "
                         "network-shaped refusal never does; a card sharing the refused "
