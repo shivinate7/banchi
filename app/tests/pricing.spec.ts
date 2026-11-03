@@ -7873,6 +7873,29 @@ test('at 1440 a list with live listings folds Range 7d, and the item column is a
   expect.soft(Math.min(...widths), `the narrowest item column is ${Math.min(...widths)}px`).toBeGreaterThanOrEqual(220)
 })
 
+/* THE "NOW $x" TEXT IS DRAWN IN FULL. The DOM holds the whole string even when the cell clips it to "Now $12..." with an ellipsis, so `toContainText` cannot tell. What is drawn is
+ * read from the element: its content is never wider than its box (`scrollWidth <= clientWidth`, which an ellipsis breaks), and the text's own width fits the box within 1px (a glyph's side bearing is not a cut). One live
+ * listing is stubbed at each price, a 4-digit one included, at the wide desk and at the narrow one. */
+for (const width of [1440, 820]) {
+  for (const [shown, asking] of [['$4.75', '4.75'], ['$12.41', '12.41'], ['$1,234.50', '1234.50']]) {
+    test(`at ${width} a live price of ${shown} is drawn as "Now ${shown}" in full, never clipped`, async ({ page }) => {
+      await setViewport(page, { width, height: 900 })
+      await open(page, { live: [tickRow(1, 'Umbreon VMAX', { asking })] })
+      const now = page.getByText(`Now ${shown}`, { exact: true })
+      await expect(now, 'the Now text is drawn').toHaveCount(1)
+      await settleFonts(page)
+      await settleMotion(page)
+      const drawn = await now.evaluate((el) => {
+        const text = document.createRange()
+        text.selectNodeContents(el)
+        return { scroll: el.scrollWidth, client: el.clientWidth, text: text.getBoundingClientRect().width, box: el.getBoundingClientRect().width }
+      })
+      expect.soft(drawn.scroll, `Now ${shown} runs ${drawn.scroll}px in a ${drawn.client}px box (an ellipsis cuts it)`).toBeLessThanOrEqual(drawn.client)
+      expect.soft(drawn.text, `the text of Now ${shown} is ${drawn.text}px wide in a ${drawn.box}px box`).toBeLessThanOrEqual(drawn.box + 1)
+    })
+  }
+}
+
 
 /* LABELS TAKE TITLE CASE (docs/DESIGN.md R5). Neither string below is a sentence (`isSentence` needs a closing . ? or !), so each is a label: a sheet heading and an
  * empty state's title. The copy sweep does not open the mark-down sheet or reach this empty state, so the exact case is matched here. */
