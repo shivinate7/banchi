@@ -199,8 +199,7 @@ def _suggest_checks(c: Checks) -> None:
     c.equal(fired(market=Decimal("8.50")), ["market_moved"], "market down exactly 15% fires too")
     c.equal(fired(market=Decimal("8.51")), [], "market down 14.9% does not fire")
 
-    # A listing is unsold after 14 days (owner's answer, queue item 117, relayed by the coordinator
-    # 2026-11-02 15:53 CST; docs/specs/pricing-suggest.md section 4). The engine's old edge was 30.
+    # A listing is unsold after 14 days (queue item 117; docs/specs/pricing-suggest.md section 4).
     c.equal(
         fired(first_seen_live=_ago(14), asking=Decimal("11.01")),
         ["unsold"],

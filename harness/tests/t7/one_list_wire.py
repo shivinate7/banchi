@@ -1190,11 +1190,10 @@ def check_live_no_market_needs_you(checks: Checks) -> None:
                          f"{label}: a live listing with copies is filed under {expected}")
 def check_send_typed_price_with_no_new_copy(checks: Checks) -> None:
     """A typed price on a live listing, sent with no new copy, is answered and goes out under the
-    checks a kept suggestion meets (owner's ruling, relayed by the coordinator 2026-11-02 15:53 CST:
-    a typed live price with no new copy sends as a price-only row): a reading from today
+    checks a kept suggestion meets (queue item 112: a typed live price with no new copy sends as a
+    price-only row): a reading from today
     (`readings_stale`) and a price within the cap of the live price (`suggestion_past_cap`, the
-    one cap check; the code is the lane's to keep or rename with this case). Today every such
-    press is refused `runs_required`.
+    one cap check).
 
     Articuno is live at 22.03. Three presses, each its own home:
       24.00, reading from today    answered: a price-only row, posted "emit-price", replacing 22.03
