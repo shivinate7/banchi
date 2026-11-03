@@ -16,8 +16,8 @@ import type {
   TrendsPayload,
 } from '../src/types'
 import { setViewport } from './phoneSwitch'
-import { payloadOf, productHistory, sendSummary } from './routeFixtures'
-import { HEAD_CENTER_PX, headOffsets, valueMeasures, VALUE_CENTER_PX, KEPT_LEFT_PX, KEPT_RIGHT_ZERO } from './shell'
+import { sendSummary, stubHistoryCard } from './routeFixtures'
+import { HEAD_CENTER_PX, headOffsets, refsBesideItem, valueMeasures, VALUE_CENTER_PX, KEPT_LEFT_PX, KEPT_RIGHT_ZERO } from './shell'
 
 /* THE PRICING SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
  *
@@ -541,19 +541,9 @@ async function open(
     })
   })
 
-  /* THE FLOATING PRICE-HISTORY CARD'S TWO READS, which every price-field focus opens on first use:
-     `GET /pipeline/products/<sku>/history` and `GET /orders` (the owner's sale marks), the same
-     pair `ProductHistory.tsx` reads. The fixtures are `history-float.spec.ts`'s: `routeFixtures`'s
-     `productHistory`, and `stubStore`'s empty orders payload, which is `payloadOf([], [])`. NOT
-     RECORDED IN `wire`: the card is not this screen's T panel, and the Qty-field case
-     asserts that no `/history` read reached `wire`. A case that asserts the card's own
-     reads stubs them after this, and the later route wins. */
-  await page.route(/\/pipeline\/products\/[^/]+\/history$/, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(productHistory()) }),
-  )
-  await page.route(/\/orders$/, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payloadOf([], [])) }),
-  )
+  /* THE FLOATING PRICE-HISTORY CARD'S TWO READS (`routeFixtures.ts:stubHistoryCard`), NOT RECORDED IN `wire`: the card is not this screen's T panel, and the
+     Qty-field case asserts that no `/history` read reached `wire`. A case that asserts the card's own reads stubs them after this, and the later route wins. */
+  await stubHistoryCard(page)
 
   /* THE MASS-CLEAR AND ITS WAY BACK (D168). Registered
      BEFORE the bare `/pricing$` pattern below, which Playwright would otherwise never reach
@@ -6449,7 +6439,9 @@ test('7b-23: Pricing.css holds no literal that a design token already names', as
 /* 7b-28: THE SORT HEADER'S HOVER BOX HUGS ITS LABEL. Equal space left and right of the label inside the box,
  * the label is centered over its column, the chevron draws outside the box
  * and moves nothing, and the press stays at the thumb floor. The box is found by what it does: the header's
- * own button or descendant whose background is on under the pointer. */
+ * own button or descendant whose background is on under the pointer.
+ * AT 820 ONLY PRICE KEEPS A HEADER (list notes item 16: Market and Lowest are one labelled line under the facts line, not columns), so the hover box is held
+ * for Price alone, Market and Lowest have no header to hover, and their sort is reached through the sort menu (the case after this loop). */
 const HOVER_COLUMNS = [
   { name: 'Market', value: '.pricing-col-market' },
   { name: 'Lowest', value: '.pricing-col-low' },
@@ -6464,10 +6456,14 @@ for (const theme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: theme })
       await setViewport(page, { width, height: 900 })
       await open(page, { skus: sortRows(), decisions: SORT_DECISIONS, saved: sortSaved(AGO(3600)) })
-      await expect(sortHead(page, 'Market')).toBeVisible()
-      for (const column of HOVER_COLUMNS) {
+      if (width === 820) {
+        await expect(sortHead(page, 'Price')).toBeVisible()
+        await expect(sortHead(page, 'Market'), 'at 820 Market has no header: it is a figure on the references line').toBeHidden()
+        await expect(sortHead(page, 'Lowest'), 'at 820 Lowest has no header: it is a figure on the references line').toBeHidden()
+      }
+      for (const column of width === 820 ? HOVER_COLUMNS.filter((one) => one.name === 'Price') : HOVER_COLUMNS) {
         const head = sortHead(page, column.name)
-        if (column.name !== 'Market' && column.name !== 'Price' && !(await head.isVisible())) continue // the screen drops Lowest and Range at 820
+        await expect(head, `${column.name} has a sort header at ${width}`).toBeVisible()
         await head.hover()
         await settleMotion(page)
         const measure = () => head.evaluate((button, spec) => {
@@ -6515,6 +6511,37 @@ for (const theme of ['light', 'dark'] as const) {
   }
 }
 
+/* AT 820 MARKET AND LOWEST SORT THROUGH THE SORT MENU, not a header (7b-28: their headers went with their columns; list notes item 16). The menu offers "Market price"
+ * and "Lowest price", and a pick orders every section highest first by the figure the row shows. The figure is read from the row's own text, "Market $30.00" and
+ * "Lowest $12.00" (a label and its money, so the reason "Market up 18% since listed." is no figure), because the references line has no cell to read. A row
+ * with no figure goes last. Both picks must draw figures, and must order the rows differently, or the case read nothing. */
+const labelledFigures = (page: Page, word: 'Market' | 'Lowest') =>
+  page.locator('.pricing-group').evaluateAll((groups, label) =>
+    groups.map((group) => ({
+      head: group.getAttribute('aria-label') ?? '',
+      names: [...group.querySelectorAll('.pricing-row')].map((row) => row.querySelector('.pricing-name')?.textContent ?? ''),
+      values: [...group.querySelectorAll<HTMLElement>('.pricing-row')].map((row) => {
+        const found = new RegExp(`\\b${label}(?:,\\s*shipped)?\\s*\\$([\\d,]+(?:\\.\\d+)?)`).exec(row.innerText)
+        return found === null ? null : Number(found[1]!.replace(/,/g, ''))
+      }),
+    })),
+    word,
+  )
+test('at 820 Market and Lowest sort through the sort menu, highest first by the figure each row shows', async ({ page }) => {
+  await setViewport(page, { width: 820, height: 900 })
+  await open(page, { skus: sortRows(), decisions: SORT_DECISIONS, saved: sortSaved(AGO(3600)) })
+  await expect(page.locator('.pricing-row')).toHaveCount(6)
+  const orders: string[][] = []
+  for (const [word, pick] of [['Market', /^Market price/], ['Lowest', /^Lowest price/]] as const) {
+    await pickFilter(page, 'Sort', pick)
+    const sections = await labelledFigures(page, word)
+    expect(sections.flatMap((section) => section.values).filter((value) => value !== null).length, `${word}: the rows draw a labelled ${word} figure`).toBeGreaterThanOrEqual(5)
+    expectSorted(sections, 'desc')
+    orders.push(sections.flatMap((section) => section.names))
+  }
+  expect(orders[0], 'the Lowest pick ordered the rows differently from the Market pick').not.toEqual(orders[1])
+})
+
 /* HEADER LABELS ARE CENTERED OVER THEIR COLUMN (owner ruling). Item stays on the left edge; the rows' values
  * are not asserted. The live-listing half is in pricing-markdown.spec.ts. */
 for (const theme of ['light', 'dark'] as const) {
@@ -6523,9 +6550,18 @@ for (const theme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: theme })
       await setViewport(page, { width, height: 900 })
       await open(page, { skus: sortRows(), decisions: SORT_DECISIONS, saved: sortSaved(AGO(3600)) })
-      await expect(sortHead(page, 'Market')).toBeVisible()
-      for (const { column, off } of await headOffsets(page)) {
+      await expect(sortHead(page, width === 820 ? 'Price' : 'Market')).toBeVisible()
+      const heads = await headOffsets(page)
+      for (const { column, off } of heads) {
         expect.soft(Math.abs(off), `${column}: label is ${off.toFixed(1)}px off`).toBeLessThanOrEqual(HEAD_CENTER_PX)
+      }
+      /* AT 820 THE LABELS LEFT TO CENTER ARE PRICE (over its column) AND ITEM (on its left edge): Market and Lowest are not columns (list notes item 16), so
+         no Market or Lowest label is measured, and the loop above must have measured Price or it measured nothing. */
+      if (width === 820) {
+        const measured = heads.map((one) => one.column)
+        expect(measured, 'the Price label is measured at 820').toContain('price')
+        expect(measured, 'no Market label is a column header at 820').not.toContain('market')
+        expect(measured, 'no Lowest label is a column header at 820').not.toContain('low')
       }
     })
   }
@@ -6540,9 +6576,16 @@ for (const theme of ['light', 'dark'] as const) {
       await setViewport(page, { width, height: 900 })
       const skus = [...sortRows(), sku({ sku: '907', name: 'Golf', snap: { market: '1.05', direct_low: null, low: '1.05', low_with_shipping: null, now: null } })]
       await open(page, { skus, decisions: SORT_DECISIONS, saved: sortSaved(AGO(3600)) })
-      await expect(sortHead(page, 'Market')).toBeVisible()
-      const seen = await valueMeasures(page)
-      expect(seen.some((m) => m.column.startsWith('market')) && seen.some((m) => m.column.startsWith('range') || width < 1440)).toBe(true)
+      await expect(sortHead(page, width === 820 ? 'Price' : 'Market')).toBeVisible()
+      const seen = await valueMeasures(page, width)
+      if (width === 820) {
+        /* AT 820 MARKET AND LOWEST ARE NOT CELLS (list notes item 16): `valueMeasures` leaves them out, no row draws either as a column beside the item, and
+           what is left to hold is Price, which keeps its place. */
+        expect(await refsBesideItem(page), 'Market and Lowest sit under the facts line, not in columns beside the item').toEqual([])
+        expect(seen.some((m) => m.column.startsWith('price')), 'a Price value is measured at 820').toBe(true)
+      } else {
+        expect(seen.some((m) => m.column.startsWith('market')) && seen.some((m) => m.column.startsWith('range'))).toBe(true)
+      }
       for (const m of seen) {
         const column = m.column.split('#')[0]!
         if (['market', 'low', 'range'].includes(column)) {

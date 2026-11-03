@@ -750,6 +750,21 @@ export function productHistory(): ProductHistoryPayload {
   }
 }
 
+/** THE FLOATING PRICE-HISTORY CARD'S TWO READS, which every price-field focus on `#/pricing` opens on first use:
+ *  `GET /pipeline/products/<sku>/history` and `GET /orders` (the owner's sale marks), the same pair
+ *  `ProductHistory.tsx` reads. The answers are `productHistory()` and `payloadOf([], [])`, the empty orders
+ *  `shell.ts:stubStore` also gives. THE ONE HOME of this pair for the specs that mount `#/pricing` without
+ *  `{ store: true }` (`pricing.spec.ts`, `pricing-markdown.spec.ts`). It records nothing: the card is not that
+ *  screen's wire. A case that asserts the card's own reads stubs them after this, and the later route wins. */
+export async function stubHistoryCard(page: Page): Promise<void> {
+  await page.route(/\/pipeline\/products\/[^/]+\/history$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(productHistory()) }),
+  )
+  await page.route(/\/orders$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payloadOf([], [])) }),
+  )
+}
+
 /** Stub the product's own history read. Its fills come off `seedPopulatedOrders`'s `/orders`,
  *  and its printings switch reads `/search`, which `shell.ts:stubStore` already answers. */
 export async function seedPopulatedProduct(page: Page): Promise<void> {

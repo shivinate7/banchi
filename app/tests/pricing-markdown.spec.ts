@@ -1,9 +1,10 @@
 // Protects: The one list on Pricing reprices live TCGplayer listings and leaves the new-copy flow untouched.
 // Governs: D28, D278, D103, D107, D118, D218, D273, D277
-import { HEAD_CENTER_PX, headOffsets, valueMeasures, VALUE_CENTER_PX, KEPT_LEFT_PX, KEPT_RIGHT_ZERO } from './shell'
+import { HEAD_CENTER_PX, headOffsets, refsBesideItem, valueMeasures, VALUE_CENTER_PX, KEPT_LEFT_PX, KEPT_RIGHT_ZERO } from './shell'
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleMotion } from './motionSettled'
+import { stubHistoryCard } from './routeFixtures'
 
 import type { MarkdownSku } from '../src/types'
 import { setViewport } from './phoneSwitch'
@@ -259,6 +260,9 @@ async function open(
   await page.route(/\/pipeline\/runs$/, async (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runs: [] }) }),
   )
+
+  /* THE PRICE-HISTORY CARD'S TWO READS: a price field in focus opens the card, which reads them. Not recorded in `wire`. */
+  await stubHistoryCard(page)
 
   await page.goto(options.route ?? ROUTE)
   await page.locator(VIEW).waitFor()
@@ -1157,8 +1161,16 @@ for (const theme of ['light', 'dark'] as const) {
       await open(page)
       await page.goto('/#/pricing')
       await expect(page.locator('.pricing-row').first()).toBeVisible()
-      for (const { column, off } of await headOffsets(page)) {
+      const heads = await headOffsets(page)
+      for (const { column, off } of heads) {
         expect.soft(Math.abs(off), `${column}: label is ${off.toFixed(1)}px off`).toBeLessThanOrEqual(HEAD_CENTER_PX)
+      }
+      /* AT 820 THE LABELS LEFT TO CENTER ARE PRICE AND ITEM: Market and Lowest are one labelled line under the facts line, not columns (list notes item 16). */
+      if (width === 820) {
+        const measured = heads.map((one) => one.column)
+        expect(measured, 'the Price label is measured at 820').toContain('price')
+        expect(measured, 'no Market label is a column header at 820').not.toContain('market')
+        expect(measured, 'no Lowest label is a column header at 820').not.toContain('low')
       }
     })
   }
@@ -1172,8 +1184,15 @@ for (const theme of ['light', 'dark'] as const) {
       await open(page)
       await page.goto('/#/pricing')
       await expect(page.locator('.pricing-row').first()).toBeVisible()
-      const seen = await valueMeasures(page)
-      expect(seen.some((m) => m.column.startsWith('market'))).toBe(true)
+      const seen = await valueMeasures(page, width)
+      if (width === 820) {
+        /* AT 820 MARKET AND LOWEST ARE NOT CELLS (list notes item 16): `valueMeasures` leaves them out, no row draws either as a column beside the item,
+           and what is left to hold is Price, which keeps its place. */
+        expect(await refsBesideItem(page), 'Market and Lowest sit under the facts line, not in columns beside the item').toEqual([])
+        expect(seen.some((m) => m.column.startsWith('price')), 'a Price value is measured at 820').toBe(true)
+      } else {
+        expect(seen.some((m) => m.column.startsWith('market'))).toBe(true)
+      }
       for (const m of seen) {
         const column = m.column.split('#')[0]!
         if (['market', 'low', 'range'].includes(column)) {
