@@ -814,12 +814,20 @@ test('the one list with no read yet says so and offers the read, and nothing is 
   expect(wire).toHaveLength(0)
 })
 
-test('the one list opens the newest read, and its line says how the read was taken', async ({ page }) => {
+test('a read opened by its stamp says how the read was taken, and draws no tab bar', async ({ page }) => {
+  /* `open` lands on the stamped route. Nothing else is opened after it: the one list does not
+     fetch the newest read at mount (the wire carries every row), so the stamp is the only way in. */
   await open(page)
-  await page.goto('/#/pricing')
-  /* THE LIST WITH NO STAMP SHOWS THE NEWEST READ, which is the only one `open` lists, and draws no tab bar. */
   await expect(page.locator('.pricing-tabs')).toHaveCount(0)
   await expect(page.locator('.pricing-rule-line')).toContainText('Not sold in 7 days, 10% under your asking price')
+})
+
+test('the one list with live rows and no stamp shows the rule and the floor, never a read’s words', async ({ page }) => {
+  await open(page, { route: '/#/pricing' })
+  const line = page.locator('.pricing-rule-line')
+  await expect(line).toContainText('New cards list at market')
+  await expect(line.locator('.bn-money')).toHaveText('$0.49')
+  await expect(line).not.toContainText('Not sold in 7 days')
 })
 
 /* SPEC 7B, CHECK 19 (the one list half). The saved strips draw at first paint here too, with no

@@ -102,7 +102,7 @@
 /* THE THUMBNAIL IS A BUTTON, SO ON A THUMB IT IS 40px WIDE (F8: it drew 36). One variable feeds the
    caption, the row and the photo button, so the columns can never disagree with the control. */
 .pricing-caption,
-.pricing-row { --pricing-thumb-w: 36px; --pricing-now-w: 96px; }
+.pricing-row { --pricing-thumb-w: 36px; --pricing-price-w: 112px; --pricing-to-w: calc(14px + var(--bn-2)); }
 @media (hover: none) and (pointer: coarse) {
   .pricing-caption,
   .pricing-row { --pricing-thumb-w: 40px; }
@@ -114,35 +114,37 @@
      touch"). Its content is two 56px minis plus their own gap (`PriceTrend.css`'s
      `.pricetrend-mini`, `.pricetrend { gap: var(--bn-2) }`) — 120px, not 64 — so the column was
      narrower than what it draws, and `overflow: hidden` cropped it flush against Lowest's own
-     right edge with none of the caption's gap visible past it. */
-  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 128px [reason-end] 60px 136px 84px 80px;
+     right edge with none of the caption's gap visible past it.
+     THE PRICE COLUMN IS 112px (list.html draws the field 104px): the width the narrow desk already gives it.
+     THE NOW TRACK IS `auto`: it takes the width of the longest "Now $x" a row can draw (`.pricing-now-ghost`), so the item column keeps the rest. */
+  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 128px [reason-end] 60px var(--pricing-price-w) 84px 80px;
   align-items: center;
   column-gap: var(--bn-2);
   padding: 0 var(--bn-3);
 }
 .pricing-list[data-copies='none'] .pricing-caption,
 .pricing-list[data-copies='none'] .pricing-row {
-  grid-template-columns: var(--pricing-send,) [item] minmax(0, 1fr) 72px 72px 128px 136px 80px;
+  grid-template-columns: var(--pricing-send,) [item] minmax(0, 1fr) 72px 72px 128px var(--pricing-price-w) 80px;
 }
 /* THE RANGE 7D COLUMN IS DRAWN ONLY WHERE THE LIST HAS ROOM FOR IT (`RANGE_ROOM_PX` in Pricing.tsx), so
    its template is its own and the narrow rules below never meet it. */
 .pricing-list[data-range='some'] .pricing-caption,
 .pricing-list[data-range='some'] .pricing-row {
-  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 116px 128px [reason-end] 60px 136px 84px 80px;
+  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 116px 128px [reason-end] 60px var(--pricing-price-w) 84px 80px;
 }
 /* A LIST WITH LIVE LISTINGS has a track for what TCGplayer holds now, before the price. The narrow desk
    has its own below; a phone column has none. */
 .pricing-list[data-now='some'] .pricing-caption,
 .pricing-list[data-now='some'] .pricing-row {
-  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 80px;
+  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 128px [reason-end] 60px auto var(--pricing-price-w) 84px 80px;
 }
 .pricing-list[data-range='some'][data-now='some'] .pricing-caption,
 .pricing-list[data-range='some'][data-now='some'] .pricing-row {
-  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 116px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 80px;
+  grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 72px 72px 116px 128px [reason-end] 60px auto var(--pricing-price-w) 84px 80px;
 }
 .pricing-list[data-range='some'][data-copies='none'] .pricing-caption,
 .pricing-list[data-range='some'][data-copies='none'] .pricing-row {
-  grid-template-columns: var(--pricing-send,) [item] minmax(0, 1fr) 72px 72px 116px 128px 136px 80px;
+  grid-template-columns: var(--pricing-send,) [item] minmax(0, 1fr) 72px 72px 116px 128px var(--pricing-price-w) 80px;
 }
 .pricing-caption {
   min-height: var(--bn-8);
@@ -267,7 +269,7 @@ span.pricing-thumb { cursor: default; }
 
 /* THE TICK IS IN A COLUMN OF ITS OWN, headed Send, before the photograph (list.html). The track is a variable so every template above takes it
    or leaves it; the label is the target (40px) and the box inside it stays the kit's. A row with no tick still draws the cell, so the tracks never shift. */
-.pricing-list[data-send='some'] { --pricing-send: 48px; }
+.pricing-list[data-send='some'] { --pricing-send: 40px; }
 .pricing-send { display: flex; justify-content: center; }
 .pricing-caption .pricing-send { text-align: center; }
 .pricing-tick { justify-content: center; min-width: var(--bn-8); min-height: var(--bn-8); cursor: pointer; flex: none; }
@@ -511,7 +513,9 @@ span.pricing-thumb { cursor: default; }
    The history door takes 40px beside the lock, so the price column gives 16px back and the gap 4px: the name keeps the width its meta line needs. */
 @container bn-page (max-width: 899px) {
   .pricing-caption,
-  .pricing-row { --pricing-now-w: 72px; grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 60px [reason-end] 112px 80px; column-gap: var(--bn-2); }
+  .pricing-row { grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 60px [reason-end] 112px 80px; column-gap: var(--bn-2); }
+  .pricing-caption,
+  .pricing-row { --pricing-to-w: 0px; }
   .pricing-to,
   .pricing-caption .pricing-col-src { display: none; }
   .pricing-list[data-copies='none'] .pricing-caption,
@@ -532,7 +536,7 @@ span.pricing-thumb { cursor: default; }
   .pricing-refs .pricing-ref-label { display: inline; color: var(--bn-ink-3); }
   .pricing-refs .pricing-ref-age { position: static; display: inline; margin-left: var(--bn-1); }
   .pricing-list[data-now='some'] .pricing-caption,
-  .pricing-list[data-now='some'] .pricing-row { grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 60px var(--pricing-now-w) [reason-end] 112px 80px; }
+  .pricing-list[data-now='some'] .pricing-row { grid-template-columns: var(--pricing-send,) var(--pricing-thumb-w) [item] minmax(0, 1fr) 60px auto [reason-end] 112px 80px; }
   .pricing-list[data-copies='some'] .pricing-row > .pricing-col-price,
   .pricing-list[data-copies='some'] .pricing-row > .pricing-now { grid-row: 1; align-self: end; }
   /* The reason runs under Qty and Now too, so they keep to the name line. */
@@ -656,17 +660,31 @@ span.pricing-thumb { cursor: default; }
 .pricing-figures-parts { margin: 0; display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-5); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
 .pricing-figures-parts b { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
 .pricing-value-line { margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
-/* WHAT TCGPLAYER HOLDS NOW and an arrow, up to the field, on the field's line. */
+/* WHAT TCGPLAYER HOLDS NOW and an arrow, up to the field, on the field's line. The track is `auto`, and every row draws the same
+   hidden ghost of the widest price a row shows ("$9,999.99", mono as `.bn-money`), plus the arrow where it is drawn, so the track is
+   as wide as the text needs and one width down the list: no column moves, and nothing is cut. The caption's cell draws the ghost alone. */
 .pricing-now {
-  display: flex;
+  display: grid;
+  grid-template-columns: max-content;
+  justify-content: end;
   align-items: center;
-  justify-content: flex-end;
-  gap: var(--bn-2);
-  min-width: 0;
   /* The price cell's own height, with the field's line on top, so "Now" sits level with the field. */
   height: calc(var(--bn-8) + var(--bn-4));
   padding-bottom: var(--bn-4);
 }
-.pricing-was { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+.pricing-now > * { grid-area: 1 / 1; }
+.pricing-now-line { display: flex; align-items: center; justify-content: flex-end; gap: var(--bn-2); }
+.pricing-now-ghost {
+  visibility: hidden;
+  white-space: pre;
+  padding-inline-end: var(--pricing-to-w);
+  font: 400 var(--bn-fs-sm) / 1 var(--bn-font-ui);
+  letter-spacing: normal;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+.pricing-now-ghost::before { content: 'Now '; }
+.pricing-now-ghost::after { content: '$9,999.99'; font-family: var(--bn-font-mono); font-weight: 600; }
+.pricing-was { flex: none; white-space: nowrap; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
 .pricing-to { flex: none; color: var(--bn-ink-4); }
 .pricing-src { display: flex; justify-self: start; min-width: 0; }

@@ -7873,6 +7873,40 @@ test('at 1440 a list with live listings folds Range 7d, and the item column is a
   expect.soft(Math.min(...widths), `the narrowest item column is ${Math.min(...widths)}px`).toBeGreaterThanOrEqual(220)
 })
 
+/* THE "NOW $x" TEXT IS DRAWN IN FULL. The DOM holds the whole string even when the cell clips it to "Now $12..." with an ellipsis, so `toContainText` cannot tell. What is drawn is
+ * read from the element: its content is never wider than its box (`scrollWidth <= clientWidth`, which an ellipsis breaks), and the text's own width fits the box within 1px (a glyph's side bearing is not a cut).
+ * `.pricing-was` does not clip, so those two reads hold whatever the track is. The last two are the ones a narrow or uneven track breaks, and they need all three prices in the list at once: the text is drawn
+ * inside its own Now cell (not spilled over the column before it), and every row's Now cell is one width (one track for the list, which the hidden ghost of the widest price gives each row;
+ * the default worklist row, which holds no listing, draws an empty Now cell and is read with the rest).
+ * The three live listings are stubbed together, a 4-digit one included, at the wide desk and at the narrow one. */
+const NOW_PRICES: [shown: string, asking: string, name: string][] = [['$4.75', '4.75', 'Umbreon VMAX'], ['$12.41', '12.41', "Professor's Research"], ['$1,234.50', '1234.50', 'Mew']]
+for (const width of [1440, 820]) {
+  for (const [shown] of NOW_PRICES) {
+    test(`at ${width} a live price of ${shown} is drawn as "Now ${shown}" in full, never clipped`, async ({ page }) => {
+      await setViewport(page, { width, height: 900 })
+      await open(page, { live: NOW_PRICES.map(([, asking, name], i) => tickRow(i + 1, name, { asking })) })
+      const now = page.getByText(`Now ${shown}`, { exact: true })
+      await expect(now, 'the Now text is drawn').toHaveCount(1)
+      await expect(page.locator('.pricing-row .pricing-was'), 'one Now text per live listing').toHaveCount(NOW_PRICES.length)
+      await settleFonts(page)
+      await settleMotion(page)
+      const drawn = await now.evaluate((el) => {
+        const text = document.createRange()
+        text.selectNodeContents(el)
+        const cell = el.closest('.pricing-now')!.getBoundingClientRect()
+        const was = el.closest('.pricing-was')!.getBoundingClientRect()
+        return { scroll: el.scrollWidth, client: el.clientWidth, text: text.getBoundingClientRect().width, box: el.getBoundingClientRect().width, cell: { left: cell.left, right: cell.right }, was: { left: was.left, right: was.right } }
+      })
+      expect.soft(drawn.scroll, `Now ${shown} runs ${drawn.scroll}px in a ${drawn.client}px box (an ellipsis cuts it)`).toBeLessThanOrEqual(drawn.client)
+      expect.soft(drawn.text, `the text of Now ${shown} is ${drawn.text}px wide in a ${drawn.box}px box`).toBeLessThanOrEqual(drawn.box + 1)
+      expect.soft(drawn.was.left, `Now ${shown} starts at ${drawn.was.left}px, left of its cell at ${drawn.cell.left}px (it spills over the column before)`).toBeGreaterThanOrEqual(drawn.cell.left - 0.5)
+      expect.soft(drawn.was.right, `Now ${shown} ends at ${drawn.was.right}px, right of its cell at ${drawn.cell.right}px`).toBeLessThanOrEqual(drawn.cell.right + 0.5)
+      const widths = await page.locator('.pricing-row .pricing-now').evaluateAll((cells) => cells.map((cell) => cell.getBoundingClientRect().width))
+      expect.soft(Math.max(...widths) - Math.min(...widths), `the Now cells are ${widths.join('px, ')}px wide: one track for every row`).toBeLessThanOrEqual(0.5)
+    })
+  }
+}
+
 
 /* LABELS TAKE TITLE CASE (docs/DESIGN.md R5). Neither string below is a sentence (`isSentence` needs a closing . ? or !), so each is a label: a sheet heading and an
  * empty state's title. The copy sweep does not open the mark-down sheet or reach this empty state, so the exact case is matched here. */
