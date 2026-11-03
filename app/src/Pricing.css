@@ -501,11 +501,11 @@ span.pricing-thumb { cursor: default; }
 /* ---- 720 and narrower desks: Lowest and the trend leave the row (the product view has both) -- */
 @container bn-page (max-width: 899px) {
   .pricing-caption,
-  .pricing-row { --pricing-now-w: 72px; grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 60px [reason-end] 128px 40px; }
+  .pricing-row { --pricing-now-w: 72px; grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 60px [reason-end] 128px 80px; }
   .pricing-to,
   .pricing-caption .pricing-col-src { display: none; }
   .pricing-list[data-copies='none'] .pricing-caption,
-  .pricing-list[data-copies='none'] .pricing-row { grid-template-columns: minmax(0, 1fr) 76px 128px 40px; }
+  .pricing-list[data-copies='none'] .pricing-row { grid-template-columns: minmax(0, 1fr) 76px 128px 80px; }
   .pricing-col-low,
   .pricing-col-trend { display: none; }
 }
@@ -513,7 +513,7 @@ span.pricing-thumb { cursor: default; }
 /* ---- a narrow desk: the price source sits under the price, as its own grid line ---------- */
 @container bn-page (min-width: 560px) and (max-width: 899px) {
   .pricing-list[data-now='some'] .pricing-caption,
-  .pricing-list[data-now='some'] .pricing-row { grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 60px var(--pricing-now-w) [reason-end] 128px 40px; }
+  .pricing-list[data-now='some'] .pricing-row { grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 60px var(--pricing-now-w) [reason-end] 128px 80px; }
   .pricing-list[data-copies='some'] .pricing-row > .pricing-col-price,
   .pricing-list[data-copies='some'] .pricing-row > .pricing-now { grid-row: 1; align-self: end; }
   /* The reason runs under Qty and Now too, so they keep to the name line. */
