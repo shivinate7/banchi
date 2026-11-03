@@ -151,10 +151,12 @@ def main() -> int:
             "CCC": _row("CCC", "Seal of Power", "", "Spiritforged"),
             "DDD": _row("DDD", "Warden's Hymn", "", "Vendetta"),
         }
+        # The reader's own network texts, each from its real raise path (see the real-text cases below).
+        network = price_refusals.network_refusals()
         refusals = {
             "AAA": _not_resolvable("Shadbow Temple", "", "Vendetta"),
             "BBB": _not_resolvable("Kihoud Temple", "", "Vendetta"),
-            "CCC": "https://mcp.tcgplayer.com/... could not be reached: timed out",
+            "CCC": str(network["offline"]),
             "DDD": _not_resolvable("Warden's Hymn", "", "Vendetta"),
         }
 
@@ -176,7 +178,6 @@ def main() -> int:
             "unreadable": pricehistory.Unreachable,
             "undecodable": pricehistory.Unreachable,
         }
-        network = price_refusals.network_refusals()
         for name, kind in expected_kind.items():
             caught = network[name]
             ok(type(caught) is kind,
@@ -191,8 +192,9 @@ def main() -> int:
         # rewritten text must still be a network refusal.
         real_403 = str(network["403"])
         rewritten, _ = archive_walk.classify_refusals({"652771": real_403}, had_earlier_success=True)
-        ok("throttle" in rewritten["652771"].lower(),
-           "scope: after an earlier success the real 403 is rewritten as a throttle", rewritten)
+        ok(rewritten["652771"] == archive_walk.THROTTLE_REWRITE,
+           "scope: after an earlier success the real 403 is rewritten to the throttle text the "
+           "reader names (THROTTLE_REWRITE)", rewritten)
         ok(not archive_review.is_identification_refusal(rewritten["652771"]),
            "the throttle rewrite of a real 403 is still a network refusal, never queued",
            rewritten)
