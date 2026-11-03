@@ -823,14 +823,19 @@ const owner = (): string => (sheetOpen ? SHELL_SCOPE : readScope)
 /* A COUNTER OF WRITES. A read that began before a write must not be kept after it: what it carries is the old store. */
 let writeGen = 0
 
-function request(path: string, init?: RequestInit): Promise<unknown> {
+/** `reads`: a POST that changes nothing in the store (it carries a body a GET cannot). It ends no kept read, and it
+ *  is never shared, since two of them to one path may carry two bodies. */
+function request(path: string, init?: RequestInit, reads = false): Promise<unknown> {
   if (DEMO) return send(path, init)
   const method = init?.method?.toUpperCase() ?? 'GET'
+  if (method !== 'GET' && reads) return send(path, init)
   if (method !== 'GET') {
     const ended = () => {
       writeGen += 1
       openReads.clear()
       pricingTables.clear()
+      floatHistories.clear()
+      floatFacts.clear()
       lastStatus = null
     }
     ended()
@@ -2629,11 +2634,11 @@ export async function cropPreview(
   send: RunSend,
   offset?: number,
 ): Promise<CropPreview> {
-  return (await request('/pipeline/crop-preview', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...onTheWire(send), offset }),
-  })) as CropPreview
+  return (await request(
+    '/pipeline/crop-preview',
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...onTheWire(send), offset }) },
+    true,
+  )) as CropPreview
 }
 
 /**
@@ -3630,6 +3635,27 @@ export async function getSavedTrends(): Promise<SavedTrendsPayload> {
 export async function getPriceFacts(sku: string): Promise<PriceFacts> {
   return (await request(`/pipeline/price-facts?sku=${encodeURIComponent(sku)}`, NO_CACHE)) as PriceFacts
 }
+
+/* THE HISTORY CARD'S KEPT READS (`HistoryFloat.tsx`): one history and one price read per SKU, so a revisit sends
+ * nothing (D278). Kept like `pricingTables`: only an answer, never an open read (reads open at once still share
+ * through `request`), and only when no write came while it ran. A write clears both, so the open after a send reads
+ * the store as it is now. A failed read is not kept, so the next open tries again. */
+const floatHistories = new Map<string, ProductHistoryPayload>()
+const floatFacts = new Map<string, PriceFacts>()
+async function kept<T>(held: Map<string, T>, sku: string, read: (sku: string) => Promise<T>): Promise<T> {
+  const answer = held.get(sku)
+  if (answer !== undefined) return answer
+  const gen = writeGen
+  const fresh = await read(sku)
+  if (gen === writeGen) held.set(sku, fresh)
+  return fresh
+}
+/** `getProductHistory` for the history card, kept per SKU until a write. */
+export const getFloatHistory = (sku: string): Promise<ProductHistoryPayload> => kept(floatHistories, sku, getProductHistory)
+/** `getPriceFacts` for the history card, kept per SKU until a write. */
+export const getFloatPriceFacts = (sku: string): Promise<PriceFacts> => kept(floatFacts, sku, getPriceFacts)
+/** Both of the card's reads for this SKU are kept, so it may draw at once. */
+export const floatReadsKept = (sku: string): boolean => floatHistories.has(sku) && floatFacts.has(sku)
 
 /** Where "Refresh now" is (`GET /pipeline/prices/refresh`). A local read. */
 export async function getPricesRefresh(): Promise<PricesRefreshState> {

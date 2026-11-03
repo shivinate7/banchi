@@ -19,8 +19,8 @@
  * listing price, so Lowest, Lowest shipped and Direct Low come off `getPriceFacts` (the figures
  * the product sheet's "Prices Now" draws). A price neither read carries shows "not carried".
  *
- * PLACEMENT. Above the row when the viewport has room there, else on the side with more room,
- * held inside the viewport. Wholly above the row, its right edge sits on the row's
+ * PLACEMENT. Above the row when the viewport has room there, under any `[data-float-ceiling]` (the
+ * page's stuck bar), else on the side with more room, held inside the viewport. Wholly above the row, its right edge sits on the row's
  * `[data-float-door]` (the row itself when it has none). Anywhere else it may overlap a price
  * column, its own row's or the next row's, so its right edge sits left of the row's
  * `[data-float-price]`, read off the real row and never a fixed offset.
@@ -28,7 +28,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { describeFailure, failureTone, getPriceFacts, getProductHistory, type Failure } from './server'
+import { describeFailure, failureTone, floatReadsKept, getFloatHistory, getFloatPriceFacts, type Failure } from './server'
 import type { PriceFacts, ProductHistoryPayload, ProductHistoryRange } from './types'
 import { Button, CardThumb, Icon, IconButton, Money, Notice, Section } from './kit'
 import { ProductChart, type Fill } from './ProductHistory'
@@ -65,20 +65,6 @@ function pickRange(payload: ProductHistoryPayload): ProductHistoryRange | null {
  * skips both and still starts the read before the owner has looked at the card. */
 const REST_MS = 250
 
-/** One read per sku for the life of the page: a revisit, or a revisit while the read is in flight,
- * sends nothing. A failed read leaves the cache so the next open tries again. */
-const histories = new Map<string, Promise<ProductHistoryPayload>>()
-const priceReads = new Map<string, Promise<PriceFacts['prices']>>()
-function once<T>(cache: Map<string, Promise<T>>, sku: string, read: (sku: string) => Promise<T>): Promise<T> {
-  let p = cache.get(sku)
-  if (p === undefined) {
-    p = read(sku)
-    cache.set(sku, p)
-    p.catch(() => cache.delete(sku))
-  }
-  return p
-}
-
 type Answer = { readonly sku: string; readonly payload: ProductHistoryPayload | null; readonly failure: Failure | null }
 
 export function HistoryFloat({
@@ -102,18 +88,17 @@ export function HistoryFloat({
   // Read only this card's history. `ProductHistory.tsx:useProductHistory` also reads every order,
   // and the caller already hands this card its fills. The reads wait for focus to rest (`REST_MS`)
   // unless both are already held. A failed price read leaves the prices as dashes; the history
-  // read reports its own failure.
+  // read reports its own failure. `server.ts` keeps both answers per SKU until a write.
   useEffect(() => {
     let alive = true
-    const held = histories.has(sku) && priceReads.has(sku)
     const timer = window.setTimeout(() => {
-      once(histories, sku, getProductHistory)
+      getFloatHistory(sku)
         .then((payload) => alive && setAnswer({ sku, payload, failure: null }))
         .catch((error) => alive && setAnswer({ sku, payload: null, failure: describeFailure(error) }))
-      once(priceReads, sku, (s) => getPriceFacts(s).then((f) => f.prices))
-        .then((prices) => alive && setFacts({ sku, prices }))
+      getFloatPriceFacts(sku)
+        .then((f) => alive && setFacts({ sku, prices: f.prices }))
         .catch(() => alive && setFacts({ sku, prices: null }))
-    }, held ? 0 : REST_MS)
+    }, floatReadsKept(sku) ? 0 : REST_MS)
     return () => {
       alive = false
       window.clearTimeout(timer)
@@ -147,8 +132,15 @@ export function HistoryFloat({
       const r = anchor.getBoundingClientRect()
       const h = card.offsetHeight
       const w = card.offsetWidth
-      const clear = r.top - GAP - EDGE >= h
-      const above = clear || (r.bottom + GAP + h + EDGE > window.innerHeight && r.top >= window.innerHeight - r.bottom)
+      // Room above ends under anything the page marks `[data-float-ceiling]` above the row (a stuck bar), read now,
+      // since such a bar sticks and remounts.
+      let ceiling = 0
+      for (const el of document.querySelectorAll('[data-float-ceiling]')) {
+        const b = el.getBoundingClientRect()
+        if (b.top <= r.top) ceiling = Math.max(ceiling, b.bottom)
+      }
+      const clear = r.top - GAP - Math.max(EDGE, ceiling) >= h
+      const above = clear || (r.bottom + GAP + h + EDGE > window.innerHeight && r.top - ceiling >= window.innerHeight - r.bottom)
       const right = clear
         ? (anchor.querySelector('[data-float-door]') ?? anchor).getBoundingClientRect().right
         : (anchor.querySelector('[data-float-price]') ?? anchor).getBoundingClientRect().left - GAP

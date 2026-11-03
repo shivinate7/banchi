@@ -3010,7 +3010,7 @@ export function Pricing() {
   const staleRead = readStale && (readView || (loaded.length === 0 && listed.size === 0 && owedTakeOffs.owed.length === 0))
   const bar =
     !readView && !staleRead && (barLoading || loaded.length > 0 || listed.size > 0 || owedTakeOffs.owed.length > 0) ? (
-      <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send to TCGplayer" aria-busy={barLoading ? 'true' : undefined}>
+      <aside className="pricing-bar" data-float-ceiling="" ref={measureBar} role="region" aria-label="Send to TCGplayer" aria-busy={barLoading ? 'true' : undefined}>
         {figures === null ? tally : null}
         {barLoading || figures === null ? null : (
           /* THE FIGURES THE PRESS WILL CARRY, in the mockup's words: copies in all, then each kind with its total. */
@@ -3075,7 +3075,7 @@ export function Pricing() {
         )}
       </aside>
     ) : staleRead ? (
-      <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send these prices">
+      <aside className="pricing-bar" data-float-ceiling="" ref={measureBar} role="region" aria-label="Send these prices">
         <p className="pricing-bar-says">
           {sheet?.at ? `This read was taken on an earlier day, ${absoluteDate(sheet.at)}. ` : 'This read has no date. '}
           Read again to see what would change.
@@ -3089,7 +3089,7 @@ export function Pricing() {
         </div>
       </aside>
     ) : readView ? (
-      <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send these prices">
+      <aside className="pricing-bar" data-float-ceiling="" ref={measureBar} role="region" aria-label="Send these prices">
         <p className="pricing-bar-says">
           {pushable.length === 0 ? 'Type a price on a listing to change it.' : `${pushable.length} new ${pushable.length === 1 ? 'price' : 'prices'} ready`}
         </p>
@@ -3869,6 +3869,7 @@ function PricingRow({
 
       <div
         className="pricing-price pricing-col-price"
+        data-float-price=""
         data-answer={lockedWhy !== null ? 'locked' : withheld ? 'held' : typeof standing === 'string' ? 'typed' : 'suggested'}
       >
         {lockedWhy !== null ? (
