@@ -8,8 +8,8 @@ the order `CHECK_ORDER` runs them.
 Protects: Every live listing reaches the pricing worklist with its asking price, its last sale
 and its suggestion; the market on the day a listing went live comes from the price archive; a
 kept suggestion rides a send as a price-only row, posted as "suggested", even with no run named;
-the server rebuilds each kept suggestion and refuses a past-cap one, or one whose price it does
-not confirm; the product history lists the SKU's asking-price postings, oldest first.
+the server rebuilds each kept suggestion and refuses a past-cap one unless the send marks that row
+ticked, or one whose price it does not confirm; the product history lists the SKU's asking-price postings, oldest first.
 Governs: D100, D107 (reopened for suggestions), D227, D243, D273
 
 THE WIRE THIS GROUP PINS (the one-list-wire lane's brief names the behaviour, not the names):
@@ -27,7 +27,8 @@ THE WIRE THIS GROUP PINS (the one-list-wire lane's brief names the behaviour, no
   - A `prices` row of a send may carry `"source": "suggested"`. Such a row posts with source
     "suggested". A row without it posts as "emit-price", as before.
   - The server rebuilds every named suggestion with the worklist's own code. A rebuilt suggestion
-    past the cap refuses `suggestion_past_cap`. A named price the server does not rebuild to
+    past the cap refuses `suggestion_past_cap`, unless the send marks that row `"ticked": true` (a boolean on the
+    row; a bigger move shows apart and needs a tick). A named price the server does not rebuild to
     the same price refuses `suggestion_changed`.
   - `do_product_history(sku)["asking_postings"]`: every posting for the SKU, oldest first.
   - A `prices` list names each SKU once. A repeated SKU refuses `prices_invalid` at the route
@@ -39,6 +40,10 @@ THE WIRE THIS GROUP PINS (the one-list-wire lane's brief names the behaviour, no
     that SKU under its top-level `held` key. `send.held` stays the receipt's own boolean.
   - The worklist's no-runs branch, with a corpus that cannot be read, answers `error:
     "corpus_unreadable"` and draws no default-policy suggestion.
+  - A live suggestion held back by the owner's limit has a reason ending "; capped at your N%",
+    N being the owner's `limit` as a percent.
+  - `do_markdown_table(stamp)["skus"]` rows carry `group` (the worklist's own rule, read off each
+    survey row's `row` cells). A corpus that cannot be read leaves `group` absent on every row.
 """
 
 from __future__ import annotations
@@ -60,6 +65,7 @@ from harness.tests.t7.common import (
     seam_run,
 )
 from harness.tests.t7.price_history import _network_recorder
+from harness.tests.t7.read_budget import TABLE_STAMP, _write_survey
 from harness.tests.t7.send_markdown import _case, _live_export_priced, _seed_sync, send_portal
 from cli import cmd_emit
 from pipeline import corpus, pricing, readings, tcgcsv, worklist
@@ -280,10 +286,11 @@ def check_worklist_carries_live_listings(checks: Checks) -> None:
 
 
 def check_worklist_without_runs_reads_newest_export(checks: Checks) -> None:
-    """With no run on disk the worklist still carries `live`, and the price is the NEWER export's.
+    """With no run on disk the worklist still carries `live`, and the asking price is the NEWER export's.
 
-    Two live exports sit in the folder; the older names 9.00 and the newer 2.50. The row must read
-    2.50, and the read must not reach the network.
+    Two live exports sit in the folder; the older names 9.00 and the newer 2.50. The row must ask
+    2.50, and the read must not reach the network. No reading exists for the SKU, so the row needs
+    you, with no suggested price (spec "Needs you": a live listing with no market price).
     """
     checks.note("")
     checks.note("WORKLIST, NO RUNS — the newest live export is the price, read off disk")
@@ -297,10 +304,10 @@ def check_worklist_without_runs_reads_newest_export(checks: Checks) -> None:
             checks.equal(
                 _pinned(_live_row(payload, DUNSPARCE_SKU)),
                 {
-                    "asking": "2.50", "last_sold_at": None, "group": "at_rule", "price": "2.50",
-                    "source": "Live", "reason": "",
+                    "asking": "2.50", "last_sold_at": None, "group": "needs_you", "price": None,
+                    "source": "Live", "reason": "no market price",
                 },
-                "with no run and no market, the live row carries the NEWER export's asking price",
+                "with no send and no market, the live row needs you with no price, and asks the NEWER export's price",
             )
 
 
@@ -481,6 +488,19 @@ def check_send_suggestion_beside_typed_price(checks: Checks) -> None:
                 )
 
 
+def _past_cap_world(checks: Checks, portal) -> None:
+    """Dunsparce live at 3.00, unsold 60 days, with a market of 2.06. The engine's own suggestion is 2.06: 31% from the live
+    price, past the 25% cap. The shared step for every past-the-cap case."""
+    _one_copy_live(checks, portal, prices={DUNSPARCE_SKU: "3.00"})
+    _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
+    _market_reading(DUNSPARCE_SKU, "2.06", "2.40")
+
+
+def _past_cap_row(**fields) -> dict:
+    """The one kept past-cap suggestion `_past_cap_world` rebuilds. `fields` adds to the row, such as `ticked`."""
+    return {"sku": DUNSPARCE_SKU, "price": "2.06", "was": "3.00", "source": "suggested", **fields}
+
+
 def check_send_refuses_suggestion_past_cap(checks: Checks) -> None:
     """The engine's own suggestion for Dunsparce is 2.06 (unsold 60 days), and TCGplayer now shows
     3.00. That is 31% from the live price, past the 25% cap. The client names the same 2.06, so the
@@ -492,18 +512,92 @@ def check_send_refuses_suggestion_past_cap(checks: Checks) -> None:
     with run_folder() as run, isolated_home(run), send_portal() as portal:
         _seed_sync()
         with _case(checks, "send: suggestion past cap"):
-            _one_copy_live(checks, portal, prices={DUNSPARCE_SKU: "3.00"})
-            _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
-            _market_reading(DUNSPARCE_SKU, "2.06", "2.40")
-            outcome = _outcome(lambda: send_routes.do_send({
-                "runs": [],
-                "confirm": True,
-                "prices": [{"sku": DUNSPARCE_SKU, "price": "2.06", "was": "3.00", "source": "suggested"}],
-            }))
+            _past_cap_world(checks, portal)
+            outcome = _outcome(lambda: send_routes.do_send({"runs": [], "confirm": True, "prices": [_past_cap_row()]}))
             checks.equal(outcome, ("refused", "suggestion_past_cap"),
                          "a suggestion past the cap is refused as suggestion_past_cap")
             checks.equal(_rows(portal), {}, "and TCGplayer receives no row")
             checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
+
+
+def check_send_past_cap_needs_a_tick(checks: Checks) -> None:
+    """A bigger move shows apart and needs a tick (`docs/specs/pricing-suggest.md`, the cap row). The server accepts a
+    past-cap suggestion only when the send marks THAT row `"ticked": true`; the field is a boolean on the row. Three presses,
+    each its own case, on the world `check_send_refuses_suggestion_past_cap` builds:
+
+      Ticked     `ticked: true`. The 2.06 goes to TCGplayer as a price-only row, posted "suggested", replacing 3.00.
+      Not ticked `ticked: false`, or no `ticked` at all, or a truthy value that is not a boolean: refused
+                 `suggestion_past_cap`. No row reaches TCGplayer and no posting is written.
+      One tick   two past-cap rows, one ticked: the tick frees its own row alone. The refusal names the other row only.
+    """
+    checks.note("")
+    checks.note("SEND, PAST THE CAP, TICKED — a past-cap suggestion rides only when its own row is ticked")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: ticked past-cap suggestion"):
+            _past_cap_world(checks, portal)
+            outcome = _outcome(lambda: send_routes.do_send({"runs": [], "confirm": True, "prices": [_past_cap_row(ticked=True)]}))
+            checks.equal(
+                outcome[0] if outcome[0] == "refused" else "answered",
+                "answered",
+                f"a ticked past-cap suggestion is answered, not refused (got {outcome[1] if outcome[0] == 'refused' else ''})",
+            )
+            if outcome[0] == "answered":
+                checks.equal(_rows(portal), {DUNSPARCE_SKU: ("0", "2.06")},
+                             "it goes to TCGplayer as a price-only row: Add to Quantity 0, at its price")
+                checks.equal(
+                    [(p["price"], p["replaced"], p["source"]) for p in _postings(DUNSPARCE_SKU)],
+                    [("2.06", "3.00", "suggested")],
+                    "and posts as \"suggested\", naming the 3.00 it replaced",
+                )
+
+    # `refusals` holds the codes a build may answer with. A tick that is not a boolean may be refused as a malformed price
+    # (`prices_invalid`) rather than as past the cap; it may never send.
+    for label, fields, refusals in (
+        ("ticked false", {"ticked": False}, ("suggestion_past_cap",)),
+        ("ticked absent", {}, ("suggestion_past_cap",)),
+        ("ticked is the text \"true\"", {"ticked": "true"}, ("suggestion_past_cap", "prices_invalid")),
+    ):
+        with run_folder() as run, isolated_home(run), send_portal() as portal:
+            _seed_sync()
+            with _case(checks, f"send: past-cap suggestion, {label}"):
+                _past_cap_world(checks, portal)
+                outcome = _outcome(lambda fields=fields: send_routes.do_send({"runs": [], "confirm": True, "prices": [_past_cap_row(**fields)]}))
+                checks.ok(
+                    outcome[0] == "refused" and outcome[1] in refusals,
+                    f"{label}: refused as {' or '.join(refusals)}",
+                    f"answered: {outcome}",
+                )
+                checks.equal(_rows(portal), {}, f"{label}: TCGplayer receives no row")
+                checks.equal(_postings(DUNSPARCE_SKU), [], f"{label}: no posting is written")
+
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: two past-cap suggestions, one ticked"):
+            _past_cap_world(checks, portal)
+            # The reverse holofoil is live at 4.00 beside it, unsold 60 days, market 2.60: a second suggestion 35% below its price.
+            portal["live"] = _live_export_priced(
+                {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 1, DUNSPARCE_REVERSE_SKU: 1},
+                {ARTICUNO_SKU: "22.03", DUNSPARCE_SKU: "3.00", DUNSPARCE_REVERSE_SKU: "4.00"},
+            )
+            _set_listing(DUNSPARCE_REVERSE_SKU, first_seen_live=_noon(_day(60)))
+            _market_reading(DUNSPARCE_REVERSE_SKU, "2.60", "2.90")
+            try:
+                send_routes.do_send({
+                    "runs": [],
+                    "confirm": True,
+                    "prices": [
+                        _past_cap_row(ticked=True),
+                        {"sku": DUNSPARCE_REVERSE_SKU, "price": "2.60", "was": "4.00", "source": "suggested"},
+                    ],
+                })
+                refused = None
+            except pipeline_routes.PipelineRefusal as caught:
+                refused = (caught.code, [note["sku"] for note in (caught.data or {}).get("refused") or []])
+            checks.equal(refused, ("suggestion_past_cap", [DUNSPARCE_REVERSE_SKU]),
+                         "the unticked row is refused by name and the ticked row is not named")
+            checks.equal(_rows(portal), {}, "and TCGplayer receives no row, ticked or not")
+            checks.equal((_postings(DUNSPARCE_SKU), _postings(DUNSPARCE_REVERSE_SKU)), ([], []), "and no posting is written")
 
 
 def check_send_suggestion_changed(checks: Checks) -> None:
@@ -990,6 +1084,158 @@ def check_worklist_group_follows_rule_price(checks: Checks) -> None:
                      "a row with neither cells nor snap is no market price")
 
 
+def check_live_capped_reason_names_the_cap(checks: Checks) -> None:
+    """A live listing whose suggested move passes the owner's limit lands in `needs_you`, and its
+    reason ends by naming that limit: "; capped at your 25%".
+
+    Dunsparce asks 3.00 at market 2.06, unsold 60 days, so the engine's price is 2.06: a 31% drop,
+    over the default 25% limit and far under the 25-dollar value line, so only the cap holds it back.
+    Only the ENDING is pinned, not the sentence before it. A second case sets the owner's limit to
+    0.20: the ending then names 20%, so the figure is the owner's setting and not a constant.
+    """
+    checks.note("")
+    checks.note("WORKLIST, CAPPED LIVE SUGGESTION — the reason names the owner's limit")
+    for label, limit, ending in (
+        ("default limit", None, "; capped at your 25%"),
+        ("limit 0.20", "0.20", "; capped at your 20%"),
+    ):
+        with run_folder() as run, isolated_home(run), _case(checks, f"worklist capped reason: {label}"):
+            _write_live("20260201-000000", _live_export_priced({DUNSPARCE_SKU: 1}, {DUNSPARCE_SKU: "3.00"}))
+            _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
+            _market_reading(DUNSPARCE_SKU, "2.06", "2.40")
+            if limit is not None:
+                book = corpus.Corpus.read()
+                book.limit = limit
+                book.write()
+            row = _live_row(pipeline_routes.do_pipeline_worklist([]), DUNSPARCE_SKU) or {}
+            checks.equal(row.get("group"), "needs_you",
+                         f"{label}: a suggested move past the limit is held for the owner")
+            checks.ok(str(row.get("reason")).endswith(ending),
+                      f"{label}: the reason ends {ending!r}", repr(row.get("reason")))
+
+
+def check_markdown_table_carries_group(checks: Checks) -> None:
+    """`do_markdown_table` rows carry the SAME `group` `/pipeline/pricing`'s `live` row gives the
+    same SKU, so one listing has one group on both screens (`_live_wire` is the one source).
+
+    Three live SKUs, one shape each, and a fourth the survey saw but the newest live export lacks:
+      Articuno   unsold 60 days, 13% over market: a trigger fires, `suggested`.
+      Dunsparce  asks 3.00 at market 2.06: the move passes the owner's limit, `needs_you`.
+      Reverse    5 days live, asking at market: nothing fires, `at_rule`.
+      Gone       in the survey, not in the live export: no `group`.
+    The survey's own export cells are set so the old rule (a new copy's group, off those cells) reads
+    `at_rule` for Articuno and Dunsparce, which the wire does not. A `prices.json` that cannot be
+    read leaves `group` absent on every row, and the table still answers: the owner's settings decide
+    the group, and a default policy would guess.
+    """
+    checks.note("")
+    checks.note("MARKDOWN TABLE — each row carries the live wire's group")
+    live = {ARTICUNO_SKU: "22.03", DUNSPARCE_SKU: "2.06", DUNSPARCE_REVERSE_SKU: "2.60"}
+    asking = {ARTICUNO_SKU: "25.00", DUNSPARCE_SKU: "3.00", DUNSPARCE_REVERSE_SKU: "2.60"}
+    cells = {sku: {tcgcsv.MARKET_PRICE_COLUMN: market + "00"} for sku, market in live.items()}
+
+    def seed() -> None:
+        _write_live("20260201-000000", _live_export_priced({sku: 1 for sku in live}, asking))
+        for sku, market in live.items():
+            _market_reading(sku, market, "2.40" if sku == DUNSPARCE_SKU else None)
+        _set_listing(ARTICUNO_SKU, first_seen_live=_noon(_day(60)))
+        _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
+        _set_listing(DUNSPARCE_REVERSE_SKU, first_seen_live=_noon(_day(5)))
+
+    def table_groups() -> dict:
+        _write_survey(0, (*live, "GONE"), cells)
+        table = pipeline_routes.do_markdown_table(TABLE_STAMP)
+        return {row["sku"]: row.get("group", "<absent>") for row in table["skus"]}
+
+    with run_folder() as run, isolated_home(run), _case(checks, "markdown table group: readable corpus"):
+        seed()
+        wire = {sku: (_live_row(pipeline_routes.do_pipeline_worklist([]), sku) or {}).get("group", "<no row>")
+                for sku in live}
+        checks.equal(wire, {ARTICUNO_SKU: "suggested", DUNSPARCE_SKU: "needs_you", DUNSPARCE_REVERSE_SKU: "at_rule"},
+                     "precondition: the live wire fires a trigger on two SKUs and leaves the third at the rule")
+        checks.equal(table_groups(), {**wire, "GONE": "<absent>"},
+                     "each markdown row's group is the live wire's for that SKU; a SKU the live export lacks has none")
+    with run_folder() as run, isolated_home(run), _case(checks, "markdown table group: corpus unreadable"):
+        seed()
+        files.prices_path().parent.mkdir(parents=True, exist_ok=True)
+        files.prices_path().write_text("{ not json", encoding="utf-8")
+        checks.equal(table_groups(), {**dict.fromkeys(live, "<absent>"), "GONE": "<absent>"},
+                     "an unreadable corpus leaves `group` absent on every row, and the rows still come")
+
+
+def check_live_no_market_needs_you(checks: Checks) -> None:
+    """A live listing with copies and no market price is `needs_you` on `/pipeline/pricing`'s `live`
+    wire: the spec's first group is "No market price, a move past the cap, or a card at or above the
+    value line", and it holds for a listing that is live as much as for a new copy.
+
+    One Dunsparce listing, first seen 5 days ago so no trigger fires, asking 2.60, in four shapes:
+    a blank market, a zero market, no reading row at all (each `needs_you`), and a market of 2.60,
+    which stays `at_rule` and keeps the rule honest about the other direction.
+    """
+    checks.note("")
+    checks.note("WORKLIST, LIVE LISTING WITH NO MARKET PRICE — needs you")
+    for label, market, expected in (
+        ("blank market", "", "needs_you"),
+        ("zero market", "0.00", "needs_you"),
+        ("no reading", None, "needs_you"),
+        ("market present", "2.60", "at_rule"),
+    ):
+        with run_folder() as run, isolated_home(run), _case(checks, f"worklist no market: {label}"):
+            _write_live("20260201-000000", _live_export_priced({DUNSPARCE_SKU: 1}, {DUNSPARCE_SKU: "2.60"}))
+            _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(5)))
+            if market is not None:
+                _market_reading(DUNSPARCE_SKU, market)
+            row = _live_row(pipeline_routes.do_pipeline_worklist([]), DUNSPARCE_SKU) or {}
+            checks.equal(row.get("group", "<no row>"), expected,
+                         f"{label}: a live listing with copies is filed under {expected}")
+def check_send_typed_price_with_no_new_copy(checks: Checks) -> None:
+    """A typed price on a live listing, sent with no new copy, is answered and goes out under the
+    checks a kept suggestion meets (owner's ruling, relayed by the coordinator 2026-11-02 15:53 CST:
+    a typed live price with no new copy sends as a price-only row): a reading from today
+    (`readings_stale`) and a price within the cap of the live price (`suggestion_past_cap`, the
+    one cap check; the code is the lane's to keep or rename with this case). Today every such
+    press is refused `runs_required`.
+
+    Articuno is live at 22.03. Three presses, each its own home:
+      24.00, reading from today    answered: a price-only row, posted "emit-price", replacing 22.03
+      24.00, reading from yesterday  refused readings_stale; no row, no posting
+      40.00, reading from today    refused suggestion_past_cap (82% from 22.03); no row, no posting
+    """
+    checks.note("")
+    checks.note("SEND, TYPED PRICE ONLY — a live listing's typed price needs no new copy, and meets the same checks")
+
+    def press(price: str, *, reading_at: Optional[int]):
+        with run_folder() as run, isolated_home(run), send_portal() as portal:
+            _seed_sync()
+            _one_copy_live(checks, portal)
+            _market_reading(ARTICUNO_SKU, "22.03", "22.98", at=reading_at)
+            _typed(ARTICUNO_SKU, price)
+            outcome = _outcome(lambda: send_routes.do_send({
+                "runs": [],
+                "confirm": True,
+                "prices": [{"sku": ARTICUNO_SKU, "price": price, "was": "22.03"}],
+            }))
+            return outcome, _rows(portal), [(p["price"], p["replaced"], p["source"]) for p in _postings(ARTICUNO_SKU)]
+
+    with _case(checks, "send: typed price, no new copy, fresh reading"):
+        outcome, rows, postings = press("24.00", reading_at=None)
+        checks.equal(outcome[0] if outcome[0] == "refused" else "answered", "answered",
+                     f"a typed price alone is answered, not refused (got {outcome[1] if outcome[0] == 'refused' else ''})")
+        checks.equal(rows, {ARTICUNO_SKU: ("0", "24.00")}, "it goes out as a price-only row at the typed price")
+        checks.equal(postings, [("22.03", None, "emit"), ("24.00", "22.03", "emit-price")],
+                     "and posts as \"emit-price\", naming the 22.03 it replaced")
+    with _case(checks, "send: typed price, no new copy, reading from yesterday"):
+        outcome, rows, postings = press("24.00", reading_at=_yesterday_at())
+        checks.equal(outcome, ("refused", "readings_stale"),
+                     "a typed price over a reading from an earlier day is refused readings_stale")
+        checks.equal((rows, postings), ({}, [("22.03", None, "emit")]), "and nothing reaches TCGplayer or the postings")
+    with _case(checks, "send: typed price, no new copy, past the cap"):
+        outcome, rows, postings = press("40.00", reading_at=None)
+        checks.equal(outcome, ("refused", "suggestion_past_cap"),
+                     "a typed price more than the cap from the live price is refused suggestion_past_cap")
+        checks.equal((rows, postings), ({}, [("22.03", None, "emit")]), "and nothing reaches TCGplayer or the postings")
+
+
 CHECKS = (
     check_worklist_carries_live_listings,
     check_worklist_without_runs_reads_newest_export,
@@ -997,6 +1243,7 @@ CHECKS = (
     check_send_takes_suggestions_with_no_run,
     check_send_suggestion_beside_typed_price,
     check_send_refuses_suggestion_past_cap,
+    check_send_past_cap_needs_a_tick,
     check_send_suggestion_changed,
     check_send_empty_runs_without_prices_refused,
     check_product_history_asking_postings,
@@ -1010,4 +1257,8 @@ CHECKS = (
     check_worklist_live_listing_card_facts,
     check_worklist_new_copy_group,
     check_worklist_group_follows_rule_price,
+    check_live_capped_reason_names_the_cap,
+    check_markdown_table_carries_group,
+    check_live_no_market_needs_you,
+    check_send_typed_price_with_no_new_copy,
 )

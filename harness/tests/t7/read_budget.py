@@ -13,7 +13,7 @@ read-only POSTs in `POST_READS`, is called once per size through a real in-proce
 only for the routes in `PHOTO_WALK_FREE`: `scan` (calls to `sidecar.scan`) and `walk` (directory
 entries listed under the photograph roots, `captures/` and `photos/`).
 
-Seven rules:
+Eight rules:
 1. EXACT BUDGET. `BUDGET[route]` holds each counter's value at size S. Over it fails. Under it
    fails with "lower to N" (the `UNSCOPED_WALK_EXPECTED` ratchet in `scripts/docs_audit/core.py`).
 2. GROWTH. `CONSTANT` counters must be equal at S and 2S. `json_loads` and `read_sidecar` may
@@ -46,6 +46,13 @@ Seven rules:
    at every size (`entry(4, 1 + n % 3)`), so a statement per queued card is a constant there and only
    `check_queue_read_flat`, on a fixture of its own, can see it grow.
 
+8. LIVE WIRE FLAT. `GET /pipeline/pricing` and `GET /pipeline/markdowns/<stamp>/table` both call `pipeline_routes._live_wire`, so
+   each makes the same number of SQL statements at S and 2S while its live listings double. The shared fixture holds no live
+   export, so `_live_wire` answers no rows there and a statement per listing cannot show. Measured: three per listing, the
+   archive summary (`_market_on`), the `listings` row and the `readings` row (a `Rows.get` each, where one bulk read serves
+   all). `check_live_wire_flat` builds a live export, a reading, a first-live day and an archive bucket for every listing, on a
+   fixture of its own, and holds the answered rows to the count.
+
 Two checks hold the answer of those selections to the full scan (`sidecar.scan` over every photograph,
 then `narrow`):
 - `check_selection_scan_equivalence`: the answer equals the scan key for key, in the same order, for a
@@ -70,6 +77,7 @@ import sqlite3
 from pathlib import Path
 
 from harness.tests import Checks
+from harness.tests.home import run_folder
 from harness.tests.t7.common import (
     QuietHandler,
     _spawn_server,
@@ -328,7 +336,10 @@ BUDGET = {
     # growth rule. `json_loads` is one parse per slab row (15 slabs at S).
     '/slabs': {"status": 200, 'sql': 12, 'json_loads': 15, 'store_read': 1},
     '_SLABS_ITEM_RE': {"status": 200, 'sql': 16, 'json_loads': 8, 'store_read': 1},
-    '_MARKDOWN_TABLE_RE': {"status": 200, 'sql': 11, 'json_loads': 0, 'store_read': 1},
+    # sql 12: the store open (11) and the one `SELECT key, payload FROM cards WHERE state = 'sold'` that `_live_wire` makes
+    # through `cmd_reprice.last_sales` (`inventory.in_state`). This fixture holds no live export, so the wire's per-listing
+    # work is not here: `check_live_wire_flat` holds that.
+    '_MARKDOWN_TABLE_RE': {"status": 200, 'sql': 12, 'json_loads': 0, 'store_read': 1},
     '_MARKDOWN_HISTORY_RE': {"status": 404},
     '_MARKDOWN_TRENDS_RE': {"status": 404},
     '_SEND_FILE_RE': {"status": 404},
@@ -627,8 +638,9 @@ def _build(checks: Checks, size: int) -> dict:
     return {"run": run.directory.name, "cid": cid, "table_stamp": TABLE_STAMP}
 
 
-def _write_survey(size: int, skus: tuple = ()) -> None:
-    """One markdown whose survey holds `size` live rows (SKU0..), or exactly `skus`, so the table route's work per row shows as growth."""
+def _write_survey(size: int, skus: tuple = (), cells: dict | None = None) -> None:
+    """One markdown whose survey holds `size` live rows (SKU0..), or exactly `skus`, so the table route's work per row shows as growth.
+    `cells` maps a SKU to its export row's cells (the survey's `row`); a SKU it does not name keeps `{}`."""
     import json
 
     from cli import cmd_reprice
@@ -636,7 +648,10 @@ def _write_survey(size: int, skus: tuple = ()) -> None:
     directory = files.inventory_dir() / cmd_reprice.DIRNAME / TABLE_STAMP
     directory.mkdir(parents=True, exist_ok=True)
     named = skus or tuple(f"SKU{n}" for n in range(size))
-    rows_ = [{"sku": sku, "standing": "offered", "skip": None, "name": sku, "market": "1.00", "row": {}} for sku in named]
+    rows_ = [
+        {"sku": sku, "standing": "offered", "skip": None, "name": sku, "market": "1.00", "row": (cells or {}).get(sku, {})}
+        for sku in named
+    ]
     (directory / cmd_reprice.SURVEY).write_text(json.dumps({"at": None, "asked": {}, "counts": {}, "source": {}, "skus": rows_}), "utf-8")
 
 
@@ -1300,6 +1315,109 @@ def check_queue_read_flat(checks: Checks) -> None:
     checks.ok(not problems, "13. /queues makes the same number of statements at S and 2S, while its queued entries double")
 
 
+# --------------------------------------------------------------------------- the live wire, statements
+
+LIVE_STAMP = "20260102-000100"  # the one live export the live-wire fixture fetched
+# The two routes that call `_live_wire`, each with the URL that reaches it and how many rows of its answer carry the wire.
+LIVE_WIRE_ROUTES = {
+    "/pipeline/pricing": ("/pipeline/pricing", lambda answer: len(answer.get("live") or [])),
+    "_MARKDOWN_TABLE_RE": (
+        f"/pipeline/markdowns/{TABLE_STAMP}/table",
+        lambda answer: sum(1 for row in answer.get("skus") or [] if "group" in row),
+    ),
+}
+
+
+def _live_world(size: int) -> None:
+    """`size` live listings, SKU0.., each with everything `_live_wire` reads per listing: a row in the newest live export
+    with a copy and an asking price, a reading, a first-live day, and an archive month bucket on that day. That is the hit
+    path of `_market_on`. One transaction writes them all: `one_list_wire`'s `_set_listing`, `_market_reading` and `_bucket`
+    open one each, which is `size` times three opens here."""
+    from harness.tests.t7.common import FIXTURE_EXPORT
+    from harness.tests.t7.one_list_wire import _day, _noon
+    from store.pricearchive import RANGE_WIDTH_DAYS, Bucket
+
+    source = tcgcsv.read_export(FIXTURE_EXPORT)
+    folder = files.inventory_dir() / pipeline_routes.LIVE_DIR
+    folder.mkdir(parents=True, exist_ok=True)
+    tcgcsv.write_csv(
+        folder / f"{pipeline_routes.LIVE_PREFIX}{LIVE_STAMP}.csv",
+        source.header,
+        [
+            dict(source.rows[0], **{tcgcsv.SKU_COLUMN: f"SKU{n}", tcgcsv.LIVE_QUANTITY_COLUMN: "1", tcgcsv.PRICE_COLUMN: "1.00"})
+            for n in range(size)
+        ],
+    )
+    listed = _day(5).isoformat()
+    with Store().write() as snapshot:
+        for n in range(size):
+            sku = f"SKU{n}"
+            snapshot.inventory.listing(sku).first_seen_live = _noon(_day(5))
+            snapshot.readings.entries[sku] = Reading(market="1.25", at=1_700_000_000, source="t7", kind="run", low_with_shipping="1.40")
+        snapshot.archive.upsert({
+            f"SKU{n}:month:{listed}": Bucket(f"SKU{n}", 4242, "month", RANGE_WIDTH_DAYS["month"], listed, "1.00", 5, 2, None, None, 0)
+            for n in range(size)
+        })
+
+
+def _live_wire_read(size: int) -> dict:
+    """`{route: {"status", "rows", "sql"}}` for each route in `LIVE_WIRE_ROUTES`, on a store of `size` live listings.
+    The survey holds the same `size` SKUs, so the table route has a row for every listing the wire carries."""
+    import json
+
+    out = {}
+    with run_folder() as run, isolated_home(run):
+        _live_world(size)
+        _write_survey(size)
+        Store().read()
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        try:
+            for route, (url, rows_of) in LIVE_WIRE_ROUTES.items():
+                with _Meter() as meter:
+                    status, body, _ = request(port, "GET", url, origin=capture_server.DEFAULT_ALLOWED_ORIGINS[0])
+                answer = json.loads(body) if status == 200 else {}
+                out[route] = {"status": status, "rows": rows_of(answer), "sql": meter.counts["sql"]}
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+    return out
+
+
+def check_live_wire_flat(checks: Checks) -> None:
+    """Rule 8. `GET /pipeline/pricing` and the markdown table route call `_live_wire`, and each makes the same number of
+    SQL statements at S and at 2S while its live listings double. Each listing has a reading and a first-live day, so
+    `_market_on` has work to do for every one. The wire's rows are held to the listing count at both sizes first: a fixture
+    that carried no listing, or a route that dropped the wire, could not tell a flat read from one that queries per listing.
+    The rows grow here, so the rule is on the statements and not on the rows."""
+    checks.note("")
+    checks.note("LIVE WIRE FLAT — statements per request, at S and 2S live listings")
+    problems: list = []
+    small, big = _live_wire_read(SIZES[0]), _live_wire_read(SIZES[1])
+    for route in LIVE_WIRE_ROUTES:
+        before = len(problems)
+        for label, got, listings in (("S", small[route], SIZES[0]), ("2S", big[route], SIZES[1])):
+            if got["status"] != 200:
+                problems.append(f"{route} answered {got['status']} at {label}")
+            elif got["rows"] != listings:
+                problems.append(f"{route} carries the live wire on {got['rows']} rows at {label}, the fixture lists {listings}")
+            elif not got["sql"]:
+                problems.append(f"{route} made no statement at {label}: the meter no longer sees the store")
+        if len(problems) == before and small[route]["sql"] != big[route]["sql"]:
+            problems.append(
+                f"{route} sql grows with the live listings: {small[route]['sql']} statements for {SIZES[0]} listings at S, "
+                f"{big[route]['sql']} for {SIZES[1]} at 2S. It must read the archive, the listings and the readings for every listing in a fixed number of statements"
+            )
+    for problem in problems:
+        checks.ok(False, problem)
+    checks.ok(
+        not problems,
+        f"14. {len(LIVE_WIRE_ROUTES)} routes carry _live_wire in the same number of statements at S and 2S, while their live listings double",
+    )
+
+
 # --------------------------------------------------------------------------- the box walk, answers
 
 # What the three reads answer for `PIN_WORLD`. Every fact the
@@ -1489,6 +1607,7 @@ CHECKS = (
     check_box_walk_json_flat,
     check_box_walk_equivalence,
     check_queue_read_flat,
+    check_live_wire_flat,
 )
 
 

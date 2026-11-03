@@ -1203,11 +1203,9 @@ def do_send(payload: dict) -> dict:
     pipeline_routes.refuse_oversize_runs(wanted)
     download = bool(payload.get("download"))
     payload = dict(payload, prices=_named_prices(payload), moves=_named_moves(payload))
-    # NO RUN IS ENOUGH FOR ONE SEND ONLY: named prices that are all kept suggestions. Each is a
-    # price-only row on a listing that is already live, so there is no copy for a run to carry.
-    if not wanted and not (
-        payload["prices"] and all(row.get("source") == postings.SUGGESTED for row in payload["prices"])
-    ):
+    # NO RUN IS ENOUGH FOR ONE SEND ONLY: named prices. Each is a price-only row on a listing that
+    # is already live, so there is no copy for a run to carry (`_checked_prices` gates them).
+    if not wanted and not payload["prices"]:
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST, "runs_required", "Send a non-empty `runs` list."
         )
@@ -1277,6 +1275,8 @@ def _named_prices(payload: dict) -> List[dict]:
                 "price": tcgcsv.format_price(price),
                 "was": None if was is None else tcgcsv.format_price(was),
                 **({"source": postings.SUGGESTED} if source == postings.SUGGESTED else {}),
+                # The tick on a past-cap suggestion: the boolean `true` only, never a truthy stand-in.
+                **({"ticked": True} if row.get("ticked") is True else {}),
             }
         )
     return out
@@ -1383,6 +1383,12 @@ def _refuse_unreadable_claim() -> None:
         ) from None
 
 
+def _checked_prices(payload: dict) -> List[dict]:
+    """The named prices the server checks against today's reading and the cap: every kept
+    suggestion, and, in a press with no run, every typed price too (no new copy rides beside it)."""
+    return [row for row in payload["prices"] if row.get("source") == postings.SUGGESTED or not payload["runs"]]
+
+
 def _refuse_stale_readings(payload: dict, drawn: Any, step: str) -> None:
     """A press with kept suggestions refuses `readings_stale` when a reading behind one was written
     on an earlier US Central day (a send never prices from an export older than today). It
@@ -1391,9 +1397,8 @@ def _refuse_stale_readings(payload: dict, drawn: Any, step: str) -> None:
     refuse, not this one's."""
     stale = sorted(
         row["sku"]
-        for row in payload["prices"]
-        if row.get("source") == postings.SUGGESTED
-        and (reading := drawn.readings.entries.get(row["sku"])) is not None
+        for row in _checked_prices(payload)
+        if (reading := drawn.readings.entries.get(row["sku"])) is not None
         and store_clock.before_today(datetime.fromtimestamp(reading.at, tz=timezone.utc))
     )
     if stale:
@@ -1439,16 +1444,15 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> N
       1. A rebuilt suggestion whose named price moves the live price past the owner's `policy.limit`
          (the one `pipeline/suggest.py` sorts by) refuses `suggestion_past_cap`, naming each card.
          It is measured on the price in the FRESH live read, never on the `was` the screen drew.
+         A row the send marks `ticked` (spec: a bigger move needs a tick) is not refused.
       2. A named price that is not the rebuilt price, or has no rebuilt suggestion at all, refuses
          `suggestion_changed`. A SKU with no suggestion has nothing to be past a cap of.
     """
-    kept = {
-        row["sku"]: (row["price"], row["was"])
-        for row in payload["prices"]
-        if row.get("source") == postings.SUGGESTED
-    }
-    if not kept:
+    checked = {row["sku"]: (row["price"], row["was"]) for row in _checked_prices(payload)}
+    if not checked:
         return
+    suggested = {r["sku"] for r in payload["prices"] if r.get("source") == postings.SUGGESTED}
+    kept = {sku: named for sku, named in checked.items() if sku in suggested}
     try:
         book = corpus.Corpus.read()
         limit = suggest.check_setting(book.limit, suggest.DEFAULT_LIMIT, "limit")
@@ -1465,7 +1469,10 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> N
         row["sku"]: row["price"] for row in pipeline_routes._live_wire(drawn, book) if row["source"] == suggest.SOURCE
     }
     names = {tcgcsv.sku_cell(row): row.get(tcgcsv.NAME_COLUMN) for row in fresh.rows}
-    over = sendguard.suggestions_past_cap({s: v for s, v in kept.items() if s in rebuilt}, prices, limit, names)
+    ticked = {row["sku"] for row in payload["prices"] if row.get("ticked") is True}
+    over = sendguard.suggestions_past_cap(
+        {s: v for s, v in checked.items() if (s in rebuilt or s not in kept) and s not in ticked}, prices, limit, names
+    )
     if over:
         parts = [
             f"{note.name or note.sku}: ${note.price} is more than {int(limit * 100)}% from the ${note.live} TCGplayer shows"
