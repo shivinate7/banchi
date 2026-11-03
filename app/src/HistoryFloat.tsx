@@ -224,7 +224,7 @@ export function HistoryFloat({
           <div><dt>Lowest, shipped</dt><dd>{price(prices?.low_with_shipping)}</dd></div>
           <div><dt>Direct Low</dt><dd>{price(prices?.direct_low)}</dd></div>
         </dl>
-        <Button icon="external" tabIndex={mode === 'focus' ? -1 : undefined} onClick={() => { window.location.hash = `#/product?sku=${encodeURIComponent(sku)}` }}>Full history</Button>
+        <Button icon="external" tabIndex={mode === 'focus' ? -1 : undefined} onClick={() => { window.location.hash = `#/product?sku=${encodeURIComponent(sku)}` }}>Full History</Button>
       </footer>
     </section>,
     document.body,

@@ -115,34 +115,34 @@
      `.pricetrend-mini`, `.pricetrend { gap: var(--bn-2) }`) — 120px, not 64 — so the column was
      narrower than what it draws, and `overflow: hidden` cropped it flush against Lowest's own
      right edge with none of the caption's gap visible past it. */
-  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 128px [reason-end] 60px 136px 84px 40px;
+  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 128px [reason-end] 60px 136px 84px 80px;
   align-items: center;
   column-gap: var(--bn-3);
   padding: 0 var(--bn-3);
 }
 .pricing-list[data-copies='none'] .pricing-caption,
 .pricing-list[data-copies='none'] .pricing-row {
-  grid-template-columns: minmax(0, 1fr) 76px 76px 128px 136px 40px;
+  grid-template-columns: minmax(0, 1fr) 76px 76px 128px 136px 80px;
 }
 /* THE RANGE 7D COLUMN IS DRAWN ONLY WHERE THE LIST HAS ROOM FOR IT (`RANGE_ROOM_PX` in Pricing.tsx), so
    its template is its own and the narrow rules below never meet it. */
 .pricing-list[data-range='some'] .pricing-caption,
 .pricing-list[data-range='some'] .pricing-row {
-  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 116px 128px [reason-end] 60px 136px 84px 40px;
+  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 116px 128px [reason-end] 60px 136px 84px 80px;
 }
 /* A LIST WITH LIVE LISTINGS has a track for what TCGplayer holds now, before the price. The narrow desk
    has its own below; a phone column has none. */
 .pricing-list[data-now='some'] .pricing-caption,
 .pricing-list[data-now='some'] .pricing-row {
-  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 40px;
+  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 80px;
 }
 .pricing-list[data-range='some'][data-now='some'] .pricing-caption,
 .pricing-list[data-range='some'][data-now='some'] .pricing-row {
-  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 116px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 40px;
+  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 116px 128px [reason-end] 60px var(--pricing-now-w) 136px 84px 80px;
 }
 .pricing-list[data-range='some'][data-copies='none'] .pricing-caption,
 .pricing-list[data-range='some'][data-copies='none'] .pricing-row {
-  grid-template-columns: minmax(0, 1fr) 76px 76px 116px 128px 136px 40px;
+  grid-template-columns: minmax(0, 1fr) 76px 76px 116px 128px 136px 80px;
 }
 .pricing-caption {
   min-height: var(--bn-8);
@@ -408,6 +408,7 @@ span.pricing-thumb { cursor: default; }
    held row draws two matching tinted chips in a row and the ready row draws none, and the
    control itself looks like a different shape depending on the card. Bare in both states; the
    icon alone (lock vs unlock) already says which one this is. */
+.pricing-acts { display: flex; align-items: center; justify-content: flex-end; }
 .pricing-row .pricing-hold[aria-pressed='true'] { background: transparent; color: var(--bn-ink-2); }
 
 /* ---- the popovers and sheets ----------------------------------------------------------------- */
@@ -526,7 +527,7 @@ span.pricing-thumb { cursor: default; }
   .pricing-row,
   .pricing-list[data-copies='none'] .pricing-row,
   .pricing-list[data-now='some'] .pricing-row {
-    grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 112px 40px;
+    grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 112px 80px;
     grid-template-areas:
       'thumb id price hold'
       'thumb id market qty'
@@ -537,7 +538,7 @@ span.pricing-thumb { cursor: default; }
     padding-inline: var(--bn-2);
   }
   .pricing-list[data-copies='none'] .pricing-row {
-    grid-template-columns: minmax(0, 1fr) 112px 40px;
+    grid-template-columns: minmax(0, 1fr) 112px 80px;
     grid-template-areas:
       'id price hold'
       'id market market';
@@ -545,7 +546,7 @@ span.pricing-thumb { cursor: default; }
   .pricing-thumb { grid-area: thumb; }
   .pricing-id { grid-area: id; }
   .pricing-col-price { grid-area: price; }
-  .pricing-row .pricing-hold { grid-area: hold; }
+  .pricing-row .pricing-acts { grid-area: hold; }
   .pricing-col-market { grid-area: market; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
   .pricing-col-qty { grid-area: qty; }
   .pricing-col-src { grid-area: src; }

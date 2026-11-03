@@ -1835,6 +1835,7 @@ export function Pricing() {
     const needs: MergedSku[] = []
     const ready: MergedSku[] = []
     const suggested: MergedSku[] = []
+    const kept: MergedSku[] = []
     const closed = new Map<string, MergedSku[]>()
     for (const row of sorted) {
       const why = groupOf(row)
@@ -1842,6 +1843,9 @@ export function Pricing() {
         const group = closed.get(why)
         if (group === undefined) closed.set(why, [row])
         else group.push(row)
+      } else if (isWithheld(answerFor(row))) {
+        /* A KEPT-OFF ROW IS IN NONE OF THE THREE GROUPS (list-notes item 12): it draws only behind the one press, in a group of its own. */
+        if (filterHeld) kept.push(row)
       } else {
         /* THE SERVER'S WORD ON THE GROUP, never worked out here. */
         const group = serverGroup(row)
@@ -1852,15 +1856,17 @@ export function Pricing() {
     }
     /* THE THREE GROUPS IN THE SPEC'S ORDER, each named for what the owner does there. An empty one still
        draws, with its count of 0 and its sentence. A heading is Chicago Title Case (docs/DESIGN.md R5). */
-    const groups: { head: string; rows: MergedSku[]; lede?: string }[] = [
-      { head: titleCase('Needs you', true), lede: 'Nothing here goes until you tick it or type a price.', rows: needs },
-      { head: titleCase('Suggested changes', true), lede: 'Ticked rows go with the next send. Untick one to keep its live price.', rows: suggested },
-      { head: titleCase('Going at the rule', true), lede: 'These go at your rule, at the floor, or at a price you typed.', rows: ready },
-    ]
+    const groups: { head: string; rows: MergedSku[]; lede?: string }[] = filterHeld
+      ? [{ head: titleCase('Kept off', true), lede: 'Not in this send. Release one to put it back.', rows: kept }]
+      : [
+          { head: titleCase('Needs you', true), lede: 'Nothing here goes until you tick it or type a price.', rows: needs },
+          { head: titleCase('Suggested changes', true), lede: 'Ticked rows go with the next send. Untick one to keep its live price.', rows: suggested },
+          { head: titleCase('Going at the rule', true), lede: 'These go at your rule, at the floor, or at a price you typed.', rows: ready },
+        ]
     /* THE SERVER'S SENTENCE, VERBATIM (D59): the client never composes a reason. */
     for (const [why, group] of closed) groups.push({ head: why, rows: group })
     return groups
-  }, [arrival, rows, facetShape, facetPicks, keepRow, sort, saved, askingAtSort])
+  }, [arrival, rows, facetShape, facetPicks, keepRow, sort, saved, askingAtSort, filterHeld, answerFor])
 
   const order = useMemo(() => drawn.flatMap((group) => group.rows.map((row) => row.sku)), [drawn])
 
@@ -2816,7 +2822,7 @@ export function Pricing() {
           aria-pressed={filterHeld}
           onClick={() => setFilterHeld((on) => !on)}
         >
-          {`Kept off ${held.length}`}
+          {titleCase(`Show kept off (${held.length})`, true)}
         </Button>
       )}
     </div>
@@ -2960,17 +2966,8 @@ export function Pricing() {
   const tally = (
     <div className="pricing-tally">
       {pricedTile}
-      <Tile data-tile="held" pending={barLoading} icon="lock" tone="info" title={`${progress.held} kept off TCGplayer`} room="Not in this send. Show kept off">
-        {progress.held > 0 ? (
-          <>
-            Not in this send.{' '}
-            <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => showRows({}, true)}>
-              Show kept off
-            </Button>
-          </>
-        ) : (
-          'None kept off.'
-        )}
+      <Tile data-tile="held" pending={barLoading} icon="lock" tone="info" title={`${progress.held} kept off TCGplayer`} room="Not in this send.">
+        {progress.held > 0 ? 'Not in this send.' : 'None kept off.'}
       </Tile>
       <Tile
         data-tile="ready"
@@ -3021,11 +3018,6 @@ export function Pricing() {
               </span>
               <span>
                 <b>{progress.held}</b> kept off TCGplayer, not in this send
-                {progress.held === 0 ? null : (
-                  <Button size="sm" variant="ghost" className="bn-tile-act" onClick={() => showRows({}, true)}>
-                    Show kept off ({progress.held})
-                  </Button>
-                )}
               </span>
             </p>
           </div>
@@ -3322,7 +3314,9 @@ export function Pricing() {
           <div className="pricing-list" ref={measureList} data-copies={source.copies ? 'some' : 'none'} data-range={rangeOn ? 'some' : undefined} data-now={oneList ? 'some' : undefined}
             // Focus leaving the list closes the card. The card takes no focus in this mode, so the list is all there is to stay in.
             onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFloat(null)
+              const to = event.relatedTarget as Element | null
+              // The card a door opens takes focus; that is still the list's card.
+              if (!event.currentTarget.contains(to) && to?.closest('[data-history-float]') == null) setFloat(null)
             }}
           >
             <div className="pricing-caption" role="row">
@@ -3402,6 +3396,7 @@ export function Pricing() {
                     onAsked={(text) => setAsked(sku.sku, text)}
                     holding={holdFor === sku.sku}
                     onPriceFocus={(rowEl) => setFloat({ sku: sku.sku, anchor: rowEl })}
+                    onDoor={(rowEl, door) => setFloat({ sku: sku.sku, anchor: rowEl, door })}
                     registerInput={(node) => {
                       if (node) inputs.current.set(sku.sku, node)
                       else inputs.current.delete(sku.sku)
@@ -3563,19 +3558,21 @@ function fieldState(
   /* A TYPED PRICE ON A ROW WITH NO MARKET PRICE IS WHAT THE SEND LISTS AT (the owner's ruling), so
      the row says only that there is no market to compare it with. */
   if (sku.bucket === 'no_market_data') {
-    return typeof standing === 'string' ? { text: 'No market price', tone: 'quiet' } : { text: 'Needs a price', tone: 'warn' }
+    /* A ROW WITH NO PRICE SAYS SO ONCE, in the From column ("No price yet", `fromWord`), not again under the field. */
+    return typeof standing === 'string' ? { text: 'No market price', tone: 'quiet' } : null
   }
   return null
 }
 
-type FloatOpen = { readonly sku: string; readonly anchor: HTMLElement }
+/** `door` is the history door that opened the card: the card takes focus and gives it back to the door. */
+type FloatOpen = { readonly sku: string; readonly anchor: HTMLElement; readonly door?: HTMLElement }
 type FloatOpener = (open: FloatOpen | null) => void
 
 /** The history card's host (spec 9c). `opener` moves or closes it. The owner's sales for its chart come from the
  *  orders, read on the first open. */
 function PricingFloat({ opener, suggestionOf }: { readonly opener: Ref<FloatOpener>; readonly suggestionOf: (sku: string) => string }) {
   const [float, setFloat] = useState<FloatOpen | null>(null)
-  useImperativeHandle(opener, () => (open) => setFloat((was) => (was?.sku === open?.sku && was?.anchor === open?.anchor ? was : open)), [])
+  useImperativeHandle(opener, () => (open) => setFloat((was) => (was?.sku === open?.sku && was?.anchor === open?.anchor && was?.door === open?.door ? was : open)), [])
   const [orders, setOrders] = useState<readonly OrderRow[]>([])
   const ordersAsked = useRef(false)
   useEffect(() => {
@@ -3593,7 +3590,8 @@ function PricingFloat({ opener, suggestionOf }: { readonly opener: Ref<FloatOpen
     <HistoryFloat
       sku={float.sku}
       anchor={float.anchor}
-      mode="focus"
+      mode={float.door === undefined ? 'focus' : 'door'}
+      restoreFocus={float.door}
       fills={fills}
       suggestion={suggestion === '' ? undefined : suggestion}
       onClose={() => setFloat(null)}
@@ -3623,6 +3621,7 @@ function PricingRow({
   onAsked,
   holding,
   onPriceFocus,
+  onDoor,
   registerInput,
   registerHold,
   onHover,
@@ -3664,6 +3663,8 @@ function PricingRow({
   holding: boolean
   /** The price field took focus: the row it sits in, which the history card floats above. */
   onPriceFocus: (row: HTMLElement) => void
+  /** The history door was pressed: the row it sits in and the door itself, which gets focus back. */
+  onDoor: (row: HTMLElement, door: HTMLElement) => void
   registerInput: (node: HTMLInputElement | null) => void
   registerHold: (node: HTMLButtonElement | null) => void
   onHover: (on: boolean) => void
@@ -3971,16 +3972,32 @@ function PricingRow({
         </span>
       )}
 
-      <IconButton
-        ref={registerHold}
-        icon={withheld ? 'unlock' : 'lock'}
-        label={withheld ? 'Release' : 'Keep off TCGplayer'}
-        name={withheld ? `Release ${sku.name}` : `Keep ${sku.name} off TCGplayer`}
-        kbd="H"
-        pressed={withheld}
-        className="pricing-hold"
-        onClick={onHold}
-      />
+      {/* THE HISTORY DOOR (list.html item 17, spec 9c), BESIDE THE LOCK: the only way to a card that draws no price field. A row with a
+          field is reached from the field, so its door keeps out of the tab order. */}
+      <span className="pricing-acts">
+        <IconButton
+          icon="history"
+          label="Price history"
+          name={`Price history for ${sku.name}`}
+          className="pricing-door"
+          tabIndex={withheld || lockedWhy !== null ? undefined : -1}
+          onClick={(event) => {
+            const rowEl = event.currentTarget.closest<HTMLElement>('.pricing-row')
+            if (rowEl !== null) onDoor(rowEl, event.currentTarget)
+          }}
+          {...{ 'data-float-door': '' }}
+        />
+        <IconButton
+          ref={registerHold}
+          icon={withheld ? 'unlock' : 'lock'}
+          label={withheld ? 'Release' : 'Keep off TCGplayer'}
+          name={withheld ? `Release ${sku.name}` : `Keep ${sku.name} off TCGplayer`}
+          kbd="H"
+          pressed={withheld}
+          className="pricing-hold"
+          onClick={onHold}
+        />
+      </span>
     </div>
   )
 }
