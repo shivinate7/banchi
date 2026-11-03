@@ -592,7 +592,7 @@ for (const size of SIZES) {
  * never overlaps the bar; a row with no room under the bar opens it below (the first case); a row with room under it
  * opens it above (the second case, which passes today and keeps a fix from always opening below).
  *
- * Ten rows and one live listing (11), so the page scrolls far enough to put a row at any height. The viewport is 1200
+ * Sixteen filler rows, the two stored rows and one live listing, so the page scrolls far enough to put a row at any height. The viewport is 1200
  * tall so a card fits below the row at every width: at 900 the 385px card at 820 fits neither above the row under the
  * bar nor below it, and a case that no placement can pass says nothing about the placement. */
 for (const size of SIZES) {
@@ -600,15 +600,17 @@ for (const size of SIZES) {
     const GAP_PX = 8
     /* A row high enough in the list that the page can scroll it to any height. */
     const ROW = 2
+    /* Rows are 83px, so row `ROW` at 150px needs about 1050px of list under it: filler rows past that, plus the two stored rows and the live listing. */
+    const FILLER = 16
     const barOf = (page: Page) => page.locator('.pricing-bar')
     test.beforeEach(async ({ page }) => {
       await setViewport(page, { width: size.width, height: 1200 })
-      await seedPopulatedPricing(page, 8, () => [liveListing()])
+      await seedPopulatedPricing(page, FILLER, () => [liveListing()])
       await page.route(HISTORY, (route) =>
         route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payloadWithAsking()) }),
       )
       await page.goto(PRICING)
-      await expect(page.locator('.pricing-row')).toHaveCount(11)
+      await expect(page.locator('.pricing-row')).toHaveCount(FILLER + 3)
       await settleMotion(page)
     })
 
