@@ -1,12 +1,14 @@
 import {
   useCallback,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  type Ref,
   type RefObject,
 } from 'react'
 
@@ -1863,21 +1865,9 @@ export function Pricing() {
   const order = useMemo(() => drawn.flatMap((group) => group.rows.map((row) => row.sku)), [drawn])
 
   /* THE HISTORY CARD (spec 9c): a price field taking focus opens it on that row, and it stays open while focus
-     is anywhere in `.pricing-list`. The owner's sales for its chart come from the orders, read once on first open. */
-  const [float, setFloat] = useState<{ sku: string; anchor: HTMLElement } | null>(null)
-  const [orders, setOrders] = useState<readonly OrderRow[]>([])
-  const ordersAsked = useRef(false)
-  useEffect(() => {
-    if (float === null || ordersAsked.current) return
-    ordersAsked.current = true
-    // A failed read leaves the chart without sale marks; the card draws the rest.
-    // It also clears the ask, so the next open tries again.
-    getOrders().then((payload) => setOrders(payload.orders)).catch(() => { ordersAsked.current = false })
-  }, [float])
-  const floatSku = float?.sku
-  const floatFills = useMemo(() => (floatSku === undefined ? [] : fillsFor(floatSku, orders)), [floatSku, orders])
-  const floatRow = float === null ? undefined : rows.find((one) => one.sku === float.sku)
-  const floatSuggestion = floatRow === undefined ? '' : suggestionFor(floatRow)
+     is anywhere in `.pricing-list`. Its state lives in `PricingFloat`, so moving it re-renders the card alone. */
+  const floatOpener = useRef<FloatOpener>(null)
+  const setFloat = useCallback((open: FloatOpen | null) => floatOpener.current?.(open), [])
 
   const move = useCallback(
     (sku: string, by: number) => {
@@ -2529,7 +2519,7 @@ export function Pricing() {
         snap(sku, 'now')
       }
     },
-    [answerFor, commit, move, snap, suggestionFor, toggleHold, undoLast, openPhoto, openProduct, source],
+    [answerFor, commit, move, snap, suggestionFor, toggleHold, undoLast, openPhoto, openProduct, source, setFloat],
   )
 
   const photoSku = useMemo(() => (photoFor === null ? null : rows.find((row) => row.sku === photoFor.sku) ?? null), [photoFor, rows])
@@ -3447,16 +3437,13 @@ export function Pricing() {
       </div>
       </Page>
 
-      {float !== null && float.anchor.isConnected ? (
-        <HistoryFloat
-          sku={float.sku}
-          anchor={float.anchor}
-          mode="focus"
-          fills={floatFills}
-          suggestion={floatSuggestion === '' ? undefined : floatSuggestion}
-          onClose={() => setFloat(null)}
-        />
-      ) : null}
+      <PricingFloat
+        opener={floatOpener}
+        suggestionOf={(sku) => {
+          const row = rows.find((one) => one.sku === sku)
+          return row === undefined ? '' : suggestionFor(row)
+        }}
+      />
 
       <Popover open={runsOpen} onClose={() => setRunsOpen(false)} anchor={runsAnchor} label="Which cards to price" className="pricing-runs-pop">
         <PickRuns runs={roster} picked={picked} onToggle={toggleRun} onClear={clearPicked} />
@@ -3579,6 +3566,39 @@ function fieldState(
     return typeof standing === 'string' ? { text: 'No market price', tone: 'quiet' } : { text: 'Needs a price', tone: 'warn' }
   }
   return null
+}
+
+type FloatOpen = { readonly sku: string; readonly anchor: HTMLElement }
+type FloatOpener = (open: FloatOpen | null) => void
+
+/** The history card's host (spec 9c). `opener` moves or closes it. The owner's sales for its chart come from the
+ *  orders, read on the first open. */
+function PricingFloat({ opener, suggestionOf }: { readonly opener: Ref<FloatOpener>; readonly suggestionOf: (sku: string) => string }) {
+  const [float, setFloat] = useState<FloatOpen | null>(null)
+  useImperativeHandle(opener, () => (open) => setFloat((was) => (was?.sku === open?.sku && was?.anchor === open?.anchor ? was : open)), [])
+  const [orders, setOrders] = useState<readonly OrderRow[]>([])
+  const ordersAsked = useRef(false)
+  useEffect(() => {
+    if (float === null || ordersAsked.current) return
+    ordersAsked.current = true
+    // A failed read leaves the chart without sale marks; the card draws the rest.
+    // It also clears the ask, so the next open tries again.
+    getOrders().then((payload) => setOrders(payload.orders)).catch(() => { ordersAsked.current = false })
+  }, [float])
+  const floatSku = float?.sku
+  const fills = useMemo(() => (floatSku === undefined ? [] : fillsFor(floatSku, orders)), [floatSku, orders])
+  if (float === null || !float.anchor.isConnected) return null
+  const suggestion = suggestionOf(float.sku)
+  return (
+    <HistoryFloat
+      sku={float.sku}
+      anchor={float.anchor}
+      mode="focus"
+      fills={fills}
+      suggestion={suggestion === '' ? undefined : suggestion}
+      onClose={() => setFloat(null)}
+    />
+  )
 }
 
 function PricingRow({
