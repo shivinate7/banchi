@@ -78,6 +78,8 @@
     "111-palette-focus-red.md",
     "112-request-budget-leave.md",
     "113-single-reds-on-main.md",
-    "114-waiting-scan-misses.md"
+    "114-waiting-scan-misses.md",
+    "115-new-copy-tick-keyed-by-sku.md",
+    "116-past-cap-tick-ignores-source.md"
   ]
 }

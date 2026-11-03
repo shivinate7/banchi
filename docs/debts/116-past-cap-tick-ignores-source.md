@@ -1,4 +1,4 @@
-## DEBT-past-cap-tick-ignores-source — the send skips the cap check for any row marked ticked, typed prices too
+## DEBT116 — the send skips the cap check for any row marked ticked, typed prices too
 
 **What.** The send's cap check skips every row the press marks `ticked: true`, whether it is a kept suggestion or a typed price. `server/send_routes.py` builds the ticked set in `_refuse_past_cap` from `payload["prices"]` without reading `source`. The screen sets `ticked` only on a past-cap suggestion, so no press sends a ticked typed price today.
 

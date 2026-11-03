@@ -1,4 +1,4 @@
-## DEBT-new-copy-tick-keyed-by-sku — a new copy's tick on the pricing list outlives a change to its price
+## DEBT115 — a new copy's tick on the pricing list outlives a change to its price
 
 **What.** On `#/pricing`, the tick on a new copy under Needs You is keyed by SKU alone, so it survives a rule change or a refresh that moves the copy's price. `app/src/Pricing.tsx` keeps `ticks[row.sku]` and clears it only after a send. A live suggestion's tick is keyed to its figure (`tickKey`) and does not have this gap.
 
