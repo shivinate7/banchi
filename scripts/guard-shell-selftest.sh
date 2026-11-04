@@ -862,10 +862,12 @@ judge_agent "$tmp/main" "export BANCHI_MAIN=off; echo hi"
 if [ $? -eq 2 ]; then ok "export form is refused"; else bad "export BANCHI_MAIN=off was allowed"; fi
 judge_agent "$tmp/main" "env BANCHI_DOCS=off echo hi"
 if [ $? -eq 2 ]; then ok "env form is refused"; else bad "env BANCHI_DOCS=off was allowed"; fi
-for lever in KILL SUITE_LOCK SERVE_MAIN SYNC; do
+for lever in SUITE_LOCK SERVE_MAIN SYNC; do
   judge_agent "$tmp/main" "BANCHI_$lever=off echo hi"
   if [ $? -eq 0 ]; then ok "recovery lever BANCHI_$lever=off is allowed"; else bad "BANCHI_$lever=off was refused"; fi
 done
+judge_agent "$tmp/main" "BANCHI_KILL=off echo hi"
+if [ $? -eq 2 ]; then ok "BANCHI_KILL=off is refused as owner-only, like any non-lever switch"; else bad "BANCHI_KILL=off was allowed"; fi
 agent_refuses() {   # agent_refuses <label> <command>
   judge_agent "$tmp/main" "$2"
   if [ $? -eq 2 ]; then ok "refused: $1"; else bad "ALLOWED: $1"; fi
@@ -911,7 +913,7 @@ judge_agent "$tmp/main" "BANCHI_GUARD_SCOPE=all echo hi"
 if [ $? -eq 0 ]; then ok "a run-everything scope switch is allowed"; else bad "BANCHI_GUARD_SCOPE=all was refused"; fi
 
 echo ""
-echo "  the escape hatches, in both of BANCHI_KILL's two forms"
+echo "  the escape hatches: inline lifts, a mention does not"
 
 allows "wait, inline"     "$tmp/main" "BANCHI_WAIT=off until ! pgrep -f x; do sleep 5; done"
 allows "tree, inline"     "$WT" "BANCHI_TREE=off cat > $tmp/main/work.py"

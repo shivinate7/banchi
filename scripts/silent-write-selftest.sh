@@ -348,7 +348,7 @@ case "$out" in *"| tail -40"*) ok "and a git write, which does NOT block, still 
   *) bad "the ordinary advice was lost — a git write does not block and the pipe is right for it" ;; esac
 
 echo ""
-echo "  the escape hatch, in both of BANCHI_KILL's two forms"
+echo "  the escape hatch: inline and in the environment lift it, a mention does not"
 
 allows "inline in the command"  "BANCHI_SILENT=off git commit -m x >/dev/null 2>&1"
 refuses "a mere mention does not lift it" "echo BANCHI_SILENT=off; git commit -m x >/dev/null 2>&1"
