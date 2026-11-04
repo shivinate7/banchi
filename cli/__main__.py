@@ -270,7 +270,7 @@ def build_parser() -> argparse.ArgumentParser:
     # immutable input — and it refuses a run that is not stranded.
     rescue = sub.add_parser(
         "rescue",
-        help="re-address a stranded run's cards to where they are now. Free, previews.",
+        help="re-address a stranded run's cards, by digest, to where they are now. Free, previews.",
     )
     rescue.add_argument("run_dir", help="the run a join refuses over a reallocated box")
     rescue.add_argument(
@@ -331,7 +331,7 @@ def build_parser() -> argparse.ArgumentParser:
     match_audit = match_sub.add_parser(
         "audit",
         help="re-read every filed card's photo with the free reader; list disagreements. Free. "
-        "--write sends in-stock disagreements back to Review.",
+        "--write sends in-stock disagreements back to Review (`free_reader_disagrees`).",
     )
     match_audit.add_argument("--write", action="store_true", help="queue each in-stock disagreement for Review (sold cards are only listed)")
 

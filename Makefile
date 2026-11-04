@@ -173,7 +173,7 @@ worktree-setup:
 worktree-provision-selftest:
 	@bash scripts/worktree-provision-selftest.sh
 
-# core.hooksPath is LOCAL config — it lives in .git/config, which is never pushed. So a fresh
+# Arms the hooks from scripts/githooks/. Once per clone. core.hooksPath is LOCAL config — it lives in .git/config, which is never pushed. So a fresh
 # clone carries scripts/githooks/pre-commit as a tracked file with NOTHING POINTING AT IT, and
 # CLAUDE.md's bearer-instrument rule is unenforced on the first commit. It fails silently,
 # which is the only way an opsec rule can fail badly: nothing is printed, nothing exits 1, and
@@ -675,7 +675,7 @@ githooks-selftest:
 # claude-settings and reads `.github/stamp.json`. A bare `make merge` refuses, `ARGS=<n>` is a free
 # preview that presses nothing, and `ARGS="<n> --confirm"` merges (D42, the owner names the act).
 # The tool claims in a temporary worktree, so this checkout need not stand on the PR's branch.
-# It never rebases or force-pushes: a moved head stops it.
+# It never rebases or force-pushes: a moved head stops it, so rebase by hand and run it again.
 merge:
 	@~/.claude/bin/merge $(ARGS)
 
@@ -756,6 +756,7 @@ catalog-index:
 # the real 26 MB snapshot, so this is fast enough for `make check`. Every case failed before
 # `scripts/catalog-index.py` and `pipeline/catalog.py` existed: no index to build, no reader
 # to open one. Writes only a temp directory, so it gates like any other selftest.
+# Not in `make check`: scripts/checks.py does not run it.
 catalog-index-selftest:
 	@python3 scripts/catalog-index-selftest.py
 
@@ -848,7 +849,7 @@ screen-freshness-selftest:
 # its `janitor/sweep.py`, a PREVIEW unless ARGS=--confirm: branches, worktrees, dead-rooted
 # servers, loose processes, stale registrations and husks, across every checkout under
 # ~/Developer. ARGS=<root> narrows it to one clone. CLAUDE_JANITOR_SWEEP names another copy.
-# What stays in scripts/janitor.py is one tree's teardown. `session-teardown.sh` runs it.
+# What stays in scripts/janitor.py is one tree's teardown: it keeps `--teardown`. `session-teardown.sh` runs it.
 janitor:
 	@python3 "$${CLAUDE_JANITOR_SWEEP:-$$HOME/.claude/janitor/sweep.py}" $(ARGS)
 

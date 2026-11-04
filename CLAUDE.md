@@ -34,8 +34,6 @@ writes, what it costs. `make explain` lists what `make check` runs, and `ARGS=<t
 
 - **Ask the owner before `make up`, `make down`, `make up ARGS=--restart` or `make restart-now`, and name the reason.**
   The capture server is threaded and holds the owner's live store (`.claude/rules/server.md`).
-- `make design-check` leaves its verdict in `.serve/design-check.json`: read it once after the run. Never poll it, never pipe the
-  run through `tail`. It takes a machine-wide lock and refuses rather than queues (`ARGS=--wait` queues).
 - `BANCHI_SERVE_SCOPE=all` and `BANCHI_GUARD_SCOPE=all` run every path-gated self-test (run-everything, not a hatch). `BANCHI_CSS_VARS=off`
   and `BANCHI_TOKEN_LITERALS=off` skip `make css-var-check` and `make token-literal-check`: owner-only.
 - `./banchi identify` costs money: `--dry-run` first. Kill only your own processes: `make reap` stops what this session started
@@ -54,21 +52,14 @@ Folder rules load when you read under that folder: `app/` (screens, design syste
 whole repo:
 
 - **Every checkout has its own store and ports** (D43, the port follows the store). An empty inventory in a
-  worktree is correct. `make worktree-setup` claims this checkout's port slot once (`scripts/port-slots.py`).
+  worktree is correct. A linked checkout claims a port slot once in `~/.banchi/port-slots.json`
+  (`scripts/port-slots.py`). A test run refuses a reused dev server that does not name this checkout
+  (`app/checkoutIdentity.ts`, D261, a checkout claims its port slot). `make port-agreement` keeps `app/devPort.ts` and `server/ports.py` in step.
+- **A burst of clients kills the capture server. Run the full suite once, at the end.**
+- **The pipeline is reachable from a screen** (D33, reachable from a screen). It lives in Review's runs sheet. A run's scope is a selection
+  (D180, a press names the cards): `pipeline/selection.py` is one grammar for the screen, the route and the CLI.
 - **Real CSV libraries only.** PapaParse (JS), `csv` (Python). Never `split(",")`. `fixtures/` holds real TCGplayer exports,
   ground truth. Never modify them. Deeper schema facts live in the `tcgplayer-csv` skill.
-- **Batch API, not sequential calls.** Model: `claude-haiku-5-5`. The `paid-read model` row of `make docs-audit` holds it to `identify/prompt.py`.
-- **Not a Claude artifact.** No `window.storage`, no `facingMode: "environment"`, nothing about a card in `localStorage`.
-  **Ten keys are stored on the device**, each a fact about this machine and not a card. `app/src/useCamera.ts`
-  holds `banchi.capture.deviceId` and `banchi.capture.rotation`. `app/src/deviceMemory.ts` holds `banchi.theme` (a `THEMES` id: light, dark, abyssal-bloom or carnival-midway),
-  `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`, `banchi.box-recency`,
-  `banchi.capture.setup` (six values as one document, D142, the setup outlives the browser) and `banchi.capture.sections` (kept until the sitting
-  ends, D164, the undo stack is the sitting). `app/src/Orders.tsx` holds
-  `banchi.orders.last-check`.
-  `app/eslint.config.js` bans `localStorage` outside `useCamera.ts` and `deviceMemory.ts`.
-
-  `sessionStorage` is a separate store. It holds `banchi.session.captureId`, `banchi.session.homeDeck` (the Home deck already played this sitting) and `banchi.run-scope` (D39, a run's scope is a selection handed off).
-  The `storage keys` row of `make docs-audit` reconciles this roster (D27, session state is device-local).
 - **`make harness` runs all ten verification tests**, T1-T9 and T11. No T10. Run it before you say something works.
 
 ## Hard rules
@@ -122,7 +113,9 @@ whole repo:
 - **Main moves by pull request. A session never commits to main or pushes it** (D42, main moves by pull request).
   Parent rules `git-main-only-by-pr` (merge by pull request) and `git-integration-branch-merge` (lane batching) apply.
   Parent decision `standing-merge-grant` says who merges: a batch runner, under the coordinator's grant. The coordinator never merges.
-  A one-lane session the owner started may merge its own lone lane. A lane a coordinator started never merges.
+  A one-lane session the owner started may merge its own lone lane, only under that repo's merge grant or the owner's named act,
+  under the same limits. A lane session a coordinator started never merges: it hands the batch runner each reviewed lane branch.
+  Parent decision `session-tiers` holds the `cs-build` tags and the lane hand-off.
   Any other merge is the owner's named act, "merge" and not "ship it". Use `make merge ARGS="<n> --confirm"`, never `--admin`.
   One standing exception (D42, main moves by pull request):
   the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
@@ -146,8 +139,8 @@ and shiv-stylisms `reports-blockquote-no-fence` (report shape). No task restatem
 - Read `docs/decisions/` before you propose an architecture change (`scripts/decision-context.py` finds the entry,
   `make map ARGS=--decisions` indexes them). Reopening one follows parent rule `outcomes-stale-decision-protocol` (stale decisions).
 - Parent rule `building-land-design-or-abandon` (land it or drop it) applies. Its homes here: `docs/specs/`, or the decision that owns it.
-- The waiting page's writer exports its data to `docs/waiting/` (D327, a committed record). Parent record `waiting-data-in-repo` (waiting data copies) applies.
-  `scripts/waiting-export.py --calls` prints the reads.
+- The waiting page's writer exports the page's data to `docs/waiting/` at each wake and before any republish
+  (D327, the waiting page is a committed record). `scripts/waiting-export.py --calls` prints the reads.
 - Parent rule `tokens-compacting-keep-essentials` (what a compaction keeps) applies. Also keep the fixture schema facts.
 
 ### Writing a brief

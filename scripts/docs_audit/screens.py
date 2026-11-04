@@ -17,6 +17,7 @@ from .core import (
     _NUMBER_WORDS,
     _merge_rows,
     _strip_ts_comments,
+    claude_and_rules,
     exists,
     markdown_files,
     read,
@@ -936,8 +937,7 @@ def check_storage_keys(report: Report) -> None:
                 )
             )
 
-    claude = ROOT / "CLAUDE.md"
-    roster = _ROSTER_RE.search(read(claude)) if exists(claude) else None
+    roster = _ROSTER_RE.search(claude_and_rules())
     if roster is None:
         findings.append(
             Finding(

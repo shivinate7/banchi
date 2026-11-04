@@ -21,6 +21,7 @@ from .core import (
     _sibling,
     _strip_ts_comments,
     _walk,
+    claude_and_rules,
     exists,
     glob_files,
     python_files,
@@ -1077,7 +1078,7 @@ def check_design_check_verdict(report: Report) -> None:
     reporter = read(_VERDICT_REPORTER) if exists(_VERDICT_REPORTER) else None
     config = read(_VERDICT_CONFIG) if exists(_VERDICT_CONFIG) else None
     makefile = read(ROOT / "Makefile") if exists(ROOT / "Makefile") else ""
-    published = read(ROOT / "CLAUDE.md") if exists(ROOT / "CLAUDE.md") else ""
+    published = claude_and_rules()
     findings = verdict_disagreements(reporter, config, makefile, published)
     match = _VERDICT_RESULT_FILE.search(reporter or "")
     where = f"{match.group(1)}/{match.group(2)}" if match else "unreadable"

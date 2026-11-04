@@ -83,6 +83,20 @@ Fulfiller's. The shell has these parts:
   `PHONE_SPECS_ON` in `app/tests/phoneSwitch.ts`.
 - Anything a thumb presses is 40px or more.
 - `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a real browser. It is not in `make check`.
-  Root `CLAUDE.md` says how to read its verdict, and `make help ARGS=design-check` prints the rest.
+  `make help ARGS=design-check` prints the rest.
+- Its verdict lands in `.serve/design-check.json`: read it once after the run. Never poll it, never pipe the
+  run through `tail`. It takes a machine-wide lock and refuses rather than queues (`ARGS=--wait` queues).
 
-Browser storage keys are rostered in root `CLAUDE.md` (the `storage keys` row of `make docs-audit` reads them there).
+## Browser storage
+
+- **Not a Claude artifact.** No `window.storage`, no `facingMode: "environment"`, nothing about a card in `localStorage`.
+  **Ten keys are stored on the device**, each a fact about this machine and not a card. `app/src/useCamera.ts`
+  holds `banchi.capture.deviceId` and `banchi.capture.rotation`. `app/src/deviceMemory.ts` holds `banchi.theme` (a `THEMES` id: light, dark, abyssal-bloom or carnival-midway),
+  `banchi.rail`, `banchi.orders.fetch-filter`, `banchi.inventory.hide-sold`, `banchi.box-recency`,
+  `banchi.capture.setup` (six values as one document, D142, the setup outlives the browser) and `banchi.capture.sections` (kept until the sitting
+  ends, D164, the undo stack is the sitting). `app/src/Orders.tsx` holds
+  `banchi.orders.last-check`.
+  `app/eslint.config.js` bans `localStorage` outside `useCamera.ts` and `deviceMemory.ts`.
+
+  `sessionStorage` is a separate store. It holds `banchi.session.captureId`, `banchi.session.homeDeck` (the Home deck already played this sitting) and `banchi.run-scope` (D39, a run's scope is a selection handed off).
+  The `storage keys` row of `make docs-audit` reconciles this roster (D27, session state is device-local).

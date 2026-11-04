@@ -15,6 +15,7 @@ from .core import (
     Report,
     _merge_rows,
     child_names,
+    claude_and_rules,
     exists,
     glob_files,
     literals_from_module,
@@ -425,5 +426,5 @@ def model_disagreement(claude_text: str, prompt_text: str) -> Optional[str]:
 
 
 def check_paid_read_model(report: Report) -> None:
-    why = model_disagreement(read(ROOT / "CLAUDE.md"), read(ROOT / "identify" / "prompt.py"))
+    why = model_disagreement(claude_and_rules(), read(ROOT / "identify" / "prompt.py"))
     report.add("paid-read model", MECHANICAL, [Finding("CLAUDE.md", why)] if why else [], scanned=1)

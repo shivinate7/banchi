@@ -19,6 +19,7 @@ Each command's `--help` says what it writes.
 - **A run's slot numbers are not the truth. The photograph is** (D36, the store says which slot).
   `cli/resolve.py:realign` re-binds records. It refuses on ambiguity and on a reallocated box.
 - Only two columns are ever written: `Add to Quantity`, `TCG Marketplace Price`. `TCGplayer Id` is never modified.
+- **Batch API, not sequential calls.** Model: `claude-haiku-5-5`.
 - **No duplicate SKU rows in an import file.** Aggregate by SKU. `Add to Quantity` equals the copy count. There is no standing
   cap (D7, duplicates aggregate by SKU). A send may ask for one (`emit --cap N`) or for a quantity (`emit --quantity SKU=N`).
   `uncommitted_positions` stops a copy going out twice.
@@ -37,7 +38,7 @@ Each command's `--help` says what it writes.
   `inventory/prices.json`. `policy.threshold` is also the floor, and the owner sets it. Its default is $0.49 (`pipeline/corpus.py:DEFAULT_CUTOFF`). `sub_threshold` also defaults to $0.49, a default and not the floor (D9, threshold and floor).
   `banchi prices adopt` migrates legacy run files. `join` and `emit` refuse over an unadopted one.
 - **The free reader sets itself up** (D301, stock photos are hotlinked, never mirrored). `match prepare` downloads the pinned model file
-  and reads each stock photo once, and `serve` starts it whenever the store holds a card from an unread set. Env `BANCHI_AUTO_SETUP=on`
+  and reads each stock photo once, and `serve` starts it whenever the store holds a card from an unread set (never with the runtime missing). Env `BANCHI_AUTO_SETUP=on`
   forces auto-start. Unset, it is refused when `CI` or `BANCHI_HARNESS` is set (`make harness` sets it) and in a linked worktree.
   `match --sweep` is the background reader's watcher: it never spends, reads even mid-feed, and is off until the Capture screen's Rig switch is on.
   The runs sheet's Prepare press is a manual refresh.
