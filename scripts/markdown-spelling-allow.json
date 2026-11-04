@@ -190,14 +190,6 @@
         "catalogue"
       ]
     },
-    "docs/decisions/*-archive-refusals-go-to-review.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "catalogue",
-        "catalogue",
-        "catalogue"
-      ]
-    },
     "docs/decisions/*-public-demo-is-scrubbed-store.md": {
       "lane": "docs-sweep",
       "SPELLING": [
