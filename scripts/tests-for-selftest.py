@@ -27,6 +27,13 @@ THE REACH RULES DECIDED HERE (the builder implements them; each rule has a case 
 - A file a group reaches only inside a check body selects that group alone, plus `t7_store_and_seams.py`.
 - A `tN_*.py` module with no top-level `run` is not a suite. `t7_box_map.py` is one: its checks run inside
   `t7_store_and_seams.py`, so a file it reaches prints `t7_store_and_seams.py`.
+- A unit test's dynamic `import('../../src/x.ts')` loads that module, so the module's unit test is selected.
+- A suite that runs `./banchi` reaches the `cli/` package the shim execs (`python3 -m cli`), and a suite that runs
+  `sys.executable -m cli` reaches it too.
+- A suite that does not parse is still printed for a file it names: the selector cannot read its imports, so it
+  selects more, never nothing.
+- A reached module that is not UTF-8 (a PEP 263 latin-1 cookie) is read as data: no traceback, exit 0.
+- A selector run writes no bytecode beside the scope scripts it loads.
 
 HOW IT IS RUN
     python3 scripts/tests-for-selftest.py
@@ -35,7 +42,7 @@ files into a run folder, and run the suites there. Each run folder is `harness/t
 the one home for run folders; its sweep is proven in `harness/tests/t7/t1_results.py`. A subprocess has a timeout,
 and no case sleeps or reads a clock.
 
-COST: one selector run per selector case (about 30 runs), plus four Playwright unit runs of two files (clean, then
+COST: one selector run per selector case (about 45 runs), plus four Playwright unit runs of two files (clean, then
 planted) and four short Python suite runs for the planted break. The unit legs need `app/node_modules`
 (`npm ci --prefix app`), and without it that case fails and names the fix.
 """
@@ -43,6 +50,7 @@ planted) and four short Python suite runs for the planted break. The unit legs n
 from __future__ import annotations
 
 import ast
+import importlib.util
 import os
 import re
 import shutil
@@ -144,10 +152,12 @@ def require_selector() -> bool:
                   "scripts/tests-for.py is not in the tree, so there is no selector to run (the builder writes it)")
 
 
-def run_selector(args: List[str], cwd: Path) -> Tuple[Optional[int], List[str], str]:
+def run_selector(args: List[str], cwd: Path, script: Path = SELECTOR) -> Tuple[Optional[int], List[str], str]:
+    # The consumer runs bare python3, which writes bytecode. A run with PYTHONDONTWRITEBYTECODE set would hide that.
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONDONTWRITEBYTECODE"}
     try:
-        done = subprocess.run(["python3", str(SELECTOR), *args], cwd=str(cwd), capture_output=True,
-                              text=True, timeout=TIMEOUT)
+        done = subprocess.run(["python3", str(script), *args], cwd=str(cwd), capture_output=True,
+                              text=True, timeout=TIMEOUT, env=env)
     except subprocess.TimeoutExpired:
         return None, [], "timed out after %d seconds" % TIMEOUT
     return done.returncode, done.stdout.splitlines(), done.stderr
@@ -167,7 +177,9 @@ def select_expect(label: str, args: List[str], cwd: Path, want: List[str]) -> No
     if code is None:
         expect(False, f"{label}: the selector {err}")
         return
-    expect(code == 0, f"{label}: the selector exited {code}, expected 0 ({err.strip()[-200:]})")
+    last = err.strip().splitlines()[-1:] or [""]
+    expect(code == 0, f"{label}: the selector exited {code}, expected 0 ({last[0][-200:]})")
+    expect("Traceback" not in err, f"{label}: the selector raised on a module it read, so it printed a traceback")
     expect_suites(label, lines, want)
 
 
@@ -180,6 +192,45 @@ def write_tree(base: Path, files: Dict[str, str]) -> Path:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")
     return base
+
+
+def ts_tree(run: Path, name: str, test_body: str) -> Path:
+    """One unit-test fixture: a product module `app/src/x.ts` and one unit test, `t.unit.ts`, whose body is `test_body`.
+    Every TypeScript case builds its tree here, so the fixture has one home."""
+    return write_tree(run / name, {
+        "app/src/x.ts": "export const x = 1\n",
+        "app/tests/unit/unit.ts": "export const test = (n: string, f: () => unknown) => f\nexport const expect = (v: unknown) => v\n",
+        "app/tests/unit/t.unit.ts": test_body,
+    })
+
+
+def is_not_utf8(data: bytes) -> bool:
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return True
+    return False
+
+
+def does_not_parse(text: str) -> bool:
+    try:
+        ast.parse(text)
+    except SyntaxError:
+        return True
+    return False
+
+
+def load_guard_scope():
+    """scripts/guard-scope.py, loaded for its `derive_subjects`. No bytecode is written beside it."""
+    spec = importlib.util.spec_from_file_location("_guard_scope_for_selftest", ROOT / "scripts" / "guard-scope.py")
+    module = importlib.util.module_from_spec(spec)
+    was = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = was
+    return module
 
 
 # One synthetic tree for the rules that need no real repo. Every case below queries it; no case adds files to it.
@@ -533,6 +584,28 @@ def real_python_run_by_unit_test_reaches_slab_graders() -> None:
     expect("app/tests/unit/slab-graders.unit.ts" in lines, "store/slabs.py: slab-graders.unit.ts is not printed (python -c subprocess)")
 
 
+@case
+def real_deleted_boxes_reaches_formatter_homes_past_a_regex_quote() -> None:
+    """Text read past a regex literal: formatter-homes.unit.ts lists DeletedBoxes.tsx in a plain array, after a regex
+    literal whose backtick the scanner must not read as a template opener. The array is read as text, so the file is
+    selected."""
+    CURRENT[0] = "real_deleted_boxes_reaches_formatter_homes_past_a_regex_quote"
+    text = (ROOT / "app/tests/unit/formatter-homes.unit.ts").read_text(encoding="utf-8")
+    if not all([
+        expect("'DeletedBoxes.tsx'" in text, "scope: formatter-homes.unit.ts no longer lists DeletedBoxes.tsx"),
+        expect("(['\"`])(\\w*)\\1" in text, "scope: formatter-homes.unit.ts no longer holds the regex literal with a backtick"),
+        expect((ROOT / "app/src/DeletedBoxes.tsx").is_file(), "scope: app/src/DeletedBoxes.tsx is missing"),
+    ]) or not require_selector():
+        return
+    code, lines, err = run_selector(["app/src/DeletedBoxes.tsx"], ROOT)
+    if code is None:
+        expect(False, f"app/src/DeletedBoxes.tsx: the selector {err}")
+        return
+    expect(code == 0, f"app/src/DeletedBoxes.tsx: the selector exited {code}, expected 0 ({err.strip()[-200:]})")
+    expect("app/tests/unit/formatter-homes.unit.ts" in lines,
+           "app/src/DeletedBoxes.tsx: formatter-homes.unit.ts is not printed (a backtick in a regex literal hides its files list)")
+
+
 # --------------------------------------------------------------------------------- synthetic trees
 
 
@@ -802,6 +875,261 @@ def root_reads_the_tree_it_is_pointed_at() -> None:
     else:
         expect(code == 0, f"--root beats the cwd: the selector exited {code}, expected 0 ({err.strip()[-200:]})")
         expect(lines == [], f"--root beats the cwd: the selector read the cwd, not --root, and printed {lines[:3]}")
+
+
+# --------------------------------------------------------------------------------- scanner edges (TypeScript strings, dynamic imports)
+
+
+@case
+def ts_regex_quote_on_the_line_before_a_read_still_selects() -> None:
+    """Control, green on the current scanner. A regex literal's quote ends at its own line, so the read on the next
+    line is still a read."""
+    CURRENT[0] = "ts_regex_quote_on_the_line_before_a_read_still_selects"
+    run = _current_run()
+    tree = ts_tree(run, "a2a-line-before",
+                   "const apostrophe = /'/\n"
+                   "const text = readFileSync(new URL('../../src/x.ts', import.meta.url), 'utf8')\n")
+    if not require_selector():
+        return
+    select_expect("app/src/x.ts, a regex quote on the line before the read", ["app/src/x.ts"], tree,
+                  ["app/tests/unit/t.unit.ts"])
+
+
+@case
+def ts_regex_quote_on_the_read_line_does_not_hide_the_read() -> None:
+    """The scanner takes a regex literal's quote for a string opener. On the read's own line the string runs past the
+    read's opening quote, so the read is lost."""
+    CURRENT[0] = "ts_regex_quote_on_the_read_line_does_not_hide_the_read"
+    run = _current_run()
+    tree = ts_tree(run, "a2b-same-line",
+                   "const ok = /'/.test(s); const text = readFileSync(new URL('../../src/x.ts', import.meta.url), 'utf8')\n")
+    if not require_selector():
+        return
+    select_expect("app/src/x.ts, a regex quote on the read's own line", ["app/src/x.ts"], tree,
+                  ["app/tests/unit/t.unit.ts"])
+
+
+@case
+def ts_multi_line_template_with_comment_openers_does_not_hide_a_read() -> None:
+    """Control, green on the current scanner. `//` and `/*` inside a multi-line template literal are text, so the read
+    after the template is still a read."""
+    CURRENT[0] = "ts_multi_line_template_with_comment_openers_does_not_hide_a_read"
+    run = _current_run()
+    tree = ts_tree(run, "a3-template",
+                   "const doc = `\n  // a line comment in a template\n  /* a block opener in a template\n`\n"
+                   "const text = readFileSync(new URL('../../src/x.ts', import.meta.url), 'utf8')\n")
+    if not require_selector():
+        return
+    select_expect("app/src/x.ts, after a multi-line template with // and /*", ["app/src/x.ts"], tree,
+                  ["app/tests/unit/t.unit.ts"])
+
+
+@case
+def ts_lone_quote_in_a_string_or_comment_does_not_hide_a_read() -> None:
+    """Control, green on the current scanner. A lone quote inside a double-quoted string or a line comment opens no
+    string, so the read after it is still a read."""
+    CURRENT[0] = "ts_lone_quote_in_a_string_or_comment_does_not_hide_a_read"
+    run = _current_run()
+    tree = ts_tree(run, "a4-lone-quote",
+                   "const msg = \"Don't\"\n"
+                   "// it's\n"
+                   "const text = readFileSync(new URL('../../src/x.ts', import.meta.url), 'utf8')\n")
+    if not require_selector():
+        return
+    select_expect("app/src/x.ts, after a lone quote in a string and a comment", ["app/src/x.ts"], tree,
+                  ["app/tests/unit/t.unit.ts"])
+
+
+@case
+def ts_dynamic_import_in_a_unit_test_selects_the_module_it_loads() -> None:
+    """A unit test that loads a module by `await import('../../src/x.ts')` runs that module, so the module's unit test
+    is selected. The scanner leaves an import specifier out of the text reads, so a dynamic import has to be read as
+    a load of its own."""
+    CURRENT[0] = "ts_dynamic_import_in_a_unit_test_selects_the_module_it_loads"
+    run = _current_run()
+    tree = ts_tree(run, "g-dynamic-import",
+                   "import { test, expect } from './unit'\n\n"
+                   "test('dyn', async () => {\n"
+                   "  const m = await import('../../src/x.ts')\n"
+                   "  expect(m.x)\n"
+                   "})\n")
+    if not require_selector():
+        return
+    select_expect("app/src/x.ts, loaded by await import() in a unit test", ["app/src/x.ts"], tree,
+                  ["app/tests/unit/t.unit.ts"])
+
+
+# --------------------------------------------------------------------------------- subprocess shims and the cli package
+
+
+@case
+def bash_shim_running_python_m_cli_reaches_the_cli_package() -> None:
+    """A suite runs `./banchi`, a bash shim whose one line is `exec python3 -m cli`. The shim execs the package, so the
+    `cli/` package reaches the suite."""
+    CURRENT[0] = "bash_shim_running_python_m_cli_reaches_the_cli_package"
+    run = _current_run()
+    tree = write_tree(run / "f1-shim", {
+        "harness/__init__.py": "",
+        "harness/tests/__init__.py": "",
+        "harness/tests/t6_shim.py": "import subprocess\n\n\ndef run():\n    subprocess.run(['./banchi', 'identify'], check=True)\n",
+        "banchi": "#!/usr/bin/env bash\nexec python3 -m cli \"$@\"\n",
+        "cli/__init__.py": "",
+        "cli/__main__.py": "from cli import cli_leaf\n\n\nprint(cli_leaf.VALUE)\n",
+        "cli/cli_leaf.py": "VALUE = 5\n",
+    })
+    if not require_selector():
+        return
+    select_expect("cli/cli_leaf.py, reached through ./banchi, a bash shim", ["cli/cli_leaf.py"], tree,
+                  ["harness/tests/t6_shim.py"])
+
+
+@case
+def suite_running_sys_executable_m_cli_reaches_the_cli_package() -> None:
+    """A suite runs `[sys.executable, '-m', 'cli']`. The module name is a literal argument, so the `cli/` package it
+    runs reaches the suite."""
+    CURRENT[0] = "suite_running_sys_executable_m_cli_reaches_the_cli_package"
+    run = _current_run()
+    tree = write_tree(run / "f2-module", {
+        "harness/__init__.py": "",
+        "harness/tests/__init__.py": "",
+        "harness/tests/t6_module.py": ("import subprocess\nimport sys\n\n\ndef run():\n"
+                                       "    subprocess.run([sys.executable, '-m', 'cli'], check=True)\n"),
+        "cli/__init__.py": "",
+        "cli/__main__.py": "from cli import cli_leaf\n\n\nprint(cli_leaf.VALUE)\n",
+        "cli/cli_leaf.py": "VALUE = 5\n",
+    })
+    if not require_selector():
+        return
+    select_expect("cli/cli_leaf.py, reached through sys.executable -m cli", ["cli/cli_leaf.py"], tree,
+                  ["harness/tests/t6_module.py"])
+
+
+# --------------------------------------------------------------------------------- inputs the selector must survive
+
+
+@case
+def suite_that_does_not_parse_is_still_printed() -> None:
+    """A suite that does not parse is still a suite. The selector cannot read its imports, so it selects more, never
+    prints nothing."""
+    CURRENT[0] = "suite_that_does_not_parse_is_still_printed"
+    run = _current_run()
+    tree = write_tree(run / "c-syntax", {
+        "harness/__init__.py": "",
+        "harness/tests/__init__.py": "",
+        "pipeline/__init__.py": "",
+        "harness/tests/t1_broken.py": "from pipeline import broken_leaf\n\n\ndef run(:\n    return broken_leaf.X\n",
+        "pipeline/broken_leaf.py": "X = 1\n",
+    })
+    if not all([expect(does_not_parse((tree / "harness/tests/t1_broken.py").read_text(encoding="utf-8")),
+                       "scope: t1_broken.py parses, so the case does not test a syntax error")]) or not require_selector():
+        return
+    select_expect("pipeline/broken_leaf.py, imported by a suite that does not parse", ["pipeline/broken_leaf.py"], tree,
+                  ["harness/tests/t1_broken.py"])
+
+
+@case
+def reached_latin1_module_exits_zero_and_its_suite_prints() -> None:
+    """A module a suite imports carries a PEP 263 latin-1 cookie and a byte that is not UTF-8. The selector reads it as
+    data: exit 0, the suite printed, no traceback."""
+    CURRENT[0] = "reached_latin1_module_exits_zero_and_its_suite_prints"
+    run = _current_run()
+    tree = write_tree(run / "d1-latin", {
+        "harness/__init__.py": "",
+        "harness/tests/__init__.py": "",
+        "pipeline/__init__.py": "",
+        "harness/tests/t1_latin.py": "from pipeline import latin_leaf, direct_leaf\n\n\ndef run():\n    return latin_leaf.X\n",
+        "pipeline/direct_leaf.py": "VALUE = 1\n",
+    })
+    latin = b"# -*- coding: latin-1 -*-\nX = 'caf\xe9'\n"
+    (tree / "pipeline/latin_leaf.py").write_bytes(latin)
+    if not all([expect(is_not_utf8(latin), "scope: the latin-1 fixture decodes as UTF-8, so it has no non-UTF-8 byte")]) \
+            or not require_selector():
+        return
+    select_expect("pipeline/direct_leaf.py, with a latin-1 module reached through t1_latin", ["pipeline/direct_leaf.py"],
+                  tree, ["harness/tests/t1_latin.py"])
+
+
+@case
+def script_run_by_a_suite_that_is_latin1_exits_zero_and_its_suite_prints() -> None:
+    """A suite runs a script by its literal path, and the script carries a latin-1 cookie and a byte that is not UTF-8.
+    The selector reads the script as data: exit 0, the suite printed, no traceback."""
+    CURRENT[0] = "script_run_by_a_suite_that_is_latin1_exits_zero_and_its_suite_prints"
+    run = _current_run()
+    tree = write_tree(run / "d2-script", {
+        "harness/__init__.py": "",
+        "harness/tests/__init__.py": "",
+        "harness/tests/t1_runs.py": ("import subprocess\nimport sys\n\n\ndef run():\n"
+                                     "    subprocess.run([sys.executable, 'scripts/latin_tool.py'], check=True)\n"),
+    })
+    latin = b"# -*- coding: latin-1 -*-\nprint('caf\xe9')\n"
+    (tree / "scripts").mkdir(parents=True, exist_ok=True)
+    (tree / "scripts/latin_tool.py").write_bytes(latin)
+    if not all([expect(is_not_utf8(latin), "scope: the latin-1 script decodes as UTF-8, so it has no non-UTF-8 byte")]) \
+            or not require_selector():
+        return
+    select_expect("scripts/latin_tool.py, a latin-1 script a suite runs", ["scripts/latin_tool.py"], tree,
+                  ["harness/tests/t1_runs.py"])
+
+
+@case
+def selector_run_writes_no_bytecode_beside_the_scope_scripts() -> None:
+    """The selector loads guard-scope.py and browser-scope.py. A run leaves no __pycache__ beside them, so the copy's
+    scripts folder holds no bytecode after the run, and the bare python3 the consumer runs is the one that is checked."""
+    CURRENT[0] = "selector_run_writes_no_bytecode_beside_the_scope_scripts"
+    run = _current_run()
+    tree = base_tree(run)
+    copy = run / "bytecode-copy"
+    (copy / "scripts").mkdir(parents=True, exist_ok=True)
+    for name in ("tests-for.py", "guard-scope.py", "browser-scope.py"):
+        shutil.copyfile(ROOT / "scripts" / name, copy / "scripts" / name)
+    if not require_selector():
+        return
+    code, lines, err = run_selector(["pipeline/direct_leaf.py", "--root", str(tree)], run,
+                                    script=copy / "scripts" / "tests-for.py")
+    if code is None:
+        expect(False, f"pipeline/direct_leaf.py: the copied selector {err}")
+        return
+    expect(code == 0, f"pipeline/direct_leaf.py: the copied selector exited {code}, expected 0 ({err.strip()[-200:]})")
+    expect_suites("pipeline/direct_leaf.py, from a copy of the selector", lines, ["harness/tests/t1_direct.py"])
+    made = sorted(str(p.relative_to(copy)) for p in copy.rglob("__pycache__"))
+    expect(not made, f"the selector wrote bytecode beside the scope scripts: {made}")
+
+
+# --------------------------------------------------------------------------------- guard-scope's derived subjects
+
+
+@case
+def derived_subjects_keep_the_subscript_widening() -> None:
+    """guard-scope's `derive_subjects` reads a path chain that starts at a subscript, such as
+    `Path(__file__).resolve().parents[3] / "scripts" / "x.py"`. Three suites' subjects come from that shape, and the
+    widening is pinned so a change that drops it is seen."""
+    CURRENT[0] = "derived_subjects_keep_the_subscript_widening"
+    want = {
+        "harness/tests/t6_geometry.py": ["demo-assets/extra/photos/0000.jpg"],
+        "harness/tests/t7/price_fresh.py": ["fixtures/riftbound_export_untouched.csv", "scripts/price-refresh-daily.py",
+                                            "scripts/launchagent.py"],
+        "harness/tests/t7/price_moves.py": ["scripts/price-refresh-daily.py", "scripts/launchagent.py"],
+    }
+    shape = {
+        "harness/tests/t6_geometry.py": ['"demo-assets" / "extra" / "photos" / "0000.jpg"'],
+        "harness/tests/t7/price_fresh.py": ['parents[1] / "fixtures" / "riftbound_export_untouched.csv"',
+                                            'parents[3] / "scripts" / "price-refresh-daily.py"'],
+        "harness/tests/t7/price_moves.py": ['parents[3] / "scripts" / "price-refresh-daily.py"'],
+    }
+    scope = []
+    for rel, needles in shape.items():
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        for needle in needles:
+            scope.append(expect(needle in text, f"scope: {rel} no longer holds the path chain {needle}"))
+    scope.append(expect("import launchagent" in (ROOT / "scripts/price-refresh-daily.py").read_text(encoding="utf-8"),
+                        "scope: price-refresh-daily.py no longer imports launchagent, so launchagent.py is not a subject"))
+    if not all(scope):
+        return
+    gs = load_guard_scope()
+    for rel, subjects in want.items():
+        got = set(gs.derive_subjects(ROOT / rel))
+        missing = sorted(set(subjects) - got)
+        expect(not missing, f"{rel}: derive_subjects does not name {missing}, so the subscript widening is gone")
 
 
 # --------------------------------------------------------------------------------- planted breaks (bounded)
