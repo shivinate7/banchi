@@ -92,10 +92,8 @@ field `skipped` is gone. `app/src/server.ts:neighborWords` says the run.
 
 ### The neighbour sentence says back and front (UX-186)
 
-"Between X and Y" did not say which card is at the back. The sentence is now "It sits in front
-of X and behind Y.", composed once in `app/src/server.ts:placeParts`. X is toward the back and
-Y toward the front, so the words agree with card 1 at the far back. A departed card reads "It
-was ...". The Fulfiller reads this sentence, and it is the accessible name of the owner's
+"Between X and Y" did not say which card is at the back. The sentence is now `Position: X / Y`, composed once in `app/src/server.ts:placeParts`. X is toward the back and
+Y toward the front, so the words agree with card 1 at the far back. A card at an end reads `Previous: X (last in the box)` or `Next: Y (first in the box)`, with no tense. The Fulfiller reads this sentence, and it is the accessible name of the owner's
 neighbour ladder. Review's place pill draws back, the two neighbours and front on one line
 under the label.
 

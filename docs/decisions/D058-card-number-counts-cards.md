@@ -66,7 +66,7 @@ It becomes `Card 29` only when 180 sells. That card is in its own section, in fr
 
 **`capacity` keeps its D20 job and loses this one.** It records how full the box got. `GET /boxes` still reports it. `close_box` still freezes it at the high-water mark. The seal control still names that number before it is pressed. It is no longer the divisor. A sealed box's identity line carries both (`542 of 543 sealed`), because one of them beside a bar reading `#40 of 542` would be the second-renderer failure with two numbers instead of one.
 
-**`GET /boxes` gains `on_hand`.** `fill`, `next_index`, `cards`, `sold` and `retired` are unchanged. `BoxOps` promises its census greps to `inventory.json`, and it still does.
+**`GET /boxes` gains `on_hand`.** `fill`, `next_index`, `cards`, `sold` and `retired` are unchanged. The wire keeps the server's field names (`app/src/types.ts`).
 
 ### A live defect this forced, and the rule that fixes it
 

@@ -36,7 +36,7 @@ Which order a press records against, when one card serves several buyers, is ans
 
 Three places drew a nameless buyer's name slot as `No name`, a typed dot, and the order's full id. That typed a separator D218 refuses. It also repeated the full id, once in the number slot and once in the name slot.
 
-**The name slot now reads `MM-DD-YY_XXXXX`.** That is the group's `latest` placed date in UTC, an underscore, then the last five characters of the group's most recent order id. UTC keeps the label stable across viewers. `app/src/orderView.ts:unnamedBuyerLabel` composes it. `BuyerRow`, `OrderPanel`, the phone rail chip and the Manage sheet's title all read it, instead of building the string apart. It takes the mono face (D221), since a composed id is a machine string.
+**The name slot reads `Buyer on Order …XXXXX` (D274, the label form).** `app/src/orderView.ts:unnamedBuyerLabel` composes it. `BuyerRow`, `OrderPanel`, the phone rail chip and the Manage sheet's title all read it, instead of building the string apart.
 
 A nameless group holds only one order. `orderBuyers.ts` keys a nameless order on itself, and it never merges two. "Several orders, several dates" cannot happen today. The helper still falls back to the most recent order if that changes. That is the same order `latest` is already computed across. A shorter id draws whole, never padded. The full id stays in the order slot alone. It is never repeated here (`OrderPanel`'s `ORDER <number>` / `<n> ORDERS`).
 

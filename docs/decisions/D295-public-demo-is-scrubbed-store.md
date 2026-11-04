@@ -75,9 +75,9 @@ flow — are left in place, for anyone who wants a store with no real photograph
 iterate against. `demo-static` no longer builds from them. It now depends on
 `demo-mirror-install`.
 
-**Left open, not blocking.** A parallel lane, `ux/stock-images`, is meant to put stock
-image URLs on route responses, so a recorded bundle carries them. This entry does not
-depend on it. The mirror has no determinism check, because rebuilding it twice
+**Closed by D301.** `image_url` rides the sets and pricing responses, so a recorded bundle carries them.
+
+**Left open, not blocking.** The mirror has no determinism check, because rebuilding it twice
 means reading the real store twice. Whether the real ledger's open-order count ever
 exceeds `WALK_PLAN_ORDERS` on a future rebuild is unmeasured. If it does, the recorder
 refuses loudly rather than guessing.

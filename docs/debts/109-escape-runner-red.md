@@ -1,6 +1,6 @@
 ## DEBT109 — the assertion after Escape goes red on the CI runner, and the cause is unread
 
-**What.** A `design-check` shard fails on the assertion right after `keyboard.press('Escape')` in `capture-claims.spec.ts`, `live-reconcile.spec.ts` or `markdown.spec.ts`, and it does so on the CI runner.
+**What.** A `design-check` shard fails on the assertion right after `keyboard.press('Escape')` in `capture-claims.spec.ts` or `live-reconcile.spec.ts`, and it does so on the CI runner.
 
 - **Moved from.** DEBT8 (an entry that says no work is proposed). This item carries an owner and a fix-by date, so it lives here.
 - **Rate.** The rate DEBT8 once gave, about one job in thirteen, is not borne out. In the 100 most recent completed main check runs (window run numbers 2489 to 3148) there were 19 first-attempt reds, and none of the 19 shows an Escape failure.
