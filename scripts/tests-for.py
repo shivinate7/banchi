@@ -506,7 +506,7 @@ class Reach:
         folder = posixpath.dirname(rel)
         runs: List[List[str]] = []
         previous_end: Optional[int] = None
-        for start, end, value, quote in strings:
+        for start, end, value, _quote in strings:
             if "${" in value:
                 previous_end = None
                 continue
