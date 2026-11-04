@@ -1,6 +1,6 @@
 # D179 — Shell mistakes are refused by resolving them
 
-A read-only audit asked of every written rule: has it been broken, and can a machine see it? Forty rules were mechanizable. Five are one command away from a session. Each has a measured incident. `scripts/guard-shell.py` enforces those five as a PreToolUse hook on Bash and on Write|Edit, armed in both tools' rosters (D135).
+A read-only audit asked of every written rule: has it been broken, and can a machine see it? Forty rules were mechanizable. Five are one command away from a session. Each has a measured incident. `scripts/guard-shell.py` enforces those five as a PreToolUse hook on Bash and on Write|Edit, armed in `.claude/settings.json`.
 
 D173 is that audit's ruling: a rule that can be enforced mechanically is enforced mechanically, and a rule with no reader is advice. This entry records which five, what each cost, and where these readers are blind.
 
@@ -150,4 +150,4 @@ The guards that write it are `guard-shell.py`, `silent-write-guard.py`, `guard-o
 
 ### Standing
 
-**BUILT and self-tested**: seven clauses, `scripts/guard-shell-selftest.sh` with four reproductions, the swept allow list, every hatch in both forms, and the fail-open floor. **RECORDED**: this entry, `docs/map.py`, CLAUDE.md, `scripts/checks.py` and both hook rosters. **NEITHER**: nothing. What is unproven is what every hook here shares. `silent-write-selftest.sh` says so in as many words. The harness invokes the hook, and exit 2 blocks a call. Both are the harness's behaviour, not this repository's.
+**BUILT and self-tested**: four clauses (tree, wait, push and narrate), `scripts/guard-shell-selftest.sh` with one reproduction per clause, the swept allow list, every hatch in both forms, and the fail-open floor. **RECORDED**: this entry, `docs/map.py`, CLAUDE.md, `scripts/checks.py` and the one hook roster, `.claude/settings.json`. **NEITHER**: nothing. What is unproven is what every hook here shares. `silent-write-selftest.sh` says so in as many words. The harness invokes the hook, and exit 2 blocks a call. Both are the harness's behaviour, not this repository's.

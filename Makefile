@@ -1320,11 +1320,10 @@ silent-write-selftest:
 
 .PHONY: silent-write-selftest
 
-# SEVEN SHELL MISTAKES THIS REPO HAS ALREADY PAID FOR, refused before they run. Every one was a
+# FOUR SHELL MISTAKES THIS REPO HAS ALREADY PAID FOR, refused before they run. Every one was a
 # rule somebody had written down and a later session broke anyway — which is D171's ruling
-# about what a rule IS, applied to seven more commands:
+# about what a rule IS, applied to four more commands:
 #
-#   `git checkout <modified path>`     2026-09-06, ~240 lines of uncommitted work destroyed
 #   a write outside this checkout      2026-09-06, ~1,500 lines into the owner's MAIN tree, on
 #                                      main, hot-reloaded into their live capture server
 #   a polling loop                     2026-09-12 twice: a `pgrep` waiter whose pattern is not
@@ -1333,12 +1332,14 @@ silent-write-selftest:
 #   `git push <remote> HEAD`           2026-09-12, a stray branch on origin while the real PR
 #                                      branch went untouched, the tracked upstream being a
 #                                      DIFFERENT name (D179, amended 2026-09-13)
-#   a bare `git stash` / `pop`         the stash stack is shared by every worktree of this
-#                                      clone, so a pop takes whatever another tree pushed
+#   a narrated wait piped to `tail`    a working `make merge` read as a hang, because the pipe
+#                                      buffered its heartbeat and kept only the end of it
 #
+# The shared layer's guard owns `git checkout <path>`, a bare `git stash` and `git reset --hard`.
 # `scripts/guard-shell.py --hook` is a PreToolUse hook on Bash and on Write|Edit — not a target
-# you run — and this self-test is what proves it. FOUR OF THE INCIDENTS ARE PERFORMED in a
-# throwaway repository before the guard is asked about them, which is reap-selftest's standard;
+# you run — and this self-test is what proves it. THREE OF THE INCIDENTS ARE PERFORMED in a
+# throwaway repository before the guard is asked about them, and the narrated wait's is
+# performed there too, which is reap-selftest's standard;
 # the false positives are RUN there too, because a case that is secretly a typo passes for the
 # wrong reason. IN `check`, NEVER IN THE GIT HOOK: it writes a temp repository (D18).
 guard-shell-selftest:

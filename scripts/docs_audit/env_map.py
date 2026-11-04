@@ -922,6 +922,10 @@ CLAUDE_SETTINGS = ROOT / ".claude" / "settings.json"
 #: Code runs every clause the script has. The triples below drop a prefix, so a pin that appears
 #: is its own finding.
 _SKIP_ENV = re.compile(r"^GUARD_SHELL_SKIP=(\S*)\s+")
+#: Every spelling `guard-shell.py`'s `main` reads as a skip: the variable as a word anywhere
+#: (a leading prefix, after other assignments, after `env` or `export`, quoted) and the `--skip`
+#: alias as `--skip NAMES` or `--skip=NAMES`. `--skip-x` is another word and does not match.
+_SKIP_PIN = re.compile(r"""(?:^|[\s;&|('"])(?:GUARD_SHELL_SKIP=|--skip(?:=|\s|$))""")
 _ENV_WORD = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
 #: The one hook Claude Code runs narrowed by an environment prefix: the file and bash-c clauses
@@ -968,7 +972,7 @@ def check_claude_hooks(report: Report) -> None:
 
     THREE CLAIMS, EACH ONE A SILENT FAILURE WHEN WRONG. A hook whose script was renamed or
     deleted does not error, it never runs. A `scripts/guard-shell.py` entry that sets
-    `GUARD_SHELL_SKIP` runs fewer clauses than the script has (D179). The silent-write hook that lost its `BANCHI_SILENT_WRITE_ONLY` prefix runs the
+    `GUARD_SHELL_SKIP`, or passes `--skip`, runs fewer clauses than the script has (D179). The silent-write hook that lost its `BANCHI_SILENT_WRITE_ONLY` prefix runs the
     clauses the shared layer already owns (D171).
     """
     findings: List[Finding] = []
@@ -1000,12 +1004,12 @@ def check_claude_hooks(report: Report) -> None:
                 command = hook.get("command") or ""
                 if "scripts/guard-shell.py" not in command:
                     continue
-                if _SKIP_ENV.match(command):
+                if _SKIP_PIN.search(command):
                     findings.append(
                         Finding(
                             ".claude/settings.json",
                             f"{event} (matcher `{matcher}`) must not set `GUARD_SHELL_SKIP` "
-                            f"before guard-shell.py, got `{command}`.",
+                            f"or pass `--skip` to guard-shell.py, got `{command}`.",
                         )
                     )
 
