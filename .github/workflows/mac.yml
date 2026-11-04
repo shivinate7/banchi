@@ -11,6 +11,8 @@ name: mac
 on:
   schedule:
     - cron: '23 5 * * 1'
+  push:
+    branches: [lane/tci-5-mac-job]
   workflow_dispatch:
     inputs:
       report_failure:
@@ -138,6 +140,20 @@ jobs:
           make "$TARGET" 2>&1 | tee "$log" || rc=$?
           scripts/ci-skip-count.sh "$TARGET" "$log"
           exit "$rc"
+
+      - name: DIAGNOSTIC capture server on this runner
+        if: ${{ failure() }}
+        run: |
+          set +e
+          ulimit -n; sysctl kern.ipc.somaxconn; uname -a
+          tmp="$(mktemp -d)"
+          BANCHI_HOME="$tmp/home" BANCHI_PORT=18765 python3 server/capture_server.py > "$tmp/cap.log" 2>&1 &
+          pid=$!
+          sleep 10
+          curl -sv --max-time 5 http://127.0.0.1:18765/status
+          echo "--- capture log"
+          cat "$tmp/cap.log"
+          kill "$pid"
 
   alarm:
     needs: [mac-product]
