@@ -253,7 +253,7 @@ A row's run id is one run that proved it, fixed when the row was written. It is 
 | Linux server and every browser spec | `.github/workflows/check.yml`: the `ci-check` shards and the `design-check` matrix, on `ubuntu-latest` | 41773920691 |
 | macOS, the product checks | `.github/workflows/mac.yml`'s `mac-product` job, weekly and on dispatch; outside `all-jobs-passed` (D136) | 41774107649 |
 | macOS, the server serving a real build | the same job's `make serve-selftest` step | 41774107649 |
-| The public demo on GitHub Pages | `.github/workflows/demo.yml`; `docs/specs/demo.md` says what it asserts | 41776203254 |
+| The public demo on GitHub Pages | `.github/workflows/demo.yml`; `docs/specs/demo.md` says what it asserts | 41511476601 |
 | The phone on the LAN at the capture port | `make lan-check`, run by hand with the phone on the network (§10) | none, local |
 | The Fulfiller's own device | untested | none |
 | Safari, Add to Dock | untested | none |
