@@ -392,6 +392,10 @@ def rule_files(root: Optional[Path] = None) -> List[Path]:
     return [p for p in _walk(folder, (".md",)) if p != folder / "README.md"]
 
 
+# Where a finding from a `claude_and_rules` read points: the claim may sit in either.
+CLAUDE_OR_RULES = "CLAUDE.md or .claude/rules"
+
+
 def claude_and_rules(root: Optional[Path] = None) -> str:
     """CLAUDE.md and every path-scoped rule file, read as one text, joined on a blank line.
 

@@ -271,6 +271,8 @@ def build_parser() -> argparse.ArgumentParser:
     rescue = sub.add_parser(
         "rescue",
         help="re-address a stranded run's cards, by digest, to where they are now. Free, previews.",
+        description="Re-address a stranded run's cards, by digest, to where they are now. Free. "
+        "Previews by default; --write creates a second run and never edits the one given.",
     )
     rescue.add_argument("run_dir", help="the run a join refuses over a reallocated box")
     rescue.add_argument(
@@ -332,6 +334,9 @@ def build_parser() -> argparse.ArgumentParser:
         "audit",
         help="re-read every filed card's photo with the free reader; list disagreements. Free. "
         "--write sends in-stock disagreements back to Review (`free_reader_disagrees`).",
+        description="Re-read every filed card's photo with the free reader and list disagreements. Free. "
+        "--write sends in-stock disagreements back to Review (`free_reader_disagrees`); "
+        "sold cards are only listed.",
     )
     match_audit.add_argument("--write", action="store_true", help="queue each in-stock disagreement for Review (sold cards are only listed)")
 

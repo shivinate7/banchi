@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from .core import (
+    CLAUDE_OR_RULES,
     ADVISORY,
     ALLOWLIST,
     Finding,
@@ -997,7 +998,7 @@ def verdict_disagreements(
         findings.append(
             Finding(
                 "app/design-check-reporter.ts",
-                "does not exist, but CLAUDE.md tells a session to read the file it writes.",
+                f"does not exist, but {CLAUDE_OR_RULES} tells a session to read the file it writes.",
             )
         )
         return findings
@@ -1022,7 +1023,7 @@ def verdict_disagreements(
                 "app/playwright.config.ts",
                 "its `reporter` setting no longer names `./design-check-reporter.ts`.\n"
                 "  The suite would run green and write no verdict at all, and a session "
-                "following CLAUDE.md would read the absent file as `the run died before "
+                f"following {CLAUDE_OR_RULES} would read the absent file as `the run died before "
                 "Playwright loaded its config` — a wrong diagnosis reached by following the "
                 "documented procedure.\n"
                 "  Comments do not count: this reads the config with them blanked.",
@@ -1064,8 +1065,8 @@ def verdict_disagreements(
     if path not in published:
         findings.append(
             Finding(
-                "CLAUDE.md",
-                f"the reporter writes `{path}`, which this file never names.\n"
+                CLAUDE_OR_RULES,
+                f"the reporter writes `{path}`, which no file there names.\n"
                 "  The path is the whole instruction — a session told to read a verdict file "
                 "needs to be told which one.",
             )
