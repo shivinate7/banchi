@@ -260,7 +260,7 @@ def build_parser() -> argparse.ArgumentParser:
     identify.add_argument(
         "--dry-run",
         action="store_true",
-        help="everything except the API call",
+        help="everything except the API call. Run it first: this command spends money",
     )
 
     # --------------------------------------------------------------------------- rescue
@@ -512,7 +512,8 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="hold this SKU to at most N copies LIVE at TCGplayer, counting what is already "
         "out — a SKU at or over N adds nothing and the report says by how much. Omit for no "
-        "cap, which is the default since the standing bound was retired",
+        "cap, which is the default since the standing bound was retired. Refuses a SKU while a "
+        "sent copy is still pending: run `reconcile --live` first",
     )
     # A QUANTITY FOR ONE CARD, THIS PRESS ONLY (D7, amended 2026-09-11, on the operator's
     # ruling). A send quantity and not a ceiling: `--quantity 8608859=2` puts two copies of
@@ -654,7 +655,9 @@ def build_parser() -> argparse.ArgumentParser:
         "newest reading per SKU",
     )
     readings_adopt.add_argument(
-        "--write", action="store_true", help="actually write; previews without it"
+        "--write", action="store_true",
+        help="actually write; previews without it. Fully replaces both tables, and refuses over no source "
+        "or a malformed pricing.json",
     )
     readings_sub.add_parser("show", help="what the table holds, and which files it last read")
 
@@ -691,7 +694,8 @@ def build_parser() -> argparse.ArgumentParser:
         "it says into the table",
     )
     skus_adopt.add_argument(
-        "--write", action="store_true", help="actually write; previews without it"
+        "--write", action="store_true",
+        help="actually write; previews without it. Folds onto the table, never a full replace",
     )
 
     # ------------------------------------------------------------------------- archive

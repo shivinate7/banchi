@@ -381,6 +381,17 @@ def _walk(root: Path, suffixes: Tuple[str, ...]) -> List[Path]:
     return sorted(found)
 
 
+def rule_files(root: Optional[Path] = None) -> List[Path]:
+    """Each path-scoped rule file under `.claude/rules/`, at any depth, the folder's `README.md` excluded.
+
+    Claude Code loads `.claude/rules/` recursively, so every reader that needs a rule's prose
+    reads this one list. `root` lets a self-test point it at a fixture tree.
+    """
+    base = root or ROOT
+    folder = base / ".claude" / "rules"
+    return [p for p in _walk(folder, (".md",)) if p != folder / "README.md"]
+
+
 def markdown_files() -> List[Path]:
     """Every TRACKED markdown file: the index in staged mode, `git ls-files` otherwise.
 
