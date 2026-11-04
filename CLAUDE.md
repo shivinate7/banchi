@@ -140,9 +140,9 @@ and shiv-stylisms `reports-blockquote-no-fence` (report shape). No task restatem
 - Read `docs/decisions/` before you propose an architecture change (`scripts/decision-context.py` finds the entry,
   `make map ARGS=--decisions` indexes them). Reopening one follows parent rule `outcomes-stale-decision-protocol` (stale decisions).
 - Parent rule `building-land-design-or-abandon` (land it or drop it) applies. Its homes here: `docs/specs/`, or the decision that owns it.
-- The waiting page's writer exports the page's data to `docs/waiting/` at each wake and before any republish
-  (D327, the waiting page is a committed record). Parent record `waiting-data-in-repo` (waiting data copies) wins where they differ.
-  `scripts/waiting-export.py --calls` prints the reads.
+- The waiting page's writer copies the page's data to `waiting/` on the record branch at each wake and before
+  any republish, with the shared skill `waiting-page` (D327, the waiting page is a committed record; parent record
+  `waiting-data-in-repo`, waiting data copies).
 - Parent rule `tokens-compacting-keep-essentials` (what a compaction keeps) applies. Also keep the fixture schema facts.
 
 ### Writing a brief

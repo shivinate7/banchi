@@ -147,7 +147,6 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
 - `scripts/user-strings.mjs` — The AST half of the `no mechanism on screen` row — walks every `.tsx` under app/src through app/node_modules/typescript (the compiler the app itself builds with, the same choice screen-freshness.mjs makes and for the same reason) and prints one JSON array of every USER-VISIBLE string: JSX text nodes.
 - `scripts/verdict-selftest.py` — PROVES `app/design-check-reporter.ts` STILL WRITES A VERDICT, BY RUNNING IT.
 - `scripts/views.txt` — The manifest `make screenshot` walks: one `<name> <url> <selectors>` line per view worth looking at.
-- `scripts/waiting-export.py` — Turns the waiting page's database, read by the page writer with ArtifactData `list` and `out_dir` into a scratch folder, into `docs/waiting/`'s four files.
 - `scripts/worktree-create-selftest.sh` — `make worktree-create-selftest`: runs worktree-create.sh for four names at once, five rounds, in a throwaway repo with an origin.
 - `scripts/worktree-create.sh` — The WorktreeCreate hook. Makes every Claude Code worktree with a plain `git worktree add` at `.claude/worktrees/<name>` on `worktree-<name>`, cut from a fresh origin/main with --no-track (no shared .git/config write, so parallel Agents do not race on its lock; the branch has no upstream), so githooks/post-checkout provisions it.
 - `scripts/worktree-guard.sh` — The SessionStart hook: provisions a git worktree's UNTRACKED state before any work starts.
