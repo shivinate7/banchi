@@ -1,6 +1,6 @@
 # D127 — A session stops only what it started
 
-**Status.** The PreToolUse hook mode of `scripts/reap.py` was deleted on the owner's ruling (D135, 2026-11-04 08:40 CST), because only the Codex setup armed it. The shared layer's machine-wide-kill rule owns that guard for Claude Code. The reaper stays (`make reap`). The hook sections below record why the verdict works as it does. `BANCHI_KILL`, its escape hatch, has no reader left and is gone.
+**Status.** The PreToolUse hook mode of `scripts/reap.py` was deleted on the coordinator's ruling of 2026-11-04 08:40 CST, which follows the owner's ruling of 2026-11-04 07:56 CST (Cockpit item 214 a) to delete all of Banchi's Codex setup, because only the Codex setup armed it. D135 is the record. The shared layer's machine-wide-kill rule owns that guard for Claude Code. The reaper stays (`make reap`). The hook sections below record why the verdict works as it does. `BANCHI_KILL`, its escape hatch, has no reader left and is gone.
 
 **Built after two incidents in a single session.** Both happened while cleaning up dev servers the session had launched itself.
 
@@ -44,7 +44,7 @@ On a Bash call it has no opinion about, the guard costs 35 ms. Measured over fiv
 
 **A broken GUARD fails open. An unreadable TARGET fails closed.** The first is `guard-opsec.sh`'s rule, taken here unchanged and for its reason. That guard was disabled inside a day when it blocked on its own bugs. The second is not the same rule. It is the guard being right that it does not know. That is a fact about the world, not a defect in the code.
 
-**The escape hatch is `BANCHI_KILL=off`, and every refusal prints it.** It follows the house convention `BANCHI_MAIN=off` set. It is sized to be reached for rarely. Everything provably the session's own is already allowed. A session that wants the hatch is doing something unusual, and should notice that it is.
+**The escape hatch was `BANCHI_KILL=off`, and every refusal printed it. It is gone with the hook mode (see Status).** It follows the house convention `BANCHI_MAIN=off` set. It is sized to be reached for rarely. Everything provably the session's own is already allowed. A session that wants the hatch is doing something unusual, and should notice that it is.
 
 ### One file, two faces, one predicate
 

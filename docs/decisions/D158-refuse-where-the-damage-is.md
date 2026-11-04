@@ -89,7 +89,7 @@ speakers there.
 
 ### It has an escape hatch, and that is a departure from the entry it is modelled on
 
-`BANCHI_SERVE_MAIN=off`, printed in every refusal, as `BANCHI_MAIN=off`, `BANCHI_KILL=off`,
+`BANCHI_SERVE_MAIN=off`, printed in every refusal, as `BANCHI_MAIN=off`,
 `BANCHI_REVERT=off` and `BANCHI_SUITE_LOCK=off` all are.
 D140 (merge claims the decision number) is the merge's own stale-half guard, landed the same
 night. It deliberately has none, on the ground that what it refuses

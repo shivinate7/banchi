@@ -12,7 +12,7 @@ D171: a rule is read once, at the start, then competes for attention with the wo
 
 ### Amended: what Claude Code runs
 
-The owner ruled that Claude Code runs `GUARD_SHELL_SKIP=reset scripts/guard-shell.py --hook`. The shared guard (`claude-settings` `hooks/guard.py`, rule 1, shared-tree) owns clauses 1, 7 and 8 there. It refuses a checkout or restore over a modified path, a stash that takes another tree's entry, and a hard reset over uncommitted work. Each is judged against its subject's state. The Claude-side copy was cut so one refusal speaks once. Clauses 1 and 7 are gone from this script (D135). `GUARD_SHELL_SKIP` and its alias `--skip` name clauses by table name. An unknown name skips nothing. Clauses 3 and 4 are gone too.
+Claude Code runs `GUARD_SHELL_SKIP=reset scripts/guard-shell.py --hook`. The coordinator set that value under D135; on the owner's earlier ruling it skipped three clauses. The shared guard (`claude-settings` `hooks/guard.py`, rule 1, shared-tree) refuses a checkout or restore over a modified path, a stash that takes another tree's entry, and a hard reset over uncommitted work. Each is judged against its subject's state. The Claude-side copy was cut so one refusal speaks once. Of those three, only the reset clause is still in this script; clauses 1 and 7 are gone (D135). `GUARD_SHELL_SKIP` and its alias `--skip` name clauses by table name. An unknown name skips nothing. Clauses 3 and 4 are gone too.
 
 ### The five, and what each cost
 

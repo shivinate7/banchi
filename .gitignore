@@ -28,6 +28,8 @@ dist/
 # ignore-check: bare on purpose, see the note at the top of this file
 .serve
 .claude/settings.local.json
+# A stray local Codex config may hold a secret, and this repo is public.
+.codex/config.toml
 __pycache__/
 *.pyc
 # Glob, not the bare name: an editor that saves as `.env.rtf` or `.env.txt` leaves a
