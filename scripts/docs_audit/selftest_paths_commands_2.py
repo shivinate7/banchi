@@ -9,7 +9,16 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import List
 
-from .core import ADVISORY, ROOT, Report, list_names_from_assign, markdown_files, module_globals, read
+from .core import (
+    ADVISORY,
+    ROOT,
+    Report,
+    claude_and_rules,
+    list_names_from_assign,
+    markdown_files,
+    module_globals,
+    read,
+)
 from .harness_criteria import string_assign
 from .hygiene import (
     check_agent_links,
@@ -26,6 +35,7 @@ from .paths_commands import (
     dict_keys_from_assign,
     line_anchor_candidates,
 )
+from .screens import _ROSTER_RE
 from .strings import _only_shrinks
 
 
@@ -417,4 +427,32 @@ def run(ok) -> None:
                 "app/AGENTS.md" not in by_where,
                 "a folder link whose rule covers that folder is not an orphan",
                 str(by_where),
+            )
+
+        # CLAUDE.md ends in its device-key roster, with no newline after it, and a rule file follows. The
+        # roster reader stops at a blank line, so the join must put one there: the roster must end at its
+        # own last word and not run on into the rule file's text.
+        with _fixture_root(run_dir / "roster-foot") as root:
+            (root / "CLAUDE.md").write_text(
+                "# Root\n\n**Two keys are stored on the device**, each a fact about this machine. "
+                "`app/src/a.tsx` holds `banchi.a`.",
+                encoding="utf-8",
+            )
+            rule = root / ".claude" / "rules" / "app.md"
+            rule.parent.mkdir(parents=True, exist_ok=True)
+            rule.write_text(
+                "---\npaths:\n  - \"app/**\"\n---\n# Rule\nRULE-SENTINEL line of the rule file.\n\n"
+                "Second paragraph of the rule.\n",
+                encoding="utf-8",
+            )
+            found = _ROSTER_RE.search(claude_and_rules(root))
+            ok(
+                found is not None,
+                "scope: the roster at the foot of CLAUDE.md is found once a rule file follows it",
+                str(claude_and_rules(root)),
+            )
+            ok(
+                found is not None and "RULE-SENTINEL" not in found.group(0),
+                "a roster at the foot of CLAUDE.md does not run on into the rule file that follows it",
+                "" if found is None else found.group(0),
             )
