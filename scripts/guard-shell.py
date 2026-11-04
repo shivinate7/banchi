@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Refuse five shell mistakes this repo has already made and paid for.
+"""Refuse four shell mistakes this repo has already made and paid for.
 
 EVERY CLAUSE HERE HAS AN INCIDENT BEHIND IT, and not one of them was a lapse of care: each
 was a rule somebody had already written down, in a memory file or in CLAUDE.md, and then
 broken by a session that had read it. That is not a reason to write the rule again; it is
 what D171 rules a rule IS. A rule is read once, at the start, and then competes with the
-work. So these five are mechanical. Their numbers are stable ids: 1 (`git checkout <path>`),
-3 (`gh api -f`), 4 (`ln -s` over a path) and 7 (`git stash`) are retired on the owner's word,
-and nothing renumbers.
+work. So these four are mechanical. Their numbers are stable ids: 1 (`git checkout <path>`),
+3 (`gh api -f`), 4 (`ln -s` over a path), 7 (`git stash`) and 8 (`git reset --hard`) are retired on
+the owner's word, and nothing renumbers.
 
-CLAUDE CODE RUNS THIS WITH `GUARD_SHELL_SKIP=reset` (`--skip` is an alias). The shared layer's guard
-(`claude-settings/hooks/guard.py`, rule 1, shared-tree) owns clause 8 there, so the
-Claude-side copy is cut on the owner's word.
+CLAUDE CODE RUNS EVERY CLAUSE HERE, with no skip. The shared layer's guard
+(`claude-settings/hooks/guard.py`, rule 1, shared-tree) owns the checkout, stash and reset
+refusals, so those three clauses are gone from this script (D135).
 
     2. A write outside the checkout this session is standing in
        2026-09-06: an absolute-path `cd` prefix wrote ~1,500 lines into the owner's MAIN
@@ -40,13 +40,6 @@ Claude-side copy is cut on the owner's word.
        the fix — but naming a refspec, even an unqualified `HEAD`, is git's own signal that
        the caller knows what they want, and that signal was wrong.
 
-    8. `git reset --hard` / `--merge` / `--keep` over a working tree that still holds
-       uncommitted changes
-       Named outright by the parent CLAUDE.md, and mechanised for D173's reason: the argument
-       alone, rather than waiting on a loss. A hard-family reset overwrites the index and the
-       working tree from a commit with no confirmation and no record of what it overwrote,
-       silently, without asking.
-
     9. A command that waits for minutes and NARRATES while it does, piped into `tail` or
        redirected away
        2026-09-20. `make merge` pushes a claim commit and waits for that commit's checks;
@@ -69,7 +62,7 @@ THE STANDARD IS D127'S (THE RETIRED `reap.py` HOOK) AND IT IS NOT NEGOTIABLE HER
                                 missing `git`: exit 0 and refuse nothing
     an unreadable TARGET fails CLOSED — but only where "unreadable" is this file being right
                                 that it does not know AND the harm is unrecoverable, which is
-                                true of none of these five: four of them RESOLVE
+                                true of none of these four: three of them RESOLVE
                                 their subject and clause 9 names a roster of two, and a subject
                                 a clause cannot resolve is a command it has no opinion about
 
@@ -85,10 +78,10 @@ purpose, every legitimate shape this repo actually types is pinned as PASSING in
 `scripts/guard-shell-selftest.sh`, and each is RUN there before it is scored, because a case
 that is secretly a typo passes for the wrong reason.
 
-FIVE CLAUSES, FIVE HATCHES, AND THAT IS DELIBERATE. One switch for the whole hook would mean
+FOUR CLAUSES, FOUR HATCHES, AND THAT IS DELIBERATE. One switch for the whole hook would mean
 disarming the tree clause in order to push once, which is how a guard
 stops being one. Each refusal prints only its own, each is honoured in the environment and
-inline, and all five are documented in CLAUDE.md (`make docs-audit`'s `env names` row refuses
+inline, and all four are documented in CLAUDE.md (`make docs-audit`'s `env names` row refuses
 a variable the code reads and no markdown names).
 
     scripts/guard-shell.py --hook            the PreToolUse hook. Payload on stdin.
@@ -130,7 +123,7 @@ except Exception:                                             # noqa: BLE001 —
 
 # ----------------------------------------------------------------------------- the clauses
 #
-# DECLARED, because five clauses each with their own hatch is five names a reader has to be
+# DECLARED, because four clauses each with their own hatch is four names a reader has to be
 # able to find. The selftest reads this table so a clause added without a hatch, or a hatch
 # named in one place and printed in another, is a failing case rather than a silent hole.
 
@@ -149,9 +142,6 @@ CLAUSES = (
     Clause("push", "BANCHI_PUSH",
            "never `git push <remote> HEAD` / `<remote> <branch>` when the tracked upstream "
            "is a different, non-default branch"),
-    Clause("reset", "BANCHI_RESET",
-           "never `git reset --hard`/`--merge`/`--keep` over a tree that still holds "
-           "uncommitted tracked changes"),
     Clause("narrate", "BANCHI_NARRATE",
            "never hide the heartbeat of a command that waits for minutes — let its output "
            "reach the session as it happens"),
@@ -172,6 +162,7 @@ class Verdict(NamedTuple):
 
 
 #: Clauses the caller left to another guard (`GUARD_SHELL_SKIP`, or `--skip`). Set once, by `main`, for one hook run.
+#: No hook entry in this repo sets it now: Claude Code runs every clause.
 SKIPPED: Set[str] = set()
 
 
@@ -451,46 +442,8 @@ def _sanctioned_outside(target: str) -> str:
     return ""
 
 
-# Helpers `clause_push` and `clause_reset` share.
-
 def _flag_value(token: str, flags: Set[str]) -> bool:
     return token in flags or any(token.startswith(flag + "=") for flag in flags)
-
-
-def _modified(paths: Sequence[str], cwd: str) -> List[Tuple[str, str]]:
-    """(path, porcelain status) for every tracked change under these pathspecs.
-
-    `--porcelain -z` rather than a line split, because a rename carries TWO paths in one
-    record and a path may contain a space — reading those wrong would mean a refusal naming a
-    file the command does not touch.
-    """
-    ok, out = _run(["git", "status", "--porcelain", "-z", "--"] + list(paths), cwd=cwd)
-    if not ok:
-        return []
-    fields = out.split("\0")
-    changed: List[Tuple[str, str]] = []
-    index = 0
-    while index < len(fields):
-        record = fields[index]
-        index += 1
-        if len(record) < 4:
-            continue
-        status, path = record[:2], record[3:]
-        if status[0] in ("R", "C"):
-            index += 1                     # the rename's source, which is the next field
-        if status in ("??", "!!"):
-            continue                       # untracked or ignored: there is nothing to lose
-        changed.append((path, status))
-    return changed
-
-
-def _porcelain(status: str) -> str:
-    staged, tree = status[0], status[1]
-    if staged != " " and staged != "?" and tree not in (" ", "?"):
-        return "modified, with changes staged as well"
-    if staged not in (" ", "?"):
-        return "staged" + (" for deletion" if staged == "D" else "")
-    return "modified" + (" (deleted)" if tree == "D" else "")
 
 
 # ------------------------------------------------------------ 2. a write outside this tree
@@ -1079,80 +1032,6 @@ def clause_push(reading: "shell_parse.Reading", cwd: str) -> Verdict:
     return Verdict(refusals, notes)
 
 
-# --------------------------------------------------------------- 8. a hard-family reset
-
-_RESET_DISCARDING_MODES = {"--hard", "--merge", "--keep"}
-
-
-def _reset_refusal(text: str, mode: str, changed: List[Tuple[str, str]]) -> Refusal:
-    lines = ["  {0}".format(text)]
-    for path, status in changed[:8]:
-        lines.append("      {0} is {1}".format(path, _porcelain(status)))
-    if len(changed) > 8:
-        lines.append("      and {0} more".format(len(changed) - 8))
-    lines.extend([
-        "",
-        "  `reset {0}` overwrites the index AND the working tree from a commit, with no".format(
-            mode),
-        "  confirmation and no record of what it overwrote — `git checkout <path>`'s own",
-        "  shape (rank 1 above) one register up: the whole tree instead of one file.",
-        "",
-        "  Mutation-test with a copy instead, which cannot reach anything you did not copy:",
-        "      cp path/to/file.py path/to/file.py.bak    # before the mutation",
-        "      cp path/to/file.py.bak path/to/file.py     # restore it after",
-        "  Commit first when the work is real: `reset --hard` over a clean tree destroys",
-        "  nothing, because there is nothing uncommitted left for it to overwrite.",
-        "",
-        "  NOTE: `scripts/githooks/reference-transaction` already refuses this shape when it",
-        "  would MOVE A PROTECTED REF (`main`) — that hook and this clause see different",
-        "  halves: the ref hook guards which commit a branch points at, this guards the",
-        "  uncommitted work in the tree standing on it, and a reset can lose the second",
-        "  while never touching the first.",
-    ])
-    return Refusal("reset", lines,
-                   "BLOCKED: this would discard uncommitted work, and git will not ask first.")
-
-
-def clause_reset(reading: "shell_parse.Reading", cwd: str) -> Verdict:
-    """`git reset --hard`/`--merge`/`--keep` over a dirty tree, refused; everything else passes.
-
-    THE RULING THE MODULE DOCSTRING ASKS FOR. A path-form reset — `git reset [<commit>] --
-    <paths>...` — is NEVER refused, and that is not a gap: git itself refuses to combine a
-    pathspec with `--hard`/`--merge`/`--keep` ("fatal: Cannot do hard reset with paths."), so
-    the only mode a pathspec can ever reach is the mixed/soft one, which touches the INDEX
-    and never the working tree. Unstaging a file cannot discard its content — the content on
-    disk is exactly what it was before the command ran — so there is no discarding path-form
-    case for this clause to catch, and every path-form shape below is pinned as PASSING for
-    that reason rather than left untested. A bare `git reset` (no mode, no paths) is the same
-    mixed default and passes the same way; `--soft` never touches the working tree either.
-
-    So the whole predicate is: one of the three discarding modes, over a tree `git status`
-    says is not clean. Untracked files are excluded on purpose — `--hard` never touches them
-    (that is `git clean`'s job, not this clause's), and counting them would refuse a `--hard`
-    that discards nothing.
-    """
-    refusals: List[Refusal] = []
-    notes: List[str] = []
-    for placed in reading.placed:
-        argv = shell_parse.strip_prefixes(placed.stage.argv)
-        verb, rest = shell_parse.git_verb(argv)
-        if verb != "reset":
-            continue
-        where = shell_parse.git_cwd(argv) or cwd
-        if not os.path.isdir(where):
-            notes.append("`{0}` names a directory this guard cannot read, so it has no "
-                         "opinion about it".format(shell_parse.short(placed.stage.text)))
-            continue
-        mode = next((token for token in rest if token in _RESET_DISCARDING_MODES), "")
-        if not mode:
-            continue                       # soft/mixed, or a path-form reset: nothing to lose
-        changed = _modified([], where)
-        if not changed:
-            continue                       # a genuinely clean tree: nothing to lose either
-        refusals.append(_reset_refusal(shell_parse.short(placed.stage.text), mode, changed))
-    return Verdict(refusals, notes)
-
-
 # ------------------------------------------------ 9. a narrated wait with nobody watching it
 #
 # `make merge` pushes a claim commit (when a record is pending) and then waits for the checks, which take four
@@ -1372,7 +1251,6 @@ def read_command(command: str, cwd: str, backgrounded: bool = False) -> Verdict:
         ("tree", lambda: clause_tree_bash(reading, cwd, root)),
         ("wait", lambda: clause_wait(reading, command, cwd, backgrounded)),
         ("push", lambda: clause_push(reading, cwd)),
-        ("reset", lambda: clause_reset(reading, cwd)),
         ("narrate", lambda: clause_narrate(reading)),
     ):
         if _off(clause, command):
@@ -1454,7 +1332,7 @@ def explain(command: str, write: str, cwd: str) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="guard-shell",
-        description="Refuse five shell mistakes this repo has already paid for.",
+        description="Refuse four shell mistakes this repo has already paid for.",
     )
     parser.add_argument("--hook", action="store_true",
                         help="run as a PreToolUse hook; reads the payload on stdin")

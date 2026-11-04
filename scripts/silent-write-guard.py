@@ -90,7 +90,7 @@ def _hatch_set_by(name: str, command: str) -> bool:
         return False
 
 # THE PARSER MOVED TO `scripts/shell_parse.py` ON 2026-09-12, UNCHANGED, because a second
-# guard needed it. `scripts/guard-shell.py` refuses five shell mistakes and every one of them
+# guard needed it. `scripts/guard-shell.py` refuses four shell mistakes and every one of them
 # has to read a command the same way this file does — and the four defects this tokenizer took
 # to get right (a newline is not whitespace, an operator is not a string, a heredoc body is a
 # document, `#` is not always a comment) are four defects that guard would have shipped again.

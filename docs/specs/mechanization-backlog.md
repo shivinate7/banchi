@@ -219,8 +219,8 @@ Fix it and leave the pin: red (stale).
 
 **Cost:** small.
 
-**Status.** `scripts/guard-shell.py` has five clauses (tree, wait, push,
-reset, narrate) and none reads `.env`. `.claude/settings.json` denies `Read(./.env)` and nothing
+**Status.** `scripts/guard-shell.py` has four clauses (tree, wait, push,
+narrate) and none reads `.env`. `.claude/settings.json` denies `Read(./.env)` and nothing
 else screens the key.
 
 **Mechanism.** A clause in the same Bash hook. Refuse a command whose resolved read target is `./.env`

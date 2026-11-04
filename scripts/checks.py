@@ -1209,11 +1209,11 @@ CHECKS = (
         "target": "guard-shell-selftest",
         "shard": "guards-1",
         "runs": "bash scripts/guard-shell-selftest.sh",
-        "asserts": "scripts/guard-shell.py, the PreToolUse hook that refuses five shell "
+        "asserts": "scripts/guard-shell.py, the PreToolUse hook that refuses four shell "
                    "mistakes this repo has already paid for: a write outside this checkout, "
                    "a polling loop, `git push <remote> "
                    "HEAD` (or the branch's own literal name) when the tracked upstream is a "
-                   "different name, a hard reset and a narrated wait. "
+                   "different name and a narrated wait. "
                    "THREE OF THE INCIDENTS ARE "
                    "PERFORMED rather than asserted about — a real worktree whose root differs "
                    "from its main checkout's, "

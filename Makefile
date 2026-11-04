@@ -1335,7 +1335,6 @@ silent-write-selftest:
 #                                      DIFFERENT name (D179, amended 2026-09-13)
 #   a bare `git stash` / `pop`         the stash stack is shared by every worktree of this
 #                                      clone, so a pop takes whatever another tree pushed
-#   `git reset --hard`/`--merge`       over uncommitted tracked work
 #
 # `scripts/guard-shell.py --hook` is a PreToolUse hook on Bash and on Write|Edit — not a target
 # you run — and this self-test is what proves it. FOUR OF THE INCIDENTS ARE PERFORMED in a

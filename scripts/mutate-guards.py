@@ -204,11 +204,6 @@ GUARD_SHELL_MUTATIONS: Tuple[Mutation, ...] = (
         '            if True:\n                continue',
     ),
     Mutation(
-        "reset clause: never recognise a discarding mode",
-        '_RESET_DISCARDING_MODES = {"--hard", "--merge", "--keep"}',
-        '_RESET_DISCARDING_MODES = set()',
-    ),
-    Mutation(
         "narrate clause: a truncating filter is no longer one",
         '_TRUNCATING = {"tail", "head"}',
         '_TRUNCATING = set()',

@@ -918,12 +918,10 @@ def check_hook_roster(report: Report) -> None:
 
 CLAUDE_SETTINGS = ROOT / ".claude" / "settings.json"
 
-#: The value `.claude/settings.json` pins for `GUARD_SHELL_SKIP` on a `scripts/guard-shell.py`
-#: hook: the Bash entry skips the clause the shared layer owns, every other entry sets it empty
-#: so an inherited value never narrows a guard. The triples below drop the prefix, so a pin that
-#: drifts is its own finding.
+#: `.claude/settings.json` sets no `GUARD_SHELL_SKIP` on a `scripts/guard-shell.py` hook: Claude
+#: Code runs every clause the script has. The triples below drop a prefix, so a pin that appears
+#: is its own finding.
 _SKIP_ENV = re.compile(r"^GUARD_SHELL_SKIP=(\S*)\s+")
-CLAUDE_BASH_SKIP = "reset"
 _ENV_WORD = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
 #: The one hook Claude Code runs narrowed by an environment prefix: the file and bash-c clauses
@@ -969,9 +967,8 @@ def check_claude_hooks(report: Report) -> None:
     """`.claude/settings.json`'s `hooks` block runs the hooks it should, each naming a real file.
 
     THREE CLAIMS, EACH ONE A SILENT FAILURE WHEN WRONG. A hook whose script was renamed or
-    deleted does not error, it never runs. A `scripts/guard-shell.py` entry whose
-    `GUARD_SHELL_SKIP` pin drifts runs more or fewer clauses than the shared layer leaves it
-    (D179). The silent-write hook that lost its `BANCHI_SILENT_WRITE_ONLY` prefix runs the
+    deleted does not error, it never runs. A `scripts/guard-shell.py` entry that sets
+    `GUARD_SHELL_SKIP` runs fewer clauses than the script has (D179). The silent-write hook that lost its `BANCHI_SILENT_WRITE_ONLY` prefix runs the
     clauses the shared layer already owns (D171).
     """
     findings: List[Finding] = []
@@ -1003,14 +1000,12 @@ def check_claude_hooks(report: Report) -> None:
                 command = hook.get("command") or ""
                 if "scripts/guard-shell.py" not in command:
                     continue
-                found = _SKIP_ENV.match(command)
-                want = CLAUDE_BASH_SKIP if matcher == "Bash" else ""
-                if not found or found.group(1) != want:
+                if _SKIP_ENV.match(command):
                     findings.append(
                         Finding(
                             ".claude/settings.json",
-                            f"{event} (matcher `{matcher}`) must set "
-                            f"`GUARD_SHELL_SKIP={want}` before guard-shell.py, got `{command}`.",
+                            f"{event} (matcher `{matcher}`) must not set `GUARD_SHELL_SKIP` "
+                            f"before guard-shell.py, got `{command}`.",
                         )
                     )
 

@@ -3427,13 +3427,13 @@ COMPONENTS = [
                 "governed_by": ["D18", "D127", "D171", "D173"],
             },
             "guard-shell.py": {
-                "does": "the PreToolUse hook on Bash AND Write|Edit that refuses five shell "
+                "does": "the PreToolUse hook on Bash AND Write|Edit that refuses four shell "
                         "mistakes this repo has already paid for, each with a measured "
                         "incident: a write outside this checkout (~1,500 "
                         "lines into the owner's main tree on `main`, hot-reloaded into their "
                         "live capture server); a polling loop (a `pgrep` waiter whose pattern is "
                         "not the process, and a backgrounded driver that ran 119 rounds over "
-                        "3h58m across a compaction); a hard reset; a narrated wait; and "
+                        "3h58m across a compaction); a narrated wait; and "
                         "`git push <remote> HEAD` (or the "
                         "current branch's own literal name) when the tracked upstream is a "
                         "different, NON-DEFAULT branch (a coordinator's push silently created "
@@ -3447,25 +3447,24 @@ COMPONENTS = [
                         "`main`/`master` that exists locally. IT "
                         "RESOLVES RATHER THAN MATCHES TEXT, "
                         "which is reap.py's standard and the only way these have answers: "
-                        "`git status --porcelain` decides whether a tree holds uncommitted "
-                        "changes, a backgrounded command's loop is READ out of the shell script it "
+                        "a backgrounded command's loop is READ out of the shell script it "
                         "names, and `branch.<name>.remote`/`.merge` are read exactly as git "
                         "itself reads them. The Write|Edit half parses nothing at all, so no "
                         "shell form "
                         "skirts it. ONE HATCH PER CLAUSE, so no clause can be disarmed by the "
-                        "switch that guards another. Claude Code sets `GUARD_SHELL_SKIP="
-                        "reset` (`--skip` is an alias) because the shared layer owns that clause. Fails OPEN on "
+                        "switch that guards another. Claude Code runs every clause: no hook "
+                        "entry sets `GUARD_SHELL_SKIP` (`--skip` is its alias). Fails OPEN on "
                         "its own bugs, including a missing `shell_parse.py`, and an operand it "
                         "cannot resolve is REPORTED rather than passed silently.",
                 # D171 is the ruling that a rule read once competes with the work, which is
-                # why all five are mechanical. D127 is the guard whose resolution standard and
+                # why all four are mechanical. D127 is the guard whose resolution standard and
                 # fail-open asymmetry this one takes unchanged. D43 is the second clause's
                 # whole subject. D18 keeps its self-test off the commit path.
-                "governed_by": ["D179", "D18", "D43", "D127", "D157",
+                "governed_by": ["D179", "D18", "D43", "D127", "D135", "D157",
                                 "D171", "D173", "D305"],
             },
             "guard-shell-selftest.sh": {
-                "does": "proves guard-shell.py by COMMITTING its five mistakes in a throwaway "
+                "does": "proves guard-shell.py by COMMITTING its four mistakes in a throwaway "
                         "repository with a linked worktree. Three of the incidents are "
                         "PERFORMED before the guard is asked about them: a worktree whose root "
                         "really differs from its main checkout's, "
