@@ -57,7 +57,7 @@ from dataclasses import dataclass
 from typing import Iterable, List, Mapping
 
 from cli import resolve as run_resolve
-from pipeline import games, join, tcgcsv, variant
+from pipeline import games, join, pricearchive, pricehistory, tcgcsv, variant
 from store import master, queues
 
 # The reason every entry this module writes carries — `pipeline/variant.py`'s own name for
@@ -66,17 +66,13 @@ from store import master, queues
 ARCHIVE_UNRESOLVED = variant.NO_CATALOG_ROW
 
 # Substrings that mark a refusal as ABOUT THE NETWORK OR THE HOST, never about the card's own
-# identification — `pipeline/pricehistory.py:Unreachable`'s three raise sites
-# ("... answered HTTP <code>: ...", "... could not be reached: ...", "... did not answer
-# JSON: ...") and `Blocked`'s own message, which always contains "answered HTTP 403" (matched
-# by the broader "answered HTTP" already). BY THE TIME A REFUSAL REACHES THIS MODULE IT IS
-# ALREADY A PLAIN STRING — `pipeline/pricehistory.py:Market.readings_for_rows` folds every
-# `PriceHistoryError` into `str(exc)` before this layer ever sees one (D231's own note), and
-# this module may not edit that file to carry the exception type further. Substring matching
-# on a message this repo already writes in a fixed shape is the same discipline
-# `pipeline/pricearchive.py:BLOCKED_SIGNATURE` already uses for the identical problem one
-# case narrower.
-_NETWORK_SIGNATURES = ("answered HTTP", "could not be reached", "did not answer JSON")
+# identification: `pipeline/pricehistory.py:NETWORK_SIGNATURES`, the texts `fetch_json` raises
+# (`Blocked`, `Unreachable`, `Offline`), plus `pipeline/pricearchive.py:THROTTLE_REWRITE`, the text
+# `cmd_pricearchive` feeds this module in place of a 403 that followed a success. BY THE TIME A
+# REFUSAL REACHES THIS MODULE IT IS ALREADY A PLAIN STRING: `Market.readings_for_rows` folds every
+# `PriceHistoryError` into `str(exc)` (D231's own note). Both sources are the constants the code
+# emits, so a sentence the reader changes moves here with it. No `NotResolvable` text contains one.
+_NETWORK_SIGNATURES = (*pricehistory.NETWORK_SIGNATURES, pricearchive.THROTTLE_REWRITE)
 
 
 def is_identification_refusal(message: str) -> bool:

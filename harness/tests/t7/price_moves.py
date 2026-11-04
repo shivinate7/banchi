@@ -22,7 +22,7 @@ from pathlib import Path
 from unittest import mock
 
 from cli import cmd_pricearchive
-from harness.tests import Checks
+from harness.tests import Checks, price_refusals
 from harness.tests.t7.common import isolated_home
 from pipeline import movers, pricearchive as archive_walk, pricehistory, pricerefresh
 from pipeline.pricehistory import Bucket as HistoryBucket, Reading as HistoryReading, Series
@@ -281,7 +281,8 @@ class _Host:
     403 to every later one (None: never; 0: from the very first, with no earlier success). `empty`
     answers every SKU with a strip that holds no bucket. `during` is called each time the sweep asks
     the host, so a case can look at the world mid-sweep. The counters live here, not on a Market,
-    because the backoff builds a second Market."""
+    because the backoff builds a second Market. `refusal` is the text the reader writes for an HTTP
+    403, got from the reader's own raise path once, here, so the stub never types it."""
 
     def __init__(self, refuse_after=None, empty=False, during=None):
         self.refuse_after = refuse_after
@@ -289,6 +290,7 @@ class _Host:
         self.during = during
         self.asked = []
         self.built = []
+        self.refusal = price_refusals.folded_history_refusal(product_id=42)
 
     def market(self):
         host = self
@@ -307,10 +309,7 @@ class _Host:
                     host.asked.append(sku)
                     self.requests += len(ranges)
                     if host.refuse_after is not None and len(host.asked) > host.refuse_after:
-                        refusals[sku] = (
-                            "https://infinite-api.tcgplayer.com/price/history/42/detailed?range=month "
-                            + archive_walk.BLOCKED_SIGNATURE + ". Set BANCHI_TCG_USER_AGENT."
-                        )
+                        refusals[sku] = host.refusal
                         continue
                     readings[sku] = HistoryReading(sku=sku, product_id=42, series={
                         r: Series(
