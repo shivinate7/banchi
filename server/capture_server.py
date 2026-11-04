@@ -318,6 +318,7 @@ import os
 import re
 import signal
 import selectors
+import socketserver
 import traceback
 import socket
 import sqlite3
@@ -17889,6 +17890,19 @@ class CaptureServer(ThreadingHTTPServer):
     """
 
     request_queue_size = 128
+
+    def server_bind(self) -> None:
+        """Bind and listen without asking DNS anything.
+
+        `http.server.HTTPServer.server_bind` calls `socket.getfqdn` after it binds and before the
+        server listens. A reverse lookup that never returns (an offline Mac, a macOS CI runner)
+        then leaves the port bound and refusing connections for as long as it hangs. Nothing here
+        reads `server_name`, so it is set from the bound address and no name is looked up.
+        """
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = str(host)
+        self.server_port = port
 
     # ------------------------------------------------------------------ the worker pool
     #
