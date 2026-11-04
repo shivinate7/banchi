@@ -30,6 +30,8 @@ WHAT THIS PROVES:
   8. A `NotResolvable` from the real catalogue walk is an identification refusal, and it
      stays one when its words happen to name a network failure.
   9. Every `PriceHistoryError` subclass, found by walking the class tree, has its pinned kind.
+  10. An HTTP 404 from the history endpoint is an identification refusal and queues for review.
+      Main sent it to review, and that holds until a measured run says otherwise.
 
 PATH GATED, THE SEVENTEENTH (D247, owner's word 2026-09-23, on the same ground as
 `pricearchive-selftest`'s sixteenth entry): `make archive-review-selftest`, wired into
@@ -201,6 +203,15 @@ def _verdicts_from_the_real_path() -> None:
         ok(not is_identification(refusal), f"{label} is not an identification refusal", refusal)
         ok(_kind_of(refusal) == _kind_constant(kind), f"{label} is tagged {kind}",
            f"got {_kind_of(refusal)!r}")
+
+    print("\n-- an HTTP 404 from the history endpoint is an identification refusal --")
+    not_found = _refusal_through(net, "request", side_effect=_http(404))
+    ok(not_found is not None, "scope: an HTTP 404 from the history fetch was refused", not_found)
+    ok(_kind_of(not_found) == _kind_constant("KIND_IDENTIFICATION"),
+       "an HTTP 404 from the history fetch is tagged KIND_IDENTIFICATION",
+       f"got {_kind_of(not_found)!r}")
+    ok(is_identification(not_found),
+       "an HTTP 404 from the history fetch still queues for review", not_found)
 
     print("\n-- a NotResolvable from the real catalogue walk is an identification refusal --")
     not_resolvable = _not_resolvable_refusal()
