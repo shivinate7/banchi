@@ -19,6 +19,14 @@ read held 800 ms. A new screen is covered with no edit to the spec.
 **Case: a sale press.** The press that sells a copy moves nothing. A line that the sale rewrites
 holds a fixed line box, so a different string cannot change a height.
 
+**Case: the Capture rail's far tiles.** A capture adds a tile at the top and moves every older tile one cell. Every tile
+of the sitting stays a real row (D164): in the tab order, counted by a screen reader, never blank. A tile outside the
+rail's own view keeps its row button and nothing under it (`capture-undo-far`, set by the rail's `IntersectionObserver`),
+at the thumbnail's own 9:16 box, so it holds its size when it comes near. A scroll wakes the tiles one list-size ahead
+before they paint, focus wakes its tile, and the scroll's end sends them back. `content-visibility: auto` cannot do it,
+because Chrome judges it against the page viewport plus a margin of several screens and never the rail's scroller.
+`app/tests/capture-freeze.spec.ts` measures it: each added tile costs at most 3 layout objects.
+
 **The box comes from construction, never from a tuned pixel.** Three ways are allowed, in this
 order:
 
@@ -39,7 +47,7 @@ spec. The list only shrinks (D280, lists of offenders).
 wraps once a count lands. It cannot know which variant of a status line a store earns. The frame
 takes the common variant. The budget bounds the rest.
 
-**Enforced** by `app/tests/stability.spec.ts`.
+**Enforced** by `app/tests/stability.spec.ts`, and for the rail by `app/tests/capture-freeze.spec.ts`.
 
 **NOT MECHANIZED:** the rule that a fix leaves the loaded screen unchanged. A machine cannot tell
 a loaded frame that changed from one that only loads differently.

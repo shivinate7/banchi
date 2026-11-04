@@ -1119,6 +1119,16 @@ const UndoDrop = memo(
   (prev, next) => prev.onRemove === next.onRemove && sameTarget(prev.target, next.target),
 )
 
+/* A FAR TILE (D313). `capture-undo-far` (CaptureScreen.css) lays out only the tile's row button. The drop
+ * button is more than a box: every `IconButton` portals a tooltip span into `<body>`, outside the list, where
+ * it costs layout objects on every capture. So a far tile also unmounts it, through the setter its cell
+ * registers here. The class changes at once, and the unmount is a state update React renders next. */
+const FAR_SETTERS = new WeakMap<Element, (far: boolean) => void>()
+function setTileFar(item: Element, far: boolean): void {
+  item.classList.toggle('capture-undo-far', far)
+  FAR_SETTERS.get(item)?.(far)
+}
+
 /* ONE FILMSTRIP TILE, RANK-FREE. A tile's props are its card and nothing about where it sits, so a
  * capture changes no existing tile's props and `railElements` hands React the very same element
  * for each, which it skips. What depends on rank (the keycap, the "Undo N" label, the data
@@ -1140,8 +1150,16 @@ const UndoCell = memo(function UndoCell({
   onUndo: (target: UndoTarget, at: number) => void
   onRemove: (target: UndoTarget) => void
 }) {
+  const [far, setFar] = useState(false)
+  const registerFar = useCallback((node: HTMLLIElement | null) => {
+    if (node !== null) FAR_SETTERS.set(node, setFar)
+  }, [])
   return (
-    <li className={at >= DEALING_RAIL_TILES ? 'capture-undo-still' : 'bn-stagger-item'} style={{ '--i': at } as CSSProperties}>
+    <li
+      ref={registerFar}
+      className={at >= DEALING_RAIL_TILES ? 'capture-undo-still' : 'bn-stagger-item'}
+      style={{ '--i': at } as CSSProperties}
+    >
       {/* THE CELL WRAPS TWO SIBLING BUTTONS RATHER THAN NESTING ONE INSIDE THE
           OTHER — an interactive element cannot hold a second one and stay valid,
           and the two mean different things: the row still walks the plan back to
@@ -1164,7 +1182,7 @@ const UndoCell = memo(function UndoCell({
             own complaint — undoing a mid-sitting shot loses every capture after
             it too. `removeCardInPlace` is the route that already exists for it
             (D10 ruling 1), and this is its second door, beside the row's own. */}
-        <UndoDrop target={target} onRemove={onRemove} />
+        {far ? null : <UndoDrop target={target} onRemove={onRemove} />}
       </div>
     </li>
   )
@@ -4373,8 +4391,10 @@ export function CaptureScreen() {
   /* THE RANK-DEPENDENT FACE OF A TILE, WRITTEN ONTO THE DOM. A tile's rank moves for every tile on a
    * capture, and React would have to render all N to say so. This writes six values per tile
    * instead (no element is created), and only for the tiles a person can reach or see: the newest
-   * `DEALING_RAIL_TILES` and the tiles in the scroller's view. A tile further out is written when
-   * it scrolls in or takes focus, before it can be read or pressed. Same text and attributes the
+   * `DEALING_RAIL_TILES` and the tiles near the scroller's view. A tile further out is written when
+   * it scrolls near or takes focus, before it can be read or pressed. The same observer marks a tile
+   * far (`capture-undo-far`): only its row button stays laid out, so a capture re-lays a bounded
+   * number of tiles, not one per card in the sitting (D313). Same text and attributes the
    * tiles carried when React drew them. */
   const busyNow = useRef(busy)
   busyNow.current = busy || held
@@ -4412,9 +4432,11 @@ export function CaptureScreen() {
           for (const entry of entries) {
             if (!entry.isIntersecting) {
               railVisible.current.delete(entry.target)
+              if (!entry.target.matches(':focus-within')) setTileFar(entry.target, true)
               continue
             }
             railVisible.current.add(entry.target)
+            setTileFar(entry.target, false)
             writeTile(entry.target, Array.prototype.indexOf.call(list.children, entry.target))
           }
         },
@@ -4438,15 +4460,56 @@ export function CaptureScreen() {
   const onRailFocus = useCallback(
     (event: FocusEvent) => {
       const item = (event.target as Element).closest('.capture-undo-list > li')
-      if (item?.parentElement) writeTile(item, Array.prototype.indexOf.call(item.parentElement.children, item))
+      if (item?.parentElement) {
+        setTileFar(item, false)
+        writeTile(item, Array.prototype.indexOf.call(item.parentElement.children, item))
+      }
     },
     [writeTile],
   )
+  /* A SCROLL WAKES THE TILES AHEAD OF IT BEFORE THEY ARE PAINTED. The observer above reports after a frame, so
+   * a far tile it had not yet reached would show its bare box for that frame. A scroll event runs before the
+   * frame's layout, so the tiles within one list-size of the view, along either axis (a column at 1440, a row at
+   * 820), are woken and written there. They stay awake until the scroll ends, which then sends back every tile
+   * the observer does not hold in view. A capture, which scrolls nothing, never wakes a tile it did not need. */
+  const wakeAhead = useCallback(() => {
+    const list = railListRef.current
+    if (list === null) return
+    const view = list.getBoundingClientRect()
+    const woken: number[] = []
+    for (let rank = 0; rank < list.children.length; rank += 1) {
+      const item = list.children[rank]!
+      if (!item.classList.contains('capture-undo-far')) continue
+      const box = item.getBoundingClientRect()
+      if (
+        box.bottom >= view.top - view.height && box.top <= view.bottom + view.height &&
+        box.right >= view.left - view.width && box.left <= view.right + view.width
+      ) woken.push(rank)
+    }
+    for (const rank of woken) {
+      const item = list.children[rank]!
+      setTileFar(item, false)
+      writeTile(item, rank)
+    }
+  }, [writeTile])
+  const sendBackFar = useCallback(() => {
+    const list = railListRef.current
+    if (list === null) return
+    for (const item of Array.from(list.children)) {
+      if (!railVisible.current.has(item) && !item.matches(':focus-within')) setTileFar(item, true)
+    }
+  }, [])
   useEffect(() => {
     const list = railListRef.current
     list?.addEventListener('focusin', onRailFocus)
-    return () => list?.removeEventListener('focusin', onRailFocus)
-  }, [railList, onRailFocus])
+    list?.addEventListener('scroll', wakeAhead, { passive: true })
+    list?.addEventListener('scrollend', sendBackFar)
+    return () => {
+      list?.removeEventListener('focusin', onRailFocus)
+      list?.removeEventListener('scroll', wakeAhead)
+      list?.removeEventListener('scrollend', sendBackFar)
+    }
+  }, [railList, onRailFocus, wakeAhead, sendBackFar])
   const dealerSaid = !dealerSupported() ? dealerReason : dealerIdle && dealerReason !== null ? dealerReason : dealer.said
 
   /** WHETHER THERE IS ANYTHING TO CLEAR, which is what disables the control rather than hiding
