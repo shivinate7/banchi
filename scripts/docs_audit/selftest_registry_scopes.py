@@ -385,9 +385,9 @@ def run(ok) -> None:
         module_globals()["MAP"] = _saved
 
     # THE REQUIRED CHECK'S WIRING (the `all jobs passed` row). The reader is
-    # `registry_scopes.all_jobs_passed_findings`, a pure function over check.yml's text, the other
+    # `registry_scopes.all_jobs_passed_findings`, a pure function over checks.yml's text, the other
     # workflows and the stamp. It is fetched by name, so a reader not yet built fails each case with
-    # a plain label rather than a crash. The fixture is ONE valid check.yml; each red case is ONE
+    # a plain label rather than a crash. The fixture is ONE valid checks.yml; each red case is ONE
     # mutation of it, and asserts the finding its mutation must raise, because "any finding" passes
     # vacuously when the fixture itself is broken.
     print("\nthe required check's wiring is read both ways, and each defect is a finding")
@@ -556,11 +556,11 @@ jobs:
         got = findings_for(mutated_no_rollup)
         ok(
             got is not None and any("has no `all-jobs-passed` job" in m for _, m in got),
-            "a check.yml with no rollup job is a finding that names the missing job",
+            "a checks.yml with no rollup job is a finding that names the missing job",
             NOT_BUILT if got is None else str(got),
         )
     else:
-        ok(False, "a check.yml with no rollup job is a finding that names the missing job", NOT_BUILT)
+        ok(False, "a checks.yml with no rollup job is a finding that names the missing job", NOT_BUILT)
 
     red(
         "a pin that differs from the rollup's pin is a finding that names the action",
@@ -731,7 +731,7 @@ jobs:
     got = wiring_fn({DEMO: DEMO_TEXT}, GREEN_STAMP, WANTED) if wiring_fn else None
     ok(
         got is not None and any("does not exist or cannot be read" in m for _, m in got),
-        "a missing check.yml is a finding, never a pass",
+        "a missing checks.yml is a finding, never a pass",
         NOT_BUILT if got is None else str(got),
     )
 
@@ -756,7 +756,7 @@ jobs:
             rows = [row for row in report.checks if row.check == "all jobs passed"]
             ok(
                 len(rows) == 1 and any("does not exist or cannot be read" in f.message for f in rows[0].findings),
-                "a missing check.yml makes the live row red, never a crash or a pass",
+                "a missing checks.yml makes the live row red, never a crash or a pass",
                 str([f.message for f in rows[0].findings]) if rows else "no row",
             )
         finally:
