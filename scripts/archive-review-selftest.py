@@ -4,9 +4,10 @@
 Protects: The price-archive review command refuses each unresolvable case in its own words and writes nothing on a preview, with no network call.
 Governs: D234, D247
 
-NO NETWORK CALL. Every refusal below is a fabricated string, shaped exactly the way
-`pipeline/pricehistory.py:NotResolvable`, `Unreachable` and `Blocked` already write one —
-`cli/archive_review.py` never talks to a market, and neither does this test.
+NO NETWORK CALL. The network refusals below come out of the real fetch path
+(`pipeline/pricehistory.py:fetch_json` and `Market.readings_for_rows`), with `pipeline.net.request`
+replaced by a fake that raises or answers. No socket is opened and no pause is taken. The
+identification refusals are the text `pipeline/pricehistory.py:ProductIndex.find` writes.
 
 WHAT THIS PROVES:
 
@@ -23,6 +24,12 @@ WHAT THIS PROVES:
      re-open an answered entry — proving the real code's use of `Queue.upsert` is
      load-bearing, per `CLAUDE.md`'s "a guard is trusted only once it fails on the defect
      it guards."
+  7. Every way a price-history fetch can fail (no connection, a dropped read, HTTP 503, 500,
+     403, a body that is not JSON) is a network refusal, never an identification refusal.
+     The verdict follows the refusal's kind, not its wording, so a reworded message moves nothing.
+  8. A `NotResolvable` from the real catalogue walk is an identification refusal, and it
+     stays one when its words happen to name a network failure.
+  9. Every `PriceHistoryError` subclass, found by walking the class tree, has its pinned kind.
 
 PATH GATED, THE SEVENTEENTH (D247, owner's word 2026-09-23, on the same ground as
 `pricearchive-selftest`'s sixteenth entry): `make archive-review-selftest`, wired into
@@ -35,17 +42,23 @@ when touched.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 import shutil
 import sys
 import tempfile
+import urllib.error
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from cli import archive_review  # noqa: E402
 from cli import resolve as run_resolve  # noqa: E402
+from pipeline import net  # noqa: E402
+from pipeline import pricehistory  # noqa: E402
 from pipeline import tcgcsv  # noqa: E402
 from pipeline import variant  # noqa: E402
 from store import files  # noqa: E402
@@ -87,7 +100,165 @@ def _not_resolvable(name: str, number: str, set_name: str) -> str:
     )
 
 
+# The kinds `pipeline/pricehistory.py` names, pinned by refusal class. A class missing here is
+# unpinned and fails by name, so a new refusal class gets its kind on purpose.
+PINNED_KINDS = {
+    "NotResolvable": "KIND_IDENTIFICATION",
+    "Unreachable": "KIND_NETWORK",
+    "Offline": "KIND_NETWORK",
+    "Blocked": "KIND_BLOCKED",
+    "UnknownRange": "KIND_REQUEST",
+}
+
+
+def _kind_constant(name: str) -> str:
+    """One of `pipeline/pricehistory.py`'s KIND_ values, or a named marker while it is not built."""
+    return getattr(pricehistory, name, f"<no {name}>")
+
+
+def _kind_of(message) -> str:
+    """The kind a refusal carries. A plain string carries none, and says so by name."""
+    return getattr(message, "kind", "<no kind>")
+
+
+def _offline() -> net.Offline:
+    error = net.Offline("Could not connect to infinite-api.tcgplayer.com.")
+    error.__cause__ = urllib.error.URLError(ConnectionRefusedError(111, "Connection refused"))
+    return error
+
+
+def _dropped() -> net.Dropped:
+    error = net.Dropped("The connection failed while the answer was being read.")
+    error.__cause__ = ConnectionResetError(104, "Connection reset by peer")
+    return error
+
+
+def _http(status: int) -> net.NetError:
+    return net.NetError(f"The host answered with status {status}.", status=status)
+
+
+def _network_failures() -> list:
+    """Each way one price-history fetch fails, as `pipeline.net.request` answers it:
+    `(label, the kind its refusal must carry, how to patch request)`."""
+    return [
+        ("no connection was made", "KIND_NETWORK", {"side_effect": _offline()}),
+        ("the connection dropped after it opened", "KIND_NETWORK", {"side_effect": _dropped()}),
+        ("HTTP 503", "KIND_NETWORK", {"side_effect": _http(503)}),
+        ("HTTP 500", "KIND_NETWORK", {"side_effect": _http(500)}),
+        ("HTTP 403", "KIND_BLOCKED", {"side_effect": _http(403)}),
+        ("a 200 body that is not JSON", "KIND_NETWORK", {"return_value": b"<html>maintenance</html>"}),
+    ]
+
+
+def _refusal_through(target, name: str, *, sku: str = "NET", product_ids=None, **how):
+    """The refusal `Market.readings_for_rows` writes for `sku` when `target.name` is replaced by
+    `mock.patch.object(target, name, **how)`. The real `fetch_json` turns a raise into its own
+    error and the real fold turns that into the refusal.
+
+    `product_ids` None pins the SKU to product 7, so the walk starts at the history fetch. Pass `{}`
+    to make the walk go through the catalogue. A pause and a clock are never read: `_sleep` and
+    `_monotonic` are replaced, and stderr is kept out of the report.
+    """
+    known = {sku: 7} if product_ids is None else product_ids
+    market = pricehistory.Market(courtesy_delay=0)
+    with contextlib.redirect_stderr(io.StringIO()), mock.patch.object(pricehistory, "_sleep"), \
+            mock.patch.object(pricehistory, "_monotonic", return_value=0.0), \
+            mock.patch.object(target, name, **how):
+        _readings, refusals = market.readings_for_rows(
+            [_row(sku, "Seal of Power", "", "Spiritforged")], ranges=("month",), product_ids=known
+        )
+    return refusals.get(sku)
+
+
+def _not_resolvable_refusal(sku: str = "NRV") -> str:
+    """The refusal a real catalogue walk writes when the catalogue holds no product line of that
+    name: `Market.category_id` raises `NotResolvable` itself, from an empty category list."""
+    market = pricehistory.Market(fetcher=lambda url: {"results": []}, courtesy_delay=0)
+    _readings, refusals = market.readings_for_rows(
+        [_row(sku, "Seal of Power", "", "Spiritforged")], ranges=("month",)
+    )
+    return refusals.get(sku)
+
+
+def _refusal_classes() -> list:
+    """Every class under `PriceHistoryError`, recursively, as this process has them loaded."""
+    found, pending = [], [pricehistory.PriceHistoryError]
+    while pending:
+        for sub in pending.pop().__subclasses__():
+            if sub not in found:
+                found.append(sub)
+                pending.append(sub)
+    return sorted(found, key=lambda cls: cls.__name__)
+
+
+def _verdicts_from_the_real_path() -> None:
+    is_identification = archive_review.is_identification_refusal
+
+    print("-- the real failure paths: never an identification refusal, kind by class --")
+    for label, kind, how in _network_failures():
+        refusal = _refusal_through(net, "request", **how)
+        ok(refusal is not None, f"scope: {label} was refused, not read", refusal)
+        ok(not is_identification(refusal), f"{label} is not an identification refusal", refusal)
+        ok(_kind_of(refusal) == _kind_constant(kind), f"{label} is tagged {kind}",
+           f"got {_kind_of(refusal)!r}")
+
+    print("\n-- a NotResolvable from the real catalogue walk is an identification refusal --")
+    not_resolvable = _not_resolvable_refusal()
+    ok(not_resolvable is not None, "scope: the unmatched product line was refused", not_resolvable)
+    ok(is_identification(not_resolvable),
+       "a NotResolvable from the catalogue walk is an identification refusal", not_resolvable)
+    ok(_kind_of(not_resolvable) == _kind_constant("KIND_IDENTIFICATION"),
+       "a NotResolvable from the catalogue walk is tagged KIND_IDENTIFICATION",
+       f"got {_kind_of(not_resolvable)!r}")
+    ok(is_identification("a plain message that carries no kind"),
+       "an untagged plain str still queues: no review item is hidden")
+
+    print("\n-- the verdict follows the class, never the words --")
+    reworded = _refusal_through(
+        pricehistory, "_get",
+        side_effect=pricehistory.Unreachable("Nothing in this sentence repeats an old one."),
+    )
+    ok(reworded is not None, "scope: a reworded Unreachable was refused", reworded)
+    ok(not is_identification(reworded), "a reworded Unreachable is still a network refusal",
+       reworded)
+    reworded_offline = _refusal_through(
+        pricehistory, "_get",
+        side_effect=pricehistory.Offline("A different sentence, the same class."),
+    )
+    ok(reworded_offline is not None, "scope: a reworded Offline was refused", reworded_offline)
+    ok(not is_identification(reworded_offline),
+       "a reworded Offline is still a network refusal", reworded_offline)
+    named_network = _refusal_through(
+        pricehistory.Market, "product_id_for_row", product_ids={},
+        side_effect=pricehistory.NotResolvable("The mirror could not be reached for this card."),
+    )
+    ok(named_network is not None, "scope: a NotResolvable whose words name a network failure "
+       "was refused", named_network)
+    ok(is_identification(named_network),
+       "a NotResolvable whose words say 'could not be reached' still queues", named_network)
+    ok(is_identification("The price service could not be reached."),
+       "an untagged str that names a network failure still queues: the kind decides, not the words")
+
+    print("\n-- every refusal class has a pinned kind, and a refusal keeps its words --")
+    classes = _refusal_classes()
+    ok(bool(classes), "scope: the PriceHistoryError class tree was walked", classes)
+    refuse = getattr(pricehistory, "refusal", None)
+    ok(refuse is not None, "pricehistory.refusal exists: the one place a raise becomes a kind")
+    for cls in classes:
+        want = (_kind_constant(PINNED_KINDS[cls.__name__])
+                if cls.__name__ in PINNED_KINDS else "<not pinned>")
+        got = "<no refusal()>" if refuse is None else _kind_of(refuse(cls("a message")))
+        ok(got == want, f"{cls.__name__} maps to its pinned kind",
+           f"want {want!r}, got {got!r}")
+    if refuse is not None:
+        changed = [cls.__name__ for cls in classes
+                   if str(refuse(cls("a message"))) != "a message"]
+        ok(not changed, "every refusal keeps its message text unchanged", changed)
+
+
 def main() -> int:
+    _verdicts_from_the_real_path()
+
     previous = os.environ.get(files.HOME_ENV)
     home = Path(tempfile.mkdtemp(prefix="archive-review-selftest-"))
     os.environ[files.HOME_ENV] = str(home)
@@ -149,7 +320,7 @@ def main() -> int:
         refusals = {
             "AAA": _not_resolvable("Shadbow Temple", "", "Vendetta"),
             "BBB": _not_resolvable("Kihoud Temple", "", "Vendetta"),
-            "CCC": "https://mcp.tcgplayer.com/... could not be reached: timed out",
+            "CCC": _refusal_through(net, "request", sku="CCC", side_effect=_http(503)),
             "DDD": _not_resolvable("Warden's Hymn", "", "Vendetta"),
         }
 
@@ -157,7 +328,7 @@ def main() -> int:
         ok(archive_review.is_identification_refusal(refusals["AAA"]),
            "a NotResolvable message is an identification refusal")
         ok(not archive_review.is_identification_refusal(refusals["CCC"]),
-           "an Unreachable-shaped message is never an identification refusal")
+           "an HTTP 503 refusal from the real fetch path is never an identification refusal")
 
         print("\n-- cards_for_refusals: per-card match, never per-sku --")
         inventory = Store().read().inventory

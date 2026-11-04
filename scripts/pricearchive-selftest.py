@@ -33,6 +33,8 @@ file's own imports, never hand-typed beside it).
 
 from __future__ import annotations
 
+import contextlib
+import io
 import sys
 import time
 from datetime import date
@@ -45,10 +47,12 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from cli import archive_review  # noqa: E402
 from cli import cmd_pricearchive  # noqa: E402
 from harness.tests.home import isolated_home  # noqa: E402
 from pipeline import games as games_module  # noqa: E402
 from pipeline import join as join_module  # noqa: E402
+from pipeline import net  # noqa: E402
 from pipeline import pricearchive as archive_walk  # noqa: E402
 from pipeline import pricehistory  # noqa: E402
 from pipeline import productview  # noqa: E402
@@ -178,6 +182,37 @@ def _series(sku: str, range_: str, start: date, market: str, quantity: int = 1) 
         language="English", total_quantity_sold=quantity, total_transaction_count=quantity,
         buckets=(bucket,),
     )
+
+
+def _kind_constant(name: str) -> str:
+    """One of `pipeline/pricehistory.py`'s KIND_ values, or a named marker while it is not built."""
+    return getattr(pricehistory, name, f"<no {name}>")
+
+
+def _kind_of(message) -> str:
+    """The kind a refusal carries. A plain string carries none, and says so by name."""
+    return getattr(message, "kind", "<no kind>")
+
+
+FORBIDDEN_SKU = "652771"
+
+
+def _forbidden_refusal() -> str:
+    """The refusal `Market.readings_for_rows` writes for a 403 from the history endpoint, produced
+    by the real fetch path: `pipeline.net.request` raises an HTTP 403, `fetch_json` turns it into
+    `Blocked`, and the fold turns that into the refusal. Never a typed copy of its wording.
+    `_sleep` and `_monotonic` are replaced and stderr is kept out of the report: no pause, no clock.
+    """
+    market = pricehistory.Market(courtesy_delay=0)
+    error = net.NetError("The host answered with status 403.", status=403)
+    with contextlib.redirect_stderr(io.StringIO()), mock.patch.object(pricehistory, "_sleep"), \
+            mock.patch.object(pricehistory, "_monotonic", return_value=0.0), \
+            mock.patch.object(net, "request", side_effect=error):
+        _readings, refusals = market.readings_for_rows(
+            [{tcgcsv_module.SKU_COLUMN: FORBIDDEN_SKU}], ranges=("month",),
+            product_ids={FORBIDDEN_SKU: int(FORBIDDEN_SKU)},
+        )
+    return refusals.get(FORBIDDEN_SKU)
 
 
 def main() -> int:
@@ -1673,39 +1708,51 @@ def main() -> int:
 
         # ------------------------------------------------- pacing (D222)
         print("\n-- pipeline/pricearchive.py: classify_refusals and measured_pace --")
-        blocked_message = (
-            "https://infinite-api.tcgplayer.com/price/history/652771/detailed?range=month "
-            "answered HTTP 403. That is either an authorization change at the host or its "
-            "own defenses declining this client by its request signature — set "
-            "BANCHI_TCG_USER_AGENT in .env to the User-Agent your browser sends and try "
-            "again."
-        )
-        refusals_in = {"652771": blocked_message, "other": "not in the script"}
+        forbidden = _forbidden_refusal()
+        ok(forbidden is not None, "scope: the 403 was refused by the real fetch path, not read",
+           forbidden)
+        refusals_in = {FORBIDDEN_SKU: forbidden, "other": "not in the script"}
 
         # THE GUARD, PROVEN TO FAIL WITHOUT THE FIX FIRST: with no evidence of an earlier
         # success, the message is left exactly as `Blocked` phrased it — still pointing at
-        # the User-Agent, which is the WRONG remedy once a run has actually throttled.
+        # the browser signature, which is the WRONG remedy once a run has actually throttled.
+        # Its kind is blocked and it is never queued as an identification question.
         unchanged, blocked_count = archive_walk.classify_refusals(
             refusals_in, had_earlier_success=False
         )
-        ok(unchanged["652771"] == blocked_message,
+        ok(unchanged[FORBIDDEN_SKU] == forbidden,
            "with no earlier success this pass, a 403 is left exactly as Blocked phrased it "
            "— this function has no evidence yet to call it a throttle", unchanged)
-        ok(blocked_count == 1, "exactly one refusal carried the 403 signature", blocked_count)
+        ok(_kind_of(unchanged[FORBIDDEN_SKU]) == _kind_constant("KIND_BLOCKED"),
+           "with no earlier success, the 403 still carries kind blocked",
+           f"got {_kind_of(unchanged[FORBIDDEN_SKU])!r}")
+        ok(not archive_review.is_identification_refusal(unchanged[FORBIDDEN_SKU]),
+           "with no earlier success, the 403 is never queued as an identification refusal")
+        ok(blocked_count == 1, "exactly one refusal is a blocked refusal", blocked_count)
 
         # NOW THE FIX: after this pass has already read something successfully, the SAME
         # message is rewritten, and it never repeats the disproved remedy.
         rewritten, blocked_count2 = archive_walk.classify_refusals(
             refusals_in, had_earlier_success=True
         )
-        ok("BANCHI_TCG_USER_AGENT" not in rewritten["652771"],
+        ok("browser signature" not in rewritten[FORBIDDEN_SKU],
            "after an earlier success this pass, the rewritten message never repeats the "
            "remedy this pass has already disproved", rewritten)
-        ok("throttle" in rewritten["652771"].lower(),
+        ok("throttle" in rewritten[FORBIDDEN_SKU].lower(),
            "the rewritten message names what it actually is", rewritten)
+        ok(_kind_of(rewritten[FORBIDDEN_SKU]) == _kind_constant("KIND_BLOCKED"),
+           "the rewritten throttle message keeps kind blocked",
+           f"got {_kind_of(rewritten[FORBIDDEN_SKU])!r}")
+        ok(not archive_review.is_identification_refusal(rewritten[FORBIDDEN_SKU]),
+           "the rewritten throttle message is never queued as an identification refusal")
         ok(rewritten["other"] == "not in the script",
            "a refusal that never carried the 403 signature is left untouched", rewritten)
         ok(blocked_count2 == 1, "the blocked count is unchanged by the rewrite", blocked_count2)
+
+        empty, empty_count = archive_walk.classify_refusals({}, had_earlier_success=True)
+        ok(empty == {} and empty_count == 0,
+           "no refusals in: none rewritten and none counted (the empty state)",
+           (empty, empty_count))
 
         ok(archive_walk.measured_pace(0, 0) == archive_walk.DEFAULT_COURTESY_DELAY_SECONDS,
            "no requests measured yet -> the naive default, never a divide-by-zero")
