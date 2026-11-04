@@ -119,7 +119,7 @@ _IMPORT_LEAD = re.compile(r"(?:\bfrom|\bimport)\s*$")
 _DYNAMIC_LEAD = re.compile(r"\bimport\s*\(\s*$")
 _RUN_GAP = re.compile(r"\s*,\s*")
 _WORD = re.compile(r"[A-Za-z_$][\w$]*|\d[\w.]*")
-_BEFORE_REGEX = frozenset("return typeof case in of delete void throw new else do instanceof yield await".split())
+_BEFORE_REGEX = frozenset(["return", "typeof", "case", "in", "of", "delete", "void", "throw", "new", "else", "do", "instanceof", "yield", "await"])
 _VALUE = ("v", "")  # the token before a `/` ended a value, so the `/` divides
 _Token = Tuple[int, int, str, str]
 
