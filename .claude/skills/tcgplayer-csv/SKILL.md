@@ -46,7 +46,7 @@ the moment the button was pressed, and nothing in it is a window onto anything.
 `TCG Market Price` is the only column with sales behind it. It is TCGplayer's own
 aggregate over recent sales rather than a sale. It is one number. It has no window. **There are no
 last-sold rows in this export.** TCGplayer's price-history endpoint does publish sales buckets; `pipeline/pricehistory.py` reads them. Those buckets are
-aggregates over a date range, not last-sold rows. `docs/decisions/`'s Someday list
+aggregates over a date range, not last-sold rows. The sales-history read in `docs/specs/stale-listings.md`
 carries what is available instead.
 
 ## Variant lives in the Condition string
