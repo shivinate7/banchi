@@ -1337,9 +1337,8 @@ silent-write-selftest:
 #
 # The shared layer's guard owns `git checkout <path>`, a bare `git stash` and `git reset --hard`.
 # `scripts/guard-shell.py --hook` is a PreToolUse hook on Bash and on Write|Edit — not a target
-# you run — and this self-test is what proves it. THREE OF THE INCIDENTS ARE PERFORMED in a
-# throwaway repository before the guard is asked about them, and the narrated wait's is
-# performed there too, which is reap-selftest's standard;
+# you run — and this self-test is what proves it. ALL FOUR INCIDENTS ARE PERFORMED in a
+# throwaway repository before the guard is asked about them, which is reap-selftest's standard;
 # the false positives are RUN there too, because a case that is secretly a typo passes for the
 # wrong reason. IN `check`, NEVER IN THE GIT HOOK: it writes a temp repository (D18).
 guard-shell-selftest:
