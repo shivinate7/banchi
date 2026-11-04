@@ -25,7 +25,9 @@ WHAT THIS PROVES:
      load-bearing, per `CLAUDE.md`'s "a guard is trusted only once it fails on the defect
      it guards."
   7. Every way a price-history fetch can fail (no connection, a dropped read, HTTP 503, 500,
-     403, a body that is not JSON) is a network refusal, never an identification refusal.
+     a body that is not JSON) is a network refusal, never an identification refusal. An HTTP
+     403 is a blocked refusal (`KIND_BLOCKED`, `pipeline/pricehistory.refusal`), never a
+     network one.
      The verdict follows the refusal's kind, not its wording, so a reworded message moves nothing.
   8. A `NotResolvable` from the real catalogue walk is an identification refusal, and it
      stays one when its words happen to name a network failure.
