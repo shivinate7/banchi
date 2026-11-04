@@ -1,0 +1,10 @@
+{
+  "title": "Revenue's prior window overlaps the current one",
+  "status": "todo",
+  "phase": "Audit: to do",
+  "why": "Source: docs/specs/todo-audit-verify.md, RESOLVED real defect (sales-findings prior window), at main 06571635.",
+  "note": "Revenue.windowsOf with inPrevious overlaps by 1.9 days (3-month preset, May 31) and 2.9 days (6-month preset, Aug 31). Sales in the overlap count in both windows.",
+  "ask": null,
+  "order": 141,
+  "updatedAt": "2026-11-04T02:55:00Z"
+}

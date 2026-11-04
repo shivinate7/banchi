@@ -1,10 +1,10 @@
 {
-  "title": "To do: Features (28). Screens",
+  "title": "To do: d039 public demo has no Shelf move or undo (M) (+4 more)",
   "status": "todo",
   "phase": "Audit: to do",
   "why": "Source: docs/specs/todo-audit.md, section 2 (To do (104; no owner call; ranked by user impact, then size)), line 12 of that section, at main 06571635.",
   "note": "Features (28). Screens: d039 public demo has no Shelf move or undo (M); d027 Fulfillment still loads the whole store (M); d059 release and undo for an unreadable submission claim (M); d068 with s/sales-plan \"What you asked\" on #/revenue and asked-price line on #/product (M, 3 items); s/stale-listings plausibility check on a typed price (M).",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 36
 }

@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/069-price-refresh-schedule.md (DEBT69), at main 06571635.",
-  "note": "`scripts/price-refresh-daily.py` runs `pipeline_routes.do_prices_refresh` once a day (D104). It downloads the owner's own live listings, fetches the catalog export once per game, re-joins every open run and reads the sales history. That prices every copy held but not listed. `#/pricing` shows which listed items moved more than 10% since listing. One thing is not covered: \"since listing\" needs an archive bucket for the listing day. Only an archive sweep writes that bucket (the daily job sweeps it after the refresh, D224). So a listing the archive never read is counted as unchecked on the panel.",
+  "note": "`scripts/price-refresh-daily.py` runs `pipeline_routes.do_prices_refresh` once a day (D104). It downloads the owner's own live listings, fetches the catalog export once per game, re-joins every open run and reads the sales history. That prices every copy held but not listed. `#/pricing` shows which listed items moved more than 10% since listing. One thing is not covered: \"since listing\" needs an archive bucket for the listing day. Only an archive sweep writes that bucket (the daily job sweeps it after the refresh, D224). So a listing the archive never read is counted as unchecked on the panel. Action line: step audit-2-13, audit-3-6, audit-3-7.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 102
 }

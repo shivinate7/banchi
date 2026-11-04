@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/032-the-archive-sweep-stays-a-press-and-the-owner-intends.md (DEBT32), at main 06571635.",
-  "note": "`banchi archive sweep` has no timer of its own (D224). The daily price job runs it, once per US Central day, in the first job run of that day, on the owner's word. launchd runs a job missed in sleep when the Mac wakes. A day the Mac stays off all day runs no sweep. The job also runs at login (`RunAtLoad`), so a Mac that was off at the job's hour sweeps when it is next on. D219 (the price archive never deletes) governs what a sweep stores. D222 (the host throttles this client) sets its pace.",
+  "note": "`banchi archive sweep` has no timer of its own (D224). The daily price job runs it, once per US Central day, in the first job run of that day, on the owner's word. launchd runs a job missed in sleep when the Mac wakes. A day the Mac stays off all day runs no sweep. The job also runs at login (`RunAtLoad`), so a Mac that was off at the job's hour sweeps when it is next on. D219 (the price archive never deletes) governs what a sweep stores. D222 (the host throttles this client) sets its pace. Action line: step audit-3-7.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 83
 }

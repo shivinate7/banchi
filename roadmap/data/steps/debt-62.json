@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/062-demo-assets-lfs.md (DEBT62), at main 06571635.",
-  "note": "`demo-assets/` holds thousands of tracked files, about 180 MB in all. The weekly mirror moves the figure. The demo photos are most of the repo's bytes. Every clone, and every CI job that clones, downloads them.",
+  "note": "`demo-assets/` holds thousands of tracked files, about 180 MB in all. The weekly mirror moves the figure. The demo photos are most of the repo's bytes. Every clone, and every CI job that clones, downloads them. Action line: step audit-3-4.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 95
 }

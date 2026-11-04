@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/022-a-control-shrunk-inside-its-own-sticky-bar-is-invisible.md (DEBT22), at main 06571635.",
-  "note": "`app/tests/phone.spec.ts` decides a probe landed on the control with `owns = t.contains(n) || n.contains(t) || chrome(n)`. The `n.contains(t)` clause (the probe landed on the control's own ancestor) lets a 22px tick answer at 46px through a padded wrapper, and it is load-bearing for the hit-area method (D117). So shrinking `.browse-boxchip` to 20px lands its corner probes on `.browse-mobilebar`, the sticky bar that contains it, and the suite stays green.",
+  "note": "`app/tests/phone.spec.ts` decides a probe landed on the control with `owns = t.contains(n) || n.contains(t) || chrome(n)`. The `n.contains(t)` clause (the probe landed on the control's own ancestor) lets a 22px tick answer at 46px through a padded wrapper, and it is load-bearing for the hit-area method (D117). So shrinking `.browse-boxchip` to 20px lands its corner probes on `.browse-mobilebar`, the sticky bar that contains it, and the suite stays green. Action line: step audit-2-8.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 76
 }

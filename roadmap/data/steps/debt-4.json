@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/004-criteria-and-evidence-four-ways-a-row-goes-quiet.md (DEBT4), at main 06571635.",
-  "note": "Three checks of a gate's evidence go quiet without a finding: a renamed evidence source, a score file the glob does not match, and a partial history replay that exits 0.",
+  "note": "Three checks of a gate's evidence go quiet without a finding: a renamed evidence source, a score file the glob does not match, and a partial history replay that exits 0. Action line: step audit-2-1, audit-2-7.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 67
 }

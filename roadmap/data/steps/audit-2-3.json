@@ -1,10 +1,10 @@
 {
-  "title": "To do: Runs and slabs",
+  "title": "To do: d098 \"free read is not set up\" shows when all cards are answered (S,…) (+3 more)",
   "status": "todo",
   "phase": "Audit: to do",
   "why": "Source: docs/specs/todo-audit.md, section 2 (To do (104; no owner call; ranked by user impact, then size)), line 3 of that section, at main 06571635.",
   "note": "Runs and slabs: d098 \"free read is not set up\" shows when all cards are answered (S, RunsComposer.tsx); d097 Card Ladder failure on Add hides its plain sentence (S, Slabs.tsx); d099 dry run decodes every photo at full size (M, cmd_identify.py); s/mechanization Rank 31 a terminal identify writes no running.pid (S).",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 27
 }

@@ -1,10 +1,10 @@
 {
-  "title": "Close the record: s/capture-app",
+  "title": "Close the record: reason codes are 19 (6+13), not 15. s/multi-game: Riftbound has met… (+1 more)",
   "status": "todo",
   "phase": "Audit: close the record",
   "why": "Source: docs/specs/todo-audit.md, section 1 (Close the record (20)), line 7 of that section, at main 06571635.",
   "note": "s/capture-app: reason codes are 19 (6+13), not 15. s/multi-game: Riftbound has met real photos (box 1 and 3, 324 detected); also fix the comment in pipeline/games.py.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 21
 }

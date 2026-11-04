@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/091-send-press-label-widens.md (DEBT91), at main 06571635.",
-  "note": "The send press's label grows when the worklist lands. The pending bar's press reads \"Send to TCGplayer\". The loaded press reads \"Send All N SKUs to TCGplayer\", and it is longer with price changes or live moves. `.send-press` is `flex: 0 1 auto`.",
+  "note": "The send press's label grows when the worklist lands. The pending bar's press reads \"Send to TCGplayer\". The loaded press reads \"Send All N SKUs to TCGplayer\", and it is longer with price changes or live moves. `.send-press` is `flex: 0 1 auto`. Action line: step audit-2-2.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 118
 }

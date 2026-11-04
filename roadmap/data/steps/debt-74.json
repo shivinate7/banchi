@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/074-logo-base-parameters-held-never-swept.md (DEBT74), at main 06571635.",
-  "note": "`docs/specs/logo.md` section 3 tags four parameters HELD: the chrome gradient colors, the turbulence base frequency, the turbulence octaves and the card base fill `#5A6E80`. They were chosen once and never put against an alternative. The card base fill was seen beside three alternatives on a light ground, and that sweep was about the ground, so it does not count.",
+  "note": "`docs/specs/logo.md` section 3 tags four parameters HELD: the chrome gradient colors, the turbulence base frequency, the turbulence octaves and the card base fill `#5A6E80`. They were chosen once and never put against an alternative. The card base fill was seen beside three alternatives on a light ground, and that sweep was about the ground, so it does not count. Action line: step audit-3-8.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 107
 }

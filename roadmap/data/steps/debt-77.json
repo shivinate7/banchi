@@ -1,10 +1,10 @@
 {
   "title": "DEBT77: every phone-width spec is off",
   "status": "todo",
-  "phase": "Known gaps (debts)",
+  "phase": "Known gaps (shelved)",
   "why": "Source: docs/debts/077-phone-specs-off.md (DEBT77), at main 06571635.",
-  "note": "By the owner's word, no spec that draws a page below 768px wide runs. That is all of `app/tests/phone.spec.ts`, the touch-screen block in `app/tests/gallery.spec.ts`, and every case or width in another spec that sizes the page below 768. `PHONE_SPECS_ON` in `app/tests/phoneSwitch.ts` is the one switch. No test is deleted.",
+  "note": "By the owner's word, no spec that draws a page below 768px wide runs. That is all of `app/tests/phone.spec.ts`, the touch-screen block in `app/tests/gallery.spec.ts`, and every case or width in another spec that sizes the page below 768. `PHONE_SPECS_ON` in `app/tests/phoneSwitch.ts` is the one switch. No test is deleted. Shelved: docs/specs/todo-audit.md section 4 lists it.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 109
 }

@@ -1,10 +1,10 @@
 {
-  "title": "Needs owner call: d058",
+  "title": "Needs owner call: land the Lane H record (ux/h-record, six palettes) on main? d062:… (+1 more)",
   "status": "todo",
   "phase": "Audit: needs owner call",
   "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 4 of that section, at main 06571635.",
   "note": "d058: land the Lane H record (ux/h-record, six palettes) on main? d062: move demo-assets (5,286 files, 238 MiB) to Git LFS? Check quota first; rewrite history?",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 44
 }

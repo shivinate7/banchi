@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/008-recorded-and-correctly-unfixed.md (DEBT8), at main 06571635.",
-  "note": "Each item below is a known gap that a green run does not show, and no work is proposed on any of them.",
+  "note": "Each item below is a known gap that a green run does not show, and no work is proposed on any of them. Action line: step audit-2-4.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 69
 }

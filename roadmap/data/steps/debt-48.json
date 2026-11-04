@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/048-code-side-mechanization-left-open.md (DEBT48), at main 06571635.",
-  "note": "`docs-audit` mechanizes claims written in markdown, and four claims written in code stay open.",
+  "note": "`docs-audit` mechanizes claims written in markdown, and four claims written in code stay open. Action line: step audit-2-10.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 90
 }

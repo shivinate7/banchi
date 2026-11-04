@@ -1,10 +1,10 @@
 {
-  "title": "To do: Defects (32). Data",
+  "title": "To do: d087 write the Unhold receipt and store change in one transaction (M) (+3 more)",
   "status": "todo",
   "phase": "Audit: to do",
-  "why": "Source: docs/specs/todo-audit.md, section 2 (To do (104; no owner call; ranked by user impact, then size)), line 1 of that section, at main 06571635.",
-  "note": "Defects (32). Data: d087 write the Unhold receipt and store change in one transaction (M); d040 divider save lands past departed cards (S, join.divider_index); s/mechanization Rank 33 a copy can be offered twice, add a per-copy marker (M); d004 a tune-only T1 run overwrites the committed holdout score (S).",
+  "why": "Source: docs/specs/todo-audit.md, section 2 (To do (104; no owner call; ranked by user impact, then size)), line 1 of that section, at main 06571635. Corrected by docs/specs/todo-audit-verify.md.",
+  "note": "Defects (32). Data: d087 write the Unhold receipt and store change in one transaction (M); d040 divider save lands past departed cards (S, join.divider_index); s/mechanization Rank 33 a copy can be offered twice, add a per-copy marker (M); d004 a tune-only T1 run overwrites the committed holdout score (S). Correction: mechanization Rank 33 is 'Declined by the owner (D59)' (docs/specs/mechanization-backlog.md); todo-audit-verify.md moves it to owner call.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 25
 }

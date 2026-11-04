@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/059-unreadable-claim-no-remedy.md (DEBT59), at main 06571635.",
-  "note": "A live send claim that will not parse is drawn and released by key on Pricing's send card. `send_routes.do_release_unreadable` releases it and `do_restore_unreadable` undoes that. Until then it blocks every press.",
+  "note": "A live send claim that will not parse is drawn and released by key on Pricing's send card. `send_routes.do_release_unreadable` releases it and `do_restore_unreadable` undoes that. Until then it blocks every press. Action line: step audit-2-12.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 92
 }

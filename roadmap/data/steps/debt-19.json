@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/019-the-revert-guard-is-exact-and-three-shapes-of-reversal.md (DEBT19), at main 06571635.",
-  "note": "`make revert-guard` refuses a file whose whole change restores what main had before a commit in main's last sixty (`scripts/revert-audit.py:WINDOW`). It is exact by object id and by `-U0` hunk (D133). Three shapes pass:",
+  "note": "`make revert-guard` refuses a file whose whole change restores what main had before a commit in main's last sixty (`scripts/revert-audit.py:WINDOW`). It is exact by object id and by `-U0` hunk (D133). Three shapes pass: Action line: step audit-2-7.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 74
 }

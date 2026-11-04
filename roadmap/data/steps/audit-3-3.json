@@ -1,10 +1,10 @@
 {
-  "title": "Needs owner call: d043",
+  "title": "Needs owner call: raise n or count per-card calls so merge speed sees pure-Python… (+1 more)",
   "status": "todo",
   "phase": "Audit: needs owner call",
   "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 3 of that section, at main 06571635.",
   "note": "d043: raise n or count per-card calls so merge speed sees pure-Python loops? d011: measure parked-writer wait on your live store? Only you can; make status shows the slow-request lines.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 43
 }

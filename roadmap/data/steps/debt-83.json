@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/083-rail-offscreen-tiles.md (DEBT83), at main 06571635.",
-  "note": "With the full rail drawn (not dealing), each capture costs slightly more as the sitting grows. Every tile stays in the DOM, and the browser re-lays and re-paints the whole grid when a tile lands. `content-visibility: auto` skips none of them, because Chrome judges it against the page viewport and not the rail's scroller.",
+  "note": "With the full rail drawn (not dealing), each capture costs slightly more as the sitting grows. Every tile stays in the DOM, and the browser re-lays and re-paints the whole grid when a tile lands. `content-visibility: auto` skips none of them, because Chrome judges it against the page viewport and not the rail's scroller. Action line: step audit-3-9.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 111
 }

@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/070-sales-export-price-series.md (DEBT70), at main 06571635.",
-  "note": "`#/product` shows what this seller got for a product against the archived market on each sale date (`GET /pipeline/products/<sku>/realized`, `pipeline/realized.py`). It is a read-only diagnostic. Nothing prices, lists or re-prices from it.",
+  "note": "`#/product` shows what this seller got for a product against the archived market on each sale date (`GET /pipeline/products/<sku>/realized`, `pipeline/realized.py`). It is a read-only diagnostic. Nothing prices, lists or re-prices from it. Action line: step audit-3-6.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 103
 }

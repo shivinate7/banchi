@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/082-fulfiller-pick-list-slide.md (DEBT82), at main 06571635.",
-  "note": "With more than one owed card, the box list moves once when the orders read ends. The Pick list sits above the boxes, and its height is the number of owed cards times a card's own height. That number is known only when the walk plan lands. `Fulfillment` draws a frame in the list's shape, heading plus one card, so the boxes hold still when exactly one card is owed.",
+  "note": "With more than one owed card, the box list moves once when the orders read ends. The Pick list sits above the boxes, and its height is the number of owed cards times a card's own height. That number is known only when the walk plan lands. `Fulfillment` draws a frame in the list's shape, heading plus one card, so the boxes hold still when exactly one card is owed. Action line: step audit-3-9.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 110
 }

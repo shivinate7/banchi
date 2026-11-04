@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/044-pokemontcg-io-is-deprecated-and-this-repo-does-not-call-it.md (DEBT44), at main 06571635.",
-  "note": "`pipeline/stockimages.py` resolves Pokemon stock images from the vendored `vendor/pokemon-tcg-data/` tree (D15): `sets/en.json` for the set id, then `cards/en/<id>.json` for `images.small`. It makes no network call. The live `api.pokemontcg.io` answered HTTP 500 and 502 to every query tried. That includes the one the stock-images research recorded working. Its own notice sets shutdown at 2027-03-01. The gap is that the vendored tree is refreshed by hand (`make catalog-refresh`). So a set released after the last refresh has no row and no stock image. It is a join miss, never a guess.",
+  "note": "`pipeline/stockimages.py` resolves Pokemon stock images from the vendored `vendor/pokemon-tcg-data/` tree (D15): `sets/en.json` for the set id, then `cards/en/<id>.json` for `images.small`. It makes no network call. The live `api.pokemontcg.io` answered HTTP 500 and 502 to every query tried. That includes the one the stock-images research recorded working. Its own notice sets shutdown at 2027-03-01. The gap is that the vendored tree is refreshed by hand (`make catalog-refresh`). So a set released after the last refresh has no row and no stock image. It is a join miss, never a guess. Action line: step audit-2-13.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 89
 }

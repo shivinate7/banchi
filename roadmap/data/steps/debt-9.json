@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/009-the-sigil-check-matches-text-so-a-renamed-local-walks.md (DEBT9), at main 06571635.",
-  "note": "`make sigil-check` (D92) refuses a bare `#` composed from an expression naming `index`, and the word form `Card {…index}`. It reads source text. `const n = side.index` on one line and `#{n}` or `Card {n}` on the next is a violation it cannot see. So is indirection through a helper, a destructure or a prop rename. One shipped: `slotNumber` returned `String(target.index)` three functions away from the `#`. The bypass is `BANCHI_SIGIL=off`, or the per-line `sigil-ok: <why>`.",
+  "note": "`make sigil-check` (D92) refuses a bare `#` composed from an expression naming `index`, and the word form `Card {…index}`. It reads source text. `const n = side.index` on one line and `#{n}` or `Card {n}` on the next is a violation it cannot see. So is indirection through a helper, a destructure or a prop rename. One shipped: `slotNumber` returned `String(target.index)` three functions away from the `#`. The bypass is `BANCHI_SIGIL=off`, or the per-line `sigil-ok: <why>`. Action line: step audit-2-15, audit-3-1.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 70
 }

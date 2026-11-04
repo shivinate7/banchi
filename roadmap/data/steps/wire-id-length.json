@@ -1,0 +1,10 @@
+{
+  "title": "Is the 64-character card id wanted on the wire?",
+  "status": "todo",
+  "phase": "Audit: needs owner call",
+  "why": "Source: docs/specs/stable-card-id.md, doubts table, item 4 (open), at main 06571635.",
+  "note": "The full 64 characters is built. cid[:12] is what prose and screens use. Nothing types either. Only the owner can rule.",
+  "ask": null,
+  "order": 145,
+  "updatedAt": "2026-11-04T02:55:00Z"
+}

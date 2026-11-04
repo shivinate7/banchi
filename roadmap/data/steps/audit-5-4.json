@@ -5,6 +5,6 @@
   "why": "Source: docs/specs/todo-audit.md, section 5 (Unclear (9)), line 4 of that section, at main 06571635.",
   "note": "s/efficiency holdings range summary read once per range: scan cost not measured.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 61
 }

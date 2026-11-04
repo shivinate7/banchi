@@ -1,10 +1,10 @@
 {
-  "title": "To do: Server",
+  "title": "To do: d006 20-connection backlog leg (S) (+4 more)",
   "status": "todo",
   "phase": "Audit: to do",
   "why": "Source: docs/specs/todo-audit.md, section 2 (To do (104; no owner call; ranked by user impact, then size)), line 9 of that section, at main 06571635.",
   "note": "Server: d006 20-connection backlog leg (S); d006 start the server under a bare interpreter (S); d085 and s/efficiency read budget still on miss paths (M, read_budget.py); s/efficiency read_sidecar growth unchecked (S); s/efficiency loop-expensive check misses deep helpers (M).",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 33
 }

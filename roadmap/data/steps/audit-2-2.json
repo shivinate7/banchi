@@ -1,10 +1,10 @@
 {
-  "title": "To do: Pricing bar",
+  "title": "To do: d095 typed price on an at-cap row is counted but not sent (S,…) (+3 more)",
   "status": "todo",
   "phase": "Audit: to do",
   "why": "Source: docs/specs/todo-audit.md, section 2 (To do (104; no owner call; ranked by user impact, then size)), line 2 of that section, at main 06571635.",
   "note": "Pricing bar: d095 typed price on an at-cap row is counted but not sent (S, Pricing.tsx); d089 zero runs or failed load is unstated and untested (S); d091 press label widens at landing (S); d090 bar grows when a send notice lands late (M).",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 26
 }

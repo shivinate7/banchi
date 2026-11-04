@@ -1,10 +1,10 @@
 {
   "title": "DEBT72: PKMNVAULT, Supabase and eBay are unbuilt",
   "status": "todo",
-  "phase": "Known gaps (debts)",
+  "phase": "Known gaps (shelved)",
   "why": "Source: docs/debts/072-vault-supabase-ebay.md (DEBT72), at main 06571635.",
-  "note": "No work starts on PKMNVAULT or anything Supabase or eBay without a decision entry that argues it. Manual eBay sales of code cards stay allowed on the shared foundation.",
+  "note": "No work starts on PKMNVAULT or anything Supabase or eBay without a decision entry that argues it. Manual eBay sales of code cards stay allowed on the shared foundation. Shelved: docs/specs/todo-audit.md section 4 lists it.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 105
 }

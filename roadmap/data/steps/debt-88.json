@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/088-send-bar-height-below-820.md (DEBT88), at main 06571635.",
-  "note": "The send bar's height below an 820 column is unmeasured. At about 700 wide, the tiles wrap to 2+1, so the sticky bar grows by one tile row. Its height is unmeasured.",
+  "note": "The send bar's height below an 820 column is unmeasured. At about 700 wide, the tiles wrap to 2+1, so the sticky bar grows by one tile row. Its height is unmeasured. Action line: step audit-2-8.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 115
 }

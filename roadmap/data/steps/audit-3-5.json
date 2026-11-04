@@ -5,6 +5,6 @@
   "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 5 of that section, at main 06571635.",
   "note": "d061 has eight items. 1 case-fold blank-number names. 2 read identifications once in do_pipeline_scope. 3 clear RunPanel when another run opens. 4 guard arrow keys for screen-reader browse mode. 5 review the 41 getattr/setattr card-field calls. 6 split capture_server.py (18,062 lines). 7 one hook per big screen. 8 add mypy. Which do you want? Items 1 to 4 are small.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 45
 }

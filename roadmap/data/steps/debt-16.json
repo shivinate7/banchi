@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/016-the-browser-fleet-is-locked-and-the-rest-of-the-load-is.md (DEBT16), at main 06571635.",
-  "note": "`make design-check` runs behind a machine-wide lock and the rest of the load does not, and only the failure of two browser fleets at once was measured.",
+  "note": "`make design-check` runs behind a machine-wide lock and the rest of the load does not, and only the failure of two browser fleets at once was measured. Action line: step audit-2-11.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 73
 }

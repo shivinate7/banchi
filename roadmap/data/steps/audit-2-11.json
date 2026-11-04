@@ -1,10 +1,10 @@
 {
-  "title": "To do: Measure",
+  "title": "To do: d016 two parallel make check (S) (+13 more)",
   "status": "todo",
   "phase": "Audit: to do",
   "why": "Source: docs/specs/todo-audit.md, section 2 (To do (104; no owner call; ranked by user impact, then size)), line 11 of that section, at main 06571635.",
   "note": "Measure: d016 two parallel make check (S); d034 catalog number drift (S); d041 share for \"Make this the rule\" (S); d065 number-corner crop on every card (M); d071 set-hint A/B (S); d094 five-digit tile counts (S); s/stale-listings trends read time (S); s/multi-game crop bands for Riftbound and others (M); s/demo github-pages deploy policy (S); s/one-process app-build trigger (S) and make status stale time (S); s/home-assistant 4.45 GB photos (S); s/lean-server baseline week (S); s/mechanization surfaces never audited (L); s/sales-findings float cents (S).",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 35
 }

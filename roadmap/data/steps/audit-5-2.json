@@ -1,10 +1,10 @@
 {
-  "title": "Unclear: s/order-pipeline real order end to end",
+  "title": "Unclear: I cannot tell if you did it (+1 more)",
   "status": "todo",
   "phase": "Audit: unclear",
   "why": "Source: docs/specs/todo-audit.md, section 5 (Unclear (9)), line 2 of that section, at main 06571635.",
   "note": "s/order-pipeline real order end to end: I cannot tell if you did it; the store is off limits.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 59
 }

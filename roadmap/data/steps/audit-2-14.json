@@ -1,10 +1,10 @@
 {
-  "title": "To do: s/dispenser (all S)",
+  "title": "To do: remember the dispenser across loads (+2 more)",
   "status": "todo",
   "phase": "Audit: to do",
   "why": "Source: docs/specs/todo-audit.md, section 2 (To do (104; no owner call; ranked by user impact, then size)), line 14 of that section, at main 06571635.",
   "note": "s/dispenser (all S): remember the dispenser across loads; stop when dealt minus fires exceeds 3; add a 200-card cap.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 38
 }

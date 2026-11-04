@@ -1,0 +1,10 @@
+{
+  "title": "The holdings line still rescales from low to high",
+  "status": "todo",
+  "phase": "Audit: to do",
+  "why": "Source: docs/specs/sales-findings.md section 1, 'The holdings line rescales itself'; docs/specs/todo-audit-verify.md Deviations, at main 06571635.",
+  "note": "Revenue.holdingsSegments normalizes to the lowest and highest value. The bucket bars are fixed; the holdings line is not. Step audit-1-10 closes only the bars.",
+  "ask": null,
+  "order": 142,
+  "updatedAt": "2026-11-04T02:55:00Z"
+}

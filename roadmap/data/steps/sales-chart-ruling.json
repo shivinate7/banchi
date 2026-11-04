@@ -1,0 +1,10 @@
+{
+  "title": "Revenue chart: delete, repair or leave alone",
+  "status": "todo",
+  "phase": "Audit: needs owner call",
+  "why": "Source: docs/specs/sales-findings.md section 4, item 3, at main 06571635.",
+  "note": "The standing ruling is to leave it. One review argued to delete it: it duplicates the list beneath and has no axis. The to-do audit says it needs a call but lists it in no section.",
+  "ask": null,
+  "order": 143,
+  "updatedAt": "2026-11-04T02:55:00Z"
+}

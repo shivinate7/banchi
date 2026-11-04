@@ -1,10 +1,10 @@
 {
-  "title": "Close the record: d064",
+  "title": "Close the record: the gap is closed. join.py falls back to a name match and queues…",
   "status": "todo",
   "phase": "Audit: close the record",
   "why": "Source: docs/specs/todo-audit.md, section 1 (Close the record (20)), line 2 of that section, at main 06571635.",
   "note": "d064: the gap is closed. join.py falls back to a name match and queues NUMBER_UNREAD_NAME_MATCHED. Say only a printedTotal check is left (unmeasured).",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 16
 }

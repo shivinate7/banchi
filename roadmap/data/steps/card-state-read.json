@@ -1,0 +1,10 @@
+{
+  "title": "The card state 'read' is not built",
+  "status": "todo",
+  "phase": "Audit: to do",
+  "why": "Source: docs/specs/batch-script.md, 'Open, not built: the card state read', at main 06571635.",
+  "note": "A card is 'read' after Haiku answers and before the join runs, between 'captured' and 'identified'.",
+  "ask": null,
+  "order": 144,
+  "updatedAt": "2026-11-04T02:55:00Z"
+}

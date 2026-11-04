@@ -1,10 +1,10 @@
 {
-  "title": "Needs owner call: s/identify-engine-pick",
+  "title": "Needs owner call: set pass marks for reader idle memory and capture p99? s/multi-game:…",
   "status": "todo",
   "phase": "Audit: needs owner call",
   "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 13 of that section, at main 06571635.",
   "note": "s/identify-engine-pick: set pass marks for reader idle memory and capture p99? s/multi-game: photograph One Piece and misc cards to test them?",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 53
 }

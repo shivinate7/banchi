@@ -1,10 +1,10 @@
 {
   "title": "DEBT14: A pooled card reaches the pricing table and the box walk, and `located`…",
   "status": "todo",
-  "phase": "Known gaps (debts)",
+  "phase": "Known gaps (shelved)",
   "why": "Source: docs/debts/014-a-pooled-card-reaches-the-pricing-table-and-the-box-walk.md (DEBT14), at main 06571635.",
-  "note": "A pooled card reaches the pricing table and the box walk, because `located: false` hides the position label on every owner screen and the photograph on none.",
+  "note": "A pooled card reaches the pricing table and the box walk, because `located: false` hides the position label on every owner screen and the photograph on none. Shelved: docs/specs/todo-audit.md section 4 lists it.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 72
 }

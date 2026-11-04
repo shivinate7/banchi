@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/086-duplicate-homes.md (DEBT86), at main 06571635.",
-  "note": "A whole-repo sweep found capabilities with more than one implementation whose copies still agree. The hard rule \"one home per capability\" covers them. The server, pipeline and identify copies are closed. The app copies are next.",
+  "note": "A whole-repo sweep found capabilities with more than one implementation whose copies still agree. The hard rule \"one home per capability\" covers them. The server, pipeline and identify copies are closed. The app copies are next. Action line: step audit-2-5.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 114
 }

@@ -1,10 +1,10 @@
 {
   "title": "DEBT66: no perceptual-hash cross-check on identification",
   "status": "todo",
-  "phase": "Known gaps (debts)",
+  "phase": "Known gaps (shelved)",
   "why": "Source: docs/debts/066-perceptual-hash-layer.md (DEBT66), at main 06571635.",
-  "note": "A perceptual-hash identification layer could cross-check the model's read (a v2 accuracy idea). Nothing starts on it without a decision entry that argues it.",
+  "note": "A perceptual-hash identification layer could cross-check the model's read (a v2 accuracy idea). Nothing starts on it without a decision entry that argues it. Shelved: docs/specs/todo-audit.md section 4 lists it.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 99
 }

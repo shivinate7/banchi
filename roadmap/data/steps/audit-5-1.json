@@ -1,10 +1,10 @@
 {
-  "title": "Unclear: d050 git and gh traps",
+  "title": "Unclear: advice only (+1 more)",
   "status": "todo",
   "phase": "Audit: unclear",
   "why": "Source: docs/specs/todo-audit.md, section 5 (Unclear (9)), line 1 of that section, at main 06571635.",
   "note": "d050 git and gh traps: advice only; Git is now 2.54.0, so whether the push 400 still happens is unmeasured.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 58
 }

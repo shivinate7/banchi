@@ -1,10 +1,10 @@
 {
-  "title": "Needs owner call: d001",
+  "title": "Needs owner call: does \"a test imports it\" count as \"a test covers it\", and may…",
   "status": "todo",
   "phase": "Audit: needs owner call",
   "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 1 of that section, at main 06571635.",
   "note": "d001: does \"a test imports it\" count as \"a test covers it\", and may governed_by be checked from the map side? d009 (also s/mechanization Rank 34): add a nominal type over slot and index (L, D92 rejected it), or keep the text-match ceiling?",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 41
 }

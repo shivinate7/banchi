@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/011-the-capture-server-bounds-concurrent-requests-not-threads.md (DEBT11), at main 06571635.",
-  "note": "The capture server bounds concurrent requests and not threads, so a writer parked on the store lock still holds a request slot, and the heavy lock-free reads wait behind it.",
+  "note": "The capture server bounds concurrent requests and not threads, so a writer parked on the store lock still holds a request slot, and the heavy lock-free reads wait behind it. Action line: step audit-1-1, audit-2-6, audit-3-3.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:45:00Z",
+  "updatedAt": "2026-11-04T02:55:00Z",
   "order": 71
 }
