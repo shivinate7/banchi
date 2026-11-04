@@ -298,15 +298,15 @@ def run(ok) -> None:
     ok(any(f.where == ".codex/hooks.json" and "full hook" in f.message for f in found),
        "red: Codex's entry has the prefix", str(found))
 
-    # GUARD_SHELL_SKIP pin: Claude's Bash entry skips three clauses, every other guard-shell entry is empty.
+    # GUARD_SHELL_SKIP pin: Claude's Bash entry skips four clauses, every other guard-shell entry is empty.
     gs = "scripts/guard-shell.py --hook"
-    sk = "GUARD_SHELL_SKIP=checkout,stash,reset "
+    sk = "GUARD_SHELL_SKIP=checkout,stash,reset,push "
     c_bash, c_edit = hook("Bash", sk + gs), hook("Write|Edit", "GUARD_SHELL_SKIP= " + gs)
     x_bash, x_edit = hook("Bash", "GUARD_SHELL_SKIP= " + gs), hook("Write|Edit", "GUARD_SHELL_SKIP= " + gs)
     found = codex_hooks_findings([c_bash, c_edit], [x_bash, x_edit, reap])
     ok(not found, "green: each guard-shell entry carries its pinned skip value", str(found))
     found = codex_hooks_findings([hook("Bash", "GUARD_SHELL_SKIP=checkout " + gs), c_edit], [x_bash, x_edit, reap])
-    ok(len(found) == 1 and "GUARD_SHELL_SKIP=checkout,stash,reset" in str(found[0]),
+    ok(len(found) == 1 and "`GUARD_SHELL_SKIP=checkout,stash,reset,push`" in str(found[0]),
        "red: Claude's Bash entry carries a different skip value", str(found))
     found = codex_hooks_findings([c_bash, c_edit], [hook("Bash", gs), x_edit, reap])
     ok(len(found) == 1 and "must set `GUARD_SHELL_SKIP=`" in str(found[0]),
