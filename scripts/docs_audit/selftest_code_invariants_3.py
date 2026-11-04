@@ -13,8 +13,13 @@ from .code_invariants import (
     check_import_filename_agreement,
     check_threshold_agreement,
 )
-from .core import Finding, PACKAGE_DIR, ROOT, Report, markdown_files, module_globals
-from .paths_commands import _commands_named, _commands_roster_findings, check_commands_roster
+from .core import Finding, PACKAGE_DIR, ROOT, Report, _sibling, markdown_files, module_globals
+from .paths_commands import (
+    _commands_named,
+    _commands_roster_findings,
+    _commented_targets,
+    check_commands_roster,
+)
 from .registry_scopes import CHECKS_REGISTRY, check_commit_path
 
 
@@ -218,7 +223,7 @@ def run(ok) -> None:
     _stale = _commands_roster_findings(_targets, {"up", "down", "reap", "venv"}, set(),
                                         {"up": "used to be internal"})
     ok(any("Stale" in m for m in _msgs(_stale)),
-       "an allow-list entry for a target CLAUDE.md now bullets is stale",
+       "an allow-list entry for a target that is already documented is stale",
        str(_msgs(_stale)))
     _ghost = _commands_roster_findings(_targets, {"up", "down", "reap", "venv"}, set(),
                                         {"no-such-target": "why"})
@@ -228,6 +233,16 @@ def run(ok) -> None:
     ok(_commands_named("## Commands\n\n```\nmake up   # one line\nmake down # another\n```\n")
        == {"up", "down"},
        "the Commands block's bullet names are read out of its fenced list")
+
+    # A target is documented by a comment directly above its rule (what `make help` prints), and by
+    # nothing else here. The reader is `make-help.py`, so it must load before its answer means anything.
+    ok(_sibling("make-help.py") is not None, "scope: make-help.py loads as the reader of target comments")
+    ok(_commented_targets("# Says what it does.\ncommented:\n\t@true\n\nbare:\n\t@true\n") == {"commented"},
+       "a target with a comment directly above its rule is documented, and one with none is not")
+    ok(_commented_targets("# Says what it does.\n\nbare:\n\t@true\n") == set(),
+       "a comment separated from its rule by a blank line documents nothing")
+    ok(_commented_targets("#\nbare:\n\t@true\n") == set(),
+       "an empty `#` line is no comment")
 
     print("\ncommands roster: end to end, unpatched: the real tree agrees with itself")
     report = Report()

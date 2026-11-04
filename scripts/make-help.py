@@ -33,15 +33,15 @@ _SENTENCE_RE = re.compile(r"(.+?[.!?])(\s|$)")
 NO_COMMENT = "(no comment above this target — add one)"
 
 
-def targets_and_summaries(text: str) -> List[Tuple[str, str]]:
-    """Every target in file order, paired with its comment's first sentence.
+def target_comments(text: str) -> List[Tuple[str, List[str]]]:
+    """Every target in file order, paired with every line of the comment directly above it.
 
     A target is a line matching `name:` that is not `.PHONY:`. Its comment is every
     contiguous `#`-prefixed line directly above it, with no blank line in between — the
     shape this Makefile already uses throughout. The first definition of a name wins, which
     matters nowhere here since this Makefile never redefines a target.
     """
-    out: List[Tuple[str, str]] = []
+    out: List[Tuple[str, List[str]]] = []
     seen: Dict[str, bool] = {}
     pending: List[str] = []
     for line in text.split("\n"):
@@ -58,14 +58,30 @@ def targets_and_summaries(text: str) -> List[Tuple[str, str]]:
             name = match.group(1)
             if name not in seen:
                 seen[name] = True
-                paragraph = " ".join(p for p in pending if p)
-                sentence = _SENTENCE_RE.match(paragraph)
-                summary = sentence.group(1) if sentence else (paragraph or NO_COMMENT)
-                out.append((name, summary))
+                out.append((name, pending))
             pending = []
             continue
         pending = []
     return out
+
+
+def targets_and_summaries(text: str) -> List[Tuple[str, str]]:
+    """Every target in file order, paired with its comment's first sentence."""
+    out: List[Tuple[str, str]] = []
+    for name, lines in target_comments(text):
+        paragraph = " ".join(p for p in lines if p)
+        sentence = _SENTENCE_RE.match(paragraph)
+        out.append((name, sentence.group(1) if sentence else (paragraph or NO_COMMENT)))
+    return out
+
+
+def full_comment(text: str, name: str) -> str:
+    """One target's whole comment, as written, or a note when the target or its comment is absent."""
+    for target, lines in target_comments(text):
+        if target == name:
+            body = "\n".join(lines).strip()
+            return f"make {name}\n\n{body}" if body else f"make {name}: {NO_COMMENT}"
+    return f"make {name}: no such target. `make help` lists them."
 
 
 def render(text: str) -> str:
@@ -75,13 +91,17 @@ def render(text: str) -> str:
             continue
         lines.append(f"  make {name:<28} {summary}")
     lines.append("")
-    lines.append("The full reasoning for any target sits in its own comment in the Makefile.")
+    lines.append("`make help ARGS=<target>` prints a target's whole comment: its flags, what it writes, what it costs.")
     return "\n".join(lines)
 
 
 def main(argv: List[str]) -> int:
-    del argv
-    print(render(MAKEFILE.read_text(encoding="utf-8")))
+    text = MAKEFILE.read_text(encoding="utf-8")
+    if argv:
+        for name in argv:
+            print(full_comment(text, name))
+        return 0
+    print(render(text))
     return 0
 
 

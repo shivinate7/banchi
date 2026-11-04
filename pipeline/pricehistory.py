@@ -285,6 +285,31 @@ EXTENDED_NUMBER = "Number"
 RATIO = Decimal("0.0001")
 
 
+# The network refusal texts `fetch_json` and `fetch_text` raise, one constant per text. Each raise
+# site uses its constant, and a reader that must recognise a refusal after `Market.readings_for_rows`
+# has folded it to `str(exc)` (`pipeline/pricearchive.py:classify_refusals`,
+# `cli/archive_review.py:is_identification_refusal`) points at these and never at a copy.
+BLOCKED_MESSAGE = (
+    "The price service answered 'forbidden'. Either what it allows changed, or it is declining this "
+    "app's browser signature. Set the browser signature in the Mac's settings file (the .env file in "
+    "the app's folder) to match your browser, then try again."
+)
+# The words `UNREACHABLE_MESSAGE` is built on: the one phrase a no-connection or dropped-read text always carries.
+UNREACHABLE_PHRASE = "could not be reached"
+UNREACHABLE_MESSAGE = f"The price service {UNREACHABLE_PHRASE}. Check the connection, then try again."
+UNREADABLE_MESSAGE = "The price service sent back something that could not be read. Try again in a moment."
+# The fixed start of the status-code text: `status_message` appends the status reason and a closing
+# sentence. `BLOCKED_MESSAGE` opens the same way, so a reader that must tell a 403 from any other
+# status matches `BLOCKED_MESSAGE` whole and never this prefix.
+STATUS_MESSAGE_PREFIX = "The price service answered '"
+NETWORK_SIGNATURES = (BLOCKED_MESSAGE, UNREACHABLE_PHRASE, UNREADABLE_MESSAGE, STATUS_MESSAGE_PREFIX)
+
+
+def status_message(reason: str) -> str:
+    """The `Unreachable` text for an HTTP status other than 403, starting with `STATUS_MESSAGE_PREFIX`."""
+    return f"{STATUS_MESSAGE_PREFIX}{reason.lower()}'. Try again in a moment."
+
+
 class PriceHistoryError(RuntimeError):
     """The reader could not answer. Every refusal below is one of these."""
 
@@ -1003,7 +1028,7 @@ def fetch_json(
         return json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         print(f"price service {url}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
-        raise Unreachable("The price service sent back something that could not be read. Try again in a moment.") from exc
+        raise Unreachable(UNREADABLE_MESSAGE) from exc
 
 
 def fetch_text(
@@ -1016,7 +1041,7 @@ def fetch_text(
         return body.decode("utf-8").strip()
     except UnicodeDecodeError as exc:
         print(f"price service {url}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
-        raise Unreachable("The price service sent back something that could not be read. Try again in a moment.") from exc
+        raise Unreachable(UNREADABLE_MESSAGE) from exc
 
 
 def _get(url: str, timeout: float, user_agent: str) -> bytes:
@@ -1028,25 +1053,23 @@ def _get(url: str, timeout: float, user_agent: str) -> bytes:
         # connection, a DNS failure, or a timeout reaching the socket in the first place. It is
         # retried, and counts toward a degraded host.
         print(f"price service {url}: {type(exc.__cause__).__name__}: {exc.__cause__}", file=sys.stderr, flush=True)
-        raise Offline("The price service could not be reached. Check the connection, then try again.") from exc.__cause__
+        raise Offline(UNREACHABLE_MESSAGE) from exc.__cause__
     except net.Dropped as exc:
         # A connection WAS made and the read that followed it stalled or the peer reset mid-body.
         # That says nothing about whether the NEXT product's own connection will succeed: a plain,
         # non-sticky `Unreachable`, never `Offline`.
         print(f"price service {url}: {type(exc.__cause__).__name__}: {exc.__cause__}", file=sys.stderr, flush=True)
-        raise Unreachable("The price service could not be reached. Check the connection, then try again.") from exc.__cause__
+        raise Unreachable(UNREACHABLE_MESSAGE) from exc.__cause__
     except net.NetError as exc:
         if exc.status == 403:
             # NEVER THE VALUE, ONLY THE NAME OF THE KNOB — D171's rule that a refusal must
             # name its remedy, and CLAUDE.md's rule that no message here ever carries the
             # user agent string itself.
             print(f"price service {url}: HTTP 403; set {AGENT_ENV} in the settings file", file=sys.stderr, flush=True)
-            raise Blocked(
-                "The price service answered 'forbidden'. Either what it allows changed, or it is declining this app's browser signature. Set the browser signature in the Mac's settings file (the .env file in the app's folder) to match your browser, then try again."
-            ) from exc
+            raise Blocked(BLOCKED_MESSAGE) from exc
         reason = http.client.responses.get(exc.status, "an error")
         print(f"price service {url}: HTTP {exc.status} {reason}", file=sys.stderr, flush=True)
-        raise Unreachable(f"The price service answered '{reason.lower()}'. Try again in a moment.") from exc
+        raise Unreachable(status_message(reason)) from exc
     return body
 
 

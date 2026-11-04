@@ -67,7 +67,7 @@
   "merge": {
     "method": "merge",
     "requiredChecks": "protection",
-    "deadlineMinutes": 65,
+    "deadlineMinutes": 45,
     "afterMerge": ["python3 scripts/primary_sync.py --confirm"],
     "deleteBranch": true
   }

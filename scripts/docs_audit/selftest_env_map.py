@@ -15,12 +15,14 @@ from .core import (
     _STAGED_PATHS,
     _walk,
     child_names,
+    claude_and_rules,
     exists,
     glob_files,
     leave_staged_mode,
     module_globals,
     read,
     rel,
+    rule_files,
 )
 from .env_map import _hook_triples, check_codex_hooks, source_names
 from .registry_scopes import _spec_map_should_run
@@ -137,10 +139,18 @@ def run(ok) -> None:
         str(sorted(sites["local"]) + sorted(sites["session"])),
     )
     ok(
-        _NUMBER_WORDS.get((_ROSTER_RE.search(read(ROOT / "CLAUDE.md")) or [None, "x"])[1].lower())
+        _NUMBER_WORDS.get((_ROSTER_RE.search(claude_and_rules()) or [None, "x"])[1].lower())
         == len(sites["local"]),
-        "CLAUDE.md's count word parses and equals the number of device-local keys",
+        "the device-key roster's count word parses and equals the number of device-local keys",
         str(sorted(sites["local"])),
+    )
+    # The shared reader holds every rule file whole, so a read re-pointed to it sees what the rule
+    # files say. At least one rule file must exist, or the claim is vacuously true.
+    rules = rule_files()
+    ok(
+        bool(rules) and all(read(path) in claude_and_rules() for path in rules),
+        "the shared reader holds every rule file whole, and there is at least one to hold",
+        str([rel(path) for path in rules]),
     )
     report = Report()
     check_storage_keys(report)

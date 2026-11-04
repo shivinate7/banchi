@@ -8,7 +8,7 @@ import { setViewport } from './phoneSwitch'
 import { DEALING_RAIL_TILES, SAVE_WAIT_MS } from '../src/dealer'
 
 /* A LONG SITTING MUST NOT FREEZE THE MAIN THREAD. A `longtask` observer reports only tasks of
- * 50 ms or more, so "no entry" is the bar. Two cases:
+ * 50 ms or more, so "no entry" is the bar. Three cases:
  *  1. DEALING, 300 captures, monthly and on demand (BANCHI_LONG_SITTING=1): the rail
  *     (`footer.capture-undo`) stays live but draws only the newest DEALING_RAIL_TILES tiles, first
  *     tile the latest card, the Last capture panel (`aside.capture-last`) shows each new photo, no
@@ -16,6 +16,8 @@ import { DEALING_RAIL_TILES, SAVE_WAIT_MS } from '../src/dealer'
  *     one catch-up render may be long and is not barred. This run is what catches growth. The
  *     owner's longest sitting is 555 cards. No per-PR case in this file deals cards, by the owner's word.
  *  2. HAND FEED, 60 captures with the shutter: the old bar, so hand feeding cannot regress.
+ *  3. HAND FEED, the layout objects each tile added costs between captures 21 to 30 and 51 to 60, read from
+ *     the Chromium trace: no clock, so the same count on every runner.
  * Photos are distinct 1920x1080 JPEGs, so image decode is in the measurement. The dealer is the
  * fake Bluetooth device of `dispenser.spec.ts` (shared in `dispenserRig.ts`). Nothing reaches a
  * store: `POST /capture` is answered here. */
@@ -312,9 +314,94 @@ test('hand-fed, captures 51 to 60 cost no more than captures 21 to 30', async ({
     perCapture.push(await longTasks(page))
     cost.push(await blockedMs(page))
   }
-  /* The window starts at capture 21: the visible tile area fills up over the first ~20 captures, which is
-   * a fixed cost that saturates, not growth. */
+  /* The window starts at capture 21 to leave out the first 20 captures. Cost does not stop growing there:
+   * on today's rail each capture adds one tile's layout objects to the tree, so cost keeps rising past
+   * capture 21. The layout case below measures that growth directly. */
   expect(judge(cost, perCapture, 10, 20), `blocked time over ${CAPTURES} hand-fed captures`).toBe('')
+})
+
+/* EACH TILE A SITTING ADDS COSTS A BOUNDED NUMBER OF LAYOUT OBJECTS. Chromium's `devtools.timeline` trace reports
+ * the size of each layout: a `Layout` event's `totalObjects` is the layout objects in the document. Every tile
+ * stays in the rail, and each one stays in every later layout, so the count rises with each tile added.
+ * That count does not depend on runner speed. Two other trace counts do not grow past capture 21 on this rail,
+ * so they cannot show this growth: `UpdateLayoutTree`'s `elementCount` and `Layout`'s `dirtyObjects` stay in a
+ * band of about 280 to 450 across captures 21 to 60, and they swing from one capture to the next.
+ * THE BOUND. A kept tile still costs its own box, one layout object, so a correct fix adds about 1 per tile.
+ * The bound is 3: that box plus a wrapper or two still pass. Today's rail adds about 20 per tile (1002 at
+ * captures 21 to 30, 1602 at captures 51 to 60, 30 tiles between the window medians), far past it. */
+const OBJECTS_PER_TILE_BOUND = 3
+
+type TraceEvent = { name: string; ts: number; args?: Record<string, unknown> }
+
+/** Records the page's `devtools.timeline` trace. `mark(label)` puts a labelled stamp into it. The stamp
+ *  forces the style and layout of whatever the capture just changed, so that work lands inside the window. */
+async function recordTimeline(page: Page) {
+  const cdp = await page.context().newCDPSession(page)
+  const events: TraceEvent[] = []
+  cdp.on('Tracing.dataCollected', (e) => { events.push(...(e.value as unknown as TraceEvent[])) })
+  const complete = new Promise<void>((resolve) => cdp.once('Tracing.tracingComplete', () => resolve()))
+  await cdp.send('Tracing.start', { categories: 'devtools.timeline', transferMode: 'ReportEvents' })
+  return {
+    mark: (label: string) => page.evaluate((text) => {
+      void document.body.offsetHeight
+      console.timeStamp(text)
+    }, label),
+    stop: async (): Promise<TraceEvent[]> => {
+      await cdp.send('Tracing.end')
+      await complete
+      return events
+    },
+  }
+}
+
+/** Per capture, the largest layout tree among the layouts between its `start n` and `end n` marks, and
+ *  how many layouts there were. The largest is taken so a frame that paints mid-window cannot change it. */
+function layoutWindows(events: TraceEvent[]): Map<number, { objects: number; layouts: number }> {
+  const out = new Map<number, { objects: number; layouts: number }>()
+  let open = 0
+  for (const e of [...events].sort((a, b) => a.ts - b.ts)) {
+    if (e.name === 'TimeStamp') {
+      const message = String((e.args?.data as { message?: unknown } | undefined)?.message ?? '')
+      const m = /^(start|end) (\d+)$/.exec(message)
+      if (m !== null) open = m[1] === 'start' ? Number(m[2]) : 0
+      continue
+    }
+    if (e.name !== 'Layout' || open === 0) continue
+    const objects = Number((e.args?.beginData as { totalObjects?: unknown } | undefined)?.totalObjects ?? 0)
+    const seen = out.get(open) ?? { objects: 0, layouts: 0 }
+    out.set(open, { objects: Math.max(seen.objects, objects), layouts: seen.layouts + 1 })
+  }
+  return out
+}
+
+test('hand-fed, each tile a capture adds costs a bounded number of layout objects, captures 21 to 60', async ({ page }) => {
+  const CAPTURES = 60
+  test.setTimeout(300_000)
+  await handCamera(page)
+  await stubWire(page, CAPTURES)
+  await pickCameraAndBox(page)
+  await expect(page.getByRole('button', { name: 'Capture', exact: true })).toBeEnabled()
+  const timeline = await recordTimeline(page)
+  for (let n = 1; n <= CAPTURES; n += 1) {
+    await timeline.mark(`start ${n}`)
+    await page.keyboard.press('c')
+    await expect(page.locator('.capture-undo-row').first()).toHaveAttribute('aria-label', new RegExp(`Card ${n}$`), { timeout: 15_000 })
+    await timeline.mark(`end ${n}`)
+  }
+  const windows = layoutWindows(await timeline.stop())
+  const captures = Array.from({ length: CAPTURES }, (_, i) => i + 1)
+  // The scope first: a window with no layout measures nothing, so it must not read as a flat tree.
+  expect(captures.filter((n) => (windows.get(n)?.layouts ?? 0) === 0), 'every capture window holds a layout').toEqual([])
+  const early = median(captures.slice(20, 30).map((n) => windows.get(n)?.objects ?? 0))
+  const late = median(captures.slice(50, 60).map((n) => windows.get(n)?.objects ?? 0))
+  // The window medians sit at captures 25.5 and 55.5, so 30 tiles separate them.
+  const addedTiles = 30
+  const perTile = (late - early) / addedTiles
+  console.log(`LAYOUT OBJECTS median per capture: captures 21 to 30 ${early}, captures 51 to 60 ${late}, per added tile ${perTile}`)
+  const verdict = perTile <= OBJECTS_PER_TILE_BOUND
+    ? ''
+    : `layout objects per added tile: ${perTile} (median ${early} at captures 21 to 30, ${late} at captures 51 to 60), over ${OBJECTS_PER_TILE_BOUND}`
+  expect(verdict, `layout objects each added tile costs over ${CAPTURES} hand-fed captures`).toBe('')
 })
 
 test('a tile press undoes exactly the depth its label shows, even from a handler painted before more captures landed', async ({ page }) => {
@@ -538,3 +625,235 @@ test('a capture answered created:false shows the server photo, not the frame jus
   expect(await thumb.getAttribute('src'), 'the tile does not draw the unsaved frame').not.toMatch(/^blob:/)
   expect(photoGets.length, 'the tile asked the server for its photo').toBeGreaterThan(0)
 })
+
+/* THE RAIL'S FACES, READ IN THE PAGE (D313, a far tile). `installRailProbe` runs before the app and reads only:
+ *  - `__railCheck()`: `inView`, the tiles whose row crosses the rail's visible box, and for each cause the first of
+ *    those tiles that has it, '' when none. `far`: the tile is in its far state. `number`: its key is not drawn.
+ *    `photo`: its thumbnail is not drawn. `stale`: its key is not its live rank, the digit rank + 1, or a letter for
+ *    the newest. A far tile reports `far` alone, since its key and photo are hidden by that same state.
+ *  - `__sampleStart()`, `__sampleStop()`, `__sampleFrames()`: `__railCheck` on every animation frame in between,
+ *    with the first tile and the frame count for each cause.
+ *  - `__ends` and `__endPos`: how many scrolls of the rail have ended, and where it stood at the last one. */
+function installRailProbe(list: string): void {
+  const CAUSES = ['far', 'number', 'photo', 'stale'] as const
+  type Cause = (typeof CAUSES)[number]
+  type Check = Record<Cause, string> & { inView: number }
+  const none = (): Record<Cause, string> => ({ far: '', number: '', photo: '', stale: '' })
+  const shown = (el: Element | null): boolean => el !== null && el.getClientRects().length > 0
+  const check = (): Check => {
+    const out: Check = { ...none(), inView: 0 }
+    const rail = document.querySelector(list)
+    if (rail === null) return out
+    const view = rail.getBoundingClientRect()
+    Array.from(rail.children).forEach((item, rank) => {
+      const row = item.querySelector('.capture-undo-row')
+      if (row === null) return
+      const box = row.getBoundingClientRect()
+      if (!(box.right > view.left && box.left < view.right && box.bottom > view.top && box.top < view.bottom)) return
+      out.inView += 1
+      const where = `rank ${rank} (${row.getAttribute('aria-label') ?? 'no label'})`
+      if (item.classList.contains('capture-undo-far')) {
+        if (out.far === '') out.far = `${where} is far`
+        return
+      }
+      const key = row.querySelector('.capture-key')
+      if (!shown(key)) {
+        if (out.number === '') out.number = `${where} shows no number`
+      } else {
+        const text = (key?.textContent ?? '').trim()
+        const live = rank === 0 ? !/^\d+$/.test(text) : text === String(rank + 1)
+        if (!live && out.stale === '') out.stale = `${where} shows "${text}", its live rank is ${rank + 1}`
+      }
+      if (!shown(row.querySelector('img.capture-undo-thumb')) && out.photo === '') out.photo = `${where} shows no photo`
+    })
+    return out
+  }
+  const zero = (): Record<Cause, number> => ({ far: 0, number: 0, photo: 0, stale: 0 })
+  let first = none()
+  let count = zero()
+  let frames = 0
+  let run = 0
+  const w = window as unknown as {
+    __railCheck: () => Check
+    __sampleStart: () => void
+    __sampleStop: () => { frames: number; first: Record<Cause, string>; count: Record<Cause, number> }
+    __sampleFrames: () => number
+    __ends: number
+    __endPos: number
+  }
+  w.__railCheck = check
+  w.__sampleStart = () => {
+    run += 1
+    const id = run
+    frames = 0
+    first = none()
+    count = zero()
+    const tick = () => {
+      if (id !== run) return
+      frames += 1
+      const now = check()
+      for (const cause of CAUSES) {
+        if (now[cause] === '') continue
+        count[cause] += 1
+        if (first[cause] === '') first[cause] = `frame ${frames}: ${now[cause]}`
+      }
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  }
+  w.__sampleStop = () => {
+    run += 1
+    return { frames, first, count }
+  }
+  w.__sampleFrames = () => frames
+  w.__ends = 0
+  w.__endPos = -1
+  document.addEventListener('scrollend', (event) => {
+    const rail = document.querySelector(list)
+    if (rail === null || event.target !== rail) return
+    w.__ends += 1
+    w.__endPos = rail.scrollTop + rail.scrollLeft
+  }, true)
+}
+
+type RailCause = 'far' | 'number' | 'photo' | 'stale'
+type Probe = { frames: number; first: Record<RailCause, string>; count: Record<RailCause, number> }
+const RAIL = 'footer.capture-undo .capture-undo-list'
+const WHEEL_STEPS = 20
+
+const railInView = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __railCheck: () => { inView: number } }).__railCheck().inView)
+const railEnds = (page: Page) => page.evaluate(() => (window as unknown as { __ends: number }).__ends)
+const railPos = (page: Page) =>
+  page.evaluate((sel) => {
+    const el = document.querySelector(sel) as HTMLElement
+    return el.scrollTop + el.scrollLeft
+  }, RAIL)
+/** The first tile in view that fails a cause, named in words, or '' when every tile in view has its face and its live number. */
+const faceFault = (page: Page) =>
+  page.evaluate(() => {
+    const c = (window as unknown as { __railCheck: () => Record<RailCause, string> }).__railCheck()
+    return c.far || c.number || c.photo || c.stale
+  })
+const sampleStart = (page: Page) => page.evaluate(() => (window as unknown as { __sampleStart: () => void }).__sampleStart())
+const sampleStop = (page: Page): Promise<Probe> =>
+  page.evaluate(() => (window as unknown as { __sampleStop: () => Probe }).__sampleStop())
+const sampleFrames = (page: Page) => page.evaluate(() => (window as unknown as { __sampleFrames: () => number }).__sampleFrames())
+
+/** One cause from a probe, with its first tile and how many frames held it, or '' when no frame did. */
+const report = (p: Probe, cause: RailCause): string =>
+  p.first[cause] === '' ? '' : `${p.first[cause]} (${p.count[cause]} of ${p.frames} frames)`
+
+/** The rail scrolls down at 1440 and along at 820. The axis is the one with more to scroll: a computed
+ *  `overflow-y` reads `auto` beside an `overflow-x: auto` even when nothing scrolls on that axis. */
+async function railAxis(page: Page): Promise<{ axis: 'x' | 'y'; range: number }> {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel) as HTMLElement
+    const down = el.scrollHeight - el.clientHeight
+    const along = el.scrollWidth - el.clientWidth
+    return down >= along ? { axis: 'y' as const, range: down } : { axis: 'x' as const, range: along }
+  }, RAIL)
+}
+
+/** A wheel scroll of `WHEEL_STEPS` steps over the rail. The steps cover 80% of its range, so none reaches the end. */
+async function wheelScroll(page: Page): Promise<number> {
+  const { axis, range } = await railAxis(page)
+  const step = Math.floor((range * 0.8) / WHEEL_STEPS)
+  await page.locator(RAIL).hover({ position: { x: 24, y: 24 } })
+  for (let i = 0; i < WHEEL_STEPS; i += 1) {
+    await page.mouse.wheel(axis === 'x' ? step : 0, axis === 'y' ? step : 0)
+  }
+  return range
+}
+
+/** Waits until the rail has ended a scroll after `before` scrolls had ended, and sits where that last one ended. */
+async function settleRail(page: Page, before: number): Promise<void> {
+  await expect.poll(
+    () => page.evaluate((args) => {
+      const w = window as unknown as { __ends: number; __endPos: number }
+      const el = document.querySelector(args.sel) as HTMLElement
+      return w.__ends > args.before && el.scrollTop + el.scrollLeft === w.__endPos
+    }, { sel: RAIL, before }),
+    { message: 'the rail has ended its scroll', timeout: 10_000 },
+  ).toBe(true)
+}
+
+/** Scrolls the rail to its middle in one scroll, on the axis `railAxis` names. Returns the range it could scroll. */
+async function railToMiddle(page: Page): Promise<number> {
+  const { axis, range } = await railAxis(page)
+  await page.evaluate(
+    ({ sel, axis, half }) => {
+      const el = document.querySelector(sel) as HTMLElement
+      el.scrollTo(axis === 'y' ? { top: half } : { left: half })
+    },
+    { sel: RAIL, axis, half: range / 2 },
+  )
+  return range
+}
+
+/** Hand-fed at `width`: the probe is installed first, then the camera and box, then `captures` captures, each waited for. */
+async function handFedSitting(page: Page, width: number, captures: number): Promise<void> {
+  await page.addInitScript(installRailProbe, RAIL)
+  await setViewport(page, { width, height: 900 })
+  await handCamera(page)
+  await stubWire(page, captures + 1)
+  await pickCameraAndBox(page)
+  await expect(page.getByRole('button', { name: 'Capture', exact: true })).toBeEnabled()
+  for (let n = 1; n <= captures; n += 1) {
+    await page.keyboard.press('c')
+    await expect(tiles(page).first()).toHaveAttribute('aria-label', new RegExp(`Card ${n}$`), { timeout: 15_000 })
+  }
+}
+
+for (const width of [1440, 820]) {
+  test(`hand-fed at ${width}px, scroll: every frame, each tile in the rail's view is live with its face and its number`, async ({ page }) => {
+    test.setTimeout(300_000)
+    await handFedSitting(page, width, 60)
+    const before = await railEnds(page)
+    expect(await railInView(page), 'tiles in the rail\'s view before the scroll').toBeGreaterThan(0)
+    const start = await railPos(page)
+    await sampleStart(page)
+    const range = await wheelScroll(page)
+    await settleRail(page, before)
+    const probe = await sampleStop(page)
+    expect(range, 'the rail can scroll').toBeGreaterThan(0)
+    expect((await railPos(page)) - start, 'the 20 wheel steps moved the rail').toBeGreaterThan(0)
+    expect(probe.frames, 'animation frames sampled during the scroll').toBeGreaterThan(0)
+    expect.soft(report(probe, 'far'), 'a tile in the rail\'s view is far during the scroll').toBe('')
+    expect.soft(report(probe, 'number'), 'a tile in the rail\'s view shows no number during the scroll').toBe('')
+    expect.soft(report(probe, 'photo'), 'a tile in the rail\'s view shows no photo during the scroll').toBe('')
+    expect.soft(report(probe, 'stale'), 'a tile in the rail\'s view shows a stale number during the scroll').toBe('')
+  })
+
+  test(`hand-fed at ${width}px, after scroll: once the scroll ends, each tile in the rail's view has its face`, async ({ page }) => {
+    test.setTimeout(300_000)
+    await handFedSitting(page, width, 60)
+    const before = await railEnds(page)
+    expect(await railInView(page), 'tiles in the rail\'s view before the scroll').toBeGreaterThan(0)
+    expect(await wheelScroll(page), 'the rail can scroll').toBeGreaterThan(0)
+    await settleRail(page, before)
+    expect(await railInView(page), 'tiles in the rail\'s view after the scroll').toBeGreaterThan(0)
+    await expect.poll(() => faceFault(page), { message: 'every tile in view has its face and its live number', timeout: 10_000 }).toBe('')
+  })
+
+  test(`hand-fed at ${width}px, middle capture: one capture keeps each tile in view with its face, on the next frame and after`, async ({ page }) => {
+    test.setTimeout(300_000)
+    await handFedSitting(page, width, 60)
+    const before = await railEnds(page)
+    expect(await railToMiddle(page), 'the rail can scroll').toBeGreaterThan(0)
+    await settleRail(page, before)
+    expect(await railInView(page), 'tiles in the rail\'s view at the middle').toBeGreaterThan(0)
+    await expect.poll(() => faceFault(page), { message: 'every tile in view has its face before the capture', timeout: 10_000 }).toBe('')
+    await sampleStart(page)
+    await page.keyboard.press('c')
+    await expect(tiles(page).first()).toHaveAttribute('aria-label', /Card 61$/, { timeout: 15_000 })
+    const landed = await sampleFrames(page)
+    await expect.poll(() => sampleFrames(page), { message: 'three frames after the capture landed', timeout: 10_000 }).toBeGreaterThanOrEqual(landed + 3)
+    const probe = await sampleStop(page)
+    expect.soft(report(probe, 'far'), 'a tile in the rail\'s view is far after one capture').toBe('')
+    expect.soft(report(probe, 'number'), 'a tile in the rail\'s view shows no number after one capture').toBe('')
+    expect.soft(report(probe, 'photo'), 'a tile in the rail\'s view shows no photo after one capture').toBe('')
+    expect.soft(report(probe, 'stale'), 'a tile in the rail\'s view shows a stale number after one capture').toBe('')
+    await expect.poll(() => faceFault(page), { message: 'every tile in view has its face after the capture', timeout: 10_000 }).toBe('')
+  })
+}

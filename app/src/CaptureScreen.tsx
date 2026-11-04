@@ -1119,6 +1119,18 @@ const UndoDrop = memo(
   (prev, next) => prev.onRemove === next.onRemove && sameTarget(prev.target, next.target),
 )
 
+/* A FAR TILE (D313). `capture-undo-far` (CaptureScreen.css) lays out only the tile's row button. The drop
+ * button is more than a box: every `IconButton` portals a tooltip span into `<body>`, outside the list, where
+ * it costs layout objects on every capture. So a far tile also unmounts it, through the setter its cell
+ * registers here. The class changes at once, and the unmount is a state update React renders next. */
+/** How long the rail holds still before the tiles a scroll woke ahead of its view go back to far. */
+const SCROLL_IDLE_MS = 150
+const FAR_SETTERS = new WeakMap<Element, (far: boolean) => void>()
+function setTileFar(item: Element, far: boolean): void {
+  item.classList.toggle('capture-undo-far', far)
+  FAR_SETTERS.get(item)?.(far)
+}
+
 /* ONE FILMSTRIP TILE, RANK-FREE. A tile's props are its card and nothing about where it sits, so a
  * capture changes no existing tile's props and `railElements` hands React the very same element
  * for each, which it skips. What depends on rank (the keycap, the "Undo N" label, the data
@@ -1140,8 +1152,23 @@ const UndoCell = memo(function UndoCell({
   onUndo: (target: UndoTarget, at: number) => void
   onRemove: (target: UndoTarget) => void
 }) {
+  const [far, setFar] = useState(false)
+  const item = useRef<HTMLLIElement | null>(null)
+  const registerFar = useCallback((node: HTMLLIElement | null) => {
+    item.current = node
+    if (node !== null) FAR_SETTERS.set(node, setFar)
+  }, [])
+  /* REACT WRITES THIS `li`'S `className` WHENEVER THE TILE'S `at` CHANGES, which drops the class `setTileFar`
+     put there. This runs after every render of the cell, before paint, and puts the class back to the state. */
+  useLayoutEffect(() => {
+    item.current?.classList.toggle('capture-undo-far', far)
+  })
   return (
-    <li className={at >= DEALING_RAIL_TILES ? 'capture-undo-still' : 'bn-stagger-item'} style={{ '--i': at } as CSSProperties}>
+    <li
+      ref={registerFar}
+      className={at >= DEALING_RAIL_TILES ? 'capture-undo-still' : 'bn-stagger-item'}
+      style={{ '--i': at } as CSSProperties}
+    >
       {/* THE CELL WRAPS TWO SIBLING BUTTONS RATHER THAN NESTING ONE INSIDE THE
           OTHER — an interactive element cannot hold a second one and stay valid,
           and the two mean different things: the row still walks the plan back to
@@ -1164,7 +1191,7 @@ const UndoCell = memo(function UndoCell({
             own complaint — undoing a mid-sitting shot loses every capture after
             it too. `removeCardInPlace` is the route that already exists for it
             (D10 ruling 1), and this is its second door, beside the row's own. */}
-        <UndoDrop target={target} onRemove={onRemove} />
+        {far ? null : <UndoDrop target={target} onRemove={onRemove} />}
       </div>
     </li>
   )
@@ -4373,13 +4400,13 @@ export function CaptureScreen() {
   /* THE RANK-DEPENDENT FACE OF A TILE, WRITTEN ONTO THE DOM. A tile's rank moves for every tile on a
    * capture, and React would have to render all N to say so. This writes six values per tile
    * instead (no element is created), and only for the tiles a person can reach or see: the newest
-   * `DEALING_RAIL_TILES` and the tiles in the scroller's view. A tile further out is written when
-   * it scrolls in or takes focus, before it can be read or pressed. Same text and attributes the
+   * `DEALING_RAIL_TILES` and the tiles near the scroller's view. A tile further out is written when
+   * it scrolls near or takes focus, before it can be read or pressed. The same observer marks a tile
+   * far (`capture-undo-far`): only its row button stays laid out, so a capture re-lays a bounded
+   * number of tiles, not one per card in the sitting (D313). Same text and attributes the
    * tiles carried when React drew them. */
   const busyNow = useRef(busy)
   busyNow.current = busy || held
-  const railVisible = useRef(new Set<Element>())
-  const railSeen = useRef(new WeakSet<Element>())
   const railObserver = useRef<{ root: Element; observer: IntersectionObserver } | null>(null)
   const writeTile = useCallback((item: Element, rank: number) => {
     const row = item.querySelector<HTMLButtonElement>('.capture-undo-row')
@@ -4400,22 +4427,73 @@ export function CaptureScreen() {
     if (key.className !== cls) key.className = cls
     if (rank >= DEALING_RAIL_TILES) item.classList.add('capture-undo-still')
   }, [])
+  /* A TILE IS AWAKE WHILE ITS BOX TOUCHES THE RAIL'S VIEW WIDENED BY `ahead` LIST-SIZES ON EACH SIDE, and far
+   * otherwise. The woken tiles cost about twenty layout objects each, so a capture wakes only the tiles in the
+   * view (`ahead` 0): a wider zone would grow the cost of a capture with the sitting. A scroll widens it to one
+   * list-size, so a tile is awake, and its photo decoded, before it scrolls in. */
+  const inZone = useCallback((box: DOMRect, view: DOMRect, ahead: number) => (
+    box.bottom >= view.top - ahead * view.height && box.top <= view.bottom + ahead * view.height &&
+    box.right >= view.left - ahead * view.width && box.left <= view.right + ahead * view.width
+  ), [])
+  /* WAKES, BEFORE PAINT, EACH FAR TILE IN THE ZONE. The observer below reports after a frame, so a tile that
+   * came into view with no scroll (a capture or an undo that shifted the tiles, a resize) or by a scroll would
+   * show its bare box for that frame. A scroll event, the layout effect after a commit and a resize observer all
+   * run before the frame paints, and read where the tiles are now. This only wakes. Sending a tile far is
+   * `sendBack` and the observer, and both read a tile's box now, never an answer a frame old. */
+  const wake = useCallback((ahead: number) => {
+    const list = railListRef.current
+    if (list === null) return
+    const view = list.getBoundingClientRect()
+    const woken: number[] = []
+    for (let rank = 0; rank < list.children.length; rank += 1) {
+      const item = list.children[rank]!
+      if (!item.classList.contains('capture-undo-far')) continue
+      const box = item.getBoundingClientRect()
+      // Tiles run in order along the rail's one scrolling axis, so the first one past the zone ends the walk.
+      if (box.top > view.bottom + ahead * view.height || box.left > view.right + ahead * view.width) break
+      if (inZone(box, view, ahead)) woken.push(rank)
+    }
+    for (const rank of woken) {
+      const item = list.children[rank]!
+      setTileFar(item, false)
+      writeTile(item, rank)
+    }
+  }, [inZone, writeTile])
+  /* SENDS BACK EACH AWAKE TILE OUT OF VIEW, once the rail has been still for `SCROLL_IDLE_MS`: a scroll wakes
+   * tiles ahead of the view that the observer never reported, so the observer cannot send them back. A timer
+   * from the last scroll event does it in every browser; `scrollend` is not in all of them. A tile holding
+   * focus stays awake. */
+  const sendBackTimer = useRef(0)
+  const sendBack = useCallback(() => {
+    const list = railListRef.current
+    if (list === null) return
+    const view = list.getBoundingClientRect()
+    for (const item of Array.from(list.children)) {
+      if (item.classList.contains('capture-undo-far') || item.matches(':focus-within')) continue
+      if (item.querySelector('.capture-undo-row') !== null && !inZone(item.getBoundingClientRect(), view, 0)) setTileFar(item, true)
+    }
+  }, [inZone])
+  const onRailScroll = useCallback(() => {
+    wake(1)
+    window.clearTimeout(sendBackTimer.current)
+    sendBackTimer.current = window.setTimeout(sendBack, SCROLL_IDLE_MS)
+  }, [wake, sendBack])
   useLayoutEffect(() => {
     const list = railListRef.current
     if (list === null) return
     if (railObserver.current?.root !== list) {
       railObserver.current?.observer.disconnect()
-      railVisible.current.clear()
-      railSeen.current = new WeakSet()
       const observer = new IntersectionObserver(
         (entries) => {
+          const view = list.getBoundingClientRect()
           for (const entry of entries) {
-            if (!entry.isIntersecting) {
-              railVisible.current.delete(entry.target)
-              continue
+            const item = entry.target
+            if (entry.isIntersecting) {
+              setTileFar(item, false)
+              writeTile(item, Array.prototype.indexOf.call(list.children, item))
+            } else if (!item.matches(':focus-within') && !inZone(item.getBoundingClientRect(), view, 0)) {
+              setTileFar(item, true)
             }
-            railVisible.current.add(entry.target)
-            writeTile(entry.target, Array.prototype.indexOf.call(list.children, entry.target))
           }
         },
         { root: list },
@@ -4426,27 +4504,45 @@ export function CaptureScreen() {
     const children = list.children
     for (let rank = 0; rank < children.length; rank += 1) {
       const item = children[rank]!
-      if (!railSeen.current.has(item)) {
-        railSeen.current.add(item)
-        if (item.querySelector('.capture-undo-row') !== null) observer.observe(item)
-        writeTile(item, rank)
-      } else if (rank < DEALING_RAIL_TILES || railVisible.current.has(item)) writeTile(item, rank)
+      if (item.classList.contains('capture-undo-ghost') || item.classList.contains('capture-undo-spacer')) continue
+      /* EVERY TILE IS OBSERVED ON EVERY RUN, a no-op for one already observed. The unmount cleanup below
+         disconnects the observer, and a remount runs this effect again over the same list: a tile skipped
+         for having been seen would never be observed again. */
+      observer.observe(item)
+      // An awake tile is written on every run, since a capture moves its rank.
+      if (rank < DEALING_RAIL_TILES || !item.classList.contains('capture-undo-far')) writeTile(item, rank)
     }
-  }, [railList, busy, held, writeTile])
-  useEffect(() => () => railObserver.current?.observer.disconnect(), [])
+    wake(0)
+  }, [railList, busy, held, writeTile, wake, inZone])
+  useEffect(() => () => {
+    railObserver.current?.observer.disconnect()
+    window.clearTimeout(sendBackTimer.current)
+  }, [])
   /* A tile out of view that takes focus is written first, so what a screen reader reads is current. */
   const onRailFocus = useCallback(
     (event: FocusEvent) => {
       const item = (event.target as Element).closest('.capture-undo-list > li')
-      if (item?.parentElement) writeTile(item, Array.prototype.indexOf.call(item.parentElement.children, item))
+      if (item?.parentElement) {
+        setTileFar(item, false)
+        writeTile(item, Array.prototype.indexOf.call(item.parentElement.children, item))
+      }
     },
     [writeTile],
   )
   useEffect(() => {
     const list = railListRef.current
-    list?.addEventListener('focusin', onRailFocus)
-    return () => list?.removeEventListener('focusin', onRailFocus)
-  }, [railList, onRailFocus])
+    if (list === null) return
+    list.addEventListener('focusin', onRailFocus)
+    list.addEventListener('scroll', onRailScroll, { passive: true })
+    // A resize moves the tiles with no scroll and no commit. This callback runs after layout, before paint.
+    const resize = new ResizeObserver(() => wake(0))
+    resize.observe(list)
+    return () => {
+      list.removeEventListener('focusin', onRailFocus)
+      list.removeEventListener('scroll', onRailScroll)
+      resize.disconnect()
+    }
+  }, [railList, onRailFocus, onRailScroll, wake])
   const dealerSaid = !dealerSupported() ? dealerReason : dealerIdle && dealerReason !== null ? dealerReason : dealer.said
 
   /** WHETHER THERE IS ANYTHING TO CLEAR, which is what disables the control rather than hiding

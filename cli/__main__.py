@@ -260,7 +260,7 @@ def build_parser() -> argparse.ArgumentParser:
     identify.add_argument(
         "--dry-run",
         action="store_true",
-        help="everything except the API call",
+        help="everything except the API call. Run it first: this command spends money",
     )
 
     # --------------------------------------------------------------------------- rescue
@@ -270,7 +270,9 @@ def build_parser() -> argparse.ArgumentParser:
     # immutable input — and it refuses a run that is not stranded.
     rescue = sub.add_parser(
         "rescue",
-        help="re-address a stranded run's cards to where they are now. Free, previews.",
+        help="re-address a stranded run's cards, by digest, to where they are now. Free, previews.",
+        description="Re-address a stranded run's cards, by digest, to where they are now. Free. "
+        "Previews by default; --write creates a second run and never edits the one given.",
     )
     rescue.add_argument("run_dir", help="the run a join refuses over a reallocated box")
     rescue.add_argument(
@@ -331,7 +333,10 @@ def build_parser() -> argparse.ArgumentParser:
     match_audit = match_sub.add_parser(
         "audit",
         help="re-read every filed card's photo with the free reader; list disagreements. Free. "
-        "--write sends in-stock disagreements back to Review.",
+        "--write sends in-stock disagreements back to Review (`free_reader_disagrees`).",
+        description="Re-read every filed card's photo with the free reader and list disagreements. Free. "
+        "--write sends in-stock disagreements back to Review (`free_reader_disagrees`); "
+        "sold cards are only listed.",
     )
     match_audit.add_argument("--write", action="store_true", help="queue each in-stock disagreement for Review (sold cards are only listed)")
 
@@ -512,7 +517,8 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="hold this SKU to at most N copies LIVE at TCGplayer, counting what is already "
         "out — a SKU at or over N adds nothing and the report says by how much. Omit for no "
-        "cap, which is the default since the standing bound was retired",
+        "cap, which is the default since the standing bound was retired. Refuses a SKU while a "
+        "sent copy is still pending: run `reconcile --live` first",
     )
     # A QUANTITY FOR ONE CARD, THIS PRESS ONLY (D7, amended 2026-09-11, on the operator's
     # ruling). A send quantity and not a ceiling: `--quantity 8608859=2` puts two copies of
@@ -654,7 +660,9 @@ def build_parser() -> argparse.ArgumentParser:
         "newest reading per SKU",
     )
     readings_adopt.add_argument(
-        "--write", action="store_true", help="actually write; previews without it"
+        "--write", action="store_true",
+        help="actually write; previews without it. Fully replaces both tables, and refuses over no source "
+        "or a malformed pricing.json",
     )
     readings_sub.add_parser("show", help="what the table holds, and which files it last read")
 
@@ -664,7 +672,7 @@ def build_parser() -> argparse.ArgumentParser:
     # (`docs/specs/holdings-roster.md`).
     holdings_roster = sub.add_parser(
         "holdings-roster",
-        help="value an investment roster CSV at this store's prices. Free, read-only.",
+        help="value an investment roster CSV at this store's prices. Free, read-only, no screen.",
     )
     holdings_roster.add_argument("csv", help="the roster export")
     holdings_roster.add_argument(
@@ -691,7 +699,8 @@ def build_parser() -> argparse.ArgumentParser:
         "it says into the table",
     )
     skus_adopt.add_argument(
-        "--write", action="store_true", help="actually write; previews without it"
+        "--write", action="store_true",
+        help="actually write; previews without it. Folds onto the table, never a full replace",
     )
 
     # ------------------------------------------------------------------------- archive
@@ -713,7 +722,8 @@ def build_parser() -> argparse.ArgumentParser:
         "what came back — never deleting a bucket a pass did not mention",
     )
     archive_sweep.add_argument(
-        "--write", action="store_true", help="actually write; previews without it"
+        "--write", action="store_true",
+        help="actually write; previews without it, and a preview makes no network call",
     )
     archive_show = archive_sub.add_parser(
         "show", help="what the archive holds, and which ranges were last swept"
@@ -798,7 +808,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     applying = reprice_sub.add_parser(
         "apply",
-        help="read the edited worklist back and write the price-only import CSV",
+        help="read the edited worklist back and write the price-only import CSV. The `#/pricing` modal is its screen",
     )
     applying.add_argument("worklist", help="the worklist, edited or not")
     applying.add_argument(

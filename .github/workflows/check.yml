@@ -227,8 +227,8 @@ jobs:
         env:
           BANCHI_GUARD_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
           BANCHI_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
-          # Only `serve-selftest` (in a guards shard) reads this: it turns on its real `vite build` arm.
-          BANCHI_SERVE_REAL_BUILD: '1'
+          # Only `serve-selftest` reads this, and `scripts/checks.py` files it in guards-2: it turns on its real `vite build` arm.
+          BANCHI_SERVE_REAL_BUILD: ${{ matrix.target == 'ci-check-guards-2' && '1' || '' }}
           TARGET: ${{ matrix.target }}
         # A SKIP SHOWS AND NEVER FAILS. The shard's own exit code is kept (`rc`). The count reads the
         # markers the tools already print (`scripts/ci-skip-count.sh` is the one home of the reader).
@@ -341,7 +341,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: shivinate7/claude-settings/actions/all-jobs-passed@49a41651a3f8182b211db3b1a4596933ca4eca58 # main, 2026-11-01
+      - uses: shivinate7/claude-settings/actions/all-jobs-passed@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
         with:
           needs: ${{ toJSON(needs) }}
 
@@ -383,7 +383,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: shivinate7/claude-settings/actions/stamp@49a41651a3f8182b211db3b1a4596933ca4eca58 # main, 2026-11-01
+      - uses: shivinate7/claude-settings/actions/stamp@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
         with:
           mode: check
           config: .github/stamp.json
@@ -422,7 +422,7 @@ jobs:
       - name: Install
         run: npm ci --prefix app
 
-      - uses: shivinate7/claude-settings/actions/code-check@49a41651a3f8182b211db3b1a4596933ca4eca58 # main, 2026-11-01
+      - uses: shivinate7/claude-settings/actions/code-check@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
         with:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
@@ -790,6 +790,6 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: shivinate7/claude-settings/actions/ci-done-comment@49a41651a3f8182b211db3b1a4596933ca4eca58 # main, 2026-11-01
+      - uses: shivinate7/claude-settings/actions/ci-done-comment@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
         with:
           needs: ${{ toJSON(needs) }}

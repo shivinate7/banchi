@@ -46,6 +46,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from cli import cmd_pricearchive  # noqa: E402
+from harness.tests import price_refusals  # noqa: E402
 from harness.tests.home import isolated_home  # noqa: E402
 from pipeline import games as games_module  # noqa: E402
 from pipeline import join as join_module  # noqa: E402
@@ -1673,13 +1674,12 @@ def main() -> int:
 
         # ------------------------------------------------- pacing (D222)
         print("\n-- pipeline/pricearchive.py: classify_refusals and measured_pace --")
-        blocked_message = (
-            "https://infinite-api.tcgplayer.com/price/history/652771/detailed?range=month "
-            "answered HTTP 403. That is either an authorization change at the host or its "
-            "own defenses declining this client by its request signature — set "
-            "BANCHI_TCG_USER_AGENT in .env to the User-Agent your browser sends and try "
-            "again."
-        )
+        # The texts the reader really writes, from its own raise path (`harness/tests/price_refusals.py`).
+        # Scope before subject: the 403 must raise `Blocked`, or the cases below prove nothing about it.
+        blocked_error = price_refusals.fetch_refusal(price_refusals.net_error(403))
+        ok(isinstance(blocked_error, pricehistory.Blocked),
+           "the real raise path for an HTTP 403 is Blocked (scope before subject)", repr(blocked_error))
+        blocked_message = str(blocked_error)
         refusals_in = {"652771": blocked_message, "other": "not in the script"}
 
         # THE GUARD, PROVEN TO FAIL WITHOUT THE FIX FIRST: with no evidence of an earlier
@@ -1691,21 +1691,47 @@ def main() -> int:
         ok(unchanged["652771"] == blocked_message,
            "with no earlier success this pass, a 403 is left exactly as Blocked phrased it "
            "— this function has no evidence yet to call it a throttle", unchanged)
-        ok(blocked_count == 1, "exactly one refusal carried the 403 signature", blocked_count)
+        ok(blocked_count == 1, "the real 403 text is counted as blocked (no earlier success)",
+           blocked_count)
 
         # NOW THE FIX: after this pass has already read something successfully, the SAME
         # message is rewritten, and it never repeats the disproved remedy.
         rewritten, blocked_count2 = archive_walk.classify_refusals(
             refusals_in, had_earlier_success=True
         )
-        ok("BANCHI_TCG_USER_AGENT" not in rewritten["652771"],
+        ok("browser signature" not in rewritten["652771"],
            "after an earlier success this pass, the rewritten message never repeats the "
-           "remedy this pass has already disproved", rewritten)
+           "remedy this pass has already disproved (the real text's own browser-signature "
+           "remedy)", rewritten)
         ok("throttle" in rewritten["652771"].lower(),
            "the rewritten message names what it actually is", rewritten)
         ok(rewritten["other"] == "not in the script",
            "a refusal that never carried the 403 signature is left untouched", rewritten)
         ok(blocked_count2 == 1, "the blocked count is unchanged by the rewrite", blocked_count2)
+
+        # Every other real network text is NOT a 403, even after an earlier success. The 500
+        # shares the 403's opening words ("The price service answered '..."), so a signature
+        # that matches only that opening would count it too.
+        print("-- classify_refusals: the real non-403 texts are never a block --")
+        for name, caught in price_refusals.network_refusals().items():
+            if name == "403":
+                continue
+            ok(caught is not None, f"the real raise path for {name} raised (scope before subject)",
+               repr(caught))
+            _, count = archive_walk.classify_refusals({name: str(caught)}, had_earlier_success=True)
+            ok(count == 0, f"a real {name} refusal is not counted as blocked, even after an "
+               "earlier success", str(caught))
+        empty_out, empty_count = archive_walk.classify_refusals({}, had_earlier_success=True)
+        ok(empty_out == {} and empty_count == 0,
+           "no refusals in, nothing rewritten and nothing counted", (empty_out, empty_count))
+        every_real = {f"network {name}": str(caught)
+                      for name, caught in price_refusals.network_refusals().items()}
+        every_real.update({f"not resolvable ({stage})": str(text)
+                           for stage, text in price_refusals.not_resolvable_refusals().items()})
+        _, full_count = archive_walk.classify_refusals(every_real, had_earlier_success=True)
+        ok(full_count == 1,
+           "across every real refusal text the reader writes, exactly one (the 403) is counted "
+           "as blocked", full_count)
 
         ok(archive_walk.measured_pace(0, 0) == archive_walk.DEFAULT_COURTESY_DELAY_SECONDS,
            "no requests measured yet -> the naive default, never a divide-by-zero")

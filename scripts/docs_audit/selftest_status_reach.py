@@ -5,7 +5,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from .core import ROOT, Report, exists, read, registered_tests
+from .core import ROOT, Report, claude_and_rules, exists, read, registered_tests
 from .design import COLOR, TYPEFACE, token_value
 from .env_map import DEFAULT_SOURCE_SUFFIXES, SOURCE_SUFFIXES_KEY, scan_plan, source_names
 from .hygiene import _VERDICT_CONFIG, _VERDICT_REPORTER, verdict_disagreements
@@ -28,7 +28,7 @@ def run(ok) -> None:
             read(_VERDICT_REPORTER) if exists(_VERDICT_REPORTER) else None,
             read(_VERDICT_CONFIG) if exists(_VERDICT_CONFIG) else None,
             read(ROOT / "Makefile"),
-            read(ROOT / "CLAUDE.md"),
+            claude_and_rules(),
         ),
         "this repo's own four files agree",
     )
@@ -252,6 +252,6 @@ def run(ok) -> None:
     ok(model_disagreement(rule, 'MODEL = "m-1"\n') is None, "equal ids agree")
     ok(model_disagreement(rule, 'MODEL = "m-2"\n') is not None, "a swapped model id is caught")
     ok(
-        model_disagreement(read(ROOT / "CLAUDE.md"), read(ROOT / "identify" / "prompt.py")) is None,
-        "this repo's CLAUDE.md and prompt.py agree",
+        model_disagreement(claude_and_rules(), read(ROOT / "identify" / "prompt.py")) is None,
+        "this repo's CLAUDE.md (and its rule files) and prompt.py agree",
     )

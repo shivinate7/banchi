@@ -246,14 +246,14 @@ because only this form would want one. No such person exists, so nothing plans i
 ## 9. Where it is tested
 
 One row per platform the product ships on. "Untested" means no job and no local check reads it.
-A row's run id is the last green run, read from the job's own history.
+A row's run id is one run that proved it, fixed when the row was written. It is a proof, not the latest run.
 
-| Platform | Where it is tested | Last green run |
+| Platform | Where it is tested | Proved by run |
 |---|---|---|
-| Linux server and every browser spec | `.github/workflows/check.yml`: the `ci-check` shards and the `design-check` matrix, on `ubuntu-latest` | 41560353874 |
+| Linux server and every browser spec | `.github/workflows/check.yml`: the `ci-check` shards and the `design-check` matrix, on `ubuntu-latest` | 41773920691 |
 | macOS, the product checks | `.github/workflows/mac.yml`'s `mac-product` job, weekly and on dispatch; outside `all-jobs-passed` (D136) | 41774107649 |
 | macOS, the server serving a real build | the same job's `make serve-selftest` step | 41774107649 |
-| The public demo on GitHub Pages | `.github/workflows/demo.yml`; `docs/specs/demo.md` says what it asserts | 41593550251 |
+| The public demo on GitHub Pages | `.github/workflows/demo.yml`; `docs/specs/demo.md` says what it asserts | 41776203254 |
 | The phone on the LAN at the capture port | `make lan-check`, run by hand with the phone on the network (§10) | none, local |
 | The Fulfiller's own device | untested | none |
 | Safari, Add to Dock | untested | none |
@@ -264,10 +264,15 @@ A row's run id is the last green run, read from the job's own history.
 
 `BANCHI_SERVE_REAL_BUILD=1` runs the real `vite build` in `make serve-selftest`'s supervisor arm
 (`serve-selftest.py`'s `check_real_build`). Unset, it is SKIPPED. It needs node and `app/node_modules`.
-`mac.yml` and `check.yml` both set it. The arm refuses a path that is no route with 404 and serves no
-catch-all `index.html`, which is D138's ruling.
+`mac.yml` sets it, and `check.yml` sets it for the shard that runs `serve-selftest`. The arm refuses a
+path that is no route with 404 and serves no catch-all `index.html`, which is D138's ruling.
 
+A pull request that touches only `app/` does not run `serve-selftest`: `scripts/serve-scope.py` leaves
+`app/**` out of what it reads. `check.yml` sets `BANCHI_SERVE_SCOPE=all` on every run that is not a pull
+request, so the real-build arm covers such a change on a push to main and on the nightly run. `mac.yml`
+covers it weekly on macOS.
 
+## 10. What only the owner can do
 
 Two presses on the owner's own machine. A session cannot do either:
 

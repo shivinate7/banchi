@@ -1,1 +1,1 @@
-CLAUDE.md
+../.claude/rules/code-cards.md

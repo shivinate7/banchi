@@ -23,15 +23,15 @@ permissions:
 
 # Never cancelled: a weekly run is a measurement, and a newer one is not a reason to drop it.
 concurrency:
-  group: mac-${{ github.run_id }}
+  group: mac
   cancel-in-progress: false
 
 jobs:
   mac-product:
     runs-on: macos-latest
-    # Provisional: no macOS run had been timed when this was written. The merge tool waits for
-    # the largest job cap plus five minutes (`merge.deadlineMinutes` in `.github/stamp.json`).
-    timeout-minutes: 60 # provisional
+    # Provisional: one proof run timed it. This job is outside the merge, so it does not set
+    # `merge.deadlineMinutes` in `.github/stamp.json`.
+    timeout-minutes: 40 # provisional, run 41774107649 took about 15 min
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -142,7 +142,7 @@ jobs:
 
   alarm:
     needs: [mac-product]
-    if: ${{ always() && (github.event_name == 'schedule' || inputs.report_failure) && contains(needs.*.result, 'failure') }}
+    if: ${{ always() && (github.event_name == 'schedule' || inputs.report_failure) && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -156,7 +156,7 @@ jobs:
           SHA: ${{ github.sha }}
         run: |
           title="Mac check failing"
-          failed="$(jq -r 'to_entries[] | select(.value.result == "failure") | "- \(.key)"' <<<"$NEEDS")"
+          failed="$(jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | "- \(.key) (\(.value.result))"' <<<"$NEEDS")"
           body="$(printf 'Failed jobs at %s:\n\n%s\n\nRun: %s' "${SHA:0:12}" "$failed" "$RUN_URL")"
           open="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" \
             --json number,title --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
