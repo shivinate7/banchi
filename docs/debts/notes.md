@@ -40,3 +40,4 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - `pipeline/rosterholdings.py`'s `build_roster_report`: a product id whose archive SKUs are only partly in `skus` prices from the ones present, so a foil line can take a non-foil price. `no_sku_row` covers only all-missing. `skus` has no delete path today.
 - `pipeline/rosterholdings.py`'s `_id_of` reads ids with `int()`, so `09001` and `+9001` become separate rows. Roster ids are plain integers today.
 - `#/pricing` Now column: its width comes from a hidden "Now $9,999.99" in each row, so a live price of $10,000 or more widens only its own row (about 7px at $12,345), and that row's Market column drifts left. Nothing clips.
+- Auto mode refuses `Bash` for a remote branch delete (`git push origin :refs/heads/<branch>`), even for a hand-off branch the session made whose commit is already on another branch, such as `seed/banchi-roadmap`. The owner deletes such a branch.
