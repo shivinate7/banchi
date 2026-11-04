@@ -29,9 +29,8 @@
 # is exactly reap-selftest's and janitor-selftest's standing.
 #
 # WHAT IT CANNOT PROVE. That Claude Code actually invokes the hook, or that exit 2 blocks a
-# tool call — both are the harness's behaviour and not this repo's. `.claude/settings.json` and
-# `.codex/hooks.json` are what arm it and `make docs-audit`'s `codex hooks` row is what keeps
-# those two rosters honest with each other.
+# tool call — both are the harness's behaviour and not this repo's. `.claude/settings.json` arms
+# it and `make docs-audit`'s `claude hooks` row keeps its prefix honest.
 
 set -uo pipefail          # NOT -e: every case must run and be scored
 

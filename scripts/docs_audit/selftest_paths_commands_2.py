@@ -7,7 +7,6 @@ import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import List
 
 from .core import (
     ADVISORY,
@@ -22,10 +21,8 @@ from .core import (
 )
 from .harness_criteria import string_assign
 from .hygiene import (
-    check_agent_links,
+    check_fork_claude_link,
     check_positional_references,
-    expected_rule_links,
-    rule_folders,
     verdict_disagreements,
 )
 from .paths_commands import (
@@ -68,14 +65,6 @@ def _fixture_root(root: Path):
         yield root
     finally:
         here["ROOT"], here["_INDEX_PATHS"] = saved
-
-
-def _rule_file(root: Path, name: str, globs: List[str]) -> None:
-    """One rule file under the fixture's `.claude/rules/`, its `paths:` list the given globs."""
-    path = root / ".claude" / "rules" / name
-    path.parent.mkdir(parents=True, exist_ok=True)
-    body = "".join(f'  - "{glob}"\n' for glob in globs)
-    path.write_text("---\npaths:\n" + body + "---\n# Rule\n", encoding="utf-8")
 
 
 def run(ok) -> None:
@@ -353,83 +342,58 @@ def run(ok) -> None:
         str(found),
     )
 
-    # A rule's `paths:` globs are `<folder>/**` or the rule cannot be linked for Codex, and a rule
-    # that cannot be linked is said so, never skipped (rule_folders' own docstring).
-    print("\nrule folders: a glob has to be `<folder>/**`, or the rule is refused, never skipped")
-    ok(
-        rule_folders('---\npaths:\n  - "app/**"\n---\n# Rule\n') == ["app"],
-        "a `<folder>/**` glob is read as its folder",
-    )
-    ok(
-        rule_folders('---\npaths:\n  - "app/src/*.ts"\n---\n# Rule\n') is None,
-        "a glob that does not end in `/**` makes the rule refused, not an empty list",
-    )
-    ok(
-        rule_folders('---\npaths:\n  - "app/**"\n  - "app/src/*.ts"\n---\n# Rule\n') is None,
-        "one such glob among good ones refuses the whole rule",
-    )
-
-    # The fixture is a whole repo root in one run folder: each case points the audit's ROOT at its
-    # own subfolder, and the rule files and symlinks it needs are made there. The real tree is never read.
-    print("\nrule links: one rule per folder, a rule that cannot be linked says so, an orphan link is named")
+    # `code-card-fork/CLAUDE.md` is the one symlink the fork reads. It is relative, it names the root
+    # CLAUDE.md, and it resolves. Each case points the audit's ROOT at its own fixture.
+    print("\nfork claude link: the fork's CLAUDE.md is a relative symlink to the root CLAUDE.md, and it resolves")
     with _run_folder() as run_dir:
-        with _fixture_root(run_dir / "empty"):
-            ok(
-                expected_rule_links() == ([], []),
-                "control: no rule files means no links and no findings",
-            )
-
-        with _fixture_root(run_dir / "two") as root:
-            _rule_file(root, "a.md", ["app/**"])
-            _rule_file(root, "b.md", ["app/**", "store/**"])
-            links, findings = expected_rule_links()
-            ok(
-                links == [("app/AGENTS.md", "../.claude/rules/a.md"),
-                          ("store/AGENTS.md", "../.claude/rules/b.md")],
-                "a folder takes the first rule that covers it, and the second rule links only its other folders",
-                str(links),
-            )
-            ok(
-                len(findings) == 1 and findings[0].where == ".claude/rules/b.md"
-                and "already covers" in findings[0].message,
-                "the second rule on one folder is one finding, against the rule that owns the folder",
-                str([(f.where, f.message) for f in findings]),
-            )
-
-        with _fixture_root(run_dir / "glob") as root:
-            _rule_file(root, "c.md", ["app/src/*.ts", "store/**"])
-            links, findings = expected_rule_links()
-            ok(
-                links == [] and len(findings) == 1 and findings[0].where == ".claude/rules/c.md"
-                and "no `paths:`" in findings[0].message,
-                "a rule with a glob that is not `<folder>/**` links no folder, not even its good glob",
-                str([(f.where, f.message) for f in findings]) + " links " + str(links),
-            )
-
-        with _fixture_root(run_dir / "orphan") as root:
-            _rule_file(root, "app.md", ["app/**"])
-            (root / "app").mkdir()
-            (root / "store").mkdir()
-            os.symlink("../.claude/rules/app.md", root / "app" / "AGENTS.md")
-            os.symlink("../.claude/rules/app.md", root / "store" / "AGENTS.md")
-            ok(
-                (root / "store" / "AGENTS.md").is_symlink(),
-                "scope: the orphan link is on disk as a symlink before its finding is read",
-            )
+        with _fixture_root(run_dir / "fork-good") as root:
+            (root / "CLAUDE.md").write_text("# Root\n", encoding="utf-8")
+            (root / "code-card-fork").mkdir()
+            os.symlink("../CLAUDE.md", root / "code-card-fork" / "CLAUDE.md")
             report = Report()
-            check_agent_links(report)
-            by_where = {f.where: f.message for f in report.checks[0].findings}
+            check_fork_claude_link(report)
+            found = [f for row in report.checks for f in row.findings]
+            ok(not found, "control: a relative link to ../CLAUDE.md that resolves is clean", str(found))
+
+        with _fixture_root(run_dir / "fork-absent") as root:
+            (root / "CLAUDE.md").write_text("# Root\n", encoding="utf-8")
+            (root / "code-card-fork").mkdir()
+            report = Report()
+            check_fork_claude_link(report)
+            found = [f for row in report.checks for f in row.findings]
             ok(
-                "store/AGENTS.md" in by_where and "does not cover `store/`" in by_where["store/AGENTS.md"],
-                "a folder link whose rule does not cover that folder is an orphan, and is named",
-                str(by_where),
-            )
-            ok(
-                "app/AGENTS.md" not in by_where,
-                "a folder link whose rule covers that folder is not an orphan",
-                str(by_where),
+                len(found) == 1 and "is not a symlink" in found[0].message,
+                "red: the fork's CLAUDE.md is a plain file, not a symlink, and that is reported",
+                str(found),
             )
 
+        with _fixture_root(run_dir / "fork-wrong") as root:
+            (root / "CLAUDE.md").write_text("# Root\n", encoding="utf-8")
+            (root / "README.md").write_text("# Other\n", encoding="utf-8")
+            (root / "code-card-fork").mkdir()
+            os.symlink("../README.md", root / "code-card-fork" / "CLAUDE.md")
+            report = Report()
+            check_fork_claude_link(report)
+            found = [f for row in report.checks for f in row.findings]
+            ok(
+                len(found) == 1 and "links to `../README.md`" in found[0].message,
+                "red: a link that resolves but names another file is reported, with the target it must name",
+                str(found),
+            )
+
+        with _fixture_root(run_dir / "fork-dangling") as root:
+            (root / "code-card-fork").mkdir()
+            os.symlink("../CLAUDE.md", root / "code-card-fork" / "CLAUDE.md")
+            report = Report()
+            check_fork_claude_link(report)
+            found = [f for row in report.checks for f in row.findings]
+            ok(
+                len(found) == 1 and "does not exist" in found[0].message,
+                "red: a link whose root CLAUDE.md is missing is reported as dangling",
+                str(found),
+            )
+
+    with _run_folder() as run_dir:
         # CLAUDE.md ends in its device-key roster, with no newline after it, and a rule file follows. The
         # roster reader stops at a blank line, so the join must put one there: the roster must end at its
         # own last word and not run on into the rule file's text.

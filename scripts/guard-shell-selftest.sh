@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `make guard-shell-selftest` — scripts/guard-shell.py, proved by committing its six mistakes.
+# `make guard-shell-selftest` — scripts/guard-shell.py, proved by committing its five mistakes.
 # Protects: The shell guard refuses each of its mistakes, proved by committing each mistake in a throwaway repository.
 # Governs: D18
 #
@@ -8,10 +8,9 @@
 # reproduction: `reap-selftest.sh` reproduces both 2026-09-10 kill incidents with real
 # processes and a real socket, `revert-selftest.sh` rebuilds PR #218 and #221, and
 # `silent-write-selftest.sh` reproduces the refused commit whose refusal went to /dev/null. So
-# five of the six incidents are PERFORMED here first, in a throwaway repository, and only then
+# three of the five incidents are PERFORMED here first, in a throwaway repository, and only then
 # is the guard asked about them:
 #
-#   1. a file is modified, `git checkout <it>` is run for real, and the work is gone
 #   2. a worktree is made, and its root is a different directory from the main checkout's
 #   5. `pgrep -f <tag>` matches the shell whose own command line carries that tag
 #   6. a local branch is really made to track a differently-named remote branch — the exact
@@ -32,10 +31,10 @@
 # WHY IT IS NOT IN THE GIT HOOK. D18: it writes a temp repository and makes real commits in
 # it. It IS in `make check` and `make ci-check`, which is reap-selftest's standing exactly.
 #
-# WHAT IT CANNOT PROVE. That Claude Code or Codex actually invokes the hook, or that exit 2
+# WHAT IT CANNOT PROVE. That Claude Code actually invokes the hook, or that exit 2
 # blocks a tool call — both are the harness's behaviour and not this repo's.
-# `.claude/settings.json` and `.codex/hooks.json` arm it and `make docs-audit`'s `codex hooks`
-# row is what keeps those two rosters honest with each other.
+# `.claude/settings.json` arms it and `make docs-audit`'s `claude hooks` row keeps its
+# `GUARD_SHELL_SKIP` pin honest.
 
 set -uo pipefail          # NOT -e: every case must run and be scored
 
@@ -172,155 +171,6 @@ else
 fi
 
 echo "guard-shell-selftest — fixture at $tmp"
-echo ""
-echo "  1. the destructive checkout, reproduced"
-
-# ------------------------------------------------- 1a. the incident, performed in the fixture
-(
-  cd "$tmp/main" || exit 1
-  # ~240 LINES IS THE REAL FIGURE AND THE SHAPE IS WHAT MATTERS: uncommitted work in a file
-  # that is otherwise ordinary, put back by a command that asks nothing.
-  printf 'one\ntwo\nthree\n' > work.py
-  for i in $(seq 1 240); do printf 'the session\x27s own work line %s\n' "$i" >> work.py; done
-  wc -l < work.py | tr -d ' ' > "$tmp/before"
-  git checkout -q work.py 2>/dev/null
-  wc -l < work.py | tr -d ' ' > "$tmp/after"
-)
-if [ "$(cat "$tmp/before")" = "243" ] && [ "$(cat "$tmp/after")" = "3" ]; then
-  ok "\`git checkout work.py\` destroyed 240 uncommitted lines, silently and without asking"
-else
-  bad "the incident did not reproduce: $(cat "$tmp/before") lines before, $(cat "$tmp/after") after"
-fi
-
-# Put the dirt back, so every case below is posed against a genuinely modified file. The
-# DIRECTORY is dirtied too, because a branch named after a directory in the tree — `git checkout
-# -b harness`, `-b app`, `-b scripts` — is an ordinary thing to type, and it is the one case
-# where the branch-creation exemption is load-bearing rather than redundant with resolution.
-(cd "$tmp/main" && printf 'one\ntwo\nthree\nfour\n' > work.py && printf 'y\n' >> harness/images/a.jpg)
-
-echo ""
-echo "  the guard refuses it, in every spelling that discards"
-
-refuses "the bare form — the 2026-09-06 command"    "$tmp/main" "git checkout work.py"
-refuses "with \`--\`, which is the careful spelling of the same discard" \
-  "$tmp/main" "git checkout -- work.py"
-refuses "\`-q\` does not launder it"                 "$tmp/main" "git checkout -q -- work.py"
-refuses "\`git restore\`, the modern name"            "$tmp/main" "git restore work.py"
-refuses "\`git restore --worktree --staged\`, which takes both copies" \
-  "$tmp/main" "git restore --staged --worktree work.py"
-refuses "\`git checkout .\` over the whole dirty set"  "$tmp/main" "git checkout ."
-refuses "\`git checkout -- .\`"                        "$tmp/main" "git checkout -- ."
-refuses "\`git -C <tree> checkout\`, which names another tree" \
-  "$tmp" "git -C $tmp/main checkout work.py"
-refuses "buried mid-script behind a \`&&\`"           "$tmp/main" "echo tidy && git checkout work.py"
-# A MULTI-LINE SCRIPT IS THE ORDINARY SHAPE OF A SESSION'S BASH CALL, and `shlex` treats a
-# newline as plain whitespace — so without the line separator the shared parser inserts, these
-# two lines are ONE simple command whose head is `echo`, which has no git verb at all. That is a
-# MISS on the exact command this clause exists for, and it is the same parser defect
-# `silent-write-guard.py` shipped in the other direction, as a false positive. One parser, one
-# arm each.
-refuses "on its own line in a two-line script"       "$tmp/main" "echo tidy
-git checkout work.py"
-refuses "an env prefix does not launder it"          "$tmp/main" "BANCHI_MAIN=off git checkout work.py"
-
-# THE REFUSAL'S CONTENT IS SCORED, NOT ONLY ITS EXIT CODE. A refusal that does not name the
-# escape hatch is what CLAUDE.md forbids repo-wide, and one that does not name the `.bak`
-# shape sends a session looking for a different command to type.
-judge "$tmp/main" "git checkout work.py"
-case "$out" in
-  *"BANCHI_CHECKOUT=off"*) bad "the refusal names the CHECKOUT switch to an agent" ;;
-  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
-  *) bad "the refusal carries no owner-only line" ;; esac
-case "$out" in *".bak"*) ok "the refusal names the \`.bak\` copy as the way to do it safely" ;;
-  *) bad "the refusal does not name the .bak shape" ;; esac
-case "$out" in *"work.py is modified"*) ok "the refusal names the file and its state" ;;
-  *) bad "the refusal does not say which file is modified" ;; esac
-case "$out" in *"1 added, 0 removed"*|*"added,"*) ok "the refusal says how many lines would go" ;;
-  *) bad "the refusal does not carry a diffstat" ;; esac
-
-echo ""
-echo "  what clause 1 must NEVER refuse"
-
-for case in \
-  'git checkout main' \
-  'git checkout -b brand-new' \
-  'git checkout -q -b another-one' \
-  'git checkout clean.txt' \
-  'git checkout -- clean.txt' \
-  'git restore clean.txt' \
-  'git restore --staged work.py' \
-  'git switch -q main' \
-  'git checkout HEAD~0' \
-; do
-  if real_command "$tmp/main" "$case"; then
-    allows "a branch, a clean path or an index op: \`$case\`" "$tmp/main" "$case"
-  fi
-done
-
-# A NAMED SOURCE OVER A CLEAN PATH IS GENUINELY SAFE — nothing is at stake, so this stays
-# a pass. Run for real first, because a bad sha would make this pass for the wrong reason.
-sha="$(cd "$tmp/main" && git rev-parse HEAD)"
-if real_command "$tmp/main" "git checkout $sha -- clean.txt"; then
-  allows "\`git checkout <sha> -- <path>\` over a CLEAN path" "$tmp/main" "git checkout $sha -- clean.txt"
-fi
-
-# A NAMED SOURCE OVER A MODIFIED PATH IS NOT SAFE, AND THE OLD SPEC SAID IT WAS — the exact
-# hole #321's own report named: "true of an arbitrary sha and false of HEAD, which is
-# byte-identical in effect to the refused \`git checkout -- <path>\`." Closed the same
-# session a coordinator ran \`git checkout origin/main -- .\` over a tree that only survived
-# because it happened to be clean at that moment — naming a source changes what gets
-# WRITTEN, never whether an uncommitted change is discarded first.
-refuses "\`git checkout <sha> -- <path>\` over a MODIFIED path — a named source is not a hatch" \
-  "$tmp/main" "git checkout $sha -- work.py"
-refuses "\`git restore --source=<sha>\` over a MODIFIED path — same hole, the modern name" \
-  "$tmp/main" "git restore --source=$sha work.py"
-allows "\`--patch\` asks before it discards"  "$tmp/main" "git checkout -p work.py"
-allows "a path in no tree this guard can read" "$tmp/main" "git checkout nothing-named-this"
-# AN UNTRACKED FILE HAS NOTHING TO LOSE. git refuses it on its own — `did not match any file
-# known to git` — and a guard that refused it first would be taking credit for git's answer
-# while teaching a session that this clause fires on files it has no business in.
-printf 'brand new and untracked\n' > "$tmp/main/fresh.txt"
-allows "an UNTRACKED path — \`??\` is not a modification" "$tmp/main" "git checkout fresh.txt"
-allows "\`git -C\` at a directory that is not there" "$tmp/main" "git -C /no/such/tree checkout x.py"
-
-# A HEREDOC BODY IS A DOCUMENT AND NOT A COMMAND, and this is the case that cannot be dodged:
-# the commit message announcing this guard, and its decision entry, both quote
-# `git checkout work.py` on a line of their own. A parser that read a body line as a command
-# would refuse the one commit that cannot be wrong. `silent-write-selftest.sh` scores the same
-# requirement for the other guard; the parser is now shared, so this is the second reader's arm
-# for it rather than a duplicate.
-allows "a heredoc body that QUOTES the refused command" "$tmp/main" "git commit -F - <<'MSG'
-Refuse the command that destroyed 240 lines:
-
-git checkout work.py
-
-and name the .bak copy in the refusal.
-MSG"
-
-# A BRANCH NAMED AFTER A DIRECTORY IN THE TREE, which is the one shape where "it creates a
-# branch" has to be read off the FLAGS: `harness` exists on disk and carries a modification, so
-# resolution alone would call it a dirty path and refuse a branch creation.
-if real_command "$tmp/main" "git checkout -b harness"; then
-  (cd "$tmp/main" && git switch -q main 2>/dev/null; git branch -q -D harness 2>/dev/null)
-  allows "a branch named after a dirty directory" "$tmp/main" "git checkout -b harness"
-fi
-
-# THE NON-VACUITY LINE: an operand that resolves to neither a path nor a commit is REPORTED
-# while being allowed, so "parsed nothing" can never read as "nothing to object to".
-judge "$tmp/main" "git checkout nothing-named-this"
-case "$out" in *"resolves to neither a path"*) ok "an unresolvable operand is reported, not swallowed" ;;
-  *) bad "an unresolvable operand produced no note: $out" ;; esac
-
-# AND THE OTHER HALF OF THAT LINE: a REAL branch must not be reported as unresolvable. Both
-# verdicts are "allowed", so the exit code cannot tell them apart — the difference is whether
-# this guard resolved `main` as a commit or merely failed to recognise it, and a guard that
-# printed a note on every branch switch is one a session learns to ignore.
-judge "$tmp/main" "git checkout main"
-case "$out" in
-  *"resolves to neither"*) bad "a real branch was reported as unresolvable: $out" ;;
-  *) ok "a branch is RESOLVED as a commit, not merely unrecognised" ;;
-esac
-
 echo ""
 echo "  2. a write outside this checkout, with a real worktree to be outside of"
 
@@ -620,8 +470,7 @@ echo "  6. a push to the wrong branch name, reproduced"
 # `branch.<name>.remote` / `.merge` — and the honest way to arm it is the way a background
 # agent actually created it: `git push -u origin <local>:<remote>` sets exactly that pair,
 # under a DIFFERENT name on each side. A file this section writes is its own
-# (`pr-work.txt`), never `work.py`, so nothing here disturbs the dirty state clause 1's own
-# cases still depend on.
+# (`pr-work.txt`), never `work.py`.
 git init -q --bare "$tmp/origin.git" 2>/dev/null
 (
   cd "$tmp/main" || exit 1
@@ -780,121 +629,6 @@ allows "a detached HEAD — nothing this clause can name as \"the current branch
   "$tmp/main" "git push origin HEAD"
 
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
-
-echo ""
-echo "  7. a consuming/destructive stash, reproduced"
-
-# --------------------------------------------------- 7a. the incident, performed in the fixture
-#
-# A SECOND, ANONYMOUS ENTRY, LOST TO A BARE POP — the shape the parent CLAUDE.md's mandate
-# names, reproduced rather than merely asserted about: session A pushes an untagged entry,
-# session B (another worktree sharing this same stack) pushes its own, and a bare
-# `git stash pop` — typed by either session, meaning "get MY work back" — hands back B's
-# entry to A, or A's own entry is gone under B's next `pop` before A ever sees it again.
-(
-  cd "$tmp/main" || exit 1
-  printf 'session A change\n' >> work.py
-  git stash push -q
-  printf 'session B change\n' >> work.py
-  git stash push -q
-  # the bare pop a session actually types, expecting to get its OWN work back
-  git stash pop -q
-  grep -q "session B change" work.py && ! grep -q "session A change" work.py
-)
-if [ $? -eq 0 ]; then
-  ok "a bare \`git stash pop\` handed back the WRONG entry — session A's own push is still on the stack, unreachable by anything but luck"
-else
-  bad "the stash incident did not reproduce as described"
-fi
-# THE CLEANUP THAT NEVER RAN. This line used to read `git stash clear -q`, and `clear` takes
-# no options: git answered `error: unknown switch \`q'` with exit 129, `2>/dev/null` ate it,
-# and the `&&` short-circuited so the `checkout` never ran either. Every refusal case below
-# therefore ran over a one-entry stack BY ACCIDENT for as long as clause 7 existed — and
-# since the clause did not read the stack at all, nothing could tell that apart from a real
-# refusal. Both halves are now deliberate and asserted, which is the whole point of 7b.
-(cd "$tmp/main" && git stash clear 2>/dev/null; git checkout -q -- work.py 2>/dev/null)
-(cd "$tmp/main" && printf 'one\ntwo\nthree\nfour\n' > work.py)
-
-echo ""
-echo "  7b. AN EMPTY STACK IS NOT A SUBJECT — the clause resolves before it refuses"
-
-# THE ARM THAT GOES RED ON THE DEFECT. Measured 2026-09-17: before the stack reader landed,
-# these three verdicts over an EMPTY stack were byte-identical to the ones over a real entry,
-# while `git stash pop` itself answers "No stash entries found." A guard whose answer does not
-# move when its subject does is matching the SUBCOMMAND NAME — `reap.py`'s `\bpkill\b` defect,
-# one command over. Revert `_stash_entries` and all three of these go red.
-stack_depth() { (cd "$1" && git stash list | wc -l | tr -d ' '); }
-
-if [ "$(stack_depth "$tmp/main")" = "0" ]; then
-  ok "the fixture's stack is genuinely empty — the arm below has the subject it claims"
-else
-  bad "the fixture's stack is NOT empty, so the empty-stack arm proves nothing"
-fi
-allows "\`git stash pop\` over an EMPTY stack — nothing to consume, and git itself refuses it" \
-  "$tmp/main" "git stash pop"
-allows "\`git stash clear\` over an EMPTY stack — it destroys nothing" \
-  "$tmp/main" "git stash clear"
-allows "\`git stash drop\` over an EMPTY stack — there is no \`stash@{0}\` to drop" \
-  "$tmp/main" "git stash drop"
-refuses "a bare \`git stash\` is refused EVEN over an empty stack — it is a push, and its hazard is identification, not consumption" \
-  "$tmp/main" "git stash"
-
-# Now put a real entry on the stack, deliberately, so every case below has a subject.
-(cd "$tmp/main" && printf 'work to set aside\n' >> work.py && git stash push -q -m "selftest entry")
-if [ "$(stack_depth "$tmp/main")" = "1" ]; then
-  ok "one real entry is on the stack — the refusal cases below are not vacuous"
-else
-  bad "the fixture could not put an entry on the stack"
-fi
-
-echo ""
-echo "  the guard refuses it"
-
-refuses "a bare \`git stash\` — the same six characters mean \"save\" AND \"restore\"" \
-  "$tmp/main" "git stash"
-refuses "\`git stash -u\`, still no subcommand named" "$tmp/main" "git stash -u"
-refuses "\`git stash pop\`, unconditionally" "$tmp/main" "git stash pop"
-refuses "\`git stash pop\` with an explicit index — pop is refused either way" \
-  "$tmp/main" "git stash pop stash@{0}"
-refuses "\`git stash drop\` with no entry named — defaults to \`stash@{0}\`" \
-  "$tmp/main" "git stash drop"
-refuses "\`git stash clear\` — takes no target, always destroys the whole stack" \
-  "$tmp/main" "git stash clear"
-refuses "an env prefix does not launder it" \
-  "$tmp/main" "BANCHI_MAIN=off git stash pop"
-refuses "buried mid-script behind a \`&&\`" \
-  "$tmp/main" "echo tidy && git stash drop"
-
-judge "$tmp/main" "git stash pop"
-case "$out" in
-  *"BANCHI_STASH=off"*) bad "the refusal names the STASH switch to an agent" ;;
-  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
-  *) bad "the refusal carries no owner-only line" ;; esac
-case "$out" in *"per-CLONE"*) ok "the refusal explains the shared-stack hazard" ;;
-  *) bad "the refusal does not explain why the stack is shared" ;; esac
-case "$out" in *"never a stash"*) ok "the refusal's remedy names a commit on your own branch" ;;
-  *) bad "the refusal's remedy does not tell the caller to commit instead" ;; esac
-case "$out" in *"stash push"*) bad "the remedy still offers a tagged stash — a tag fixes identification only, and the entry still belongs to no branch and dies with the session holding the tag" ;;
-  *) ok "the remedy offers no stash form at all, tagged or otherwise" ;; esac
-case "$out" in *"working tree"*) ok "the refusal states a worktree count" ;;
-  *) bad "the refusal does not say how many trees share the stack" ;; esac
-
-echo ""
-echo "  what clause 7 must NEVER refuse"
-
-for case in \
-  'git stash push -u -m "a tag"' \
-  'git stash push' \
-  'git stash list' \
-  'git stash show stash@{0}' \
-  'git stash apply stash@{0}' \
-  'git stash apply' \
-  'git stash drop stash@{1}' \
-  'git stash drop deadbeef' \
-  'git stash branch some-branch' \
-; do
-  allows "an identified or non-destructive form: \`$case\`" "$tmp/main" "$case"
-done
 
 echo ""
 echo "  8. a hard-family reset, reproduced"
@@ -1089,15 +823,9 @@ for case in \
   'gh pr merge 300 --squash' \
   'gh pr checks 300' \
   'gh api repos/o/r/branches/main/protection' \
-  'ln -sfn ../CLAUDE.md AGENTS.md' \
 ; do
   allows "swept: \`$case\`" "$tmp/main" "$case"
 done
-# `git checkout -- <path>` OVER A CLEAN PATH IS githooks-selftest.sh:131's SHAPE, and it is
-# the one swept line whose verdict depends on the tree rather than the string: clean passes,
-# dirty is the rule. Both directions are already pinned above; this is the line as typed.
-allows "swept: \`git checkout -q -- clean.txt\` (clean)" "$tmp/main" "git checkout -q -- clean.txt"
-
 echo ""
 echo "  the owner-only clause: an agent's tool call may not set a guard switch"
 
@@ -1170,7 +898,6 @@ if [ $? -eq 0 ]; then ok "a run-everything scope switch is allowed"; else bad "B
 echo ""
 echo "  the escape hatches, in both of BANCHI_KILL's two forms"
 
-allows "checkout, inline" "$tmp/main" "BANCHI_CHECKOUT=off git checkout work.py"
 allows "wait, inline"     "$tmp/main" "BANCHI_WAIT=off until ! pgrep -f x; do sleep 5; done"
 allows "tree, inline"     "$WT" "BANCHI_TREE=off cat > $tmp/main/work.py"
 
@@ -1205,17 +932,16 @@ if [ "$a" = "$((b + 1))" ] && [ -z "$out" ]; then ok "a hatch inside -c lifts AN
 else bad "the -c hatch wrote $((a - b)) log line(s), out=[$out]"; fi
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
 
-allows "stash, inline"   "$tmp/main" "BANCHI_STASH=off git stash pop"
 hatchlog="$tmp/main/.git/banchi-hatches.log"
 before="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
 judge "$tmp/main" "git status --porcelain"
-judge "$tmp/main" "echo BANCHI_STASH=offish BANCHI_x=on"
+judge "$tmp/main" "echo BANCHI_PUSH=offish BANCHI_x=on"
 for mention in \
   "grep -n 'BANCHI_TREE=off' README.md" \
   "echo BANCHI_TREE=off" \
   "git commit -m 'doc: BANCHI_PUSH=off is the hatch'" \
   "cat <<EOF
-BANCHI_STASH=off
+BANCHI_RESET=off
 EOF" \
   "# BANCHI_TREE=off" \
   "printf 'BANCHI_WAIT=off'" \
@@ -1225,7 +951,7 @@ done
 after_plain="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
 if [ "$before" = "$after_plain" ]; then ok "a plain command and six MENTIONS of a hatch write no hatch-log line"
 else bad "a plain command or a mention wrote $((after_plain - before)) hatch-log line(s)"; fi
-for real in "BANCHI_PUSH=off git status" "env BANCHI_STASH=off ls" "BANCHI_WAIT=off echo hi"; do
+for real in "BANCHI_PUSH=off git status" "env BANCHI_RESET=off ls" "BANCHI_WAIT=off echo hi"; do
   b="$(cat "$hatchlog" | wc -l | tr -d ' ')"
   judge "$tmp/main" "$real"
   a="$(cat "$hatchlog" | wc -l | tr -d ' ')"
@@ -1249,10 +975,8 @@ hatch_env() {   # hatch_env <name> <cwd> <command>
         | env "$1=off" python3 "$GUARD" --hook 2>&1)"
   if [ $? -eq 0 ]; then ok "$1=off in the environment"; else bad "$1=off in the environment did not disarm it"; fi
 }
-hatch_env BANCHI_CHECKOUT "$tmp/main" "git checkout work.py"
 hatch_env BANCHI_WAIT     "$tmp/main" "until ! pgrep -f x; do sleep 5; done"
 hatch_env BANCHI_PUSH     "$tmp/main" "git push origin HEAD"
-hatch_env BANCHI_STASH    "$tmp/main" "git stash pop"
 hatch_env BANCHI_RESET    "$tmp/main" "git reset --hard"
 hatch_env BANCHI_NARRATE  "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
@@ -1264,8 +988,8 @@ if [ $? -eq 0 ]; then ok "BANCHI_TREE=off in the environment"; else bad "BANCHI_
 # EVERY CLAUSE HAS A HATCH AND EVERY HATCH IS PRINTED. The table is read rather than retyped,
 # so a clause added without one fails here instead of shipping unescapable.
 count="$(python3 "$GUARD" --clauses | wc -l | tr -d ' ')"
-if [ "$count" = "7" ]; then ok "seven clauses, seven hatches, read from the guard's own table"
-else bad "the clause table has $count rows; this file scores seven"; fi
+if [ "$count" = "5" ]; then ok "five clauses, five hatches, read from the guard's own table"
+else bad "the clause table has $count rows; this file scores five"; fi
 if python3 "$GUARD" --clauses | grep -qv "BANCHI_.*=off"; then
   bad "a clause in the table names no escape hatch"
 else
@@ -1287,16 +1011,20 @@ fails_open "a tool_input that is a list" '{"tool_input":[1,2,3]}'
 fails_open "a null command"              '{"tool_input":{"command":null}}'
 fails_open "a payload that is a list"    '[1,2,3]'
 fails_open "no stdin at all"             ''
-fails_open "an unbalanced quote"         '{"tool_input":{"command":"git checkout '"'"'work.py"}}'
+# The balanced reset is refused in this dirty tree, so the unbalanced one would be refused too if the
+# parser read it: the allowed verdict below is the fail-open, not an absent subject.
+(cd "$tmp/main" && printf 'one\ntwo\nthree\ncontrol dirt\n' > work.py)
+refuses "control: the balanced reset is refused in this dirty tree" "$tmp/main" "git reset --hard"
+fails_open "an unbalanced quote"         "{\"cwd\":\"$tmp/main\",\"tool_input\":{\"command\":\"git reset --hard 'HEAD\"}}"
 fails_open "an empty file_path"          '{"tool_input":{"file_path":""}}'
-fails_open "a cwd that does not exist"   '{"cwd":"/no/such/place","tool_input":{"command":"git checkout work.py"}}'
+fails_open "a cwd that does not exist"   '{"cwd":"/no/such/place","tool_input":{"command":"git reset --hard"}}'
 
 # THE SHARED PARSER IS A DEPENDENCY, AND A MISSING DEPENDENCY IS A BROKEN GUARD. Copied into
 # a throwaway directory WITHOUT `shell_parse.py`, the guard must have no opinion about
 # anything rather than raise — the import is guarded for exactly this.
 mkdir -p "$tmp/lonely"
 cp "$GUARD" "$tmp/lonely/guard-shell.py"
-out="$(printf '%s' "git checkout work.py" \
+out="$(printf '%s' "git reset --hard" \
       | CWD="$tmp/main" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read()}}))' \
       | python3 "$tmp/lonely/guard-shell.py" --hook 2>&1)"
 if [ $? -eq 0 ]; then ok "with shell_parse.py absent, the guard has no opinion"
@@ -1320,7 +1048,7 @@ echo ""
 echo "  --skip: clauses another guard owns, through the real CLI"
 
 # THE REAL CLI, NOT `hook()`: `--skip` is parsed by `main`, and Claude Code runs exactly
-# `--hook --skip checkout,stash,reset`. Earlier sections leave the tree in unknown states,
+# `--hook --skip reset`. Earlier sections leave the tree in unknown states,
 # so it is dirtied again here, and a refused case is meaningless on a clean tree.
 (cd "$tmp/main" && git checkout -q main 2>/dev/null; printf 'one\ntwo\nthree\nskip-section\n' > work.py)
 skip_cli() {   # skip_cli <skip-list|-> <cwd> <command> -> exit code
@@ -1335,17 +1063,17 @@ skip_cli_write() {   # skip_cli_write <skip-list> <cwd> <file_path>
         | python3 "$GUARD" --hook --skip "$1" 2>&1)"
   return $?
 }
-SKIPS="checkout,stash,reset"
-for c in "git stash pop" "git reset --hard" "git checkout work.py"; do
+SKIPS="reset"
+for c in "git reset --hard"; do
   skip_cli - "$tmp/main" "$c"; a=$?
   skip_cli "$SKIPS" "$tmp/main" "$c"; b=$?
   if [ $a -eq 2 ] && [ $b -eq 0 ]; then ok "\`$c\`: refused without --skip, allowed with it"
   else bad "\`$c\`: exit $a without --skip, $b with it (want 2 and 0)"; fi
 done
-skip_cli "bogus,,nonsense" "$tmp/main" "git checkout work.py"
+skip_cli "bogus,,nonsense" "$tmp/main" "git reset --hard"
 [ $? -eq 2 ] && ok "an unknown name in --skip skips nothing" || bad "an unknown name in --skip skipped a clause"
-skip_cli "checkout,bogus" "$tmp/main" "git stash pop"
-[ $? -eq 2 ] && ok "…and a known name beside it skips only its own clause" || bad "--skip checkout also skipped the stash clause"
+skip_cli "reset,bogus" "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
+[ $? -eq 2 ] && ok "…and a known name beside it skips only its own clause" || bad "--skip reset also skipped the wait clause"
 
 # GUARD_SHELL_SKIP is the hook option's home; `--skip` is its alias; both together skip the union.
 skip_env() {   # skip_env <env-list> <flags...> -- <cwd> <command> -> exit code
@@ -1356,19 +1084,19 @@ skip_env() {   # skip_env <env-list> <flags...> -- <cwd> <command> -> exit code
         | GUARD_SHELL_SKIP="$env_list" python3 "$GUARD" "${args[@]}" 2>&1)"
   return $?
 }
-skip_env checkout -- "$tmp/main" "git checkout work.py"
-[ $? -eq 0 ] && ok "GUARD_SHELL_SKIP=checkout skips the checkout clause" || bad "GUARD_SHELL_SKIP=checkout did not skip the checkout clause"
-skip_env checkout -- "$tmp/main" "git stash pop"
-[ $? -eq 2 ] && ok "…and only that clause: a stash in a shared tree is still refused" || bad "GUARD_SHELL_SKIP=checkout also skipped the stash clause"
-skip_env "" --skip checkout -- "$tmp/main" "git checkout work.py"; a=$?
-skip_env "" --skip checkout -- "$tmp/main" "git stash pop"; b=$?
-if [ $a -eq 0 ] && [ $b -eq 2 ]; then ok "--skip checkout behaves as the variable does"
-else bad "--skip checkout: checkout exit $a, stash exit $b (want 0 and 2)"; fi
-skip_env checkout --skip stash -- "$tmp/main" "git checkout work.py"; a=$?
-skip_env checkout --skip stash -- "$tmp/main" "git stash pop"; b=$?
-skip_env checkout --skip stash -- "$tmp/main" "git reset --hard"; c=$?
+skip_env reset -- "$tmp/main" "git reset --hard"
+[ $? -eq 0 ] && ok "GUARD_SHELL_SKIP=reset skips the reset clause" || bad "GUARD_SHELL_SKIP=reset did not skip the reset clause"
+skip_env reset -- "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
+[ $? -eq 2 ] && ok "…and only that clause: a polling loop is still refused" || bad "GUARD_SHELL_SKIP=reset also skipped the wait clause"
+skip_env "" --skip reset -- "$tmp/main" "git reset --hard"; a=$?
+skip_env "" --skip reset -- "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"; b=$?
+if [ $a -eq 0 ] && [ $b -eq 2 ]; then ok "--skip reset behaves as the variable does"
+else bad "--skip reset: reset exit $a, wait exit $b (want 0 and 2)"; fi
+skip_env reset --skip narrate -- "$tmp/main" "git reset --hard"; a=$?
+skip_env reset --skip narrate -- "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"; b=$?
+skip_env reset --skip narrate -- "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"; c=$?
 if [ $a -eq 0 ] && [ $b -eq 0 ] && [ $c -eq 2 ]; then ok "the variable and --skip together skip the union, and no more"
-else bad "variable plus flag: checkout $a, stash $b, reset $c (want 0, 0, 2)"; fi
+else bad "variable plus flag: reset $a, narrate $b, wait $c (want 0, 0, 2)"; fi
 
 # Re-arm the mismatch: a branch tracking a DIFFERENTLY named upstream (later sections repoint it).
 (cd "$tmp/main" && git checkout -q -B skip-mismatch main 2>/dev/null \
