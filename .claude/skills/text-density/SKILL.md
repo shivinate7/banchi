@@ -6,7 +6,7 @@ description: Run the on-demand text-density pass over Banchi's own screens and r
 # Text density pass
 
 `D284` replaces a pinned word ceiling with three things. None of them is
-a count. Two are gates, both the `[text-shape]` check in `app/tests/text-checks.spec.ts`: repetition and sentence shape. The third is this pass. A
+a count. Two are gates, both run by `app/tests/text-checks.spec.ts`: `[text-shape]` (D284, three checks replace one ceiling), which checks repetition and sentence shape, and `[machine-words]` (D196, no user-visible string names a decision). The third is this pass. A
 session runs it on demand. It is never a gate. `D284` carries the argument.
 
 ## Running it
@@ -23,6 +23,10 @@ It needs no dev server and no store. It runs `app/tests/text-checks.spec.ts` in 
 populated fixture of `app/tests/routeFixtures.ts`, each screen read only once it is loaded.
 So the table shows the same screens, in the same state, as the gates. Playwright starts this
 checkout's own Vite, or reuses the one already on its port. Every read is stubbed.
+
+Before a run, confirm you stand in your own checkout: `git rev-parse --show-toplevel` must
+print your worktree path. Two worktrees can derive the same port. If a server that is not
+yours answers your dev port, stop and say so.
 
 ## Reading the cut table
 

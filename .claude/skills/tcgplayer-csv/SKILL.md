@@ -78,7 +78,7 @@ Both halves come from the card's identification, matched against the `Number` co
 ## Duplicates
 
 Never emit two rows with the same `TCGplayer Id` in one import file — behavior is
-undefined. Aggregate by SKU; `Add to Quantity` counts new copies only. There is no standing cap: a send asks for one with `emit --cap N`. See `docs/decisions/` D7.
+undefined. Aggregate by SKU, so `Add to Quantity` equals the copy count. There is no standing cap (the cap of 4 per SKU is gone): a send asks for one with `emit --cap N`. See `docs/decisions/` D7, duplicates aggregate by SKU.
 
 ## Round trip
 

@@ -34,7 +34,7 @@ So the digest travels: `Markdown` takes `revision` and hands back `onCorpusWritt
 
 `#/pricing` takes two unmodified keys — `R` reloads, held `T` peeks a price history — and both list the open surfaces they stand down for by name. The sheet is a surface that did not exist when they were written.
 
-`R` is the harmful one, and it is not cosmetic. Typed into the sheet's *"Cut, percent"* field, it would call `load()`. It would re-read the worklist and the corpus. It would **discard an in-flight survey out from under the operator**: bytes the screen is holding for an export they just waited on. `app/tests/markdown.spec.ts` carried a case for it until the spec was deleted with the sheet; `app/tests/pricing-markdown.spec.ts` does not carry it.
+`R` is the harmful one, and it is not cosmetic. Typed into the sheet's *"Cut, percent"* field, it would call `load()`. It would re-read the worklist and the corpus. It would **discard an in-flight survey out from under the operator**: bytes the screen is holding for an export they just waited on. `app/tests/markdown.spec.ts` carried a case for it until the spec was deleted with the sheet; `app/tests/pricing-markdown.spec.ts` does not carry it (DEBT-markdown-r-key-no-test, the missing case).
 
 ### A route is still not the answer
 
