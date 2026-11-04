@@ -238,7 +238,7 @@ Lane `ux/pr4-search` checked the open gaps. The gaps were: `#` forms, composed f
 - N4 was closed by ruling 2 (round 11). `case_is_floor_query_classifies_by_the_fold` and `case_do_search_dotted_initials_are_brought_back` both pass.
 - `#24a` finds SKU `8802`. The round-9 case covers it through the "Rengar, Unseen (hash)" row, so no new case is needed.
 
-`RULINGS.md` is a dated review record. It stays as evidence, not as a live status page. `make match-selftest` passes 241 of 241 cases, both matchers. T7 (`harness/tests/t7_store_and_seams.py`) passes inside `make harness`. Neither matcher changed. No gap was left with a clear right answer.
+`make match-selftest` passes 241 of 241 cases, both matchers. T7 (`harness/tests/t7_store_and_seams.py`) passes inside `make harness`. Neither matcher changed. No gap was left with a clear right answer.
 
 ### Typos and a near match
 
