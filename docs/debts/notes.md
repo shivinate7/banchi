@@ -41,3 +41,4 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - `pipeline/rosterholdings.py`'s `_id_of` reads ids with `int()`, so `09001` and `+9001` become separate rows. Roster ids are plain integers today.
 - `#/pricing` Now column: its width comes from a hidden "Now $9,999.99" in each row, so a live price of $10,000 or more widens only its own row (about 7px at $12,345), and that row's Market column drifts left. Nothing clips.
 - `map.config.json`'s `mapPaths` lists `harness/run.py` only, so `make map-check` does not refuse a new top-level `harness/<x>.py`; main's flat scan did.
+- An unmapped code file is no longer refused at commit, only by `make check` and CI: the pre-commit hook runs bare python3 with no node or claude-settings (`make map-check` takes 5.7 s).
