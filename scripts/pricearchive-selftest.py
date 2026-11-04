@@ -215,6 +215,14 @@ def _forbidden_refusal() -> str:
     return refusals.get(FORBIDDEN_SKU)
 
 
+LEDGER_NET_SKU = "NET1"
+
+
+def _http_answer(status: int) -> net.NetError:
+    """An HTTP error answer from the price service, as `pipeline.net.request` raises it."""
+    return net.NetError(f"The host answered with status {status}.", status=status)
+
+
 def main() -> int:
     print("price-history archive self-test\n")
 
@@ -756,6 +764,58 @@ def main() -> int:
            "MUTATION: reinstating the old games.py gate makes the same YuGiOh line "
            "refuse again — confirms the fix above, and not the fixture, is what "
            "resolves it")
+
+        # ------------------------------ a ledger refusal carries the kind of its failure, not a bare str
+        print("\n-- pipeline/pricearchive.py: a ledger refusal carries the kind its failure was --")
+        net_ledger = _FakeLedger({
+            "ebay:net": OrderRecord(
+                source="ebay", number="net", status="Open",
+                lines=[
+                    OrderLine(
+                        sku=LEDGER_NET_SKU, quantity=1, unit_price="10.00",
+                        name="YuGiOh - Legend of Blue Eyes White Dragon: Blue-Eyes White "
+                             "Dragon - Near Mint",
+                    ),
+                ],
+            ),
+        })
+        # A REAL `pricehistory.Market`, so each failure is raised by its own fetch path, through
+        # `pipeline.net.request`, and turned into its class there. Each answer is consumed by one
+        # call in order: the category list first, then the group list.
+        with_categories = b'{"results": [{"name": "YuGiOh", "categoryId": 2}]}'
+        with_no_categories = b'{"results": []}'
+        network_ledger_cases = [
+            ("the category list answers HTTP 503", [_http_answer(503)], "KIND_NETWORK"),
+            ("the category list answers HTTP 403", [_http_answer(403)], "KIND_BLOCKED"),
+            ("the group list answers HTTP 503", [with_categories, _http_answer(503)], "KIND_NETWORK"),
+            ("the group list answers HTTP 403", [with_categories, _http_answer(403)], "KIND_BLOCKED"),
+        ]
+        for label, answers, kind_name in network_ledger_cases:
+            with contextlib.redirect_stderr(io.StringIO()), \
+                    mock.patch.object(net, "request", side_effect=answers):
+                _rows, refusals = archive_walk._ledger_export_rows(
+                    net_ledger, [LEDGER_NET_SKU], pricehistory.Market(courtesy_delay=0)
+                )
+            refusal = refusals.get(LEDGER_NET_SKU)
+            ok(refusal is not None, f"scope: the ledger SKU was refused when {label}", refusals)
+            ok(_kind_of(refusal) == _kind_constant(kind_name),
+               f"a ledger refusal when {label} is tagged {kind_name}",
+               f"got {_kind_of(refusal)!r}")
+            ok(not archive_review.is_identification_refusal(refusal),
+               f"a ledger refusal when {label} is not an identification refusal", refusal)
+
+        # The control, green on main: a product line the catalogue does not hold is a NotResolvable
+        # from `category_id`, and it still reads as an identification refusal.
+        with contextlib.redirect_stderr(io.StringIO()), \
+                mock.patch.object(net, "request", side_effect=[with_no_categories]):
+            _rows, refusals = archive_walk._ledger_export_rows(
+                net_ledger, [LEDGER_NET_SKU], pricehistory.Market(courtesy_delay=0)
+            )
+        ok(LEDGER_NET_SKU in refusals,
+           "scope: a product line the catalogue does not hold was refused", refusals)
+        ok(archive_review.is_identification_refusal(refusals.get(LEDGER_NET_SKU)),
+           "a NotResolvable from the ledger's category walk still reads as identification",
+           refusals)
 
         # -------------------------------------------------------- pipeline: sweep (no network)
         print("\n-- pipeline/pricearchive.py: sweep, against a FakeMarket, both directions --")
