@@ -2361,8 +2361,8 @@ COMPONENTS = [
                 "is not a thing to route around. `harness/` is where the test that reads them "
                 "lives anyway, and its two gitignored neighbors (`images`, `.cache`) are "
                 "named individually in .gitignore, so this one is tracked by default.\n\n"
-                "No per-file entries: this component declares no source_suffixes, so the "
-                "orphan rule does not scan it — the same arrangement `fixtures/` uses, for "
+                "No per-file entries: this component lists no modules, so nothing "
+                "compares it to the tree — the same arrangement `fixtures/` uses, for "
                 "the same reason. A sixth trace is added by copying it in, never by editing "
                 "one of these.",
     },
@@ -2415,8 +2415,8 @@ COMPONENTS = [
         # declaring a suffix for a language a directory does not contain is how a scan
         # reports a clean run over nothing, which is the failure `app/` spent a day on.
         #
-        # THE HOLE: `githooks/pre-commit` has no suffix, and scan_plan rejects any entry
-        # that does not start with a dot, so no value here can reach it. It is listed
+        # THE HOLE: `githooks/pre-commit` has no suffix, and the orphan scan rejected any entry
+        # that did not start with a dot, so no value here could reach it. It is listed
         # below, so its *disappearance* is caught — but a second extensionless hook
         # (`pre-push`, `commit-msg`) would land unnamed and nothing would fail. Left to
         # docs/debts/ rather than worked around: the limit is in scripts/docs-audit.py,
@@ -2431,7 +2431,6 @@ COMPONENTS = [
         # declared suffix, which failed the commit until it was described. The two outcomes
         # from one change are the clearest statement of this hole available, so they are
         # recorded here rather than only in docs/debts/.
-        "source_suffixes": [".py", ".sh", ".txt", ".mjs"],
         "note": "THIS ENTRY HAD NO MODULE LIST UNTIL 2026-08-13, so the orphan rule never "
                 "scanned this directory — the rule is guarded on `modules`, and an entry "
                 "with none has nothing to be an orphan of. Measured before the fix: "
@@ -4060,7 +4059,7 @@ COMPONENTS = [
                         "subject-count row and the coupling question.",
                 "governed_by": []},
             "docs_audit/env_map.py": {
-                "does": "The rows over environment variables, hatches, the subagent override, the repo map, the "
+                "does": "The rows over environment variables, hatches, the subagent override, the map data, the "
                         "hook roster, Codex hooks and the build-order mirror.",
                 "governed_by": ["D2", "D31", "D80", "D127", "D135", "D140", "D171", "D178", "D280"]},
             "docs_audit/games.py": {
@@ -5647,8 +5646,7 @@ COMPONENTS = [
         "governed_by": ["D327"],
         "note": "Only its README until the page writer's first export, after it removes the one closed "
                 "item that restates a concern the owner ruled out of the repo. No per-file "
-                "entries: this component declares no source_suffixes, so the orphan rule does "
-                "not scan it, the same arrangement `fixtures/` uses.",
+                "entries: this component lists no modules, so nothing compares it to the tree, the same arrangement `fixtures/` uses.",
     },
     {
         "path": ".claude/rules/README.md",
@@ -5690,8 +5688,8 @@ COMPONENTS = [
                 "highest-risk assumption in D22: TCGplayer does carry both as Product Line "
                 "values, on the identical 16-column header. They also refuted three guesses "
                 "the registry had been written around — see D22. No per-file entries here "
-                "because this component declares no source_suffixes, so the orphan rule does "
-                "not scan it; the audit's game rows read the directory instead. THE TWO "
+                "because this component lists no modules, so nothing compares it to the "
+                "tree; the audit's game rows read the directory instead. THE TWO "
                 "JSON CAPTURES ARE NOT EXPORTS and are here for the property that makes "
                 "this directory what it is: they carry the SHAPE nothing invented would "
                 "get wrong in the same way — every number arriving as a string, a "
@@ -6236,14 +6234,13 @@ COMPONENTS = [
         # looked at no file in the entry it names. It was inert exactly that way until
         # 2026-08-13 — see the note. `.json` is deliberately absent: it would conscript
         # package-lock.json, and a manifest is not a module anyone writes a `does` for.
-        "source_suffixes": [".ts", ".tsx", ".css", ".js", ".html"],
         "note": "THE ORPHAN RULE WAS INERT OVER THIS DIRECTORY UNTIL 2026-08-13, AND IT COST "
                 "EXACTLY WHAT docs/debts/ SAID IT WOULD. It filtered on one repo-wide `.py` "
                 "suffix, one level deep, so step 7a's thirteen new files landed beside the "
                 "described modules and this list named none of them — a green row over an "
                 "entry nothing had checked. The rule reaches here now because the entry "
-                "declares `source_suffixes` above and scripts/docs-audit.py reads it, which is "
-                "the half of that fix that lives in this file. It did its job on the same day: "
+                "was widened to the web suffixes in the audit that has since been retired; "
+                "docs/map/ now lists every file here. It did its job on the same day: "
                 "7b's seven files could not land here unnamed. "
                 "Nothing here imports the static palette sheets: they were drawings of the spec, and "
                 "this is built from docs/DESIGN.md itself. "
