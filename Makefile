@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status restart-now map explain harness harness-1 harness-2 harness-3 harness-part check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest rosterholdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint pytypes typecheck unit venv launch-config worktree-setup worktree-provision-selftest worktree-create-selftest session-teardown-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent backup backup-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest waiting-export-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
+.PHONY: map-check map-check-selftest help status restart-now map explain harness harness-1 harness-2 harness-3 harness-part check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest rosterholdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint pytypes typecheck unit venv launch-config worktree-setup worktree-provision-selftest worktree-create-selftest session-teardown-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent backup backup-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest waiting-export-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -356,7 +356,7 @@ docs-audit:
 # THE ONE GENERATOR INTO A DOC, AND IT GATES NOTHING (D18, amended 2026-09-17). It previews, and
 # ARGS=--write applies. It adds
 # the decision ids a file cites to that file's `governed_by` in docs/map.py — the answer
-# `make docs-audit`'s `repo map` row already computes to decide the commit. It imports that
+# `make docs-audit`'s `map data` row already computes to decide the commit. It imports that
 # row's own `cited_decisions()` rather than reimplementing it, so the two cannot disagree.
 #
 # NOT A PREREQUISITE OF ANYTHING, and never wired to a hook. That is the whole of D18: a
@@ -768,6 +768,20 @@ catalog-index-selftest:
 # `make catalog-mirror` fills it for real (about 16.7 GB).
 catalog-mirror:
 	@python3 scripts/catalog-image-mirror.py $(ARGS)
+
+# THE FILE MAP'S COVERAGE CHECK IS claude-settings' `plain-english-map` skill, NOT THIS REPO'S.
+# `docs/map/` and `map.config.json` are what it reads. `scripts/map-check.py` finds the skill
+# (`$CLAUDE_SETTINGS_DIR`, `~/claude-settings`, the `~/.claude` link) and runs it; it fails, and
+# never skips, when it finds none. node, so off the commit path for port-agreement's reason.
+map-check:
+	@python3 scripts/map-check.py
+
+# THE MAP CHECK'S FAIL-CLOSED ARMS, PROVED AGAINST STUB SKILLS BUILT IN A RUN FOLDER. No skill found,
+# a named dir with no skill, a named dir with no map-check.mjs, no node, and the skill's own
+# exit code all fail the run; a mutant of map-check.py for each must turn a check red. It writes
+# only that run folder, and removes it (D18). node, so off the commit path for map-check's reason.
+map-check-selftest:
+	@python3 scripts/map-check-selftest.py
 
 # HERE BECAUSE TWO LANGUAGES HOLD ONE ALGORITHM AND NEITHER CAN IMPORT THE OTHER (D43).
 # Python serves the capture port, TypeScript addresses it, and a disagreement is silent and

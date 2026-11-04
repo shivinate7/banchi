@@ -33,13 +33,10 @@ EXIT_USAGE = 64
 # Directories that are not this project's source. `.venv` alone holds hundreds of vendored
 # READMEs, and auditing someone else's markdown would be noise with a straight face.
 #
-# `dist` and `test-results` joined when the repo-map orphan scan learned to recurse: they
-# are Vite's build output and Playwright's per-run output, both under `app/`, and a scan
-# that descends now has an opinion about them. Pruned here rather than left to the
-# gitignore filter in `check_map` because the two do different jobs — this one stops a
-# build tree being enumerated at all, and that one stops a finding being *reported* for
-# anything git calls local state. Neither subsumes the other: `app/playwright-report/` is
-# ignored and not listed here, and a scan of a fresh worktree walks it for nothing.
+# `dist` and `test-results` are Vite's build output and Playwright's per-run output, both
+# under `app/`, and a scan that descends has an opinion about them. Pruned here so a build
+# tree is never enumerated at all. `app/playwright-report/` is not listed here, and a scan
+# of a fresh worktree walks it for nothing.
 #
 # `worktrees` IS HERE FOR A DIFFERENT REASON FROM THE REST, AND IT IS THE ONLY ONE ABOUT
 # CORRECTNESS RATHER THAN WASTE (2026-08-29). Everything above is build output or local state:
@@ -50,9 +47,7 @@ EXIT_USAGE = 64
 # exists on ITS branch, and this script failed the commit on THIS branch because the Makefile here
 # has no such target. Two branches are allowed to disagree; that is what a branch is.
 #
-# It is not covered by the gitignore filter in `check_map` for the reason the paragraph above
-# gives — that filter stops a finding being REPORTED and this stops the tree being walked — and
-# the finding here was against `make targets`, which never consults it.
+# The finding here was against `make targets`, which walks the tree and so needs this prune.
 SKIP_DIRS = {
     ".venv", ".git", "node_modules", "captures", "runs", "inventory", "__pycache__",
     "dist", "test-results", "worktrees",
@@ -528,7 +523,7 @@ def top_level_names() -> Set[str]:
 
 
 # D60's row. Reads docs/decisions/ by hard-coded path, so it answers on every run rather
-# than only when that file is staged — the same asymmetry check_map and check_pass_criteria
+# than only when that file is staged — the same asymmetry check_map_data and check_pass_criteria
 # already have, and for the same reason: a broken heading there breaks every consumer, not
 # only the commit that wrote it.
 #

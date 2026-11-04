@@ -54,8 +54,8 @@ from .paths_commands import load_game_coverage_allowlist
 # advisory row and nothing else, and a path in it that does not resolve is skipped in
 # silence rather than reported. A gate that can be failed by a file on one person's disk is
 # a gate that gets switched off, and a gate that *requires* such a file has already switched
-# itself off for everyone else — which is the same failure the repo-map orphan rule went
-# quiet under, arriving from the opposite direction.
+# itself off for everyone else — which is the same failure that makes a check go quiet
+# for everyone, arriving from the opposite direction.
 
 GAMES_MODULE = ROOT / "pipeline" / "games.py"
 RARITY_MARKS_MODULE = ROOT / "app" / "src" / "kit" / "rarityMarks.ts"

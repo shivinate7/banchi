@@ -61,6 +61,8 @@ type ScreenKeys = {
 
 export type Route = {
   readonly path: string
+  /** The screen's name in the plain-English map: `docs/map/traces/<screenKey>.md` is its trace page. */
+  readonly screenKey: string
   readonly label: string
   readonly title?: string
   readonly icon: IconName
@@ -211,13 +213,13 @@ const FULFILLMENT_KEYS: ScreenKeys = {
    the brand links to Home, the dead-end page offers Home and Inventory, and the crash page offers
    Home. `app/tests/nav.spec.ts` proves the rest with a throwaway row. */
 export const ROUTES: readonly Route[] = [
-  { path: '/', label: 'Home', icon: 'home', view: Home, persona: 'owner', group: 'home', hotkey: 'h', nav: true, keywords: 'start overview' },
-  { path: '/capture', label: 'Capture', icon: 'camera', view: CaptureScreen, persona: 'owner', group: 'work', hotkey: 'c', nav: true, tab: true, keywords: 'camera photograph scan feeder new box section', keys: CAPTURE_KEYS },
-  { path: '/review', label: 'Review', icon: 'inbox', view: ReviewQueue, persona: 'owner', group: 'work', hotkey: 'q', nav: true, tab: true, keywords: 'queue answer questions parked pipeline identify join emit import csv reconcile the store live quantities my pricing run runs', keys: REVIEW_KEYS },
-  { path: '/pricing', label: 'Pricing', icon: 'tag', view: Pricing, persona: 'owner', group: 'work', hotkey: 'p', nav: true, keywords: 'price hold write files emit worklist markdown stale reprice live listings mark down', keys: PRICING_KEYS },
-  { path: '/orders', label: 'Orders', icon: 'cart', view: Orders, persona: 'owner', group: 'sell', hotkey: 'o', nav: true, tab: true, keywords: 'pull sell fetch orders paste ledger', keys: ORDERS_KEYS },
-  { path: '/shipping', label: 'Shipping', icon: 'truck', view: Shipping, persona: 'owner', group: 'sell', hotkey: 's', nav: true, keywords: 'ship lanes envelope parcel export' },
-  { path: '/revenue', label: 'Sales', icon: 'dollar', view: Revenue, persona: 'owner', group: 'sell', hotkey: 'v', nav: true, keywords: 'revenue sold gross money history search by name retrospective', keys: SALES_KEYS },
+  { path: '/', label: 'Home', screenKey: 'home', icon: 'home', view: Home, persona: 'owner', group: 'home', hotkey: 'h', nav: true, keywords: 'start overview' },
+  { path: '/capture', label: 'Capture', screenKey: 'capture', icon: 'camera', view: CaptureScreen, persona: 'owner', group: 'work', hotkey: 'c', nav: true, tab: true, keywords: 'camera photograph scan feeder new box section', keys: CAPTURE_KEYS },
+  { path: '/review', label: 'Review', screenKey: 'review', icon: 'inbox', view: ReviewQueue, persona: 'owner', group: 'work', hotkey: 'q', nav: true, tab: true, keywords: 'queue answer questions parked pipeline identify join emit import csv reconcile the store live quantities my pricing run runs', keys: REVIEW_KEYS },
+  { path: '/pricing', label: 'Pricing', screenKey: 'pricing', icon: 'tag', view: Pricing, persona: 'owner', group: 'work', hotkey: 'p', nav: true, keywords: 'price hold write files emit worklist markdown stale reprice live listings mark down', keys: PRICING_KEYS },
+  { path: '/orders', label: 'Orders', screenKey: 'orders', icon: 'cart', view: Orders, persona: 'owner', group: 'sell', hotkey: 'o', nav: true, tab: true, keywords: 'pull sell fetch orders paste ledger', keys: ORDERS_KEYS },
+  { path: '/shipping', label: 'Shipping', screenKey: 'shipping', icon: 'truck', view: Shipping, persona: 'owner', group: 'sell', hotkey: 's', nav: true, keywords: 'ship lanes envelope parcel export' },
+  { path: '/revenue', label: 'Sales', screenKey: 'revenue', icon: 'dollar', view: Revenue, persona: 'owner', group: 'sell', hotkey: 'v', nav: true, keywords: 'revenue sold gross money history search by name retrospective', keys: SALES_KEYS },
   /* THE STALE-LISTING MARKDOWN IS NOT A ROW HERE, AND IT MOVED SCREENS RATHER THAN GAINING ONE.
    *
    * D100 wanted `#/markdown` on D86's precedent — a worklist the operator sits in is what earned
@@ -245,18 +247,18 @@ export const ROUTES: readonly Route[] = [
    * Adding a row here also moves a count three mechanical checks reconcile (`route census`,
    * `route rosters`, and every spec's pinned roster), so it is a deliberate edit and never a
    * side effect. */
-  { path: '/inventory', label: 'Inventory', icon: 'box', view: Inventory, persona: 'owner', group: 'library', hotkey: 'i', nav: true, tab: true, keywords: 'boxes find a card where search sold retire move', keys: INVENTORY_KEYS },
-  { path: '/codes', label: 'Codes', icon: 'qr', view: Codes, persona: 'owner', group: 'library', hotkey: 'd', nav: true, keywords: 'code cards qr redeem read a box', keys: CODES_KEYS },
-  { path: '/slabs', label: 'Slabs', icon: 'layers', view: Slabs, persona: 'owner', group: 'library', hotkey: 'l', nav: true, keywords: 'slab graded psa beckett bgs sgc cgc card ladder cert value', keys: SLABS_KEYS },
-  { path: '/fulfillment', label: 'Cards to Pull', icon: 'hand', view: Fulfillment, persona: 'fulfiller', group: 'aside', keywords: 'hand-off pull fulfiller new tab', keys: FULFILLMENT_KEYS },
-  { path: '/gallery', label: 'Kit', icon: 'grid', view: Gallery, persona: 'owner', group: 'aside', keywords: 'component kit design system tokens' },
+  { path: '/inventory', label: 'Inventory', screenKey: 'inventory', icon: 'box', view: Inventory, persona: 'owner', group: 'library', hotkey: 'i', nav: true, tab: true, keywords: 'boxes find a card where search sold retire move', keys: INVENTORY_KEYS },
+  { path: '/codes', label: 'Codes', screenKey: 'codes', icon: 'qr', view: Codes, persona: 'owner', group: 'library', hotkey: 'd', nav: true, keywords: 'code cards qr redeem read a box', keys: CODES_KEYS },
+  { path: '/slabs', label: 'Slabs', screenKey: 'slabs', icon: 'layers', view: Slabs, persona: 'owner', group: 'library', hotkey: 'l', nav: true, keywords: 'slab graded psa beckett bgs sgc cgc card ladder cert value', keys: SLABS_KEYS },
+  { path: '/fulfillment', label: 'Cards to Pull', screenKey: 'fulfillment', icon: 'hand', view: Fulfillment, persona: 'fulfiller', group: 'aside', keywords: 'hand-off pull fulfiller new tab', keys: FULFILLMENT_KEYS },
+  { path: '/gallery', label: 'Kit', screenKey: 'gallery', icon: 'grid', view: Gallery, persona: 'owner', group: 'aside', keywords: 'component kit design system tokens' },
   /* THE PER-PRODUCT VIEW IS OFF-NAV ON PURPOSE (D227). It is a deep link, not a destination
    * anyone browses to cold: a product name on another screen opens it, and so does the
    * palette's "Go to" and its card search (D276). `OFF_NAV` below is what keeps
    * this from reading as an omission to `route rosters` and `route census`. No hotkey: a route
    * with no nav entry earns no chord, per this file's own rule for `#/fulfillment` and
    * `#/gallery`. */
-  { path: '/product', label: 'Product History', icon: 'chart', view: ProductHistory, persona: 'owner', group: 'aside', keywords: 'sku market price archive per product history sold' },
+  { path: '/product', label: 'Product History', screenKey: 'product', icon: 'chart', view: ProductHistory, persona: 'owner', group: 'aside', keywords: 'sku market price archive per product history sold' },
   /* RUNS FOLDED INTO REVIEW (D291, the owner's ruling, RULINGS.md Q6).
    * `#/runs` stays a registered route, off-nav (the same D227 shape `#/product` above
    * already has), because a route is not a feature — a bookmark, a link Pricing or
@@ -265,8 +267,11 @@ export const ROUTES: readonly Route[] = [
    * unread by itself, and Review reads them (`RunsContent`'s own hash functions, unchanged)
    * to know which of "Past runs" the operator meant to open. No hotkey, on `#/product`'s own
    * rule for a route with no nav entry. */
-  { path: '/runs', label: 'Runs', icon: 'play', view: RunsRedirect, persona: 'owner', redirect: true, group: 'aside', keywords: 'pipeline identify join emit import csv reconcile the store live quantities my pricing' },
+  { path: '/runs', label: 'Runs', screenKey: 'runs', icon: 'play', view: RunsRedirect, persona: 'owner', redirect: true, group: 'aside', keywords: 'pipeline identify join emit import csv reconcile the store live quantities my pricing' },
 ]
+
+/** Every screen's `screenKey`, in table order. `map.config.json` names this list as its `screenKeys`, because the map check follows the spread to each row's `screenKey`. */
+export const SCREEN_KEYS = [...ROUTES.map((route) => route.screenKey)]
 
 const GROUPS: readonly { readonly id: Group; readonly label: string | null }[] = [
   { id: 'home', label: null },

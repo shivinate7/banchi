@@ -24,7 +24,7 @@ from .core import (
     rel,
     rule_files,
 )
-from .env_map import _hook_triples, check_codex_hooks, source_names
+from .env_map import _hook_triples, check_codex_hooks
 from .registry_scopes import _spec_map_should_run
 from .rules import (
     HARD_RULE_FLOOR,
@@ -362,15 +362,6 @@ def run(ok) -> None:
             [rel(p) for p in glob_files(ROOT / "docs", "*.md")] == ["docs/GATES.md"],
             "glob matches within one directory of the index",
             str([rel(p) for p in glob_files(ROOT / "docs", "*.md")]),
-        )
-        # The orphan scan's deep mode, through the index. It is the only check in this file
-        # that walks a directory tree, so it is the only one that could quietly go back to
-        # asking the worktree — and in the hook the worktree is the tree that will not be
-        # committed.
-        ok(
-            source_names(ROOT / "docs", (".md",), True) == {"GATES.md", "specs/batch-script.md"},
-            "a deep scan enumerates the index, nested paths and all",
-            str(sorted(source_names(ROOT / "docs", (".md",), True))),
         )
     finally:
         leave_staged_mode()

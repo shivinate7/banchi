@@ -1,4 +1,4 @@
-"""Environment variables, hatches, the repo map, hooks and build order."""
+"""Environment variables, hatches, the map data, hooks and build order."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ from .core import (
     registered_tests,
     rel,
 )
-from .paths_commands import PROPOSED_SIGIL, ignored_paths, marked_proposed
+from .paths_commands import PROPOSED_SIGIL, marked_proposed
 from .registry_scopes import _tracked_paths
 from .records import (
     _DECISION_RE,
@@ -213,121 +213,9 @@ def _env_names() -> Row:
 # GATES.md disagree about where the project is" — genuinely is gone, and a later session
 # wondering why nothing checks that should find the answer at the site.
 
-# ----------------------------------------------------------------------- the repo map
+# ----------------------------------------------------------------------- the map data
 
 MAP = ROOT / "docs" / "map.py"
-
-# What the orphan scan counts as source when an entry says nothing. Every entry written
-# before the key below existed keeps exactly the behavior it had: `.py`, one level deep.
-DEFAULT_SOURCE_SUFFIXES: Tuple[str, ...] = (".py",)
-
-# The optional per-entry key that widens it. A single repo-wide suffix set was the obvious
-# fix and is the wrong one: adding the web extensions to it would conscript
-# static `.html` and `.css` drawing sheets, which are drawings of docs/DESIGN.md and
-# deliberately not components, into demanding map entries. Per-entry is the only shape that
-# lets `app/` declare what it is written in without deciding that for the rest of the tree —
-# and a sheet directory stays uncovered by having no entry with a module list at all,
-# rather than by an exemption someone has to maintain.
-SOURCE_SUFFIXES_KEY = "source_suffixes"
-
-
-def scan_plan(component: Dict[str, object]) -> Tuple[Tuple[str, ...], bool, List[str]]:
-    """What this entry's orphan scan covers: (suffixes, recursive, complaints).
-
-    **Declaring the key replaces the default set rather than adding to it.** `app/` holds no
-    `.py` and never will, so a union would have it hunting for a language it does not
-    contain; the entry is the right place to say what a directory is written in, and saying
-    it should not mean saying it twice.
-
-    **A declaration is also what turns the scan recursive, and the coupling is deliberate.**
-    A declaring directory keeps its source in subdirectories — `app/src/`, `app/tests/` —
-    so a flat scan of one would find nothing whatever suffixes it was handed, which is the
-    second half of why tonight's `.tsx` drift landed in silence. Recursing for *every* entry
-    was the first draft and was worse: `harness/` lists `run.py` alone, and everything under
-    `harness/tests/` and `harness/eval/` is deliberately undescribed (the map says so in a
-    comment). Turning a dozen of those into blocking findings is a content decision about
-    the map, argued in the map, not a side effect of widening a suffix set in here. So the
-    default stays flat and grandfathered, and an entry that declares is an entry that has
-    said what its whole tree is made of.
-
-    **A malformed declaration scans nothing and reports that it scanned nothing.** Falling
-    back to the `.py` default would leave `app/` printing a clean orphan scan that had
-    looked at no file it contains — a check gone quiet, which docs/debts/ already names
-    as this auditor's worst failure mode. The complaints are MECHANICAL because the shape of
-    a literal is provable: there is no context this script is missing.
-    """
-    declared = component.get(SOURCE_SUFFIXES_KEY)
-    if declared is None:
-        return DEFAULT_SOURCE_SUFFIXES, False, []
-
-    # A bare string is the plausible mistake, and it is the dangerous one: `str.endswith`
-    # accepts a string as happily as a tuple, so `".tsx"` written without its brackets would
-    # scan for one suffix and look entirely correct doing it.
-    if isinstance(declared, str) or not isinstance(declared, (list, tuple)):
-        return (), False, [
-            f"`{SOURCE_SUFFIXES_KEY}` must be a list of suffixes — [\".tsx\", \".css\"] — "
-            f"and is {declared!r}. Nothing was scanned for orphans under this entry."
-        ]
-
-    complaints: List[str] = []
-    suffixes: List[str] = []
-    for item in declared:
-        if not isinstance(item, str) or not item.startswith(".") or len(item) < 2:
-            complaints.append(
-                f"`{SOURCE_SUFFIXES_KEY}` lists {item!r}, which is not a file suffix. "
-                f"A suffix starts with a dot — `\".tsx\"`, never `\"tsx\"`, which matches no "
-                f"filename and would report a clean scan for having looked at nothing."
-            )
-            continue
-        suffixes.append(item)
-
-    if declared and not suffixes:
-        complaints.append(
-            f"`{SOURCE_SUFFIXES_KEY}` names no usable suffix, so the orphan rule does not "
-            f"run over this directory at all."
-        )
-    if not declared:
-        complaints.append(
-            f"`{SOURCE_SUFFIXES_KEY}` is an empty list. An entry that declares the key is "
-            f"saying what its source is; declaring nothing switches the orphan rule off "
-            f"here, which is what leaving the key out already does more honestly."
-        )
-    if not component.get("modules"):
-        complaints.append(
-            f"`{SOURCE_SUFFIXES_KEY}` is declared but the entry lists no `modules`, and the "
-            f"orphan scan only runs where there is a module list to compare against. Either "
-            f"list the modules or drop the key — an inert declaration reads as coverage."
-        )
-    return tuple(suffixes), True, complaints
-
-
-def source_names(target: Path, suffixes: Tuple[str, ...], deep: bool) -> Set[str]:
-    """Source files under `target`, named the way docs/map.py names them.
-
-    Relative and slash-joined, because the map already keys `app/`'s modules by
-    `src/tokens.css` — so a recursive scan needs no translation step, the relative path IS
-    the key. `__init__.py` is excluded as package plumbing rather than a module anyone would
-    write a `does` for.
-
-    Deep mode reuses `_walk`, which buys two properties that would otherwise have to be
-    rebuilt here: it prunes SKIP_DIRS as it descends, so `app/node_modules` is never
-    enumerated rather than enumerated and discarded, and it reads the index in staged mode,
-    so the hook keeps auditing the tree the commit will carry.
-    """
-    if not suffixes:
-        return set()
-    if not deep:
-        return {
-            name
-            for name in child_names(target)
-            if name.endswith(suffixes) and name != "__init__.py"
-        }
-    return {
-        path.relative_to(target).as_posix()
-        for path in _walk(target, suffixes)
-        if path.name != "__init__.py"
-    }
-
 
 # Files whose bytes are not prose. `cited_decisions` reads every mapped file looking for `D<n>`
 # and a compressed image will eventually contain those three bytes by chance — icon-touch-1024.png
@@ -353,7 +241,7 @@ def cited_decisions(path: Path) -> Set[str]:
     THE THIRD SITE, and the one docs/debts/ got wrong. That entry judged this reader "not
     separately broken — it compares against `decision_headings`", and about the CAP it was
     right: an id it cannot read is one `governed_by` never asks about. About the WIDEN it was
-    wrong in the other direction. This is a `repo map` finding, which is MECHANICAL, so the
+    wrong in the other direction. This is a `map data` finding, which is MECHANICAL, so the
     three real `# noqa: D102` / `# noqa: D401` lines in server/ turned into four blocked
     commits the moment the third digit came into reach — measured, on the first full run
     after the widen, and the reason `without_noqa` is applied here and not only to the
@@ -729,22 +617,19 @@ def check_subagent_override(report: Report) -> None:
     )
 
 
-def check_map(report: Report, allowed: Dict[str, str]) -> None:
-    """docs/map.py claims things about the repo; this is where they are checked.
+def check_map_data(report: Report, allowed: Dict[str, str]) -> None:
+    """docs/map.py is data that other tools read; this is where its claims are checked.
 
-    The orphan rule is the one that does the work. Everything else here catches a claim
-    that went false; the orphan rule catches a claim that was never made — a module added
-    without touching the map, which is exactly how an index quietly stops describing the
-    thing it indexes.
-
-    What each entry's orphan scan looks at is the entry's own declaration — see `scan_plan`.
-    It reached `.py` and one directory deep until 2026-08-13, so `app/` was inert under a
-    rule its map entry looked covered by: every step 7a screen landed beside the described
-    modules in one evening and the row stayed green.
+    It checks the data and never the coverage. Which tracked code file has no description is
+    the shared plain-english-map check's question (`make map-check`, over `docs/map/`).
+    What is checked here is what that check cannot see: each `governed_by` names a decision
+    that exists, each `tested_by` names a registered harness test, a listed path exists (a
+    `planned` one does not yet), a module's own `D<n>` citations are all in its
+    `governed_by`, and the `SHIPPED` and `OPEN` rows have unique ids and the right `on`.
     """
     findings: List[Finding] = []
     if not exists(MAP):
-        report.add("repo map", MECHANICAL, [Finding("docs/map.py", "does not exist")])
+        report.add("map data", MECHANICAL, [Finding("docs/map.py", "does not exist")])
         return
 
     data = literals_from_module(MAP)
@@ -752,16 +637,12 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     shipped = data.get("SHIPPED") or []
     open_steps = data.get("OPEN") or []
     if not components:
-        report.add("repo map", MECHANICAL, [Finding("docs/map.py", "no COMPONENTS list to read")])
+        report.add("map data", MECHANICAL, [Finding("docs/map.py", "no COMPONENTS list to read")])
         return
 
     singles = {i for i, _, _ in decision_heading_lines_across(decision_files(), "D")}
     test_names = {name for name, _ in registered_tests()}
     claimed = 0
-    # (component path, orphan) pairs, reported after the loop rather than inside it. The
-    # gitignore question below is one batched git call for the whole map that way, instead
-    # of one per entry that lists modules.
-    orphans: List[Tuple[str, str]] = []
 
     def check_decisions(where: str, names: Sequence[str]) -> None:
         for name in names:
@@ -806,10 +687,6 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
         check_decisions(where, component.get("governed_by") or [])
         check_tests(where, component.get("tested_by") or [])
 
-        suffixes, deep, complaints = scan_plan(component)
-        for complaint in complaints:
-            findings.append(Finding(where, complaint))
-
         modules = component.get("modules") or {}
         for name, entry in modules.items():
             module_path = target / name
@@ -831,31 +708,6 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
                         f"but the map does not list it under governed_by.",
                     )
                 )
-
-        # Orphans: a source file the map never mentions. Still guarded on `modules`, which
-        # is the exception docs/debts/ records for `scripts/`: an entry with no module
-        # list has nothing to be an orphan of.
-        if modules and exists(target):
-            for orphan in sorted(source_names(target, suffixes, deep) - set(modules)):
-                orphans.append((path, orphan))
-
-    # A gitignored file is local state and not repo content — the same argument
-    # `ignored_paths` makes for a dangling reference, and it lands harder here because this
-    # row blocks: refusing a commit over `app/playwright-report/index.html` would be the
-    # auditor stopping work on a file the repo does not contain. One batched call, and in
-    # staged mode the list is empty by construction, since `_walk` reads the index and the
-    # index holds nothing ignored — so the pre-commit path pays nothing for this.
-    ignored = ignored_paths([owner + orphan for owner, orphan in orphans])
-    for owner, orphan in orphans:
-        if owner + orphan in ignored:
-            continue
-        findings.append(
-            Finding(
-                f"docs/map.py -> {owner}",
-                f"`{owner}{orphan}` exists but no entry describes it. Add it to "
-                f"modules, with what it does and what governs it.",
-            )
-        )
 
     # THE `status` FIELD IS GONE AND SO IS THE RULE THAT READ IT. This block enforced
     # "exactly one build-order step is `next`", which was right while the build order was a
@@ -905,7 +757,7 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     # could not have told a shipped step from an open one, which is now half the claim. The
     # replacement reads the two headings and reconciles each separately, in both directions.
 
-    report.add("repo map", MECHANICAL, findings, f"{claimed} entries match the tree",
+    report.add("map data", MECHANICAL, findings, f"{claimed} entries match the tree",
                scanned=claimed)
 
 
@@ -987,19 +839,17 @@ def _map_component(path: str) -> Optional[Dict[str, object]]:
 def check_hook_roster(report: Report) -> None:
     """Every file in `scripts/githooks/` has an entry in docs/map.py.
 
-    THE ORPHAN SCAN CANNOT COVER THIS DIRECTORY, and docs/map.py says so in its own comment:
-    a git hook is extensionless by git's requirement, `scan_plan` matches entries by suffix,
-    and an entry with no suffix is rejected. So the hooks are listed BY HAND, and a list kept
-    by hand is a list that stops being kept.
+    THE SHARED MAP CHECK DOES NOT COVER THIS DIRECTORY: a git hook is extensionless by git's
+    requirement, and `map.config.json` lists code files by extension. So the hooks are listed
+    BY HAND, and a list kept by hand is a list that stops being kept.
 
     It stopped once. D42 added `reference-transaction` and `pre-push` and wrote both entries;
     two later hooks landed with no entry. Measured: five hooks on disk, three in the map.
 
     **This is the narrowest possible reader of that hole**, and deliberately not a widening of
-    `scan_plan` to admit extensionless entries. That was the obvious fix and it is the wrong
-    one: the suffix rule is what keeps `views.txt` and a stray `README` from being conscripted
-    into demanding entries, and relaxing it repeals a rule that is doing work everywhere else
-    to repair one directory. One directory's roster, checked against one directory's entries.
+    the extension list to admit extensionless files, which would conscript `views.txt` and a
+    stray `README` into demanding entries. One directory's roster, checked against one
+    directory's entries.
 
     The commit path is the subject, which is why this blocks. A hook nobody wrote down is a
     thing that runs on every commit and appears in no account of what runs on every commit.
@@ -1040,9 +890,8 @@ def check_hook_roster(report: Report) -> None:
                     f"scripts/githooks/{hook}",
                     f"runs on the commit path and has no entry in docs/map.py.\n"
                     f"  Add `\"githooks/{hook}\"` to the `scripts/` component's `modules`, "
-                    f"with a `does` and its `governed_by`. The orphan scan cannot find this "
-                    f"directory — the suffix rule rejects an extensionless key — so this row "
-                    f"is the only thing that will.",
+                    f"with a `does` and its `governed_by`. The shared map check (`make map-check`) cannot "
+                    f"see an extensionless file, so this row is the only thing that will.",
                 )
             )
     for key in sorted(listed):

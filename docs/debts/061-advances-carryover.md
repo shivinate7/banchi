@@ -15,7 +15,7 @@
    - Step 5, reads: `do_inventory*`, `do_search`, `do_status`, `do_skus_photos`, `do_games`, `do_graveyard`, `do_photo*`.
    - Not split: `CaptureHandler`, `CaptureServer`, the dispatch and the request-slot figures. The `server concurrency` row of `make docs-audit` reads them in this file.
 
-   Method per step: move the functions unchanged to `server/<family>_routes.py`, leave a one-line alias in `capture_server` for each moved name tests use, then repoint tests and delete the aliases in the same PR when the diff stays readable. Each PR adds its repo-map entries and runs the full `make check`. A reviewer reads that the diff is a pure move.
+   Method per step: move the functions unchanged to `server/<family>_routes.py`, leave a one-line alias in `capture_server` for each moved name tests use, then repoint tests and delete the aliases in the same PR when the diff stays readable. Each PR adds its `docs/map/` lines and runs the full `make check`. A reviewer reads that the diff is a pure move.
 
    Cost: six PRs. Each is a large diff in the file the owner calls fragile, with no behavior change. Gain: smaller files, and a clear home per route family. Stop if step 0 finds a helper tangle that cannot move without changing behavior.
 

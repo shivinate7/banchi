@@ -608,7 +608,7 @@ Kept so nobody re-proposes them. A rejected mechanism usually fires on honest wo
 - **A PreToolUse Bash hook that refuses a bare `gh pr merge` without an env marker.** Every measured
   incident went through `make merge` from the wrong tree, so the tree is the subject. Rank 28 fixes it
   there.
-- **A non-empty `governed_by` branch in `check_map`.** Any D number that resolves satisfies it, so
+- **A non-empty `governed_by` branch in `check_map_data`.** Any D number that resolves satisfies it, so
   during a file split the cheapest compliance is pasting the nearest plausible one. It corrupts the
   field `scripts/decision-context.py` reads.
 - **A `sole writer` row that counts import-CSV writers.** A count of one survives substitution. Pin the
