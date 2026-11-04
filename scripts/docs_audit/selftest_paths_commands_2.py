@@ -11,6 +11,7 @@ from typing import List
 
 from .core import (
     ADVISORY,
+    CLAUDE_OR_RULES,
     ROOT,
     Report,
     claude_and_rules,
@@ -329,7 +330,7 @@ def run(ok) -> None:
     moved = good_reporter.replace("'design-check.json'", "'verdict.json'")
     found = verdict_disagreements(moved, good_config, good_make, good_prose)
     ok(
-        any(f.where == "CLAUDE.md" for f in found),
+        any(f.where == CLAUDE_OR_RULES for f in found),
         "a RESULT_FILE the prose does not name is reported",
         str(found),
     )
