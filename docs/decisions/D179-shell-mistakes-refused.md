@@ -1,6 +1,6 @@
 # D179 — Shell mistakes are refused by resolving them
 
-A read-only audit asked of every written rule: has it been broken, and can a machine see it? Forty rules were mechanizable. Five are one command away from a session. Each has a measured incident. `scripts/guard-shell.py` enforces those five as a PreToolUse hook on Bash and on Write|Edit, armed in `.claude/settings.json`.
+A read-only audit asked of every written rule: has it been broken, and can a machine see it? Forty rules were mechanizable. Five are one command away from a session. Each has a measured incident. `scripts/guard-shell.py` enforces the tree, wait and push clauses among them, and a later narrate clause, as a PreToolUse hook on Bash and on Write|Edit, armed in `.claude/settings.json`.
 
 D173 is that audit's ruling: a rule that can be enforced mechanically is enforced mechanically, and a rule with no reader is advice. This entry records which five, what each cost, and where these readers are blind.
 

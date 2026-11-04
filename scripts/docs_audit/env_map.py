@@ -1024,8 +1024,10 @@ def check_claude_hooks(report: Report) -> None:
                                     "Claude Code runs the file and bash-c clauses alone (D171)."))
 
     for event, _matcher, command in sorted(claude_triples):
-        # Leading `NAME=value` words are environment, not the script.
+        # Leading `NAME=value` words, and an `env` before them, are environment, not the script.
         words = [w for w in command.split() if not _ENV_WORD.match(w)]
+        if words[:1] == ["env"]:
+            words = words[1:]
         script = words[0].strip('"') if words else ""
         # A hook that must not resolve against the session's cwd names its project root
         # (worktree-create.sh: a tree cut before the script existed had no copy).
