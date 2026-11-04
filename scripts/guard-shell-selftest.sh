@@ -1001,12 +1001,11 @@ skip_cli_write() {   # skip_cli_write <skip-list> <cwd> <file_path>
   return $?
 }
 SKIPS="wait"
-for c in "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"; do
-  skip_cli - "$tmp/main" "$c"; a=$?
-  skip_cli "$SKIPS" "$tmp/main" "$c"; b=$?
-  if [ $a -eq 2 ] && [ $b -eq 0 ]; then ok "\`$c\`: refused without --skip, allowed with it"
-  else bad "\`$c\`: exit $a without --skip, $b with it (want 2 and 0)"; fi
-done
+c="until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
+skip_cli - "$tmp/main" "$c"; a=$?
+skip_cli "$SKIPS" "$tmp/main" "$c"; b=$?
+if [ $a -eq 2 ] && [ $b -eq 0 ]; then ok "\`$c\`: refused without --skip, allowed with it"
+else bad "\`$c\`: exit $a without --skip, $b with it (want 2 and 0)"; fi
 skip_cli "bogus,,nonsense" "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
 [ $? -eq 2 ] && ok "an unknown name in --skip skips nothing" || bad "an unknown name in --skip skipped a clause"
 skip_cli "push,bogus" "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
