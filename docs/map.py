@@ -4756,6 +4756,13 @@ COMPONENTS = [
                         "rules live in claude-settings, never here.",
                 "governed_by": ["D17", "D18"],
             },
+            "map-check-selftest.py": {
+                "does": "`make map-check-selftest` — proves `map-check.py` fails closed against "
+                        "stub skills built in a run folder: no skill, a named dir with none, a "
+                        "skill folder with no `map-check.mjs`, no node, and the skill's own exit "
+                        "code. Each mutant of the script must turn a check red.",
+                "governed_by": ["D18"],
+            },
             "map-fix.py": {
                 "does": "`make map-fix` — add the decision ids a file cites to that file's "
                         "`governed_by` here. THE ONE GENERATOR THAT WRITES INTO A DOC, and it "

@@ -70,6 +70,7 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
 - `scripts/launchagent.py` — The shared launchd install and remove for a daily job on the owner's Mac, main tree only.
 - `scripts/make-help.py` — `make help` — one line per Makefile target, derived from the comment directly above the target's own rule.
 - `scripts/map-check.py` — `make map-check` — finds claude-settings' shared plain-english-map skill and runs its check over `docs/map/` and `map.config.json`, and fails when it finds no skill.
+- `scripts/map-check-selftest.py` — `make map-check-selftest` — proves `scripts/map-check.py` fails closed against stub skills built in a run folder: no skill, a named dir with none, no `map-check.mjs`, no node, and the skill's exit code, with a mutant of the script for each.
 - `scripts/map-fix.py` — `make map-fix` — add the decision ids a file cites to that file's `governed_by` here.
 - `scripts/map-view.py` — `make map` — docs/map.py rendered for a person, in four views: the shape, one package, one module, everything a decision governs, and `--stale`.
 - `scripts/match-heldout.py` — The held-out check on the free reader's accept rule, a gate before adoption and not part of `make check`: reads photographs the spike never saw (the store read-only, minus an exclude list, or a manifest), scores each answer against the owner's confirmed identification, and fails on any wrong answer accepted or any absent-truth card accepted.

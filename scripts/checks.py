@@ -164,6 +164,24 @@ CHECKS = (
         "governed_by": ("D18",),
     },
     {
+        "target": "map-check-selftest",
+        "shard": "static",
+        "runs": "python3 scripts/map-check-selftest.py",
+        "asserts": "the map check never passes without checking, against stub skills built in a "
+                   "run folder: no skill found exits non-zero, a named CLAUDE_SETTINGS_DIR "
+                   "with no skill fails and never falls through to another copy, a named dir "
+                   "with a skill folder but no map-check.mjs fails, node missing exits "
+                   "non-zero, and the skill's own exit code is map-check.py's. Each mutant of "
+                   "map-check.py must turn a check red.",
+        "needs": ("python3", "node", "git", "claude-settings"),
+        "writes": "a run folder it makes and removes.",
+        "commit_path": False,
+        "why_off_commit_path": "map-check's reason exactly: it needs node, and the commit hook "
+                               "runs a bare python3 with nothing installed.",
+        "gates": True,
+        "governed_by": ("D18",),
+    },
+    {
         "target": "revert-guard",
         "shard": None,
         "runs": "python3 scripts/revert-audit.py branch",
