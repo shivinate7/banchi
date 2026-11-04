@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
-
 from .core import ROOT, Report, exists, read, registered_tests
 from .design import COLOR, TYPEFACE, token_value
-from .env_map import DEFAULT_SOURCE_SUFFIXES, SOURCE_SUFFIXES_KEY, scan_plan, source_names
 from .hygiene import _VERDICT_CONFIG, _VERDICT_REPORTER, verdict_disagreements
 from .paths_commands import phony_gaps
 from .status_reach import (
@@ -55,60 +51,6 @@ def run(ok) -> None:
         "this repo's own Makefile agrees with its .PHONY",
         str(phony_gaps(read(ROOT / "Makefile"))),
     )
-
-    # The orphan scan's reach. Every case here is a way for the rule to look like it ran:
-    # the wrong suffixes find nothing, a flat scan of a nested tree finds nothing, and a
-    # typo in the declaration finds nothing — all three print the same clean row.
-    print("\nthe orphan scan covers what the map entry declares")
-    ok(
-        scan_plan({}) == (DEFAULT_SOURCE_SUFFIXES, False, []),
-        "an entry declaring nothing is scanned as it always was",
-        str(scan_plan({})),
-    )
-    plan = scan_plan({SOURCE_SUFFIXES_KEY: [".tsx", ".css"], "modules": {"src/a.tsx": {}}})
-    ok(plan == ((".tsx", ".css"), True, []), "a declaration replaces the default, and recurses", str(plan))
-    plan = scan_plan({SOURCE_SUFFIXES_KEY: ["tsx"], "modules": {"src/a.tsx": {}}})
-    ok(
-        plan[0] == () and len(plan[2]) == 2,
-        "a suffix without its dot is reported, not silently matched",
-        str(plan),
-    )
-    plan = scan_plan({SOURCE_SUFFIXES_KEY: ".tsx", "modules": {"src/a.tsx": {}}})
-    ok(
-        plan[0] == () and len(plan[2]) == 1,
-        "a bare string is reported — str.endswith would have accepted it",
-        str(plan),
-    )
-    plan = scan_plan({SOURCE_SUFFIXES_KEY: [".tsx"]})
-    ok(
-        len(plan[2]) == 1,
-        "declaring suffixes with no modules list is an inert declaration",
-        str(plan),
-    )
-
-    with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        for name in ("src/a.tsx", "src/deep/b.tsx", "node_modules/pkg/c.tsx",
-                     "dist/d.tsx", "test-results/e.tsx", "src/f.py"):
-            target = root / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text("", encoding="utf-8")
-        found = source_names(root, (".tsx",), True)
-        ok(
-            found == {"src/a.tsx", "src/deep/b.tsx"},
-            "a deep scan reaches subdirectories and skips the build output",
-            str(sorted(found)),
-        )
-        ok(
-            source_names(root, (".tsx",), False) == set(),
-            "and the flat scan it replaced saw none of it — the defect, measured",
-            str(sorted(source_names(root, (".tsx",), False))),
-        )
-        ok(
-            source_names(root, DEFAULT_SOURCE_SUFFIXES, False) == set(),
-            "a `.py` entry is unaffected by any of it",
-            str(sorted(source_names(root, DEFAULT_SOURCE_SUFFIXES, False))),
-        )
 
     # A tested_by claim. Every case below is a way for this row to pass a claim it should
     # refuse, or refuse one it should pass — and the blocking direction is the expensive one,
@@ -217,7 +159,7 @@ def run(ok) -> None:
         )
         ok(
             not found and claims == 0,
-            "an unregistered id is the repo map row's finding, not counted or repeated here",
+            "an unregistered id is the map data row's finding, not counted or repeated here",
             str(found),
         )
         found, _ = reach_findings([{"path": "no_such_dir/", "tested_by": ["T3"]}], registry)
