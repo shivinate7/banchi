@@ -32,7 +32,8 @@ from a card's name.
 shapes, `Cookie:` headers, auth headers, passwords, email addresses and phone numbers. DEBT114 (the
 waiting-page scan misses address and credential-name shapes) lists what passes it: addresses, a
 `NAME=value` or `name: value` line whose name ends in key, secret, token or cookie and whose value
-has no known token shape, bare cookies, and a bare `Bearer` or `Basic` value. The writer's read of the diff is the cover until the shared scan refuses them.
+has no known token shape, bare cookies, and a bare `Bearer` or `Basic` value. The writer's read
+of the diff is the cover until the shared scan refuses them.
 
 **Not exported.** `receipts/` (when a session read and filed an answer) and the page's roadmap
 block. The mockups' design data is exported, as `waiting/page/designData.json`. The answers and
