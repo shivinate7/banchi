@@ -64,7 +64,8 @@ contribution is where that split falls on the READ side, given the archive
   back into the table. That is `D219`'s own ruling, restated rather
   than reopened here.
 
-The screen never merges the two kinds of observation into one number or one line. The
+The screen never merges the two kinds of observation into one series or one line. The one
+number built from both is the Difference row, described under What is out of scope here. The
 market series draws as a broken polyline. It gaps at any bucket with no price, inherited
 from `PriceHistory.tsx:sparkSegments` rather than rebuilt. The owner's own fills draw as
 individual marks, at their own true date and price, in the one accent this design system
@@ -79,5 +80,10 @@ sale.
 Cost basis is out of scope, along with a counterfactual re-priced at today's figure. So is
 any verdict comparing a fill to its bucket. All three are
 `docs/specs/sales-plan.md` section 1's questions, not this entry's. This view draws two
-kinds of observation side by side. It states their limits. It computes no comparison between
-them.
+kinds of observation side by side. It states their limits.
+
+The view computes one comparison between them: the Difference row. It is the average price you
+got per copy, minus the market average per copy, over the sales compared. It is drawn as a plain
+signed number (`Money` with `signed`, in `kit/data.tsx`), in one money color for both signs. It
+carries no verdict word. No color, icon or arrow reads as good or bad. D278's sign-not-color rule
+applies (owner, 2026-11-04 06:40 CST, Cockpit item 187 a).
