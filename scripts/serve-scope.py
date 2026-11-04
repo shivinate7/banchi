@@ -103,11 +103,13 @@ SCOPE = (
 )
 
 # `app/**` IS DELIBERATELY ABSENT, AND IT IS THE WHOLE POINT OF THIS FILE.
-# `scripts/serve-selftest.py` writes a STUB `app/` into the throwaway tree and never copies
-# this one — its own header says so: "a real `app/` means `node_modules` and a real `vite
-# build`, which is the one thing this script is deliberately not testing." The day it copies
-# a real `app/`, `CARRY` gains the name and the `serve scope` row fails until this list
-# follows. That is the reconciliation doing its job, not a surprise.
+# `scripts/serve-selftest.py` gives its throwaway trees a STUB `app/`, so an `app/` change cannot
+# move what it reads. The one exception is `check_real_build`, which copies the real `app/` and
+# runs the real `vite build`. It runs only when BANCHI_SERVE_REAL_BUILD is `1`, and `check.yml`
+# and `mac.yml` set that on runs whose scope is `all` (a push to main, the nightly, the weekly
+# Mac run). A pull request that touches only `app/` skips the self-test and meets that arm on
+# main. If the stub trees ever copy a real `app/`, `CARRY` gains the name and the `serve scope`
+# row fails until this list follows.
 
 
 def _browser_scope():
