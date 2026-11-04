@@ -161,15 +161,8 @@ class Verdict(NamedTuple):
     notes: List[str]        # printed, exit 0 — what this file looked at and could not read
 
 
-#: Clauses the caller left to another guard (`GUARD_SHELL_SKIP`, or `--skip`). Set once, by `main`, for one hook run.
-#: No hook entry in this repo sets it now: Claude Code runs every clause.
-SKIPPED: Set[str] = set()
-
-
 def _off(clause: str, command: str) -> bool:
-    """Whether this clause is skipped, or its hatch is set, in either form: environment or inline."""
-    if clause in SKIPPED:
-        return True
+    """Whether this clause's hatch is set, in either form: environment or inline."""
     name = HATCH[clause]
     return os.environ.get(name) == "off" or name in _hatches_set(command)
 
@@ -1336,8 +1329,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--hook", action="store_true",
                         help="run as a PreToolUse hook; reads the payload on stdin")
-    parser.add_argument("--skip", metavar="NAMES", default="",
-                        help="comma-separated clause names another guard owns; not run")
     parser.add_argument("--explain", metavar="CMD", default="",
                         help="the verdict for one command, and why")
     parser.add_argument("--explain-write", metavar="PATH", default="",
@@ -1359,10 +1350,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for clause in CLAUSES:
             print("{0:<10} {1:<22} {2}".format(clause.name, clause.hatch + "=off", clause.rule))
         return 0
-    # GUARD_SHELL_SKIP is the hook option's home: an environment variable, so a copy that does not
-    # know it ignores it. `--skip` stays as an alias for branches that already pass it.
-    skip = os.environ.get("GUARD_SHELL_SKIP", "") + "," + args.skip
-    SKIPPED.update(name for name in skip.split(",") if name in HATCH)
     if args.hook:
         try:
             payload = json.loads(sys.stdin.read() or "{}")

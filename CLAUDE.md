@@ -97,7 +97,7 @@ whole repo:
   screenshot, commit or any tracked file. The gitignored `inventory/` is the sanctioned place.
   `scripts/githooks/pre-commit` enforces it, armed by `make hooks`.
 - **Four shell mistakes are refused before they run** by `scripts/guard-shell.py --hook` on Bash and Write/Edit.
-  Claude Code runs every clause: no hook entry sets `GUARD_SHELL_SKIP` (`--skip` is its alias, and the `claude hooks` row of `make docs-audit` refuses one that does).
+  Claude Code runs every clause.
   The shared layer's guard owns the checkout, stash and reset refusals, so those clauses are gone from this script.
   Each clause fails open on its own bugs. A tool call that sets a real `BANCHI_*=off` is refused as owner-only, with no switch named, unless it is a recovery lever (`BANCHI_SUITE_LOCK`, `BANCHI_SERVE_MAIN`, `BANCHI_SYNC`). Only the owner's terminal and CI set the rest (D42 (main moves by pull request) and D179 (shell mistakes are refused by resolving)). Each has an owner-held escape hatch, never printed to an agent: `BANCHI_TREE`,
   `BANCHI_WAIT`, `BANCHI_PUSH`, `BANCHI_NARRATE`

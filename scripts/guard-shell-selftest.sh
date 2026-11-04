@@ -34,8 +34,7 @@
 #
 # WHAT IT CANNOT PROVE. That Claude Code actually invokes the hook, or that exit 2
 # blocks a tool call — both are the harness's behaviour and not this repo's.
-# `.claude/settings.json` arms it and `make docs-audit`'s `claude hooks` row refuses
-# a settings entry that sets `GUARD_SHELL_SKIP`.
+# `.claude/settings.json` arms it.
 
 set -uo pipefail          # NOT -e: every case must run and be scored
 
@@ -982,75 +981,19 @@ fi
 
 LIBDIR="$HERE"
 echo ""
-echo "  --skip: clauses another guard owns, through the real CLI"
+echo "  the push mismatch, and a missing cwd"
 
-# THE REAL CLI, NOT `hook()`: `--skip` is parsed by `main`, and a hook entry runs `--hook --skip <clause>`.
-# Earlier sections leave the tree in unknown states,
-# so it is dirtied again here, and a refused case is meaningless on a clean tree.
-(cd "$tmp/main" && git checkout -q main 2>/dev/null; printf 'one\ntwo\nthree\nskip-section\n' > work.py)
-skip_cli() {   # skip_cli <skip-list|-> <cwd> <command> -> exit code
-  local args=(--hook); [ "$1" = "-" ] || args+=(--skip "$1")
-  out="$(printf '%s' "$3" \
-        | CWD="$2" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read()}}))' \
-        | python3 "$GUARD" "${args[@]}" 2>&1)"
-  return $?
-}
-skip_cli_write() {   # skip_cli_write <skip-list> <cwd> <file_path>
-  out="$(CWD="$2" TARGET="$3" python3 -c 'import json,os; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"file_path":os.environ["TARGET"]}}))' \
-        | python3 "$GUARD" --hook --skip "$1" 2>&1)"
-  return $?
-}
-SKIPS="wait"
-c="until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
-skip_cli - "$tmp/main" "$c"; a=$?
-skip_cli "$SKIPS" "$tmp/main" "$c"; b=$?
-if [ $a -eq 2 ] && [ $b -eq 0 ]; then ok "\`$c\`: refused without --skip, allowed with it"
-else bad "\`$c\`: exit $a without --skip, $b with it (want 2 and 0)"; fi
-skip_cli "bogus,,nonsense" "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
-[ $? -eq 2 ] && ok "an unknown name in --skip skips nothing" || bad "an unknown name in --skip skipped a clause"
-skip_cli "push,bogus" "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
-[ $? -eq 2 ] && ok "…and a known name beside it skips only its own clause" || bad "--skip push also skipped the wait clause"
-
-# GUARD_SHELL_SKIP is the hook option's home; `--skip` is its alias; both together skip the union.
-skip_env() {   # skip_env <env-list> <flags...> -- <cwd> <command> -> exit code
-  local env_list="$1"; shift; local args=(--hook)
-  while [ "$1" != "--" ]; do args+=("$1"); shift; done; shift
-  out="$(printf '%s' "$2" \
-        | CWD="$1" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read()}}))' \
-        | GUARD_SHELL_SKIP="$env_list" python3 "$GUARD" "${args[@]}" 2>&1)"
-  return $?
-}
-skip_env wait -- "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
-[ $? -eq 0 ] && ok "GUARD_SHELL_SKIP=wait skips the wait clause" || bad "GUARD_SHELL_SKIP=wait did not skip the wait clause"
-skip_env wait -- "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"
-[ $? -eq 2 ] && ok "…and only that clause: a narrated merge is still refused" || bad "GUARD_SHELL_SKIP=wait also skipped the narrate clause"
-skip_env "" --skip wait -- "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"; a=$?
-skip_env "" --skip wait -- "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"; b=$?
-if [ $a -eq 0 ] && [ $b -eq 2 ]; then ok "--skip wait behaves as the variable does"
-else bad "--skip wait: wait exit $a, narrate exit $b (want 0 and 2)"; fi
-skip_env wait --skip narrate -- "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"; a=$?
-skip_env wait --skip narrate -- "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"; b=$?
-skip_env wait --skip narrate -- "$WT" "cat > $tmp/main/work.py"; c=$?
-if [ $a -eq 0 ] && [ $b -eq 0 ] && [ $c -eq 2 ]; then ok "the variable and --skip together skip the union, and no more"
-else bad "variable plus flag: wait $a, narrate $b, tree $c (want 0, 0, 2)"; fi
-
-# Re-arm the mismatch: a branch tracking a DIFFERENTLY named upstream (later sections repoint it).
-(cd "$tmp/main" && git checkout -q -B skip-mismatch main 2>/dev/null \
-  && git config branch.skip-mismatch.remote origin \
-  && git config branch.skip-mismatch.merge refs/heads/claude/skip-mismatch)
-skip_cli - "$tmp/main" "git push origin HEAD"
-[ $? -eq 2 ] || bad "the skip-section push fixture did not arm: the mismatch is not refused without --skip"
+# Arm the mismatch: a branch tracking a DIFFERENTLY named upstream.
+(cd "$tmp/main" && git checkout -q -B push-mismatch main 2>/dev/null \
+  && git config branch.push-mismatch.remote origin \
+  && git config branch.push-mismatch.merge refs/heads/claude/push-mismatch)
+judge "$tmp/main" "git push origin HEAD"
+[ $? -eq 2 ] || bad "the push-mismatch fixture did not arm: the mismatch is not refused"
 # A MISSING CWD FAILS OPEN ONLY FOR A CLAUSE THAT READS THE REPOSITORY THERE. The push clause reads the
 # tracked upstream at cwd, so it is the subject: the armed mismatch is refused from a real checkout
-# (the line above) and must be allowed, not crash, from a directory that does not exist.
+# (the arm above) and must be allowed, not crash, from a directory that does not exist.
 fails_open "a cwd that does not exist: the push the mismatch refuses is allowed" "{\"cwd\":\"/no/such/place\",\"tool_input\":{\"command\":\"git push origin HEAD\"}}"
-skip_cli "$SKIPS" "$tmp/main" "git push origin HEAD"
-[ $? -eq 2 ] && ok "with --skip, the push mismatch is still refused" || bad "--skip let the push mismatch through"
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
-skip_cli "$SKIPS" "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"
-[ $? -eq 2 ] && ok "with --skip wait, a narrated merge is still refused" || bad "--skip wait let the narrate clause through"
-skip_cli_write "$SKIPS" "$WT" "$tmp/main/work.py"
-[ $? -eq 2 ] && ok "with --skip, a write outside the checkout is still refused" || bad "--skip let a write outside the checkout through"
 
 echo ""
 echo "  the refusal log"
@@ -1071,6 +1014,17 @@ if [ $bogus_status -eq 0 ] && [ -n "$bogus_out" ]; then ok "--hook --bogus exits
 else bad "--hook --bogus: exit $bogus_status, stderr '$bogus_out' (want 0 and a warning)"; fi
 python3 "$GUARD" --bogus >/dev/null 2>&1 </dev/null
 [ $? -eq 2 ] && ok "without --hook, an unknown flag still exits 2" || bad "without --hook, an unknown flag did not exit 2"
+
+# A STALE `--skip` IS AN UNKNOWN FLAG, AND THE HOOK IGNORES IT: the wait clause stays live. The option was
+# retired, so a settings entry that still passes the flag must not switch that clause off. THE REAL CLI,
+# NOT `judge`: only `main` parses the flag, and `judge` calls `hook()` directly.
+stale_cmd="until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
+out="$(printf '%s' "$stale_cmd" \
+      | CWD="$tmp/main" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read()}}))' \
+      | python3 "$GUARD" --hook --skip wait 2>&1)"
+stale_status=$?
+if [ $stale_status -eq 2 ]; then ok "a stale --skip wait is ignored as an unknown flag: the wait clause still refuses"
+else bad "a stale --skip wait switched the wait clause off: exit $stale_status (want 2)"; fi
 
 echo ""
 printf '  %d passed, %d failed\n' "$pass" "$fail"
