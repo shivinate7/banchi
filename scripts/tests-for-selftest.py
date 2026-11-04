@@ -423,6 +423,9 @@ def real_pipeline_routes_reaches_groups_that_never_import_the_hermetic_setup() -
     if code is None or code != 0:
         expect(False, f"server/pipeline_routes.py: the selector exited {code}, expected 0 ({err.strip()[-200:]})")
         return
+    # Inclusion, not equality: t3, t6 and t11 also reach it through real imports, so only the far files below are refused.
+    missing = sorted(set(want) - set(lines))
+    expect(not missing, f"server/pipeline_routes.py: a suite that reaches it is not printed: {missing}")
     for group in real_groups():
         if group.split("/")[-1][:-3] in non_importers:
             expect(group in lines, f"inheritance: {group} never imports the hermetic setup but is not printed")
@@ -438,9 +441,8 @@ def real_unreached_file_prints_nothing_and_exits_zero() -> None:
     mentions = []
     for base in (ROOT / "harness", ROOT / "app/tests/unit"):
         for path in base.rglob("*"):
-            if path.is_file() and path.suffix in {".py", ".ts"}:
-                if "janitor.py" in path.read_text(encoding="utf-8", errors="replace"):
-                    mentions.append(str(path.relative_to(ROOT)))
+            if path.is_file() and path.suffix in {".py", ".ts"} and "janitor.py" in path.read_text(encoding="utf-8", errors="replace"):
+                mentions.append(str(path.relative_to(ROOT)))
     if not expect(not mentions, f"scope: a suite names janitor.py: {mentions[:3]}") or not require_selector():
         return
     code, lines, err = run_selector(["scripts/janitor.py"], ROOT)
