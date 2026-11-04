@@ -1001,11 +1001,17 @@ class Refusal(str):
 def refusal(exc: PriceHistoryError) -> Refusal:
     """The `Refusal` for a raised `PriceHistoryError`, kind chosen by its class, never its text.
 
-    `Offline` is an `Unreachable`, so one test covers both. A bare `PriceHistoryError` is an
+    `Offline` is an `Unreachable`, so one test covers both. An HTTP 404 is the one `Unreachable`
+    that is not a network refusal. A bare `PriceHistoryError` is an
     identification refusal: when the class says nothing, the card goes to review.
     """
+    cause = exc.__cause__
     if isinstance(exc, Blocked):
         kind = KIND_BLOCKED
+    elif isinstance(exc, Unreachable) and isinstance(cause, net.NetError) and cause.status == 404:
+        # Main queued a 404 for review. Whether a 404 means a missing product is unmeasured, so
+        # it stays an identification refusal. The signal is the status code, never the text.
+        kind = KIND_IDENTIFICATION
     elif isinstance(exc, Unreachable):
         kind = KIND_NETWORK
     elif isinstance(exc, UnknownRange):

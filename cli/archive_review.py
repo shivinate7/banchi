@@ -42,7 +42,7 @@ below, by `pipeline/pricehistory.py:Refusal.kind`), and builds the entries `Queu
 already knows how to hold.
 
 A CARD THIS MODULE CANNOT QUEUE IS NAMED, NEVER SILENTLY ABSENT (`queue_entries`'s own
-`QueueBuild.unavailable`, review round, HIGH finding, 2026-09-24) — `CLAUDE.md`'s hard rule,
+`QueueBuild.unavailable`) — `CLAUDE.md`'s hard rule,
 "never drop a card without saying so", applied to the one shape this module can itself
 produce: a SKU-bound card whose evidence (`read_name`/`read_number`/`read_printed_total`)
 was never recorded matches its own refusal exactly and still carries no reading to show a

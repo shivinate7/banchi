@@ -105,11 +105,9 @@ CATALOG_SKUS_PER_PASS = 600
 # again within the same week always advances onto ground the last one had not covered.
 RESUME_TTL_SECONDS = 6 * 24 * 60 * 60
 
-# `pipeline/pricehistory.py:COURTESY_DELAY_SECONDS`, copied rather than imported — the
-# `market` argument stays duck-typed throughout and this module imports `pricehistory` only
-# for `Refusal` and its kinds, so the naive first guess has to live here too, for a checkout
-# that has never measured a real throttle yet.
-DEFAULT_COURTESY_DELAY_SECONDS = 0.15
+# The naive first guess for a checkout that has never measured a real throttle yet: the reader's
+# own pause, so the two never drift apart.
+DEFAULT_COURTESY_DELAY_SECONDS = pricehistory.COURTESY_DELAY_SECONDS
 
 # How much slower than the rate that just got a session blocked the next attempt goes.
 # ARGUED, NOT PROVEN OPTIMAL (D222): doubling the interval a run
@@ -446,6 +444,9 @@ def _ledger_export_rows(
     rows: Dict[str, dict] = {}
     refusals: Dict[str, str] = {}
     groups_by_line: Dict[str, Optional[Dict[str, dict]]] = {}
+    # A mirror failure keeps its class's kind, so a network or blocked refusal is never read as
+    # an identification one. Any other exception leaves no entry and keeps the plain sentence.
+    line_failures: Dict[str, str] = {}
 
     for sku, name in candidates.items():
         if not name:
@@ -461,14 +462,14 @@ def _ledger_export_rows(
             try:
                 category_id = market.category_id(product_line)
                 groups_by_line[product_line] = market.groups(category_id)
-            except Exception as exc:  # the mirror's own refusal shape, duck-typed (see
-                # the header — this module takes no hard dependency on
-                # `pipeline/pricehistory.py`'s exception types)
+            except pricehistory.PriceHistoryError as exc:
                 groups_by_line[product_line] = None
-                _ = exc
+                line_failures[product_line] = pricehistory.refusal(exc)
+            except Exception:  # a market that is not `pricehistory.Market` raises its own shapes
+                groups_by_line[product_line] = None
         groups = groups_by_line[product_line]
         if groups is None:
-            refusals[sku] = (
+            refusals[sku] = line_failures.get(product_line) or (
                 f"{product_line!r} could not be resolved against the tcgcsv category list"
             )
             continue
