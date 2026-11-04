@@ -59,7 +59,7 @@ per set and overall.
   (one file per configuration, as above). Measured against baseline: holdout 0.9706 → 0.9559,
   high-confidence misses 5 → 7, and the finish distribution hardened (`unknown` 27 → 5,
   `normal` 66 → 111). That happened despite the clause's own carve-out sentence. It is the
-  exact both-directions failure the Someday entry warned about, plus a third nobody predicted.
+  exact both-directions failure that was predicted, plus a third nobody predicted.
   The losses were name misspellings, not rarity-adjacent. The join key improved by one. The
   confident-digit miss (`271/167`) survived, which is the class D23 says only the catalog
   cross-check catches. **The production clause is therefore switched off** in
