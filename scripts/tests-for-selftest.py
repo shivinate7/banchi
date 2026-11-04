@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Proves `scripts/tests-for.py <path> [--root DIR]`, the selector that names the suites which reach one product file.
 
+Protects: The suite selector names exactly the suites that reach a product file, and `--root` wins over the cwd it runs in.
+
 Consumer: claude-settings `hooks/mutate_shared.py` `_select_suites`, profile key `select`. It runs the selector
 from a checkout root with bare `python3`, and keeps only the changed suites the selector prints.
 
