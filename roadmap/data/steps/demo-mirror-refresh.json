@@ -1,0 +1,10 @@
+{
+  "title": "demo: mirror refresh",
+  "status": "active",
+  "phase": "In flight (open PRs)",
+  "why": "Source: open PR #1029 (branch demo/mirror-refresh), https://github.com/shivinate7/banchi/pull/1029.",
+  "note": "Ready PR #1029 on branch demo/mirror-refresh.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 8
+}

@@ -1,0 +1,10 @@
+{
+  "title": "Needs owner call: Logo",
+  "status": "todo",
+  "phase": "Audit: needs owner call",
+  "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 8 of that section, at main 06571635.",
+  "note": "Logo: d073 with s/logo, try a drop shadow on the dock icon? d074 with s/logo, sweep the four HELD mark parameters, or re-tag them? Both need your eye.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 48
+}

@@ -1,0 +1,10 @@
+{
+  "title": "DEBT107: the browser-scope self-test went red on main in three runs",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/107-browser-scope-self-test.md (DEBT107), at main 06571635.",
+  "note": "The `audit-self-test` step of `ci-check (ci-check-guards-1)` went red on three main runs, with two browser-scope rows failing.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 131
+}

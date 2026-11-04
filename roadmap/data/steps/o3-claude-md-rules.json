@@ -1,0 +1,10 @@
+{
+  "title": "Folder-only CLAUDE.md sections move to path-scoped rules",
+  "status": "active",
+  "phase": "In flight (open PRs)",
+  "why": "Source: open PR #1005 (branch o3-claude-md-rules), https://github.com/shivinate7/banchi/pull/1005.",
+  "note": "Draft PR #1005 on branch o3-claude-md-rules.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 9
+}

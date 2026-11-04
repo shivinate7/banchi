@@ -1,0 +1,10 @@
+{
+  "title": "DEBT85: The read-budget check proves some routes on their miss path only",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/085-read-budget-miss-paths.md (DEBT85), at main 06571635.",
+  "note": "`harness/tests/t7/read_budget.py` budgets about 15 routes against a fixture that never reaches their hit path. A per-card walk added to one of them stays green.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 113
+}

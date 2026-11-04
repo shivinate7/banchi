@@ -1,0 +1,10 @@
+{
+  "title": "DEBT115: a new copy's tick on the pricing list outlives a change to its price",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/115-new-copy-tick-keyed-by-sku.md (DEBT115), at main 06571635.",
+  "note": "On `#/pricing`, the tick on a new copy under Needs You is keyed by SKU alone, so it survives a rule change or a refresh that moves the copy's price. `app/src/Pricing.tsx` keeps `ticks[row.sku]` and clears it only after a send. A live suggestion's tick is keyed to its figure (`tickKey`) and does not have this gap.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 139
+}

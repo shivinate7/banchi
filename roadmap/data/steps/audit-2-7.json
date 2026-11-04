@@ -1,0 +1,10 @@
+{
+  "title": "To do: Tooling",
+  "status": "todo",
+  "phase": "Audit: to do",
+  "why": "Source: docs/specs/todo-audit.md, section 2 (To do (104; no owner call; ranked by user impact, then size)), line 7 of that section, at main 06571635.",
+  "note": "Tooling: d002 extensionless seams need map entries (S); d003 cmd_identify builds master.Card by hand (S); d004 read evidence sources from harness.run.TESTS (S); d004 partial audit-history replay exits 0 (S); d019 revert guard misses old, re-worded and shared-hunk reversals (M); d020 _live_pid has no argv check (S).",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 31
+}

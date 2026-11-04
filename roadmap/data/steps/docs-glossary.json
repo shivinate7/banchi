@@ -1,0 +1,10 @@
+{
+  "title": "docs: glossary, one word per meaning, with the code map",
+  "status": "active",
+  "phase": "In flight (open PRs)",
+  "why": "Source: open PR #961 (branch docs/glossary), https://github.com/shivinate7/banchi/pull/961.",
+  "note": "Draft PR #961 on branch docs/glossary.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 11
+}

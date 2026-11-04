@@ -1,0 +1,10 @@
+{
+  "title": "DEBT84: The public demo's first screen sits just under its byte budget, and its time…",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/084-demo-chunk-size.md (DEBT84), at main 06571635.",
+  "note": "The demo fetches each screen's recorded data when the screen asks (`docs/specs/demo.md`, \"Fetched per screen\"). Home's first load is 8.32 MB decoded, under `HOME_FIRST_LOAD_BUDGET_BYTES` (8.5 MiB) in `app/tests/demo-coverage.spec.ts`. Before the split, the `demoServer` chunk was 86 MB raw and Home's first load was 87.9 MB.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 112
+}

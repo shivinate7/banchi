@@ -1,0 +1,10 @@
+{
+  "title": "DEBT114: the waiting-page export scan misses some address and key shapes",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/114-waiting-scan-misses.md (DEBT114), at main 06571635.",
+  "note": "`scripts/waiting-export.py`'s `PATTERNS` let some buyer-address and secret shapes through to the public `docs/waiting/`. Found by review round 3 of the lane that built it, with inline probes.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 138
+}

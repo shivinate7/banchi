@@ -1,0 +1,10 @@
+{
+  "title": "DEBT90: a send notice joins the bar after the worklist lands",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/090-send-notice-lands-late.md (DEBT90), at main 06571635.",
+  "note": "A send notice can join the send bar after it first draws. The pending bar in `Pricing.tsx` draws no notice. `SendCard` and its first `GET /pipeline/sends` start only when the worklist lands. A notice stands for a day after a checked send (`STANDS_MS`), and for any open, short or unreadable receipt.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 117
+}

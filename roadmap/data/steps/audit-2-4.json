@@ -1,0 +1,10 @@
+{
+  "title": "To do: Screens",
+  "status": "todo",
+  "phase": "Audit: to do",
+  "why": "Source: docs/specs/todo-audit.md, section 2 (To do (104; no owner call; ranked by user impact, then size)), line 4 of that section, at main 06571635.",
+  "note": "Screens: s/sales-findings percent change has no base floor (S, Revenue.tsx); s/sales-findings partial-month mark is lost on the filter chip and table (S); d060 delete the IS_DEMO stopgap (S, Orders.tsx); d008 \"Unnamed Box\" still typed in Fulfillment (S); s/demo Home and Orders say \"no export\" until Shipping opens (S); s/graveyard Deleted boxes shelf is not in the URL (S, BoxBrowse.tsx).",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 28
+}

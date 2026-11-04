@@ -1,0 +1,10 @@
+{
+  "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror",
+  "status": "todo",
+  "phase": "Build order (map OPEN)",
+  "why": "Source: docs/map.py OPEN, step n=9, at main 06571635.",
+  "note": "Snapshot and SQLite index are built. The image mirror fill (make catalog-mirror) has never run; it is the owner's disk to spend (D15, vendored catalog).",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 13
+}

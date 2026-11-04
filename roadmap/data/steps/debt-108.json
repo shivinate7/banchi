@@ -1,0 +1,10 @@
+{
+  "title": "DEBT108: two capture timing checks go red on design-check shard 4",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/108-capture-freeze-timing.md (DEBT108), at main 06571635.",
+  "note": "Two timing checks in `tests/capture-freeze.spec.ts` go red on `design-check (4)`, one by timing out and one by growth in blocked time per capture.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 132
+}

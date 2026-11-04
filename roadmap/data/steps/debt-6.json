@@ -1,0 +1,10 @@
+{
+  "title": "DEBT6: T7 leaves two capture-server facts unchecked",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/006-t7-leaves-two-capture-server-facts-unchecked.md (DEBT6), at main 06571635.",
+  "note": "T7 never opens twenty connections against the capture server's accept backlog, and never starts the server under a bare interpreter.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 68
+}

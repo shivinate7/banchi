@@ -1,0 +1,10 @@
+{
+  "title": "DEBT26: The Intelligent Mail barcode encoder is written, correct against the Postal…",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/026-the-intelligent-mail-barcode-encoder-is-written-correct.md (DEBT26), at main 06571635.",
+  "note": "The Intelligent Mail barcode encoder is written and correct against the Postal Service's own worked examples, and it is parked on a branch because no screen reaches it.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 79
+}

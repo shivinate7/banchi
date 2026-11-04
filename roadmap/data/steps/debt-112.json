@@ -1,0 +1,10 @@
+{
+  "title": "DEBT112: the Capture screen's sweep read is counted as still asking after the screen is…",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/112-request-budget-leave.md (DEBT112), at main 06571635.",
+  "note": "The test `a screen that is left stops asking, and what it had open is aborted` in `tests/request-budget.spec.ts` goes red on `design-check (11)` when a `GET /pipeline/match/sweep` read, sent by the Capture screen, is still open or is sent after the screen is left.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 136
+}

@@ -1,0 +1,10 @@
+{
+  "title": "DEBT110: the merge-speed guard's 10 s wall-clock backstop can fail on a loaded machine",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/110-merge-speed-backstop.md (DEBT110), at main 06571635.",
+  "note": "`harness/tests/t7_box_map.py:check_merge_speed` can fail through its 10 s wall-clock backstop on a loaded machine, with no defect in the merge.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 134
+}

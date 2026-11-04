@@ -1,0 +1,10 @@
+{
+  "title": "fix: the dry-run quote reads photos at half size",
+  "status": "active",
+  "phase": "In flight (open PRs)",
+  "why": "Source: open PR #944 (branch fix/dry-run-decode), https://github.com/shivinate7/banchi/pull/944.",
+  "note": "Draft PR #944 on branch fix/dry-run-decode.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 12
+}

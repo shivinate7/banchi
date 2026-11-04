@@ -1,0 +1,10 @@
+{
+  "title": "DEBT96: Fulfillment still shows the owner's photo first",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/096-fulfill-stock-art.md (DEBT96), at main 06571635.",
+  "note": "The owner ruled that Fulfillment shows the catalog image first, with the owner's own photo one press away (lean-server spec, section 6, Q2 and Q6). `#/fulfillment` still shows the capture photo (`previewUrl`) first.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 122
+}

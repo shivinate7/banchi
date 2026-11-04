@@ -1,0 +1,10 @@
+{
+  "title": "DEBT63: T1 has never been compared with TCGplayer Scan & Identify",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/063-bench-scan-identify.md (DEBT63), at main 06571635.",
+  "note": "When Haiku scores below the floor on T1, nobody knows whether the task is hard or the prompt is weak. Hand-feed the same ~50 eval images to TCGplayer Scan & Identify and compare. It is manual (about 30 minutes) and needs no integration code. It tells whether to keep tuning the prompt or to move the bar (D2).",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 96
+}

@@ -1,0 +1,10 @@
+{
+  "title": "Serialize worktree creation with a lock (fixes the run 3256 red)",
+  "status": "active",
+  "phase": "In flight (open PRs)",
+  "why": "Source: open PR #1033 (branch lane/worktree-add-lock), https://github.com/shivinate7/banchi/pull/1033.",
+  "note": "Draft PR #1033 on branch lane/worktree-add-lock.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 4
+}

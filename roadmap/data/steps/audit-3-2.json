@@ -1,0 +1,10 @@
+{
+  "title": "Needs owner call: d003",
+  "status": "todo",
+  "phase": "Audit: needs owner call",
+  "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 2 of that section, at main 06571635.",
+  "note": "d003: send the operator's note to the model? It changes prompt_fingerprint and needs its own ruling (M). d033: add a way to reopen a wrongly answered queue entry (M)?",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 42
+}

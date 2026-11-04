@@ -1,0 +1,10 @@
+{
+  "title": "DEBT3: The claim chain",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/003-the-claim-chain.md (DEBT3), at main 06571635.",
+  "note": "A capture-time claim crosses hops that nothing binds together. `CAPTURE_CLAIM_FIELDS` in `store/master.py` binds the server side (the record upsert, the `allocate_capture` pass-through, `sidecar_payload`, `PUT_FIELDS`), and T7's `check_capture_claim_chain` iterates it. Still unbound:",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 66
+}

@@ -1,0 +1,10 @@
+{
+  "title": "Close the record: d084 and s/demo (DEBT84 note)",
+  "status": "todo",
+  "phase": "Audit: close the record",
+  "why": "Source: docs/specs/todo-audit.md, section 1 (Close the record (20)), line 3 of that section, at main 06571635.",
+  "note": "d084 and s/demo (DEBT84 note): close condition met. Home loads 8.32 MB, under the 8.5 MiB budget. Retitle it. Keep slow-network time as an unmeasured note.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 17
+}

@@ -1,0 +1,10 @@
+{
+  "title": "DEBT106: a package install in design-check can fail a shard on a mirror stall",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/106-apt-install-timeout.md (DEBT106), at main 06571635.",
+  "note": "The install step in `design-check`, which installs the build tools and fonts, runs `apt-get` under two 60 s timeouts, and when both expire it exits 124 and fails the shard before any test runs.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 130
+}

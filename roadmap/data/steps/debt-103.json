@@ -1,0 +1,10 @@
+{
+  "title": "DEBT103: A nightly sweep that stops still ends the job with exit 0",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/103-throttled-nightly-sweep.md (DEBT103), at main 06571635.",
+  "note": "The daily price job runs `archive sweep --write` after its refresh (D224). A second throttle or a host that refused from the first sku stops the sweep. It keeps every bucket it wrote (D222) and records a failed `archive` step. The job still ends 0, by the owner's default. `#/pricing` draws a step's sentence only when the whole refresh failed, so on the screen a stopped night looks like a finished one.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 127
+}

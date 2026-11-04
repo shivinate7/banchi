@@ -1,0 +1,10 @@
+{
+  "title": "Needs owner call: d082 with s/stability",
+  "status": "todo",
+  "phase": "Audit: needs owner call",
+  "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 9 of that section, at main 06571635.",
+  "note": "d082 with s/stability: pick one of three layouts so Fulfiller boxes stop sliding when owed cards land. d083: build only nearby rail tiles (you deferred it)?",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 49
+}

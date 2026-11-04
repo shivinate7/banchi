@@ -1,0 +1,10 @@
+{
+  "title": "Unclear: s/mechanization prose-only rules list",
+  "status": "todo",
+  "phase": "Audit: unclear",
+  "why": "Source: docs/specs/todo-audit.md, section 5 (Unclear (9)), line 6 of that section, at main 06571635.",
+  "note": "s/mechanization prose-only rules list: not re-read against code. s/sales-findings prior-window overlap of 1 to 3 days: never measured.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 63
+}

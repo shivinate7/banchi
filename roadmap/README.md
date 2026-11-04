@@ -1,0 +1,16 @@
+# Roadmap
+
+`data/` holds one JSON file per document: `data/steps/<id>.json`, `data/topics/<id>.json` and
+`data/meta/<name>.json`. A step file holds the fields `title`, `status` (`todo`, `active`, `done`),
+`phase`, `order`, `why`, `note`, `ask` and `updatedAt`. Two more fields serve the guard: `lane`
+(`"session_<id>"`, the lane bound to the step; the coordinator writes it) and `grants` (step grants,
+each `{"words", "at", "role", "by": "triage"}`; triage writes them only). The skill gives their shape.
+
+The roadmap build script is `skills/roadmap` in claude-settings. Build the roadmap block from this repo's checkout:
+
+    python3 ~/.claude/skills/roadmap/build.py --repo <checkout> --block --out FILE
+
+The roadmap build script publishes nothing. The page writer splices the block into the repo's one page
+and alone publishes it (skill `waiting-page`). The roadmap build script runs without live work. Triage adds
+`--live live.json` at each publish, after the page writer writes `live.json`. The skill says
+what that file holds, and what the block shows without it. Build again after each edit to `data/`.

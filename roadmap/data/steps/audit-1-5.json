@@ -1,0 +1,10 @@
+{
+  "title": "Close the record: s/lean-server",
+  "status": "todo",
+  "phase": "Audit: close the record",
+  "why": "Source: docs/specs/todo-audit.md, section 1 (Close the record (20)), line 5 of that section, at main 06571635.",
+  "note": "s/lean-server: \"Nothing is built\" is wrong (stock-first walk pane, image_url routes exist). Section 7 sizes are measured in s/home-assistant section 1.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 19
+}

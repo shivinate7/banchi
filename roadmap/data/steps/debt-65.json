@@ -1,0 +1,10 @@
+{
+  "title": "DEBT65: the number-corner crop is sent only on a retry",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/065-number-corner-crop-always.md (DEBT65), at main 06571635.",
+  "note": "`geometry/crop.py` upscales the collector number to at least 600px, but the batch script uses it only after a weak first read. T1 misses (`051/197` for `031/197`, `271/167` for `211/167`) are confident reads with the name right and the digits wrong, so no confidence threshold fires on them.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 98
+}

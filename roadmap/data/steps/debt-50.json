@@ -1,0 +1,10 @@
+{
+  "title": "DEBT50: git and gh CLI traps hit from this checkout",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/050-git-and-gh-cli-traps.md (DEBT50), at main 06571635.",
+  "note": "The git and gh command-line tools have traps that sessions hit from this checkout, and each one is listed below.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 91
+}

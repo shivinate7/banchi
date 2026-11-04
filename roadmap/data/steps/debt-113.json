@@ -1,0 +1,10 @@
+{
+  "title": "DEBT113: three design-check tests went red once on main, with no cause read",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/113-single-reds-on-main.md (DEBT113), at main 06571635.",
+  "note": "Three design-check tests went red once each on main, and their causes are unread.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 137
+}

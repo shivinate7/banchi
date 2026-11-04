@@ -1,0 +1,10 @@
+{
+  "title": "CLAUDE.md: cut restated parent text to citations",
+  "status": "active",
+  "phase": "In flight (open PRs)",
+  "why": "Source: open PR #1036 (branch claude-md-cites-parent), https://github.com/shivinate7/banchi/pull/1036.",
+  "note": "Draft PR #1036 on branch claude-md-cites-parent.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 1
+}

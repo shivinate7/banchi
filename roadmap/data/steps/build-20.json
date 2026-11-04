@@ -1,0 +1,10 @@
+{
+  "title": "The shipped status and the tracking write-back",
+  "status": "todo",
+  "phase": "Build order (map OPEN)",
+  "why": "Source: docs/map.py OPEN, step n=20, at main 06571635.",
+  "note": "Steps 13 and 14 of docs/specs/order-pipeline.md (also its heading 'T5 — tracking back. NOT BUILT'). Writing tracking back is the first act a buyer sees (D69, screen before transport).",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 14
+}

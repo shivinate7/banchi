@@ -1,0 +1,10 @@
+{
+  "title": "DEBT20: Two liveness oracles read a pid, and a recycled one lies to both",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/020-two-liveness-oracles-read-a-pid-and-a-recycled-one-lies.md (DEBT20), at main 06571635.",
+  "note": "Two liveness checks read a process id, and a recycled id makes both of them report the wrong process as live.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 75
+}

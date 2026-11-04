@@ -1,0 +1,10 @@
+{
+  "title": "Match price-service refusals by the constants that raise them",
+  "status": "active",
+  "phase": "In flight (open PRs)",
+  "why": "Source: open PR #1030 (branch block-signature-drift), https://github.com/shivinate7/banchi/pull/1030.",
+  "note": "Ready PR #1030 on branch block-signature-drift.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 7
+}

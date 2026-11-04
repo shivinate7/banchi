@@ -1,0 +1,15 @@
+# shivinate7/banchi, branch `roadmap`: the roadmap record and briefs
+
+This branch holds the record for shivinate7/banchi: the roadmap, briefs and role hand-off notes. It shares
+no history with main, needs no PR, and runs no CI. Never merge it into main. The project
+instructions govern how to work. This file holds the mechanics only.
+
+- The roadmap is the record: `roadmap/data/` (`steps/`, `topics/`, `meta/`, one JSON file each).
+  Trust it over memory. Say when it and the repo disagree.
+- To file: `git fetch origin roadmap`, work on a checkout of `roadmap` (a worktree is fine),
+  edit, commit, `git push origin roadmap`.
+- Other sessions file here too. Pull right before each write.
+- Briefs go in `briefs/`, role hand-off notes in `handoffs/`. A brief's full text also goes in its
+  step's `ask` field.
+- Set up by the `project-ops` skill of claude-settings. Its templates hold the roles, the roster,
+  the brief and the role hand-off note.

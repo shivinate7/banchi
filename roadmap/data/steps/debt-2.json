@@ -1,0 +1,10 @@
+{
+  "title": "DEBT2: The map's reach",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/002-the-maps-reach.md (DEBT2), at main 06571635.",
+  "note": "The file map cannot see an extensionless file, and a map entry proves a file is described, never that the description is true.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 65
+}

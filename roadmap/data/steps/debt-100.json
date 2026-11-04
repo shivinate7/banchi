@@ -1,0 +1,10 @@
+{
+  "title": "DEBT100: the free number reader for same-art printings is shelved",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/100-same-art-reader-shelved.md (DEBT100), at main 06571635.",
+  "note": "Two printings of one card can share their art. The free image reader cannot tell them apart. A free reader of the printed collector number would. It is not built, and the owner shelved it. Same-art printings stay a human check in Review.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 124
+}

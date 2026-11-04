@@ -1,0 +1,10 @@
+{
+  "title": "Unclear: s/stability S16 receipt toast growth",
+  "status": "todo",
+  "phase": "Audit: unclear",
+  "why": "Source: docs/specs/todo-audit.md, section 5 (Unclear (9)), line 3 of that section, at main 06571635.",
+  "note": "s/stability S16 receipt toast growth: did not reproduce; no test covers growth in place.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 60
+}

@@ -1,0 +1,10 @@
+{
+  "title": "Move claude-settings action pins to main da8d807 (tci-10)",
+  "status": "active",
+  "phase": "In flight (open PRs)",
+  "why": "Source: open PR #1032 (branch lane/tci-10-one-pin), https://github.com/shivinate7/banchi/pull/1032.",
+  "note": "Draft PR #1032 on branch lane/tci-10-one-pin.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 5
+}

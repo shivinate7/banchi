@@ -1,0 +1,10 @@
+{
+  "title": "Close the record: s/one-process",
+  "status": "todo",
+  "phase": "Audit: close the record",
+  "why": "Source: docs/specs/todo-audit.md, section 1 (Close the record (20)), line 9 of that section, at main 06571635.",
+  "note": "s/one-process: section 4 omits the idle hold; sections 5 and 10 say six device keys, now ten. s/demo: drop the stale ux/stock-images note; section 8 says seven refused paths, the table has eight.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 23
+}

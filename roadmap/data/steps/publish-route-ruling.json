@@ -1,0 +1,10 @@
+{
+  "title": "Record owner ruling on audit item 185: delete the unused publish routes",
+  "status": "active",
+  "phase": "In flight (open PRs)",
+  "why": "Source: open PR #1035 (branch publish-route-ruling), https://github.com/shivinate7/banchi/pull/1035.",
+  "note": "Draft PR #1035 on branch publish-route-ruling.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 2
+}

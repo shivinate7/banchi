@@ -1,0 +1,10 @@
+{
+  "title": "DEBT105: focus does not land on Add a Slab after Remove on an empty list",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/105-add-a-slab-focus.md (DEBT105), at main 06571635.",
+  "note": "The test `after Remove by a click that focuses Remove and a quick list read, focus lands on Add a Slab` in `tests/slabs.spec.ts` goes red on `design-check (10)` when focus does not land on Add a Slab after Remove, with the list read quickly and the list empty.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 129
+}

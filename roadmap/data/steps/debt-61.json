@@ -1,0 +1,10 @@
+{
+  "title": "DEBT61: build proposals are still open",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/061-advances-carryover.md (DEBT61), at main 06571635.",
+  "note": "Build proposals carried over from earlier work are still open. Each open item was checked against the code and stays open. Item 6 has a plan and no build ruling.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 94
+}

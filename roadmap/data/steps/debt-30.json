@@ -1,0 +1,10 @@
+{
+  "title": "DEBT30: The copies panel flash guard is shelved by owner ruling",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/030-the-copies-panel-flash-guard-is-shelved-on-the-owners-word.md (DEBT30), at main 06571635.",
+  "note": "Two tests in `app/tests/inventory.spec.ts` are `test.skip`, found by title: `the copies list holds while a new answer moves the walk to another drawer` and `a press to another drawer dims`. Both use `expectCopiesHeld`, which samples every animation frame during a delayed box fetch and asserts no frame lost the copies panel's rows. The owner ruled the guard off. It stays off until the owner rules otherwise.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 81
+}

@@ -1,0 +1,10 @@
+{
+  "title": "guard-shell: Claude Code skips the tree clause (c174)",
+  "status": "active",
+  "phase": "In flight (open PRs)",
+  "why": "Source: open PR #1003 (branch c174-guard-skip-tree), https://github.com/shivinate7/banchi/pull/1003.",
+  "note": "Ready PR #1003 on branch c174-guard-skip-tree.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 10
+}

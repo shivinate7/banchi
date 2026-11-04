@@ -1,0 +1,10 @@
+{
+  "title": "Needs owner call: s/my-slabs",
+  "status": "todo",
+  "phase": "Audit: needs owner call",
+  "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 12 of that section, at main 06571635.",
+  "note": "s/my-slabs: build the daily sweep and launchd job? Build the buyer export through a check step? Measure call rate, token life, velocity, estimate lag (needs your Card Ladder login).",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 52
+}

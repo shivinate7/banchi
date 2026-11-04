@@ -1,0 +1,10 @@
+{
+  "title": "DEBT102: a send writes its import file outside the store lock",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/102-send-file-outside-lock.md (DEBT102), at main 06571635.",
+  "note": "A send plans and writes its import file, then takes the store lock to stamp. A copy that sells or is retired in that gap is skipped by the stamp, but its row is already in the file. A send never counts a copy it did not send, so the store never counts that copy sent (D26 (retired is a terminal card state); D59 (live count is per SKU)).",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 126
+}

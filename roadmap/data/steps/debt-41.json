@@ -1,0 +1,10 @@
+{
+  "title": "DEBT41: Pricing never offers \"Make this the rule\"",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/041-pricing-never-offers-make-this-the-rule.md (DEBT41), at main 06571635.",
+  "note": "D277's Q9 says Pricing offers \"Make this the rule\" once, when most typed prices follow one pattern. It is not built. On a copy of the owner's store no single rule fit: the best, market plus $0.23, fits 16.9% of typed prices.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 87
+}

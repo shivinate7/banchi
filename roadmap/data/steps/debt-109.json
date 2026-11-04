@@ -1,0 +1,10 @@
+{
+  "title": "DEBT109: the assertion after Escape goes red on the CI runner, and the cause is unread",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/109-escape-runner-red.md (DEBT109), at main 06571635.",
+  "note": "A `design-check` shard fails on the assertion right after `keyboard.press('Escape')` in `capture-claims.spec.ts`, `live-reconcile.spec.ts` or `markdown.spec.ts`, and it does so on the CI runner.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 133
+}

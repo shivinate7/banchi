@@ -1,0 +1,10 @@
+{
+  "title": "DEBT68: the posted-price history has no screen",
+  "status": "todo",
+  "phase": "Known gaps (debts)",
+  "why": "Source: docs/debts/068-posted-price-view.md (DEBT68), at main 06571635.",
+  "note": "The owner wants a view of posted prices. `price_postings` (D243) records every posted price. The build waits on the gate: one SKU has a second posting, meaning `price_postings` rows exceed its distinct SKUs. Check with one query.",
+  "ask": null,
+  "updatedAt": "2026-11-04T02:45:00Z",
+  "order": 101
+}
