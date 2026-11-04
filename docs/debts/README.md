@@ -108,5 +108,5 @@ DEBT115 a new copy's tick on the pricing list outlives a change to its price
 DEBT116 the send skips the cap check for any row marked ticked, typed prices too
 DEBT117 The markdown sheet's R-key stand-down has no test
 DEBT118 a new code file with no map line passes the commit and fails only in make check and CI
-DEBT-stale-cache-fault-looks-like-id a stale list makes a network fault look like an unknown set
+DEBT119 a stale list makes a network fault look like an unknown set
 ```

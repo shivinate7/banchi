@@ -1,4 +1,4 @@
-## DEBT-stale-cache-fault-looks-like-id — a stale list makes a network fault look like an unknown set
+## DEBT119 — a stale list makes a network fault look like an unknown set
 
 **What.** After a failed refetch, `pipeline/pricehistory.Market`'s `get` and `group_id` serve the stale catalog list, so a set missing from that list raises `NotResolvable`, which `readings_for_rows` returns as an identification refusal without checking `serving_stale`.
 
