@@ -12,9 +12,10 @@ rebuilt from transcripts. The repo held no copy. The owner asked for one.
 **The duty is the shared one.** claude-settings decision waiting-data-in-repo (a copy of the
 waiting page lives in the repo) sets the copy's home, its file layout and its scan. The skill
 `waiting-page`, section "Keep a copy in the repo", holds the writer's steps. Banchi keeps no
-export script, and main's tip holds no copy. The old copy on main stays in git history. The
-shared scan finds nothing in it. A repo changes to fit a shared tool, never the tool to fit a repo
-(owner ruling, via the coordinator).
+export script, and main's tip holds no copy. The old copy on main, a README and one JSON file
+each for items, answers, groups and meta, stays in git history. The shared scan finds nothing in
+it. A repo changes to fit a shared tool, never the tool to fit a repo (owner ruling, via the
+coordinator).
 
 - The copy is folder `waiting/` on the record branch `roadmap`, one file per document. Tools read
   the folder name through claude-settings `lint/layout.py`, never as a literal.
