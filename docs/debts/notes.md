@@ -47,3 +47,5 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - `app/src/CaptureScreen.tsx` `capture-undo-far`: a far tile woken while its write is still in flight shows the drop button enabled.
 - `app/tests/stability.spec.ts`'s case S17 (web fonts): flaky in the cloud container, 7 of 25 runs on main. Not seen in CI.
 - The claude-settings code-check comment rule flags `owner's ruling` in a code comment as history narration. This is a false alarm owned by claude-settings, not banchi.
+- `docs_audit.paths_commands`'s `_commented_targets` counts a banner comment above a target (a comment that describes a block of targets) as that target's own, so a target with no description of its own can pass `commands roster`. `make help` would print the banner for it.
+- `docs_audit.status_reach`'s `model_disagreement` compares only the first "Batch API ... Model:" line in CLAUDE.md and the rule files joined, so a second, stale copy of that line in another rule file passes `paid-read model`.

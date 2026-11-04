@@ -22,6 +22,7 @@ from .core import (
     markdown_files,
     read,
     rel,
+    rule_files,
 )
 from .paths_commands import _MAKE_REF_RE, _MAKE_RULE_RE, iter_code_lines
 from .records import _corpus, _debts_corpus
@@ -211,8 +212,8 @@ def _gloss_after(rest: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def bare_id_findings(text: str) -> List[Finding]:
-    """Each decision or debt id in `CLAUDE.md`, at its first use in a paragraph, needs a gloss.
+def bare_id_findings(text: str, where: str = "CLAUDE.md") -> List[Finding]:
+    """Each decision or debt id in `CLAUDE.md` or a rule file, at its first use in a paragraph, needs a gloss.
 
     The gloss is `D43 (short words)` or `D43, short words` (parent rule
     `speak-cite-id-plus-gloss`). A paragraph is a run of lines with no blank line, and each
@@ -238,12 +239,12 @@ def bare_id_findings(text: str) -> List[Finding]:
             headings = [_entry_heading(kind, n) for n in range(lo, hi + 1)]
             if gloss is None:
                 found.append(Finding(
-                    f"CLAUDE.md:{number}",
+                    f"{where}:{number}",
                     f"`{ident}` has no gloss. Write `{ident} (<2-6 words from its heading>)` "
                     "at its first use in the paragraph."))
             elif not any(h and _gloss_matches(gloss, h) for h in headings):
                 found.append(Finding(
-                    f"CLAUDE.md:{number}",
+                    f"{where}:{number}",
                     f"the gloss `{gloss}` for `{ident}` shares no word with the entry's own "
                     "heading. Take the gloss from the heading."))
     return found
@@ -307,6 +308,9 @@ def check_rule_enforcement(report: Report) -> None:
     rows = audit_row_names()
 
     findings.extend(bare_id_findings(text))
+    folder_rules = rule_files(ROOT)
+    for rule_file in folder_rules:
+        findings.extend(bare_id_findings(read(rule_file), rel(rule_file)))
 
     prose_only: List[str] = []
     for line, block in blocks:
@@ -372,7 +376,8 @@ def check_rule_enforcement(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(blocks)} hard rules: {len(blocks) - len(prose_only)} name a mechanism that "
-        f"resolves, {len(prose_only)} argue why none can (pinned at {PROSE_ONLY_EXPECTED})",
+        f"resolves, {len(prose_only)} argue why none can (pinned at {PROSE_ONLY_EXPECTED}); "
+        f"{len(folder_rules)} folder rule files read for bare ids",
         scanned=len(blocks),
     )
 

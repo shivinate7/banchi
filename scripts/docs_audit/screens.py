@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse
 
 from .core import (
+    CLAUDE_OR_RULES,
     Finding,
     MECHANICAL,
     ROOT,
@@ -17,6 +18,7 @@ from .core import (
     _NUMBER_WORDS,
     _merge_rows,
     _strip_ts_comments,
+    claude_and_rules,
     exists,
     markdown_files,
     read,
@@ -936,12 +938,11 @@ def check_storage_keys(report: Report) -> None:
                 )
             )
 
-    claude = ROOT / "CLAUDE.md"
-    roster = _ROSTER_RE.search(read(claude)) if exists(claude) else None
+    roster = _ROSTER_RE.search(claude_and_rules())
     if roster is None:
         findings.append(
             Finding(
-                "CLAUDE.md",
+                CLAUDE_OR_RULES,
                 "no `**N keys are stored on the device**` sentence found, so the roster this "
                 "row reconciles is gone or reworded past the pattern watching it.\n"
                 f"  the app writes {len(local)} `localStorage` key(s): "
@@ -956,12 +957,12 @@ def check_storage_keys(report: Report) -> None:
         count = _NUMBER_WORDS.get(word.lower())
         if count is None:
             findings.append(
-                Finding("CLAUDE.md", f"`{word} keys are stored on the device` — not a number word.")
+                Finding(CLAUDE_OR_RULES, f"`{word} keys are stored on the device` — not a number word.")
             )
         elif count != len(local):
             findings.append(
                 Finding(
-                    "CLAUDE.md",
+                    CLAUDE_OR_RULES,
                     f"says `{word}` ({count}) keys are stored on the device; `app/src` writes "
                     f"{len(local)}.\n"
                     f"  in the app: {', '.join('`' + k + '`' for k in sorted(local))}\n"
@@ -972,7 +973,7 @@ def check_storage_keys(report: Report) -> None:
         for key in sorted(published - set(local)):
             findings.append(
                 Finding(
-                    "CLAUDE.md",
+                    CLAUDE_OR_RULES,
                     f"`{key}` is published as a device-local key and no file in `app/src` "
                     "writes it to `localStorage`.",
                 )
@@ -981,7 +982,7 @@ def check_storage_keys(report: Report) -> None:
             findings.append(
                 Finding(
                     local[key][0],
-                    f"`{key}` is written to `localStorage` and CLAUDE.md's roster does not "
+                    f"`{key}` is written to `localStorage` and the roster in {CLAUDE_OR_RULES} does not "
                     "name it.\n"
                     "  D27 permits `localStorage` only for facts about THIS MACHINE. Add it "
                     "to that sentence with what it is a fact about, and correct the count.",
@@ -992,7 +993,7 @@ def check_storage_keys(report: Report) -> None:
         for path in sorted(named - holding):
             findings.append(
                 Finding(
-                    "CLAUDE.md",
+                    CLAUDE_OR_RULES,
                     f"the roster names `{path}` and that file writes no `localStorage` key.\n"
                     "  Name the module that HOLDS the key, not the screen that reads it back. "
                     "`App.tsx` and `kit/index.tsx` were named here and "
@@ -1003,7 +1004,7 @@ def check_storage_keys(report: Report) -> None:
             findings.append(
                 Finding(
                     path,
-                    "writes a `localStorage` key and CLAUDE.md's roster does not name this "
+                    f"writes a `localStorage` key and the roster in {CLAUDE_OR_RULES} does not name this "
                     f"file: {', '.join('`' + k + '`' for k in sorted(k for k in local if path in local[k]))}",
                 )
             )
@@ -1028,7 +1029,7 @@ def check_storage_keys(report: Report) -> None:
         "storage keys",
         MECHANICAL,
         findings,
-        f"{len(local)} device-local keys against CLAUDE.md's roster, "
+        f"{len(local)} device-local keys against the roster in {CLAUDE_OR_RULES}, "
         f"{len(session)} session keys all named in markdown",
         scanned=len(local) + len(session),
     )

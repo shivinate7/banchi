@@ -4093,8 +4093,8 @@ COMPONENTS = [
             "docs_audit/hygiene.py": {
                 "does": "The doc-hygiene, route-roster, recorded-deletion, spec-seal, design-check verdict and "
                         "positional-reference rows.",
-                "governed_by": ["D69", "D70", "D90", "D97", "D110", "D113", "D119", "D132", "D144",
-                                "D149", "D155"]},
+                "governed_by": ["D69", "D70", "D90", "D97", "D110", "D113", "D119", "D132", "D135",
+                                "D144", "D149", "D155"]},
             "docs_audit/paths_commands.py": {
                 "does": "The rows that read paths, line anchors, `make` targets, the commands roster and "
                         "`banchi` subcommands out of the markdown.",
@@ -5664,9 +5664,40 @@ COMPONENTS = [
     {
         "path": ".claude/rules/README.md",
         "status": "built",
-        "does": "the shared rules-folder note, copied verbatim from claude-settings. Its "
-                "paths frontmatter keeps it out of every session's context.",
-        "governed_by": [],
+        "does": "the rules-folder note: its `paths:` frontmatter keeps it out of every session's "
+                "context, and it rosters the rule files and the folder `AGENTS.md` links that "
+                "carry them to Codex.",
+        "governed_by": ["D135"],
+    },
+    {
+        "path": ".claude/rules/app.md",
+        "status": "built",
+        "does": "the front end's rules (screens, design system, shell, verifying a screen), loaded when a session reads under `app/`.",
+        "governed_by": ["D135"],
+    },
+    {
+        "path": ".claude/rules/server.md",
+        "status": "built",
+        "does": "the capture server's rules (threading, port slots, photograph reclaim), loaded when a session reads under `server/`.",
+        "governed_by": ["D135"],
+    },
+    {
+        "path": ".claude/rules/pipeline.md",
+        "status": "built",
+        "does": "the pipeline, CLI and paid-read rules (join key, pricing, emit, the free reader), loaded under `pipeline/`, `cli/` and `identify/`.",
+        "governed_by": ["D135"],
+    },
+    {
+        "path": ".claude/rules/store.md",
+        "status": "built",
+        "does": "the store's rules (one SQLite file, sections, box names), loaded when a session reads under `store/`.",
+        "governed_by": ["D135"],
+    },
+    {
+        "path": ".claude/rules/code-cards.md",
+        "status": "built",
+        "does": "the dormant code-card feature's rules, loaded under `codes/` and `code-card-fork/`.",
+        "governed_by": ["D135"],
     },
     {
         "path": "docs/specs/home-assistant.md",
