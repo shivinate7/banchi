@@ -430,7 +430,7 @@ class Run:
 
     @property
     def created_at(self) -> Optional[str]:
-        """When this run directory was made — the manifest's own stamp: UTC, to the second."""
+        """When this run directory was made — the manifest's own stamp: UTC, to the millisecond (older runs: to the second)."""
         return self.manifest.get("created_at")
 
     @property
