@@ -45,8 +45,8 @@ the moment the button was pressed, and nothing in it is a window onto anything.
 
 `TCG Market Price` is the only column with sales behind it. It is TCGplayer's own
 aggregate over recent sales rather than a sale. It is one number. It has no window. **There are no
-last-sold rows in this export, and TCGplayer publishes none anywhere.** So this is not a
-gap to be filled from another one of their files. The sales-history read in `docs/specs/stale-listings.md`
+last-sold rows in this export.** TCGplayer's price-history endpoint does publish sales buckets; `pipeline/pricehistory.py` reads them. Those buckets are
+aggregates over a date range, not last-sold rows. The sales-history read in `docs/specs/stale-listings.md`
 carries what is available instead.
 
 ## Variant lives in the Condition string
@@ -68,19 +68,17 @@ evidence — that is rung 2 of the variant ladder.
 key = zfill(3)(number) + "/" + printedTotal
 ```
 
-Built from pokemontcg.io data, matched against the `Number` column.
+Both halves come from the card's identification, matched against the `Number` column. This shape is Pokemon's; each game keys through `pipeline/join.py:JOIN_KEY_STRATEGIES` (D21, D25).
 
 - Secret rares exceed the denominator in the same format: `161/159`. Do not treat this as
   invalid.
 - **Never join on `Product Name`.** It inconsistently embeds the number — `Accelgor` in one
-  row, `Black Belt's Training - 143/159` in another. Name matching is a fallback for rare
-  blank-`Number` rows only.
+  row, `Black Belt's Training - 143/159` in another. Name matching is a last resort: it fires only when the number key finds nothing (D35).
 
 ## Duplicates
 
 Never emit two rows with the same `TCGplayer Id` in one import file — behavior is
-undefined. Aggregate by SKU, set `Add to Quantity` to the copy count, cap live quantity at
-4, hold the remainder as backstock. See `docs/decisions/` D7.
+undefined. Aggregate by SKU, so `Add to Quantity` equals the copy count. There is no standing cap (the cap of 4 per SKU is gone): a send asks for one with `emit --cap N`. See `docs/decisions/` D7, duplicates aggregate by SKU.
 
 ## Round trip
 

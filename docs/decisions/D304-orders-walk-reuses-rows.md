@@ -75,7 +75,7 @@ It resolves the open questions the drift findings raised against them, on the ow
 
 ### What is still open
 
-The lane plan (`orders-a/PLAN.md`, lanes A1 through A6) is not built by this entry. This
+The lane plan (lanes A1 through A6) is not built by this entry. This
 entry is the design record the lanes build from. `docs/specs/order-walk-plan.md` §16 points
 here for the design, and holds the sort-order argument's own detail.
 

@@ -77,8 +77,7 @@
 
 **Stale `copy-budget` comments outside this lane's files.** Each names the deleted spec, its ceiling file, or its pin script as if they were live.
 
-- `orders`: `app/src/Orders.tsx`'s comment above the buyer-list re-sort names the ceiling file and `node scripts/copy-budget.mjs --pin`. `app/tests/orders.spec.ts`'s fixture header names `copy-budget.spec.ts` as a reader.
 - `sales`: `app/src/Revenue.tsx` cites a cost measured by `copy-budget.spec.ts`.
-- `docs-sweep`: `app/tests/shipping.spec.ts`'s fixture header and `app/tests/phone.spec.ts`'s populated-graveyard comment each name `copy-budget.spec.ts` as a reader.
+- `docs-sweep`: `app/tests/shipping.spec.ts`'s fixture header names `copy-budget.spec.ts` as a reader.
 
 The decision entries and reviews that name `copy-budget` are history, and stay as written.
