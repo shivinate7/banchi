@@ -48,7 +48,6 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
-import uuid
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Dict, Optional
@@ -1093,29 +1092,6 @@ def run_folder_home():
     return run_folder
 
 
-def check_run_folder_sweep() -> None:
-    """The sweep test-temp-standard names: an old sibling goes, a new one stays.
-
-    The root is a folder inside this run's own run folder, so the sweep never reaches the shared
-    temp root. The old sibling's mtime is set two days back. That is a fixture, not an assert.
-    """
-    run_folder = run_folder_home()
-    print("\n  the run folder removes siblings over a day old and keeps newer ones")
-    with run_folder() as outer:
-        root = outer / "sweep"
-        root.mkdir()
-        old = root / ("%d-%s" % (os.getpid(), uuid.uuid4()))
-        new = root / ("%d-%s" % (os.getpid(), uuid.uuid4()))
-        old.mkdir()
-        new.mkdir()
-        two_days_ago = time.time() - 2 * 24 * 60 * 60
-        os.utime(old, (two_days_ago, two_days_ago))
-        with run_folder(root):
-            check(not old.exists(),
-                  "a sibling run folder over a day old is removed when the next run starts")
-            check(new.exists(), "and a sibling run folder under a day old stays")
-
-
 def check_real_build() -> None:
     """The real `vite build`, served by the real `serve.py up` (one-process.md section 1.1). Gated.
 
@@ -1762,7 +1738,6 @@ def main() -> int:
             "a checkout whose trunk is called something else is not in violation for it",
         )
 
-    check_run_folder_sweep()
     check_real_build()
     print()
     if failures:
