@@ -94,6 +94,5 @@ direction is a sign and a word, never a color. The owner's plain-number ruling (
 06:40 CST, Cockpit item 187 a) waives the word for this row. The row is a sign and a figure only.
 
 Constraint 2 in that section rules out one number that compares a fill with a bucket, and asks that
-the spread be kept. The owner's ruling allows the Difference row, which compares two averages over
-the sales compared and drops each sale's bucket low and high; the spread stays on the market chart
-above, one tick per bucket.
+the spread be kept. The owner's ruling allows the Difference row, which compares two averages; it drops each
+bucket's low and high, and the spread stays on the market chart above.

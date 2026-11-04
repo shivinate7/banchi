@@ -41,7 +41,7 @@ estimate. Rules for how it draws:
 - It is blind to what the card cost, and that fact sits beside the figure. A card bought at two
   dollars and sold at eighteen, against a twenty dollar market, is a large gain. This figure draws
   it as a shortfall.
-- Direction is a sign and a word, never a color (D278). The palette holds no red and no green.
+- Direction is a sign and a word, never a color (`docs/specs/sales-findings.md`, section "Constraints on the per-product view", constraint 3). The palette holds no red and no green.
 - Today's price comes from the price archive, with its own age (D225). The screen never fetches on
   its own.
 - A name with no reading shows no figure, and never a zero. The count of names with no reading is
