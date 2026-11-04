@@ -342,12 +342,13 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   Parent rules `git-main-only-by-pr` (main moves only by pull request) and `git-integration-branch-merge` (how lanes join one integration branch) apply.
   Parent records `standing-merge-grant` (standing merge grant) and `session-tiers` (session tiers) say who merges, and when.
   The coordinator holds the grant and never merges. The batch runner runs each merge under it.
+  A solo or one-lane session the owner started merges its own PR, under the repo's grant (`session-tiers`).
   The owner's named act for a merge is "merge", not "ship it". The owner can withdraw the grant in chat.
   A session's role comes from its own `cs-build` tag. Lane sessions pass their work to the batch runner. They never merge, build an integration branch, open an integration PR or mark a PR ready. A merge uses `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
   One standing exception (D42, main moves by pull request):
   the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
   GitHub branch protection has 0 reviews and `strict: false`. The one check it is to require is `all-jobs-passed`,
-  which rolls up every job, `revert-guard` included (claude-settings decision same-check-kinds). Protection holds that one check and no other.
+  which rolls up every job, `revert-guard` included (claude-settings decision `same-check-kinds`, one rollup check per repo). Protection holds that one check and no other.
   It catches the remote half. The local hook is the only cover for a local fast-forward.
   `scripts/githooks/reference-transaction` and `scripts/githooks/pre-push` refuse, armed by `make hooks`.
   `BANCHI_MAIN=off` is the hatch. The primary checkout syncs itself (D176, the primary checkout syncs):
