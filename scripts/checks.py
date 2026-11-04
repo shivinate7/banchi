@@ -1446,6 +1446,26 @@ CHECKS = (
         "governed_by": ("D18", "D247"),
     },
     {
+        "target": "tests-for-selftest",
+        "shard": "guards-2",
+        "runs": "python3 scripts/tests-for-selftest.py",
+        "asserts": "the per-file suite selector (D247, amended), on the real tree and on fixture "
+                   "trees: a TypeScript text read survives a regex literal, a multi-line "
+                   "template and a lone quote; `import()` and `python -m` (a shell shim, an "
+                   "argv pair) reach their module; a suite that does not parse is still "
+                   "printed; a latin-1 module exits 0; the run writes no bytecode; and one "
+                   "planted break per language turns the selected suite red and leaves an "
+                   "unselected one green.",
+        "needs": ("python3", "node", "app deps"),
+        "writes": "a run folder under the temp root, which `harness/tests/home.py`'s "
+                  "`run_folder` removes, holding fixture trees and one copy of `app/`.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a run folder, and it runs four Playwright "
+                               "unit runs and about forty selector runs, about 95 seconds.",
+        "gates": True,
+        "governed_by": ("D18", "D247"),
+    },
+    {
         "target": "token-literal-check-selftest",
         "shard": "guards-2",
         "runs": "python3 scripts/token-literal-check.py --self-test",

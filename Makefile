@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: map-check map-check-selftest help status restart-now map explain harness harness-1 harness-2 harness-3 harness-part check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest rosterholdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint pytypes typecheck unit venv launch-config worktree-setup worktree-provision-selftest worktree-create-selftest session-teardown-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent backup backup-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
+.PHONY: map-check map-check-selftest help status restart-now map explain harness harness-1 harness-2 harness-3 harness-part check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest rosterholdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest tests-for tests-for-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint pytypes typecheck unit venv launch-config worktree-setup worktree-provision-selftest worktree-create-selftest session-teardown-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent backup backup-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -921,6 +921,33 @@ serve-scope:
 # That gate, including a CARRY drift it must catch.
 serve-scope-selftest:
 	@python3 scripts/serve-scope.py selftest
+
+# WHICH TEST SUITES REACH ONE PRODUCT FILE (D247, amended). ARGS=<repo-relative path> [--root DIR].
+# Prints the python harness modules (`harness/tests/tN_*.py`, `harness/tests/t7/<group>.py`) and the
+# unit tests (`app/tests/unit/*.unit.ts`) that load the file by an import, a literal path, a
+# subprocess argument or a text read, one per line; nothing and exit 0 when no suite reaches it.
+# The consumer is claude-settings' mutation guard, which runs only the suites it prints. It reuses
+# `scripts/guard-scope.py` and `scripts/browser-scope.py`, never a second scanner.
+# COST: reads and parses the python files the suites reach, about 5 seconds; it starts no process,
+# writes no file and leaves nothing running.
+tests-for:
+	@python3 scripts/tests-for.py $(ARGS)
+
+# The selector proved on the real tree and on fixture trees, with one planted break per language:
+# the selected suite goes red, an unselected one stays green. PATH GATED (D247, amended): what it
+# reads is derived from its own source, so it skips on a branch that touches none of that, a
+# docs-only branch among them. `BANCHI_GUARD_SCOPE=all` runs it anyway.
+# Needs `npm ci --prefix app`. COST: reads the checkout, four Playwright unit runs and about forty
+# selector runs, about 95 seconds when it runs; writes a run folder under the temp root that
+# `harness/tests/home.py`'s `run_folder` removes; no process is left running.
+tests-for-selftest:
+	$(NPM_GUARD)
+	@python3 scripts/guard-scope.py classify --target tests-for-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
+		python3 scripts/tests-for-selftest.py; \
+	else \
+		echo "tests-for-selftest: SKIPPED — this branch does not touch the suite selector, the scope scripts it loads or the files its cases read. BANCHI_GUARD_SCOPE=all runs it anyway."; \
+	fi
 
 # THE SECOND PATH GATE (D247, owner's word 2026-09-20 on a fresh measurement): what each
 # guard and product self-test reads. ARGS=list [--target <name>], or
