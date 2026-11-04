@@ -76,6 +76,7 @@ DEBT74 the mark's four HELD base parameters were never compared
 DEBT76 the walk's card sheet on a phone sells, and no running check proves it
 DEBT77 every phone-width spec is off
 DEBT82 The Fulfiller's boxes slide once when the Pick list lands
+DEBT83 Off-screen rail tiles still cost a little per capture
 DEBT84 The public demo's first screen sits just under its byte budget, and its time on a slow network is unmeasured
 DEBT85 The read-budget check proves some routes on their miss path only
 DEBT86 Capabilities written twice that have not drifted yet

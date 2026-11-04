@@ -1099,9 +1099,9 @@
 /* Tiles past the newest few arrive still (D313): no `.bn-stagger-item`, so no `!important` name to beat. */
 .capture-undo-list > li.capture-undo-still { animation: none; }
 /* A TILE FAR FROM THE RAIL'S OWN VIEW KEEPS ITS ROW BUTTON AND NOTHING UNDER IT (D313). The list's
-   IntersectionObserver in CaptureScreen sets it on each tile outside the view, and a scroll wakes the
-   tiles one list-size ahead before they paint. Every tile
-   stays a real row: the button is in the tab order and the accessibility tree, and its
+   IntersectionObserver in CaptureScreen sets it on each tile outside the view. A scroll wakes the tiles
+   one list-size ahead before they paint, and a capture, an undo or a resize wakes the tiles that came into
+   view. Every tile stays a real row: the button is in the tab order and the accessibility tree, and its
    `aria-label` is its name. `content-visibility: auto` cannot do this: Chrome judges it against the
    page viewport plus a margin of several screens, never the rail's scroller, so it skipped nothing
    in a sitting of a few hundred cards. A face, a key, the drop button and the overlay are `display:

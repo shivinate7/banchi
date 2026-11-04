@@ -23,7 +23,9 @@ holds a fixed line box, so a different string cannot change a height.
 of the sitting stays a real row (D164): in the tab order, counted by a screen reader, never blank. A tile outside the
 rail's own view keeps its row button and nothing under it (`capture-undo-far`, set by the rail's `IntersectionObserver`),
 at the thumbnail's own 9:16 box, so it holds its size when it comes near. A scroll wakes the tiles one list-size ahead
-before they paint, focus wakes its tile, and the scroll's end sends them back. `content-visibility: auto` cannot do it,
+before they paint. A capture, an undo or a resize wakes the tiles that came into view, and focus wakes its tile. All of
+them read where a tile sits now, never an observer's answer from a frame ago. A rail that holds still for 150 ms sends the
+tiles out of view back. `content-visibility: auto` cannot do it,
 because Chrome judges it against the page viewport plus a margin of several screens and never the rail's scroller.
 `app/tests/capture-freeze.spec.ts` measures it: each added tile costs at most 3 layout objects.
 
