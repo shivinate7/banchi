@@ -10,7 +10,7 @@ The checks behind `make docs-audit`, one module for each row group, with each ro
 - `scripts/docs_audit/core.py` — The shared half of the audit: `Finding`, `Row` and `Report`, the staged-mode readers (`read`, `exists`, `glob_files`), `ROOT` and `set_root`, the module-globals mapping the self-test patches through, and the helpers two row modules both use.
 - `scripts/docs_audit/design.py` — The design-token, raw-color, breakpoint and JS-breakpoint rows over `docs/DESIGN.md`, `tokens.css` and the stylesheets.
 - `scripts/docs_audit/dispatch.py` — The row that reconciles every defined check with the ones `rows.audit` runs, the subject-count row and the coupling question.
-- `scripts/docs_audit/env_map.py` — The rows over environment variables, hatches, the subagent override, the map data and map sections rows, the hook roster, Codex hooks and the build-order mirror.
+- `scripts/docs_audit/env_map.py` — The rows over environment variables, hatches, the subagent override, the map data and map sections rows, the hook roster, Claude hooks and the build-order mirror.
 - `scripts/docs_audit/games.py` — The rows over game and export vocabulary: the registry against the committed exports, coverage, the matrix superset and the join-key shape.
 - `scripts/docs_audit/harness_criteria.py` — The rows that reconcile harness test counts, published pass criteria and their evidence with `harness/run.py` and `docs/GATES.md`.
 - `scripts/docs_audit/hygiene.py` — The doc-hygiene, route-roster, recorded-deletion, spec-seal, design-check verdict and positional-reference rows.

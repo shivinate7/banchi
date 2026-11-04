@@ -3430,15 +3430,13 @@ COMPONENTS = [
                 "governed_by": ["D18", "D127", "D171", "D173"],
             },
             "guard-shell.py": {
-                "does": "the PreToolUse hook on Bash AND Write|Edit that refuses seven shell "
+                "does": "the PreToolUse hook on Bash AND Write|Edit that refuses five shell "
                         "mistakes this repo has already paid for, each with a measured "
-                        "incident: `git checkout`/`git restore` over a MODIFIED path (240 "
-                        "lines destroyed 2026-09-06, and the same command typed again over "
-                        "CLAUDE.md on 2026-09-12); a write outside this checkout (~1,500 "
+                        "incident: a write outside this checkout (~1,500 "
                         "lines into the owner's main tree on `main`, hot-reloaded into their "
                         "live capture server); a polling loop (a `pgrep` waiter whose pattern is "
                         "not the process, and a backgrounded driver that ran 119 rounds over "
-                        "3h58m across a compaction); a stash; a hard reset; a narrated wait; and "
+                        "3h58m across a compaction); a hard reset; a narrated wait; and "
                         "`git push <remote> HEAD` (or the "
                         "current branch's own literal name) when the tracked upstream is a "
                         "different, NON-DEFAULT branch (a coordinator's push silently created "
@@ -3452,15 +3450,14 @@ COMPONENTS = [
                         "`main`/`master` that exists locally. IT "
                         "RESOLVES RATHER THAN MATCHES TEXT, "
                         "which is reap.py's standard and the only way these have answers: "
-                        "`git status --porcelain` decides whether an operand is a modified "
-                        "path, a backgrounded command's loop is READ out of the shell script it "
+                        "`git status --porcelain` decides whether a tree holds uncommitted "
+                        "changes, a backgrounded command's loop is READ out of the shell script it "
                         "names, and `branch.<name>.remote`/`.merge` are read exactly as git "
                         "itself reads them. The Write|Edit half parses nothing at all, so no "
                         "shell form "
                         "skirts it. ONE HATCH PER CLAUSE, so no clause can be disarmed by the "
                         "switch that guards another. Claude Code sets `GUARD_SHELL_SKIP="
-                        "checkout,stash,reset` (`--skip` is an alias) because the shared layer owns those three; "
-                        "Codex runs all seven. Fails OPEN on "
+                        "reset` (`--skip` is an alias) because the shared layer owns that clause. Fails OPEN on "
                         "its own bugs, including a missing `shell_parse.py`, and an operand it "
                         "cannot resolve is REPORTED rather than passed silently.",
                 # D171 is the ruling that a rule read once competes with the work, which is
@@ -3471,18 +3468,16 @@ COMPONENTS = [
                                 "D171", "D173", "D305"],
             },
             "guard-shell-selftest.sh": {
-                "does": "proves guard-shell.py by COMMITTING its seven mistakes in a throwaway "
-                        "repository with a linked worktree. Four of the incidents are "
-                        "PERFORMED before the guard is asked about them: 240 uncommitted lines "
-                        "really destroyed by a real `git checkout`, a worktree whose root "
+                "does": "proves guard-shell.py by COMMITTING its five mistakes in a throwaway "
+                        "repository with a linked worktree. Three of the incidents are "
+                        "PERFORMED before the guard is asked about them: a worktree whose root "
                         "really differs from its main checkout's, "
                         "`pgrep -f` really reporting a process that merely "
                         "NAMES its pattern, and a real local branch made to track a "
                         "differently-named remote branch — the exact mechanism a background "
                         "agent's push created one by (`git push -u origin <local>:<remote>`). "
                         "THE FALSE POSITIVES ARE THE OTHER "
-                        "HALF and the git ones are RUN in the fixture first: a branch, a clean "
-                        "path, `--staged`, a named source, "
+                        "HALF and the git ones are RUN in the fixture first: "
                         "a pid wait, a bounded retry, a foreground loop, a backgrounded "
                         "`make design-check ARGS=--wait`, the ordinary first push of a new "
                         "branch, an upstream already matching its own name, the ordinary first "
@@ -3997,19 +3992,11 @@ COMPONENTS = [
                 # and `banchi.*` both stand and a row demanding one of them would be
                 # demanding a rename that silently discards what a browser holds under the
                 # old spelling.
-                # D127 JOINS AS A CITED FAILURE, the same shape D70 and D101 already
-                # carry above: `check_codex_hooks`'s docstring names the two incidents its
-                # missing hooks would have reopened had the row not backfilled them —
-                # `reap.py --hook` on every `Bash` call (D127) and `session-teardown.sh` on
-                # `WorktreeRemove` (the claude-settings janitor sweep) — because a reader who does not know why
-                # those two hooks matter reads a bare roster diff as pedantry. D135 is the
-                # ruling the row enforces: Codex reads the same guards a Claude Code session
-                # does, through `.codex/hooks.json` reconciled against `.claude/settings.json`.
-                # D47 IS CITED IN `branch_files`, NOT IN THE CODEX ROW: a tracked directory
-                # symlink (D47's own subject) is a changed path with no text to scan, and that
-                # function's `is_dir()` guard is what keeps `check_renumbered_decisions` from
-                # crashing on one — found the moment `.agents/skills` became the first such
-                # link this repo's own history ever produced.
+                # D47 IS CITED IN `branch_files`: a tracked directory symlink (D47's own
+                # subject) is a changed path with no text to scan, and that function's
+                # `is_dir()` guard is what keeps `check_renumbered_decisions` from crashing
+                # on one — found the moment a tracked directory symlink first appeared in
+                # this repo's own history.
                 "governed_by": ["D1", "D2", "D3", "D6", "D7", "D8", "D9", "D10", "D11", "D12",
                                 "D16", "D17", "D18", "D22", "D23", "D24", "D26", "D27", "D31",
                                 "D33", "D39", "D41", "D43", "D47", "D50", "D51", "D60",
@@ -4046,7 +4033,7 @@ COMPONENTS = [
                 "governed_by": []},
             "docs_audit/env_map.py": {
                 "does": "The rows over environment variables, hatches, the subagent override, the map data, the "
-                        "hook roster, Codex hooks and the build-order mirror.",
+                        "hook roster, Claude hooks and the build-order mirror.",
                 "governed_by": ["D2", "D31", "D80", "D127", "D135", "D140", "D171", "D178", "D280"]},
             "docs_audit/games.py": {
                 "does": "The rows over game and export vocabulary: the registry against the committed exports, "
@@ -5632,8 +5619,7 @@ COMPONENTS = [
         "path": ".claude/rules/README.md",
         "status": "built",
         "does": "the rules-folder note: its `paths:` frontmatter keeps it out of every session's "
-                "context, and it rosters the rule files and the folder `AGENTS.md` links that "
-                "carry them to Codex.",
+                "context, and it rosters the rule files.",
         "governed_by": ["D135"],
     },
     {

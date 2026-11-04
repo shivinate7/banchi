@@ -50,7 +50,7 @@ On a Bash call it has no opinion about, the guard costs 35 ms. Measured over fiv
 
 **It does not duplicate `janitor.py`, and it was built not to.** The claude-settings sweep owns the neighbouring question. That is what a FINISHED session left behind, on its own schedule, across trees, branches and orphans. This entry owns one signal at the moment it is sent. The two share their reasoning. Where the shapes matched, the code was copied WITH its argument, not re-derived. That covers `_real` and its symlink trap, the process table, and the leader-only `killpg`. Neither grew a second, disagreeing notion of what is safe to stop.
 
-**It imports nothing from this tree**, for `janitor.py`'s reason. Both stay repo-agnostic, so a hook can point them at any checkout. **The repo's own `.codex/hooks.json` carries the hook.** The guard is armed in this tree and in every worktree cut from it. No per-machine step is needed. The repo's copy is the only one, and it runs from `scripts/`. `.claude/settings.json` does not carry it, on the owner's word. The shared layer's machine-wide-kill rule owns the Claude side.
+**It imports nothing from this tree**, for `janitor.py`'s reason. Both stay repo-agnostic, so a hook can point them at any checkout. **No hook in this repo arms it.** `.claude/settings.json` does not carry it, on the owner's word: the shared layer's machine-wide-kill rule owns the Claude side. `.codex/hooks.json` carried it until D135 removed the Codex setup. The script's `--hook` mode stays until the owner rules on it.
 
 ### Amendment: a root may not be a directory that contains everything
 

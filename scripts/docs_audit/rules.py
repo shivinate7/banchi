@@ -77,7 +77,7 @@ _ARGUMENT_MIN_WORDS = 12
 
 _ROW_NAME_RE = re.compile(r'report\.add\(\s*\n?\s*"([^"\n]+)"')
 _MECH_PATHS = ("scripts/", "harness/tests/", "app/tests/", "app/eslint.config.js", "ruff.toml",
-               ".claude/settings.json", ".codex/hooks.json", ".github/workflows/")
+               ".claude/settings.json", ".github/workflows/")
 
 
 def audit_row_names() -> Set[str]:
@@ -271,7 +271,7 @@ def check_rule_enforcement(report: Report) -> None:
     with `>/dev/null 2>&1`. §11 carried a sentence about two observed mutation
     failures that were measured false on both counts. `screen-freshness --self-test` exited 1
     on main while sitting on no make target and printing *"run --self-test"*. Against that:
-    `raw color`, `storage keys`, `check registry`, `codex hooks`, `id claims`
+    `raw color`, `storage keys`, `check registry`, `id claims`
     and `shell substitution` have never once been bypassed, because none of them can be.
 
     **What it cannot see, by name.** Whether the named mechanism actually covers the rule —

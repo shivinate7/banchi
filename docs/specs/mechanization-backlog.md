@@ -252,7 +252,7 @@ another checkout holds it, naming that tree and printing `make design-check PW_A
 `BANCHI_SUITE_LOCK=off`. Fail open on its own parse errors and on an unreadable lock directory.
 
 **Where.** `scripts/suite-lock.py --hook`, registered as a PreToolUse Bash matcher in
-`.claude/settings.json` and `.codex/hooks.json` (D135), with an arm in `make suite-lock-selftest`.
+`.claude/settings.json`, with an arm in `make suite-lock-selftest`.
 
 **Catches.** The one bypass left in the `suite lock` row: `npx playwright test` typed into a shell,
 which no Makefile recipe mediates. The row reads recipe lines and `app/package.json` scripts and
@@ -586,8 +586,7 @@ Kept so nobody re-proposes them. A rejected mechanism usually fires on honest wo
 - **A Stop hook that compares files named in a wrap-up against the turn's write targets.** Unmeasured. Its
   own author found no instance.
 - **A PreCompact hook that injects the fixture facts, `make` targets and modified-file list.** Breakage is
-  unobservable by construction. It also collides with D135's `codex hooks` row, which compares the full
-  event, matcher and command triple.
+  unobservable by construction.
 - **Registering a harness-running Stop hook on SubagentStop.** The path is unexercised (0 of 129,119
   assistant messages were sidechain). Arming it would spend the owner's CPU on the machine their rig and
   live capture server run on.

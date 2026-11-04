@@ -12,7 +12,7 @@ D171: a rule is read once, at the start, then competes for attention with the wo
 
 ### Amended: what Claude Code runs
 
-The owner ruled that Claude Code runs `GUARD_SHELL_SKIP=checkout,stash,reset scripts/guard-shell.py --hook`. The shared guard (`claude-settings` `hooks/guard.py`, rule 1, shared-tree) owns clauses 1, 7 and 8 there. It refuses a checkout or restore over a modified path, a stash that takes another tree's entry, and a hard reset over uncommitted work. Each is judged against its subject's state. The Claude-side copy was cut so one refusal speaks once. `.codex/hooks.json` runs all seven, because Codex runs no shared guard (D135). `GUARD_SHELL_SKIP` and its alias `--skip` name clauses by table name. An unknown name skips nothing. Clauses 3 and 4 are gone for both tools.
+The owner ruled that Claude Code runs `GUARD_SHELL_SKIP=reset scripts/guard-shell.py --hook`. The shared guard (`claude-settings` `hooks/guard.py`, rule 1, shared-tree) owns clauses 1, 7 and 8 there. It refuses a checkout or restore over a modified path, a stash that takes another tree's entry, and a hard reset over uncommitted work. Each is judged against its subject's state. The Claude-side copy was cut so one refusal speaks once. Clauses 1 and 7 are gone from this script (D135). `GUARD_SHELL_SKIP` and its alias `--skip` name clauses by table name. An unknown name skips nothing. Clauses 3 and 4 are gone too.
 
 ### The five, and what each cost
 
@@ -40,7 +40,7 @@ A pass the guard could not decide is printed. An operand that resolves to neithe
 
 ### Hatches: none is printed to an agent
 
-`BANCHI_CHECKOUT`, `BANCHI_TREE`, `BANCHI_WAIT` and the later clauses' hatches each take `=off`, honoured in the environment. Each is the owner's to set. The owner ruled that a refusal never prints a blocked switch's name to an agent. It prints "owner-only: ask the owner to run this command". `clause_owner_only` refuses an agent's tool call that sets any real `BANCHI_*=off`, read by `_hatches_set`. So a mention passes.
+`BANCHI_TREE`, `BANCHI_WAIT` and the later clauses' hatches each take `=off`, honoured in the environment. Each is the owner's to set. The owner ruled that a refusal never prints a blocked switch's name to an agent. It prints "owner-only: ask the owner to run this command". `clause_owner_only` refuses an agent's tool call that sets any real `BANCHI_*=off`, read by `_hatches_set`. So a mention passes.
 
 Four recovery levers stay open to an agent. Each frees a stuck session: `BANCHI_KILL`, `BANCHI_SUITE_LOCK`, `BANCHI_SERVE_MAIN` and `BANCHI_SYNC`. They keep their printed names. The owner's terminal and CI are not tool calls, so the clause never sees them. The clause lives in `hook`, not `read_command`. The self-test's older cases call `hook(payload, owner_only=False)`. Only its owner-only cases call `--hook`. There is no switch for this clause.
 

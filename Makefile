@@ -141,8 +141,8 @@ launch-config:
 # and fails outright offline.
 #
 # `make worktree-setup` copies no secret. `.env` reaches each Claude Code worktree through
-# `.worktreeinclude` instead (owner's ruling, 2026-09-28), with `.claude/settings.local.json`
-# and `.codex/config.toml`. T1 does not need it once the cache is warm.
+# `.worktreeinclude` instead (owner's ruling, 2026-09-28), with `.claude/settings.local.json`.
+# T1 does not need it once the cache is warm.
 # `--foreground`: a needed `npm ci` finishes before this target returns (the SessionStart hook
 # omits the flag and backgrounds it); a current install is skipped, so a rerun is cheap.
 # The cache/mirror/node_modules provisioning below is shared with scripts/worktree-guard.sh

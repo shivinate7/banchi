@@ -150,8 +150,8 @@ fi
 
 # SECRETS FILES (D312, the hook refuses a secrets file). Refused: any staged
 # path whose basename is `.env` or starts with `.env.`, in any directory. The Claude guard only
-# sees a command that NAMES the file, so `git add -f .` sweeps it in, and Codex runs no Claude
-# hook. This hook is the one guard every tool runs. The one allow is `.env.example`, the template
+# sees a command that NAMES the file, so `git add -f .` sweeps it in.
+# This hook is the one guard every tool runs. The one allow is `.env.example`, the template
 # this repo tracks. Names are read with -z, so git does not quote a non-ASCII path. The match is
 # case-insensitive, because macOS is: `.ENV` is the same file. Fails open like the other clauses.
 # No hatch: a secret in history is not undone by a flag.

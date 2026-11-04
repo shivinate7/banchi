@@ -35,7 +35,7 @@ from .design import (
 from .dispatch import check_coupling, check_dispatch, check_subject_counts
 from .env_map import (
     check_build_order_mirror,
-    check_codex_hooks,
+    check_claude_hooks,
     check_env_vocabulary,
     check_hatch_state,
     check_hook_roster,
@@ -56,7 +56,7 @@ from .harness_criteria import (
     check_pass_criteria,
 )
 from .hygiene import (
-    check_agent_links,
+    check_fork_claude_link,
     check_design_check_verdict,
     check_doc_hygiene,
     check_positional_references,
@@ -211,7 +211,7 @@ ROWS: Tuple[AuditRow, ...] = (
     AuditRow("import filename agreement", 1, check_import_filename_agreement, ()),
     AuditRow("map data", 1, check_map_data, ("allowed",)),
     AuditRow("hook roster", 2, check_hook_roster, ()),
-    AuditRow("codex hooks", 2, check_codex_hooks, ()),
+    AuditRow("claude hooks", 2, check_claude_hooks, ()),
     AuditRow("map sections", 3, check_map_sections, ()),
     AuditRow("build order mirror", 2, check_build_order_mirror, ()),
     AuditRow("game vocabulary", 1, check_game_vocabulary, ()),
@@ -245,7 +245,7 @@ ROWS: Tuple[AuditRow, ...] = (
     AuditRow("views exposure", 1, check_views_opsec, ()),
     AuditRow("doc hygiene", 3, check_doc_hygiene, ("docs",)),
     AuditRow("route rosters", 2, check_route_rosters, ()),
-    AuditRow("agent links", 1, check_agent_links, ()),
+    AuditRow("fork claude link", 1, check_fork_claude_link, ()),
     AuditRow("readme blocks", 2, check_readme_blocks, ()),
     AuditRow("test purposes", 2, check_test_purposes, ()),
     AuditRow("recorded deletions", 1, check_recorded_deletions, ()),

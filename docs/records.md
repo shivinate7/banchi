@@ -10,6 +10,7 @@ Each row has the slug, the first sentence of the record, and a link to it. A rec
 
 | Slug | Gist | Link |
 |---|---|---|
+| `D135-codex-reads-same-rules` | Banchi has no Codex setup. | [`docs/decisions/D135-codex-reads-same-rules.md`](../docs/decisions/D135-codex-reads-same-rules.md) |
 | `D216-history-host-blocks-agent` | The price-history host declines this project's default User-Agent, so Banchi sends a browser User-Agent through one setting. | [`docs/decisions/D216-history-host-blocks-agent.md`](../docs/decisions/D216-history-host-blocks-agent.md) |
 | `D218-a-typed-dot-is-a-defect` | A typed middle dot or bullet (U+00B7, U+2022) in a user-visible string is a defect. | [`docs/decisions/D218-a-typed-dot-is-a-defect.md`](../docs/decisions/D218-a-typed-dot-is-a-defect.md) |
 | `D245-citation-names-symbol-not-line` | A citation names a symbol, a section or a decision id, never a line number. | [`docs/decisions/D245-citation-names-symbol-not-line.md`](../docs/decisions/D245-citation-names-symbol-not-line.md) |
@@ -144,7 +145,6 @@ Each row has the slug, the first sentence of the record, and a link to it. A rec
 | `D132-sold-is-folded-away-by-default` | Sold cards are folded away by default on the inventory screen. | [`docs/decisions/D132-sold-is-folded-away-by-default.md`](../docs/decisions/D132-sold-is-folded-away-by-default.md) |
 | `D133-revert-guard-judges-landing` | **A branch is judged by what it would land on main, not by its own commits.** A file put back to main's state is refused unless a commit on the branch names it. | [`docs/decisions/D133-revert-guard-judges-landing.md`](../docs/decisions/D133-revert-guard-judges-landing.md) |
 | `D134-a-departed-record-is-buried` | **Settled by the owner.** A whole-box merge (D83) carries only the on-hand cards. | [`docs/decisions/D134-a-departed-record-is-buried.md`](../docs/decisions/D134-a-departed-record-is-buried.md) |
-| `D135-codex-reads-same-rules` | OpenAI Codex was installed in this repository before this change. | [`docs/decisions/D135-codex-reads-same-rules.md`](../docs/decisions/D135-codex-reads-same-rules.md) |
 | `D136-suite-sharded-never-widened` | **Settled on the owner's interview.** A timing failure under machine load is never a reason to cut, weaken or malform finished work so a test passes; fix the test's clock or its wait instead. | [`docs/decisions/D136-suite-sharded-never-widened.md`](../docs/decisions/D136-suite-sharded-never-widened.md) |
 | `D137-the-catalog-is-near-mint-by-rule` | **Ruling: the join keeps only Near Mint and sealed rows of the catalog.** Play grades are dropped in the join, not on the wire. | [`docs/decisions/D137-the-catalog-is-near-mint-by-rule.md`](../docs/decisions/D137-the-catalog-is-near-mint-by-rule.md) |
 | `D140-merge-claims-the-decision-number` | **Ruled by the owner: a branch never takes a record number. | [`docs/decisions/D140-merge-claims-the-decision-number.md`](../docs/decisions/D140-merge-claims-the-decision-number.md) |
