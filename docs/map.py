@@ -1365,7 +1365,8 @@ COMPONENTS = [
                                         "and IN `make check` as of D247's sixteenth entry "
                                         "(owner's word, 2026-09-23) — no network call. A "
                                         "FakeMarket and a RecordingMarket stand in for the "
-                                        "network; 106 assertions, including the D278 "
+                                        "network; refusal texts come from the reader's own raise "
+                                        "path (`harness/tests/price_refusals.py`). Includes the D278 "
                                         "collision arm run both ways, an interrupted "
                                         "one-shot sweep proven to lose everything BEFORE the "
                                         "chunked fix is proven to keep what it already "
@@ -3091,7 +3092,8 @@ COMPONENTS = [
                         "(identity-follows-sku.md lane 4, moved off a disk walk), and "
                         "`pipeline/productview.py:row_for_sku` preferring the skus-table row "
                         "over a misread stored name, each with its own mutation guard. "
-                        "106 assertions.",
+                        "Its refusal cases take their texts from the reader's own raise "
+                        "path, `harness/tests/price_refusals.py`.",
                 "governed_by": ["D18", "D21", "D35", "D278", "D219", "D222", "D231", "D224",
                                 "D234", "D247", "D254"],
             },
@@ -3167,9 +3169,10 @@ COMPONENTS = [
             },
             "archive-review-selftest.py": {
                 "does": "proves cli/archive_review.py against a throwaway store, no "
-                        "network. Fabricates refusal strings shaped exactly like "
-                        "pipeline/pricehistory.py:NotResolvable/Unreachable's own "
-                        "messages, never calls a market. Proves: an identification "
+                        "network. Its real-text cases take their texts from the reader's own "
+                        "raise path (`harness/tests/price_refusals.py`), with only "
+                        "pipeline/net.py:request stubbed; no case calls a market. "
+                        "Proves: an identification "
                         "refusal reaches the review queue with its photograph; a "
                         "network-shaped refusal never does; a card sharing the refused "
                         "SKU but carrying a DIFFERENT stored number is never queued (the "
@@ -3610,7 +3613,17 @@ COMPONENTS = [
                         "`git worktree add` at `.claude/worktrees/<name>` on `worktree-<name>`, "
                         "cut from a fresh origin/main with --no-track (no shared .git/config write, so parallel "
                         "Agents do not race on its lock; the branch has no upstream), so githooks/post-checkout provisions it. "
-                        "Claude Code's own creation never fires post-checkout. Prints only the "
+                        "Claude Code's own creation never fires post-checkout. The add runs under a "
+                        "lock directory at `<git common dir>/banchi-worktree-add.lock` (`take_lock`, "
+                        "`release_lock`), so adds in one clone run one at a time: git reads a "
+                        "sibling's half-written worktree record otherwise. The lock is built "
+                        "privately with its pid inside and renamed into place in one step "
+                        "(`rename_noreplace`), so it never shows without a pid. A live holder's "
+                        "pid makes the add wait and say so. A dead pid is judged once "
+                        "(`lock_is_stale`) and taken by one waiter's move to a private name "
+                        "(`reap_stale`), which checks the moved lock holds the judged pid and "
+                        "otherwise puts it back, never deleting a lock it did not judge. "
+                        "`BANCHI_WORKTREE_LOCK_WAIT` seconds (default 120) fails the creation. Prints only the "
                         "path on stdout; exits non-zero only when git cannot make the tree.",
                 "governed_by": ["D18"],
             },
@@ -3618,7 +3631,13 @@ COMPONENTS = [
                 "does": "`make worktree-create-selftest`: runs worktree-create.sh for four "
                         "names at once, five rounds, in a throwaway repo with an origin. Every "
                         "tree and branch must exist and no config.lock may remain. Red on the "
-                        "hook without --no-track.",
+                        "hook without --no-track. Arms for the add lock: a free lock, a lock "
+                        "held by a live pid (the add waits and says so), a lock with a dead "
+                        "pid (taken over); two waiters on one stale lock (seams order their "
+                        "reads, no two adds overlap); a pid this user cannot signal counts as "
+                        "live; the wait cap; INT and TERM release the lock. Red on the hook "
+                        "without the lock. A sweep arm "
+                        "proves an old sibling run folder is removed and a new one stays.",
                 "governed_by": ["D18"],
             },
             "session-teardown-selftest.sh": {

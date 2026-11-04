@@ -4,9 +4,11 @@
 Protects: The price-archive review command refuses each unresolvable case in its own words and writes nothing on a preview, with no network call.
 Governs: D234, D247
 
-NO NETWORK CALL. Every refusal below is a fabricated string, shaped exactly the way
-`pipeline/pricehistory.py:NotResolvable`, `Unreachable` and `Blocked` already write one —
-`cli/archive_review.py` never talks to a market, and neither does this test.
+NO NETWORK CALL. `cli/archive_review.py` never talks to a market, and neither does this test.
+The refusals in the older cases are fabricated strings shaped the way
+`pipeline/pricehistory.py:NotResolvable` writes one. The texts the real-text cases use are
+what the reader itself raises, got through `harness/tests/price_refusals.py` with only
+`pipeline/net.py:request` stubbed, so a sentence the reader changes shows up here as a failure.
 
 WHAT THIS PROVES:
 
@@ -46,6 +48,9 @@ sys.path.insert(0, str(ROOT))
 
 from cli import archive_review  # noqa: E402
 from cli import resolve as run_resolve  # noqa: E402
+from harness.tests import price_refusals  # noqa: E402
+from pipeline import pricearchive as archive_walk  # noqa: E402
+from pipeline import pricehistory  # noqa: E402
 from pipeline import tcgcsv  # noqa: E402
 from pipeline import variant  # noqa: E402
 from store import files  # noqa: E402
@@ -146,10 +151,12 @@ def main() -> int:
             "CCC": _row("CCC", "Seal of Power", "", "Spiritforged"),
             "DDD": _row("DDD", "Warden's Hymn", "", "Vendetta"),
         }
+        # The reader's own network texts, each from its real raise path (see the real-text cases below).
+        network = price_refusals.network_refusals()
         refusals = {
             "AAA": _not_resolvable("Shadbow Temple", "", "Vendetta"),
             "BBB": _not_resolvable("Kihoud Temple", "", "Vendetta"),
-            "CCC": "https://mcp.tcgplayer.com/... could not be reached: timed out",
+            "CCC": str(network["offline"]),
             "DDD": _not_resolvable("Warden's Hymn", "", "Vendetta"),
         }
 
@@ -158,6 +165,49 @@ def main() -> int:
            "a NotResolvable message is an identification refusal")
         ok(not archive_review.is_identification_refusal(refusals["CCC"]),
            "an Unreachable-shaped message is never an identification refusal")
+
+        # The reader's own network texts, each from its real raise path. The type is checked
+        # first (scope before subject): a 403 that raised something else is a different failure
+        # from a 403 whose text reached the review queue.
+        print("\n-- is_identification_refusal: every real network text is a network refusal --")
+        expected_kind = {
+            "403": pricehistory.Blocked,
+            "500": pricehistory.Unreachable,
+            "offline": pricehistory.Offline,
+            "dropped": pricehistory.Unreachable,
+            "unreadable": pricehistory.Unreachable,
+            "undecodable": pricehistory.Unreachable,
+        }
+        for name, kind in expected_kind.items():
+            caught = network[name]
+            ok(type(caught) is kind,
+               f"the real raise path for {name} is {kind.__name__} (scope before subject)",
+               repr(caught))
+            ok(caught is not None and not archive_review.is_identification_refusal(str(caught)),
+               f"a real {name} refusal is never queued for review as an identification refusal",
+               str(caught))
+
+        # `cmd_pricearchive` feeds the review step the text AFTER `classify_refusals` rewrote it.
+        # A real 403 that follows an earlier success is rewritten as a throttle, and that
+        # rewritten text must still be a network refusal.
+        real_403 = str(network["403"])
+        rewritten, _ = archive_walk.classify_refusals({"652771": real_403}, had_earlier_success=True)
+        ok(rewritten["652771"] == archive_walk.THROTTLE_REWRITE,
+           "scope: after an earlier success the real 403 is rewritten to the throttle text the "
+           "reader names (THROTTLE_REWRITE)", rewritten)
+        ok(not archive_review.is_identification_refusal(rewritten["652771"]),
+           "the throttle rewrite of a real 403 is still a network refusal, never queued",
+           rewritten)
+
+        # Each NotResolvable the reader raises offline is a fact about the card or its row, never
+        # about the network, so each must stay an identification refusal. A stage that answered
+        # (None) fails the scope check instead of passing.
+        print("\n-- is_identification_refusal: every real NotResolvable --")
+        for stage, caught in price_refusals.not_resolvable_refusals().items():
+            ok(type(caught) is pricehistory.NotResolvable,
+               f"the real {stage} step raises NotResolvable (scope before subject)", repr(caught))
+            ok(caught is not None and archive_review.is_identification_refusal(str(caught)),
+               f"a real NotResolvable ({stage}) is still an identification refusal", str(caught))
 
         print("\n-- cards_for_refusals: per-card match, never per-sku --")
         inventory = Store().read().inventory
