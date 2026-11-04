@@ -1112,13 +1112,19 @@ def check_bind_hung_reverse_lookup_still_listens(checks: Checks) -> None:
         worker = threading.Thread(target=bind_and_serve, daemon=True)
         worker.start()
         try:
+            # The bind runs on the worker thread, so wait for it to finish (`built` is set once
+            # the server is listening, or the bind has failed) before connecting. This is the one
+            # wait; the 5 seconds bounds it, and nothing here retries.
             connected = False
             reason = ""
-            try:
-                socket.create_connection(("127.0.0.1", port), timeout=5).close()
-                connected = True
-            except OSError as exc:
-                reason = f"connect to 127.0.0.1:{port} did not complete: {exc}"
+            if built.wait(5):
+                try:
+                    socket.create_connection(("127.0.0.1", port), timeout=5).close()
+                    connected = True
+                except OSError as exc:
+                    reason = f"connect to 127.0.0.1:{port} did not complete: {exc}"
+            else:
+                reason = "the bind did not finish within 5 seconds"
             checks.ok(connected,
                       "the port accepts a connection within 5 seconds, with the lookup still hung",
                       reason)
