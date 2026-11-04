@@ -771,8 +771,9 @@ def group_aggregator_module_import_is_inherited_by_every_group() -> None:
 
 @case
 def root_reads_the_tree_it_is_pointed_at() -> None:
-    """Class 8: the selector reads --root, not the checkout the script lives in. A file the fixture holds and the
-    checkout does not must select from the fixture; the reverse must select nothing."""
+    """Class 8: --root wins over the cwd. With --root naming the fixture, a file the fixture holds and the checkout
+    does not selects from the fixture, from an unrelated cwd. With --root naming a tree without the file's importer,
+    the same file selects nothing, even from a cwd that is the fixture."""
     CURRENT[0] = "root_reads_the_tree_it_is_pointed_at"
     run = _current_run()
     tree = base_tree(run)
@@ -791,11 +792,14 @@ def root_reads_the_tree_it_is_pointed_at() -> None:
         expect(False, f"--root names the fixture, walkplan.py: the selector {err}")
     else:
         expect(lines == [], f"--root names the fixture: pipeline/walkplan.py is printed from the checkout, not the fixture: {lines[:3]}")
-    code, lines, err = run_selector(["pipeline/direct_leaf.py"], tree)
+    # --root beats the cwd: run inside the fixture, but name a tree that holds the file and not its importer.
+    bare = write_tree(run / "no-importer", {"pipeline/direct_leaf.py": "VALUE = 1\n"})
+    code, lines, err = run_selector(["pipeline/direct_leaf.py", "--root", str(bare)], tree)
     if code is None:
-        expect(False, f"no --root, run inside the fixture: the selector {err}")
+        expect(False, f"--root beats the cwd: the selector {err}")
     else:
-        expect(lines == [], "no --root: the selector read the fixture's cwd instead of its own checkout")
+        expect(code == 0, f"--root beats the cwd: the selector exited {code}, expected 0 ({err.strip()[-200:]})")
+        expect(lines == [], f"--root beats the cwd: the selector read the cwd, not --root, and printed {lines[:3]}")
 
 
 # --------------------------------------------------------------------------------- planted breaks (bounded)
