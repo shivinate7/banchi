@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import os
+import sys
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
+from typing import List
 
-from .core import ADVISORY, ROOT, Report, list_names_from_assign, markdown_files, read
+from .core import ADVISORY, ROOT, Report, list_names_from_assign, markdown_files, module_globals, read
 from .harness_criteria import string_assign
-from .hygiene import check_positional_references, verdict_disagreements
+from .hygiene import (
+    check_agent_links,
+    check_positional_references,
+    expected_rule_links,
+    rule_folders,
+    verdict_disagreements,
+)
 from .paths_commands import (
     LineAnchor,
     check_allowlist,
@@ -17,6 +27,43 @@ from .paths_commands import (
     line_anchor_candidates,
 )
 from .strings import _only_shrinks
+
+
+def _run_folder():
+    """A run folder from the repo's one temp home (`harness/tests/home.py`, test-temp-standard).
+
+    The root is on the path only for this import, so the audit's own imports stay as they were.
+    """
+    added = str(ROOT) not in sys.path
+    if added:
+        sys.path.insert(0, str(ROOT))
+    try:
+        from harness.tests.home import run_folder
+    finally:
+        if added:
+            sys.path.remove(str(ROOT))
+    return run_folder()
+
+
+@contextmanager
+def _fixture_root(root: Path):
+    """Point the audit's ROOT (and its staged index) at a fixture tree, in every module, until the block ends."""
+    here = module_globals()
+    saved = here["ROOT"], here["_INDEX_PATHS"]
+    root.mkdir(parents=True, exist_ok=True)
+    here["ROOT"], here["_INDEX_PATHS"] = root, None
+    try:
+        yield root
+    finally:
+        here["ROOT"], here["_INDEX_PATHS"] = saved
+
+
+def _rule_file(root: Path, name: str, globs: List[str]) -> None:
+    """One rule file under the fixture's `.claude/rules/`, its `paths:` list the given globs."""
+    path = root / ".claude" / "rules" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = "".join(f'  - "{glob}"\n' for glob in globs)
+    path.write_text("---\npaths:\n" + body + "---\n# Rule\n", encoding="utf-8")
 
 
 def run(ok) -> None:
@@ -293,3 +340,80 @@ def run(ok) -> None:
         "a reporter whose RESULT_FILE cannot be read reports THAT, rather than an empty agreement",
         str(found),
     )
+
+    # A rule's `paths:` globs are `<folder>/**` or the rule cannot be linked for Codex, and a rule
+    # that cannot be linked is said so, never skipped (rule_folders' own docstring).
+    print("\nrule folders: a glob has to be `<folder>/**`, or the rule is refused, never skipped")
+    ok(
+        rule_folders('---\npaths:\n  - "app/**"\n---\n# Rule\n') == ["app"],
+        "a `<folder>/**` glob is read as its folder",
+    )
+    ok(
+        rule_folders('---\npaths:\n  - "app/src/*.ts"\n---\n# Rule\n') is None,
+        "a glob that does not end in `/**` makes the rule refused, not an empty list",
+    )
+    ok(
+        rule_folders('---\npaths:\n  - "app/**"\n  - "app/src/*.ts"\n---\n# Rule\n') is None,
+        "one such glob among good ones refuses the whole rule",
+    )
+
+    # The fixture is a whole repo root in one run folder: each case points the audit's ROOT at its
+    # own subfolder, and the rule files and symlinks it needs are made there. The real tree is never read.
+    print("\nrule links: one rule per folder, a rule that cannot be linked says so, an orphan link is named")
+    with _run_folder() as run_dir:
+        with _fixture_root(run_dir / "empty"):
+            ok(
+                expected_rule_links() == ([], []),
+                "control: no rule files means no links and no findings",
+            )
+
+        with _fixture_root(run_dir / "two") as root:
+            _rule_file(root, "a.md", ["app/**"])
+            _rule_file(root, "b.md", ["app/**", "store/**"])
+            links, findings = expected_rule_links()
+            ok(
+                links == [("app/AGENTS.md", "../.claude/rules/a.md"),
+                          ("store/AGENTS.md", "../.claude/rules/b.md")],
+                "a folder takes the first rule that covers it, and the second rule links only its other folders",
+                str(links),
+            )
+            ok(
+                len(findings) == 1 and findings[0].where == ".claude/rules/b.md"
+                and "already covers" in findings[0].message,
+                "the second rule on one folder is one finding, against the rule that owns the folder",
+                str([(f.where, f.message) for f in findings]),
+            )
+
+        with _fixture_root(run_dir / "glob") as root:
+            _rule_file(root, "c.md", ["app/src/*.ts", "store/**"])
+            links, findings = expected_rule_links()
+            ok(
+                links == [] and len(findings) == 1 and findings[0].where == ".claude/rules/c.md"
+                and "no `paths:`" in findings[0].message,
+                "a rule with a glob that is not `<folder>/**` links no folder, not even its good glob",
+                str([(f.where, f.message) for f in findings]) + " links " + str(links),
+            )
+
+        with _fixture_root(run_dir / "orphan") as root:
+            _rule_file(root, "app.md", ["app/**"])
+            (root / "app").mkdir()
+            (root / "store").mkdir()
+            os.symlink("../.claude/rules/app.md", root / "app" / "AGENTS.md")
+            os.symlink("../.claude/rules/app.md", root / "store" / "AGENTS.md")
+            ok(
+                (root / "store" / "AGENTS.md").is_symlink(),
+                "scope: the orphan link is on disk as a symlink before its finding is read",
+            )
+            report = Report()
+            check_agent_links(report)
+            by_where = {f.where: f.message for f in report.checks[0].findings}
+            ok(
+                "store/AGENTS.md" in by_where and "does not cover `store/`" in by_where["store/AGENTS.md"],
+                "a folder link whose rule does not cover that folder is an orphan, and is named",
+                str(by_where),
+            )
+            ok(
+                "app/AGENTS.md" not in by_where,
+                "a folder link whose rule covers that folder is not an orphan",
+                str(by_where),
+            )
