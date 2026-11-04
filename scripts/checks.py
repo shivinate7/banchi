@@ -173,7 +173,7 @@ CHECKS = (
                    "with a skill folder but no map-check.mjs fails, node missing exits "
                    "non-zero, and the skill's own exit code is map-check.py's. Each mutant of "
                    "map-check.py must turn a check red.",
-        "needs": ("python3", "node", "git", "claude-settings"),
+        "needs": ("python3", "node"),
         "writes": "a run folder it makes and removes.",
         "commit_path": False,
         "why_off_commit_path": "map-check's reason exactly: it needs node, and the commit hook "

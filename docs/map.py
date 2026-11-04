@@ -2324,7 +2324,7 @@ COMPONENTS = [
         "modules": {
             "run.py": {"does": "the explicit ordered TESTS registry — no discovery magic", "governed_by": ["D1"]},
             # The tests themselves live under harness/tests/, and `mapPaths` in map.config.json
-            # lists only harness/run.py, so `make map-check` does not scan that far, so they are not listed one by one. `traces/` is listed because
+            # lists only harness/run.py, so `make map-check` does not scan that far. The tests are not listed one by one. `traces/` is listed because
             # it is DATA rather than a test, and tracked data with no entry is how a
             # directory ends up in the tree with nobody able to say what it is for.
         },
@@ -7621,7 +7621,7 @@ COMPONENTS = [
                         "before that \u2014 `.inventory-lone-place` had not existed since the "
                         "Banchi rebuild, neither rule was at 20px, and the total said seven "
                         "where D41 says five and the stylesheets say six. NO ROW READS THAT "
-                        "TOTAL: `check_map` reads paths, orphans, `governed_by` and "
+                        "TOTAL: `check_map_data` reads paths, `governed_by` and "
                         "`tested_by`, never a `does` string's prose. So it is not restated "
                         "here \u2014 a count with no reader is how this one drifted. WHAT IS "
                         "GONE WITH THE LOCATION CARD: the address, the neighbours band, the "
