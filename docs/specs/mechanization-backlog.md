@@ -219,7 +219,7 @@ Fix it and leave the pin: red (stale).
 
 **Cost:** small.
 
-**Status.** `scripts/guard-shell.py` has seven clauses (checkout, tree, wait, push, stash,
+**Status.** `scripts/guard-shell.py` has five clauses (tree, wait, push,
 reset, narrate) and none reads `.env`. `.claude/settings.json` denies `Read(./.env)` and nothing
 else screens the key.
 
@@ -554,8 +554,8 @@ to be able to see. None of these entries has been re-checked against the code si
   can ask it to do. Nothing worth building.
 - **A compaction preserves the fixture schema facts, every `make` command and the list of modified
   files.** A machine would need to see the summary. A compaction leaves no artifact in the tree and none
-  in the transcript. A PreCompact hook is rejected on D135's grounds: whether Codex has that event is
-  unanswerable from this tree.
+  in the transcript. A PreCompact hook was rejected on grounds D135 no longer gives (whether Codex has
+  that event). Reopen it on its own merits.
 - **A control must be on the screen a human would look for it on.** A machine would need to know where a
   person would look. D20's defect proves it: route, client and control were all present and 12 of 13
   boxes were unselectable. That judgment needs `make design-check`, which is off the commit path. The
@@ -672,4 +672,3 @@ Kept so nobody re-proposes them. A rejected mechanism usually fires on honest wo
 - Nobody dry-ran the Bash write-target resolver that other shelved clauses would share. Its parse
   coverage over real session commands is unmeasured, so every clause is specified to fail open, and a
   "guard throws" arm belongs in its self-test.
-- Whether Codex exposes a PreCompact event is unanswerable from this tree.

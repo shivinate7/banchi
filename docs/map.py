@@ -3489,11 +3489,7 @@ COMPONENTS = [
                         "out of this repo's own tooling. It also asserts the platform fact the "
                         "refusal declines to assume — BSD `pgrep` excludes its own ancestors "
                         "unless `-a` — and scores every hatch in both forms off the guard's "
-                        "own clause table. Mutation-tested: twenty-six arms, twenty-five "
-                        "caught, for the original five clauses; the survivor removes half of "
-                        "the `.bak` advice, the other "
-                        "half still satisfies the assertion, and an arm removing BOTH goes "
-                        "red. The push clause carries fourteen arms of its own as of the "
+                        "own clause table. The push clause carries fourteen arms of its own as of the "
                         "2026-09-13 default-branch amendment — six over the original "
                         "colon-check and refspec resolution, eight over `_default_branch` and "
                         "the exemption it feeds — eleven caught and three equivalent mutants.",
