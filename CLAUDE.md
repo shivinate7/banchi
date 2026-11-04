@@ -78,12 +78,9 @@ whole repo:
   (D173, a rule that can be enforced is).
   The `rule enforcement` row of `make docs-audit` parses every rule here.
   `HARD_RULE_FLOOR` and `PROSE_ONLY_EXPECTED` pin its count.
-- **Parent rules `building-one-home-per-capability` (single home) and `building-fix-cause-not-symptom` (root cause first) apply.**
-  `make map ARGS=<path>` and `scripts/decision-context.py` find the home or the existing primitive.
+- **Parent rule `building-one-home-per-capability` (single home) applies.** `make map ARGS=<path>` and `scripts/decision-context.py` find the home.
   The `capability homes` row of `make docs-audit` holds each named capability's home and refuses a call to its
-  primitives outside it. A stopgap's commit says so, and its cause goes in `docs/debts/`.
-  **NOT MECHANIZED:** a machine cannot tell that two differently named functions do the same job, or whether
-  the author knew the cause and chose the symptom.
+  primitives outside it. **NOT MECHANIZED:** a machine cannot tell that two differently named functions do the same job.
 - **A route is not a feature. Nothing is built until a screen reaches it.** Done is the route, a client function in
   `app/src/server.ts` and a control a human would look for. Where it writes, done also needs a receipt and a way back.
   **NOT MECHANIZED:** a machine cannot know which screen a human would look for a capability on.
@@ -95,6 +92,9 @@ whole repo:
 - **Scope is argued, not gated.** New surface needs a reason, written into the decision that owns it.
   The `repo map` row of `make docs-audit` fails a file with no map entry.
   Its `decision ids` row fails an id with no entry.
+- **Parent rule `building-fix-cause-not-symptom` (root cause first) applies.** `make map ARGS=<path>` and `scripts/decision-context.py` find an existing primitive.
+  A stopgap's commit says so, and its cause goes in `docs/debts/`.
+  **NOT MECHANIZED:** a machine cannot read whether the author knew the cause and chose the symptom.
 - **A settled decision is an argument, not an authority.** Parent rules `outcomes-decision-is-argument` (recorded decisions) and `outcomes-stale-decision-protocol` (stale decisions) apply. Cite the entry.
   **NOT MECHANIZED:** a machine cannot tell a rotted premise from a live one without judging the outcome it protected.
 - **Check whether a task is yours before you hand it to the owner.** Grep the routes, `make help` and

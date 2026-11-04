@@ -667,7 +667,7 @@ def build_parser() -> argparse.ArgumentParser:
     # (`docs/specs/holdings-roster.md`).
     holdings_roster = sub.add_parser(
         "holdings-roster",
-        help="value an investment roster CSV at this store's prices. Free, read-only.",
+        help="value an investment roster CSV at this store's prices. Free, read-only, no screen.",
     )
     holdings_roster.add_argument("csv", help="the roster export")
     holdings_roster.add_argument(
@@ -717,7 +717,8 @@ def build_parser() -> argparse.ArgumentParser:
         "what came back — never deleting a bucket a pass did not mention",
     )
     archive_sweep.add_argument(
-        "--write", action="store_true", help="actually write; previews without it"
+        "--write", action="store_true",
+        help="actually write; previews without it, and a preview makes no network call",
     )
     archive_show = archive_sub.add_parser(
         "show", help="what the archive holds, and which ranges were last swept"
@@ -802,7 +803,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     applying = reprice_sub.add_parser(
         "apply",
-        help="read the edited worklist back and write the price-only import CSV",
+        help="read the edited worklist back and write the price-only import CSV. The `#/pricing` modal is its screen",
     )
     applying.add_argument("worklist", help="the worklist, edited or not")
     applying.add_argument(

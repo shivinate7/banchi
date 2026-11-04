@@ -8,8 +8,9 @@ paths:
 # The pipeline, the CLI and the paid read
 
 `./banchi <command> --help` prints each command's flags and what it costs. `identify` costs money: run `--dry-run` first.
-The free verbs preview unless `--write` is given: `./banchi scan <capture-dir>` (code cards only), `./banchi rescue <run-dir>`,
+The free verbs besides `join` and `emit` are `./banchi scan <capture-dir>` (code cards only), `./banchi rescue <run-dir>`,
 `./banchi prices adopt`, `./banchi readings adopt`, `./banchi archive sweep`, `./banchi queue refresh` and `./banchi reconcile`.
+Each command's `--help` says what it writes.
 
 - **The join key is per game and normalized on both sides** (`pipeline/games.py`,
   `pipeline/join.py:number_index_key`). Never join on Product Name. D35 (Product Name join) allows it only as a last
@@ -38,4 +39,5 @@ The free verbs preview unless `--write` is given: `./banchi scan <capture-dir>` 
 - **The free reader sets itself up** (D301, stock photos are hotlinked, never mirrored). `match prepare` downloads the pinned model file
   and reads each stock photo once, and `serve` starts it whenever the store holds a card from an unread set. Env `BANCHI_AUTO_SETUP=on`
   forces auto-start. Unset, it is refused when `CI` or `BANCHI_HARNESS` is set (`make harness` sets it) and in a linked worktree.
-  `match --sweep` is the background reader's watcher: it never spends, and it is off until the Capture screen's Rig switch is on.
+  `match --sweep` is the background reader's watcher: it never spends, reads even mid-feed, and is off until the Capture screen's Rig switch is on.
+  The runs sheet's Prepare press is a manual refresh.

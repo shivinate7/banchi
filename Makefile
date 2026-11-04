@@ -1711,6 +1711,7 @@ demo-photos:
 	@$(PYTHON) scripts/demo-photos.py --source "$(SOURCE)" \
 	  --count $(DEMO_PHOTO_COUNT) --joinable $(DEMO_PHOTO_JOINABLE)
 
+# Owner's Mac only: SOURCE=<checkout> names the store to scrub and commit into `demo-assets/mirror/`.
 # THE PUBLISHED DEMO IS THE OWNER'S REAL STORE, SCRUBBED (owner's ruling, 2026-09-26,
 # `D-demo-mirror`, docs/specs/demo.md §13 — supersedes `demo-seed`'s invented one below as
 # what `demo-static` publishes). `scripts/demo-mirror.py` reads a store COPY into gitignored
@@ -1739,7 +1740,7 @@ demo-mirror-agent:
 	@python3 scripts/demo-mirror-daily.py --agent $(ARGS)
 
 # THE DAILY MARKET READ (DEBT69): one free download of the owner's own live listings, once a day, with
-# a note `#/pricing` shows. `price-refresh-agent` installs the launchd job (main tree only), ARGS=--remove
+# a note `#/pricing` shows, then the free daily TCGCSV read (D325). `price-refresh-agent` installs the launchd job (main tree only), ARGS=--remove
 # removes it. The installed job passes no flag, runs at 05:15 and at login, and skips a refresh or a sweep
 # that finished today (D224). `price-refresh` runs one read now over THIS checkout's store, changes
 # no price and passes --now (refresh even if today's finished) and --no-sweep unless ARGS=--sweep asks.
