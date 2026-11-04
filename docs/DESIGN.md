@@ -555,7 +555,7 @@ were written after the Inventory screen was measured spending 240px — 27% of a
 viewport — on chrome before its first card. Nothing mechanical enforced them then, and nothing does now. `scripts/docs-audit.py` cannot see a padding. The Playwright specs measure the Fulfillment view, which this section does not govern. A screen that drifts back to a 32px
 page header will do it silently.
 
-**The shell is three shells, one per width (D95), and one of them is nothing at all.** A 236px sidebar at 1024px and up, collapsing to a 64px icon rail on `⌘.` and remembered per device under `banchi.rail`. A 52px top bar and a 64px bottom tab bar below 768px. The tabs are the four routes that carry `tab: true`, and everything else sits behind a left drawer. No chrome at all shows on the Fulfiller's route: not-rendered rather than hidden. `⌘K` opens the command palette over any of them. `?` opens the one keyboard reference sheet, which is where a binding is documented now that the inline key hints are gone.
+**The shell is three shells, one per width (D95), and one of them is nothing at all.** A 236px sidebar at 1024px and up, collapsing to a 64px icon rail on `⌘.` and remembered per device under `banchi.rail`. A device with no stored choice starts railed below the width `--bn-rail-break-px` holds; that token is the one home of the width, and records name the token, never its number. A 52px top bar and a 64px bottom tab bar below 640px. The desktop rail covers 640 to 1023 (`TABLET_RAIL`, set by D276). The tabs are the four routes that carry `tab: true`, and everything else sits behind a left drawer. No chrome at all shows on the Fulfiller's route: not-rendered rather than hidden. `⌘K` opens the command palette over any of them. `?` opens the one keyboard reference sheet, which is where a binding is documented now that the inline key hints are gone.
 
 **The widths this build is walked at are 390, 720, 820 and 1440.** They are a phone, the
 owner's half-width Chrome window, an iPad in portrait, and the owner's Mac. **820 is the width that catches the mistake**: it is above every phone breakpoint and all thumb. That is why the control heights follow the pointer instead. **720 is the owner's own second view** (ruling,
@@ -581,8 +581,8 @@ ways. Before this was written, four edges were spelled twice — 559/560, 639/64
 LADDER          the shared vocabulary. Any sheet may use these.
   480           the narrow phone
   560           the wide phone: a receipt, a box bar and a hero fold here
-  640           the phone/tablet seam
-  768           the tablet, and the shell's own rail boundary
+  640           the phone/tablet seam, where the desktop rail starts
+  768           the tablet
   900           a two-column body becomes one, ahead of the tablet step
   1024          the desk: at and above this the sidebar is 236px, or 64px railed
   1280          the wide desk
