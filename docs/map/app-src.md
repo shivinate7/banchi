@@ -13,7 +13,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/BoxShelf.css` — The Shelf's blocks, gaps, lift bar and receipt.
 - `app/src/BoxShelf.tsx` — The Shelf, the second view of #/inventory (`?view=shelf`): every box drawn from above with its sections as blocks, card `1` at the top, counts only.
 - `app/src/CaptureScreen.css` — Its layout, at the dense end of docs/DESIGN.md's one system, two densities.
-- `app/src/CaptureScreen.tsx` — The capture screen to the owner-approved Pass D: every control one hairline row at rest (key chip, label, value), one field open at a time.
+- `app/src/CaptureScreen.tsx` — The capture screen: every control is one hairline row at rest (key chip, label, value), and one field is open at a time.
 - `app/src/CardHero.css` — The listing-correction control's own spacing.
 - `app/src/CardHero.tsx` — The card pane's shared pieces, lifted out of `BoxBrowse.tsx` so `#/orders`' walk can reuse them (`docs/specs/order-walk-plan.md` §`13`: "Inventory's card pane, unchanged").
 - `app/src/CardLocations.css` — The group at two densities.
@@ -24,15 +24,15 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/Codes.tsx` — The code-card screen: read a box's QRs into the ledger, see the two lanes C11 tiers the pile into, and hand a lane's codes to a buyer against a named order.
 - `app/src/DeletedBoxes.tsx` — Inventory's deleted boxes shelf (D134 point `5`), which replaced the tab.
 - `app/src/Fulfillment.css` — The generous `24`-`64` end of the one system, two densities.
-- `app/src/Fulfillment.tsx` — D5's second persona's entire product: cards to pull in box-walk order, photo-confirm before each pull, one-tap mark-sold with an undo window.
+- `app/src/Fulfillment.tsx` — The Fulfiller's whole product: cards to pull in box-walk order, a photo confirm before each pull, and a one-tap mark-sold with an undo window.
 - `app/src/Gallery.css` — The kit page's own layout — the specimen grid and its labels.
-- `app/src/Gallery.tsx` — `#/gallery`: THE KIT, on one page — every primitive Banchi is built from, every button variant and size, the whole icon set out of `ICON_NAMES`, and the shared components in both personas, so the tokens are LOOKED AT rather than only written.
+- `app/src/Gallery.tsx` — The kit on one page: every primitive, every button variant and size, and the whole icon set, so the tokens are looked at.
 - `app/src/HistoryFloat.css` — The card at `--bn-*` tokens only: fixed, fixed-height chart box, `560px` wide at `1440` and `384px` below.
 - `app/src/HistoryFloat.tsx` — The floating price-history card (spec pricing-suggest `9c`): opens above a row when a price field takes focus or its history door is pressed, draws `ProductHistory.tsx:ProductChart` with the owner's asking step line and the suggestion dot, holds its size while history loads, takes focus only in door mode.
 - `app/src/Home.css` — The home screen's look: the hero and its deck, the stage spine, the box and run cards.
-- `app/src/Home.tsx` — `#/`: the product drawn as a picture.
+- `app/src/Home.tsx` — The Home screen: the product drawn as a picture.
 - `app/src/Inventory.css` — Its layout, at the dense owner-side end of the one system, two densities — the search field, the found groups, the receipts, and the retire panel.
-- `app/src/Inventory.tsx` — THE ONE OWNER VIEW OF STORED CARDS (D31).
+- `app/src/Inventory.tsx` — The Inventory screen: the one owner view of stored cards.
 - `app/src/InventorySets.css` — Layout for the set view's rows — the card number column, the name column, and the row's own cursor.
 - `app/src/InventorySets.tsx` — THE OWNER'S "BY SET" VIEW (D293), a second view inside #/inventory (D264's own precedent: a view switch lives inside Inventory rather than as a fourth screen, D31).
 - `app/src/LiveReconcile.css` — The store-wide reconcile panel's own styles — quieter than the run panel above it on purpose, and the stdout block is `white-space: pre` with its own overflow because the report draws fixed-width columns a wrap would break.
@@ -40,7 +40,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/MixView.css` — The Mix view's control bar at the large control height, the table's scroll frame with a sticky first column and the heat tint (the accent at a share of its strength), `--bn-*` only.
 - `app/src/MixView.tsx` — Sales' Mix lens (`#/revenue?lens=mix`, no route of its own): a pivot over the stock the owner captured, holds and sold.
 - `app/src/Orders.css` — The order screen at owner density: the line, its reason and remedy, and the pick rows under it.
-- `app/src/Orders.tsx` — THE ORDERS HUB: one screen with two stages (D69), rendered at `#/orders` with the pull stage selected.
+- `app/src/Orders.tsx` — The orders hub: one screen with two stages, drawn on the orders route with the pull stage selected.
 - `app/src/OrdersHubStore.ts` — THE HUB'S MEMORY ACROSS A STAGE SWITCH.
 - `app/src/OrdersShipStage.tsx` — The SHIP stage of that hub: TCGplayer's Orders -> Export Shipping read into D61's three lanes, with the Pirate Ship import CSV as a download and a way to forget the batch.
 - `app/src/OrdersWalkPane.tsx` — The walk's own hook and list, over `docs/specs/order-walk-plan.md` §`13`: `useOrderWalk` re-fetches `POST /orders/walk-plan` LIVE whenever the walked set (the selected order plus every ticked one) changes, the same way selecting a box opens it, and `WalkList` draws the plan's boxes and sections, one row per physical pick (`here: true` copy).
@@ -60,19 +60,19 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/PricesAsOf.css` — That header at `--bn-*` tokens only.
 - `app/src/PricesAsOf.tsx` — The header line above #/pricing's list: "Prices as of" the catalog step's finish, and the one press, Refresh now, with its running, done and failed states.
 - `app/src/Pricing.css` — The one list, the slim bar and the rule line, `--bn-*` only.
-- `app/src/Pricing.tsx` — #/pricing, rebuilt to the owner's re-interview (D277, D277).
+- `app/src/Pricing.tsx` — The Pricing screen: every unsent copy with its price, its holds and its readiness.
 - `app/src/ProductHistory.css` — The chart at `--bn-*` tokens only.
 - `app/src/ProductHistory.tsx` — `#/product`: one product's market history, with the owner's own sales marked on it.
 - `app/src/PullConfirm.css` — Its three states, and why the key hint is absent by default.
 - `app/src/PullConfirm.tsx` — Step `6`'s component: the pull modal's confirm button.
 - `app/src/RailFrame.tsx` — The rail's own sticky frame, lifted out of `BoxBrowse.tsx` (lane A2b, the orders-a plan's component reuse map: "Inventory passes its box list and walk.
 - `app/src/Revenue.css` — The summary band, podium, mix tile, board rows and product table's own layout, `--bn-*` only (D298's Direction B).
-- `app/src/Revenue.tsx` — `#/revenue` (Sales): the gross-revenue retrospective, built on `<Page>` and Direction B (D298, RULINGS.md 'Sales'): a summary band (gross, month bars, 'On the shelf' loading on arrival), a podium of the top `3` PRINTINGS as photo tiles plus a foil/rarity mix tile, bar rows for places `4`-`10`, then the full sortable, drillable table.
+- `app/src/Revenue.tsx` — The Sales screen: the gross-revenue retrospective, with a summary band, a podium of the top printings and bar rows for the places below.
 - `app/src/ReviewBand.tsx` — THE REVIEW SUMMARY BAND, at the top of Review in the Identify strip's old slot: four counts, a health line, one paid press and the way back to Capture.
 - `app/src/ReviewBandSheet.css` — The band sheets' styles: group heads, pointer lines, rows with a `40` by `56` photo held from first paint, the held "count has moved" slot.
 - `app/src/ReviewBandSheet.tsx` — THE REVIEW BAND'S FOUR SHEETS (`docs/specs/identify-engine-pick.md`, section `10`): waiting for a paid look (grouped by why the free reader stopped), not yet looked at (by box), matched free (by set) and the cards that need a set named (by box).
 - `app/src/ReviewQueue.css` — Its layout — a photo track sized from its own height beside a choice column in the tuned `656px` measure, with the worklist as a self-scrolling rail so `47` rows cost the page no height — and the price-driven type scale that makes the sort visible — name size and price size stepping down together, parked rows dimmed.
-- `app/src/ReviewQueue.tsx` — D77's catalog lookup, reachable from EVERY queued entry (D77) — suggested on arrival where the pipeline offered no rows, and drawn on `L` where it offered rows that are the wrong card, searchable by name, number or SKU, replacing the pipeline's rows rather than sitting beside them because both are answered on the same digits.
+- `app/src/ReviewQueue.tsx` — The Review screen: works the queued entries in order, with a catalog lookup on every entry, searchable by name, number or SKU.
 - `app/src/RunFiles.css` — The download rows — moved verbatim out of RunPanel.css with the component, every class name intact so the two specs that select .run-file-import and .run-file still select what they always did.
 - `app/src/RunFiles.tsx` — A run's files, as downloads — extracted from RunPanel (D54) so two screens can draw them.
 - `app/src/RunPanel.css` — The panel at owner density — the `4`-`16` end of the scale, mono on every number, and exactly one solid accent fill: the button that spends, drawn only once the estimate is on screen above it.
@@ -80,7 +80,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/RunRescue.css` — The rescue sheet's own layout, `LiveReconcile.css`'s shape — width, padding, the thumb floor on a coarse pointer (D117).
 - `app/src/RunRescue.tsx` — D145's repair, offered from `RunPanel.tsx`'s own header ONLY where `detail.box_former` is true — a run over a drawer D20 has since handed to another box.
 - `app/src/Runs.css` — Its page chrome, to docs/DESIGN.md's numbers literally: `16px` on all four sides, a `20px` display title sharing its line with the scope and the controls, a one-line lede, and the box strip as the first real content inside `150px` of the top.
-- `app/src/Runs.tsx` — #/runs: the page chrome, the box picker, the composer, the store-wide reconcile and the stale-listing markdown, with RunPanel beneath them.
+- `app/src/Runs.tsx` — The runs sheet and the redirect from the old runs route: the box picker, the composer, the store-wide reconcile and the stale-listing markdown, with the run panel beneath them.
 - `app/src/RunsComposer.tsx` — THE IDENTIFY COMPOSER: the one press in this product that spends money, as a staged dialog — which boxes, how each is read, what it costs, and a receipt.
 - `app/src/RunsDrop.tsx` — The file controls, as controls that look like the product: a native file input cannot be styled to sit beside a kit button, so the input is visually hidden and its own <label> is the control — a label IS the accessible name of the input it wraps, so this costs nothing in reachability.
 - `app/src/RunsLog.tsx` — A command's stdout, verbatim, in a well that follows its tail, counts its lines, folds and copies.
@@ -91,9 +91,9 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/SendCard.css` — The send card's own rows: the press and its two quiet doors on one line that wraps as a unit, the download door, and the card lists under a notice.
 - `app/src/SendCard.tsx` — THE SEND CARD on Pricing's send bar: one press from priced to live (D273).
 - `app/src/Shipping.css` — The lane table and its chips, at owner density.
-- `app/src/Shipping.tsx` — `#/shipping`: NINE LINES THAT POINT THE ROUTE AT THE HUB — `<OrdersHub stage='ship'/>`.
+- `app/src/Shipping.tsx` — The shipping route: points the route at the orders hub on its ship stage.
 - `app/src/Slabs.css` — The Slabs screen's look: a fixed-width column set inside its own sideways-scrolling frame, so the header keeps its shape while the rows load and the page never scrolls sideways.
-- `app/src/Slabs.tsx` — The Slabs screen, `#/slabs`: one ledger of the owner's graded slabs with all `18` headers in the owner's order and a typed dash in each cell no route fills, sorted by Card Ladder's estimate with a slab that never sold last.
+- `app/src/Slabs.tsx` — The Slabs screen: one ledger of the owner's graded slabs, sorted by Card Ladder's estimate with a slab that never sold last.
 - `app/src/SubmissionClaims.css` — That panel's own styles: the row's two columns and nothing else — the kit supplies the panel, the list, the pills and the buttons.
 - `app/src/SubmissionClaims.tsx` — The panel on #/runs saying what a live send is holding, and the ONE way out of a stuck claim (D174).
 - `app/src/TakeOffLine.tsx` — The take-off line on a master-set retire receipt: Take It Off TCGplayer at the pull and the answer in the same place, drawn in the toast kit's changing line.
@@ -119,7 +119,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/fonts/OFL-manrope.txt` — The SIL Open Font License text for the Manrope font.
 - `app/src/frozenRank.ts` — THE ORDER IS TAKEN ONCE AND HELD UNTIL SOMEBODY ASKS FOR A NEW ONE — the copies that have left since the ranking on screen was computed, as a set of store keys, plus the three predicates every ranking under a search asks of it (`ranksAsLive`, `ranksAsShown`, `stalenessSentence`).
 - `app/src/holds.ts` — The withhold vocabulary on this side of the wire — the three reasons, their human labels and their panel keys.
-- `app/src/keys.ts` — IsEditableTarget, hoisted at its fourth copy — the one question every keyboard handler asks first.
+- `app/src/keys.ts` — The one question every keyboard handler asks first: is the event target an editable field.
 - `app/src/kit.css` — Every primitive's look, one `bn-` prefix, loaded after base.css and before any screen sheet — so a screen may refine a button and never has to redraw one.
 - `app/src/kit/Icon.tsx` — One icon set, `73` paths on a `24`-unit grid at `1.75` stroke with round joins, drawn in the Lucide idiom so the whole product speaks one line weight.
 - `app/src/kit/Lockup.tsx` — The lockup — 番地 over BANCHI inside the mark's own brackets, drawn entirely from lockupGeometry.ts.

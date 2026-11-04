@@ -4779,6 +4779,14 @@ COMPONENTS = [
                         "table of components is invisible to it, and it says so in its own "
                         "output every time it runs.",
             },
+            "map-check.py": {
+                "does": "`make map-check` — finds claude-settings' shared plain-english-map "
+                        "skill (`$CLAUDE_SETTINGS_DIR`, `~/claude-settings`, the `~/.claude` link) "
+                        "and runs its check over `docs/map/` and `map.config.json` from the repo "
+                        "root. It fails, and never skips, when it finds no skill or no node. The "
+                        "rules live in claude-settings, never here.",
+                "governed_by": ["D17", "D18"],
+            },
             "map-fix.py": {
                 "does": "`make map-fix` — add the decision ids a file cites to that file's "
                         "`governed_by` here. THE ONE GENERATOR THAT WRITES INTO A DOC, and it "

@@ -149,7 +149,8 @@ browser. No second store. No auth. `app/src/server.ts` is the only client-call f
 never from prose. The `route rosters` row of `make docs-audit` reconciles README's route table with
 it. `#/fulfillment` is the Fulfiller's whole product, with no shell (D5, two personas).
 
-- **A new screen is one `ROUTES` entry plus a view that returns `<Page>`** (D275, every screen inherits
+- **A new screen is one `ROUTES` entry (with its `screenKey`), a view that returns `<Page>`, and its `docs/map/`
+  Screens line and trace page** (`make map-check` fails without them; D275, every screen inherits
   the page scaffold). `make kit-adoption` fails a view that skips `<Page>` or hand-rolls a kit
   primitive. `app/tests/scaffold.spec.ts` asserts the frame at 1440, 820, 720 and 390. Exceptions
   live in `scripts/kit-adoption-allow.json`, a list that only shrinks. A lane that moves a

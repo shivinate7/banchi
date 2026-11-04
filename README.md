@@ -92,6 +92,7 @@ Naming follows D94 (Banchi names everything).
 ## More
 
 - [`CLAUDE.md`](CLAUDE.md): the rules agents work by, and the command list.
+- [`docs/map/`](docs/map/): the plain-English map of the code, one line per file. `make map-check` holds it in sync.
 - [`docs/decisions/`](docs/decisions/): each settled decision. `make map ARGS=D<n>` prints one.
 - [`docs/specs/`](docs/specs/): the spec for each feature.
 - [`docs/DESIGN.md`](docs/DESIGN.md): the design tokens.
