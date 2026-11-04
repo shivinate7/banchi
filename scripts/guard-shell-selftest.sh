@@ -1015,6 +1015,17 @@ else bad "--hook --bogus: exit $bogus_status, stderr '$bogus_out' (want 0 and a 
 python3 "$GUARD" --bogus >/dev/null 2>&1 </dev/null
 [ $? -eq 2 ] && ok "without --hook, an unknown flag still exits 2" || bad "without --hook, an unknown flag did not exit 2"
 
+# A STALE `--skip` IS AN UNKNOWN FLAG, AND THE HOOK IGNORES IT: the wait clause stays live. The option was
+# retired, so a settings entry that still passes the flag must not switch that clause off. THE REAL CLI,
+# NOT `judge`: only `main` parses the flag, and `judge` calls `hook()` directly.
+stale_cmd="until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
+out="$(printf '%s' "$stale_cmd" \
+      | CWD="$tmp/main" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read()}}))' \
+      | python3 "$GUARD" --hook --skip wait 2>&1)"
+stale_status=$?
+if [ $stale_status -eq 2 ]; then ok "a stale --skip wait is ignored as an unknown flag: the wait clause still refuses"
+else bad "a stale --skip wait switched the wait clause off: exit $stale_status (want 2)"; fi
+
 echo ""
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || exit 1
