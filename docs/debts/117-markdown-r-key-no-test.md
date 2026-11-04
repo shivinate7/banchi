@@ -1,4 +1,4 @@
-## DEBT-markdown-r-key-no-test — The markdown sheet's R-key stand-down has no test
+## DEBT117 — The markdown sheet's R-key stand-down has no test
 
 **What.** The live code already stands down for a bare `R`. `ReloadButton` in `app/src/kit/index.tsx` ignores `R` in an input and while `[aria-modal="true"]` is open. The percent field strips all but digits and `.`. The gap is that no test in `app/tests/pricing-markdown.spec.ts` presses `R`. The case lived in `app/tests/markdown.spec.ts`. Commit 91792271, which deleted that spec, did not port it.
 
