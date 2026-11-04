@@ -29,9 +29,9 @@ The writer edits or deletes that item on the page first.
 from a card's name.
 
 **The shared scan.** It refuses tokens and keys, cookies, auth headers, passwords, email
-addresses, phone numbers, PO boxes, city, state and ZIP lines, street addresses, and a value of 8 or
-more letters and digits set to a name that holds key, secret, token or cookie. A refusal writes nothing. The writer fixes
-the item on the page and reads again. Some address and credential shapes still pass it (DEBT114,
+addresses, phone numbers, PO boxes, city, state and ZIP lines, street addresses, and a value of
+8 or more letters and digits set to a name that holds key, secret, token or cookie. A refusal
+writes nothing. The writer fixes the item on the page and reads again. Some address and credential shapes still pass it (DEBT114,
 the waiting-page scan misses some address and credential shapes). The writer's read of the diff
 is the cover for them.
 
