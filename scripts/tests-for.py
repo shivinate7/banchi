@@ -29,7 +29,7 @@ THE REACH RULES (each is a case of `scripts/tests-for-selftest.py`):
 - A `tN_*.py` module with no top-level `run` is no suite: its checks run inside the aggregator.
 
 THE HOMES IT REUSES, never copies: `scripts/guard-scope.py` for the Python scan (`_PathCollector`,
-`_package_imports` read at any depth or at import time, `derive_subjects` for a script a suite runs) and
+`_tree_package_imports` read at any depth or at import time, `derive_subjects` for a script a suite runs) and
 `scripts/browser-scope.py` for the TypeScript scan (`import_closure`; strings and comments of a
 test are read in one pass here). Both read the module global `ROOT`, which this sets to `--root`.
 
@@ -38,7 +38,7 @@ KNOWN GAPS, each a miss that narrows the answer: a file a suite reaches only thr
 by the change (nothing resolves it). The consumer runs the full set on a file this prints nothing for only when
 it chooses to: an empty answer is "no suite reaches it", not "it is safe".
 
-COST: reads and parses each Python file the suites reach once (about a second on this repo); starts no process.
+COST: reads and parses each Python file the suites reach once (about 5 seconds on this repo); starts no process.
 Stdlib only.
 """
 
@@ -355,7 +355,7 @@ class Reach:
                 norm = self.inside(posixpath.join(base, named)) if named else None
                 if norm and self.is_dir(norm) and norm not in bases:
                     bases.append(norm)
-        wants_dir = re.search(r"readdir|glob", text) is not None
+        wants_dir = re.search(r"\breaddir(?:Sync)?\s*\(|\bglob(?:Sync)?\s*\(", text) is not None
         extensions = tuple(re.findall(r"endsWith\(\s*['\"](\.\w+)['\"]", text))
         recursive = "recursive" in text
         for cand in candidates:
