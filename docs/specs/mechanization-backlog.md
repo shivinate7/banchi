@@ -666,7 +666,7 @@ Kept so nobody re-proposes them. A rejected mechanism usually fires on honest wo
   rules surface. They carry at least four imperative rules, of which only the mark's `border-radius`
   rule is in this file.
 - `code-card-fork/CLAUDE.md`, a separate track with its own schema, was unread.
-- The harness modules' `PASS_CRITERIA` strings, `app/tests/`'s specs and the workflows beyond `check.yml`
+- The harness modules' `PASS_CRITERIA` strings, `app/tests/`'s specs and the workflows beyond `checks.yml`
   were sampled or unread. The skills (`tcgplayer-csv`, `docs-audit`) were not opened.
 - The transcript evidence rests on one reader's scan of 389 sessions. Two proposals were declined for want
   of a dry run: the derived deletion-needle table and a "watched counts" row over every published integer.

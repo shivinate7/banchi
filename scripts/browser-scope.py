@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """DOES THIS CHANGE REACH WHAT A BROWSER DRAWS? (D141)
 
-`.github/workflows/check.yml`'s `design-check` job is three shards of roughly nine minutes
+`.github/workflows/checks.yml`'s `design-check` job is three shards of roughly nine minutes
 each, so one push costs about 27 billed runner-minutes, and until D141 it ran on every push
 to every branch. Measured 2026-09-11: seven pull requests plus re-runs landed in one evening
 and most touched no screen code at all — a docs auditor (#260), a key-rotation fix (#261), a
@@ -34,7 +34,7 @@ which is the wire's only client-side declaration and is inside `app/**`.
 
 IT FAILS OPEN, IN EVERY DIRECTION IT CAN. An unknown event, a base it cannot find, a diff it
 cannot compute, an EMPTY diff (more likely a wrong base than an empty change), and a recipe
-it cannot extract on either side all answer RUN, out loud. `check.yml` reads the answer as
+it cannot extract on either side all answer RUN, out loud. `checks.yml` reads the answer as
 `!= 'false'`, so a job that never ran answers RUN too. Only an explicit `false` skips.
 
 AND IT NEVER ACTS ON A PUSH TO MAIN. There the diff is classified and PRINTED so the
@@ -144,7 +144,7 @@ SCOPE = (
                "suite does, on the same recipe line, so a change to it changes what runs.",
     },
     {
-        "path": ".github/workflows/check.yml",
+        "path": ".github/workflows/checks.yml",
         "why": "The gate itself. A change to how the matrix is invoked, sharded or skipped "
                "has to run the matrix, or the change is verified by nothing.",
     },
@@ -571,7 +571,7 @@ def selftest() -> int:
     ok(not classify_paths(["server/capture_server.py", "scripts/serve.py"], read_side).run,
        "a server change skips: the suite seals the capture port")
     ok(classify_paths([], read_side).run, "an empty diff runs, because it is probably a wrong base")
-    ok(classify_paths([".github/workflows/check.yml"], read_side).run, "the gate's own file runs")
+    ok(classify_paths([".github/workflows/checks.yml"], read_side).run, "the gate's own file runs")
 
     print("\nthe recipe narrowing")
     same = "NPM_GUARD = @true\n\nup:\n\t@echo up\n\ndesign-check:\n\t$(NPM_GUARD)\n\t@run it\n"
@@ -1171,7 +1171,7 @@ def classify_specs_revisions(base: str, head: str) -> SpecVerdict:
 
 # --------------------------------------------------------------------------- the shards
 #
-# THE THIRD LEVER. `check.yml` runs the browser matrix as M shards; this says which spec
+# THE THIRD LEVER. `checks.yml` runs the browser matrix as M shards; this says which spec
 # files each one runs. Longest-processing-time packing over measured seconds per file.
 
 SPEC_TIMES = ROOT / "scripts" / "browser-spec-times.json"

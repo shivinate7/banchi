@@ -70,7 +70,7 @@ Ten mutations, one per fix. Two found holes. `sellableStore()` moved `state` and
 
 ### Platform floor: `make design-check` runs in CI
 
-`make design-check` is a job in `.github/workflows/check.yml`. It runs on `pull_request` and on `push: main`. Before that job, it ran in neither `make check` nor CI. Every floor in this entry fired only when a person typed the command on one Mac. That covers D50's three, D117's thumb floor and the Fulfiller's contractual constraints.
+`make design-check` is a job in `.github/workflows/checks.yml`. It runs on `pull_request` and on `push: main`. Before that job, it ran in neither `make check` nor CI. Every floor in this entry fired only when a person typed the command on one Mac. That covers D50's three, D117's thumb floor and the Fulfiller's contractual constraints.
 
 The job is separate, not a step in `check`. A chromium install is a real cost. A red `check` and a red `design-check` make claims about different things. The job has no `scripts/checks.py` entry, because `check registry` refuses an entry for a target that `make check` does not run.
 

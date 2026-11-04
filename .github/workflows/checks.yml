@@ -102,7 +102,7 @@
 # IT GATES AND NOTHING ELSE. No commit, no branch move, no publish — D42 keeps main moving by
 # pull request only, and a workflow that wrote would be a second way. It reads the repo.
 
-name: check
+name: checks
 
 on:
   # A draft runs no job at all (each job's `if` skips it); `ready_for_review` starts the full run when the person marks it ready.
@@ -140,7 +140,7 @@ permissions:
 # main, a nightly and a manual run each get a group of their own (the run id), so a second
 # merge can neither cancel the first one's verdict nor replace it while it waits.
 concurrency:
-  group: check-${{ github.event_name == 'pull_request' && format('{0}-{1}', github.ref, github.event.pull_request.draft) || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('{0}-{1}', github.ref, github.event.pull_request.draft) || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -360,7 +360,7 @@ jobs:
   # recorder that skips on purpose), `nightly-alarm` (a reporter that skips unless something
   # failed) and `ci-done` (the last job; it reads the rollup's needs and reports a red run).
   all-jobs-passed:
-    needs: [ci-check, ci-static, revert-guard, records, code-check, zizmor, already-passed, browser-scope, design-check]
+    needs: [ci-check, ci-static, revert-guard, records, checks, zizmor, already-passed, browser-scope, design-check]
     if: ${{ always() && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -423,7 +423,7 @@ jobs:
   # merge through `all-jobs-passed`, which lists it in `needs` and fails unless it succeeded, the
   # same way `records` does.
   # `npm ci` because tsc reads app/'s types from app/node_modules.
-  code-check:
+  checks:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 9
@@ -450,6 +450,7 @@ jobs:
         with:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
+  # zizmor stays its own job: ci-job cannot read its step `if: steps.changed.outputs.run == 'true'`, so folding it into `checks` would make the lint unknown.
   # THE WORKFLOWS' OWN LINT. zizmor reads `.github/workflows/` and `.github/dependabot.yml` for unpinned actions, persisted
   # checkout tokens, template injection and over-broad permissions. Pinned to one version so a
   # release cannot turn this red on its own. It is a needed job of `all-jobs-passed`, so a red
@@ -641,7 +642,7 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: |
           pin="$(node -p "require('./app/package.json').devDependencies['@playwright/test']")"
-          tag="$(grep -oE 'mcr.microsoft.com/playwright:v[0-9.]+' .github/workflows/check.yml | head -1 | sed 's/.*:v//')"
+          tag="$(grep -oE 'mcr.microsoft.com/playwright:v[0-9.]+' .github/workflows/checks.yml | head -1 | sed 's/.*:v//')"
           if [ "$pin" != "$tag" ]; then
             echo "image is Playwright $tag but app/package.json pins $pin: move them together" >&2
             exit 1
@@ -774,7 +775,7 @@ jobs:
   # a week of red nights is one issue and not seven. `issues: write` is the whole grant: the
   # job checks nothing out and reads its verdict from `needs`. A skipped job is not a failure.
   nightly-alarm:
-    needs: [ci-check, ci-static, revert-guard, zizmor, design-check, records, code-check]
+    needs: [ci-check, ci-static, revert-guard, zizmor, design-check, records, checks]
     if: ${{ always() && !github.event.pull_request.draft && (github.event_name == 'schedule' || inputs.report_failure) && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -806,7 +807,7 @@ jobs:
   # cancelled and posts nothing. The action is pinned to the same commit as every other
   # claude-settings action here (the `all jobs passed` row of `make docs-audit` holds that).
   ci-done:
-    needs: [ci-check, ci-static, revert-guard, records, code-check, zizmor, already-passed, browser-scope, design-check, design-check-passed, all-jobs-passed, nightly-alarm]
+    needs: [ci-check, ci-static, revert-guard, records, checks, zizmor, already-passed, browser-scope, design-check, design-check-passed, all-jobs-passed, nightly-alarm]
     if: ${{ !cancelled() && github.event_name == 'pull_request' && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 2   # provisional: a comment post takes seconds; 60 would pass the merge deadline of 45

@@ -1,7 +1,7 @@
 # The owner runs banchi on a Mac, and every other job here runs on ubuntu-latest. This job is the
 # one place the product's own checks run on macOS, so "tested on the Mac" names a run and not a
 # belief (docs/specs/one-process.md, "Where it is tested"). It runs the same `ci-check-product`
-# shards `check.yml` runs, then `make serve-selftest` against a real vite build.
+# shards `checks.yml` runs, then `make serve-selftest` against a real vite build.
 #
 # IT IS OUTSIDE `all-jobs-passed` ON PURPOSE (D136, amended). A macOS runner is slower, and a
 # wheel or a runner-image change on it would otherwise block every pull request for a platform
@@ -60,7 +60,7 @@ jobs:
           git config --global user.email "check@example.com"
           git config --global user.name "check"
 
-      # The same probe `check.yml` runs: `store/db.py:_add_search_index` needs FTS5, and this
+      # The same probe `checks.yml` runs: `store/db.py:_add_search_index` needs FTS5, and this
       # runner's Python links its own SQLite.
       - name: FTS5 is compiled into this runner's SQLite
         run: |

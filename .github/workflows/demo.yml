@@ -169,7 +169,7 @@ jobs:
         working-directory: app
         env:
           DEMO_REQUIRED: '1'
-        # --workers=2, THE SAME NUMBER check.yml's OWN design-check JOB ALREADY PINS TO
+        # --workers=2, THE SAME NUMBER checks.yml's OWN design-check JOB ALREADY PINS TO
         # THIS RUNNER'S REAL CORE COUNT (2026-09-27, CI runs 36314954311 and 36316345981):
         # "Orders draws a walk" solves a client-side walk over this mirror's full 71 open
         # orders plus the whole 3,510-card inventory already in memory -- real, measured
@@ -181,7 +181,7 @@ jobs:
 
       # WHAT A RED RUN LEFT BEHIND NOTHING RECOVERABLE, TWICE (2026-09-27, CI runs
       # 36314954311 and 36316345981) — `gh run download` found no artifacts either time,
-      # because this step never uploaded one. `check.yml`'s `design-check` job already
+      # because this step never uploaded one. `checks.yml`'s `design-check` job already
       # solved this: the config turns `trace: retain-on-failure` on under CI, so a failing
       # case already writes its DOM before and after every action, its console and its
       # network into `app/test-results/` — nothing here ever read that directory. Same
@@ -257,7 +257,7 @@ jobs:
     steps:
       - id: deploy
         # NODE 20, LIKE EVERY OTHER PIN IN THIS REPO, AND THE DATE IS 2026-09-23.
-        # Every `uses:` line here and in `check.yml` targets the Node 20 runtime, except the
+        # Every `uses:` line here and in `checks.yml` targets the Node 20 runtime, except the
         # shared Playwright action's inner `actions/cache` step, whose runtime is unmeasured.
         # GitHub force-runs them on Node 24 and prints a deprecation annotation on every
         # run; both workflows pass and have passed throughout. This step gets the comment

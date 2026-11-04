@@ -106,7 +106,7 @@ SCOPE = (
 # `app/**` IS DELIBERATELY ABSENT, AND IT IS THE WHOLE POINT OF THIS FILE.
 # `scripts/serve-selftest.py` gives its throwaway trees a STUB `app/`, so an `app/` change cannot
 # move what it reads. The one exception is `check_real_build`, which copies the real `app/` and
-# runs the real `vite build`. It runs only when BANCHI_SERVE_REAL_BUILD is `1`. `check.yml` sets
+# runs the real `vite build`. It runs only when BANCHI_SERVE_REAL_BUILD is `1`. `checks.yml` sets
 # that on the guards-2 shard for every event, so a pull request in this scope runs the real build
 # too; `mac.yml` sets it on the weekly Mac run. A pull request that touches only `app/` skips the
 # self-test, so it meets that arm on main. If the stub trees ever copy a real `app/`, `CARRY`
