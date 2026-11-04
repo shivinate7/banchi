@@ -1,4 +1,4 @@
-## DEBT-commit-hook-skips-map-check — a new code file with no map line passes the commit and fails only in make check and CI
+## DEBT118 — a new code file with no map line passes the commit and fails only in make check and CI
 
 **What.** The pre-commit hook does not run `make map-check`, so a code file added under `map.config.json`'s `mapPaths` with no `docs/map/` line commits clean and goes red only in `make check` and CI. Main's orphan row refused it at commit.
 
