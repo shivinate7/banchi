@@ -290,13 +290,12 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 
 ## Hard rules
 
-- **A RULE THAT CAN BE MECHANICALLY ENFORCED MUST BE.** A new rule needs its enforcement before it is done.
-  Without one, it carries a bold NOT MECHANIZED line that says what a machine would have to see
+- **Parent rule `outcomes-mechanize-rules` (rules become checks) applies.**
+  Without a check, a rule carries a bold NOT MECHANIZED line that says what a machine would have to see
   (D173, a rule that can be enforced is).
   The `rule enforcement` row of `make docs-audit` parses every rule here.
   `HARD_RULE_FLOOR` and `PROSE_ONLY_EXPECTED` pin its count.
-- **One home per capability, called from everywhere.** Find the home before you build (`make map ARGS=<path>`,
-  `scripts/decision-context.py`). Extend it before you build a second. A second needs a written reason.
+- **Parent rule `building-one-home-per-capability` (single home) applies.** `make map ARGS=<path>` and `scripts/decision-context.py` find the home.
   The `capability homes` row of `make docs-audit` holds each named capability's home and refuses a call to its
   primitives outside it. **NOT MECHANIZED:** a machine cannot tell that two differently named functions do the same job.
 - **A route is not a feature. Nothing is built until a screen reaches it.** Done is the route, a client function in
@@ -310,20 +309,16 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **Scope is argued, not gated.** New surface needs a reason, written into the decision that owns it.
   The `repo map` row of `make docs-audit` fails a file with no map entry.
   Its `decision ids` row fails an id with no entry.
-- **Fix the cause, never the symptom. Check whether the primitive exists first.**
-  `make map ARGS=<path>` and `scripts/decision-context.py` find it.
-  Name a stopgap a stopgap in the commit, with the cause in `docs/debts/`.
+- **Parent rule `building-fix-cause-not-symptom` (root cause first) applies.** `make map ARGS=<path>` and `scripts/decision-context.py` find an existing primitive.
+  A stopgap's commit says so, and its cause goes in `docs/debts/`.
   **NOT MECHANIZED:** a machine cannot read whether the author knew the cause and chose the symptom.
-- **A settled decision is an argument, not an authority. Think in outcomes.** Cite the entry.
-  Name the premise that no longer holds, and how you know (measure it or say "unmeasured").
-  Name what it protected, and what protects that now. Propose the fix, and wait for the owner's word.
-  Never quietly work around or repeal it. **NOT MECHANIZED:** a machine cannot tell a rotted premise from a live one without judging the outcome it protected.
+- **A settled decision is an argument, not an authority.** Parent rules `outcomes-decision-is-argument` (recorded decisions) and `outcomes-stale-decision-protocol` (stale decisions) apply. Cite the entry.
+  **NOT MECHANIZED:** a machine cannot tell a rotted premise from a live one without judging the outcome it protected.
 - **Check whether a task is yours before you hand it to the owner.** Grep the routes, the Commands block and
   `docs/map.py` first. **NOT MECHANIZED:** a machine cannot read a sentence to a person and decide whether
   this repo can already do it.
-- **No history date in repo prose.** D308 (no dates in repo prose) allows a deadline date. History is git's. Rewrite a claim in place, and keep only what is true now.
-  Old dates go when their file is next rewritten. Never in a sweep. A decision file is a rule, not a log. A change rewrites it.
-  Old records are deleted, not archived. See D308 (no dates in repo prose).
+- **No history date in repo prose.** D308 (no dates in repo prose) allows a deadline date. Parent rule `speak-rewrite-superseded-in-place` (superseded text) applies.
+  Old dates go when their file is next rewritten, never in a sweep. Old records are deleted, not archived.
   **NOT MECHANIZED:** a machine cannot tell a date from a version number, a port or a test fixture without intent.
 - **Opsec.** A live unredeemed code card is a bearer instrument. No code-card photo in a listing, README,
   screenshot or commit. `scripts/githooks/pre-commit` enforces it, armed by `make hooks`.
@@ -340,19 +335,15 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   A record that must quote a line writes it in words.
 - **A screen answers to the system.** `--bn-*` tokens only, checked at 1440 and 820, light and dark.
   `docs/DESIGN.md` is the record. The `design tokens` row of `make docs-audit` locks every name and hex both ways.
-- **Main moves by pull request. A session never commits to it and never pushes it** (D42, main moves by pull request).
-  The batch runner, the session the coordinator starts and tags `cs-build:batch-runner` (claude-settings decision session-tiers), runs merges under the coordinator's standing merge grant and holds none of its own. It batches every reviewed
-  lane the owner set out, across all sessions, into one integration branch, waits on its CI, merges it under that grant and
-  archives the finished lanes. The coordinator starts lanes and talks with the owner. Any other merge happens only on the
-  owner's named act ("merge", not "ship it"), and the batch runner runs it. The coordinator holds the standing merge grant
-  (owner, 2026-10-29 16:47 CDT, "for now"; claude-settings decision standing-merge-grant). It merges on green checks and a done review.
-  It never asks the owner to merge. The owner withdraws the grant in chat. A lane session never merges. It hands the batch
-  runner each reviewed lane branch with its head commit and review verdict. It never builds an integration branch, opens
-  an integration PR or marks a PR ready. A session's role comes from its own `cs-build` tag (claude-settings decision session-tiers). A merge uses `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
+- **Main moves by pull request. A session never commits to main or pushes it** (D42, main moves by pull request).
+  Parent rules `git-main-only-by-pr` (merge by pull request) and `git-integration-branch-merge` (lane batching) apply.
+  Who merges: parent record `standing-merge-grant` (its solo and one-lane bullets) and `session-tiers` (lane hand-off).
+  The owner's named act for a merge is "merge", not "ship it".
+  A merge uses `make merge ARGS="<n> --confirm"`, never `--admin`.
   One standing exception (D42, main moves by pull request):
   the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
   GitHub branch protection has 0 reviews and `strict: false`. The one check it is to require is `all-jobs-passed`,
-  which rolls up every job, `revert-guard` included (claude-settings decision same-check-kinds). Protection holds that one check and no other.
+  which rolls up every job, `revert-guard` included (claude-settings decision `same-check-kinds`, one rollup check per repo). Protection holds that one check and no other.
   It catches the remote half. The local hook is the only cover for a local fast-forward.
   `scripts/githooks/reference-transaction` and `scripts/githooks/pre-push` refuse, armed by `make hooks`.
   `BANCHI_MAIN=off` is the hatch. The primary checkout syncs itself (D176, the primary checkout syncs):
@@ -360,45 +351,41 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 
 ## Working agreement
 
-Report format: **Done, Deviations, Input Needed, Next**, in that order (parent CLAUDE.md). Done is one line per item:
-**BUILT**, **RECORDED** or **OTHER**, with its PR or commit. "Solved" with no bucket named is refused.
-Use bold labels in one quoted block, never a code fence. Start with the point. No task restatement.
+Report labels: parent rule `reports-order-of-labels` (label order).
+Done items: parent rule `reports-done-format` (one bucket per item).
+Report layout: shiv-stylisms `reports-blockquote-no-fence` (report shape). No task restatement.
 
-- Run `make harness` before you say something works. Give the verdict, never the output.
-- Screen work: experience is everything (D307, rulings CLAUDE.md carried). Run a design pass
-  before you build. Review the built screen against it before you call it done.
-- A lane session runs Opus (claude-settings decision session-tiers). The agents it starts follow `agent-model-cap`:
-  Sonnet is the default and the ceiling. Plan, the built-in advisor, the designer, the design reviewer and a builder's
-  third try run Opus. Reviewers run Sonnet from round 2; round 1 uses the role's model. Any other Opus agent needs the
-  owner's grant. Say an Opus agent in one line first, and raise it only on the owner's grant, in `.claude/settings.local.json`.
+- Run `make harness` before you say something works, through `verdict` (parent rule `tokens-run-through-verdict`, verdict logging).
+- Screen work: experience is everything (D307, rulings CLAUDE.md carried). Parent rule `roles-one-role-per-agent` (designer and design reviewer) applies.
+- Model caps: parent records `agent-model-cap` (agent models) and `session-tiers` (lane tiers). Parent rules `roles-sonnet-is-the-ceiling` (Opus only on grant) and `roles-opus-shaped-say-so` (one-line notice) apply. An owner's Opus grant goes in `.claude/settings.local.json`.
 - A builder commits and pushes its branch after every pass, even red. Each commit message ends with `Done:` and
   `Next:` lines, so a lane resumes from its branch alone.
 - Read `docs/decisions/` before you propose an architecture change (`scripts/decision-context.py` finds the entry,
-  `make map ARGS=--decisions` indexes them). Reopen one only by citing it and waiting for the owner's word.
-- Design work is repo work. Land it in `docs/specs/` or the decision that owns it in the same session, or declare it abandoned.
-- The waiting page's writer exports the page's data to `docs/waiting/` at each wake and before any republish
-  (D327, the waiting page is a committed record). `scripts/waiting-export.py --calls` prints the reads.
-- When compacting, keep the fixture schema facts, every `make` command and the modified-file list.
+  `make map ARGS=--decisions` indexes them). Reopening one follows parent rule `outcomes-stale-decision-protocol` (stale decisions).
+- Parent rule `building-land-design-or-abandon` (land it or drop it) applies. Its homes here: `docs/specs/`, or the decision that owns it.
+- The waiting page's writer exports its data to `docs/waiting/` (D327, a committed record). Parent record `waiting-data-in-repo` (waiting data copies) applies.
+  `scripts/waiting-export.py --calls` prints the reads.
+- Parent rule `tokens-compacting-keep-essentials` (what a compaction keeps) applies. Also keep the fixture schema facts and every `make` command.
 
 ### Writing a brief
 
-- **Name the rendering component and the state that selects it.** Run `make orient ARGS=app/src/Orders.tsx --name CopyMapView`
-  before the brief. It prints which component draws it.
+- **Name the rendering component and the state that selects it.** Parent rule `roles-brief-contents` (a brief's contents) applies.
+  Run `make orient ARGS=app/src/Orders.tsx --name CopyMapView` before the brief. It prints which component draws it.
 - **Never ask an agent to rebuild a state it has left.** Capture a "before" image before the edit, or not at all.
-  Wanting a "before" image afterwards is the orchestrator's job, in a separate clean checkout. It is never the
-  working agent's, and never in a shared tree. `BANCHI_STASH` refuses a bare stash. **NOT MECHANIZED:** a machine cannot tell that a sentence requires undoing work.
+  A "before" image taken afterwards is the orchestrator's job, in a separate clean checkout (parent rule `shared-trees-one-checkout-per-agent`, one checkout per agent).
+  `BANCHI_STASH` refuses a bare stash. **NOT MECHANIZED:** a machine cannot tell that a sentence requires undoing work.
 - **State a fence by intent and name the exception.** Example: "Do not change which cards a walk holds. Rendering
   changes inside `WalkView` are in scope." **NOT MECHANIZED:** a machine cannot tell a fence around
   behavior from one around files.
-- **Show the screen before you say it looks right.** Render at 1440 and 820, both themes, and look at the images.
+- **Show the screen before you say it looks right.** Parent rule `verification-screens-verdict` (screen verdict) applies. Render at 1440 and 820, both themes, and look at the images.
 
 ## Map
 
-- `docs/map.py` is the repo as data: built, TBD, and the decisions that govern each file. Read it through `make map`.
-  Never read it whole. `make docs-audit` fails a file with no entry.
+- `docs/map.py` is the repo as data: built, TBD, and the decisions that govern each file. Read it through `make map`,
+  never whole (parent rule `tokens-never-load-whole-doc`, read in sections). `make docs-audit` fails a file with no entry.
 - Build order is `SHIPPED` and `OPEN` (D80, a section with no reader). `n` is a stable id.
 - `docs/agent-traps.md` holds the tool and test traps that produced a false green or a lost tree. Read it before a mutation run or a worktree recovery.
-- `docs/decisions/` holds settled decisions, one file each. It is never `@`-loaded (D60, the @-loaded docs are dense).
+- `docs/decisions/` holds settled decisions, one file each (parent rule `git-record-own-file-per-kind`, own file per record). It is never `@`-loaded (D60, the @-loaded docs are dense).
   `scripts/decision-context.py` names the governing ones.
 - `docs/GATES.md` points at `docs/gates/`: the harness contract and the build order.
   `make gates-selftest` proves the set is complete.
