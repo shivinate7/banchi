@@ -658,6 +658,21 @@ refuses "\`--merge\`, the same discard" "$tmp/main" "git reset --merge"
 refuses "\`--keep\`, the same discard" "$tmp/main" "git reset --keep"
 refuses "an env prefix does not launder it" "$tmp/main" "BANCHI_MAIN=off git reset --hard"
 refuses "buried mid-script behind a \`&&\`" "$tmp/main" "echo tidy && git reset --hard"
+# A MULTI-LINE SCRIPT IS THE ORDINARY SHAPE OF A SESSION'S BASH CALL, and `shlex` reads a newline as
+# plain whitespace. Without the line separator the shared parser inserts, these two lines are ONE
+# command whose head is `echo`, a miss on the exact command the clause exists for.
+refuses "on its own line in a two-line script" "$tmp/main" "echo tidy
+git reset --hard"
+refuses "\`git -C <tree> reset --hard\`, which names another tree" "$tmp" "git -C $tmp/main reset --hard"
+# A HEREDOC BODY IS A DOCUMENT AND NOT A COMMAND: a commit message that quotes the refused command on
+# a line of its own must pass, or the guard refuses the one commit that cannot be wrong.
+allows "a heredoc body that QUOTES the refused reset" "$tmp/main" "git commit -F - <<'MSG'
+Refuse the command that destroyed 100 lines:
+
+git reset --hard
+
+and name the escape hatch in the refusal.
+MSG"
 
 judge "$tmp/main" "git reset --hard"
 case "$out" in

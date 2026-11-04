@@ -191,6 +191,12 @@ def run(ok) -> None:
        "a malformed hooks block reads as no hooks, not a crash")
     ok(not _hook_triples({"hooks": {"Stop": [{"hooks": [{"type": "prompt", "text": "x"}]}]}}),
        "a non-command hook (a prompt, say) contributes nothing to the roster")
+    ok(
+        ("PreToolUse", "Bash", "scripts/reap.py --hook") in _hook_triples(claude_shaped)
+        and ("PreToolUse", "Write|Edit", "scripts/decision-context.py")
+        not in _hook_triples(claude_shaped),
+        "the triple is exact — same event and matcher, a different command is not a match",
+    )
 
     # And the real tree: the row must pass against its own repository, or it asserts a rule this
     # tree does not follow.
