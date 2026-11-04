@@ -31,6 +31,6 @@
 - Every `PriceHistoryError` subclass has its pinned kind.
 - An HTTP 404 from the history endpoint is an identification refusal and queues for review.
 
-Not yet proved: the ledger-path kinds.
+Ledger-path kinds are proved in `scripts/pricearchive-selftest.py`, under its section "a ledger refusal carries the kind its failure was".
 
 Governs: `cli/archive_review.py`, `cli/cmd_pricearchive.py`.
