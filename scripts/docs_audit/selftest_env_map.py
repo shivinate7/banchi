@@ -19,7 +19,6 @@ from .core import (
     glob_files,
     leave_staged_mode,
     module_globals,
-    read,
     rel,
 )
 from .env_map import _hook_triples, check_codex_hooks, source_names
@@ -31,6 +30,7 @@ from .rules import (
     check_rule_enforcement,
 )
 from .screens import _ROSTER_RE, _storage_sites, check_storage_keys
+from .selftest_data import claude_and_rules
 from .spelling import check_shell_substitution
 
 
@@ -137,9 +137,9 @@ def run(ok) -> None:
         str(sorted(sites["local"]) + sorted(sites["session"])),
     )
     ok(
-        _NUMBER_WORDS.get((_ROSTER_RE.search(read(ROOT / "CLAUDE.md")) or [None, "x"])[1].lower())
+        _NUMBER_WORDS.get((_ROSTER_RE.search(claude_and_rules()) or [None, "x"])[1].lower())
         == len(sites["local"]),
-        "CLAUDE.md's count word parses and equals the number of device-local keys",
+        "the device-key roster's count word parses and equals the number of device-local keys",
         str(sorted(sites["local"])),
     )
     report = Report()

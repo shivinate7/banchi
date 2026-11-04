@@ -218,7 +218,7 @@ def run(ok) -> None:
     _stale = _commands_roster_findings(_targets, {"up", "down", "reap", "venv"}, set(),
                                         {"up": "used to be internal"})
     ok(any("Stale" in m for m in _msgs(_stale)),
-       "an allow-list entry for a target CLAUDE.md now bullets is stale",
+       "an allow-list entry for a target that is already documented is stale",
        str(_msgs(_stale)))
     _ghost = _commands_roster_findings(_targets, {"up", "down", "reap", "venv"}, set(),
                                         {"no-such-target": "why"})
