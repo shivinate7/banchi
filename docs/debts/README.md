@@ -106,4 +106,5 @@ DEBT113 three design-check tests went red once on main, with no cause read
 DEBT114 the waiting-page export scan misses some address and key shapes
 DEBT115 a new copy's tick on the pricing list outlives a change to its price
 DEBT116 the send skips the cap check for any row marked ticked, typed prices too
+DEBT-stale-cache-fault-looks-like-id a stale list makes a network fault look like an unknown set
 ```
