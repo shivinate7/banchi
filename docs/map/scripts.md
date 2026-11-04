@@ -1,0 +1,153 @@
+# Scripts
+
+The gate machinery and the tools around it: the pre-commit hook, the docs audit it runs, the opsec guard that is that hook's disabled PreToolUse twin, D42's two-hook guard over main and the throwaway-repo self-test that proves it, the Stop hook, the PostToolUse typecheck hook, D17's decision-context hook, `make status`.
+
+## Code files
+
+- `scripts/archive-review-selftest.py` — Proves cli/archive_review.py against a throwaway store, no network.
+- `scripts/audit-history.py` — Replays today's auditor over every historical tree to answer one question: which checks have ever had something to say.
+- `scripts/backup-daily.py` — The one-time copy to iCloud Drive on the owner's Mac, run by hand (first copy of DEBT67; the launchd agent is not installed): `photos/` and `captures/` as files, never overwritten and never deleted in the destination.
+- `scripts/browser-scope.py` — Does a change reach what a browser draws?
+- `scripts/build-lockup.mjs` — Generates the LOCKUP — app/src/kit/lockupGeometry.ts — by reading docs/specs/logo.md section `13`'s settled table and running docs/specs/logo/sheets/lockup-core.js in a real browser.
+- `scripts/build-mark.mjs` — Generates the app's mark — app/src/kit/markGeometry.ts, markPalettes.ts and app/public/favicon.svg — by READING docs/specs/logo/sheets/small-cut.html and evaluating the drawing routine out of it, so there is exactly one implementation of the geometry in this repo.
+- `scripts/capture-gate.py` — Ship gate (b) for the background reader: p50 and p99 of `300` feeder-paced capture requests on a scratch store with the reader off, on in the gaps, and on always.
+- `scripts/cardladder-selftest.py` — Proves `pipeline/cardladder.py` stays inside the owner's bounds for the Card Ladder login, against a fake transport and a fake clock: no network, no real sleep, no secrets file read.
+- `scripts/catalog-image-mirror.py` — Build-order step `9`, piece `3`: derive the image-mirror manifest from the vendored snapshot (no network) and fill it — resumable (a non-empty destination file is skipped without a request) and rate-limited.
+- `scripts/catalog-index-selftest.py` — Scripts/catalog-index.py and pipeline/catalog.py, proved against a throwaway two-set fixture rather than the real `26` MB snapshot, so it is fast enough for `make check`.
+- `scripts/catalog-index.py` — Build-order step `9`, piece `2`: build vendor/pokemon-tcg-data/catalog.sqlite from the vendored snapshot — cards join to sets BY FILENAME, because printedTotal lives only in sets/en.json.
+- `scripts/catalog-refresh.py` — Build-order step `9`, piece `1` (D15): shallow-clone PokemonTCG/pokemon-tcg-data, diff it against the committed vendor/pokemon-tcg-data/ snapshot, and — unless `--dry-run` — replace it and record the upstream commit SHA in SNAPSHOT.json.
+- `scripts/checks.py` — `make explain` — what `make check` runs, as a CHECKS literal plus its own renderer, one entry per target in the recipe: what it asserts, what toolchain it needs, whether it writes, whether it is on the commit path and why not, whether a finding gates.
+- `scripts/ci-skip-count.sh` — The one reader of a CI shard's skip count: `check.yml`'s matrix step and its `ci-static` job call it over the shard's log.
+- `scripts/cid-selftest.py` — Proves D172's card name and the photograph store filed under it by violating both, against a throwaway store with photographs this script draws — the operator's corpus cannot be re-taken, so pointing a destructive suite at it is the incident rather than the test.
+- `scripts/css-var-check.py` — `make css-var-check` — a `var(--x)` with no fallback, where `--x` is defined nowhere, drops the whole declaration silently.
+- `scripts/d240-tolerance-fit.py` — RESCUED, INCOMPLETE — the sweep exists, the measurement it takes has never been run.
+- `scripts/debts_corpus.py` — The debts corpus, read as one text or as one entry — the same seam decisions_corpus.py builds for docs/decisions/, applied to docs/debts/.
+- `scripts/decision-context.py` — D17's PreToolUse hook: reads this file and emits one id-and-title line per governing decision as additionalContext, with `make map` for the full text — never permissionDecision, which would auto-approve every Write in the project.
+- `scripts/decisions_corpus.py` — The decision corpus, read as one text or as one entry.
+- `scripts/demo-extra-real.py` — Curates a SECOND, small, real card set — its own manifest and photographs under demo-assets/extra/, never touching the default `132`-card demo-assets/cards.json or its photos.
+- `scripts/demo-histories.py` — `make demo-histories`: records every demo card's price history, all four ranges, from infinite-api into a NEW dated directory under `fixtures/demo-price-history/`, on the owner's Mac only, with the browser User-Agent the owner allows there (D216) and never from CI.
+- `scripts/demo-hold.py` — The demo workflow's hold.
+- `scripts/demo-mirror-daily-photos-selftest.py` — `make demo-mirror-daily-photos-selftest`: the weekly mirror ships every photograph its bundle names.
+- `scripts/demo-mirror-daily.py` — The weekly demo refresh on the owner's Mac (the owner can also run `make demo-mirror` by hand).
+- `scripts/demo-mirror.py` — Builds the published demo as a scrubbed mirror of the owner's real store (`D295`, the public demo is the scrubbed real store).
+- `scripts/demo-photos.py` — Curates the owner's own card photographs, and the identification each one actually got, into the tracked `demo-assets/` the demo is built from.
+- `scripts/demo-record-resume-selftest.py` — `WorkArea`/`snapshot_key`, the resume cache PR `4B` lane M added to `demo-record.py`, proved with a `FakeServer` rather than a real server or store: a route already on disk is never asked for again, a killed-then-resumed sweep's finished bundle is byte-identical to a clean one.
+- `scripts/demo-record-selftest.py` — Server's stdout-drain, proved on a bare subprocess rather than by spending a full sweep: a child that floods stdout past the OS pipe buffer with nobody reading it does not exit in time; the same child DOES exit once Server's own drain thread is reading it.
+- `scripts/demo-record-walkplan-selftest.py` — `record_walk_plans`, proved on the failure a real `71`-open-order rebuild hit: the OLD rule recorded every SUBSET of the ticked open orders (`2^n` sets), refusing outright past `7` — shown here to reach an astronomical count at `71` and to have been refused by the real recorder's own message.
+- `scripts/demo-record.py` — Spawns its own capture server over the demo store on its own port, sweeps every GET the client can build against the parameter space the store actually holds, and writes app/demo/bundle.json plus the photographs Vite will bundle.
+- `scripts/demo-seed.py` — Writes a demo store — real catalogue rows out of fixtures/, invented positions, drawn card photographs, a corpus with three deliberate holds, and two run directories in the shape `identify` leaves behind.
+- `scripts/demo_scrub.py` — Strips machine-local absolute paths out of the bundle before it is published, and audits its own output for anything that still looks like a home directory.
+- `scripts/derived-numbers-pin.py` — `python3 scripts/derived-numbers-pin.py --write` rewrote every `<!-- derived:<name> -->`-marked number in the tracked markdown to match `derived_numbers.py:REGISTRY[<name>].compute(ROOT)`.
+- `scripts/derived_numbers.py` — A named registry of tree-descriptive numbers: one pure `compute(root) -> int` function per figure, and `MARKER_RE`/`find_markers()`, the `<!-- derived:<name> -->` marker syntax a number in prose once used to name its own derivation.
+- `scripts/docs-audit-allow-game-coverage.txt` — `game key rarity` pairs the `game coverage` row may not ask about, one `pair # reason` line each.
+- `scripts/docs-audit-allow.txt` — Paths and identifiers the docs name before they exist, one `path # reason` line each.
+- `scripts/docs-audit.py` — The entry script for D16's layers `1` and `2`: `build_parser` and `main`, with the mechanical checks and the coupling question under `--staged` in the `docs_audit/` modules listed below.
+- `scripts/error-words.py` — The refusal half of D196, read at the source.
+- `scripts/export-matcher-model.py` — A developer step, run once per model in a throwaway venv that has torch: exports Marqo ecommerce-B's image tower to ONNX and writes the parity reference (torch's own vectors for fixed synthetic images).
+- `scripts/extract_real_facts.py` — Reads a READ-ONLY COPY of the owner's store (never the owner's own checkout) and writes demo-assets/real-facts.json: a typed price per SKU (from prices.json, only for SKUs a vendored fixture also prices, so a mismatch is checkable against the demo's own real arithmetic), a short list of real sale lines per SKU.
+- `scripts/gates_corpus.py` — The gates corpus, read as one text — decisions_corpus.py's twin.
+- `scripts/githooks-selftest.sh` — Builds an origin and a clone in a temp directory, points core.hooksPath at the real hook files, and runs the gestures against them: nineteen cases over what is refused, what stays open, the legitimate pull, the escape hatch and a fresh clone.
+- `scripts/guard-opsec.sh` — The PreToolUse opsec twin, with a narrowed shape match: a code stands alone, mixes letters and digits and has no repeated group.
+- `scripts/guard-scope.py` — Does this branch reach what one of the gated self-tests proves?
+- `scripts/guard-shell-selftest.sh` — Proves guard-shell.py by COMMITTING its seven mistakes in a throwaway repository with a linked worktree.
+- `scripts/guard-shell.py` — The PreToolUse hook on Bash AND Write|Edit that refuses seven shell mistakes this repo has already paid for, each with a measured incident: `git checkout`/`git restore` over a MODIFIED path; a write outside this checkout (~`1,500` lines into the owner's main tree on `main`, hot-reloaded into their live capture server).
+- `scripts/hand-search-selftest.py` — `make hand-search-selftest` — proves app/eslint.config.js's HAND_SEARCH_RULES sees the shape it is for, on fixtures over the real `npx eslint --stdin` (F11c, the reviewer's own finding: the round-one rule matched only `x.toLowerCase().includes(y)` and let `.startsWith`/`.endsWith`/`.indexOf`, `.toLocaleLowerCase()`, and a fold on the ARGUMENT instead of the receiver (`x.includes(y.toLowerCase())`) through silently).
+- `scripts/holdings-selftest.py` — Proves pipeline/holdings.py against fixtures built in the file (`D236`) — no store on disk, no network.
+- `scripts/identity-binding-selftest.py` — Proves pipeline/identity_binding.py, the migration's classifier and the merged D242 report (identity-follows-sku.md §`5.5`, §`7`, lane `2`), over plain Card/SkuRow objects — no store.
+- `scripts/identity-checks-selftest.py` — Proves pipeline/identity_checks.py against literal CardRecord fixtures (D239), and the `identity`, `photos` and `checks` subcommands of cli/cmd_cards.py against a temp store.
+- `scripts/identity-cli-selftest.py` — Proves the CLI writers (identity-follows-sku.md §`4.2`, lane `3b`) against a real throwaway store and the real CLI dispatch.
+- `scripts/identity-readers-selftest.py` — Proves the evidence readers (identity-follows-sku.md §`5.1`, lane `4`), added on a review finding, HIGH: reading read_name/read_number/read_printed_total unconditionally left cli/requeue.py:identified answering None for every open entry and cli/resolve.py:store_payload filing {'name': None.
+- `scripts/identity-replay.py` — The migration's replay, before any write (identity-follows-sku.md §`7.4`, lane `2`): reads a COPY of the store, read-only (store/db.py:open_read_only, never db.connect), simulates the whole press in memory through pipeline/identity_binding.py's own plan_migration, and asserts the six things §`7.4` names.
+- `scripts/identity-store-selftest.py` — Proves Inventory.bind_sku/unbind_sku, the one writer (identity-follows-sku.md §`4.1`, lane `1`), and record_identification's narrowed write, over an in-memory Inventory and Skus table — no store, no disk write at all. bind_sku stamps name/number/printed_total/rarity/set_name/condition off a skus row for a Pokemon card.
+- `scripts/ignore-check.sh` — The other half of D47: `git check-ignore` over every path a worktree provisions, asserting each is ignored WHATEVER kind of thing is at it.
+- `scripts/index-decisions.py` — Folds every unregistered docs/decisions/ entry into docs/decisions/ORDER.json, at claim time.
+- `scripts/janitor-selftest.sh` — Proves janitor.py against a throwaway clone, with a fake liveness oracle and real processes.
+- `scripts/janitor.py` — The part of the janitor that is Banchi's own.
+- `scripts/js-breakpoints.py` — The pure extraction, IMPORT-GRAPH PAIRING and comparison behind `make docs-audit`'s `js breakpoints` row (D123): every `(min|max)-width: NNNpx)` a `.ts`/`.tsx` file under app/src spells inside a media-query string, against only the `@media` widths of the stylesheets THAT FILE ITSELF IMPORTS (direct `.css` imports.
+- `scripts/kit-adoption.mjs` — `make kit-adoption` — does every screen inherit the page scaffold (D275)?
+- `scripts/lan-check.py` — Answers whether the owner's LAN URL still works, end to end and from this machine: the name resolves and to an address this Mac actually holds, Vite accepts the Host, the capture server answers on the same name, and A REAL WRITE IS ACCEPTED FROM THAT ORIGIN.
+- `scripts/launch-config.py` — Writes `.claude/launch.json` for THIS checkout's dev port, which is what the Browser pane opens.
+- `scripts/launchagent.py` — The shared launchd install and remove for a daily job on the owner's Mac, main tree only.
+- `scripts/make-help.py` — `make help` — one line per Makefile target, derived from the comment directly above the target's own rule.
+- `scripts/map-fix.py` — `make map-fix` — add the decision ids a file cites to that file's `governed_by` here.
+- `scripts/map-view.py` — `make map` — docs/map.py rendered for a person, in four views: the shape, one package, one module, everything a decision governs, and `--stale`.
+- `scripts/match-heldout.py` — The held-out check on the free reader's accept rule, a gate before adoption and not part of `make check`: reads photographs the spike never saw (the store read-only, minus an exclude list, or a manifest), scores each answer against the owner's confirmed identification, and fails on any wrong answer accepted or any absent-truth card accepted.
+- `scripts/match-parity.py` — Proves a matcher model file against torch's answer with onnxruntime alone: the pinned size and SHA-`256`, and a cosine of at least `0.9999` on every reference vector through the shipped Pillow and numpy preprocessing.
+- `scripts/match-selftest.py` — FLT-`06`/`04`'s one forgiving matcher, server side (UX-`173`).
+- `scripts/mutate-guards.py` — A mutation runner over five of this repo's guards (guard-shell.py, silent-write-guard.py, reap.py, primary_sync.py, revert-audit.py), built because the hand-kept arm counts drift — a sentence once claimed sixteen arms over a file that held eighteen, caught by a person rather than a check.
+- `scripts/offenders-prune.py` — `make offenders-prune` — delete the STALE entries from the three shrinking offender lists (`typed-interpunct-allow.json`, `markdown-spelling-allow.json`, `no-owner-quotes-allow.json`), and re-key a listed file that git's rename detection (`git diff -M` from the merge-base with origin/main) says moved.
+- `scripts/only_shrinks.py` — THE ONE only-shrinks helper for every shrinking offender list (D280).
+- `scripts/orient.py` — `make orient <file.tsx>` — every component in a .tsx file, its line span, which component draws it, and the expression that decides whether it is drawn.
+- `scripts/pipeline-trends-archive-ids-selftest.py` — Proves `server/pipeline_routes.py:_trends_for_entries` passes the archive's already-verified productId per SKU (`store/pricearchive.py:PriceArchive.for_sku`, D254) into `Market.readings_for_rows`, by poisoning `category_id`/`group_id` to raise if either is ever called for a SKU the archive already resolves.
+- `scripts/port-agreement.py` — Proves `server/ports.py` and `app/devPort.ts` still answer the same numbers.
+- `scripts/port-slots.py` — The port slot registry's one writer.
+- `scripts/ports-machine-selftest.py` — Proves `server/ports.py`'s `machine_dir` (the one-time move of the old machine dir to `~/.banchi`) and `remove_old_agent` (deletes an old launchd plist, never a current one) against a temp HOME.
+- `scripts/price-postings-recovery.py` — Read-only measurement against the owner's real inventory/store.sqlite (opened through `store/db.py:open_read_only`, never `store.db.connect`, no `banchi` command run): how much price HISTORY survives before `price_postings` existed to record it.
+- `scripts/price-postings-selftest.py` — Proves store/postings.py's `price_postings` table against a throwaway store, no network (D243).
+- `scripts/price-refresh-daily.py` — The daily market read on the owner's Mac: one call to `do_prices_refresh` (the live listings, the catalog per game, a re-join of every open run, then the Trends preload), each step leaving a note `#/pricing` shows.
+- `scripts/pricearchive-selftest.py` — Proves store/pricearchive.py and pipeline/pricearchive.py against a throwaway store, no network (D219).
+- `scripts/pricehistory-cache-selftest.py` — Proves pipeline/pricehistory.py's two cache lifetimes against a fake clock and a counting fetcher, no network.
+- `scripts/pricehistory-offline-selftest.py` — Proves `pipeline/pricehistory.fetch_json`'s one retry rule over a scripted `urlopen` and one fake clock, no network, no real sleep: which failures retry, the time budget and `Retry-After`, and that a host that lost `PAUSE_AFTER_FAILURES` calls in a row gets one attempt per call, shared by every `Market`, never refused unsent and with no retry pause.
+- `scripts/primary_sync.py` — THE PRIMARY CHECKOUT PUTS ITSELF BACK ON main AND FAST-FORWARDS IT.
+- `scripts/product-history-selftest.py` — Proves pipeline/productview.py and server/pipeline_routes.py:do_product_history against a throwaway store (D227).
+- `scripts/prose-guard.py` — D60's two guards over the four docs CLAUDE.md names.
+- `scripts/qr-clear-check.py` — Re-decodes every STAGED image under demo-assets/photos/ and demo-assets/extra/photos/ with codes/qr.py, reading the STAGED BLOB (`git show :<path>`) rather than the working-tree file.
+- `scripts/readiness-agreement.py` — Reconciles app/src/readiness.ts's second implementation of pipeline/decisions.py:blocking against the Python it re-implements (D54, docs/debts/`003`).
+- `scripts/readings-selftest.py` — Proves store/readings.py and pipeline/readings.py against a throwaway store (D189).
+- `scripts/readme_gen.py` — Regenerates README.md's `<!-- gen:NAME -->` blocks from their sources.
+- `scripts/reap-selftest.sh` — Proves reap.py by pointing it at processes it must not kill.
+- `scripts/reap.py` — The kill guard, and the tool it names.
+- `scripts/reap_mark.py` — Stamps the process a launcher is about to become with the session that started it — `.serve/owners/<pid>.json`, `{pid, owner, label, startedAt}` — so `reap.py` can tell WHOSE a process is, not only whether it is under this checkout.
+- `scripts/refusal-log-assert.sh` — Sourced by each guard's self-test: asserts the refusal log holds exactly one well-formed line for a refusal.
+- `scripts/refusal_log.py` — The one refusal log. Every guard that denies or asks appends one TAB-separated line to `.git/banchi-refusals.log`, beside the hatch log: time, `guard:rule`, a snippet of at most `80` characters, the session id, the checkout.
+- `scripts/repair-born-game-selftest.py` — Proves `repair-born-game.py` on a throwaway store: a resolvable NULL-game card gets the right game, a card that already has one is never planned or touched, a card whose sku's product line maps to no game is refused and named, a card whose sku this store has never seen is refused and named.
+- `scripts/repair-born-game.py` — The one-off repair for the F1 defect: a card born with `game IS NULL` although its sku is already bound.
+- `scripts/revert-audit.py` — One question of a change, asked of every commit on main's first-parent line (`history`) or of what a branch would land there (`branch`, which is `make revert-guard`, the pre-push hook and the PR check): does it put a file back the way main had it BEFORE a commit main already carries?
+- `scripts/rosterholdings-selftest.py` — Proves pipeline/rosterholdings.py against a roster CSV string, a SKU list and a PriceArchive built in the file (`D324`) — no store on disk, no network.
+- `scripts/score-detect.py` — `scripts/score-detect.py scan|sweep [<captures dir>]` — re-scores geometry.detect_card over real capture directories, which is D75's one-off measurement made repeatable.
+- `scripts/score-trace.py` — `scripts/score-trace.py summary|presence|sweep|stalls|camera|gain|contact` — re-scores a saved motion trace offline, which is docs/specs/motion-trigger.md §`4`'s "Scoring a trace offline" written down.
+- `scripts/screen-freshness.mjs` — Proves every server WRITE in app/src has a way back — a re-read, an invalidation signal, or a reason in the code why none is owed.
+- `scripts/screenshot.mjs` — The browser half of `make screenshot`: one render, and the proof that it is complete.
+- `scripts/screenshot.sh` — The manifest loop, THIS CHECKOUT'S DEV PORT, and every message a person reads; screenshot.mjs is the browser half.
+- `scripts/serve-scope.py` — Does this branch reach what `make serve-selftest` reads?
+- `scripts/serve-selftest.py` — THE SUPERVISOR'S BUILD JOB, PROVED AGAINST A THROWAWAY TREE (D138).
+- `scripts/serve.py` — `make up` / `make down` / `make launch-agent`.
+- `scripts/session-teardown-selftest.sh` — `make session-teardown-selftest`: session-teardown.sh's branch step in a throwaway repo.
+- `scripts/session-teardown.sh` — The SessionEnd / WorktreeRemove hook.
+- `scripts/set-hint-agreement.py` — Port-agreement.py's shape, one decision over: proves `server/tcg_export.py:match_sets` and `app/src/setHint.ts` resolve a capture-time set hint to the same set.
+- `scripts/shell_parse.py` — ONE READER FOR A SHELL COMMAND, shared by the two guards that need one.
+- `scripts/sigil-check.py` — `make sigil-check` — a bare `#` on an owner-side screen draws D58's COUNT of the cards in a box and never the store key, and a key is drawn only with D68's `B<box>` sigil (D92).
+- `scripts/silent-write-guard.py` — The PreToolUse hook on Bash that refuses a git WRITE whose own output is thrown away.
+- `scripts/silent-write-selftest.sh` — Proves silent-write-guard.py by violating it.
+- `scripts/sku-name-contradictions-selftest.py` — Proves pipeline/sku_name_contradictions.py against literal tcgcsv.Row fixtures, no store, no network.
+- `scripts/sku-number-contradictions-selftest.py` — Proves pipeline/sku_number_contradictions.py against literal NumberRecord fixtures and duck-typed Market fakes, no store, no network (D242).
+- `scripts/skus-selftest.py` — Proves store/skus.py and pipeline/skus.py against a throwaway store (identity-follows-sku.md §`3.2`, lane `0`). split_condition over every recognized grade plus Unopened; rows equal distinct ids (a repeated SKU line folds to one row); a second adopt is a no-op; an older file never overwrites a newer one's facts (STALE).
+- `scripts/slabs-routes-selftest.py` — Proves `server/slabs_routes.py`, the My Slabs routes, against the real Card Ladder client on a fake transport, a fake clock and a throwaway store: add reads three callables and writes the slab, the day's snapshot and the sales once, an update replaces the day's row, any failed or limited read writes nothing.
+- `scripts/slabs-store-selftest.py` — Proves `store/slabs.py`, the My Slabs tables, against a throwaway store: a slab is one row per cert and grader with the grader in Card Ladder's name; a snapshot is one row per slab per day and a second write that day replaces it; a sale is keyed by its id, kept when a later read drops it and shared by every slab that read it.
+- `scripts/split-debts.py` — Performed the split of docs/debts/ into docs/debts/, and proves it lost nothing — split-decisions.py's chunk model applied to docs/debts/'s plain-numbered `## <n> — <title>` headings instead of `# D<id>`.
+- `scripts/split-decisions.py` — Performed the split of docs/decisions/ into docs/decisions/, and proves it lost nothing.
+- `scripts/split-gates.py` — Performed the split of docs/GATES.md into docs/gates/, and proves it lost nothing.
+- `scripts/status.py` — `make status`. Holds no fact about the project: the step and the gate come from this file, the T1 score from harness/results/, the branch from git, the health line from docs-audit.py's `--json`.
+- `scripts/ste/ste_lint.py` — The STE prose check's linter, VENDORED verbatim from $HOME/.claude/lint/ste_lint.py (MIT, LICENSE-ste_lint beside it) — a COPY, never a symlink (D47): a fresh clone, a CI runner and this repo's own git history all lack $HOME/.claude, so a gate here cannot point at a path outside its own tree.
+- `scripts/ste_measure.py` — The STE prose check's ONE measurer.
+- `scripts/stockimages-cache-selftest.py` — Proves `pipeline/stockimages.py`'s disk cache offline, both ways: a `Market` whose fetcher always raises `Offline` (the same failure `demo-record.py`'s `OFFLINE_BOOT` produces for a real socket), pointed at an empty directory, answers `url_for` as `None`; pointed at one seeded with a `tcgcsv/<category>/<group>/products` cache entry, answers the product's `imageUrl`.
+- `scripts/subagent-override-selftest.py` — Proves the `subagent override` row of `make docs-audit` by breaking it in a real throwaway repository with a real nested worktree.
+- `scripts/submission-selftest.py` — Proves the identify claim table by violating it.
+- `scripts/suite-lock.py` — `make design-check`'s doorman, and `make suite-lock-selftest`.
+- `scripts/sweep-memory.py` — Ship gate (a) for the background reader: the watcher's idle RSS with an empty queue and the worker's peak RSS over a queue of captures, on a scratch store.
+- `scripts/sweep_scratch.py` — A scratch capture server over a temporary store (own free port, the model symlinked, the index copied) for the background reader's two measurements.
+- `scripts/sync-selftest.py` — The self-sync, PROVED BY VIOLATING IT in throwaway clones with real bare origins and real linked worktrees.
+- `scripts/tests_page.py` — `make tests-page` — writes `docs/TESTS.md`, one page of what each test file protects.
+- `scripts/text-density/density.mjs` — `make text-density` — the third piece of `D284`, a REPEATABLE, ON-DEMAND density pass that prints a CUT TABLE, never a gate (D18: it writes one receipt, `.serve/text-density.json`, gitignored).
+- `scripts/token-literal-check-pin.py` — `python3 scripts/token-literal-check-pin.py --pin` — the ONE thing allowed to write `scripts/token-literal-check.json`, token-literal-check.py's own per-file ratchet ceiling (D18, D280's shape).
+- `scripts/token-literal-check.py` — `make token-literal-check` — a CSS literal exactly equal to a design token's value, in its own property family: `font-size: 22px` where `--bn-fs-2xl: 22px`, `padding: 8px` where `--bn-2: 8px`. css-var-check's sibling, the opposite direction — that one catches a `var()` pointed at nothing, this one catches a value that should have BEEN a `var()`.
+- `scripts/typecheck-hook.py` — PostToolUse hook: runs app/'s own tsc --noEmit, and only after a `.ts` or `.tsx` under app/ is written.
+- `scripts/user-strings.mjs` — The AST half of the `no mechanism on screen` row — walks every `.tsx` under app/src through app/node_modules/typescript (the compiler the app itself builds with, the same choice screen-freshness.mjs makes and for the same reason) and prints one JSON array of every USER-VISIBLE string: JSX text nodes.
+- `scripts/verdict-selftest.py` — PROVES `app/design-check-reporter.ts` STILL WRITES A VERDICT, BY RUNNING IT.
+- `scripts/views.txt` — The manifest `make screenshot` walks: one `<name> <url> <selectors>` line per view worth looking at.
+- `scripts/waiting-export.py` — Turns the waiting page's database, read by the page writer with ArtifactData `list` and `out_dir` into a scratch folder, into `docs/waiting/`'s four files.
+- `scripts/worktree-create-selftest.sh` — `make worktree-create-selftest`: runs worktree-create.sh for four names at once, five rounds, in a throwaway repo with an origin.
+- `scripts/worktree-create.sh` — The WorktreeCreate hook. Makes every Claude Code worktree with a plain `git worktree add` at `.claude/worktrees/<name>` on `worktree-<name>`, cut from a fresh origin/main with --no-track (no shared .git/config write, so parallel Agents do not race on its lock; the branch has no upstream), so githooks/post-checkout provisions it.
+- `scripts/worktree-guard.sh` — The SessionStart hook: provisions a git worktree's UNTRACKED state before any work starts.
+- `scripts/worktree-provision-selftest.sh` — `make worktree-provision-selftest` — worktree-provision.sh's app/node_modules clone/install/staleness logic, proved against a throwaway two-tree fixture with a stubbed `npm` rather than a real network install.
+- `scripts/worktree-provision.sh` — The cache-copy, image-mirror-symlink and node_modules provisioning shared by worktree-guard.sh (above) and `make worktree-setup` — extracted so a fix like D47's lands once rather than twice.

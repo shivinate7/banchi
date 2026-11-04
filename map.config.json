@@ -1,0 +1,19 @@
+{
+  "formatVersion": 3,
+  "title": "Banchi",
+  "codeExtensions": ["py", "ts", "tsx", "js", "mjs", "sh", "css", "html", "txt"],
+  "mapPaths": [
+    "app/",
+    "cli/",
+    "codes/",
+    "geometry/",
+    "identify/",
+    "pipeline/",
+    "scripts/",
+    "server/",
+    "store/",
+    "harness/run.py"
+  ],
+  "modelSeam": { "file": "identify/batch.py" },
+  "requireAllKeys": false
+}
