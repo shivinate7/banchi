@@ -376,6 +376,33 @@ def _walk(root: Path, suffixes: Tuple[str, ...]) -> List[Path]:
     return sorted(found)
 
 
+def rule_files(root: Optional[Path] = None) -> List[Path]:
+    """Each path-scoped rule file under `.claude/rules/`, at any depth, the folder's `README.md` excluded.
+
+    Claude Code loads `.claude/rules/` recursively, so every reader that needs a rule's prose
+    reads this one list. `root` lets a self-test point it at a fixture tree.
+    """
+    base = root or ROOT
+    folder = base / ".claude" / "rules"
+    return [p for p in _walk(folder, (".md",)) if p != folder / "README.md"]
+
+
+# Where a finding from a `claude_and_rules` read points: the claim may sit in either.
+CLAUDE_OR_RULES = "CLAUDE.md or .claude/rules"
+
+
+def claude_and_rules(root: Optional[Path] = None) -> str:
+    """CLAUDE.md and every path-scoped rule file, read as one text, joined on a blank line.
+
+    A check that reconciles a published claim (a roster, a model, a path) with the code reads
+    this, so the claim may live in the folder rule that governs it and not only in the root file.
+    The blank line is load-bearing: the storage roster reader stops at one, so a roster at the
+    foot of CLAUDE.md must not run on into a rule file. A missing file adds nothing.
+    """
+    base = root or ROOT
+    return "\n\n".join(read(p) for p in [base / "CLAUDE.md", *rule_files(root)] if exists(p))
+
+
 def markdown_files() -> List[Path]:
     """Every TRACKED markdown file: the index in staged mode, `git ls-files` otherwise.
 

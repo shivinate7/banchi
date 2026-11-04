@@ -1115,23 +1115,23 @@ def check_server_concurrency(report: Report) -> None:
     code agree about what it IS, which is the only half a checker can hold honestly (D16).
 
     **TWO PUBLICATIONS, AS OF THIS ROW'S SECOND WIDENING. Only §11 had a
-    reader, and CLAUDE.md publishes the same four attributed literals** — `class
+    reader, and `.claude/rules/server.md` publishes the same four attributed literals** — `class
     CaptureServer(ThreadingHTTPServer)`, `request_queue_size = 128`, `CaptureHandler.timeout
-    = 15`, `REQUEST_SLOTS = 4` — in the file every session loads before it touches the server
+    = 15`, `REQUEST_SLOTS = 4` — in the file a session loads when it reads under `server/`,
     whose collapse at 150 connections is measured. A retune that fails this row via §11 while
-    CLAUDE.md goes on saying 4 is a document that is wrong in the more-read of the two places.
+    the rule file goes on saying 4 is a document that is wrong in the more-read of the two places.
     Both are compared now, and a finding names WHICH file it is about.
 
     **The fifth fact stays scoped to §11 on purpose**, and this is a narrowing of the
     proposal that asked for it: the fifth is the METHOD NAME that sends `Connection: close`,
-    and CLAUDE.md deliberately publishes the header without naming the method — §11 is where
+    and the rule file deliberately publishes the header without naming the method — §11 is where
     the mechanism is argued. Demanding the name in both would have failed on an unchanged
     tree, which is not a defect it found, only prose it wanted. Nothing is uncovered by the
     narrowing: §11 is the only file that makes the claim, so it is the only file that can go
     stale on it.
 
     The bare integers are safe from both anchors for the reason the comment below records:
-    CLAUDE.md's "sized this at 12" and "80 Playwright browsers, 969 threads" are
+    the rule file's "sized this at 12" and "80 Playwright browsers, 969 threads" are
     measurements, and an ATTRIBUTED anchor can neither be satisfied nor tripped by a loose
     number.
     """
@@ -1162,18 +1162,18 @@ def check_server_concurrency(report: Report) -> None:
     publications: List[Tuple[str, str, str]] = [
         ("docs/debts/", "section 11", section),
     ]
-    claude_md = ROOT / "CLAUDE.md"
-    claude_text = read(claude_md) if exists(claude_md) else None
-    if claude_text is None:
+    rule_file = ROOT / ".claude" / "rules" / "server.md"
+    rule_text = read(rule_file) if exists(rule_file) else None
+    if rule_text is None:
         findings.append(
             Finding(
-                "CLAUDE.md",
+                ".claude/rules/server.md",
                 "is not there, and it publishes this server's concurrency facts to every "
-                "session that loads it. Nothing else reconciles that copy.",
+                "session that reads a file under `server/`. Nothing else reconciles that copy.",
             )
         )
     else:
-        publications.append(("CLAUDE.md", "the capture-server bullet", claude_text))
+        publications.append((".claude/rules/server.md", "the capture-server bullet", rule_text))
 
     for what, pattern, shape, anchor, published in _CONCURRENCY_FACTS:
         found = pattern.search(source)

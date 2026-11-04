@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from .core import (
+    CLAUDE_OR_RULES,
     ADVISORY,
     ALLOWLIST,
     Finding,
@@ -21,11 +22,13 @@ from .core import (
     _sibling,
     _strip_ts_comments,
     _walk,
+    claude_and_rules,
     exists,
     glob_files,
     python_files,
     read,
     rel,
+    rule_files,
 )
 from .design import _POSITIONAL_RE
 from .records import _corpus, decisions_text
@@ -339,30 +342,98 @@ def _route_prose_findings() -> List[Finding]:
     return out
 
 
-# CLAUDE.md's "Codex reads this same file" paragraph names these four links.
+# CLAUDE.md's "Codex reads these files" paragraph names these links. Each folder a rule file covers
+# holds one more, `<folder>/AGENTS.md -> ../.claude/rules/<rule>`, derived below from the rule's own
+# `paths:` list so there is no second table to drift (D135, Codex reads the same rules).
 AGENT_LINKS: Tuple[Tuple[str, str], ...] = (
     ("AGENTS.md", "CLAUDE.md"),
     (".agents/skills", "../.claude/skills"),
-    ("code-card-fork/AGENTS.md", "CLAUDE.md"),
     ("code-card-fork/CLAUDE.md", "../CLAUDE.md"),
 )
 
+_RULE_GLOB_RE = re.compile(r"""^\s+-\s+["']?([^"'\s]+)["']?\s*$""")
+
+
+def rule_folders(text: str) -> Optional[List[str]]:
+    """The folders a rule file's `paths:` frontmatter covers, or None when a glob is not `<folder>/**`.
+
+    Codex reads a folder's `AGENTS.md` and no globs, so a rule has to cover whole folders to
+    reach it. A glob of another shape is reported by the caller, never skipped.
+    """
+    if not text.startswith("---\n") or "\n---" not in text:
+        return []
+    front = text.split("\n---", 1)[0].splitlines()
+    folders: List[str] = []
+    inside = False
+    for line in front[1:]:
+        if line.startswith("paths:"):
+            inside = True
+            continue
+        if inside:
+            glob = _RULE_GLOB_RE.match(line)
+            if not glob:
+                break
+            match = re.fullmatch(r"([A-Za-z0-9_.-]+)/\*\*", glob.group(1))
+            if not match:
+                return None
+            folders.append(match.group(1))
+    return folders
+
+
+def expected_rule_links() -> Tuple[List[Tuple[str, str]], List[Finding]]:
+    """(link, target) for every folder a rule file covers, and a finding for each rule that cannot be linked."""
+    links: List[Tuple[str, str]] = []
+    findings: List[Finding] = []
+    owner: Dict[str, str] = {}
+    for rule in rule_files():
+        name = rel(rule).removeprefix(".claude/rules/")
+        folders = rule_folders(read(rule))
+        if not folders:
+            findings.append(Finding(
+                rel(rule),
+                "has no `paths:` list of `<folder>/**` globs, so no folder can link it and Codex would never "
+                "read it. Cover whole folders, or move the rule into `CLAUDE.md`."))
+            continue
+        for folder in folders:
+            if folder in owner:
+                findings.append(Finding(
+                    rel(rule),
+                    f"covers `{folder}/`, which `{owner[folder]}` already covers. A folder has one "
+                    "`AGENTS.md`, so it takes one rule file."))
+                continue
+            owner[folder] = name
+            links.append((f"{folder}/AGENTS.md", f"../.claude/rules/{name}"))
+    return links, findings
+
 
 def check_agent_links(report: Report) -> None:
-    """Each link CLAUDE.md names is a relative symlink to its stated target."""
+    """Each link CLAUDE.md names is a relative symlink; each rule file's folders hold one to it."""
     findings: List[Finding] = []
-    for link, target in AGENT_LINKS:
+    rule_links, rule_findings = expected_rule_links()
+    findings.extend(rule_findings)
+    expected = list(AGENT_LINKS) + rule_links
+    for link, target in expected:
         path = ROOT / link
         if not path.is_symlink():
-            findings.append(Finding(link, f"is not a symlink; CLAUDE.md says it links to `{target}`."))
+            findings.append(Finding(link, f"is not a symlink; it must link to `{target}`."))
         elif os.readlink(path) != target:
-            findings.append(Finding(link, f"links to `{os.readlink(path)}`; CLAUDE.md says `{target}`."))
+            findings.append(Finding(link, f"links to `{os.readlink(path)}`; it must link to `{target}`."))
+        elif not path.exists():
+            findings.append(Finding(link, f"links to `{target}`, which does not exist."))
+    named = {link for link, _ in expected}
+    for path in sorted(ROOT.glob("*/AGENTS.md")):
+        link = rel(path)
+        if link not in named and path.is_symlink() and ".claude/rules/" in os.readlink(path):
+            findings.append(Finding(
+                link,
+                f"links to a rule file `{os.readlink(path)}` whose `paths:` list does not cover "
+                f"`{link.split('/')[0]}/`. Add the folder to that rule, or delete the link."))
     report.add(
         "agent links",
         MECHANICAL,
         findings,
-        f"{len(AGENT_LINKS)} relative symlinks resolve to CLAUDE.md or .claude/skills",
-        scanned=len(AGENT_LINKS),
+        f"{len(expected)} relative symlinks resolve ({len(rule_links)} from rule files' `paths:`)",
+        scanned=len(expected),
     )
 
 
@@ -927,7 +998,7 @@ def verdict_disagreements(
         findings.append(
             Finding(
                 "app/design-check-reporter.ts",
-                "does not exist, but CLAUDE.md tells a session to read the file it writes.",
+                f"does not exist, but {CLAUDE_OR_RULES} tells a session to read the file it writes.",
             )
         )
         return findings
@@ -952,7 +1023,7 @@ def verdict_disagreements(
                 "app/playwright.config.ts",
                 "its `reporter` setting no longer names `./design-check-reporter.ts`.\n"
                 "  The suite would run green and write no verdict at all, and a session "
-                "following CLAUDE.md would read the absent file as `the run died before "
+                f"following {CLAUDE_OR_RULES} would read the absent file as `the run died before "
                 "Playwright loaded its config` — a wrong diagnosis reached by following the "
                 "documented procedure.\n"
                 "  Comments do not count: this reads the config with them blanked.",
@@ -994,8 +1065,8 @@ def verdict_disagreements(
     if path not in published:
         findings.append(
             Finding(
-                "CLAUDE.md",
-                f"the reporter writes `{path}`, which this file never names.\n"
+                CLAUDE_OR_RULES,
+                f"the reporter writes `{path}`, which no file there names.\n"
                 "  The path is the whole instruction — a session told to read a verdict file "
                 "needs to be told which one.",
             )
@@ -1008,7 +1079,7 @@ def check_design_check_verdict(report: Report) -> None:
     reporter = read(_VERDICT_REPORTER) if exists(_VERDICT_REPORTER) else None
     config = read(_VERDICT_CONFIG) if exists(_VERDICT_CONFIG) else None
     makefile = read(ROOT / "Makefile") if exists(ROOT / "Makefile") else ""
-    published = read(ROOT / "CLAUDE.md") if exists(ROOT / "CLAUDE.md") else ""
+    published = claude_and_rules()
     findings = verdict_disagreements(reporter, config, makefile, published)
     match = _VERDICT_RESULT_FILE.search(reporter or "")
     where = f"{match.group(1)}/{match.group(2)}" if match else "unreadable"

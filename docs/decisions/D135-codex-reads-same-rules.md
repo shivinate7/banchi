@@ -5,10 +5,11 @@ OpenAI Codex was installed in this repository before this change. It left three 
 **A copy is a fork with a diff that nobody watches. A symlink has no diff to drift.** The fix is not a sync script. This repo already argued that case for the eval-image mirror and lost it (D47). The fix is to point Codex at the files Claude Code already reads. One edit then reaches both readers by construction:
 
 - **`AGENTS.md -> CLAUDE.md`**, at the root. A relative link in the same directory, committed.
-- **`code-card-fork/AGENTS.md -> CLAUDE.md`**, inside that directory. The reason is the codex-track auto-load that `code-card-fork/CLAUDE.md` documents ("auto-loaded in that directory"). Codex needs the same door that the root file gets. Without it, a session working the code-card track reads the singles rules and nothing about codes.
+- **`<folder>/AGENTS.md`, a relative link to the rule file in `.claude/rules/`**, in each folder a path-scoped rule covers: `app/`, `server/`, `pipeline/`, `cli/`, `identify/`, `store/`, `codes/` and `code-card-fork/`. Claude Code loads a rule when it reads a file its `paths:` list matches. Codex reads no `.claude/rules/`, but it reads the `AGENTS.md` of each folder from the root down to the one it works in, so the link gives it the same rule from the same file. `code-card-fork/` takes the code-card rule because the codex track works there: a session in it reads the code-card rules and not only the singles rules. There is no sync script and no composed copy. The `agent links` row of `make docs-audit` derives each link from the rule's own `paths:` list, so a covered folder with no link, or a link no rule covers, fails.
+- **`code-card-fork/CLAUDE.md -> ../CLAUDE.md`**, so Claude Code's auto-load in that directory reads the root rules.
 - **`.agents/skills -> ../.claude/skills`**, a directory link. Every skill added under `.claude/skills/` is a skill Codex can load too. There is no second copy and no second place to remember it.
 
-**All three follow D47's allowed shape and avoid its refused one.** Each is relative and resolves inside the repository. The check ran with `python3 -c "os.path.realpath(...)"` against each link before commit. The pre-commit hook reads mode `120000` from the index (D47). That makes the check durable. A later session cannot turn one of these into an absolute path or a copy without the hook refusing it.
+**Every link follows D47's allowed shape and avoid its refused one.** Each is relative and resolves inside the repository. The check ran with `python3 -c "os.path.realpath(...)"` against each link before commit. The pre-commit hook reads mode `120000` from the index (D47). That makes the check durable. A later session cannot turn one of these into an absolute path or a copy without the hook refusing it.
 
 **This retires the allowlist line that predicted it.** `scripts/docs-audit-allow.txt` carried `code-card-fork/AGENTS.md` on the owner's instruction. Its reason said to delete the line if a tracked `AGENTS.md` were ever adopted, and then fix the pointer rather than excuse it. That condition is now met. The line is deleted, not edited. The entry it named now exists, and the audit confirms it.
 
@@ -26,7 +27,7 @@ Claude Code runs `BANCHI_SILENT_WRITE_ONLY=file,bash-c scripts/silent-write-guar
 
 ### What is BUILT, RECORDED, and NEITHER
 
-**BUILT:** the three symlinks, committed and verified to resolve inside the repository. `.codex/hooks.json` tracked and brought to parity with `.claude/settings.json`'s hook roster. The `codex hooks` mechanical row in `scripts/docs-audit.py`, a `ROWS` entry covered by `--self-test`. The stale allowlist line was removed. The `.gitignore` line for `.codex/config.toml` was added. `docs/map.py`'s `governed_by` for `docs-audit.py` was extended with D127 and this entry.
+**BUILT:** the symlinks, committed and verified to resolve inside the repository. `.codex/hooks.json` tracked and brought to parity with `.claude/settings.json`'s hook roster. The `codex hooks` mechanical row in `scripts/docs-audit.py`, a `ROWS` entry covered by `--self-test`. The stale allowlist line was removed. The `.gitignore` line for `.codex/config.toml` was added. `docs/map.py`'s `governed_by` for `docs-audit.py` was extended with D127 and this entry.
 
 **RECORDED:** this entry, and the CLAUDE.md paragraph that names it.
 

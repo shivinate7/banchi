@@ -1365,7 +1365,8 @@ COMPONENTS = [
                                         "and IN `make check` as of D247's sixteenth entry "
                                         "(owner's word, 2026-09-23) — no network call. A "
                                         "FakeMarket and a RecordingMarket stand in for the "
-                                        "network; 106 assertions, including the D278 "
+                                        "network; refusal texts come from the reader's own raise "
+                                        "path (`harness/tests/price_refusals.py`). Includes the D278 "
                                         "collision arm run both ways, an interrupted "
                                         "one-shot sweep proven to lose everything BEFORE the "
                                         "chunked fix is proven to keep what it already "
@@ -2664,7 +2665,15 @@ COMPONENTS = [
                         "the way launchd starts it, which is not `make up` and is the shape "
                         "the second incident was in. Only three files are tracked in that "
                         "fixture, because the switch has to CHANGE a watched file or no "
-                        "reload is scheduled and the guard is never reached.",
+                        "reload is scheduled and the guard is never reached. "
+                        "ONE ARM IS THE EXCEPTION TO THE STUB: `check_real_build`, gated by "
+                        "BANCHI_SERVE_REAL_BUILD=1 and SKIPPED without it, runs the real "
+                        "`vite build` through the real `serve.py up` over a copy of the real "
+                        "`app/` (node_modules linked per package, never as one link). It "
+                        "asserts the port opens only after the build, `/` is the built "
+                        "index.html byte for byte and not the dev page, every /assets/ file "
+                        "the page names answers 200 with a browser's type, a path that is no "
+                        "route is refused (D138: no catch-all), and `down` leaves no process.",
                 "governed_by": ["D18", "D43", "D138", "D127", "D158", "D176", "D261"],
                 "tested_by": [],
             },
@@ -3060,7 +3069,8 @@ COMPONENTS = [
                         "(identity-follows-sku.md lane 4, moved off a disk walk), and "
                         "`pipeline/productview.py:row_for_sku` preferring the skus-table row "
                         "over a misread stored name, each with its own mutation guard. "
-                        "106 assertions.",
+                        "Its refusal cases take their texts from the reader's own raise "
+                        "path, `harness/tests/price_refusals.py`.",
                 "governed_by": ["D18", "D21", "D35", "D278", "D219", "D222", "D231", "D224",
                                 "D234", "D247", "D254"],
             },
@@ -3136,9 +3146,10 @@ COMPONENTS = [
             },
             "archive-review-selftest.py": {
                 "does": "proves cli/archive_review.py against a throwaway store, no "
-                        "network. Fabricates refusal strings shaped exactly like "
-                        "pipeline/pricehistory.py:NotResolvable/Unreachable's own "
-                        "messages, never calls a market. Proves: an identification "
+                        "network. Its real-text cases take their texts from the reader's own "
+                        "raise path (`harness/tests/price_refusals.py`), with only "
+                        "pipeline/net.py:request stubbed; no case calls a market. "
+                        "Proves: an identification "
                         "refusal reaches the review queue with its photograph; a "
                         "network-shaped refusal never does; a card sharing the refused "
                         "SKU but carrying a DIFFERENT stored number is never queued (the "
@@ -3579,7 +3590,17 @@ COMPONENTS = [
                         "`git worktree add` at `.claude/worktrees/<name>` on `worktree-<name>`, "
                         "cut from a fresh origin/main with --no-track (no shared .git/config write, so parallel "
                         "Agents do not race on its lock; the branch has no upstream), so githooks/post-checkout provisions it. "
-                        "Claude Code's own creation never fires post-checkout. Prints only the "
+                        "Claude Code's own creation never fires post-checkout. The add runs under a "
+                        "lock directory at `<git common dir>/banchi-worktree-add.lock` (`take_lock`, "
+                        "`release_lock`), so adds in one clone run one at a time: git reads a "
+                        "sibling's half-written worktree record otherwise. The lock is built "
+                        "privately with its pid inside and renamed into place in one step "
+                        "(`rename_noreplace`), so it never shows without a pid. A live holder's "
+                        "pid makes the add wait and say so. A dead pid is judged once "
+                        "(`lock_is_stale`) and taken by one waiter's move to a private name "
+                        "(`reap_stale`), which checks the moved lock holds the judged pid and "
+                        "otherwise puts it back, never deleting a lock it did not judge. "
+                        "`BANCHI_WORKTREE_LOCK_WAIT` seconds (default 120) fails the creation. Prints only the "
                         "path on stdout; exits non-zero only when git cannot make the tree.",
                 "governed_by": ["D18"],
             },
@@ -3587,7 +3608,13 @@ COMPONENTS = [
                 "does": "`make worktree-create-selftest`: runs worktree-create.sh for four "
                         "names at once, five rounds, in a throwaway repo with an origin. Every "
                         "tree and branch must exist and no config.lock may remain. Red on the "
-                        "hook without --no-track.",
+                        "hook without --no-track. Arms for the add lock: a free lock, a lock "
+                        "held by a live pid (the add waits and says so), a lock with a dead "
+                        "pid (taken over); two waiters on one stale lock (seams order their "
+                        "reads, no two adds overlap); a pid this user cannot signal counts as "
+                        "live; the wait cap; INT and TERM release the lock. Red on the hook "
+                        "without the lock. A sweep arm "
+                        "proves an old sibling run folder is removed and a new one stays.",
                 "governed_by": ["D18"],
             },
             "session-teardown-selftest.sh": {
@@ -4043,8 +4070,8 @@ COMPONENTS = [
             "docs_audit/hygiene.py": {
                 "does": "The doc-hygiene, route-roster, recorded-deletion, spec-seal, design-check verdict and "
                         "positional-reference rows.",
-                "governed_by": ["D69", "D70", "D90", "D97", "D110", "D113", "D119", "D132", "D144",
-                                "D149", "D155"]},
+                "governed_by": ["D69", "D70", "D90", "D97", "D110", "D113", "D119", "D132", "D135",
+                                "D144", "D149", "D155"]},
             "docs_audit/paths_commands.py": {
                 "does": "The rows that read paths, line anchors, `make` targets, the commands roster and "
                         "`banchi` subcommands out of the markdown.",
@@ -5628,9 +5655,40 @@ COMPONENTS = [
     {
         "path": ".claude/rules/README.md",
         "status": "built",
-        "does": "the shared rules-folder note, copied verbatim from claude-settings. Its "
-                "paths frontmatter keeps it out of every session's context.",
-        "governed_by": [],
+        "does": "the rules-folder note: its `paths:` frontmatter keeps it out of every session's "
+                "context, and it rosters the rule files and the folder `AGENTS.md` links that "
+                "carry them to Codex.",
+        "governed_by": ["D135"],
+    },
+    {
+        "path": ".claude/rules/app.md",
+        "status": "built",
+        "does": "the front end's rules (screens, design system, shell, verifying a screen), loaded when a session reads under `app/`.",
+        "governed_by": ["D135"],
+    },
+    {
+        "path": ".claude/rules/server.md",
+        "status": "built",
+        "does": "the capture server's rules (threading, port slots, photograph reclaim), loaded when a session reads under `server/`.",
+        "governed_by": ["D135"],
+    },
+    {
+        "path": ".claude/rules/pipeline.md",
+        "status": "built",
+        "does": "the pipeline, CLI and paid-read rules (join key, pricing, emit, the free reader), loaded under `pipeline/`, `cli/` and `identify/`.",
+        "governed_by": ["D135"],
+    },
+    {
+        "path": ".claude/rules/store.md",
+        "status": "built",
+        "does": "the store's rules (one SQLite file, sections, box names), loaded when a session reads under `store/`.",
+        "governed_by": ["D135"],
+    },
+    {
+        "path": ".claude/rules/code-cards.md",
+        "status": "built",
+        "does": "the dormant code-card feature's rules, loaded under `codes/` and `code-card-fork/`.",
+        "governed_by": ["D135"],
     },
     {
         "path": "docs/specs/home-assistant.md",

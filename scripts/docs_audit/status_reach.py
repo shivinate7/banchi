@@ -9,12 +9,14 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from .core import (
+    CLAUDE_OR_RULES,
     Finding,
     MECHANICAL,
     ROOT,
     Report,
     _merge_rows,
     child_names,
+    claude_and_rules,
     exists,
     glob_files,
     literals_from_module,
@@ -406,7 +408,7 @@ def check_status_sources(report: Report) -> None:
                scanned=checked)
 
 
-# ------------------------------------------------- the paid-read model named in CLAUDE.md
+# ---------------------------------- the paid-read model named in CLAUDE.md or .claude/rules
 
 
 _MODEL_RULE = re.compile(r"Batch API, not sequential calls\.\*\*\s*Model: `([^`]+)`")
@@ -414,16 +416,16 @@ _MODEL_CODE = re.compile(r'^MODEL\s*=\s*"([^"]+)"', re.M)
 
 
 def model_disagreement(claude_text: str, prompt_text: str) -> Optional[str]:
-    """None when CLAUDE.md's named model equals `identify.prompt.MODEL`, else why not."""
+    """None when the model CLAUDE.md or a rule file names equals `identify.prompt.MODEL`, else why not."""
     named = _MODEL_RULE.search(claude_text)
     emitted = _MODEL_CODE.search(prompt_text)
     if not named or not emitted:
-        return "CLAUDE.md's Model line or identify/prompt.py's MODEL cannot be read"
+        return f"the Model line in {CLAUDE_OR_RULES} or identify/prompt.py's MODEL cannot be read"
     if named.group(1) != emitted.group(1):
-        return f"CLAUDE.md names {named.group(1)}, identify/prompt.py MODEL is {emitted.group(1)}"
+        return f"{CLAUDE_OR_RULES} names {named.group(1)}, identify/prompt.py MODEL is {emitted.group(1)}"
     return None
 
 
 def check_paid_read_model(report: Report) -> None:
-    why = model_disagreement(read(ROOT / "CLAUDE.md"), read(ROOT / "identify" / "prompt.py"))
-    report.add("paid-read model", MECHANICAL, [Finding("CLAUDE.md", why)] if why else [], scanned=1)
+    why = model_disagreement(claude_and_rules(), read(ROOT / "identify" / "prompt.py"))
+    report.add("paid-read model", MECHANICAL, [Finding(CLAUDE_OR_RULES, why)] if why else [], scanned=1)

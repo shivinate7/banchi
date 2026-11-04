@@ -72,12 +72,13 @@ RUFF_GUARD = @$(PYTHON) -m ruff --version >/dev/null 2>&1 || { \
 # 2026-09-27, Q1). This used to be a second, hand-typed ~22 KB copy of every target's
 # purpose, and CLAUDE.md's Commands section carried a third; the three had already
 # drifted. `scripts/make-help.py` renders this one, so there is one place to edit a
-# target's description. `make docs-audit`'s `commands roster` row reconciles CLAUDE.md's
-# short list against the real targets, both ways.
+# target's description. `make help ARGS=<target>` prints one target's whole comment, so a
+# fact that matters to a caller belongs in that comment. `make docs-audit`'s `commands roster`
+# row fails a target with no comment, a `make check` member or an allow-list entry.
 # python3, not $(PYTHON): a step-away tool that needs `make venv` first is not a
 # step-away tool. Same rule as `status`, `map`, `explain` and `docs-audit`.
 help:
-	@python3 scripts/make-help.py
+	@python3 scripts/make-help.py $(ARGS)
 
 # `.venv` + requirements.txt. Idempotent — safe to re-run whenever
 # requirements.txt changes (VENV_GUARD is what notices and asks for the re-run).
@@ -172,7 +173,7 @@ worktree-setup:
 worktree-provision-selftest:
 	@bash scripts/worktree-provision-selftest.sh
 
-# core.hooksPath is LOCAL config — it lives in .git/config, which is never pushed. So a fresh
+# Arms the hooks from scripts/githooks/. Once per clone. core.hooksPath is LOCAL config — it lives in .git/config, which is never pushed. So a fresh
 # clone carries scripts/githooks/pre-commit as a tracked file with NOTHING POINTING AT IT, and
 # CLAUDE.md's bearer-instrument rule is unenforced on the first commit. It fails silently,
 # which is the only way an opsec rule can fail badly: nothing is printed, nothing exits 1, and
@@ -278,13 +279,15 @@ hooks:
 	  echo "  re-run \`make hooks\` after any change under scripts/githooks — the copy does not follow it"
 
 
-# python3, not $(PYTHON): a step-away tool that needs `make venv` first is not a step-away
+# Where the build stands: the next step, T1's score and the branch. python3, not $(PYTHON): a
+# step-away tool that needs `make venv` first is not a step-away
 # tool. Exits non-zero if any declared source is missing — it prints MISSING rather than
 # quietly printing less, because the shorter version is the one you would believe.
 status:
 	@python3 scripts/status.py
 
-# The map, rendered. Stdlib only and no project import, same as `status` — see the module
+# The map, rendered. ARGS=<package|path|D<n>|--stale|--decisions>, and ARGS="D<n> --full" prints that
+# entry verbatim. Stdlib only and no project import, same as `status` — see the module
 # docstring for why the raw file could not be the only way to read it.
 map:
 	@python3 scripts/map-view.py $(ARGS)
@@ -350,7 +353,8 @@ docs-audit:
 	status=$$?; \
 	if [ $$status -eq 1 ]; then exit 1; fi
 
-# THE ONE GENERATOR INTO A DOC, AND IT GATES NOTHING (D18, amended 2026-09-17). It adds
+# THE ONE GENERATOR INTO A DOC, AND IT GATES NOTHING (D18, amended 2026-09-17). It previews, and
+# ARGS=--write applies. It adds
 # the decision ids a file cites to that file's `governed_by` in docs/map.py — the answer
 # `make docs-audit`'s `map data` row already computes to decide the commit. It imports that
 # row's own `cited_decisions()` rather than reimplementing it, so the two cannot disagree.
@@ -409,7 +413,8 @@ text-density:
 	$(NPM_GUARD)
 	@node scripts/text-density/density.mjs $(ARGS)
 
-# WHICH COMPONENT RENDERS THE THING, AND WHAT SELECTS IT. A RENDERER — it writes nothing and
+# WHICH COMPONENT RENDERS THE THING, AND WHAT SELECTS IT. ARGS=<file.tsx> [--name <Component>];
+# run it before briefing a screen. A RENDERER — it writes nothing and
 # gates nothing, so D18 does not reach it, the same standing `make map` has.
 #
 # Written after a fix to `#/orders` was briefed against `CopyMapView` when the screen the
@@ -465,6 +470,7 @@ check: ci-check
 # `scripts/checks.py` is the one list (`--targets [shard]`); adding a check is one entry there.
 RUN_CHECKS = t="$$(python3 scripts/checks.py --targets $(1))" && $(MAKE) --no-print-directory $$t
 
+# The same list as `check`, from `scripts/checks.py`. CI runs it as six shards, `revert-guard` apart.
 ci-check:
 	@$(call RUN_CHECKS)
 
@@ -669,7 +675,7 @@ githooks-selftest:
 # claude-settings and reads `.github/stamp.json`. A bare `make merge` refuses, `ARGS=<n>` is a free
 # preview that presses nothing, and `ARGS="<n> --confirm"` merges (D42, the owner names the act).
 # The tool claims in a temporary worktree, so this checkout need not stand on the PR's branch.
-# It never rebases or force-pushes: a moved head stops it.
+# It never rebases or force-pushes: a moved head stops it, so rebase by hand and run it again.
 merge:
 	@~/.claude/bin/merge $(ARGS)
 
@@ -750,6 +756,7 @@ catalog-index:
 # the real 26 MB snapshot, so this is fast enough for `make check`. Every case failed before
 # `scripts/catalog-index.py` and `pipeline/catalog.py` existed: no index to build, no reader
 # to open one. Writes only a temp directory, so it gates like any other selftest.
+# Not in `make check`: scripts/checks.py does not run it.
 catalog-index-selftest:
 	@python3 scripts/catalog-index-selftest.py
 
@@ -856,7 +863,7 @@ screen-freshness-selftest:
 # its `janitor/sweep.py`, a PREVIEW unless ARGS=--confirm: branches, worktrees, dead-rooted
 # servers, loose processes, stale registrations and husks, across every checkout under
 # ~/Developer. ARGS=<root> narrows it to one clone. CLAUDE_JANITOR_SWEEP names another copy.
-# What stays in scripts/janitor.py is one tree's teardown. `session-teardown.sh` runs it.
+# What stays in scripts/janitor.py is one tree's teardown: it keeps `--teardown`. `session-teardown.sh` runs it.
 janitor:
 	@python3 "$${CLAUDE_JANITOR_SWEEP:-$$HOME/.claude/janitor/sweep.py}" $(ARGS)
 
@@ -958,7 +965,9 @@ sync-selftest:
 		echo "sync-selftest: SKIPPED — nothing in this branch reaches scripts/primary_sync.py. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
-# WHAT THIS SESSION STARTED, AND NOTHING ELSE. `pkill -f` and `lsof -ti tcp:PORT` are both
+# WHAT THIS SESSION STARTED, AND NOTHING ELSE. It previews; ARGS=--confirm stops, and
+# ARGS="port:N --confirm", "match:X --confirm" or "pid:N --confirm" narrows it. An agent's bare
+# --confirm stops only its own session's pids (D305, the reaper stops only its own). `pkill -f` and `lsof -ti tcp:PORT` are both
 # machine-wide, and both were used to clean up a session's own dev servers on 2026-09-10: the
 # first also matched the owner's live capture server over their real store, the second also
 # matched the desktop app's network helper, which was merely a CLIENT of the port. This target
@@ -1442,7 +1451,8 @@ restart-now:
 down:
 	@$(PYTHON) scripts/serve.py down $(ARGS)
 
-# Generated, never tracked, and written OUTSIDE the repo into ~/Library/LaunchAgents. A
+# Starts the server at login and keeps it alive over the real store (main tree only); ARGS=--remove
+# removes it. Generated, never tracked, and written OUTSIDE the repo into ~/Library/LaunchAgents. A
 # tracked plist would carry an absolute path baked on one Mac, which is D47's failure verbatim
 # — and a worktree's plist would outlive the worktree, so this refuses in a linked checkout.
 launch-agent:
@@ -1483,7 +1493,7 @@ server:
 	$(PORT_CLAIM)
 	@python3 scripts/reap_mark.py server; exec $(PYTHON) server/capture_server.py
 
-# The manifest is an INPUT and lives beside the script that reads it. It used to point at
+# Renders scripts/views.txt to captures/ui/; it needs `make dev` running. The manifest is an INPUT and lives beside the script that reads it. It used to point at
 # captures/views.txt, which .gitignore excludes wholesale — so the one file that says which
 # views matter could never be committed, and would have died with the machine that wrote it.
 screenshot:
@@ -1716,6 +1726,7 @@ demo-photos:
 	@$(PYTHON) scripts/demo-photos.py --source "$(SOURCE)" \
 	  --count $(DEMO_PHOTO_COUNT) --joinable $(DEMO_PHOTO_JOINABLE)
 
+# Owner's Mac only: SOURCE=<checkout> names the store to scrub and commit into `demo-assets/mirror/`.
 # THE PUBLISHED DEMO IS THE OWNER'S REAL STORE, SCRUBBED (owner's ruling, 2026-09-26,
 # `D-demo-mirror`, docs/specs/demo.md §13 — supersedes `demo-seed`'s invented one below as
 # what `demo-static` publishes). `scripts/demo-mirror.py` reads a store COPY into gitignored
@@ -1744,12 +1755,13 @@ demo-mirror-agent:
 	@python3 scripts/demo-mirror-daily.py --agent $(ARGS)
 
 # THE DAILY MARKET READ (DEBT69): one free download of the owner's own live listings, once a day, with
-# a note `#/pricing` shows. `price-refresh-agent` installs the launchd job (main tree only), ARGS=--remove
+# a note `#/pricing` shows, then the free daily TCGCSV read (D325). `price-refresh-agent` installs the launchd job (main tree only), ARGS=--remove
 # removes it. The installed job passes no flag, runs at 05:15 and at login, and skips a refresh or a sweep
 # that finished today (D224). `price-refresh` runs one read now over THIS checkout's store, changes
 # no price and passes --now (refresh even if today's finished) and --no-sweep unless ARGS=--sweep asks.
 price-refresh:
 	@$(PYTHON) scripts/price-refresh-daily.py --now $(if $(findstring --sweep,$(ARGS)),,--no-sweep) $(ARGS)
+# The daily launchd job for `price-refresh` (owner's Mac, main tree only); ARGS=--remove removes it. Once per US Central day it also runs the archive sweep (D224).
 price-refresh-agent:
 	@python3 scripts/price-refresh-daily.py --agent $(ARGS)
 
@@ -1757,8 +1769,10 @@ price-refresh-agent:
 # Drive folder `Banchi backup`, never deleting or overwriting there. `backup` runs one copy now over THIS
 # checkout's store; ARGS=--verify checks the copy read-only. `backup-agent` installs the launchd job
 # (owner's Mac, main tree only; the owner has not installed it), ARGS=--remove removes it.
+# `BANCHI_BACKUP_DEST` overrides the folder; its parent must exist. Nothing is ever deleted there.
 backup:
 	@$(PYTHON) scripts/backup-daily.py $(ARGS)
+# The nightly launchd job `com.banchi.backup` for `backup` (owner's Mac, main tree only; not installed); ARGS=--remove removes it.
 backup-agent:
 	@python3 scripts/backup-daily.py --agent $(ARGS)
 
@@ -1777,7 +1791,7 @@ demo-mirror-install:
 demo-histories:
 	@$(PYTHON) scripts/demo-histories.py $(ARGS)
 
-# The store alone, built on the curated photographs.
+# The store alone, built on the curated photographs. It refuses with BANCHI_HOME unset.
 demo-seed:
 	@BANCHI_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-seed.py --force
 # THE JOIN IS THE REAL ONE, and that is the point of doing it here rather than writing a
@@ -1791,7 +1805,7 @@ demo-seed:
 	@BANCHI_HOME=$(DEMO_HOME) ./banchi join $(DEMO_HOME)/runs/demo-box3 	  --export fixtures/riftbound_export_untouched.csv > /dev/null
 	@echo "  joined 2 runs against the real fixture exports"
 
-# A SECOND, small, real box, opt-in only — never on `demo-seed` alone (D18: the flag reaches
+# The bundle alone, on a throwaway server and port. A SECOND, small, real box, opt-in only — never on `demo-seed` alone (D18: the flag reaches
 # a generator, never a gate). Set as a TARGET-SPECIFIC variable, which GNU Make propagates
 # into every prerequisite this target pulls in, direct and indirect — so `demo-static`'s own
 # chain through `demo` to `demo-seed` carries it, and a bare `make demo-seed` never does.
@@ -1799,7 +1813,7 @@ demo-record: export BANCHI_DEMO_EXTRA_REAL := 1
 demo-record:
 	@BANCHI_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-record.py $(DEMO_RECORD_ARGS)
 
-# The bundle without the build — what to run after changing a wire shape, so `git status`
+# Seeds a demo store and records the wire; read docs/specs/demo.md first. The bundle without the build — what to run after changing a wire shape, so `git status`
 # shows the recording moving with the contract it was recorded against.
 demo: demo-seed demo-record
 

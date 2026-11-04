@@ -41,3 +41,13 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - `pipeline/rosterholdings.py`'s `_id_of` reads ids with `int()`, so `09001` and `+9001` become separate rows. Roster ids are plain integers today.
 - `#/pricing` Now column: its width comes from a hidden "Now $9,999.99" in each row, so a live price of $10,000 or more widens only its own row (about 7px at $12,345), and that row's Market column drifts left. Nothing clips.
 - `map.config.json`'s `mapPaths` lists `harness/run.py` only, so `make map-check` does not refuse a new top-level `harness/<x>.py`; main's flat scan did.
+- On the GitHub macOS runner `socket.getfqdn` hangs, so a plain `python3 -m http.server` never listens. Banchi's bind no longer calls it (`CaptureServer.server_bind`). Outside banchi, bind with `socketserver.TCPServer.server_bind` or expect the same hang.
+- `scripts/worktree-create.sh`'s `take_lock`: a takeover that loses the rename puts no lock back. This is the put-back gap from PR #1033 (the worktree lock).
+- `scripts/worktree-create.sh`'s `lock_is_stale`: a reused pid makes a dead holder read as live, so a waiter sits until the lock wait limit runs out.
+- `scripts/worktree-create.sh`: the re-entry `git worktree list` read runs outside the lock.
+- `app/src/CaptureScreen.tsx` `capture-undo-far` (PR #1038, the flat rail): a far tile woken by scroll shows its trash button one frame late.
+- `app/src/CaptureScreen.tsx` `capture-undo-far`: a far tile woken while its write is still in flight shows the drop button enabled.
+- `app/tests/stability.spec.ts`'s case S17 (web fonts): flaky in the cloud container, 7 of 25 runs on main. Not seen in CI.
+- The claude-settings code-check comment rule flags `owner's ruling` in a code comment as history narration. This is a false alarm owned by claude-settings, not banchi.
+- `docs_audit.paths_commands`'s `_commented_targets` counts a banner comment above a target (a comment that describes a block of targets) as that target's own, so a target with no description of its own can pass `commands roster`. `make help` would print the banner for it.
+- `docs_audit.status_reach`'s `model_disagreement` compares only the first "Batch API ... Model:" line in CLAUDE.md and the rule files joined, so a second, stale copy of that line in another rule file passes `paid-read model`.

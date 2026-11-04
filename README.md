@@ -82,7 +82,8 @@ make ci-check         # what a fresh clone can prove
 make check            # the whole suite; `make explain` lists it
 ```
 
-[`check.yml`](.github/workflows/check.yml) shows what CI runs.
+[`check.yml`](.github/workflows/check.yml) shows what CI runs. [`mac.yml`](.github/workflows/mac.yml)
+runs the product checks on macOS, weekly.
 
 Main moves by pull request only (D42, main moves by pull request). `make docs-audit` checks
 this file against the code: paths, make targets, commands, route table and decision ids.

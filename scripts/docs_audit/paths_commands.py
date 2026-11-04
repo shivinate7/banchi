@@ -1003,11 +1003,27 @@ _COMMANDS_NAME_RE = re.compile(r"^make ([a-zA-Z0-9_-]+)", re.M)
 
 
 def _commands_named(text: str) -> Set[str]:
-    """Every `make <name>` CLAUDE.md's Commands section documents as its own bullet."""
+    """Every `make <name>` a fenced list under CLAUDE.md's `## Commands` documents as its own bullet.
+
+    CLAUDE.md carries no such list now (it points at `make help`), so this is empty on the real
+    file. A bullet written there still counts, so the section can grow one back.
+    """
     match = _COMMANDS_BLOCK_RE.search(text)
     if not match:
         return set()
     return set(_COMMANDS_NAME_RE.findall(match.group(1)))
+
+
+def _commented_targets(makefile_text: str) -> Set[str]:
+    """Every target with a comment directly above its rule: what `make help ARGS=<target>` prints.
+
+    The comment is the one home of a target's description (`scripts/make-help.py`), so a target
+    that has one is documented where a reader looks for it.
+    """
+    help_module = _sibling("make-help.py")
+    if help_module is None:
+        return set()
+    return {name for name, lines in help_module.target_comments(makefile_text) if any(lines)}
 
 
 def _commands_roster_findings(
@@ -1019,9 +1035,9 @@ def _commands_roster_findings(
     for name in sorted(targets - documented - set(allow)):
         findings.append(Finding(
             "Makefile",
-            f"target `{name}` is named neither as a `make {name}` bullet in CLAUDE.md's "
-            f"Commands section, inside `make check`'s own recipe, nor in "
-            f"{rel(COMMANDS_INTERNAL)}. Document it, wire it into `make check`, or add it "
+            f"target `{name}` has no comment above its rule in the Makefile (what `make help` "
+            f"prints for it) and no bullet in CLAUDE.md's Commands list, is not inside `make check`'s own recipe, and is not in "
+            f"{rel(COMMANDS_INTERNAL)}. Comment it, wire it into `make check`, or add it "
             f"to the allow-list with a reason.",
         ))
     for name in sorted(allow):
@@ -1030,30 +1046,29 @@ def _commands_roster_findings(
                                      f"lists `{name}`, which is not a real Makefile target."))
         elif name in documented:
             findings.append(Finding(rel(COMMANDS_INTERNAL),
-                                     f"lists `{name}`, which CLAUDE.md already documents. "
+                                     f"lists `{name}`, which is already documented. "
                                      f"Stale entry — the list only shrinks."))
     for name in sorted(named - targets):
-        findings.append(Finding("CLAUDE.md",
+        findings.append(Finding("Makefile",
                                  f"documents `make {name}`, which is not a real Makefile "
                                  f"target."))
     return findings
 
 
 def check_commands_roster(report: Report) -> None:
-    """CLAUDE.md's Commands section against the real Makefile targets, both ways.
+    """Each Makefile target is documented where `make help` reads it, both ways.
 
     On `check census`'s own precedent (token-budget audit, 2026-09-27, Q1): two published
-    lists reconciled against a real recipe, not against each other. CLAUDE.md's Commands
-    section was cut to name plus one short line plus flags, on the owner's ruling, and a
-    shrunk section is exactly the shape that goes silently stale — a target renamed or
-    retired leaves a dead bullet, and a target ADDED leaves nothing telling a reader it
-    exists.
+    lists reconciled against a real recipe, not against each other. CLAUDE.md's Commands list
+    was replaced by one pointer to `make help`, whose per-target text is the Makefile comment,
+    so the roster now holds that comment to account: a target ADDED with nothing above it
+    leaves a reader no description, and nothing else tells them it exists.
 
-    A TARGET IS "DOCUMENTED" THREE WAYS, not one. Its own `make <name>` bullet in the
-    Commands section. Named inside `make check`'s own recipe (read from the Makefile, via
-    `_check_recipe()` — the same authority `check census` already trusts, never a second
-    copy of it) — a target `make check` runs is findable from `make explain`, so a bullet
-    here would only restate what running `check` already shows. Or named in
+    A TARGET IS "DOCUMENTED" THREE WAYS. A comment directly above its rule (what
+    `make help ARGS=<name>` prints), or a `make <name>` bullet in a fenced list under
+    CLAUDE.md's `## Commands` if one is written. Named inside `make check`'s own recipe (read from the
+    Makefile, via `_check_recipe()` — the same authority `check census` already trusts, never
+    a second copy of it) — a target `make check` runs is findable from `make explain`. Or named in
     `scripts/commands-internal.json`, a SHRINKING allow-list, file -> reason, for a target
     that is neither: a one-off dev tool, a generator, or a self-test with no caller outside
     its own guard. This mirrors `serve scope`/`guard scope`'s roster shape rather than
@@ -1061,19 +1076,18 @@ def check_commands_roster(report: Report) -> None:
 
     BOTH WAYS: a real target reaching none of the three fails, naming what it is missing
     from. An allow-list entry for a target that is now documented, or that no longer
-    exists, fails too — the list only shrinks. A CLAUDE.md bullet for a target that is not
-    real fails (this is also `make targets`'s business; reporting it here as well costs
-    nothing over two small sets).
+    exists, fails too — the list only shrinks.
     """
     makefile = ROOT / "Makefile"
     claude = ROOT / "CLAUDE.md"
-    if not exists(makefile) or not exists(claude):
+    if not exists(makefile):
         report.add("commands roster", MECHANICAL,
-                   [Finding("Makefile", "cannot read the Makefile or CLAUDE.md.")])
+                   [Finding("Makefile", "cannot read the Makefile.")])
         return
 
     targets = set(_MAKE_RULE_RE.findall(read(makefile))) - {"help"}
-    named = _commands_named(read(claude))
+    named = (_commented_targets(read(makefile)) & targets) | (
+        _commands_named(read(claude)) if exists(claude) else set())
     check_members = set(_check_recipe() or []) & targets
 
     findings: List[Finding] = []
@@ -1089,7 +1103,7 @@ def check_commands_roster(report: Report) -> None:
     findings += _commands_roster_findings(targets, named, check_members, allow)
 
     report.add("commands roster", MECHANICAL, findings,
-               f"{len(targets)} targets, {len(named)} bulleted, {len(check_members)} via "
+               f"{len(targets)} targets, {len(named)} commented, {len(check_members)} via "
                f"`make check`, {len(allow)} allow-listed",
                scanned=len(targets))
 

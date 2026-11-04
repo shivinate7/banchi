@@ -59,7 +59,7 @@ Every term narrows. None widens. So the order they apply in cannot change the an
 A selection refuses a null term, an unknown top-level key on a selection route, and an empty CLI selection flag. A run never widens to the whole store unless the operator asked for all. A null term, a misspelled key and an empty flag each read as "no term". A selection with no term would be every card in the store. The refusals keep a paid press on the cards the operator named.
 
 - **How all is asked for.** The CLI spells it `--all`. `banchi identify` refuses a selection that names nothing without it. The route has no term for all. There, a selection that names nothing is the whole store, with the preflight and the confirm in front of it (`Selection.named`).
-- **Where each refusal lives.** A null term: `pipeline/selection.parse`. An unknown top-level key: `server/pipeline_routes._resolve_send`. An empty flag: `cli/cmd_identify._selection_from`.
+- **Where each refusal lives.** A null term: `pipeline/selection.parse`. An unknown top-level key: `server/pipeline_routes._resolve_selection`. An empty flag: `cli/cmd_identify._empty_flag`.
 
 ### `--box` is a filter, and the old `--box` is `--assume-box`
 
