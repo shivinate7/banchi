@@ -3465,13 +3465,14 @@ COMPONENTS = [
             },
             "guard-shell-selftest.sh": {
                 "does": "proves guard-shell.py by COMMITTING its four mistakes in a throwaway "
-                        "repository with a linked worktree. Three of the incidents are "
+                        "repository with a linked worktree. All four incidents are "
                         "PERFORMED before the guard is asked about them: a worktree whose root "
                         "really differs from its main checkout's, "
                         "`pgrep -f` really reporting a process that merely "
-                        "NAMES its pattern, and a real local branch made to track a "
+                        "NAMES its pattern, a real local branch made to track a "
                         "differently-named remote branch — the exact mechanism a background "
-                        "agent's push created one by (`git push -u origin <local>:<remote>`). "
+                        "agent's push created one by (`git push -u origin <local>:<remote>`) — "
+                        "and a narrated wait really piped into `tail`. "
                         "THE FALSE POSITIVES ARE THE OTHER "
                         "HALF and the git ones are RUN in the fixture first: "
                         "a pid wait, a bounded retry, a foreground loop, a backgrounded "
