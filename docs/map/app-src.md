@@ -1,0 +1,182 @@
+# App source
+
+The browser app: the shell, the screens, the kit and the one file that talks to the server.
+
+## Code files
+
+- `app/src/App.css` — The shell's chrome: the sidebar and the rail it collapses to, the phone's top bar and its sheet, the bottom tab bar, the command palette, the which-key overlay, the online/offline server banner, the unresolved-hash panel, the shortcuts sheet and the Fulfiller's crash page.
+- `app/src/App.tsx` — THE BANCHI SHELL, and the ROUTES table it is all driven off.
+- `app/src/BoxBrowse.css` — Its layout, and why no accent appears anywhere in it.
+- `app/src/BoxBrowse.tsx` — The box walk, D31's default way into #/inventory — was #/pull until the three routes merged.
+- `app/src/BoxOps.css` — The box header, the section track and the editors, at the dense owner-side end.
+- `app/src/BoxOps.tsx` — D20's box object, made visible and editable ON THE BROWSE'S BOX HEADER since D31 merged #/boxes away.
+- `app/src/BoxShelf.css` — The Shelf's blocks, gaps, lift bar and receipt.
+- `app/src/BoxShelf.tsx` — The Shelf, the second view of #/inventory (`?view=shelf`): every box drawn from above with its sections as blocks, card `1` at the top, counts only.
+- `app/src/CaptureScreen.css` — Its layout, at the dense end of docs/DESIGN.md's one system, two densities.
+- `app/src/CaptureScreen.tsx` — The capture screen: every control is one hairline row at rest (key chip, label, value), and one field is open at a time.
+- `app/src/CardHero.css` — The listing-correction control's own spacing.
+- `app/src/CardHero.tsx` — The card pane's shared pieces, lifted out of `BoxBrowse.tsx` so `#/orders`' walk can reuse them (`docs/specs/order-walk-plan.md` §`13`: "Inventory's card pane, unchanged").
+- `app/src/CardLocations.css` — The group at two densities.
+- `app/src/CardLocations.tsx` — One SKU group: every copy, its position, its bar and its sold action.
+- `app/src/ClearPrices.css` — What is inside the mass-clear sheet.
+- `app/src/ClearPrices.tsx` — THE MASS-CLEAR, a kit Sheet off #/pricing's header (D168).
+- `app/src/Codes.css` — The code screen's look. The two lanes are the first numbers drawn, because they are the decision; the duplicate panel takes the one non-hairline border in the file, because a duplicate can mean a code that is worth nothing.
+- `app/src/Codes.tsx` — The code-card screen: read a box's QRs into the ledger, see the two lanes C11 tiers the pile into, and hand a lane's codes to a buyer against a named order.
+- `app/src/DeletedBoxes.tsx` — Inventory's deleted boxes shelf (D134 point `5`), which replaced the tab.
+- `app/src/Fulfillment.css` — The generous `24`-`64` end of the one system, two densities.
+- `app/src/Fulfillment.tsx` — The Fulfiller's whole product: cards to pull in box-walk order, a photo confirm before each pull, and a one-tap mark-sold with an undo window.
+- `app/src/Gallery.css` — The kit page's own layout — the specimen grid and its labels.
+- `app/src/Gallery.tsx` — The kit on one page: every primitive, every button variant and size, and the whole icon set, so the tokens are looked at.
+- `app/src/HistoryFloat.css` — The card at `--bn-*` tokens only: fixed, fixed-height chart box, `560px` wide at `1440` and `384px` below.
+- `app/src/HistoryFloat.tsx` — The floating price-history card (spec pricing-suggest `9c`): opens above a row when a price field takes focus or its history door is pressed, draws `ProductHistory.tsx:ProductChart` with the owner's asking step line and the suggestion dot, holds its size while history loads, takes focus only in door mode.
+- `app/src/Home.css` — The home screen's look: the hero and its deck, the stage spine, the box and run cards.
+- `app/src/Home.tsx` — The Home screen: the product drawn as a picture.
+- `app/src/Inventory.css` — Its layout, at the dense owner-side end of the one system, two densities — the search field, the found groups, the receipts, and the retire panel.
+- `app/src/Inventory.tsx` — The Inventory screen: the one owner view of stored cards.
+- `app/src/InventorySets.css` — Layout for the set view's rows — the card number column, the name column, and the row's own cursor.
+- `app/src/InventorySets.tsx` — THE OWNER'S "BY SET" VIEW (D293), a second view inside #/inventory (D264's own precedent: a view switch lives inside Inventory rather than as a fourth screen, D31).
+- `app/src/LiveReconcile.css` — The store-wide reconcile panel's own styles — quieter than the run panel above it on purpose, and the stdout block is `white-space: pre` with its own overflow because the report draws fixed-width columns a wrap would break.
+- `app/src/LiveReconcile.tsx` — The store-wide reconcile panel on #/runs (D87) — upload one live export, preview, settle.
+- `app/src/MixView.css` — The Mix view's control bar at the large control height, the table's scroll frame with a sticky first column and the heat tint (the accent at a share of its strength), `--bn-*` only.
+- `app/src/MixView.tsx` — Sales' Mix lens (`#/revenue?lens=mix`, no route of its own): a pivot over the stock the owner captured, holds and sold.
+- `app/src/Orders.css` — The order screen at owner density: the line, its reason and remedy, and the pick rows under it.
+- `app/src/Orders.tsx` — The orders hub: one screen with two stages, drawn on the orders route with the pull stage selected.
+- `app/src/OrdersHubStore.ts` — THE HUB'S MEMORY ACROSS A STAGE SWITCH.
+- `app/src/OrdersShipStage.tsx` — The SHIP stage of that hub: TCGplayer's Orders -> Export Shipping read into D61's three lanes, with the Pirate Ship import CSV as a download and a way to forget the batch.
+- `app/src/OrdersWalkPane.tsx` — The walk's own hook and list, over `docs/specs/order-walk-plan.md` §`13`: `useOrderWalk` re-fetches `POST /orders/walk-plan` LIVE whenever the walked set (the selected order plus every ticked one) changes, the same way selecting a box opens it, and `WalkList` draws the plan's boxes and sections, one row per physical pick (`here: true` copy).
+- `app/src/PlaceNeighbors.css` — The one-line shape: a flex row that wraps rather than truncates, an arrow between the two names, no key column and no mono — undoing the borrow of `.card-locations-boxname`, whose `10px` uppercase tracked mono once made the only running English in the product a rectangle.
+- `app/src/PlaceNeighbors.tsx` — D58's neighbors, RANKED rather than joined, as ONE LINE.
+- `app/src/PositionBar.css` — The two scales at two densities: the section ruler with its fill, graduations, edge labels and crossing pin, the demoted box strip with the caret that replaced the bracket, and both marks' knockout ring as `--pb-knockout` so the row the walk stands on can answer it.
+- `app/src/PositionBar.tsx` — Where a card sits: its SECTION drawn as a ticked (`5`, `10`) ruler that marks the exact card (its own cell filled, the pin at the cell's center) with section numbers at both ends, and under it a strip of the box's sections, numbered, with this section outlined, so the sections before and after show.
+- `app/src/PositionLabel.css` — The shape, and one knob per site.
+- `app/src/PositionLabel.tsx` — ONE rendering of `pipeline/join.py:Position.label` for every OWNER site.
+- `app/src/PriceFacts.css` — That block, `--bn-*` only: bars at reduced opacity, the Market a thin ink line, and every body holding its size while it reads.
+- `app/src/PriceFacts.tsx` — The block at the top of the product sheet and page: prices now, sales over `30` days with a sold-per-day chart, and the shelf.
+- `app/src/PriceHistory.tsx` — The two drawing helpers three screens share: `RANGE_LABEL` and `sparkSegments`, the spark geometry the row trend, the product view and Sales draw with.
+- `app/src/PriceMovers.css` — That panel, `--bn-*` only.
+- `app/src/PriceMovers.tsx` — The panel above #/pricing's list: which listed items moved more than a tenth since listing, with direction and amount, and how the last daily price read ended.
+- `app/src/PriceTrend.css` — That strip at owner density.
+- `app/src/PriceTrend.tsx` — The trend strip in a #/pricing row: a daily and a weekly sparkline with a signed percentage under each, in a real `168px` column between the card and MARKET.
+- `app/src/PricesAsOf.css` — That header at `--bn-*` tokens only.
+- `app/src/PricesAsOf.tsx` — The header line above #/pricing's list: "Prices as of" the catalog step's finish, and the one press, Refresh now, with its running, done and failed states.
+- `app/src/Pricing.css` — The one list, the slim bar and the rule line, `--bn-*` only.
+- `app/src/Pricing.tsx` — The Pricing screen: every unsent copy with its price, its holds and its readiness.
+- `app/src/ProductHistory.css` — The chart at `--bn-*` tokens only.
+- `app/src/ProductHistory.tsx` — `#/product`: one product's market history, with the owner's own sales marked on it.
+- `app/src/PullConfirm.css` — Its three states, and why the key hint is absent by default.
+- `app/src/PullConfirm.tsx` — Step `6`'s component: the pull modal's confirm button.
+- `app/src/RailFrame.tsx` — The rail's own sticky frame, lifted out of `BoxBrowse.tsx` (lane A2b, the orders-a plan's component reuse map: "Inventory passes its box list and walk.
+- `app/src/Revenue.css` — The summary band, podium, mix tile, board rows and product table's own layout, `--bn-*` only (D298's Direction B).
+- `app/src/Revenue.tsx` — The Sales screen: the gross-revenue retrospective, with a summary band, a podium of the top printings and bar rows for the places below.
+- `app/src/ReviewBand.tsx` — THE REVIEW SUMMARY BAND, at the top of Review in the Identify strip's old slot: four counts, a health line, one paid press and the way back to Capture.
+- `app/src/ReviewBandSheet.css` — The band sheets' styles: group heads, pointer lines, rows with a `40` by `56` photo held from first paint, the held "count has moved" slot.
+- `app/src/ReviewBandSheet.tsx` — THE REVIEW BAND'S FOUR SHEETS (`docs/specs/identify-engine-pick.md`, section `10`): waiting for a paid look (grouped by why the free reader stopped), not yet looked at (by box), matched free (by set) and the cards that need a set named (by box).
+- `app/src/ReviewQueue.css` — Its layout — a photo track sized from its own height beside a choice column in the tuned `656px` measure, with the worklist as a self-scrolling rail so `47` rows cost the page no height — and the price-driven type scale that makes the sort visible — name size and price size stepping down together, parked rows dimmed.
+- `app/src/ReviewQueue.tsx` — The Review screen: works the queued entries in order, with a catalog lookup on every entry, searchable by name, number or SKU.
+- `app/src/RunFiles.css` — The download rows — moved verbatim out of RunPanel.css with the component, every class name intact so the two specs that select .run-file-import and .run-file still select what they always did.
+- `app/src/RunFiles.tsx` — A run's files, as downloads — extracted from RunPanel (D54) so two screens can draw them.
+- `app/src/RunPanel.css` — The panel at owner density — the `4`-`16` end of the scale, mono on every number, and exactly one solid accent fill: the button that spends, drawn only once the estimate is on screen above it.
+- `app/src/RunPanel.tsx` — THE RUNS, AS MASTER AND DETAIL, on #/runs since D39 and in #/inventory's content column before it.
+- `app/src/RunRescue.css` — The rescue sheet's own layout, `LiveReconcile.css`'s shape — width, padding, the thumb floor on a coarse pointer (D117).
+- `app/src/RunRescue.tsx` — D145's repair, offered from `RunPanel.tsx`'s own header ONLY where `detail.box_former` is true — a run over a drawer D20 has since handed to another box.
+- `app/src/Runs.css` — Its page chrome, to docs/DESIGN.md's numbers literally: `16px` on all four sides, a `20px` display title sharing its line with the scope and the controls, a one-line lede, and the box strip as the first real content inside `150px` of the top.
+- `app/src/Runs.tsx` — The runs sheet and the redirect from the old runs route: the box picker, the composer, the store-wide reconcile and the stale-listing markdown, with the run panel beneath them.
+- `app/src/RunsComposer.tsx` — THE IDENTIFY COMPOSER: the one press in this product that spends money, as a staged dialog — which boxes, how each is read, what it costs, and a receipt.
+- `app/src/RunsDrop.tsx` — The file controls, as controls that look like the product: a native file input cannot be styled to sit beside a kit button, so the input is visually hidden and its own <label> is the control — a label IS the accessible name of the input it wraps, so this costs nothing in reachability.
+- `app/src/RunsLog.tsx` — A command's stdout, verbatim, in a well that follows its tail, counts its lines, folds and copies.
+- `app/src/RunsStage.tsx` — WHERE A RUN IS, in one vocabulary for the list, the run panel and Home.
+- `app/src/SearchField.css` — The field at two densities.
+- `app/src/SearchField.tsx` — The debounced query box. Owner gets a `/` hotkey and a key hint; the Fulfiller gets neither — his screens are touch and show no keys.
+- `app/src/SectionTitle.tsx` — ONE SECTION TITLE FOR EVERY BOX-WALK LIST: `#/inventory`'s shelf and `#/orders`' walk both draw it.
+- `app/src/SendCard.css` — The send card's own rows: the press and its two quiet doors on one line that wraps as a unit, the download door, and the card lists under a notice.
+- `app/src/SendCard.tsx` — THE SEND CARD on Pricing's send bar: one press from priced to live (D273).
+- `app/src/Shipping.css` — The lane table and its chips, at owner density.
+- `app/src/Shipping.tsx` — The shipping route: points the route at the orders hub on its ship stage.
+- `app/src/Slabs.css` — The Slabs screen's look: a fixed-width column set inside its own sideways-scrolling frame, so the header keeps its shape while the rows load and the page never scrolls sideways.
+- `app/src/Slabs.tsx` — The Slabs screen: one ledger of the owner's graded slabs, sorted by Card Ladder's estimate with a slab that never sold last.
+- `app/src/SubmissionClaims.css` — That panel's own styles: the row's two columns and nothing else — the kit supplies the panel, the list, the pills and the buttons.
+- `app/src/SubmissionClaims.tsx` — The panel on #/runs saying what a live send is holding, and the ONE way out of a stuck claim (D174).
+- `app/src/TakeOffLine.tsx` — The take-off line on a master-set retire receipt: Take It Off TCGplayer at the pull and the answer in the same place, drawn in the toast kit's changing line.
+- `app/src/autoMatch.ts` — MATCHING RUNS BY ITSELF WHEN A READING FINISHES (the owner's Q4 ruling).
+- `app/src/base.css` — Reset and the page ground, and the six app-wide floors: the `:focus-visible` ring, the cursor floor after `39` of `142` interactive elements were measured with no cursor rule any selector could reach, tabular figures on every table, `output` and `time`, and the reduced-motion floor.
+- `app/src/cardCrop.ts` — THE FETCHING POLICY BEHIND THE CARD CROP, FOR EVERY SCREEN THAT DRAWS A STORED PHOTOGRAPH (D125). kit/index.tsx holds the GEOMETRY and says in its own comment that the fetching is not there because `the hero asks once for one card, the worklist asks for the rows a scroll brings into view, and those are policies, not geometry`.
+- `app/src/cardNumber.ts` — ONE COMPOSER OF THE COLLECTOR NUMBER FOR EVERY SCREEN THAT DRAWS ONE (D67).
+- `app/src/cardState.ts` — The card-state vocabulary and the age of a reading, with no component in it — `readingAgo`, `readingExact`, `stateTone`, `stateLabel`, and the `SOLD` / `RETIRED` words those two are written in (D26's two doors out).
+- `app/src/csvUpload.ts` — The one FileReader every CSV upload in this app goes through, lifted out of RunPanel.tsx so #/runs and #/shipping cannot carry two encodings to disagree about.
+- `app/src/dates.ts` — A DATE, SAID ONE OF TWO WAYS — `relativeDate` (`5 minutes ago`, `yesterday`, then the absolute form past a week) and `absoluteDate` (`Sep 4, 2026`, no leading zero).
+- `app/src/dealer.ts` — The dispenser's one home: the Web Bluetooth link to the tcg-dealer dispenser, its two-payload allow list and the paced deal loop (createDealer), and the Capture screen's hook over it (useDealer). docs/specs/dispenser.md.
+- `app/src/demoBundle.stub.ts` — The SHAPE of `make demo-record`'s recording, for a checkout that has not made one.
+- `app/src/demoCamera.ts` — A camera for a page that has none — a canvas painted with one of the demo's own photographs, handed to `useCamera` as a REAL MediaStream so every `camera.ready` gate in CaptureScreen's `3,255` lines opens the ordinary way and nothing above it changes.
+- `app/src/demoFlag.d.ts` — Declares `__BN_DEMO__`, the build-time demo flag `vite.config.ts` substitutes with a boolean literal.
+- `app/src/demoServer.ts` — The capture server, frozen — what `request()` talks to when VITE_DEMO=`1` builds the published demo.
+- `app/src/demoShared.ts` — What the demo's runtime and its build step agree on: the canonical key spelling, the two derived Home reads (`recentCards`, `historyCards`) and the folder the split recording lives in.
+- `app/src/deviceMemory.ts` — Every `localStorage` key the shell owns — the theme, the rail, which order statuses this device bothers fetching (D91), whether the inventory walk folds sold rows away, when this browser last reached for each box (D132.
+- `app/src/encode-worker.ts` — The capture JPEG encode, on a worker thread the main thread's idle scheduler cannot starve; one reused OffscreenCanvas, fed transferred ImageBitmaps by useCamera's grabFrameJpeg.
+- `app/src/engines.ts` — WHO READS THE CARDS: the two engines the runs sheet offers, `marqo-b` (the free reader, which matches a photograph to stock photos) and `haiku` (the paid read), and the free read as the default pick.
+- `app/src/fonts.css` — The three typefaces, self-hosted, and the ONE file in app/ that carries an @font-face.
+- `app/src/fonts/OFL-inter.txt` — The SIL Open Font License text for the Inter font.
+- `app/src/fonts/OFL-jetbrainsmono.txt` — The SIL Open Font License text for the JetBrains Mono font.
+- `app/src/fonts/OFL-manrope.txt` — The SIL Open Font License text for the Manrope font.
+- `app/src/frozenRank.ts` — THE ORDER IS TAKEN ONCE AND HELD UNTIL SOMEBODY ASKS FOR A NEW ONE — the copies that have left since the ranking on screen was computed, as a set of store keys, plus the three predicates every ranking under a search asks of it (`ranksAsLive`, `ranksAsShown`, `stalenessSentence`).
+- `app/src/holds.ts` — The withhold vocabulary on this side of the wire — the three reasons, their human labels and their panel keys.
+- `app/src/keys.ts` — The one question every keyboard handler asks first: is the event target an editable field.
+- `app/src/kit.css` — Every primitive's look, one `bn-` prefix, loaded after base.css and before any screen sheet — so a screen may refine a button and never has to redraw one.
+- `app/src/kit/Icon.tsx` — One icon set, `73` paths on a `24`-unit grid at `1.75` stroke with round joins, drawn in the Lucide idiom so the whole product speaks one line weight.
+- `app/src/kit/Lockup.tsx` — The lockup — 番地 over BANCHI inside the mark's own brackets, drawn entirely from lockupGeometry.ts.
+- `app/src/kit/Page.tsx` — The page scaffold every screen is built from: `Page` draws `<main class="bn-page" data-bn-page>` with one h1 (the route's title by default, read from `PageRouteContext`), the verdict, the toolbar, the status slot, and the list region with its loading and empty states.
+- `app/src/kit/data.css` — The data primitives' styles.
+- `app/src/kit/data.specimens.tsx` — Every data primitive in every state a screen can put it in, on invented data.
+- `app/src/kit/data.tsx` — THE KIT'S DATA PRIMITIVES, one drawing each for every screen.
+- `app/src/kit/dataRules.ts` — The pure half of `data.tsx`: STATUS_TONES (amber is only 'needs the owner', blue only 'moving now') and `boxesMostRecentFirst` (this browser's hand, then the newest box by `bid`, then the number).
+- `app/src/kit/dialog.css` — `Dialog`'s own inner rhythm — the sheet's width, the head padding, the lightbox's `44px` circular Close and its backdrop blur.
+- `app/src/kit/facets.ts` — THE FACET COUNTS, one way: given the rows, the facets and the picks, each option's count under the OTHER active filters and the screen's own `keep` (its search, its Hide sold).
+- `app/src/kit/filters.css` — The filter bar's styles. One line at every width: no container query decides the layout any more — the compact trigger is always shown, and its overlay (`.bn-menu.bn-filterbar-popover`, or the kit's own `Sheet` styling) is picked by the `compact` prop.
+- `app/src/kit/filters.specimens.tsx` — `FilterBar` (full width, and in a `280px` rail), `HideToggle`, `SortHeader` and `Highlight`, on invented rows whose counts come from `kit/facets.ts`.
+- `app/src/kit/filters.tsx` — THE ONE FILTER BAR (FLT-`15`, the owner's gripes about Inventory's game-then-set-then-rarity lock and Orders' four-width strip): `FilterBar` composes `Select`, `FilterChips`, `FilterCount`, `SortControl` and `SearchField` into one toolbar.
+- `app/src/kit/highlight.tsx` — THE MATCH HIGHLIGHT (FLT-`08`: "no search result shows what matched").
+- `app/src/kit/index.tsx` — The primitives as components: Button, IconButton, Kbd, Pill, Chip, PageHeader, EmptyState, Notice, Segmented, Stat, Logo — plus three things that are not components and belong beside them.
+- `app/src/kit/lockupGeometry.ts` — The lockup as static path data — 番地 and BANCHI OUTLINED, the bracket's arm and its two end discs, the block's dimensions and section `13`'s eleven settled parameters.
+- `app/src/kit/markGeometry.ts` — The Banchi mark's two optical cuts as static path data, GENERATED by scripts/build-mark.mjs out of docs/specs/logo/sheets/small-cut.html.
+- `app/src/kit/markPalettes.ts` — Docs/specs/logo.md section `9`'s seven locked marks — prism, bracket, ground and card base per variant, bluesteel the default.
+- `app/src/kit/match.ts` — ONE FORGIVING MATCHER for every search the browser runs: every word in any order; case, accents and punctuation folded; a card number with or without its leading zeros, split by a space, a hyphen or a slash; a box by its name only, never by its number; a SKU by its start.
+- `app/src/kit/overlay.tsx` — The kit's overlays: `Sheet`, `Modal`, `Popover` and `ConfirmSheet`, each with one header and one Close, focus kept inside and given back, Escape for the top one only, portalled to <body>.
+- `app/src/kit/rarityMarks.ts` — The one (game, rarity, palette) table the neighbor row's mark reads: Riftbound's gem colors, a plainest-to-richest ladder for Pokemon and One Piece in pipeline/games.py's stack order, bluesteel for anything unlisted.
+- `app/src/kit/settings.specimens.tsx` — The settings sheet's parts on invented data, mounted on the kit page as `SettingsSpecimens`.
+- `app/src/kit/settings.tsx` — THE SETTINGS SHEET'S PARTS (the owner: "Kit first").
+- `app/src/kit/sheets.ts` — One way to open a thing from wherever it is named: `registerSheet`, `openSheet`, `closeSheet`, and `useOpenSheet` for the shell's host.
+- `app/src/kit/toast.tsx` — One toast stack for the product: any screen calls `toast()`, the shell renders `<Toaster/>` once.
+- `app/src/kit/undo.ts` — THE ONE `U` PRIMITIVE (UN-`10`, `docs/specs/undo.md` §`11.3`): `useUndoHotkey` arms `U` for the newest reversible write on a screen, in place of five screens' own near-identical listeners.
+- `app/src/kit/viewState.ts` — THE ONE URL VIEW STATE (D285, the owner's ruling: filter memory lives in the URL on every screen).
+- `app/src/liveCheck.ts` — WHEN THE LIVE CHECK AFTER A SEND RUNS (the owner's Q3 ruling).
+- `app/src/main.tsx` — Mounts App, and fixes the stylesheet order: tokens, then base, then the kit — every later sheet resolves against tokens, and a screen sheet outranks the kit by arriving after it.
+- `app/src/mixPivot.ts` — The Mix pivot's pure math: nine dimensions, eight measures, `pivot`, `optionCounts`, `priceBand` and `soldShare` (a SKU's refund-adjusted gross over its copies, from `salesOf`).
+- `app/src/money.ts` — A DOLLAR AMOUNT, SAID THE SAME WAY EVERYWHERE — `money` and `roundsToNothing`.
+- `app/src/motion.ts` — Gate C's auto-capture: a pure MotionMachine (settle, novelty, card presence, deferring refractory) under a thin DOM sampler that feeds it one `64x36` luma grid per decoded frame.
+- `app/src/orderBuyers.ts` — GROUPS `GET /orders`' flat rows BY PERSON, pure and no wire call of its own (`D193`).
+- `app/src/orderPaste.ts` — THE ONE PLACE IN THIS APP THAT DECIDES WHAT LEAVES THE BROWSER ABOUT A PURCHASE (D69, amended by `D193`).
+- `app/src/orderReasons.ts` — The order-line vocabulary on this side of the wire — the six reasons pipeline/orders.py:LINE_REASONS enumerates, their human labels and their remedies.
+- `app/src/orderView.ts` — HOW THE BUYER LIST IS SORTED AND FILTERED (`D296`): a buyer whose every owed copy is in the boxes leads, oldest order first at rest, everything else stays reachable behind a status select rather than dropped — an ORDERING and never a hiding, D103's shape carried over.
+- `app/src/position.ts` — The position ARITHMETIC with no component in it — `spansOf`, `sentenceOf`, `sectionDepthOf`, their types and the shared `clamp`.
+- `app/src/pricingSource.ts` — WHERE `#/pricing`'s ROWS CAME FROM, AND WHAT MAY BE ASKED ABOUT THEM (D103).
+- `app/src/readiness.ts` — What `emit` would refuse this run for, on this side of the wire — a second implementation of pipeline/decisions.py:blocking, chosen so the pricing screen's readiness line settles on the keystroke that answers it rather than a round trip later.
+- `app/src/reasons.ts` — The review queue's fourteen reason codes and their human labels, in one file because TWO screens read them — #/review works them in order, and #/inventory's card panel says whether the selected card has an open question.
+- `app/src/revenueMath.ts` — The gross arithmetic `Revenue.tsx` draws, moved out unchanged so a test can call it: `salesOf` turns orders into sales, `sum` adds their gross.
+- `app/src/runHandoff.ts` — The one module that reads or writes the run scope carried from #/inventory to #/runs — key `banchi.run-scope`, D27's carve-out.
+- `app/src/runScope.ts` — WHICH DRAWER A RUN WAS OVER, AND WHAT THE OWNER CALLS IT — one answer, three screens (D56).
+- `app/src/runsOverlay.ts` — Dialog focus for the three runs overlays — the composer, the store-wide reconcile and the markdown sheet: focus lands inside on open, Tab and Shift-Tab stay inside, focus goes back to the opener on close, and Escape closes it UNLESS that overlay has a request in flight — the sheets stay mounted, so a close costs a reopen, but nothing aborts a fetch and its receipt would toast for a sheet that is gone.
+- `app/src/server.ts` — The only module that talks to the capture server, so the stop-the-run failure rule is one decision.
+- `app/src/setHint.ts` — WHETHER A TYPED SET HINT NAMES A REAL SET, ANSWERED AT THE RIG.
+- `app/src/slabGraders.ts` — The grader list the Add sheet offers: a copy of `store/slabs.GRADERS`, because no route sends the list yet.
+- `app/src/standing.ts` — WHAT THE STORE IS WAITING ON, RANKED, AS ONE SENTENCE — the policy behind Home's standing line, in its own module because a ranking buried in a component is one nobody can find, argue with or test.
+- `app/src/storeHistory.ts` — THE STORE'S OWN HISTORY — sittings recovered from `captured_at` by a `30`-minute gap, and the ribbon geometry Home's foot draws from them.
+- `app/src/storeKey.ts` — ONE SPELLING OF A RECORD'S STORE KEY, AND THE ONE READER OF IT (D68, D92).
+- `app/src/tabTitle.ts` — The tab title function, one fixed string per screen: its own module so a unit test imports it without the shell's CSS and React.
+- `app/src/takeOff.ts` — The master-set take-off's one vocabulary: where a take-off stands as the screens say it (offer, sent, failed, matches, onway, nosession), one card's press with every refusal read as a view, and one entry of the owed list's press answered the same way.
+- `app/src/tokens.css` — BANCHI'S TOKENS, and the only file in app/ allowed to write a color.
+- `app/src/trace.ts` — D19's Tier-`1` tuning instrument: records every frame's (t, d, dBase, luma) plus the watch-region pixels at each gate verdict and once a second, and downloads the armed session as one self-describing JSON from the HUD.
+- `app/src/trigger.ts` — The trigger seam: whatever fires a capture, behind one interface.
+- `app/src/types.ts` — The shapes the server speaks, in the server's own field names — captures, inventory, boxes, listings and the standing queues.
+- `app/src/useCamera.ts` — The camera: opened on request and never on mount, deviceId selection, never facingMode (v1 bug `3`), the native resolution requested explicitly, and a remembered device that refuses to fall back to another.
+- `app/src/useLeaveWarning.ts` — ONE HOME OF THE PAGE-UNLOAD GUARD.
+- `app/src/usePoll.ts` — ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS USED TO STAND (D207).
+- `app/src/useSearch.ts` — GET /search behind a debounce, with an out-of-order guard so a slow early answer cannot overwrite a fast later one; and `useQueryFilter`, a list the browser holds narrowed by the one matcher in `kit/match.ts`.

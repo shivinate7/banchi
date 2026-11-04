@@ -79,7 +79,7 @@ Picking the convention after seeing which one clears the threshold is the same m
 classifier to hit a number. Re-deriving the hand figures, or replacing them with an instrumented
 convention, is the honest way out. Do it before the next cut and not during it.
 
-The largest surviving row is `repo map`, and it has no self-test. Any self-test investment lands
+The largest surviving row is `map data`, and it has no self-test. Any self-test investment lands
 there.
 
 ## 9. Verified externals

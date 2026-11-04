@@ -308,6 +308,30 @@ jobs:
           print('FTS5 is available.')
           "
 
+      # THE MAP CHECK'S SKILL COMES FROM THE PINNED claude-settings, never a second pin
+      # (`make map-check`, `scripts/map-check.py`). The runner downloads the whole pinned
+      # repository for every `uses:` line of a job before any step runs, an `if: false` step
+      # included, and the `all jobs passed` row reads this line with every other pin. The
+      # step below finds that download and runs `npm ci` in it, because the skill loads
+      # `typescript` from the `node_modules` beside it. It names no sha: a glob that finds
+      # not exactly one pinned copy fails.
+      - name: Download the pinned claude-settings for the map check
+        if: false
+        uses: shivinate7/claude-settings/actions/ci-alarm@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
+
+      - name: Install the map check's skill from the pinned claude-settings
+        run: |
+          set -eu
+          cached="$(dirname "$RUNNER_WORKSPACE")/_actions/shivinate7/claude-settings"
+          set -- "$cached"/*/
+          if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
+            echo "expected exactly one pinned claude-settings under $cached, found: $*" >&2
+            exit 1
+          fi
+          root="${1%/}"
+          npm ci --prefix "$root" --ignore-scripts
+          echo "CLAUDE_SETTINGS_DIR=$root" >> "$GITHUB_ENV"
+
       # A schedule or a dispatch runs every self-test: the two path gates answer "run" on
       # their own hatches, which is what those hatches are for. A PR keeps its scope.
       - name: make ci-check-static

@@ -532,7 +532,7 @@ def check_design_tokens(report: Report) -> None:
     doc, css = claims.names, every
     if not doc or not css:
         # A side that parses to nothing must never report a clean row — same rule as a
-        # malformed `source_suffixes` scanning nothing and saying so. This is the state
+        # a malformed suffix list scanning nothing and saying so. This is the state
         # docs/debts/ calls this auditor's worst failure mode: a check gone quiet.
         report.add(
             "design tokens",

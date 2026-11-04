@@ -102,7 +102,7 @@ def is_slug(identifier: str) -> bool:
 # fixing it, and why the widen could not land without this.
 #
 # MEASURED, NOT PREDICTED. With the cap at three and this strip disabled, `decision ids in
-# code` reported all three as dangling citations and `repo map` — which is MECHANICAL —
+# code` reported all three as dangling citations and `map data` — which is MECHANICAL —
 # blocked the commit over four files.
 #
 # THE DIRECTIVE IS BLANKED, NEVER THE LINE. This repo writes prose after the codes, an
