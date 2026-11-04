@@ -108,6 +108,7 @@ ROSTER = (
     {"target": "match-selftest", "test": "scripts/match-selftest.py"},
     {"target": "browser-scope-selftest", "test": "scripts/browser-scope.py"},
     {"target": "port-slots-selftest", "test": "scripts/port-slots.py"},
+    {"target": "tests-for-selftest", "test": "scripts/tests-for-selftest.py"},
     {"target": "worktree-create-selftest", "test": "scripts/worktree-create-selftest.sh"},
     {"target": "session-teardown-selftest", "test": "scripts/session-teardown-selftest.sh"},
     # THE PRODUCT HARNESS, on the owner's word (D247, amended). Not a self-test, so its subjects

@@ -934,13 +934,20 @@ tests-for:
 	@python3 scripts/tests-for.py $(ARGS)
 
 # The selector proved on the real tree and on fixture trees, with one planted break per language:
-# the selected suite goes red, an unselected one stays green. NOT in `make check`: it runs four
-# Playwright unit runs and about forty selector runs, 105 seconds, and its real-tree cases read
-# every harness module and `app/src`, so a path gate (D247) would skip only on a docs-only branch.
-# Needs `npm ci --prefix app`. COST: reads the checkout; writes a run folder under the temp
-# root that `harness/tests/home.py`'s `run_folder` removes; no process is left running.
+# the selected suite goes red, an unselected one stays green. PATH GATED (D247, amended): what it
+# reads is derived from its own source, so it skips on a branch that touches none of that, a
+# docs-only branch among them. `BANCHI_GUARD_SCOPE=all` runs it anyway.
+# Needs `npm ci --prefix app`. COST: reads the checkout, four Playwright unit runs and about forty
+# selector runs, about 95 seconds when it runs; writes a run folder under the temp root that
+# `harness/tests/home.py`'s `run_folder` removes; no process is left running.
 tests-for-selftest:
-	@python3 scripts/tests-for-selftest.py
+	$(NPM_GUARD)
+	@python3 scripts/guard-scope.py classify --target tests-for-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
+		python3 scripts/tests-for-selftest.py; \
+	else \
+		echo "tests-for-selftest: SKIPPED — this branch does not touch the suite selector, the scope scripts it loads or the files its cases read. BANCHI_GUARD_SCOPE=all runs it anyway."; \
+	fi
 
 # THE SECOND PATH GATE (D247, owner's word 2026-09-20 on a fresh measurement): what each
 # guard and product self-test reads. ARGS=list [--target <name>], or

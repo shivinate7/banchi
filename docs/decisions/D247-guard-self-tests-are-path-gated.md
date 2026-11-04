@@ -137,7 +137,10 @@ The measured saving is unmeasured until the first CI runs after merge.
 **AMENDMENT, THE PER-FILE SUITE SELECTOR.** `scripts/tests-for.py` answers the same question one level
 down: which suites reach one file. It reuses `guard-scope.py`'s import reader (now with an import-time
 mode and a package list) and `browser-scope.py:import_closure`, so there is no second scanner. The new
-surface is argued by one reason: a mutation run of one file ran every suite (50 harness suites, about 22 minutes serial
-here, plus 6 unit files) when, for a `tabTitle.ts`-shaped file, one could reach it. Its self-test, `make tests-for-selftest`, is NOT in
-`make check` and not on `ROSTER`: it costs 105 seconds, and its real-tree cases read every harness
-module and `app/src`, so a path gate would skip it only on a docs-only branch.
+surface is argued by one reason: a mutation run of one file ran every suite (50 harness suites, plus 6 unit
+files) when, for a `tabTitle.ts`-shaped file, one could reach it. The elapsed time of that run is unmeasured and
+no figure is given. Its self-test, `make tests-for-selftest`, is on `ROSTER` and in `make check`
+(shard `guards-2`), path gated like the other guard self-tests: its subjects are derived from its own source, so
+it skips on a branch that touches none of them, a docs-only branch among them. The same change gave
+`guard-scope.py:_flatten_div` a `Subscript` arm. That widens the subjects derived for `t6_geometry`,
+`t7/price_fresh` and `t7/price_moves`. It only adds paths, so a gated self-test runs more often, never less.
