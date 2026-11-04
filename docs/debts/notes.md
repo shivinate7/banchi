@@ -40,6 +40,7 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - `pipeline/rosterholdings.py`'s `build_roster_report`: a product id whose archive SKUs are only partly in `skus` prices from the ones present, so a foil line can take a non-foil price. `no_sku_row` covers only all-missing. `skus` has no delete path today.
 - `pipeline/rosterholdings.py`'s `_id_of` reads ids with `int()`, so `09001` and `+9001` become separate rows. Roster ids are plain integers today.
 - `#/pricing` Now column: its width comes from a hidden "Now $9,999.99" in each row, so a live price of $10,000 or more widens only its own row (about 7px at $12,345), and that row's Market column drifts left. Nothing clips.
+- On the GitHub macOS runner `socket.getfqdn` hangs, so a plain `python3 -m http.server` never listens. Banchi's bind no longer calls it (`CaptureServer.server_bind`). Outside banchi, bind with `socketserver.TCPServer.server_bind` or expect the same hang.
 - `scripts/worktree-create.sh`'s `take_lock`: a takeover that loses the rename puts no lock back. This is the put-back gap from PR #1033 (the worktree lock).
 - `scripts/worktree-create.sh`'s `lock_is_stale`: a reused pid makes a dead holder read as live, so a waiter sits until the lock wait limit runs out.
 - `scripts/worktree-create.sh`: the re-entry `git worktree list` read runs outside the lock.

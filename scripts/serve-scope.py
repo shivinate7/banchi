@@ -5,7 +5,8 @@
 187.5. It is the largest single target in the suite and the one a screen change cannot
 possibly break: it copies this checkout into a throwaway tree, gives it a STUB `app/`, and
 proves the supervisor's build job against a shell script that writes one file. Nothing under
-`app/` is carried into the copy at all.
+`app/` is carried into those copies. The one exception is `check_real_build`, which copies the
+real `app/` and runs the real `vite build`, and only when BANCHI_SERVE_REAL_BUILD is `1`.
 
 THE OWNER RULED THIS ONE IN AND THE REST OUT, 2026-09-17. Path gating is not a general policy
 here: nine targets in `make check` cost under a tenth of a second each, so thirty-five scope
@@ -103,11 +104,13 @@ SCOPE = (
 )
 
 # `app/**` IS DELIBERATELY ABSENT, AND IT IS THE WHOLE POINT OF THIS FILE.
-# `scripts/serve-selftest.py` writes a STUB `app/` into the throwaway tree and never copies
-# this one — its own header says so: "a real `app/` means `node_modules` and a real `vite
-# build`, which is the one thing this script is deliberately not testing." The day it copies
-# a real `app/`, `CARRY` gains the name and the `serve scope` row fails until this list
-# follows. That is the reconciliation doing its job, not a surprise.
+# `scripts/serve-selftest.py` gives its throwaway trees a STUB `app/`, so an `app/` change cannot
+# move what it reads. The one exception is `check_real_build`, which copies the real `app/` and
+# runs the real `vite build`. It runs only when BANCHI_SERVE_REAL_BUILD is `1`. `check.yml` sets
+# that on the guards-2 shard for every event, so a pull request in this scope runs the real build
+# too; `mac.yml` sets it on the weekly Mac run. A pull request that touches only `app/` skips the
+# self-test, so it meets that arm on main. If the stub trees ever copy a real `app/`, `CARRY`
+# gains the name and the `serve scope` row fails until this list follows.
 
 
 def _browser_scope():

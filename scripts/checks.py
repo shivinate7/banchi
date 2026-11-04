@@ -1279,7 +1279,10 @@ CHECKS = (
                    "Python edit restarts it and does not rebuild, that a failed build leaves "
                    "the previous bundle byte-identical, that every request during a build "
                    "answers 200 — the swap is two renames — and that with no node on PATH the "
-                   "API comes up anyway while `GET /` says 503. Five mutations were observed "
+                   "API comes up anyway while `GET /` says 503. One gated arm, "
+                   "`check_real_build` (BANCHI_SERVE_REAL_BUILD=1, SKIPPED without it), "
+                   "swaps the stub for the real `vite build` over a copy of the real `app/`. "
+                   "Five mutations were observed "
                    "failing it, including building straight into `dist/`.",
         "needs": ("python3",),
         "writes": "two throwaway checkouts, their `.serve/` directories and the supervisors "
