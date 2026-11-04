@@ -66,7 +66,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 from server import ports  # noqa: E402
 
-# The escape hatch, spelled the way `BANCHI_MAIN=off`, `BANCHI_KILL=off`,
+# The escape hatch, spelled the way `BANCHI_MAIN=off`,
 # `BANCHI_REVERT=off`, `BANCHI_SUITE_LOCK=off` and `BANCHI_SERVE_MAIN=off` already are.
 #
 # IT TURNS THE MECHANISM OFF RATHER THAN LETTING SOMETHING PAST, which is a departure from every

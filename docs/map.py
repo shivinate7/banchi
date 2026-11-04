@@ -2734,7 +2734,7 @@ COMPONENTS = [
                         "silently built none — the seed tree has no `origin` remote, so the "
                         "push failed quietly — and four arms were green over two refs that "
                         "were equal before the call.",
-                "governed_by": ["D18", "D42", "D43", "D158", "D176"],
+                "governed_by": ["D18", "D42", "D43", "D127", "D158", "D176"],
                 "tested_by": [],
             },
             "janitor-selftest.sh": {

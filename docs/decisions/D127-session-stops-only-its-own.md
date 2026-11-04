@@ -1,6 +1,6 @@
 # D127 — A session stops only what it started
 
-**Status.** The PreToolUse hook mode of `scripts/reap.py` was deleted on the owner's ruling (D135, 2026-11-04 08:40 CST), because only the Codex setup armed it. The shared layer's machine-wide-kill rule owns that guard for Claude Code. The reaper stays (`make reap`). The hook sections below record why the verdict works as it does. `BANCHI_KILL` is now read only by `scripts/guard-shell.py`'s recovery list.
+**Status.** The PreToolUse hook mode of `scripts/reap.py` was deleted on the owner's ruling (D135, 2026-11-04 08:40 CST), because only the Codex setup armed it. The shared layer's machine-wide-kill rule owns that guard for Claude Code. The reaper stays (`make reap`). The hook sections below record why the verdict works as it does. `BANCHI_KILL`, its escape hatch, has no reader left and is gone.
 
 **Built after two incidents in a single session.** Both happened while cleaning up dev servers the session had launched itself.
 

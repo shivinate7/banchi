@@ -48,7 +48,7 @@ report. Every one of those passes, and `scripts/silent-write-selftest.sh` pins t
 passing rather than trusting this paragraph.
 
 THE ESCAPE HATCH IS `BANCHI_SILENT=off` AND IT IS PRINTED IN EVERY REFUSAL, per the house
-rule `BANCHI_MAIN=off` set, and honoured in both of `BANCHI_KILL`'s two forms — the
+rule `BANCHI_MAIN=off` set, and honoured in both forms — the
 environment, and inline in the command itself.
 
 WHAT IT COSTS, MEASURED, because it runs on EVERY Bash call in the session: 35 ms, and flat —

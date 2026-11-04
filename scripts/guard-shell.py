@@ -176,7 +176,7 @@ SKIPPED: Set[str] = set()
 
 
 def _off(clause: str, command: str) -> bool:
-    """Whether this clause is skipped, or its hatch is set, in either of `BANCHI_KILL`'s forms."""
+    """Whether this clause is skipped, or its hatch is set, in either form: environment or inline."""
     if clause in SKIPPED:
         return True
     name = HATCH[clause]
@@ -1325,8 +1325,7 @@ def clause_narrate(reading: "shell_parse.Reading") -> Verdict:
 #: THE RECOVERY LEVERS: the hatches an agent may still set, because each one frees a stuck
 #: session (a wedged process, a held lock, a main that will not sync). Every other
 #: `BANCHI_*=off` is the owner's to set, from the owner's terminal, never from a tool call.
-RECOVERY_LEVERS = frozenset({"BANCHI_KILL", "BANCHI_SUITE_LOCK", "BANCHI_SERVE_MAIN",
-                             "BANCHI_SYNC"})
+RECOVERY_LEVERS = frozenset({"BANCHI_SUITE_LOCK", "BANCHI_SERVE_MAIN", "BANCHI_SYNC"})
 OWNER_ONLY = "owner-only: ask the owner to run this command"
 
 
