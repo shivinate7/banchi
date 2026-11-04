@@ -316,7 +316,7 @@ jobs:
       # `typescript` from the `node_modules` beside it. It names no sha: a glob that finds
       # not exactly one pinned copy fails.
       - name: Download the pinned claude-settings for the map check
-        if: ${{ false }}
+        if: false
         uses: shivinate7/claude-settings/actions/ci-alarm@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
 
       - name: Install the map check's skill from the pinned claude-settings
