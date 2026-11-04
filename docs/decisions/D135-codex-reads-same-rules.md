@@ -15,7 +15,7 @@ Home: CLAUDE.md
 **What stays, because Claude Code reads it.**
 
 - `code-card-fork/CLAUDE.md -> ../CLAUDE.md`, so Claude Code's auto-load in that directory reads the root rules. The `fork claude link` row of `make docs-audit` checks it.
-- The hook checks that guarded `.claude/settings.json` alone. The `claude hooks` row keeps three of them: every hook command names a file in the tree, no `scripts/guard-shell.py` entry sets `GUARD_SHELL_SKIP`, and the silent-write hook keeps its `BANCHI_SILENT_WRITE_ONLY` prefix (D171).
+- The hook checks that guarded `.claude/settings.json` alone. The `claude hooks` row keeps two of them: every hook command names a file in the tree, and the silent-write hook keeps its `BANCHI_SILENT_WRITE_ONLY` prefix (D171).
 - A path-scoped rule may use any glob in its `paths:` list. The folder-only glob shape and the one-rule-per-folder limit existed only so each folder could hold an `AGENTS.md` link.
 
 **Also removed, on the coordinator's ruling of 2026-11-04 08:40 CST under item 214 a.** The `--hook` mode of `scripts/reap.py` (D127). Only `.codex/hooks.json` armed it. The shared layer's machine-wide-kill rule owns that guard for Claude Code. Every mode `make reap` uses stays.

@@ -3452,8 +3452,7 @@ COMPONENTS = [
                         "itself reads them. The Write|Edit half parses nothing at all, so no "
                         "shell form "
                         "skirts it. ONE HATCH PER CLAUSE, so no clause can be disarmed by the "
-                        "switch that guards another. Claude Code runs every clause: no hook "
-                        "entry sets `GUARD_SHELL_SKIP` (`--skip` is its alias). Fails OPEN on "
+                        "switch that guards another. Claude Code runs every clause. Fails OPEN on "
                         "its own bugs, including a missing `shell_parse.py`, and an operand it "
                         "cannot resolve is REPORTED rather than passed silently.",
                 # D171 is the ruling that a rule read once competes with the work, which is
