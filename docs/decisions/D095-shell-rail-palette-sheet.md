@@ -8,7 +8,7 @@
 
 ### Three shells for three widths, and one of them is nothing at all
 
-**A 236px sidebar at 1024px and up.** It collapses to a 64px icon rail on `⌘.`. The rail state is remembered per device in `localStorage` under `banchi.rail` (D27). A device with no stored choice starts railed below the width `--bn-rail-break-px` holds. That token is the one home of that width. Records name the token, never its number (the owner's ruling, Cockpit item 184 a). **Below 640px, a 52px top bar and a 64px bottom tab bar.** The desktop rail covers 640 to 1023 (`TABLET_RAIL`, set by D276, the palette is Go to). The tabs are the four routes with `tab: true`: Capture, Review, Orders and Inventory. Everything else sits behind a left drawer. **The Fulfiller's route has no nav.** `CHROME_FREE` holds his persona, and the shell renders no nav for it. It is not rendered rather than hidden, as before.
+**A 236px sidebar at 1024px and up.** It collapses to a 64px icon rail on `⌘.`. The rail state is remembered per device in `localStorage` under `banchi.rail` (D27). A device with no stored choice starts railed below the width `--bn-rail-break-px` holds. That token is the one home of that width. Records name the token, never its number (the owner's ruling, Cockpit item 184 a). **Below 640px, a 52px top bar and a 64px bottom tab bar.** The desktop rail covers 640 to 1023 (`TABLET_RAIL`, set by D276). The tabs are the four routes with `tab: true`: Capture, Review, Orders and Inventory. Everything else sits behind a left drawer. **The Fulfiller's route has no nav.** `CHROME_FREE` holds his persona, and the shell renders no nav for it. It is not rendered rather than hidden, as before.
 
 ### The palette and the sheet replace hunting for a binding
 
