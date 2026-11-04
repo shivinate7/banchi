@@ -2704,7 +2704,7 @@ COMPONENTS = [
                         "`BANCHI_SYNC=off` is the hatch, printed on every sync and every "
                         "refusal — the one hatch here that stops an act rather than "
                         "permitting one.",
-                "governed_by": ["D18", "D42", "D43", "D138", "D158", "D176"],
+                "governed_by": ["D18", "D42", "D43", "D127", "D138", "D158", "D176"],
                 "tested_by": [],
                 "note": "PROVED BY `make sync-selftest` (scripts/sync-selftest.py) AND NOT BY "
                         "THE HARNESS, which is why `tested_by` is empty: that field names "
@@ -2750,17 +2750,14 @@ COMPONENTS = [
                                 "D305"],
             },
             "reap.py": {
-                "does": "the kill guard, and the tool it names. ONE FILE, TWO FACES, ONE "
-                        "PREDICATE: `--hook` is a PreToolUse hook on Bash that refuses a "
-                        "command whose targets do not live under this checkout, and a bare run "
-                        "is the reaper that stops what does and PRINTS what it refused. The "
+                "does": "the reaper: stops what this session started and PRINTS what it "
+                        "refused. The PreToolUse hook mode was deleted (D135). The "
                         "rule is that every process an agent session may kill was started BY "
-                        "that session and lives under the tree it is working in, so the guard "
-                        "RESOLVES the command's real targets — running pgrep and lsof itself, "
-                        "read-only — rather than pattern-matching intent: `pkill -f "
-                        "capture_server.py` is allowed when the only match is yours and refused "
-                        "when it is not. Fails OPEN on its own bugs and CLOSED on a target it "
-                        "cannot place. Repo-agnostic and imports nothing from this tree, so "
+                        "that session and lives under the tree it is working in, so the reaper "
+                        "RESOLVES the real targets — running pgrep and lsof itself, "
+                        "read-only — rather than pattern-matching intent: a process is stopped "
+                        "when it is yours and refused when it is not. It fails CLOSED on a "
+                        "target it cannot place. Repo-agnostic and imports nothing from this tree, so "
                         "it covers any checkout it is pointed at. THE "
                         "BARE SWEEP ASKS THE SAME QUESTION THE VERDICT ANSWERS since "
                         "2026-09-12: `pids_under` read argv alone while `verdict_for` reads "
@@ -2789,7 +2786,7 @@ COMPONENTS = [
                 # than D305's own any-session reading. D305 is the
                 # 2026-09-27 amendment itself.
                 "governed_by": ["D305", "D18", "D43",
-                                "D138", "D88", "D127",
+                                "D138", "D88", "D127", "D135",
                                 ],
             },
             "reap_mark.py": {

@@ -146,7 +146,7 @@ The push clause's printed remedy names the branch's own name. It prints `git pus
 
 The owner ruled: log every deny or ask. `scripts/refusal_log.py` is the one helper. Each guard imports it, and the shell hooks call its CLI. It appends one line per refusal to `banchi-refusals.log`, beside the hatch log. A line holds the time, `guard:rule` (one stable id per clause), a snippet of at most 80 characters, the session id and the checkout. The snippet is a heading, a path or a masked verdict, never a whole command.
 
-The guards that write it are `guard-shell.py`, `reap.py --hook`, `silent-write-guard.py`, `guard-opsec.sh`, and the three hooks in `scripts/githooks/` that refuse. One `O_APPEND` write per line keeps concurrent agents apart. The log only records. It fails open. A log that cannot be written never changes a verdict or an output. `BANCHI_REFUSAL_LOG` names a file instead of the common-dir default. Each self-test uses it to point the log at a fixture and at an unwritable path. `make status` prints the last 24 hours per rule on one line, beside the hatch lines.
+The guards that write it are `guard-shell.py`, `silent-write-guard.py`, `guard-opsec.sh`, and the three hooks in `scripts/githooks/` that refuse. One `O_APPEND` write per line keeps concurrent agents apart. The log only records. It fails open. A log that cannot be written never changes a verdict or an output. `BANCHI_REFUSAL_LOG` names a file instead of the common-dir default. Each self-test uses it to point the log at a fixture and at an unwritable path. `make status` prints the last 24 hours per rule on one line, beside the hatch lines.
 
 ### Standing
 

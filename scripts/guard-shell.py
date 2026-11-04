@@ -63,7 +63,7 @@ Claude-side copy is cut on the owner's word.
        process table can answer in advance, so the roster is named, short, per-incident, and
        reconciled by the self-test against the heartbeat constant in the file that runs it.
 
-THE STANDARD IS `scripts/reap.py:hook`'S AND IT IS NOT NEGOTIABLE HERE EITHER:
+THE STANDARD IS D127'S (THE RETIRED `reap.py` HOOK) AND IT IS NOT NEGOTIABLE HERE EITHER:
 
     a broken GUARD fails OPEN — any parse error, any bug here, an unreadable payload, a
                                 missing `git`: exit 0 and refuse nothing
@@ -1406,7 +1406,7 @@ def render(refusals: Sequence[Refusal]) -> str:
 def hook(payload: dict, owner_only: bool = True) -> int:
     """The PreToolUse hook. Exit 2 blocks the call and hands stderr to the session.
 
-    IT FAILS OPEN ON ITS OWN BUGS. `reap.py:hook`'s docstring is the contract and it is not
+    IT FAILS OPEN ON ITS OWN BUGS. D127's standard (the retired `reap.py` hook) is the contract and it is not
     negotiable here: a guard that blocks every shell command when its parser throws is a
     guard somebody switches off inside a day, and a switched-off guard protects nothing.
     """

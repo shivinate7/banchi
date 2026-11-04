@@ -34,7 +34,7 @@ separate test below — `refs/heads/main` must be an ancestor of `refs/remotes/o
 and it is the whole reason this file can be trusted with a ref D42 protects.
 
 IT FAILS OPEN ON ITS OWN BUGS AND CLOSED ON A TARGET IT CANNOT READ, which is
-`scripts/reap.py:hook`'s rule and its reason: *"a guard that blocks every shell command when
+D127's rule (the retired `reap.py` hook) and its reason: *"a guard that blocks every shell command when
 `lsof` is missing or its own parser throws is a guard somebody switches off inside a day."*
 Here the two directions are:
 

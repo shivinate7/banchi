@@ -18,6 +18,6 @@ Home: CLAUDE.md
 - The hook checks that guarded `.claude/settings.json` alone. The `claude hooks` row keeps three of them: every hook command names a file in the tree, each `scripts/guard-shell.py` entry pins its `GUARD_SHELL_SKIP` value, and the silent-write hook keeps its `BANCHI_SILENT_WRITE_ONLY` prefix (D171).
 - A path-scoped rule may use any glob in its `paths:` list. The folder-only glob shape and the one-rule-per-folder limit existed only so each folder could hold an `AGENTS.md` link.
 
-**Not done here.** `scripts/reap.py --hook` was armed only by `.codex/hooks.json` (D127). Nothing in this repo arms it now. The shared layer's machine-wide-kill rule owns that guard for Claude Code. The script's `--hook` mode stays until the owner rules on it.
+**Also removed, on the coordinator's ruling of 2026-11-04 08:40 CST under item 214 a.** The `--hook` mode of `scripts/reap.py` (D127). Only `.codex/hooks.json` armed it. The shared layer's machine-wide-kill rule owns that guard for Claude Code. Every mode `make reap` uses stays.
 
 The owner deletes the untracked Codex files in the main checkout by hand: `~/Developer/banchi/AGENTS.md`, its `.agents/skills/` mirror, and `.codex/`.

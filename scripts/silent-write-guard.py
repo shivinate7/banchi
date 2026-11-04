@@ -33,7 +33,7 @@ THIS IS `reap.py`'S SHAPE AND IT DELIBERATELY DIFFERS IN ONE WAY. That guard can
 from the text alone — `pkill -f capture_server.py` is right on Monday and wrong on Tuesday —
 so it RESOLVES the command's real targets by asking the system. This one is the opposite case
 and it is the easier one: whether a stream reaches the session is a property of the string,
-decidable with no process table and no network. The asymmetry from `reap.py:hook` is honoured
+decidable with no process table and no network. The asymmetry from D127 is honoured
 unchanged, because it is the whole reason a guard survives its first week:
 
     a broken GUARD fails open — any parse error, any bug here, any unreadable payload exits 0
@@ -401,7 +401,7 @@ def _clauses() -> Optional[frozenset]:
 def hook(payload: dict, clauses: Optional[frozenset] = None) -> int:
     """The PreToolUse hook on Bash. Exit 2 blocks the call and hands stderr to the session.
 
-    IT FAILS OPEN ON ITS OWN BUGS. `reap.py:hook`'s docstring is the contract and it is not
+    IT FAILS OPEN ON ITS OWN BUGS. D127's standard (the retired `reap.py` hook) is the contract and it is not
     negotiable here either: a guard that blocks every shell command when its parser throws is
     a guard somebody switches off inside a day, and a switched-off guard protects nothing.
     """

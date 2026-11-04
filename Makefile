@@ -1353,11 +1353,11 @@ guard-shell-selftest:
 .PHONY: guard-shell-selftest
 
 # RETIRED. `~/.claude/bin` is claude-settings' install.sh's, and its guard refuses a session's
-# write there. Banchi's own hooks run `scripts/session-teardown.sh` and `scripts/reap.py` from
+# write there. Banchi's own hook runs `scripts/session-teardown.sh` from
 # the repo, so nothing here needs a copy. This target copies nothing.
 janitor-install:
 	@echo "claude-settings' install.sh owns ~/.claude/bin. This target copies nothing."
-	@echo "Banchi's hooks run scripts/session-teardown.sh and scripts/reap.py from the repo."
+	@echo "Banchi's hook runs scripts/session-teardown.sh from the repo."
 
 .PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check ci-check-product ci-check-product-2 ci-check-product-3 ci-check-static ci-check-guards-1 ci-check-guards-2
 

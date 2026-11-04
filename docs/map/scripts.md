@@ -98,7 +98,7 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
 - `scripts/readings-selftest.py` — Proves store/readings.py and pipeline/readings.py against a throwaway store (D189).
 - `scripts/readme_gen.py` — Regenerates README.md's `<!-- gen:NAME -->` blocks from their sources.
 - `scripts/reap-selftest.sh` — Proves reap.py by pointing it at processes it must not kill.
-- `scripts/reap.py` — The kill guard, and the tool it names.
+- `scripts/reap.py` — The reaper: stops what this session started, and prints what it refused.
 - `scripts/reap_mark.py` — Stamps the process a launcher is about to become with the session that started it — `.serve/owners/<pid>.json`, `{pid, owner, label, startedAt}` — so `reap.py` can tell WHOSE a process is, not only whether it is under this checkout.
 - `scripts/refusal-log-assert.sh` — Sourced by each guard's self-test: asserts the refusal log holds exactly one well-formed line for a refusal.
 - `scripts/refusal_log.py` — The one refusal log. Every guard that denies or asks appends one TAB-separated line to `.git/banchi-refusals.log`, beside the hatch log: time, `guard:rule`, a snippet of at most `80` characters, the session id, the checkout.

@@ -1,5 +1,7 @@
 # D127 — A session stops only what it started
 
+**Status.** The PreToolUse hook mode of `scripts/reap.py` was deleted on the owner's ruling (D135, 2026-11-04 08:40 CST), because only the Codex setup armed it. The shared layer's machine-wide-kill rule owns that guard for Claude Code. The reaper stays (`make reap`). The hook sections below record why the verdict works as it does. `BANCHI_KILL` is now read only by `scripts/guard-shell.py`'s recovery list.
+
 **Built after two incidents in a single session.** Both happened while cleaning up dev servers the session had launched itself.
 
 1. `pkill -f "capture_server.py"` targeted a scratch capture server started in a worktree. `pkill -f` is machine-wide. It also matched `/Users/shivinate/Developer/banchi/server/capture_server.py`, the owner's live capture server on :8000 over their real 1,625-card store. That process is the one **D138** keeps alive at login. The supervisor restored it 25 seconds later. **D88** kept the store intact, because every write is one SQLite transaction. Requests in flight were severed.
@@ -15,7 +17,7 @@
 
 This is not a heuristic. It is a property of how this repo is worked in. **D43 makes it true.** D43 gave every checkout its own store and its own ports, so a session's processes are already separated by path. This entry uses that separation a second time.
 
-**So the guard does not read intent. It RESOLVES the command's real targets.** `scripts/reap.py --hook` runs `pgrep` and `lsof` itself, read-only. It judges each pid it gets back. Does any absolute path in that process's argv, or its working directory, live under this checkout? So `pkill -f capture_server.py` is ALLOWED when the only match is the session's own. It is refused when it is not. The same command is right on one day and wrong on another. No reading of the string could carry that fact.
+**So the guard does not read intent. It RESOLVES the command's real targets.** `scripts/reap.py` runs `pgrep` and `lsof` itself, read-only. It judges each pid it gets back. Does any absolute path in that process's argv, or its working directory, live under this checkout? So `pkill -f capture_server.py` is ALLOWED when the only match is the session's own. It is refused when it is not. The same command is right on one day and wrong on another. No reading of the string could carry that fact.
 
 **A loop variable is answered by the clause beside it.** `kill $p` cannot be resolved alone. But `for p in $(lsof -ti tcp:5439); do kill $p; done` has the port in plain sight. So the guard asks what pids the command could be about, not what the kill's argument is. The producers are `pgrep`, `lsof -ti`, a `pkill` pattern and a `killall` name. The guard resolves them wherever they sit in the command.
 
@@ -46,11 +48,11 @@ On a Bash call it has no opinion about, the guard costs 35 ms. Measured over fiv
 
 ### One file, two faces, one predicate
 
-`scripts/reap.py` is both the hook and the tool the hook recommends. **That is the point, not a convenience.** A guard that refuses on one notion of "safe to kill" while the tool it names uses another gets bypassed. `make reap` previews everything running under this checkout. `--confirm` stops it. `port:N`, `match:X` and `pid:N` narrow it. **It prints what it refused and why.** That is the half a `pkill` cannot do.
+`scripts/reap.py` was both the hook and the tool the hook recommends. **That is the point, not a convenience.** A guard that refuses on one notion of "safe to kill" while the tool it names uses another gets bypassed. `make reap` previews everything running under this checkout. `--confirm` stops it. `port:N`, `match:X` and `pid:N` narrow it. **It prints what it refused and why.** That is the half a `pkill` cannot do.
 
 **It does not duplicate `janitor.py`, and it was built not to.** The claude-settings sweep owns the neighbouring question. That is what a FINISHED session left behind, on its own schedule, across trees, branches and orphans. This entry owns one signal at the moment it is sent. The two share their reasoning. Where the shapes matched, the code was copied WITH its argument, not re-derived. That covers `_real` and its symlink trap, the process table, and the leader-only `killpg`. Neither grew a second, disagreeing notion of what is safe to stop.
 
-**It imports nothing from this tree**, for `janitor.py`'s reason. Both stay repo-agnostic, so a hook can point them at any checkout. **No hook in this repo arms it.** `.claude/settings.json` does not carry it, on the owner's word: the shared layer's machine-wide-kill rule owns the Claude side. `.codex/hooks.json` carried it until D135 removed the Codex setup. The script's `--hook` mode stays until the owner rules on it.
+**It imports nothing from this tree**, for `janitor.py`'s reason. Both stay repo-agnostic, so a hook can point them at any checkout. **The hook mode is deleted** (see Status). `.claude/settings.json` never carried it, on the owner's word: the shared layer's machine-wide-kill rule owns the Claude side. `.codex/hooks.json` carried it until D135 removed the Codex setup.
 
 ### Amendment: a root may not be a directory that contains everything
 
