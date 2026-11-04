@@ -738,8 +738,8 @@ still gate" clause above is about those. A dialog on the screen the owner spends
 
 Rejected and worth naming: confirming only on a *second consecutive* undo. That protects against a held key walking backwards through good cards, at the cost of one more state to explain. If that ever happens in practice, it is the fix to reach for first.
 
-**THE CONTROL IS A STACK OF TEN SINCE 2026-08-29 (owner, D10), AND THE NO-DIALOG RULE SURVIVES
-IT BY DRAWING A NUMBER.** The capture screen lists the session's ten most recent captures into the current box, newest first, each row its own control. `U` and the trigger still mean the top one. Row N undoes N: that card and everything captured after it. The exception above is argued for ONE card. The ground is that its photograph is of a card still within reach of the hand that fed it. That argument does not stretch to five. What replaces it is not a confirm but a number: every row draws how many cards its press removes, before the press. So the thing a dialog would have said afterwards is on screen beforehand. It is the same
+**THE CONTROL IS A STACK OF THE WHOLE SITTING (owner, D10; D164), AND THE NO-DIALOG RULE SURVIVES
+IT BY DRAWING A NUMBER.** The capture screen lists every capture of the sitting, across drawers, newest first, each row its own control. `U` and the trigger still mean the top one. Row N undoes N: that card and everything captured after it. The exception above is argued for ONE card. The ground is that its photograph is of a card still within reach of the hand that fed it. That argument does not stretch to a row deeper than the first. What replaces it is not a confirm but a number: every row draws how many cards its press removes, before the press. So the thing a dialog would have said afterwards is on screen beforehand. It is the same
 instrument D33's money gate uses — make the number impossible not to have seen — at a much
 smaller register.
 

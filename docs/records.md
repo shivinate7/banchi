@@ -331,7 +331,6 @@ Each row has the slug, the first sentence of the record, and a link to it. A rec
 | `076-phone-walk-sheet-no-mark-sold` | On a phone, a tap on a walk row opens the card in a sheet. | [`docs/debts/076-phone-walk-sheet-no-mark-sold.md`](../docs/debts/076-phone-walk-sheet-no-mark-sold.md) |
 | `077-phone-specs-off` | By the owner's word, no spec that draws a page below 768px wide runs. | [`docs/debts/077-phone-specs-off.md`](../docs/debts/077-phone-specs-off.md) |
 | `082-fulfiller-pick-list-slide` | With more than one owed card, the box list moves once when the orders read ends. | [`docs/debts/082-fulfiller-pick-list-slide.md`](../docs/debts/082-fulfiller-pick-list-slide.md) |
-| `083-rail-offscreen-tiles` | With the full rail drawn (not dealing), each capture costs slightly more as the sitting grows. | [`docs/debts/083-rail-offscreen-tiles.md`](../docs/debts/083-rail-offscreen-tiles.md) |
 | `084-demo-chunk-size` | The demo fetches each screen's recorded data when the screen asks (`docs/specs/demo.md`, "Fetched per screen"). | [`docs/debts/084-demo-chunk-size.md`](../docs/debts/084-demo-chunk-size.md) |
 | `085-read-budget-miss-paths` | `harness/tests/t7/read_budget.py` budgets about 15 routes against a fixture that never reaches their hit path. | [`docs/debts/085-read-budget-miss-paths.md`](../docs/debts/085-read-budget-miss-paths.md) |
 | `086-duplicate-homes` | A whole-repo sweep found capabilities with more than one implementation whose copies still agree. | [`docs/debts/086-duplicate-homes.md`](../docs/debts/086-duplicate-homes.md) |
