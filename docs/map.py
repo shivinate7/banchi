@@ -3167,11 +3167,11 @@ COMPONENTS = [
             },
             "archive-review-selftest.py": {
                 "does": "proves cli/archive_review.py against a throwaway store, no "
-                        "network. Fabricates refusal strings shaped exactly like "
-                        "pipeline/pricehistory.py:NotResolvable/Unreachable's own "
-                        "messages, never calls a market. Proves: an identification "
-                        "refusal reaches the review queue with its photograph; a "
-                        "network-shaped refusal never does; a card sharing the refused "
+                        "network. Network refusals come out of the real fetch path "
+                        "(pipeline.net.request replaced), kind by "
+                        "pipeline/pricehistory.py:refusal, never by wording. Proves: an "
+                        "identification refusal reaches the review queue with its "
+                        "photograph; a network refusal never does; a card sharing the refused "
                         "SKU but carrying a DIFFERENT stored number is never queued (the "
                         "Exeggutor shape, D234); a card with no photograph is never "
                         "queued; a re-run over the same refusal adds nothing new and "

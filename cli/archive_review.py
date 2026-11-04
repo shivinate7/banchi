@@ -36,10 +36,10 @@ found in the catalogue — and `docs/decisions/`'s own rule (`building-check-pri
 is to reuse the constant the code already emits rather than mint a second word for one fact.
 
 WHAT THIS DOES NOT DO. It does not call the network, does not read or write
-`pipeline/pricearchive.py`, `pipeline/pricehistory.py` or `store/numbers.py`, and it does not
-repair a single stored field. It only decides which refusals are safe to route to a human at
-all (`is_identification_refusal`, below), and builds the entries `Queue.upsert` already knows
-how to hold.
+`pipeline/pricearchive.py` or `store/numbers.py`, and it does not repair a single stored field.
+It only decides which refusals are safe to route to a human at all (`is_identification_refusal`,
+below, by `pipeline/pricehistory.py:Refusal.kind`), and builds the entries `Queue.upsert`
+already knows how to hold.
 
 A CARD THIS MODULE CANNOT QUEUE IS NAMED, NEVER SILENTLY ABSENT (`queue_entries`'s own
 `QueueBuild.unavailable`, review round, HIGH finding, 2026-09-24) — `CLAUDE.md`'s hard rule,
@@ -57,7 +57,7 @@ from dataclasses import dataclass
 from typing import Iterable, List, Mapping
 
 from cli import resolve as run_resolve
-from pipeline import games, join, tcgcsv, variant
+from pipeline import games, join, pricehistory, tcgcsv, variant
 from store import master, queues
 
 # The reason every entry this module writes carries — `pipeline/variant.py`'s own name for
@@ -65,34 +65,21 @@ from store import master, queues
 # `NotResolvable` refusal off `pipeline/pricehistory.py:ProductIndex.find` means.
 ARCHIVE_UNRESOLVED = variant.NO_CATALOG_ROW
 
-# Substrings that mark a refusal as ABOUT THE NETWORK OR THE HOST, never about the card's own
-# identification — `pipeline/pricehistory.py:Unreachable`'s three raise sites
-# ("... answered HTTP <code>: ...", "... could not be reached: ...", "... did not answer
-# JSON: ...") and `Blocked`'s own message, which always contains "answered HTTP 403" (matched
-# by the broader "answered HTTP" already). BY THE TIME A REFUSAL REACHES THIS MODULE IT IS
-# ALREADY A PLAIN STRING — `pipeline/pricehistory.py:Market.readings_for_rows` folds every
-# `PriceHistoryError` into `str(exc)` before this layer ever sees one (D231's own note), and
-# this module may not edit that file to carry the exception type further. Substring matching
-# on a message this repo already writes in a fixed shape is the same discipline
-# `pipeline/pricearchive.py:BLOCKED_SIGNATURE` already uses for the identical problem one
-# case narrower.
-_NETWORK_SIGNATURES = ("answered HTTP", "could not be reached", "did not answer JSON")
-
 
 def is_identification_refusal(message: str) -> bool:
     """True for a refusal that is a fact about the CARD, never about the network right now.
 
-    A `NotResolvable` message (`pipeline/pricehistory.py:ProductIndex.find`,
-    `Market.product_id_for_row`, `Market.category_id`/`group_id`) never contains any of
-    `_NETWORK_SIGNATURES` — it names the card's own name, number and set, or the category or
-    group tcgcsv does not carry, and nothing about a socket or an HTTP status. A transient
-    failure is excluded here rather than queued, because a card that could not be reached
-    today is not a card whose STORED IDENTIFICATION is in question — re-running the sweep
-    later is its own remedy, and queuing it would send a human to look at a photo for no
-    reason connected to what actually failed.
+    The verdict is the refusal's `pipeline/pricehistory.py:Refusal.kind`, set where the failure
+    is raised by `pricehistory.refusal`, never read from its words. Only `KIND_IDENTIFICATION`
+    queues. A plain `str` with no kind is read as identification, so no review item is hidden.
+
+    A network, blocked or request refusal is excluded rather than queued, because a card that
+    could not be reached today is not a card whose STORED IDENTIFICATION is in question —
+    re-running the sweep later is its own remedy, and queuing it would send a human to look at
+    a photo for no reason connected to what actually failed.
     """
-    text = str(message or "")
-    return not any(signature in text for signature in _NETWORK_SIGNATURES)
+    kind = getattr(message, "kind", pricehistory.KIND_IDENTIFICATION)
+    return kind == pricehistory.KIND_IDENTIFICATION
 
 
 @dataclass(frozen=True)
@@ -143,7 +130,7 @@ def cards_for_refusals(
     not occur (every refused SKU was resolved against ITS OWN row a moment earlier), and
     skipping rather than raising keeps this function total over whatever a caller hands it.
 
-    A TRANSIENT (NETWORK) REFUSAL NEVER REACHES THE QUEUE, per `is_identification_refusal`.
+    A refusal of any other kind never reaches the queue, per `is_identification_refusal`.
 
     A CARD IN A TERMINAL STATE (D26's `sold`, `retired`, `moved`) IS EXCLUDED — its
     photograph may already be reclaimed (D89), and a departed card is not a question about

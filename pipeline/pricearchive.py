@@ -71,7 +71,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Protocol, Tuple
 
-from pipeline import games, join, tcgcsv
+from pipeline import games, join, pricehistory, tcgcsv
 from store import files
 from store import orders as order_store
 from store.pricearchive import RANGE_WIDTH_DAYS, Bucket, PriceArchive, Source, _key
@@ -105,9 +105,9 @@ CATALOG_SKUS_PER_PASS = 600
 # again within the same week always advances onto ground the last one had not covered.
 RESUME_TTL_SECONDS = 6 * 24 * 60 * 60
 
-# `pipeline/pricehistory.py:COURTESY_DELAY_SECONDS`, copied rather than imported — this
-# module still takes no hard dependency on `pricehistory` (the `market` argument stays
-# duck-typed throughout), so the naive first guess has to live here too, for a checkout
+# `pipeline/pricehistory.py:COURTESY_DELAY_SECONDS`, copied rather than imported — the
+# `market` argument stays duck-typed throughout and this module imports `pricehistory` only
+# for `Refusal` and its kinds, so the naive first guess has to live here too, for a checkout
 # that has never measured a real throttle yet.
 DEFAULT_COURTESY_DELAY_SECONDS = 0.15
 
@@ -117,14 +117,6 @@ DEFAULT_COURTESY_DELAY_SECONDS = 0.15
 # the host's real limit — which this module has no way to learn except by trying and is
 # never going to get from a constant somebody typed.
 THROTTLE_BACKOFF_FACTOR = 2.0
-
-# The one sentence `pipeline/pricehistory.py:fetch_json` raises `Blocked` with for an HTTP
-# 403 (see its own docstring). Matched by substring rather than by exception type, because
-# `readings_for_rows` already folds `Blocked` into a plain string per SKU before this
-# module ever sees it (see the header above) — this file may not change
-# `pipeline/pricehistory.py`'s exceptions, and a fixed substring of an already-fixed
-# sentence is a fact this module can rely on without a second, drifting copy of it.
-BLOCKED_SIGNATURE = "answered HTTP 403"
 
 
 class _MarketLike(Protocol):
@@ -925,7 +917,8 @@ def classify_refusals(
     refusals: Dict[str, str], had_earlier_success: bool
 ) -> Tuple[Dict[str, str], int]:
     """Rewrite a chunk's refusal messages, and answer how many were the host BLOCKING this
-    session outright (D222).
+    session outright (D222). A blocked refusal is one whose `pricehistory.Refusal.kind` is
+    `KIND_BLOCKED`; the wording is never read. A rewritten throttle message keeps that kind.
 
     A 403 THAT ARRIVES AFTER THIS PASS HAS ALREADY READ AT LEAST ONE SKU SUCCESSFULLY IS A
     THROTTLE, NEVER AN AUTHORIZATION PROBLEM — measured 2026-09-19: product 652771 answered
@@ -944,14 +937,15 @@ def classify_refusals(
     rewritten: Dict[str, str] = {}
     blocked = 0
     for sku, message in refusals.items():
-        if BLOCKED_SIGNATURE in message:
+        if getattr(message, "kind", None) == pricehistory.KIND_BLOCKED:
             blocked += 1
             if had_earlier_success:
-                rewritten[sku] = (
+                rewritten[sku] = pricehistory.Refusal(
                     "the host answered HTTP 403 after this pass had already read other "
                     "SKUs successfully — a throttle, not an authorization problem. Re-run "
                     "`archive sweep --write` later; it will not re-read what this pass "
-                    "already archived."
+                    "already archived.",
+                    pricehistory.KIND_BLOCKED,
                 )
                 continue
         rewritten[sku] = message

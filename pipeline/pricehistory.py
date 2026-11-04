@@ -973,6 +973,48 @@ def _worth_retrying(exc: PriceHistoryError) -> bool:
     return isinstance(exc, Offline) or net.worth_retrying(exc.__cause__)
 
 
+KIND_IDENTIFICATION = "identification"
+KIND_NETWORK = "network"
+KIND_BLOCKED = "blocked"
+KIND_REQUEST = "request"
+
+
+class Refusal(str):
+    """A refusal's words, carrying what kind of failure it was.
+
+    A `str` in every other respect, so a caller that prints, groups or compares refusals needs no
+    change. A caller that decides by kind reads `.kind` and never the wording. An untagged `str`
+    from elsewhere is read as `KIND_IDENTIFICATION`, so no review item is hidden.
+    """
+
+    kind: str
+
+    def __new__(cls, text: str, kind: str = KIND_IDENTIFICATION) -> "Refusal":
+        self = super().__new__(cls, text)
+        self.kind = kind
+        return self
+
+    def __getnewargs__(self):
+        return (str(self), self.kind)
+
+
+def refusal(exc: PriceHistoryError) -> Refusal:
+    """The `Refusal` for a raised `PriceHistoryError`, kind chosen by its class, never its text.
+
+    `Offline` is an `Unreachable`, so one test covers both. A bare `PriceHistoryError` is an
+    identification refusal: when the class says nothing, the card goes to review.
+    """
+    if isinstance(exc, Blocked):
+        kind = KIND_BLOCKED
+    elif isinstance(exc, Unreachable):
+        kind = KIND_NETWORK
+    elif isinstance(exc, UnknownRange):
+        kind = KIND_REQUEST
+    else:
+        kind = KIND_IDENTIFICATION
+    return Refusal(str(exc), kind)
+
+
 def fetch_json(
     url: str, timeout: float = ATTEMPT_TIMEOUT_SECONDS, user_agent: str = USER_AGENT
 ) -> Dict:
@@ -1410,7 +1452,7 @@ class Market:
             try:
                 by_product.setdefault(self.product_id_for_row(row), []).append(sku)
             except PriceHistoryError as exc:
-                refusals[sku] = str(exc)
+                refusals[sku] = refusal(exc)
         for product_id, skus in by_product.items():
             per_range: Dict[str, Dict[str, Series]] = {}
             for range_ in ranges:
@@ -1418,7 +1460,7 @@ class Market:
                     per_range[range_] = self.history(product_id, range_)
                 except PriceHistoryError as exc:
                     for sku in skus:
-                        refusals.setdefault(sku, str(exc))
+                        refusals.setdefault(sku, refusal(exc))
                     if _worth_retrying(exc):
                         break  # one product adds at most one URL to a run (D319)
             for sku in skus:
