@@ -136,6 +136,6 @@ The earlier text here said the owner's store was unaffected because it held $0.4
 A hold is a stated reason, never a zero price. A suggestion writes nothing until typed.
 
 - A hold is absent from `dispositions()`. `emit` and `prices_for` refuse a run when that mapping names a SKU the batch does not hold. A withheld SKU is the one most likely to go stale. A hold in it would break `emit` for the whole run, with nothing able to clear it.
-- A preset writes `rule` and `basis` and never an override, because an override beats the rule. It prices what it can and names what it could not. `cli/cmd_join.py:PRESETS` and `app/src/Pricing.tsx:PRESETS` agree on key, rule and basis. The `pricing presets` row of `make docs-audit` checks that.
+- A preset writes `rule` and `basis` and never an override, because an override beats the rule. It prices what it can and names what it could not. `pipeline/pricing.py:PRESETS` and `app/src/Pricing.tsx:PRESETS` agree on key, rule and basis. The `pricing presets` row of `make docs-audit` checks that.
 - The active preset chip comes from `rule` and `basis` and is never stored. A remembered chip would name a live rule while the run used another.
 - `withheld` means that this SKU is kept out of the import (`pipeline/decisions.py`). `held` means that copies TCGplayer holds (`store/master.py:Listing.held`), the opposite direction. A box that may not be deleted for a listing is a third thing, `_listing_hold`. Keep the three words apart.

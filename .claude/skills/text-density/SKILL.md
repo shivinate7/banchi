@@ -6,14 +6,13 @@ description: Run the on-demand text-density pass over Banchi's own screens and r
 # Text density pass
 
 `D284` replaces a pinned word ceiling with three things. None of them is
-a count. Two are gates, both in `app/tests/text-checks.spec.ts` (repetition and sentence shape, and
-D196's own rendered-text gap). The third is this pass. A
+a count. Two are gates, both the `[text-shape]` check in `app/tests/text-checks.spec.ts`: repetition and sentence shape. The third is this pass. A
 session runs it on demand. It is never a gate. `D284` carries the argument.
 
 ## Running it
 
 ```
-make text-density                                  # every route, 1440 and 390
+make text-density                                  # every swept route (not #/fulfillment or #/gallery), 1440 and 390
 make text-density ARGS="--route '#/pricing'"       # one route
 make text-density ARGS="--route '#/' --top 8"      # more prose blocks per route
 make text-density ARGS="--json"                    # the raw measurements
@@ -24,10 +23,6 @@ It needs no dev server and no store. It runs `app/tests/text-checks.spec.ts` in 
 populated fixture of `app/tests/routeFixtures.ts`, each screen read only once it is loaded.
 So the table shows the same screens, in the same state, as the gates. Playwright starts this
 checkout's own Vite, or reuses the one already on its port. Every read is stubbed.
-
-Before a run, confirm you stand in your own checkout: `git rev-parse --show-toplevel` must
-print your worktree path. Two worktrees can derive the same port. If a server that is not
-yours answers your dev port, stop and say so.
 
 ## Reading the cut table
 
@@ -47,7 +42,7 @@ It writes one receipt, `.serve/text-density.json`, gitignored. It never touches
 A high word count on its own is not a defect. Open the route next to the table. Ask three
 things, in the 2026-09-23 review's own order:
 
-1. **Does a sentence repeat itself?** The two gates already fail on `REPEATS`, `FACT`, `LONG`
+1. **Does a sentence repeat itself?** The `[text-shape]` check already fails on `REPEATS`, `FACT`, `LONG`
    and `CAPTION`, unless a lane's pending entry lists the finding. Check
    `app/tests/text-shape-allow.json` before you treat one as new.
 2. **Is a sentence doing the layout's job?** A caption that only restates its own heading, or

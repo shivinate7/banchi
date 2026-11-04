@@ -12,7 +12,7 @@
 
 **The separator is gone, not restyled**, which answers the owner literally. Nothing takes the interpunct's place. With the path stacked and the slot beside it, no seam is left to mark. `.browse-position-joint` is deleted. That rule painted the dots muted so the parts would bind. This treats the joints as the thing to remove.
 
-**The server string is untouched and stays the accessible name.** `pipeline/join.py:Position.label` emits `Box N · Section N · Card N`, and it keeps emitting it. `PositionParts` recomposes it into key and figure pairs for this screen only. It carries the original verbatim on `aria-label`. A screen reader announces exactly what the store said. That makes the client-side split a VIEW, not an edit of the record.
+**The server string is untouched and stays the accessible name.** `pipeline/join.py:Position.label` emits `<box name>, Section N, Card N` (D218, D260), and it keeps emitting it. `app/src/position.ts:placePartsOf` splits it for this screen only. It carries the original verbatim on `aria-label`. A screen reader announces exactly what the store said. That makes the client-side split a VIEW, not an edit of the record.
 
 **`app/tests/fulfillment.spec.ts` is not reached.** Its 32px tabular-figure floor probes `.fulfillment-place` and `.card-locations-place-large` inside `view(page)`. `.browse-position` is neither, and no spec selects it. D31's rule that the Fulfilment spec stays unweakened holds.
 

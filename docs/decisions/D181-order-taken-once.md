@@ -33,7 +33,7 @@ What is snapshotted instead is the one input that moves under a press: which cop
 
 The last row is load-bearing. It is D132's other door. Freezing the arithmetic while the fold deletes the row brings the jump back. The row vanishes, and every row under it moves up by its height. D132 offers two treatments for a departed row: fold it away, or sink it under the live ones. Frozen mode takes neither. A sink is a movement too. A frozen departure stays where it is, struck through. That is the only rendering that moves nothing.
 
-The departed row's text is the product's existing one. `pipeline/join.py:Position` already draws a copy in no slot as `Box 7 · departed · B7 #38` (D68 for why it names the record, D58 for why the number now belongs to a different card). `.is-gone` already dresses the row. The freeze changes where the row is, not what it says.
+The departed row's text is the product's existing one. `pipeline/join.py:Position` already draws a copy in no slot as the place it left, through `departed_label` (D259 replaced D68's form). `.is-gone` already dresses the row. The freeze changes where the row is, not what it says.
 
 ### The control
 
