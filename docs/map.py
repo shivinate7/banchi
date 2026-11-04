@@ -3701,6 +3701,17 @@ COMPONENTS = [
                                             "directory, because the runner installs no browser "
                                             "binaries. Never in the git hook: D18, it writes.",
                                     "governed_by": ["D16", "D18"]},
+            "waiting-export.py": {
+                "does": "turns the waiting page's database, read by the page writer with "
+                        "ArtifactData `list` and `out_dir` into a scratch folder, into "
+                        "`docs/waiting/`'s four files. Scans every string for tokens, keys, "
+                        "passwords, cookies, emails, phone numbers and street addresses "
+                        "first, and writes nothing on a hit. `--calls` prints the page URL "
+                        "and the reads to make. `--selftest` is `make waiting-export-selftest`: "
+                        "red on a fake token, email, key, address and password, green on a "
+                        "clean export, and no rewrite when nothing changed.",
+                "governed_by": ["D327", "D18"],
+            },
             "port-agreement.py": {
                 "does": "proves `server/ports.py` and `app/devPort.ts` still answer the same "
                         "numbers. One algorithm in two languages that cannot import each "
@@ -5062,7 +5073,8 @@ COMPONENTS = [
                                 "D193", "D196", "D212", "D213", "D215", "D219", "D222", "D224",
                                 "D225", "D227", "D231", "D234", "D236", "D239", "D240", "D242",
                                 "D243", "D247", "D252", "D253", "D254", "D256", "D261", "D269",
-                                "D271", "D275", "D277", "D278", "D280", "D295", "D301", "D320", "D324"],
+                                "D271", "D275", "D277", "D278", "D280", "D295", "D301", "D320", "D324",
+                                "D327"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -5627,6 +5639,18 @@ COMPONENTS = [
         "does": "the plans folder's short index: a plan holds the open lanes for work "
                 "too big for one pull request, one file per plan. None open.",
         "governed_by": [],
+    },
+    {
+        "path": "docs/waiting/",
+        "status": "built",
+        "does": "the waiting page's database as a committed record: items.json, "
+                "answers.json, groups.json and meta.json, each keyed by document id. "
+                "Written only by `scripts/waiting-export.py`, never by hand, so any account "
+                "can read the page's questions and answers from the repo.",
+        "governed_by": ["D327"],
+        "note": "Only its README until the page writer's first export, after it removes the one closed "
+                "item that restates a concern the owner ruled out of the repo. No per-file "
+                "entries: this component lists no modules, so nothing compares it to the tree, the same arrangement `fixtures/` uses.",
     },
     {
         "path": ".claude/rules/README.md",

@@ -64,12 +64,11 @@ contribution is where that split falls on the READ side, given the archive
   back into the table. That is `D219`'s own ruling, restated rather
   than reopened here.
 
-The screen never merges the two kinds of observation into one series or one line. The one
-number built from both is the Difference row, described under The Difference row below. The
+The screen never merges the two kinds of observation into one number or one line. The
 market series draws as a broken polyline. It gaps at any bucket with no price, inherited
 from `PriceHistory.tsx:sparkSegments` rather than rebuilt. The owner's own fills draw as
 individual marks, at their own true date and price, in the one accent this design system
-allows. A fill is never colored by whether it beat or missed the market. `docs/specs/sales-findings.md` already rules
+allows. A fill is never colored by whether it beat or missed the market. D278 already rules
 direction a sign and a word, never a color. A fill against a bucket is not even a
 direction. It is two facts placed near each other. A caption beside every chart states the
 bucket width now in force. That width is a property of when the report is read, not of the
@@ -80,19 +79,5 @@ sale.
 Cost basis is out of scope, along with a counterfactual re-priced at today's figure. So is
 any verdict comparing a fill to its bucket. All three are
 `docs/specs/sales-plan.md` section 1's questions, not this entry's. This view draws two
-kinds of observation side by side. It states their limits.
-
-### The Difference row
-
-The view computes one comparison between them: the Difference row. It is the average price you
-got per copy, minus the market average per copy, over the sales compared. It is drawn as a plain
-signed number (`Money` with `signed`, in `kit/data.tsx`), in one money color for both signs. No
-color, icon or arrow reads as good or bad.
-
-Section "Constraints on the per-product view" of `docs/specs/sales-findings.md` rules that
-direction is a sign and a word, never a color. The owner's plain-number ruling (owner, 2026-11-04
-06:40 CST, Cockpit item 187 a) waives the word for this row. The row is a sign and a figure only.
-
-Constraint 2 in that section rules out one number that compares a fill with a bucket, and asks that
-the spread be kept. The owner's ruling allows the Difference row, which compares two averages; it drops each
-bucket's low and high, and the spread stays on the market chart above.
+kinds of observation side by side. It states their limits. It computes no comparison between
+them.

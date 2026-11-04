@@ -1,43 +1,51 @@
 # D327 — The waiting page's data is a committed record
 
-The page writer copies the waiting page's database to folder `waiting/` on the record branch, with the shared waiting-page tool.
+The page writer exports the waiting page's database to `docs/waiting/` at each wake, so any account can read it.
 
 Kind: process
-Home: .claude/layout-extras.json
+Home: scripts/waiting-export.py
 
 **Why.** The waiting page's items, answers and groups lived only in the artifact's database. When
 the page moved to another account, Claude Code could not read that database, and the items were
 rebuilt from transcripts. The repo held no copy. The owner asked for one.
 
-**The duty is the shared one.** claude-settings decision waiting-data-in-repo (a copy of the
-waiting page lives in the repo) sets the copy's home, its file layout and its scan. The skill
-`waiting-page`, section "Keep a copy in the repo", holds the writer's steps. Banchi keeps no
-export script, and main's tip holds no copy. The old copy on main, a README and one JSON file
-each for items, answers, groups and meta, stays in git history. The shared scan finds nothing in
-it. A repo changes to fit a shared tool, never the tool to fit a repo (owner ruling, via the
-coordinator).
+**The duty.** The page writer (`meta.page.writer`, the coordinator) exports the page's data to
+the records folder at each wake, and before any republish. It is a read on demand inside a wake
+already running: no timer, no watcher.
 
-- The copy is folder `waiting/` on the record branch `roadmap`, one file per document. Tools read
-  the folder name through claude-settings `lint/layout.py`, never as a literal.
-- The page's URL is the `waiting-page` key in `.claude/layout-extras.json`.
-- Only triage writes the record branch (claude-settings guard rule roadmap-one-writer, in decision
-  session-tiers). A lane never runs the export.
+1. `python3 scripts/waiting-export.py --calls` prints the page URL, from the `waiting-page` key in
+   `.claude/layout-extras.json`, and the four collections.
+2. The writer reads `items`, `answers`, `groups` and `meta` with ArtifactData `list`, `query.limit`
+   1000 and `out_dir`, into one fresh, empty scratch folder. It pages with `next_cursor` until none
+   comes back. A reused folder keeps a deleted item's old file, so the folder is always new.
+3. `python3 scripts/waiting-export.py <folder>` scans, then writes `docs/waiting/`. It prints
+   `unchanged` or the files it changed.
+4. Only when it changed files, the writer commits them on a branch and hands that branch to the
+   batch runner like any lane. Main moves by pull request (D42, main moves by pull request).
 
-**The writer reads the diff before it commits.** This repo is public. No pattern catches text the
-owner ruled out of the repo, such as a closed item that restates a concern the owner asked to omit.
-The writer edits or deletes that item on the page first.
+**Two halves, because a script cannot read the database.** ArtifactData is a Claude tool call, not
+an API a script can reach. So Claude reads, and the script normalizes and scans. The script sorts
+keys and writes fixed indentation, so an unchanged database makes no diff. `meta.json` keeps every
+`meta` document, `page.checked` included: a wake that re-measures the page changes it, and commits.
+
+**The writer reads the diff before it commits.** No pattern catches text the owner ruled out of the
+repo, such as a closed item that restates a concern the owner asked to omit. The writer edits or
+deletes that item on the page first. This is why the first export is not in the pull request that
+built the tool: one closed item restated such a concern.
+
+**The scan.** This repo is public. Before it writes, the script scans every key and string for
+tokens (GitHub, Anthropic and other `sk-` keys, Stripe, Google, AWS, Slack, JWT, bearer and basic
+auth), private keys, any name ending in key, token, secret, password or cookie set to a value of 8 or
+more characters (a `.env` line), cookies, email addresses, phone numbers, street addresses, PO boxes
+and city, state and ZIP lines. A hit writes nothing and
+names the kind and the field, never the text. The writer removes it from the page and reads again.
+`make waiting-export-selftest` proves the scan red on each fake kind and green on a clean export.
 **NOT MECHANIZED:** a buyer's name with no address beside it. A pattern cannot tell a buyer's name
-from a card's name.
+from a card's name. The writer reads the diff before each commit, as the public-repo rule says.
 
-**The shared scan.** It refuses tokens and keys, cookies, auth headers, passwords, email
-addresses, phone numbers, PO boxes, city, state and ZIP lines, street addresses, and a value of
-8 or more letters and digits set to a name that holds key, secret, token or cookie. A refusal
-writes nothing. The writer fixes the item on the page and reads again. Some address and credential shapes still pass it (DEBT114,
-the waiting-page scan misses some address and credential shapes). The writer's read of the diff
-is the cover for them.
+**Not exported.** `receipts/` (when a session read and filed an answer) and the page's designs and
+roadmap block, which live in the page itself. The answers and items carry the rulings; the receipts
+only time their filing.
 
-**Not exported.** `receipts/` (when a session read and filed an answer) and the page's roadmap
-block. The mockups' design data is exported, as `waiting/page/designData.json`. The answers and
-items carry the rulings; the receipts only time their filing.
-
-**Reopen** if the waiting page gains an API a script can call.
+**Reopen** if the waiting page gains an API a script can call, or if the scan stops a clean export
+twice: a guard that cries wolf is spent.

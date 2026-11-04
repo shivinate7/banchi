@@ -139,8 +139,6 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
 - `scripts/sweep-memory.py` — Ship gate (a) for the background reader: the watcher's idle RSS with an empty queue and the worker's peak RSS over a queue of captures, on a scratch store.
 - `scripts/sweep_scratch.py` — A scratch capture server over a temporary store (own free port, the model symlinked, the index copied) for the background reader's two measurements.
 - `scripts/sync-selftest.py` — The self-sync, PROVED BY VIOLATING IT in throwaway clones with real bare origins and real linked worktrees.
-- `scripts/tests-for-selftest.py` — `make tests-for-selftest` — proves tests-for.py on the real tree and on fixture trees (a direct import, a package import, a subprocess run, `importlib`, the T7 group rules, `--root`), plus one planted break per language: the selected suite goes red and an unselected one stays green.
-- `scripts/tests-for.py` — `make tests-for ARGS=<path>` — prints the harness modules and unit tests that reach one product file by an import, a literal path, a subprocess argument or a text read, one per line, so a mutation run need not run every suite (D247's reach reader, reused from guard-scope.py and browser-scope.py).
 - `scripts/tests_page.py` — `make tests-page` — writes `docs/TESTS.md`, one page of what each test file protects.
 - `scripts/text-density/density.mjs` — `make text-density` — the third piece of `D284`, a REPEATABLE, ON-DEMAND density pass that prints a CUT TABLE, never a gate (D18: it writes one receipt, `.serve/text-density.json`, gitignored).
 - `scripts/token-literal-check-pin.py` — `python3 scripts/token-literal-check-pin.py --pin` — the ONE thing allowed to write `scripts/token-literal-check.json`, token-literal-check.py's own per-file ratchet ceiling (D18, D280's shape).
@@ -149,6 +147,7 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
 - `scripts/user-strings.mjs` — The AST half of the `no mechanism on screen` row — walks every `.tsx` under app/src through app/node_modules/typescript (the compiler the app itself builds with, the same choice screen-freshness.mjs makes and for the same reason) and prints one JSON array of every USER-VISIBLE string: JSX text nodes.
 - `scripts/verdict-selftest.py` — PROVES `app/design-check-reporter.ts` STILL WRITES A VERDICT, BY RUNNING IT.
 - `scripts/views.txt` — The manifest `make screenshot` walks: one `<name> <url> <selectors>` line per view worth looking at.
+- `scripts/waiting-export.py` — Turns the waiting page's database, read by the page writer with ArtifactData `list` and `out_dir` into a scratch folder, into `docs/waiting/`'s four files.
 - `scripts/worktree-create-selftest.sh` — `make worktree-create-selftest`: runs worktree-create.sh for four names at once, five rounds, in a throwaway repo with an origin.
 - `scripts/worktree-create.sh` — The WorktreeCreate hook. Makes every Claude Code worktree with a plain `git worktree add` at `.claude/worktrees/<name>` on `worktree-<name>`, cut from a fresh origin/main with --no-track (no shared .git/config write, so parallel Agents do not race on its lock; the branch has no upstream), so githooks/post-checkout provisions it.
 - `scripts/worktree-guard.sh` — The SessionStart hook: provisions a git worktree's UNTRACKED state before any work starts.
