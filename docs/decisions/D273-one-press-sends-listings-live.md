@@ -46,7 +46,7 @@ accepted that cost. These protections stay, and they are the two-press design's 
 - The upload id comes off disk, never off the request.
 - A failed push rolls back at TCGplayer. Its copies go back to the list ONLY when TCGplayer
   answered the rollback, or when no upload was opened (the 2026-09-24 review).
-- The one press is the only route that publishes. No session, test or dry run calls it. The
+- The one press is the only route that publishes. No session, test or dry run calls it. Two older routes, `POST /pipeline/markdowns/<stamp>/push` and `.../publish` (`pipeline_routes.do_markdown_push`, `do_markdown_publish`), still move an upload live with only a confirm and no live read. Nothing in the repo calls them. They are to be deleted, with their uncalled client functions, their `scripts/screen-freshness.mjs` rows, their harness cases and their spec lines (owner, 2026-11-03 19:05 CST, waiting-page item 185 `oq-publish-route`, pick a). The delete lane first reads git history for why they were added. It deletes only if no live reason turns up. Otherwise it brings the reason back to the owner. The
   repo's rule that a block-list fails open applies here: a dry run uses an allow-list.
 
 The owner still decides every price on Pricing before the press. The live check after the lag
