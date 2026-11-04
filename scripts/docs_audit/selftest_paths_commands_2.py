@@ -32,7 +32,8 @@ from .strings import _only_shrinks
 def _run_folder():
     """A run folder from the repo's one temp home (`harness/tests/home.py`, test-temp-standard).
 
-    The root is on the path only for this import, so the audit's own imports stay as they were.
+    The import loads the store package, so it happens here, inside the self-test, and never at the
+    audit's own import. The root is on the path only for this import.
     """
     added = str(ROOT) not in sys.path
     if added:

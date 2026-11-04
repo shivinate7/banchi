@@ -10,10 +10,10 @@ from .core import ROOT, read, rule_files
 def claude_and_rules() -> str:
     """CLAUDE.md and every path-scoped rule file, read as one text, joined on a blank line.
 
-    The self-test cases that read a published sentence read it here, so they see the text the
-    product checks see. `rule_files()` (core) is the one list of rule files. The blank line is
-    load-bearing: the storage roster reader stops at one, so a roster at the foot of CLAUDE.md
-    must not run on into a rule file.
+    The self-test cases read a published sentence here. The product checks read CLAUDE.md alone
+    for now, so this is the text they would read once they also read the rule files. `rule_files()`
+    (core) is the one list of rule files. The blank line is load-bearing: the storage roster reader
+    stops at one, so a roster at the foot of CLAUDE.md must not run on into a rule file.
     """
     return "\n\n".join(read(path) for path in [ROOT / "CLAUDE.md", *rule_files()])
 
