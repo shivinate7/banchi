@@ -24,6 +24,12 @@ refused with ":8000 is already held". Since D261 (a copied tree never gets the
 live port), only a `.git` DIRECTORY keeps :8000, so a copy with no `.git` takes a slot from its
 path. The pin stays: a slot can collide with another worktree's, and a free socket cannot.
 
+ONE ARM IS THE EXCEPTION, AND IT IS GATED. `check_real_build` runs the real `vite build`, through
+the real `serve.py up`, in a copy that carries the real `app/` (one-process.md section 1.1). A stub
+cannot show that the bundle `up` serves is the one Vite wrote, which is the product's claim. It
+needs node and `app/node_modules`, so it runs only with `BANCHI_SERVE_REAL_BUILD=1`. Without the
+flag it prints a `serve-real-build: SKIPPED` marker. The stub stays for every other arm.
+
 IN `make check`, NEVER IN THE GIT HOOK. D18: it writes, and nothing that writes may gate a
 commit. Same placement and same reason as `audit-self-test`, `githooks-selftest`,
 `janitor-selftest` and `verdict-selftest`.
@@ -42,6 +48,8 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import uuid
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -124,8 +132,45 @@ def check(condition: bool, message: str) -> None:
         failures.append(message)
 
 
-def build_tree(where: Path) -> Path:
-    """A checkout that can run a supervisor, with a stub `app/` in place of the real one."""
+# What a real `app/` copy leaves out. `node_modules` is linked (see `real_app_into`); `dist*` is
+# what the build writes, and a copy must never start with one; `tests/` is the Playwright suite,
+# which no build reads.
+REAL_APP_SKIP = {"node_modules", "dist", "dist.next", "dist.prev", "tests", "__pycache__"}
+
+
+def real_app_into(tree: Path) -> None:
+    """Copy the real `app/` into `tree`, with `node_modules` linked from the checkout's own.
+
+    THE LINKS ARE PER PACKAGE, NEVER ONE LINK TO THE WHOLE DIRECTORY. `npm ci` deletes
+    `node_modules` before it installs, and through a directory link it would delete the
+    checkout's own. The supervisor's receipt and Vite's cache are written into `node_modules`,
+    and they must land in this copy. Dot-entries are not linked, except `.bin`: they are caches,
+    and a cache written through a link would land in the checkout.
+    """
+    source = ROOT / "app"
+    target = tree / "app"
+    target.mkdir(parents=True)
+    for entry in source.iterdir():
+        if entry.name in REAL_APP_SKIP or entry.name.startswith("."):
+            continue
+        if entry.is_dir():
+            shutil.copytree(entry, target / entry.name,
+                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        else:
+            shutil.copy2(entry, target / entry.name)
+    modules = target / "node_modules"
+    modules.mkdir()
+    for entry in (source / "node_modules").iterdir():
+        if not entry.name.startswith(".") or entry.name == ".bin":
+            os.symlink(entry, modules / entry.name)
+
+
+def build_tree(where: Path, real_app: bool = False) -> Path:
+    """A checkout that can run a supervisor. A stub `app/` unless `real_app` asks for the real one.
+
+    `real_app` is the one option, and it is what `check_real_build` uses. The caller checks that
+    `app/node_modules` exists first; this does not.
+    """
     tree = where / "tree"
     tree.mkdir()
     for name in CARRY:
@@ -141,6 +186,12 @@ def build_tree(where: Path) -> Path:
             )
         else:
             shutil.copy2(source, target)
+
+    if real_app:
+        # No stub `npx` and no stub `npm` on this tree's PATH: the real build runs, or it fails.
+        real_app_into(tree)
+        PORTS[tree] = free_port()
+        return tree
 
     app = tree / "app"
     (app / "src").mkdir(parents=True)
@@ -317,7 +368,8 @@ def report(tree: Path) -> dict:
         return {}
 
 
-def get(port: int, path: str, timeout: float = 5.0):
+def fetch(port: int, path: str, timeout: float = 5.0):
+    """One GET: (status, Content-Type, body). A refusal is an answer, so its body is read too."""
     try:
         with urllib.request.urlopen(
             urllib.request.Request(
@@ -325,11 +377,16 @@ def get(port: int, path: str, timeout: float = 5.0):
             ),
             timeout=timeout,
         ) as response:
-            return int(response.status), response.read()
+            return int(response.status), response.headers.get("Content-Type", ""), response.read()
     except urllib.error.HTTPError as refused:
-        return int(refused.code), refused.read()
+        return int(refused.code), refused.headers.get("Content-Type", ""), refused.read()
     except OSError:
-        return 0, b""
+        return 0, "", b""
+
+
+def get(port: int, path: str, timeout: float = 5.0):
+    status, _, body = fetch(port, path, timeout)
+    return status, body
 
 
 def wait_until(predicate, seconds: float = 30.0, step: float = 0.25) -> bool:
@@ -979,6 +1036,175 @@ def check_restart_target_from_linked_worktree() -> None:
         )
 
 
+# The types a browser takes for each file the built page names, by extension. A module script
+# served with the wrong type is refused, so the type is part of what this arm claims, not only
+# the bytes. The fonts are named by the page as preloads, and `font/woff2` is their type.
+BROWSER_TYPES = {
+    ".js": ("text/javascript", "application/javascript"),
+    ".css": ("text/css",),
+    ".woff2": ("font/woff2",),
+}
+
+# The dev page's entry. `app/index.html` names it; the built page must not.
+DEV_ENTRY = b'src="/src/'
+
+REAL_BUILD_ENV = "BANCHI_SERVE_REAL_BUILD"
+
+
+class _AssetNames(HTMLParser):
+    """The `/assets/` files a page names in a script `src` or a link `href`, in order, once each."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.names: list = []
+
+    def handle_starttag(self, tag, attrs) -> None:
+        if tag not in ("script", "link"):
+            return
+        named = dict(attrs).get("src" if tag == "script" else "href") or ""
+        if named.startswith("/assets/") and named not in self.names:
+            self.names.append(named)
+
+
+def asset_urls(page: bytes) -> list:
+    parser = _AssetNames()
+    parser.feed(page.decode("utf-8", "replace"))
+    return parser.names
+
+
+def product_pids(tree: Path) -> list:
+    """The `ps` line of every process whose command names this tree. `ps -axo` reads on Linux and macOS."""
+    listing = subprocess.run(  # noqa: S603, S607
+        ["ps", "-axo", "pid=,command="], capture_output=True, text=True, check=False,
+    ).stdout
+    names = {str(tree), str(tree.resolve())}
+    return [line for line in listing.splitlines() if any(name in line for name in names)]
+
+
+def run_folder_home():
+    """The run-folder standard's one home, `harness/tests/home.py`.
+
+    Imported on first use, because that import loads the store, and a run that never reaches
+    this arm has no need of it.
+    """
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from harness.tests.home import run_folder
+    return run_folder
+
+
+def check_run_folder_sweep() -> None:
+    """The sweep test-temp-standard names: an old sibling goes, a new one stays.
+
+    The root is a folder inside this run's own run folder, so the sweep never reaches the shared
+    temp root. The old sibling's mtime is set two days back. That is a fixture, not an assert.
+    """
+    run_folder = run_folder_home()
+    print("\n  the run folder removes siblings over a day old and keeps newer ones")
+    with run_folder() as outer:
+        root = outer / "sweep"
+        root.mkdir()
+        old = root / ("%d-%s" % (os.getpid(), uuid.uuid4()))
+        new = root / ("%d-%s" % (os.getpid(), uuid.uuid4()))
+        old.mkdir()
+        new.mkdir()
+        two_days_ago = time.time() - 2 * 24 * 60 * 60
+        os.utime(old, (two_days_ago, two_days_ago))
+        with run_folder(root):
+            check(not old.exists(),
+                  "a sibling run folder over a day old is removed when the next run starts")
+            check(new.exists(), "and a sibling run folder under a day old stays")
+
+
+def check_real_build() -> None:
+    """The real `vite build`, served by the real `serve.py up` (one-process.md section 1.1). Gated.
+
+    A COLD TREE WITH THE REAL APP AND NO STUB ON ITS PATH. The claims are the product's: the port
+    opens only after the build has landed; `/` is the built `index.html`, not the dev page; every
+    `/assets/` file the page names answers 200 with a type a browser runs; a path that is no route
+    is refused rather than answered with the app (D138, `capture_server.app_claims`); and `down`
+    leaves no process that names the tree.
+
+    THE FLAG IS NOT A SKIP ON A FAILURE. With it set, a missing node or a missing
+    `app/node_modules` is a failed check, because the flag is the request for the real build.
+    """
+    if os.environ.get(REAL_BUILD_ENV) != "1":
+        print(f"serve-real-build: SKIPPED set {REAL_BUILD_ENV}=1 to build the app for real "
+              "(needs node and app/node_modules)")
+        return
+    print("\n  the real vite build, served by the real `serve.py up`")
+    node_found = shutil.which("node") is not None
+    check(node_found, "node is on PATH, which the real build needs")
+    modules_found = (ROOT / "app" / "node_modules").is_dir()
+    check(modules_found,
+          "app/node_modules is installed, which the real build needs (make worktree-setup)")
+    if not (node_found and modules_found):
+        return
+
+    run_folder = run_folder_home()
+    with run_folder() as run:
+        tree = build_tree(run, real_app=True)
+        port = PORTS[tree]
+        built = tree / "app" / "dist" / "index.html"
+        try:
+            check(not (tree / "app" / "dist").exists(),
+                  "the tree starts with no app/dist, so nothing from before this run can answer")
+            up_run = serve(tree, "up", timeout=300)
+            check(up_run.returncode == 0, "`serve.py up` exits 0")
+
+            built_at_first_answer: list = []
+
+            def first_answer() -> bool:
+                if get(port, "/status")[0] != 200:
+                    return False
+                built_at_first_answer.append(built.is_file())
+                return True
+
+            check(wait_until(first_answer, seconds=180), "`GET /status` answers 200")
+            check(built_at_first_answer == [True],
+                  "and the build had landed when it first answered, because the port opens "
+                  "only after the build")
+
+            page = built.read_bytes() if built.is_file() else b""
+            check(DEV_ENTRY in (ROOT / "app" / "index.html").read_bytes(),
+                  "app/index.html names the dev entry, so the dev-page check below can find it")
+            code, body = get(port, "/")
+            check(code == 200, f"`GET /` answers 200 (it answered {code})")
+            check(body == page, "`GET /` returns app/dist/index.html byte for byte")
+            check(DEV_ENTRY not in body, "and it is not the dev page: it names no `src=\"/src/` entry")
+
+            assets = asset_urls(page)
+            check(any(url.endswith(".js") for url in assets)
+                  and any(url.endswith(".css") for url in assets),
+                  f"the built page names a JS and a CSS file under /assets/ ({len(assets)} named)")
+            check(all(url.endswith(tuple(BROWSER_TYPES)) for url in assets),
+                  "and every /assets/ file it names is a type this arm knows")
+            for url in assets:
+                ext = "." + url.rsplit(".", 1)[-1]
+                code, ctype, _ = fetch(port, url)
+                check(code == 200, f"`GET {url}` answers 200 (it answered {code})")
+                check(ctype.startswith(BROWSER_TYPES.get(ext, ())),
+                      f"`GET {url}` is served as the type a browser takes for it (it sent {ctype!r})")
+
+            code, body = get(port, "/no-such-screen")
+            check(code == 404 and b"no_such_route" in body,
+                  f"a path that is no route is refused as 404 `no_such_route`, not answered "
+                  f"with the app (it answered {code})")
+
+            running = product_pids(tree)
+            check(len(running) >= 2,
+                  f"before `down`, the supervisor and its capture child both run ({len(running)} "
+                  "name the tree), so the check after it means something")
+            down_run = serve(tree, "down", "--confirm")
+            check(down_run.returncode == 0, "`serve.py down --confirm` exits 0")
+            check(wait_until(lambda: get(port, "/status")[0] == 0, seconds=60),
+                  "after `down`, nothing answers on the port")
+            check(wait_until(lambda: not product_pids(tree), seconds=60),
+                  "and no process still names the throwaway tree")
+        finally:
+            serve(tree, "down", "--confirm")
+
+
 def main() -> int:
     print("supervisor self-test — the build job, against a throwaway tree (D138)")
     check_port_split()
@@ -1536,6 +1762,8 @@ def main() -> int:
             "a checkout whose trunk is called something else is not in violation for it",
         )
 
+    check_run_folder_sweep()
+    check_real_build()
     print()
     if failures:
         print(f"{FAIL}  {len(failures)} of the supervisor's build behaviours are wrong")
