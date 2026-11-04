@@ -205,12 +205,12 @@ def run(ok) -> None:
     by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["claude hooks"],
-        ".claude/settings.json pins its guard-shell skip, keeps the silent-write prefix and names real files",
+        ".claude/settings.json sets no guard-shell skip prefix, keeps the silent-write prefix and names real files",
         str(by_label["claude hooks"]),
     )
 
     # Driven on a temp settings file through the row's own path global.
-    print("\nclaude hooks: the skip pin, the silent-write prefix and a missing script are each reported")
+    print("\nclaude hooks: a skip prefix, the silent-write prefix and a missing script are each reported")
     import json
     from . import env_map
 
@@ -220,7 +220,7 @@ def run(ok) -> None:
     narrow = "BANCHI_SILENT_WRITE_ONLY=file,bash-c "
     silent_c = hook("Bash", narrow + "scripts/silent-write-guard.py --hook")
     gs = "scripts/guard-shell.py --hook"
-    c_bash, c_edit = hook("Bash", "GUARD_SHELL_SKIP=reset " + gs), hook("Write|Edit", "GUARD_SHELL_SKIP= " + gs)
+    c_bash, c_edit = hook("Bash", gs), hook("Write|Edit", gs)
 
     def claude_hooks_findings(entries: list) -> list:
         with tempfile.TemporaryDirectory() as tmp:
@@ -236,13 +236,16 @@ def run(ok) -> None:
         return [f for row in rep.checks for f in row.findings]
 
     found = claude_hooks_findings([c_bash, c_edit, silent_c])
-    ok(not found, "green: each guard-shell entry carries its pinned skip value and the silent-write prefix", str(found))
+    ok(not found, "green: each guard-shell entry is bare and the silent-write prefix is present", str(found))
     found = claude_hooks_findings([hook("Bash", "GUARD_SHELL_SKIP=checkout " + gs), c_edit, silent_c])
-    ok(len(found) == 1 and "GUARD_SHELL_SKIP=reset" in str(found[0]),
-       "red: Claude's Bash entry carries a different skip value", str(found))
-    found = claude_hooks_findings([c_bash, hook("Write|Edit", "GUARD_SHELL_SKIP=reset " + gs), silent_c])
-    ok(len(found) == 1 and "must set `GUARD_SHELL_SKIP=`" in str(found[0]),
-       "red: Claude's Write|Edit entry carries a skip value", str(found))
+    ok(len(found) == 1 and "must not set `GUARD_SHELL_SKIP`" in str(found[0]),
+       "red: Claude's Bash entry sets a skip prefix", str(found))
+    found = claude_hooks_findings([c_bash, hook("Write|Edit", "GUARD_SHELL_SKIP= " + gs), silent_c])
+    ok(len(found) == 1 and "must not set `GUARD_SHELL_SKIP`" in str(found[0]),
+       "red: Claude's Write|Edit entry sets an empty skip prefix", str(found))
+    found = claude_hooks_findings([hook("Bash", "GUARD_SHELL_SKIP=wait " + gs), c_edit, silent_c])
+    ok(len(found) == 1 and "must not set `GUARD_SHELL_SKIP`" in str(found[0]),
+       "red: a prefix naming a live clause is a finding too, not a pin", str(found))
     for label, entry in (
         ("only `file`", hook("Bash", "BANCHI_SILENT_WRITE_ONLY=file scripts/silent-write-guard.py --hook")),
         ("no prefix", hook("Bash", "scripts/silent-write-guard.py --hook")),

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `make guard-shell-selftest` — scripts/guard-shell.py, proved by committing its five mistakes.
+# `make guard-shell-selftest` — scripts/guard-shell.py, proved by committing its four mistakes.
 # Protects: The shell guard refuses each of its mistakes, proved by committing each mistake in a throwaway repository.
 # Governs: D18
 #
@@ -8,7 +8,7 @@
 # reproduction: `reap-selftest.sh` reproduces both 2026-09-10 kill incidents with real
 # processes and a real socket, `revert-selftest.sh` rebuilds PR #218 and #221, and
 # `silent-write-selftest.sh` reproduces the refused commit whose refusal went to /dev/null. So
-# three of the five incidents are PERFORMED here first, in a throwaway repository, and only then
+# three of the four incidents are PERFORMED here first, in a throwaway repository, and only then
 # is the guard asked about them:
 #
 #   2. a worktree is made, and its root is a different directory from the main checkout's
@@ -16,7 +16,7 @@
 #   6. a local branch is really made to track a differently-named remote branch — the exact
 #      way a background agent's push created one — and `git push origin HEAD` is asked about
 #
-# The fifth reproduction is the one that earns its place: rank 19's rule was written correctly
+# The last reproduction is the one that earns its place: rank 19's rule was written correctly
 # and in full, and then broken four days later by a session that had read it, because the
 # mechanism — a pattern matching the searcher — is not what anybody expects. Here it is a
 # measurement.
@@ -33,8 +33,8 @@
 #
 # WHAT IT CANNOT PROVE. That Claude Code actually invokes the hook, or that exit 2
 # blocks a tool call — both are the harness's behaviour and not this repo's.
-# `.claude/settings.json` arms it and `make docs-audit`'s `claude hooks` row keeps its
-# `GUARD_SHELL_SKIP` pin honest.
+# `.claude/settings.json` arms it and `make docs-audit`'s `claude hooks` row refuses
+# a settings entry that sets `GUARD_SHELL_SKIP`.
 
 set -uo pipefail          # NOT -e: every case must run and be scored
 
@@ -631,84 +631,6 @@ allows "a detached HEAD — nothing this clause can name as \"the current branch
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
 
 echo ""
-echo "  8. a hard-family reset, reproduced"
-
-# --------------------------------------------------- 8a. the incident, performed in the fixture
-(
-  cd "$tmp/main" || exit 1
-  printf 'one\ntwo\nthree\nfour\n' > work.py
-  for i in $(seq 1 100); do printf 'reset would destroy this line %s\n' "$i" >> work.py; done
-  wc -l < work.py | tr -d ' ' > "$tmp/reset-before"
-  git reset -q --hard 2>/dev/null
-  wc -l < work.py | tr -d ' ' > "$tmp/reset-after"
-)
-if [ "$(cat "$tmp/reset-before")" = "104" ] && [ "$(cat "$tmp/reset-after")" = "3" ]; then
-  ok "\`git reset --hard\` destroyed 100 uncommitted lines, silently and without asking"
-else
-  bad "the reset incident did not reproduce: $(cat "$tmp/reset-before") before, $(cat "$tmp/reset-after") after"
-fi
-(cd "$tmp/main" && printf 'one\ntwo\nthree\nfour\nfive\n' > work.py)
-
-echo ""
-echo "  the guard refuses it"
-
-refuses "the bare form" "$tmp/main" "git reset --hard"
-refuses "against an explicit commit" "$tmp/main" "git reset --hard HEAD"
-refuses "\`--merge\`, the same discard" "$tmp/main" "git reset --merge"
-refuses "\`--keep\`, the same discard" "$tmp/main" "git reset --keep"
-refuses "an env prefix does not launder it" "$tmp/main" "BANCHI_MAIN=off git reset --hard"
-refuses "buried mid-script behind a \`&&\`" "$tmp/main" "echo tidy && git reset --hard"
-# A MULTI-LINE SCRIPT IS THE ORDINARY SHAPE OF A SESSION'S BASH CALL, and `shlex` reads a newline as
-# plain whitespace. Without the line separator the shared parser inserts, these two lines are ONE
-# command whose head is `echo`, a miss on the exact command the clause exists for.
-refuses "on its own line in a two-line script" "$tmp/main" "echo tidy
-git reset --hard"
-refuses "\`git -C <tree> reset --hard\`, which names another tree" "$tmp" "git -C $tmp/main reset --hard"
-# A HEREDOC BODY IS A DOCUMENT AND NOT A COMMAND: a commit message that quotes the refused command on
-# a line of its own must pass, or the guard refuses the one commit that cannot be wrong.
-allows "a heredoc body that QUOTES the refused reset" "$tmp/main" "git commit -F - <<'MSG'
-Refuse the command that destroyed 100 lines:
-
-git reset --hard
-
-and name the escape hatch in the refusal.
-MSG"
-
-judge "$tmp/main" "git reset --hard"
-case "$out" in
-  *"BANCHI_RESET=off"*) bad "the refusal names the RESET switch to an agent" ;;
-  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
-  *) bad "the refusal carries no owner-only line" ;; esac
-case "$out" in *".bak"*) ok "the refusal names the \`.bak\` copy as the way to do it safely" ;;
-  *) bad "the refusal does not name the .bak shape" ;; esac
-case "$out" in *"is modified"*) ok "the refusal names the modified file" ;;
-  *) bad "the refusal does not say which file is modified" ;; esac
-case "$out" in *"reference-transaction"*) \
-  ok "the refusal names the ref hook as the OTHER half, so a reader does not think it is redundant" ;;
-  *) bad "the refusal does not distinguish itself from the ref hook" ;; esac
-
-echo ""
-echo "  what clause 8 must NEVER refuse"
-
-for case in \
-  'git reset' \
-  'git reset --mixed' \
-  'git reset --soft' \
-  'git reset --soft HEAD~0' \
-  'git reset -- work.py' \
-  'git reset HEAD -- work.py' \
-; do
-  if real_command "$tmp/main" "$case"; then
-    allows "soft/mixed or a path-form reset — never destroys the working tree: \`$case\`" \
-      "$tmp/main" "$case"
-  fi
-done
-
-(cd "$tmp/main" && git add work.py && git commit -q -m "clean it up for the clean-tree case")
-allows "\`--hard\` over a genuinely clean tree — nothing to lose" "$tmp/main" "git reset --hard"
-(cd "$tmp/main" && printf 'one\ntwo\nthree\nfour\nfive\n' > work.py)
-
-echo ""
 echo "  9. a narrated wait with nobody watching it"
 
 # ------------------------------------------- 9a. the incident, performed in the fixture
@@ -958,7 +880,7 @@ for mention in \
   "echo BANCHI_TREE=off" \
   "git commit -m 'doc: BANCHI_PUSH=off is the hatch'" \
   "cat <<EOF
-BANCHI_RESET=off
+BANCHI_NARRATE=off
 EOF" \
   "# BANCHI_TREE=off" \
   "printf 'BANCHI_WAIT=off'" \
@@ -968,7 +890,7 @@ done
 after_plain="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
 if [ "$before" = "$after_plain" ]; then ok "a plain command and six MENTIONS of a hatch write no hatch-log line"
 else bad "a plain command or a mention wrote $((after_plain - before)) hatch-log line(s)"; fi
-for real in "BANCHI_PUSH=off git status" "env BANCHI_RESET=off ls" "BANCHI_WAIT=off echo hi"; do
+for real in "BANCHI_PUSH=off git status" "BANCHI_WAIT=off echo hi"; do
   b="$(cat "$hatchlog" | wc -l | tr -d ' ')"
   judge "$tmp/main" "$real"
   a="$(cat "$hatchlog" | wc -l | tr -d ' ')"
@@ -976,14 +898,13 @@ for real in "BANCHI_PUSH=off git status" "env BANCHI_RESET=off ls" "BANCHI_WAIT=
   else bad "a real setting wrote $((a - b)) line(s): $real"; fi
 done
 after_plain="$(cat "$hatchlog" | wc -l | tr -d ' ')"
-judge "$tmp/main" "export BANCHI_RESET=off; git status --porcelain"
+judge "$tmp/main" "export BANCHI_NARRATE=off; git status --porcelain"
 after_hatch="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
 if [ "$after_hatch" = "$((after_plain + 1))" ]; then ok "a hatch command writes exactly one hatch-log line"
 else bad "a hatch command wrote $((after_hatch - after_plain)) hatch-log lines"; fi
 case "$(tail -1 "$hatchlog" 2>/dev/null)" in
-  *"	BANCHI_RESET	"*"	"*"export BANCHI_RESET=off"*) ok "the line names the hatch, checkout, branch and command" ;;
+  *"	BANCHI_NARRATE	"*"	"*"export BANCHI_NARRATE=off"*) ok "the line names the hatch, checkout, branch and command" ;;
   *) bad "the hatch-log line is malformed: $(tail -1 "$hatchlog" 2>/dev/null)" ;; esac
-allows "reset, inline"   "$tmp/main" "BANCHI_RESET=off git reset --hard"
 allows "narrate, inline" "$tmp/main" "BANCHI_NARRATE=off make merge ARGS=\"437 --confirm\" | tail -5"
 
 hatch_env() {   # hatch_env <name> <cwd> <command>
@@ -994,7 +915,6 @@ hatch_env() {   # hatch_env <name> <cwd> <command>
 }
 hatch_env BANCHI_WAIT     "$tmp/main" "until ! pgrep -f x; do sleep 5; done"
 hatch_env BANCHI_PUSH     "$tmp/main" "git push origin HEAD"
-hatch_env BANCHI_RESET    "$tmp/main" "git reset --hard"
 hatch_env BANCHI_NARRATE  "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
 
@@ -1005,8 +925,8 @@ if [ $? -eq 0 ]; then ok "BANCHI_TREE=off in the environment"; else bad "BANCHI_
 # EVERY CLAUSE HAS A HATCH AND EVERY HATCH IS PRINTED. The table is read rather than retyped,
 # so a clause added without one fails here instead of shipping unescapable.
 count="$(python3 "$GUARD" --clauses | wc -l | tr -d ' ')"
-if [ "$count" = "5" ]; then ok "five clauses, five hatches, read from the guard's own table"
-else bad "the clause table has $count rows; this file scores five"; fi
+if [ "$count" = "4" ]; then ok "four clauses, four hatches, read from the guard's own table"
+else bad "the clause table has $count rows; this file scores four"; fi
 if python3 "$GUARD" --clauses | grep -qv "BANCHI_.*=off"; then
   bad "a clause in the table names no escape hatch"
 else
@@ -1028,20 +948,19 @@ fails_open "a tool_input that is a list" '{"tool_input":[1,2,3]}'
 fails_open "a null command"              '{"tool_input":{"command":null}}'
 fails_open "a payload that is a list"    '[1,2,3]'
 fails_open "no stdin at all"             ''
-# The balanced reset is refused in this dirty tree, so the unbalanced one would be refused too if the
-# parser read it: the allowed verdict below is the fail-open, not an absent subject.
-(cd "$tmp/main" && printf 'one\ntwo\nthree\ncontrol dirt\n' > work.py)
-refuses "control: the balanced reset is refused in this dirty tree" "$tmp/main" "git reset --hard"
-fails_open "an unbalanced quote"         "{\"cwd\":\"$tmp/main\",\"tool_input\":{\"command\":\"git reset --hard 'HEAD\"}}"
+# The polling loop is refused here, so the unbalanced one would be refused too if the parser read
+# it: the allowed verdict below is the fail-open, not an absent subject. The write from a real
+# worktree is the control for the missing-cwd case: the same write is refused when its cwd exists.
+refuses "control: the polling loop is refused" "$tmp/main" "until ! pgrep -f x; do sleep 5; done"
+fails_open "an unbalanced quote"         "{\"cwd\":\"$tmp/main\",\"tool_input\":{\"command\":\"until ! pgrep -f x; do sleep 5; done 'HEAD\"}}"
 fails_open "an empty file_path"          '{"tool_input":{"file_path":""}}'
-fails_open "a cwd that does not exist"   '{"cwd":"/no/such/place","tool_input":{"command":"git reset --hard"}}'
 
 # THE SHARED PARSER IS A DEPENDENCY, AND A MISSING DEPENDENCY IS A BROKEN GUARD. Copied into
 # a throwaway directory WITHOUT `shell_parse.py`, the guard must have no opinion about
 # anything rather than raise — the import is guarded for exactly this.
 mkdir -p "$tmp/lonely"
 cp "$GUARD" "$tmp/lonely/guard-shell.py"
-out="$(printf '%s' "git reset --hard" \
+out="$(printf '%s' "until ! pgrep -f x; do sleep 5; done" \
       | CWD="$tmp/main" python3 -c 'import json,os,sys; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":sys.stdin.read()}}))' \
       | python3 "$tmp/lonely/guard-shell.py" --hook 2>&1)"
 if [ $? -eq 0 ]; then ok "with shell_parse.py absent, the guard has no opinion"
@@ -1064,8 +983,8 @@ LIBDIR="$HERE"
 echo ""
 echo "  --skip: clauses another guard owns, through the real CLI"
 
-# THE REAL CLI, NOT `hook()`: `--skip` is parsed by `main`, and Claude Code runs exactly
-# `--hook --skip reset`. Earlier sections leave the tree in unknown states,
+# THE REAL CLI, NOT `hook()`: `--skip` is parsed by `main`, and a hook entry runs `--hook --skip <clause>`.
+# Earlier sections leave the tree in unknown states,
 # so it is dirtied again here, and a refused case is meaningless on a clean tree.
 (cd "$tmp/main" && git checkout -q main 2>/dev/null; printf 'one\ntwo\nthree\nskip-section\n' > work.py)
 skip_cli() {   # skip_cli <skip-list|-> <cwd> <command> -> exit code
@@ -1080,17 +999,17 @@ skip_cli_write() {   # skip_cli_write <skip-list> <cwd> <file_path>
         | python3 "$GUARD" --hook --skip "$1" 2>&1)"
   return $?
 }
-SKIPS="reset"
-for c in "git reset --hard"; do
+SKIPS="wait"
+for c in "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"; do
   skip_cli - "$tmp/main" "$c"; a=$?
   skip_cli "$SKIPS" "$tmp/main" "$c"; b=$?
   if [ $a -eq 2 ] && [ $b -eq 0 ]; then ok "\`$c\`: refused without --skip, allowed with it"
   else bad "\`$c\`: exit $a without --skip, $b with it (want 2 and 0)"; fi
 done
-skip_cli "bogus,,nonsense" "$tmp/main" "git reset --hard"
+skip_cli "bogus,,nonsense" "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
 [ $? -eq 2 ] && ok "an unknown name in --skip skips nothing" || bad "an unknown name in --skip skipped a clause"
-skip_cli "reset,bogus" "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
-[ $? -eq 2 ] && ok "…and a known name beside it skips only its own clause" || bad "--skip reset also skipped the wait clause"
+skip_cli "push,bogus" "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
+[ $? -eq 2 ] && ok "…and a known name beside it skips only its own clause" || bad "--skip push also skipped the wait clause"
 
 # GUARD_SHELL_SKIP is the hook option's home; `--skip` is its alias; both together skip the union.
 skip_env() {   # skip_env <env-list> <flags...> -- <cwd> <command> -> exit code
@@ -1101,19 +1020,19 @@ skip_env() {   # skip_env <env-list> <flags...> -- <cwd> <command> -> exit code
         | GUARD_SHELL_SKIP="$env_list" python3 "$GUARD" "${args[@]}" 2>&1)"
   return $?
 }
-skip_env reset -- "$tmp/main" "git reset --hard"
-[ $? -eq 0 ] && ok "GUARD_SHELL_SKIP=reset skips the reset clause" || bad "GUARD_SHELL_SKIP=reset did not skip the reset clause"
-skip_env reset -- "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
-[ $? -eq 2 ] && ok "…and only that clause: a polling loop is still refused" || bad "GUARD_SHELL_SKIP=reset also skipped the wait clause"
-skip_env "" --skip reset -- "$tmp/main" "git reset --hard"; a=$?
-skip_env "" --skip reset -- "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"; b=$?
-if [ $a -eq 0 ] && [ $b -eq 2 ]; then ok "--skip reset behaves as the variable does"
-else bad "--skip reset: reset exit $a, wait exit $b (want 0 and 2)"; fi
-skip_env reset --skip narrate -- "$tmp/main" "git reset --hard"; a=$?
-skip_env reset --skip narrate -- "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"; b=$?
-skip_env reset --skip narrate -- "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"; c=$?
+skip_env wait -- "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
+[ $? -eq 0 ] && ok "GUARD_SHELL_SKIP=wait skips the wait clause" || bad "GUARD_SHELL_SKIP=wait did not skip the wait clause"
+skip_env wait -- "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"
+[ $? -eq 2 ] && ok "…and only that clause: a narrated merge is still refused" || bad "GUARD_SHELL_SKIP=wait also skipped the narrate clause"
+skip_env "" --skip wait -- "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"; a=$?
+skip_env "" --skip wait -- "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"; b=$?
+if [ $a -eq 0 ] && [ $b -eq 2 ]; then ok "--skip wait behaves as the variable does"
+else bad "--skip wait: wait exit $a, narrate exit $b (want 0 and 2)"; fi
+skip_env wait --skip narrate -- "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"; a=$?
+skip_env wait --skip narrate -- "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"; b=$?
+skip_env wait --skip narrate -- "$WT" "cat > $tmp/main/work.py"; c=$?
 if [ $a -eq 0 ] && [ $b -eq 0 ] && [ $c -eq 2 ]; then ok "the variable and --skip together skip the union, and no more"
-else bad "variable plus flag: reset $a, narrate $b, wait $c (want 0, 0, 2)"; fi
+else bad "variable plus flag: wait $a, narrate $b, tree $c (want 0, 0, 2)"; fi
 
 # Re-arm the mismatch: a branch tracking a DIFFERENTLY named upstream (later sections repoint it).
 (cd "$tmp/main" && git checkout -q -B skip-mismatch main 2>/dev/null \
@@ -1121,11 +1040,15 @@ else bad "variable plus flag: reset $a, narrate $b, wait $c (want 0, 0, 2)"; fi
   && git config branch.skip-mismatch.merge refs/heads/claude/skip-mismatch)
 skip_cli - "$tmp/main" "git push origin HEAD"
 [ $? -eq 2 ] || bad "the skip-section push fixture did not arm: the mismatch is not refused without --skip"
+# A MISSING CWD FAILS OPEN ONLY FOR A CLAUSE THAT READS THE REPOSITORY THERE. The push clause reads the
+# tracked upstream at cwd, so it is the subject: the armed mismatch is refused from a real checkout
+# (the line above) and must be allowed, not crash, from a directory that does not exist.
+fails_open "a cwd that does not exist: the push the mismatch refuses is allowed" "{\"cwd\":\"/no/such/place\",\"tool_input\":{\"command\":\"git push origin HEAD\"}}"
 skip_cli "$SKIPS" "$tmp/main" "git push origin HEAD"
 [ $? -eq 2 ] && ok "with --skip, the push mismatch is still refused" || bad "--skip let the push mismatch through"
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
-skip_cli "$SKIPS" "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
-[ $? -eq 2 ] && ok "with --skip, a polling loop is still refused" || bad "--skip let a polling loop through"
+skip_cli "$SKIPS" "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"
+[ $? -eq 2 ] && ok "with --skip wait, a narrated merge is still refused" || bad "--skip wait let the narrate clause through"
 skip_cli_write "$SKIPS" "$WT" "$tmp/main/work.py"
 [ $? -eq 2 ] && ok "with --skip, a write outside the checkout is still refused" || bad "--skip let a write outside the checkout through"
 
