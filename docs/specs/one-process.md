@@ -243,7 +243,26 @@ because only this form would want one. No such person exists, so nothing plans i
 - Whether the camera grant and the 4K mode carry at the capture port as D108 measured at the dev
   port. It is the one thing here that touches the rig.
 
-## 10. What only the owner can do
+## 9. Where it is tested
+
+One row per platform the product ships on. "Untested" means no job and no local check reads it.
+A row's run id is the last green run, read from the job's own history.
+
+| Platform | Where it is tested | Last green run |
+|---|---|---|
+| Linux server and every browser spec | `.github/workflows/check.yml`: the `ci-check` shards and the `design-check` matrix, on `ubuntu-latest` | 41560353874 |
+| macOS, the product checks | `.github/workflows/mac.yml`'s `mac-product` job, weekly and on dispatch; outside `all-jobs-passed` (D136) | MAC_RUN_ID |
+| macOS, the server serving a real build | the same job's `make serve-selftest` step | MAC_RUN_ID |
+| The public demo on GitHub Pages | `.github/workflows/demo.yml`; `docs/specs/demo.md` says what it asserts | 41593550251 |
+| The phone on the LAN at the capture port | `make lan-check`, run by hand with the phone on the network (§10) | none, local |
+| The Fulfiller's own device | untested | none |
+| Safari, Add to Dock | untested | none |
+| The Bluetooth dispenser link (D316) | untested | none |
+| The launchd agents on the owner's Mac | untested | none |
+| The camera at the capture port, port 8000 | untested; the owner's press in §10 | none |
+| Chrome on the Mac against the built app | untested; `design-check` runs Chromium on Linux only | none |
+
+
 
 Two presses on the owner's own machine. A session cannot do either:
 
