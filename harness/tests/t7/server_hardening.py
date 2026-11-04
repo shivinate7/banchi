@@ -1072,10 +1072,81 @@ def check_dual_stack_bind(checks: Checks) -> None:
         httpd.server_close()
 
 
+def _free_port() -> int:
+    """A port nothing holds right now: bound, read and released. The race is the usual one."""
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+
+
+def check_bind_hung_reverse_lookup_still_listens(checks: Checks) -> None:
+    """A reverse DNS lookup that never returns must not keep the capture port closed.
+
+    `http.server.HTTPServer.server_bind` calls `socket.getfqdn` after it has bound the socket and
+    before it listens. A lookup that hangs therefore leaves the port refusing connections for as
+    long as it hangs. An offline Mac does this, and so did a macOS CI runner. This blocks
+    `getfqdn` for the whole case, starts the factory `serve()` uses, and asserts a connection and
+    `GET /status` both answer within 5 seconds.
+    """
+    checks.note("")
+    checks.note("a hung reverse DNS lookup does not keep the capture port closed")
+
+    port = _free_port()
+    release = threading.Event()
+    built = threading.Event()
+    holder: dict = {}
+
+    def hung_lookup(name="", *_args, **_kwargs):
+        release.wait(30)
+        return name
+
+    def bind_and_serve() -> None:
+        try:
+            httpd, _host = capture_server._capture_server("::", port)
+            holder["httpd"] = httpd
+            holder["thread"] = _spawn_server(httpd)
+        finally:
+            built.set()
+
+    with mock.patch.object(socket, "getfqdn", hung_lookup):
+        worker = threading.Thread(target=bind_and_serve, daemon=True)
+        worker.start()
+        try:
+            connected = False
+            reason = ""
+            try:
+                socket.create_connection(("127.0.0.1", port), timeout=5).close()
+                connected = True
+            except OSError as exc:
+                reason = f"connect to 127.0.0.1:{port} did not complete: {exc}"
+            checks.ok(connected,
+                      "the port accepts a connection within 5 seconds, with the lookup still hung",
+                      reason)
+
+            status = 0
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/status", timeout=5) as answer:
+                    status = int(answer.status)
+            except urllib.error.HTTPError as refused:
+                status = int(refused.code)
+            except OSError:
+                status = 0
+            checks.equal(status, 200, "and `GET /status` answers 200 within 5 seconds")
+        finally:
+            release.set()
+            built.wait(10)
+            httpd = holder.get("httpd")
+            if httpd is not None:
+                httpd.shutdown()
+                httpd.server_close()
+            worker.join(10)
+
+
 CHECKS = (
     check_concurrency,
     check_origin_gate,
     check_photo_cache,
     check_app_serve,
     check_dual_stack_bind,
+    check_bind_hung_reverse_lookup_still_listens,
 )
