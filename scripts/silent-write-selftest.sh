@@ -361,7 +361,7 @@ if [ $? -eq 0 ]; then ok "in the environment"; else bad "BANCHI_SILENT=off in th
 echo ""
 echo "  a broken guard fails OPEN (reap.py's asymmetry, honoured)"
 
-# EVERY ONE OF THESE MUST EXIT 0. `reap.py:hook`'s docstring is the contract: a guard that
+# EVERY ONE OF THESE MUST EXIT 0. D127 (a session stops only what it started) sets the rule: a guard that
 # blocks every shell command when its own parser throws is a guard somebody switches off
 # inside a day. There is no fail-CLOSED case here — a command this file cannot read is a
 # command it has no opinion about, which is the same rule rather than an exception to it.

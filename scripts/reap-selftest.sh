@@ -3,20 +3,20 @@
 # Protects: The reap command stops only processes this session started and refuses every other process.
 # Governs: D18, D138
 #
-# WHY THIS EXISTS. The guard's whole claim is that it can tell a process this session started
+# WHY THIS EXISTS. The reaper's whole claim is that it can tell a process this session started
 # from one it did not, and refuse the second. That claim is only worth anything if the REFUSALS
 # are exercised, and a refusal cannot be exercised against this repo: the process it exists to
 # protect is the owner's live capture server on :8000 over their real 1,625-card store, and
-# "run the guard at it and see" is the incident, not the test. So the fixture is a throwaway
+# "run the reaper at it and see" is the incident, not the test. So the fixture is a throwaway
 # checkout, a throwaway sibling directory standing in for everywhere-else, and short-lived
 # processes this script starts itself in their own process groups.
 #
 # WHY IT IS NOT IN THE GIT HOOK. D18: it writes a temp tree and it signals processes. It IS in
 # `make check`, which is exactly janitor-selftest's and revert-selftest's standing.
 #
-# THE TWO INCIDENTS ARE CASES HERE, NOT PROSE. `pkill -f <name>` where a stranger also matches,
-# and `for p in $(lsof -ti tcp:PORT); do kill $p; done` where a CLIENT holds the port — both are
-# reproduced with real processes and a real socket rather than asserted about.
+# THE INCIDENTS ARE CASES HERE, NOT PROSE. A `match:<name>` where a stranger also matches, and a
+# `port:PORT --confirm` where a CLIENT holds the port, are reproduced with real processes and a
+# real socket rather than asserted about.
 #
 # WHAT IT CANNOT PROVE. Anything about the machine's real process table: every case is confined
 # to the fixture. And the D138 case is proved through a `.serve/` pidfile it writes itself, so it
@@ -137,22 +137,15 @@ while time.time() < end and os.path.exists(sys.argv[0]):
 PY
 }
 
-# The hook, asked about one command. Prints its stderr so a failing case can be read.
-judge() {   # judge <cwd> <command> -> exit code, output in $out
-  out="$(cd "$1" && printf '%s' "$2" \
-        | python3 -c 'import json,sys; print(json.dumps({"tool_input":{"command":sys.stdin.read()}}))' \
-        | (cd "$1" && python3 "$REAP" --hook) 2>&1)"
-  return $?
-}
 
 # ------------------------------------------------------------------------------- the fixture
 # EVERY SCRIPT THIS FIXTURE STARTS CARRIES A PER-RUN TAG, BECAUSE `pgrep -f` IS MACHINE-WIDE.
-# The guard resolves `pkill -f mine.py` by running that pgrep ITSELF, across the whole machine —
+# The reaper's `match:mine.py` resolves by running that pgrep ITSELF, across the whole machine —
 # which is the whole point of it, and is correct. So a second copy of this fixture running
 # anywhere else puts a live `mine.py` in a DIFFERENT checkout: a concurrent `make check` from
 # another of this clone's worktrees, or a `time.sleep(300)` left behind by a run interrupted
-# before its EXIT trap fired. The guard judges that one "outside this checkout" and refuses the
-# command — the guard being right and the fixture being wrong — and the arm that fails is
+# before its EXIT trap fired. The reaper judges that one "outside this checkout" and refuses the
+# command — the reaper being right and the fixture being wrong — and the arm that fails is
 # `KILLING ITS OWN PROCESS IS ALLOWED`, the one constraint this file must never break. Four
 # such failures on 2026-09-11/12, against a byte-identical reap.py.
 #
@@ -167,7 +160,7 @@ judge() {   # judge <cwd> <command> -> exit code, output in $out
 #
 # IT IS A FUNCTION AND NOT SIX STRING LITERALS, so `-- a second copy of this fixture --` below
 # can build a rival's name BY THE SAME RULE rather than by hand. That is what makes the arm
-# mutation-sensitive: spell a fixed name here and the rival gets the same fixed name, the guard
+# mutation-sensitive: spell a fixed name here and the rival gets the same fixed name, the reaper
 # correctly calls it a stranger, and the arm goes red. An arm whose decoy is hand-named would
 # keep passing over exactly the bug this file is fixing.
 fixture_script() {   # fixture_script <base> <temp-dir> -> a name no other run can produce
@@ -195,92 +188,40 @@ stranger="$(spawn "$tmp/elsewhere/$stranger_script" "$tmp/elsewhere")"
 kids="$mine $stranger"
 sleep 1
 
-# ---------------------------------------------------------------- the hook: what it lets past
+# ------------------------------------------------- a session stops its own process, by match:
 echo
-echo "  -- commands the guard must not touch --"
+echo "  -- a session may stop its own process, named by match: --"
 
-judge "$tmp/checkout" "ls -la"
-[ $? -eq 0 ] && ok "an ordinary command is not read at all" || bad "a non-kill command was blocked"
-
-judge "$tmp/checkout" "echo 'remember: pkill -f is machine-wide'"
-[ $? -eq 0 ] && ok "the word in a string is not a kill" || bad "prose mentioning pkill was blocked"
-
-# --------------------------------------------------------- 2026-09-24: a pipe inside a quote
-# `_segments` used to split on every `|`, quoted or not, so a grep pattern with alternation
-# glued into an unrelated later clause read as a bare kill-word command. This is the exact
-# refused command from that defect report, plus the minimal cases under it.
-judge "$tmp/checkout" 'CS=~/Developer/claude-settings; grep -nciE "process|pid|kill" $CS/janitor/sweep.py; grep -nE "^def |process" $CS/janitor/sweep.py | head -30; echo ---; grep -nE "lsof|pgrep|killall|def .*kill" $CS/hooks/guard.py | head -20'
-[ $? -eq 0 ] && ok "a quoted pipe pattern is not read as a kill (the exact defect report)" \
-  || { bad "a grep whose quoted pattern names killall was blocked"
-       printf '%s\n' "$out" | sed 's/^/         /'; }
-
-# A kill word in the MIDDLE of a quoted alternation is the case that actually exercises the
-# bug: split on every `|` blindly, the FIRST and LAST words of the pattern come out still
-# glued to a quote character and miss `_KILL_WORDS`' exact match, but a middle word comes out
-# clean — which is exactly why `killall`, not `process` or `pid`, was what the report's guard
-# refused. `grep -E "kill|pid"` (the word at the END of the pattern) is proved wrong ABOVE by
-# the exact defect report; these three prove the word in the MIDDLE, one per kill word.
-judge "$tmp/checkout" 'grep -E "foo|kill|bar" file.py'
-[ $? -eq 0 ] && ok "kill in the middle of a quoted alternation is not a kill" \
-  || bad "grep -E \"foo|kill|bar\" was blocked"
-
-judge "$tmp/checkout" 'grep -E "foo|pkill|bar" file.py'
-[ $? -eq 0 ] && ok "pkill in the middle of a quoted alternation is not a kill" \
-  || bad "grep -E \"foo|pkill|bar\" was blocked"
-
-judge "$tmp/checkout" 'grep -E "foo|killall|bar" file.py'
-[ $? -eq 0 ] && ok "killall in the middle of a quoted alternation is not a kill" \
-  || bad "grep -E \"foo|killall|bar\" was blocked"
-
-judge "$tmp/checkout" "pkill -f $stranger_script | cat"
-status=$?
-case "$status:$out" in
-  2:*outside\ this\ checkout*) ok "a REAL unquoted pipe after a kill is still refused" ;;
-  *) bad "an unquoted pipe after a real pkill stopped being refused"
+# THE CONSTRAINT THIS FILE MUST NEVER BREAK, asked of the reaper's own resolver. A session's own
+# process, named by its script, must read OURS and KILLABLE. A break in `match:` or in the
+# ownership verdict shows here.
+out="$(cd "$tmp/checkout" && python3 "$REAP" --explain "match:$mine_script" 2>&1)"
+case "$out" in
+  *"pid $mine  OURS"*KILLABLE*) ok "KILLING ITS OWN PROCESS IS ALLOWED" ;;
+  *) bad "a session was refused its own process — the constraint this must not break"
      printf '%s\n' "$out" | sed 's/^/         /' ;;
 esac
 
-judge "$tmp/checkout" "cat > note.sh <<'EOF'
-pkill -f $stranger_script
-EOF"
-[ $? -eq 0 ] && ok "a heredoc BODY is a document, not a command" || bad "writing a script that mentions pkill was blocked"
-
-judge "$tmp/checkout" "kill -0 $stranger"
-[ $? -eq 0 ] && ok "kill -0 is a liveness probe and sends no signal" || bad "kill -0 was blocked"
-
-judge "$tmp/checkout" "sleep 5 & kill %1"
-[ $? -eq 0 ] && ok "a job spec names this shell's own job" || bad "kill %1 was blocked"
-
-judge "$tmp/checkout" "pkill -f $mine_script"
-[ $? -eq 0 ] && ok "KILLING ITS OWN PROCESS IS ALLOWED" || {
-  bad "a session was refused its own process — the constraint this must not break"
-  printf '%s\n' "$out" | sed 's/^/         /'
-}
-
-# ------------------------------------------------------------------- the hook: incident one
+# ------------------------------------------------------- incident one, through match: and --confirm
 echo
-echo "  -- incident 1: pkill -f also matched a stranger --"
+echo "  -- incident 1: a match: that names a process outside this checkout --"
 
-judge "$tmp/checkout" "pkill -f $stranger_script"
-status=$?
-case "$status:$out" in
-  2:*outside\ this\ checkout*) ok "REFUSED, naming the pid and where it lives" ;;
-  2:*) bad "refused, but not for being outside the checkout"
-       printf '%s\n' "$out" | sed 's/^/         /' ;;
-  *) bad "a stranger's process was cleared for killing" ;;
+# THE INCIDENT WAS A PATTERN THAT REACHED A PROCESS OUTSIDE THE CHECKOUT. Named by match:, the
+# stranger is judged OUTSIDE, and --confirm refuses it, says why, and leaves it running.
+out="$(cd "$tmp/checkout" && python3 "$REAP" --explain "match:$stranger_script" 2>&1)"
+case "$out" in
+  *"pid $stranger  OUTSIDE"*) ok "REFUSED, naming the pid and where it lives: judged OUTSIDE this checkout" ;;
+  *) bad "a stranger's process was not judged OUTSIDE this checkout"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
 esac
-
+out="$(cd "$tmp/checkout" && python3 "$REAP" "match:$stranger_script" --confirm 2>&1)"
+case "$out" in
+  *REFUSED*"outside this checkout"*) ok "--confirm refuses it and says it is outside this checkout" ;;
+  *) bad "--confirm did not refuse a stranger's process, or did not say why"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
 kill -0 "$stranger" 2>/dev/null \
-  && ok "the stranger is still running" || bad "the stranger was killed by the guard itself"
-
-case "$out" in
-  *BANCHI_KILL=off*) ok "the refusal prints its escape hatch" ;;
-  *) bad "a refusal with no way past it is one that gets disabled wholesale" ;;
-esac
-case "$out" in
-  *"make reap"*) ok "the refusal names the tool that does the same job safely" ;;
-  *) bad "the refusal does not say what to do instead" ;;
-esac
+  && ok "the stranger is still running" || bad "--confirm stopped a process outside this checkout"
 
 # ------------------------------------------------- the flake: a second copy of this fixture
 echo
@@ -289,11 +230,11 @@ echo "  -- a second copy of this fixture, running at the same time --"
 # THE REGRESSION ARM FOR THE PER-RUN TAG, AND IT REPRODUCES THE FLAKE RATHER THAN ASSERTING
 # ABOUT IT. A rival fixture is built the way a concurrent `make check` in another worktree
 # builds one — its own `mktemp -d`, its own tag, its own `mine` — and left running while this
-# run asks the guard to kill ITS OWN `mine`. With the tag, the two names cannot collide and the
-# kill is allowed. Without it, both runs call their process `mine.py`, `pgrep -f mine.py`
-# returns the rival as well, and the guard refuses — correctly, which is the whole problem.
+# run asks the reaper to stop ITS OWN `mine`. With the tag, the two names cannot collide and the
+# match is allowed. Without it, both runs call their process `mine.py`, `pgrep -f mine.py`
+# returns the rival as well, and the reaper refuses — correctly, which is the whole problem.
 # This failed four times on 2026-09-11/12 against a byte-identical reap.py, and nothing in this
-# file could see it: the failing arm blamed the guard.
+# file could see it: the failing arm blamed the reaper.
 #
 # The rival's pid is NOT added to `kids` in the usual way and then forgotten — it is, but its
 # TREE goes on `strays`, because it lives outside `$tmp` and the trap would otherwise leave a
@@ -312,32 +253,31 @@ rival="$(spawn "$rival_tmp/checkout/$rival_script" "$rival_tmp/checkout")"
 kids="$kids $rival"
 sleep 1
 
-judge "$tmp/checkout" "pkill -f $mine_script"
-[ $? -eq 0 ] && ok "A CONCURRENT COPY OF THIS FIXTURE CANNOT REFUSE THIS RUN ITS OWN PROCESS" || {
-  bad "a second run of this fixture made the guard refuse this run's own process — THE FLAKE"
-  printf '%s\n' "$out" | sed 's/^/         /'
-}
+out="$(cd "$tmp/checkout" && python3 "$REAP" --explain "match:$mine_script" 2>&1)"
+case "$out" in
+  *"pid $mine  OURS"*KILLABLE*) ok "A CONCURRENT COPY OF THIS FIXTURE CANNOT REFUSE THIS RUN ITS OWN PROCESS" ;;
+  *) bad "a second run of this fixture made the reaper refuse this run's own process — THE FLAKE"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
 
 # And the rival is a real, live, resolvable stranger — so the case above did not pass because
-# `pgrep` found nothing. Together the two say the NAMES are unique, not that the guard stopped
-# looking, which is the difference between a fixture that collides and a guard that is broken.
-judge "$tmp/checkout" "pkill -f $rival_script"
-status=$?
-case "$status:$out" in
-  2:*outside\ this\ checkout*) ok "and the rival's own process is still refused, by name" ;;
-  2:*) bad "the rival was refused, but not for living in another checkout"
-       printf '%s\n' "$out" | sed 's/^/         /' ;;
-  *) bad "the rival is not resolvable, so the case above proved nothing" ;;
+# `match:` found nothing. Together the two say the NAMES are unique, not that the reaper stopped
+# looking, which is the difference between a fixture that collides and a reaper that is broken.
+out="$(cd "$tmp/checkout" && python3 "$REAP" --explain "match:$rival_script" 2>&1)"
+case "$out" in
+  *"pid $rival  OUTSIDE"*) ok "and the rival's own process is still judged OUTSIDE, by name" ;;
+  *) bad "the rival is not resolvable, so the case above proved nothing"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
 esac
 fi
 
-# ------------------------------------------------------------------- the hook: incident two
+# --------------------------------------------------------------- a listener and its client, one port
 echo
-echo "  -- incident 2: lsof -ti returns clients as well as listeners --"
+echo "  -- a listener and its client on one port --"
 
 # `lsof` IS DECLARED IN scripts/checks.py:NEEDS AND IS NOT ASSUMED HERE. This suite runs on
 # `ubuntu-latest` as well as on the owner's Mac, and a runner image without it would fail every
-# case below for a reason that has nothing to do with the guard. The skip is LOUD and counts as
+# case below for a reason that has nothing to do with the reaper. The skip is LOUD and counts as
 # a FAILURE: a required case that did not run must never end green. Note that
 # reap.py itself degrades correctly without lsof rather than opening a hole: with no working
 # directory to read, a process carrying no absolute path in its argv is UNKNOWN and refused.
@@ -388,30 +328,10 @@ if [ "$held" -eq 2 ]; then
 else
   bad "the fixture did not reproduce a client on the port (holders: $holders) — every case below is now vacuous"
 fi
-
-judge "$tmp/checkout" "for p in \$(lsof -ti tcp:$port); do kill \$p; done"
-status=$?
-case "$status:$out" in
-  2:*pid\ $client*) ok "REFUSED, and it is the CLIENT the refusal names" ;;
-  2:*) bad "refused, but not on the client — the pid that made this an incident"
-       printf '%s\n' "$out" | sed 's/^/         /' ;;
-  *) bad "the loop form walked straight past the guard" ;;
-esac
 fi
 fi
 
-# ------------------------------------------------------------- the hook: nothing to read
-echo
-echo "  -- a target the guard cannot place --"
-
-judge "$tmp/checkout" 'kill $somepid'
-status=$?
-case "$status:$out" in
-  2:*cannot\ tell\ what\ pid*) ok "an unreadable target is refused, not guessed at" ;;
-  *) bad "a kill whose target cannot be read was allowed" ;;
-esac
-
-# ------------------------------------------------------------------------ the hook: D138
+# ------------------------------------------------------------------------ D138
 echo
 echo "  -- D138: the main checkout's server, even from the main checkout --"
 
@@ -424,13 +344,14 @@ case "$out" in
      printf '%s\n' "$out" | sed 's/^/         /' ;;
 esac
 
-judge "$tmp/checkout" "pkill -f $mine_script"
-status=$?
-case "$status:$out" in
-  2:*make\ down\ ARGS=--confirm*) ok "and the refusal names the drain, not a harder kill" ;;
-  2:*) bad 'refused without naming `make down`, which is the sanctioned way to stop it' ;;
-  *) bad "the pidfile'd process was cleared once reached through pkill" ;;
+out="$(cd "$tmp/checkout" && python3 "$REAP" "match:$mine_script" --confirm 2>&1)"
+case "$out" in
+  *"main checkout's own server"*) ok "and --confirm refuses it by that reason" ;;
+  *) bad "--confirm did not refuse the pidfile'd process by its D138 reason"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
 esac
+kill -0 "$mine" 2>/dev/null \
+  && ok "the pidfile'd process is still running after --confirm" || bad "--confirm stopped the main checkout's own server"
 rm -f "$tmp/checkout/.serve/capture.pid"
 
 # ------------------------------------------------------- a directory that is not a workspace
@@ -494,40 +415,25 @@ case "$out" in
   *) ok "and neither is /" ;;
 esac
 
-# The hook itself over the same ground. `judge` cannot be used here: it does not fake `$HOME`,
-# and a home directory that is not the process's own home is an ORDINARY directory — which is
-# the correct answer to a different question and would have passed this case for free.
-out="$(cd "$tmp/home/deep" && printf '{"tool_input":{"command":"pkill -f %s"}}' "$inner_script" \
-       | HOME="$tmp/home/deep" python3 "$REAP" --hook 2>&1)"
-status=$?
-[ $status -eq 2 ] && ok "a kill run from a home directory is refused, not guessed at" \
-                  || bad "a kill run from a home directory was cleared"
+# THE SAME GROUND THROUGH THE REAPER'S OWN --confirm. A run from a home directory must say WHY it
+# stops nothing, rather than naming an empty checkout, and the process it holds must survive.
+out="$(cd "$tmp/home/deep" && HOME="$tmp/home/deep" python3 "$REAP" "pid:$inner" --confirm 2>&1)"
 case "$out" in
-  *not\ a\ workspace*) ok "and the refusal says WHY rather than naming an empty checkout" ;;
-  *) bad "the refusal quoted an empty root, which reads as a bug in the guard"
+  *"is not a workspace"*) ok "a confirm run from a home directory says it is not a workspace" ;;
+  *) bad "the refusal did not say the directory is not a workspace"
      printf '%s\n' "$out" | sed 's/^/         /' ;;
 esac
+kill -0 "$inner" 2>/dev/null \
+  && ok "and the process a home directory holds is still running" || bad "a confirm run from a home directory stopped a process"
 
 # The fallback still has to WORK where the directory is an ordinary one, or a session outside a
-# repository can never clean up after itself — which is the constraint this whole guard is under.
+# repository can never clean up after itself — which is the constraint this whole reaper is under.
 out="$(cd "$tmp/elsewhere" && python3 "$REAP" --explain "pid:$stranger" 2>&1)"
 case "$out" in
   *OURS*) ok "AN ORDINARY NON-REPO DIRECTORY IS STILL A WORKSPACE — cleanup survives" ;;
   *) bad "a plain directory stopped being a root, so a session outside a repo cannot clean up"
      printf '%s\n' "$out" | sed 's/^/         /' ;;
 esac
-
-# --------------------------------------------------------------------- the escape hatch
-echo
-echo "  -- the escape hatch --"
-
-judge "$tmp/checkout" "BANCHI_KILL=off pkill -f $stranger_script"
-[ $? -eq 0 ] && ok "the hatch is honoured in the command itself" || bad "the printed hatch does not work"
-judge "$tmp/checkout" "echo BANCHI_KILL=off; pkill -f $stranger_script"
-[ $? -ne 0 ] && ok "a mere mention does not lift the guard" || bad "a mention of the hatch lifted the guard"
-out="$(cd "$tmp/checkout" && printf '{"tool_input":{"command":"pkill -f %s"}}' "$stranger_script" \
-       | BANCHI_KILL=off python3 "$REAP" --hook 2>&1)"
-[ $? -eq 0 ] && ok "and in the environment" || bad "BANCHI_KILL=off in the environment did nothing"
 
 # -------------------------------------------------------------------------- the reaper
 echo
@@ -997,24 +903,9 @@ kill -0 "$stale_pid" 2>/dev/null \
   || ok "and it is still reachable by naming it explicitly, as any untagged process is"
 
 echo
-echo "  the refusal log"
-. "$(dirname "$REAP")/refusal-log-assert.sh"
-rl="$tmp/refusals.log"
-rl_payload='{"session_id":"sess-1","tool_input":{"command":"kill 1"}}'
-rl_out="$(cd "$tmp/checkout" && printf '%s' "$rl_payload" | BANCHI_REFUSAL_LOG="$rl" python3 "$REAP" --hook 2>&1)"; rl_status=$?
-[ $rl_status -eq 2 ] && ok "a refused kill still exits 2" || bad "the logged refusal exited $rl_status"
-why="$(refusal_line_ok "$rl" "reap:kill" "sess-1")" && ok "…and writes one well-formed line" || bad "the refusal log line: $why"
-rl_bad="$(cd "$tmp/checkout" && printf '%s' "$rl_payload" | BANCHI_REFUSAL_LOG="$tmp/no/such/dir/log" python3 "$REAP" --hook 2>&1)"; rl_bad_status=$?
-if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
-else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
-
-echo
-echo "  an unknown flag: a hook warns and allows, the command line still refuses"
-bogus_out="$(cd "$tmp/checkout" && printf '{}' | python3 "$REAP" --hook --bogus 2>&1 >/dev/null)"; bogus_status=$?
-if [ $bogus_status -eq 0 ] && [ -n "$bogus_out" ]; then ok "--hook --bogus exits 0 and warns on stderr"
-else bad "--hook --bogus: exit $bogus_status, stderr '$bogus_out' (want 0 and a warning)"; fi
+echo "  an unknown flag exits 2"
 (cd "$tmp/checkout" && python3 "$REAP" --bogus >/dev/null 2>&1 </dev/null)
-[ $? -eq 2 ] && ok "without --hook, an unknown flag still exits 2" || bad "without --hook, an unknown flag did not exit 2"
+[ $? -eq 2 ] && ok "an unknown flag exits 2" || bad "an unknown flag did not exit 2"
 
 echo
 if [ "$fail" -eq 0 ]; then
