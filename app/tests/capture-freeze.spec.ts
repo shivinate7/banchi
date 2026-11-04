@@ -16,8 +16,8 @@ import { DEALING_RAIL_TILES, SAVE_WAIT_MS } from '../src/dealer'
  *     one catch-up render may be long and is not barred. This run is what catches growth. The
  *     owner's longest sitting is 555 cards. No per-PR case in this file deals cards, by the owner's word.
  *  2. HAND FEED, 60 captures with the shutter: the old bar, so hand feeding cannot regress.
- *  3. HAND FEED, the layout objects a capture walks at captures 51 to 60 against 21 to 30, read from the
- *     Chromium trace: no clock, so the same count on every runner.
+ *  3. HAND FEED, the layout objects each tile added costs between captures 21 to 30 and 51 to 60, read from
+ *     the Chromium trace: no clock, so the same count on every runner.
  * Photos are distinct 1920x1080 JPEGs, so image decode is in the measurement. The dealer is the
  * fake Bluetooth device of `dispenser.spec.ts` (shared in `dispenserRig.ts`). Nothing reaches a
  * store: `POST /capture` is answered here. */
@@ -320,18 +320,16 @@ test('hand-fed, captures 51 to 60 cost no more than captures 21 to 30', async ({
   expect(judge(cost, perCapture, 10, 20), `blocked time over ${CAPTURES} hand-fed captures`).toBe('')
 })
 
-/* THE LAYOUT A CAPTURE WALKS MUST NOT GROW WITH THE SITTING. Chromium's `devtools.timeline` trace reports
- * the size of each layout: a `Layout` event's `totalObjects` is the layout objects in the document, and each
- * tile adds about 20 of them. That count does not depend on runner speed. On today's rail it rises by about
- * 20 objects with every capture, because the rail keeps every tile in the tree.
- * Two other trace counts do not grow past capture 21 on this rail, so they cannot show this growth:
- * `UpdateLayoutTree`'s `elementCount` and `Layout`'s `dirtyObjects` stay in a band of about 280 to 450
- * across captures 21 to 60, and they swing from one capture to the next. */
-/* SLACK. On today's rail the two medians repeated exactly over three runs of this case (1002 and 1602 objects).
- * FLAT_SLACK allows 2% of the early median, about 20 objects on this rail, which is one tile's worth: a stray
- * tile in a window passes. Today's rail adds 20 objects per capture, about 600 across the 30 captures between
- * the two windows, far past the slack. */
-const FLAT_SLACK = 1.02
+/* EACH TILE A SITTING ADDS COSTS A BOUNDED NUMBER OF LAYOUT OBJECTS. Chromium's `devtools.timeline` trace reports
+ * the size of each layout: a `Layout` event's `totalObjects` is the layout objects in the document. Every tile
+ * stays in the rail, and each one stays in every later layout, so the count rises with each tile added.
+ * That count does not depend on runner speed. Two other trace counts do not grow past capture 21 on this rail,
+ * so they cannot show this growth: `UpdateLayoutTree`'s `elementCount` and `Layout`'s `dirtyObjects` stay in a
+ * band of about 280 to 450 across captures 21 to 60, and they swing from one capture to the next.
+ * THE BOUND. A kept tile still costs its own box, one layout object, so a correct fix adds about 1 per tile.
+ * The bound is 3: that box plus a wrapper or two still pass. Today's rail adds about 20 per tile (1002 at
+ * captures 21 to 30, 1602 at captures 51 to 60, 30 tiles between the window medians), far past it. */
+const OBJECTS_PER_TILE_BOUND = 3
 
 type TraceEvent = { name: string; ts: number; args?: Record<string, unknown> }
 
@@ -376,7 +374,7 @@ function layoutWindows(events: TraceEvent[]): Map<number, { objects: number; lay
   return out
 }
 
-test('hand-fed, a capture lays out a tree no bigger at captures 51 to 60 than at captures 21 to 30', async ({ page }) => {
+test('hand-fed, each tile a capture adds costs a bounded number of layout objects, captures 21 to 60', async ({ page }) => {
   const CAPTURES = 60
   test.setTimeout(300_000)
   await handCamera(page)
@@ -396,11 +394,14 @@ test('hand-fed, a capture lays out a tree no bigger at captures 51 to 60 than at
   expect(captures.filter((n) => (windows.get(n)?.layouts ?? 0) === 0), 'every capture window holds a layout').toEqual([])
   const early = median(captures.slice(20, 30).map((n) => windows.get(n)?.objects ?? 0))
   const late = median(captures.slice(50, 60).map((n) => windows.get(n)?.objects ?? 0))
-  console.log(`LAYOUT OBJECTS median per capture: captures 21 to 30 ${early}, captures 51 to 60 ${late}`)
-  const verdict = late <= FLAT_SLACK * early
+  // The window medians sit at captures 25.5 and 55.5, so 30 tiles separate them.
+  const addedTiles = 30
+  const perTile = (late - early) / addedTiles
+  console.log(`LAYOUT OBJECTS median per capture: captures 21 to 30 ${early}, captures 51 to 60 ${late}, per added tile ${perTile}`)
+  const verdict = perTile <= OBJECTS_PER_TILE_BOUND
     ? ''
-    : `layout objects per capture grew from ${early} (captures 21 to 30) to ${late} (captures 51 to 60), over ${FLAT_SLACK}x`
-  expect(verdict, `layout tree size over ${CAPTURES} hand-fed captures`).toBe('')
+    : `layout objects per added tile: ${perTile} (median ${early} at captures 21 to 30, ${late} at captures 51 to 60), over ${OBJECTS_PER_TILE_BOUND}`
+  expect(verdict, `layout objects each added tile costs over ${CAPTURES} hand-fed captures`).toBe('')
 })
 
 test('a tile press undoes exactly the depth its label shows, even from a handler painted before more captures landed', async ({ page }) => {
