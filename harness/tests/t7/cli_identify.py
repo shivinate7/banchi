@@ -3631,6 +3631,39 @@ def check_reused_box_refusal(checks: Checks) -> None:
         checks.equal(master.box_disowns_run(*args), expected, f"box_disowns_run: {label}")
 
 
+def check_run_same_second_as_box(checks: Checks) -> None:
+    """A run started in the same second as its box, and after it, is the box's own run.
+
+    The box registry stamps `created_at` to the millisecond (`master.now`). A run stamped to
+    the whole second reads as up to a second older than it is, so a run started 0.4s after
+    its box looked older than the box, and `box_disowns_run` refused its join as a reused
+    number. CI run 41874296624 hit this in T7's auto-hold case (n).
+    """
+    checks.note("")
+    checks.note("SAME SECOND — a run started just after its box is not a reused number")
+    with isolated_home():
+        cards = [(3, 1, "Articuno", "161", None), (3, 2, "Articuno", "161", None)]
+        first, _ = seam_run(checks, cards)
+        # Register the box at a moment with whole milliseconds into a second and room left in
+        # it, so the run below starts in that same second, after the box.
+        while not 0.01 <= time.time() % 1 < 0.5:
+            time.sleep(0.005)
+        with Store().write() as snapshot:
+            for key in ("3/1", "3/2"):
+                snapshot.inventory.cards.get(key).run = first.name  # as `identify` leaves them
+            snapshot.inventory.box(3).created_at = master.now()
+            born = snapshot.inventory.box(3).created_at
+        run_dir = runs.create("t7-same-second")
+        checks.ok(
+            master.newer_stamp(born, run_dir.created_at) is not True,
+            "a run created after its box never reads as older than the box",
+            f"box {born}, run {run_dir.created_at}",
+        )
+        run_dir.write_identifications(identifications_for(cards))
+        export = write_export(run_dir.path("export.csv"))
+        command(checks, "join", str(run_dir.directory), "--export", str(export))
+
+
 def check_box_true_index(checks: Checks) -> None:
     """A box has a TRUE INDEX that is never reused, and a run over a deleted drawer says so.
 
@@ -7946,6 +7979,7 @@ CHECKS = (
     check_catalog_claim_rank_and_no_cutoff,
     check_run_realignment,
     check_reused_box_refusal,
+    check_run_same_second_as_box,
     check_box_true_index,
     check_emit_buried_box,
     check_rescue_stranded_run,
