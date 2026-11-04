@@ -35,6 +35,9 @@ make worktree-setup # fresh worktree: venv, T1's cache, app/node_modules, this c
 make status         # next step, T1 score, branch.
 make map            # docs/map.py rendered. ARGS=<package|path|D<n>|--stale|--decisions>.
                     #   ARGS="D<n> --full" prints that entry verbatim.
+make map-check      # the plain-English map, `docs/map/`, against the code: claude-settings' shared
+                    #   plain-english-map check, config in `map.config.json`. In `make check` and CI.
+                    #   Needs `$CLAUDE_SETTINGS_DIR` or `~/claude-settings` with `npm ci` run in it.
 make explain        # what `make check` runs, and what each row is worth. ARGS=<target>.
 make serve-scope    # first path gate, read by `make serve-selftest`. ARGS=list | "classify --base <rev>".
                     #   BANCHI_SERVE_SCOPE=all runs it anyway (run-everything, not a hatch).
@@ -308,8 +311,8 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   reading from a guess. The drop half is `harness/tests/t3_join_coverage.py`.
 - **Report unmatched rows in both directions before you write output.** `harness/tests/t3_join_coverage.py` enforces it.
 - **Scope is argued, not gated.** New surface needs a reason, written into the decision that owns it.
-  The `repo map` row of `make docs-audit` fails a file with no map entry.
-  Its `decision ids` row fails an id with no entry.
+  `make map-check` fails a tracked code file with no `docs/map/` line.
+  The `decision ids` row of `make docs-audit` fails an id with no entry.
 - **Fix the cause, never the symptom. Check whether the primitive exists first.**
   `make map ARGS=<path>` and `scripts/decision-context.py` find it.
   Name a stopgap a stopgap in the commit, with the cause in `docs/debts/`.
@@ -394,8 +397,11 @@ Use bold labels in one quoted block, never a code fence. Start with the point. N
 
 ## Map
 
+- `docs/map/` is the plain-English map of the code: one file per area, one line per code file, a trace page per
+  screen. Read it before you answer how code works. `make map-check` holds it in sync with the code; the
+  `plain-english-map` skill says how to change it. `map.config.json` holds its repository settings.
 - `docs/map.py` is the repo as data: built, TBD, and the decisions that govern each file. Read it through `make map`.
-  Never read it whole. `make docs-audit` fails a file with no entry.
+  Never read it whole. The `map data` row of `make docs-audit` checks its claims, never which files it lists.
 - Build order is `SHIPPED` and `OPEN` (D80, a section with no reader). `n` is a stable id.
 - `docs/agent-traps.md` holds the tool and test traps that produced a false green or a lost tree. Read it before a mutation run or a worktree recovery.
 - `docs/decisions/` holds settled decisions, one file each. It is never `@`-loaded (D60, the @-loaded docs are dense).

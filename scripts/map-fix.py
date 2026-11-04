@@ -2,7 +2,7 @@
 """ADD THE DECISION IDS A FILE CITES TO `governed_by` IN docs/map.py.
 
 THIS IS A GENERATOR AND IT GATES NOTHING (D18). It is run by hand, or by an agent whose
-commit `make docs-audit`'s `repo map` row has just refused. The row keeps its job unchanged:
+commit `make docs-audit`'s `map data` row has just refused. The row keeps its job unchanged:
 it reads, it blocks, it never writes. This writes and never blocks. D18's seam list names
 `docs/map.py -> governed_by` as the one permitted location, and the argument for it is in
 that entry.
@@ -228,7 +228,7 @@ def selftest() -> int:
 
     # THE IDS HERE ARE COMPOSED, NEVER TYPED. `cited_decisions` reads every mapped file for
     # `D<n>`, and a fixture holding the literal string is a citation as far as it can tell —
-    # this file's own `repo map` entry demanded six decisions it has nothing to do with the
+    # this file's own `map data` entry demanded six decisions it has nothing to do with the
     # first time this test was written. The same failure the binary-suffix list covers, one
     # register up: a citation is a thing a person wrote about a decision, not three bytes.
     def d(number: int) -> str:

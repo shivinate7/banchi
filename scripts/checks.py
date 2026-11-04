@@ -57,6 +57,9 @@ NEEDS = {
             "loudly rather than letting the target no-op.",
     "ruff": "ruff, installed by `make venv` from requirements.txt (D82). RUFF_GUARD fails "
             "loudly rather than letting the target no-op.",
+    "claude-settings": "a claude-settings checkout with `npm ci` run in it: `$CLAUDE_SETTINGS_DIR`, "
+                       "`~/claude-settings` or the `~/.claude` install link. `scripts/map-check.py` "
+                       "fails, and never skips, when it finds none.",
 }
 
 
@@ -141,6 +144,24 @@ CHECKS = (
         "why_off_commit_path": "",
         "gates": True,
         "governed_by": ("D16", "D18"),
+    },
+    {
+        "target": "map-check",
+        "shard": "static",
+        "runs": "python3 scripts/map-check.py",
+        "asserts": "docs/map/ against the code, by claude-settings' shared plain-english-map "
+                   "check: every tracked code file under `map.config.json`'s `mapPaths` has a "
+                   "map line, no line names an untracked file, every screen key has a Screens "
+                   "line and a trace page, each trace step is reached from an earlier one, and "
+                   "each fact line says what its cited symbol holds. A file with no map line "
+                   "fails here.",
+        "needs": ("python3", "node", "git", "claude-settings"),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "It needs node and a claude-settings checkout, and the commit "
+                               "hook runs a bare python3 with nothing installed.",
+        "gates": True,
+        "governed_by": ("D18",),
     },
     {
         "target": "revert-guard",

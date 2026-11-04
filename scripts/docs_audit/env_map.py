@@ -35,7 +35,7 @@ from .core import (
     registered_tests,
     rel,
 )
-from .paths_commands import PROPOSED_SIGIL, ignored_paths, marked_proposed
+from .paths_commands import PROPOSED_SIGIL, marked_proposed
 from .registry_scopes import _tracked_paths
 from .records import (
     _DECISION_RE,
@@ -729,22 +729,19 @@ def check_subagent_override(report: Report) -> None:
     )
 
 
-def check_map(report: Report, allowed: Dict[str, str]) -> None:
-    """docs/map.py claims things about the repo; this is where they are checked.
+def check_map_data(report: Report, allowed: Dict[str, str]) -> None:
+    """docs/map.py is data that other tools read; this is where its claims are checked.
 
-    The orphan rule is the one that does the work. Everything else here catches a claim
-    that went false; the orphan rule catches a claim that was never made — a module added
-    without touching the map, which is exactly how an index quietly stops describing the
-    thing it indexes.
-
-    What each entry's orphan scan looks at is the entry's own declaration — see `scan_plan`.
-    It reached `.py` and one directory deep until 2026-08-13, so `app/` was inert under a
-    rule its map entry looked covered by: every step 7a screen landed beside the described
-    modules in one evening and the row stayed green.
+    It checks the data and never the coverage. Which tracked code file has no description is
+    the shared plain-english-map check's question (`make map-check`, over `docs/map/`).
+    What is checked here is what that check cannot see: each `governed_by` names a decision
+    that exists, each `tested_by` names a registered harness test, a listed path exists (a
+    `planned` one does not yet), a module's own `D<n>` citations are all in its
+    `governed_by`, and the `SHIPPED` and `OPEN` rows have unique ids and the right `on`.
     """
     findings: List[Finding] = []
     if not exists(MAP):
-        report.add("repo map", MECHANICAL, [Finding("docs/map.py", "does not exist")])
+        report.add("map data", MECHANICAL, [Finding("docs/map.py", "does not exist")])
         return
 
     data = literals_from_module(MAP)
@@ -752,16 +749,12 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     shipped = data.get("SHIPPED") or []
     open_steps = data.get("OPEN") or []
     if not components:
-        report.add("repo map", MECHANICAL, [Finding("docs/map.py", "no COMPONENTS list to read")])
+        report.add("map data", MECHANICAL, [Finding("docs/map.py", "no COMPONENTS list to read")])
         return
 
     singles = {i for i, _, _ in decision_heading_lines_across(decision_files(), "D")}
     test_names = {name for name, _ in registered_tests()}
     claimed = 0
-    # (component path, orphan) pairs, reported after the loop rather than inside it. The
-    # gitignore question below is one batched git call for the whole map that way, instead
-    # of one per entry that lists modules.
-    orphans: List[Tuple[str, str]] = []
 
     def check_decisions(where: str, names: Sequence[str]) -> None:
         for name in names:
@@ -806,10 +799,6 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
         check_decisions(where, component.get("governed_by") or [])
         check_tests(where, component.get("tested_by") or [])
 
-        suffixes, deep, complaints = scan_plan(component)
-        for complaint in complaints:
-            findings.append(Finding(where, complaint))
-
         modules = component.get("modules") or {}
         for name, entry in modules.items():
             module_path = target / name
@@ -831,31 +820,6 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
                         f"but the map does not list it under governed_by.",
                     )
                 )
-
-        # Orphans: a source file the map never mentions. Still guarded on `modules`, which
-        # is the exception docs/debts/ records for `scripts/`: an entry with no module
-        # list has nothing to be an orphan of.
-        if modules and exists(target):
-            for orphan in sorted(source_names(target, suffixes, deep) - set(modules)):
-                orphans.append((path, orphan))
-
-    # A gitignored file is local state and not repo content — the same argument
-    # `ignored_paths` makes for a dangling reference, and it lands harder here because this
-    # row blocks: refusing a commit over `app/playwright-report/index.html` would be the
-    # auditor stopping work on a file the repo does not contain. One batched call, and in
-    # staged mode the list is empty by construction, since `_walk` reads the index and the
-    # index holds nothing ignored — so the pre-commit path pays nothing for this.
-    ignored = ignored_paths([owner + orphan for owner, orphan in orphans])
-    for owner, orphan in orphans:
-        if owner + orphan in ignored:
-            continue
-        findings.append(
-            Finding(
-                f"docs/map.py -> {owner}",
-                f"`{owner}{orphan}` exists but no entry describes it. Add it to "
-                f"modules, with what it does and what governs it.",
-            )
-        )
 
     # THE `status` FIELD IS GONE AND SO IS THE RULE THAT READ IT. This block enforced
     # "exactly one build-order step is `next`", which was right while the build order was a
@@ -905,7 +869,7 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     # could not have told a shipped step from an open one, which is now half the claim. The
     # replacement reads the two headings and reconciles each separately, in both directions.
 
-    report.add("repo map", MECHANICAL, findings, f"{claimed} entries match the tree",
+    report.add("map data", MECHANICAL, findings, f"{claimed} entries match the tree",
                scanned=claimed)
 
 

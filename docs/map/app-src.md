@@ -22,7 +22,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/ClearPrices.tsx` — THE MASS-CLEAR, a kit Sheet off #/pricing's header (D168).
 - `app/src/Codes.css` — The code screen's look. The two lanes are the first numbers drawn, because they are the decision; the duplicate panel takes the one non-hairline border in the file, because a duplicate can mean a code that is worth nothing.
 - `app/src/Codes.tsx` — The code-card screen: read a box's QRs into the ledger, see the two lanes C11 tiers the pile into, and hand a lane's codes to a buyer against a named order.
-- `app/src/DeletedBoxes.tsx` — INVENTORY'S DELETED BOXES SHELF (D134 point `5`, the owner's word "A: delete the tab").
+- `app/src/DeletedBoxes.tsx` — Inventory's deleted boxes shelf (D134 point `5`), which replaced the tab.
 - `app/src/Fulfillment.css` — The generous `24`-`64` end of the one system, two densities.
 - `app/src/Fulfillment.tsx` — D5's second persona's entire product: cards to pull in box-walk order, photo-confirm before each pull, one-tap mark-sold with an undo window.
 - `app/src/Gallery.css` — The kit page's own layout — the specimen grid and its labels.
@@ -47,7 +47,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/PlaceNeighbors.css` — The one-line shape: a flex row that wraps rather than truncates, an arrow between the two names, no key column and no mono — undoing the borrow of `.card-locations-boxname`, whose `10px` uppercase tracked mono once made the only running English in the product a rectangle.
 - `app/src/PlaceNeighbors.tsx` — D58's neighbors, RANKED rather than joined, as ONE LINE.
 - `app/src/PositionBar.css` — The two scales at two densities: the section ruler with its fill, graduations, edge labels and crossing pin, the demoted box strip with the caret that replaced the bracket, and both marks' knockout ring as `--pb-knockout` so the row the walk stands on can answer it.
-- `app/src/PositionBar.tsx` — Where a card sits: its SECTION drawn as a ticked (`5`, `10`) ruler that marks the exact card (its own cell filled, the pin at the cell's centre) with section numbers at both ends, and under it a strip of the box's sections, numbered, with this section outlined, so the sections before and after show.
+- `app/src/PositionBar.tsx` — Where a card sits: its SECTION drawn as a ticked (`5`, `10`) ruler that marks the exact card (its own cell filled, the pin at the cell's center) with section numbers at both ends, and under it a strip of the box's sections, numbered, with this section outlined, so the sections before and after show.
 - `app/src/PositionLabel.css` — The shape, and one knob per site.
 - `app/src/PositionLabel.tsx` — ONE rendering of `pipeline/join.py:Position.label` for every OWNER site.
 - `app/src/PriceFacts.css` — That block, `--bn-*` only: bars at reduced opacity, the Market a thin ink line, and every body holding its size while it reads.
@@ -140,7 +140,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/kit/markPalettes.ts` — Docs/specs/logo.md section `9`'s seven locked marks — prism, bracket, ground and card base per variant, bluesteel the default.
 - `app/src/kit/match.ts` — ONE FORGIVING MATCHER for every search the browser runs: every word in any order; case, accents and punctuation folded; a card number with or without its leading zeros, split by a space, a hyphen or a slash; a box by its name only, never by its number; a SKU by its start.
 - `app/src/kit/overlay.tsx` — The kit's overlays: `Sheet`, `Modal`, `Popover` and `ConfirmSheet`, each with one header and one Close, focus kept inside and given back, Escape for the top one only, portalled to <body>.
-- `app/src/kit/rarityMarks.ts` — The one (game, rarity, palette) table the neighbour row's mark reads: Riftbound's gem colors, a plainest-to-richest ladder for Pokemon and One Piece in pipeline/games.py's stack order, bluesteel for anything unlisted.
+- `app/src/kit/rarityMarks.ts` — The one (game, rarity, palette) table the neighbor row's mark reads: Riftbound's gem colors, a plainest-to-richest ladder for Pokemon and One Piece in pipeline/games.py's stack order, bluesteel for anything unlisted.
 - `app/src/kit/settings.specimens.tsx` — The settings sheet's parts on invented data, mounted on the kit page as `SettingsSpecimens`.
 - `app/src/kit/settings.tsx` — THE SETTINGS SHEET'S PARTS (the owner: "Kit first").
 - `app/src/kit/sheets.ts` — One way to open a thing from wherever it is named: `registerSheet`, `openSheet`, `closeSheet`, and `useOpenSheet` for the shell's host.

@@ -13,7 +13,7 @@ CSV, variant ladder, pricing, join, routing, run decisions, per-game taxonomy.
 - `pipeline/games.py` — The per-game taxonomy: Product Line cell, ordered Rarity cells in STACK order, finish enum, finish -> Condition map, and the rarity -> finish matrix, plus join-key/prompt/crop-band/located facts per game.
 - `pipeline/holdings.py` — `on_hand_quantities`/`on_hand_names` walk the `cards` table once for every SKU not in `TERMINAL_STATES`.
 - `pipeline/identity_binding.py` — §`7.2`'s ladder — T3 (a human act chose this SKU), T5 (the read disputes the row, or is blank, no human act), T4s (number disagrees, name names more than one product), T4u (the same, but exactly one — D162), T1 (name equal after the fold), T2 (a near miss, not disputed), T6 (no SKU), `sku_unknown`.
-- `pipeline/identity_checks.py` — Four review-signal checks over already-stored card fields, no catalogue, no network: a name too long to be a name, a denominator or digit count that disagrees with its set's own dominant reading, and a name one edit from a different name this store holds in the same set.
+- `pipeline/identity_checks.py` — Four review-signal checks over already-stored card fields, no catalog, no network: a name too long to be a name, a denominator or digit count that disagrees with its set's own dominant reading, and a name one edit from a different name this store holds in the same set.
 - `pipeline/join.py` — Catalog join by SKU, aggregation, bidirectional unmatched reporting.
 - `pipeline/livecheck.py` — The whole store against one live TCGplayer export (My Pricing), both directions.
 - `pipeline/merge.py` — One import file over several runs: the copies union, deduped on (box, index), and any cap the send asked for spent ONCE over that union.

@@ -197,7 +197,7 @@ def reach_findings(
         path = str(component.get("path", ""))
         target = ROOT / path
         if not path or not exists(target):
-            continue  # the repo map row already reports a component path that is not there
+            continue  # the map data row already reports a component path that is not there
         package = path.strip("/").split("/")[0]
         importable = is_importable(target)
 
@@ -207,7 +207,7 @@ def reach_findings(
 
         for where, cited in entries:
             for name in cited:
-                # An id that is not a registered test is already a finding on the repo map
+                # An id that is not a registered test is already a finding on the map data row
                 # row, and there is no file here to parse. Reporting it twice under two
                 # labels would make one defect read as two.
                 if name not in tests or not exists(tests[name]):
@@ -289,7 +289,7 @@ def check_tested_by_reach(report: Report) -> None:
     something a `note` can talk its way out of: that is what "unenforced" meant.
     """
     if not exists(MAP):
-        return  # the repo map row above already reports a missing map, loudly
+        return  # the map data row above already reports a missing map, loudly
     components = literals_from_module(MAP).get("COMPONENTS") or []
     tests = {name: path for name, path in registered_tests()}
     findings, claims = reach_findings(components, tests)

@@ -39,7 +39,7 @@ from .env_map import (
     check_env_vocabulary,
     check_hatch_state,
     check_hook_roster,
-    check_map,
+    check_map_data,
     check_map_sections,
     check_subagent_override,
 )
@@ -209,7 +209,7 @@ ROWS: Tuple[AuditRow, ...] = (
     AuditRow("threshold agreement", 1, check_threshold_agreement, ()),
     AuditRow("dist path agreement", 1, check_dist_path_agreement, ()),
     AuditRow("import filename agreement", 1, check_import_filename_agreement, ()),
-    AuditRow("repo map", 1, check_map, ("allowed",)),
+    AuditRow("map data", 1, check_map_data, ("allowed",)),
     AuditRow("hook roster", 2, check_hook_roster, ()),
     AuditRow("codex hooks", 2, check_codex_hooks, ()),
     AuditRow("map sections", 3, check_map_sections, ()),

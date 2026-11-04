@@ -10,7 +10,7 @@ Read by four consumers, which is the reason it is data and not another markdown 
   scripts/status.py           `make status` — the human view. THE ONE A PERSON RUNS, and it
                               was missing from this list from 2026-08-13 to 2026-08-31 while
                               being the answer to "how do I look at this file"
-  scripts/docs-audit.py       its repo-map check verifies every claim below against the tree
+  scripts/docs-audit.py       its map data row verifies every claim below against the tree
   scripts/decision-context.py the PreToolUse hook that tells you which decisions govern a
                               file before you edit it
   you, or an agent            `make map` renders it — a package, a path, or a decision id.
@@ -25,14 +25,14 @@ and a codes track "gated on singles Gate B" months after Gate B passed and the g
 was retired — and nothing anywhere could tell. A section nobody reads is not free; it is a
 claim the repo makes about itself with no way of being wrong out loud.
 
-THIS FILE GOES STALE LIKE ANY OTHER DOC, so it is audited like one. The repo-map check
-fails when a `built` path is missing, when a `planned` path has quietly arrived, when a
-`governed_by` cites a decision that does not exist, and — the one that actually keeps this
-honest — when a source file exists that no entry here mentions. Adding a module without
-touching this file fails the commit.
+THIS FILE GOES STALE LIKE ANY OTHER DOC, so it is audited like one. The map data row
+fails when a `built` path is missing, when a `planned` path has quietly arrived, and when a
+`governed_by` cites a decision that does not exist. WHICH FILES THE REPO HAS IS NOT THIS
+FILE'S JOB: `docs/map/` lists every code file, and `make map-check` fails a file with no line
+there. A module absent from this file only means no decision governs it here.
 
 `governed_by` is a superset of the `D<n>` citations in the file's own comments; the
-repo-map check enforces that direction. Entries beyond the citations are curated:
+map data row enforces that direction. Entries beyond the citations are curated:
 `pipeline/pricing.py` never says "D8" in a comment, but D8 is what makes the TCGplayer
 export the only pricing source, and someone editing that file needs to know.
 
@@ -339,7 +339,7 @@ GATES = []
 # status: built | stub | planned
 #   built    code exists. `tested_by` names the harness tests that reach it, where any do
 #   stub     the file exists and deliberately does nothing yet
-#   planned  no file yet; `step` says what creates it. The repo-map check FAILS if it
+#   planned  no file yet; `step` says what creates it. The map data row FAILS if it
 #            exists, which forces the entry to be updated the day it is written.
 #
 # `step` links an entry to the build-order step whose work happens there — the step that

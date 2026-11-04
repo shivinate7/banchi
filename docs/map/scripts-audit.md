@@ -15,7 +15,7 @@ The checks behind `make docs-audit`, one module for each row group, with each ro
 - `scripts/docs_audit/harness_criteria.py` — The rows that reconcile harness test counts, published pass criteria and their evidence with `harness/run.py` and `docs/GATES.md`.
 - `scripts/docs_audit/hygiene.py` — The doc-hygiene, route-roster, recorded-deletion, spec-seal, design-check verdict and positional-reference rows.
 - `scripts/docs_audit/paths_commands.py` — The rows that read paths, line anchors, `make` targets, the commands roster and `banchi` subcommands out of the markdown.
-- `scripts/docs_audit/reasons.py` — The rows over reason codes and their neighbours: motion params, pricing presets, hint reasons, the transport promise and the export request.
+- `scripts/docs_audit/reasons.py` — The rows over reason codes and their neighbors: motion params, pricing presets, hint reasons, the transport promise and the export request.
 - `scripts/docs_audit/records.py` — The rows over the decision, gate and debt records: decision ids, id claims, numbering growth, heading structure and the debts index.
 - `scripts/docs_audit/registry_scopes.py` — The rows over the check registry, the commit path, the suite lock, the browser, spec, serve and guard scopes, and how callers invoke the audit.
 - `scripts/docs_audit/rows.py` — `ROWS`, the mode filter and `audit()`: the one table that names every row with its tier, and the loop that runs it.

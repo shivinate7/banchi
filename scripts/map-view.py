@@ -120,7 +120,7 @@ def entry_path(name: str) -> Optional[Path]:
     trade a working listing order for a working glob.
 
     That sentence deliberately spells no id. Written out, the four ids an unpadded sort
-    mangles read to `make docs-audit`'s `repo map` row as four citations this file does not
+    mangles read to `make docs-audit`'s `map data` row as four citations this file does not
     have, and the row is right to say so — an illustration is not a citation and no checker
     can tell them apart.
 
