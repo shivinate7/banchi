@@ -307,9 +307,9 @@ class _Host:
                     host.asked.append(sku)
                     self.requests += len(ranges)
                     if host.refuse_after is not None and len(host.asked) > host.refuse_after:
-                        refusals[sku] = (
-                            "https://infinite-api.tcgplayer.com/price/history/42/detailed?range=month "
-                            + archive_walk.BLOCKED_SIGNATURE + ". Set BANCHI_TCG_USER_AGENT."
+                        # The refusal the real fold writes for an HTTP 403: `Blocked`, tagged by its class.
+                        refusals[sku] = pricehistory.refusal(
+                            pricehistory.Blocked("The price service answered 'forbidden'.")
                         )
                         continue
                     readings[sku] = HistoryReading(sku=sku, product_id=42, series={
