@@ -18,7 +18,7 @@
 
 **The allocation is `max + 1` and never the lowest free id,** because an id is cited. D80 (a section needs a reader or goes) culled step 12 and rules the hole correct. The ceiling is above every number in the branch tree and in the tip of the base. So a number that main took since the cut is never reused.
 
-**Mode `check` runs on every pull request and every push to main.** It is the `records` job in `.github/workflows/check.yml`. It refuses a number that a branch wrote by hand. One exception: a `Record-claim` commit added it and main's tip lacks it. On main it refuses any pending record. The docs-audit `id claims` row reads every slug in the tree. Each slug resolves to a slug heading, and each is unique and well formed. **Main carries none.**
+**Mode `check` runs on every pull request and every push to main.** It is the `records` job in `.github/workflows/checks.yml`. It refuses a number that a branch wrote by hand. One exception: a `Record-claim` commit added it and main's tip lacks it. On main it refuses any pending record. The docs-audit `id claims` row reads every slug in the tree. Each slug resolves to a slug heading, and each is unique and well formed. **Main carries none.**
 
 ### What it retired
 

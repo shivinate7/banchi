@@ -7,7 +7,7 @@ copy and runs it from the repo root, so the rules are never copied here.
 
 WHERE THE SKILL IS, IN ORDER:
   1. `$CLAUDE_SETTINGS_DIR`, a claude-settings checkout. CI sets it to the pinned copy that the
-     runner downloaded for the `shivinate7/claude-settings/actions/...` steps of check.yml.
+     runner downloaded for the `shivinate7/claude-settings/actions/...` steps of checks.yml.
   2. `~/claude-settings`, the checkout `install.sh` links `~/.claude` to.
   3. `~/.claude/skills/plain-english-map`, the install link, followed to its real place.
 

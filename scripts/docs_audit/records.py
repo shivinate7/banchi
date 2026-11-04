@@ -403,7 +403,7 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
 #   4. MAIN CARRIES NO SLUG                      — the invariant
 #
 # The fourth is the only one that catches a claim that HALF-LANDED, and it is checkable
-# exactly where it matters: `check.yml` runs this on main after every merge. On a branch it is
+# exactly where it matters: `checks.yml` runs this on main after every merge. On a branch it is
 # silent, because a slug on a branch is the ordinary state and the whole point.
 
 
@@ -513,7 +513,7 @@ def check_id_claims(report: Report) -> None:
 
     # AND MAIN CARRIES NONE. This is the invariant the whole design rests on: a slug that
     # reaches main is a claim that half-landed, and every citation of it now resolves to
-    # nothing rather than to the wrong entry — loud, but only if something looks. `check.yml`
+    # nothing rather than to the wrong entry — loud, but only if something looks. `checks.yml`
     # runs this on main after every merge, which is the one place and moment it can look.
     if on_main() and unclaimed:
         findings.append(Finding(

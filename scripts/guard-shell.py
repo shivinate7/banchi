@@ -68,7 +68,7 @@ Claude-side copy is cut on the owner's word. Codex runs no shared guard and runs
     9. A command that waits for minutes and NARRATES while it does, piped into `tail` or
        redirected away
        2026-09-20. `make merge` pushes a claim commit and waits for that commit's checks;
-       `check.yml` takes four to five minutes, measured across 12 consecutive runs the same
+       `checks.yml` takes four to five minutes, measured across 12 consecutive runs the same
        day, and the wait prints a line a minute saying what it is waiting on. Sessions
        habitually type `… 2>&1 | tail -18`, which block-buffers that heartbeat and then keeps
        only the end of it, so five to twenty minutes of correct waiting is indistinguishable
@@ -1684,7 +1684,7 @@ def clause_narrate(reading: "shell_parse.Reading") -> Verdict:
             "  end of what finally arrives. Correct waiting and a hang look identical from "
             "outside.",
             "",
-            "  THE WAIT IS NOT THE PROBLEM AND IS NOT WORTH SHORTENING. `check.yml` takes "
+            "  THE WAIT IS NOT THE PROBLEM AND IS NOT WORTH SHORTENING. `checks.yml` takes "
             "four to",
             "  five minutes, measured across 12 consecutive runs on 2026-09-20, and the "
             "claim commit's",

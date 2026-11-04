@@ -315,7 +315,7 @@ explain:
 # end (D248) — a session runs this itself before saying something works.
 # PATH GATED (owner's word, D247 amended): `scripts/guard-scope.py` derives what the harness reads
 # from `harness/` itself and skips this when the branch touches none of it. A main push and the
-# nightly run set BANCHI_GUARD_SCOPE=all in check.yml, so they never skip.
+# nightly run set BANCHI_GUARD_SCOPE=all in checks.yml, so they never skip.
 harness:
 	$(VENV_GUARD)
 	@python3 scripts/guard-scope.py classify --target harness --base origin/main; rc=$$?; \
@@ -689,7 +689,7 @@ merge:
 # keep-ours and squashed reads the same as the PR GitHub would show.
 #
 # ON THE COMMIT PATH TWICE: here, and in pre-push (scripts/githooks/pre-push runs the same
-# script on the branch being pushed), and once more as its own job in .github/workflows/check.yml
+# script on the branch being pushed), and once more as its own job in .github/workflows/checks.yml
 # so it shows as a check on the PR. It writes nothing and needs only python3 and git. Absent
 # `origin/main` — a fixture clone, a throwaway — it allows and says so, which is the same
 # fail-open rule the two D42 hooks state. `BANCHI_REVERT=off` runs nothing, printed in every
@@ -1538,7 +1538,7 @@ screenshot:
 # three. app/design-check-reporter.ts carries the rest of the argument.
 #
 # `ARGS` REACHES THE LOCK AND `PW_ARGS` REACHES PLAYWRIGHT, and the two are kept apart by the
-# `--` on each side (D136). `.github/workflows/check.yml` runs this suite as twelve shards with
+# `--` on each side (D136). `.github/workflows/checks.yml` runs this suite as twelve shards with
 # `--workers=2`, each handed its spec files by `scripts/browser-scope.py shard`, which packs
 # whole files by measured time rather than splitting the cases. More workers on one box is
 # more suite around a test, and DEBT109 records an Escape red whose cause is unread (the same

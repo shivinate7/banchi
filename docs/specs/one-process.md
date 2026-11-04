@@ -250,7 +250,7 @@ A row's run id is one run that proved it, fixed when the row was written. It is 
 
 | Platform | Where it is tested | Proved by run |
 |---|---|---|
-| Linux server and every browser spec | `.github/workflows/check.yml`: the `ci-check` shards and the `design-check` matrix, on `ubuntu-latest` | 41773920691 |
+| Linux server and every browser spec | `.github/workflows/checks.yml`: the `ci-check` shards and the `design-check` matrix, on `ubuntu-latest` | 41773920691 |
 | macOS, the product checks | `.github/workflows/mac.yml`'s `mac-product` job, weekly and on dispatch; outside `all-jobs-passed` (D136) | 41774107649 |
 | macOS, the server serving a real build | the same job's `make serve-selftest` step | 41774107649 |
 | The public demo on GitHub Pages | `.github/workflows/demo.yml`; `docs/specs/demo.md` says what it asserts | 41511476601 |
@@ -264,11 +264,11 @@ A row's run id is one run that proved it, fixed when the row was written. It is 
 
 `BANCHI_SERVE_REAL_BUILD=1` runs the real `vite build` in `make serve-selftest`'s supervisor arm
 (`serve-selftest.py`'s `check_real_build`). Unset, it is SKIPPED. It needs node and `app/node_modules`.
-`mac.yml` sets it, and `check.yml` sets it for the shard that runs `serve-selftest`. The arm refuses a
+`mac.yml` sets it, and `checks.yml` sets it for the shard that runs `serve-selftest`. The arm refuses a
 path that is no route with 404 and serves no catch-all `index.html`, which is D138's ruling.
 
 A pull request that touches only `app/` does not run `serve-selftest`: `scripts/serve-scope.py` leaves
-`app/**` out of what it reads. `check.yml` sets `BANCHI_SERVE_SCOPE=all` on every run that is not a pull
+`app/**` out of what it reads. `checks.yml` sets `BANCHI_SERVE_SCOPE=all` on every run that is not a pull
 request, so the real-build arm covers such a change on a push to main and on the nightly run. `mac.yml`
 covers it weekly on macOS.
 

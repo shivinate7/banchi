@@ -17,7 +17,7 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
 - `scripts/catalog-index.py` — Build-order step `9`, piece `2`: build vendor/pokemon-tcg-data/catalog.sqlite from the vendored snapshot — cards join to sets BY FILENAME, because printedTotal lives only in sets/en.json.
 - `scripts/catalog-refresh.py` — Build-order step `9`, piece `1` (D15): shallow-clone PokemonTCG/pokemon-tcg-data, diff it against the committed vendor/pokemon-tcg-data/ snapshot, and — unless `--dry-run` — replace it and record the upstream commit SHA in SNAPSHOT.json.
 - `scripts/checks.py` — `make explain` — what `make check` runs, as a CHECKS literal plus its own renderer, one entry per target in the recipe: what it asserts, what toolchain it needs, whether it writes, whether it is on the commit path and why not, whether a finding gates.
-- `scripts/ci-skip-count.sh` — The one reader of a CI shard's skip count: `check.yml`'s matrix step and its `ci-static` job call it over the shard's log.
+- `scripts/ci-skip-count.sh` — The one reader of a CI shard's skip count: `checks.yml`'s matrix step and its `ci-static` job call it over the shard's log.
 - `scripts/cid-selftest.py` — Proves D172's card name and the photograph store filed under it by violating both, against a throwaway store with photographs this script draws — the operator's corpus cannot be re-taken, so pointing a destructive suite at it is the incident rather than the test.
 - `scripts/css-var-check.py` — `make css-var-check` — a `var(--x)` with no fallback, where `--x` is defined nowhere, drops the whole declaration silently.
 - `scripts/d240-tolerance-fit.py` — RESCUED, INCOMPLETE — the sweep exists, the measurement it takes has never been run.

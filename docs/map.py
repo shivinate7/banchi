@@ -2545,7 +2545,7 @@ COMPONENTS = [
             "browser-scope.py": {
                 "does": "does a change reach what a browser draws? The list of every path "
                         "`make design-check` loads, each with the reason it is there, and the "
-                        "classifier `.github/workflows/check.yml`'s `browser-scope` job runs "
+                        "classifier `.github/workflows/checks.yml`'s `browser-scope` job runs "
                         "on a pull request to decide whether the three-shard browser matrix "
                         "runs at all (D141). `classify` diffs what the branch would LAND from "
                         "the merge-base; `history N` replays main's last N merges, which is "
@@ -3624,7 +3624,7 @@ COMPONENTS = [
                 "governed_by": ["D18", "D138"],
             },
             "ci-skip-count.sh": {
-                "does": "the one reader of a CI shard's skip count: `check.yml`'s matrix step and "
+                "does": "the one reader of a CI shard's skip count: `checks.yml`'s matrix step and "
                         "its `ci-static` job call it over the shard's log. It prints "
                         "`skipped in <target>: ...` to the job log and the step summary, and "
                         "never fails: the calling step keeps make's exit code.",
@@ -6402,7 +6402,7 @@ COMPONENTS = [
                                              "wait — never an assertion — was the whole of the "
                                              "flake DEBTS.md recorded on 2026-08-30. Under CI a "
                                              "failing case keeps its trace (`retain-on-failure`) "
-                                             "and check.yml uploads it: the one-test runner red "
+                                             "and checks.yml uploads it: the one-test runner red "
                                              "has never reproduced on the rig (D128), so the run "
                                              "that fails is the only witness there is",
                                      "governed_by": ["D5", "D16", "D128", "D261"]},
