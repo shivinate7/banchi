@@ -492,6 +492,9 @@ EXTRA_SUBJECTS = {
         ("scripts/ports-machine-selftest.py", "the recipe runs this second test beside it."),
         ("scripts/suite-lock.py", "that second test loads it to check the lock's default dir."),
     ),
+    "tests-for-selftest": (
+        ("scripts/browser-scope.py", "tests-for.py loads it for import_closure."),
+    ),
 }
 
 # Targets whose test executes its subjects, so a docstring or comment edit cannot move a verdict.

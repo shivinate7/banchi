@@ -37,7 +37,13 @@ test are read in one pass here). Both read the module global `ROOT`, which this 
 
 KNOWN GAPS, each a miss that narrows the answer: a file a suite reaches only through a name built at run time
 (an f-string, a variable, an environment lookup); a directory a Python suite reads with `glob`; a file deleted
-by the change (nothing resolves it). The consumer runs the full set on a file this prints nothing for only when
+by the change (nothing resolves it). The TypeScript scan also misses these shapes, each an under-select that no
+`.unit.ts` uses today (a scan of 222 app files found none):
+- a regex after the `)` of an unbraced if/while/for reads as division;
+- `!` before `/` reads as the start of a regex;
+- a comment or a backtick specifier inside `import(...)` is not followed;
+- no JSX mode: a lone quote in `.tsx` text can mispair.
+The consumer runs the full set on a file this prints nothing for only when
 it chooses to: an empty answer is "no suite reaches it", not "it is safe".
 
 COST: reads and parses each Python file the suites reach once (about 5 seconds on this repo); starts no process.
