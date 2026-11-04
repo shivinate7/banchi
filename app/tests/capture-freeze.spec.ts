@@ -8,7 +8,7 @@ import { setViewport } from './phoneSwitch'
 import { DEALING_RAIL_TILES, SAVE_WAIT_MS } from '../src/dealer'
 
 /* A LONG SITTING MUST NOT FREEZE THE MAIN THREAD. A `longtask` observer reports only tasks of
- * 50 ms or more, so "no entry" is the bar. Two cases:
+ * 50 ms or more, so "no entry" is the bar. Three cases:
  *  1. DEALING, 300 captures, monthly and on demand (BANCHI_LONG_SITTING=1): the rail
  *     (`footer.capture-undo`) stays live but draws only the newest DEALING_RAIL_TILES tiles, first
  *     tile the latest card, the Last capture panel (`aside.capture-last`) shows each new photo, no
@@ -16,6 +16,8 @@ import { DEALING_RAIL_TILES, SAVE_WAIT_MS } from '../src/dealer'
  *     one catch-up render may be long and is not barred. This run is what catches growth. The
  *     owner's longest sitting is 555 cards. No per-PR case in this file deals cards, by the owner's word.
  *  2. HAND FEED, 60 captures with the shutter: the old bar, so hand feeding cannot regress.
+ *  3. HAND FEED, the layout objects a capture walks at captures 51 to 60 against 21 to 30, read from the
+ *     Chromium trace: no clock, so the same count on every runner.
  * Photos are distinct 1920x1080 JPEGs, so image decode is in the measurement. The dealer is the
  * fake Bluetooth device of `dispenser.spec.ts` (shared in `dispenserRig.ts`). Nothing reaches a
  * store: `POST /capture` is answered here. */
@@ -312,9 +314,93 @@ test('hand-fed, captures 51 to 60 cost no more than captures 21 to 30', async ({
     perCapture.push(await longTasks(page))
     cost.push(await blockedMs(page))
   }
-  /* The window starts at capture 21: the visible tile area fills up over the first ~20 captures, which is
-   * a fixed cost that saturates, not growth. */
+  /* The window starts at capture 21 to leave out the first 20 captures. Cost does not stop growing there:
+   * on today's rail each capture adds one tile's layout objects to the tree, so cost keeps rising past
+   * capture 21. The layout case below measures that growth directly. */
   expect(judge(cost, perCapture, 10, 20), `blocked time over ${CAPTURES} hand-fed captures`).toBe('')
+})
+
+/* THE LAYOUT A CAPTURE WALKS MUST NOT GROW WITH THE SITTING. Chromium's `devtools.timeline` trace reports
+ * the size of each layout: a `Layout` event's `totalObjects` is the layout objects in the document, and each
+ * tile adds about 20 of them. That count does not depend on runner speed. On today's rail it rises by about
+ * 20 objects with every capture, because the rail keeps every tile in the tree.
+ * Two other trace counts do not grow past capture 21 on this rail, so they cannot show this growth:
+ * `UpdateLayoutTree`'s `elementCount` and `Layout`'s `dirtyObjects` stay in a band of about 280 to 450
+ * across captures 21 to 60, and they swing from one capture to the next. */
+/* SLACK. On today's rail the two medians repeated exactly over three runs of this case (1002 and 1602 objects).
+ * FLAT_SLACK allows 2% of the early median, about 20 objects on this rail, which is one tile's worth: a stray
+ * tile in a window passes. Today's rail adds 20 objects per capture, about 600 across the 30 captures between
+ * the two windows, far past the slack. */
+const FLAT_SLACK = 1.02
+
+type TraceEvent = { name: string; ts: number; args?: Record<string, unknown> }
+
+/** Records the page's `devtools.timeline` trace. `mark(label)` puts a labelled stamp into it. The stamp
+ *  forces the style and layout of whatever the capture just changed, so that work lands inside the window. */
+async function recordTimeline(page: Page) {
+  const cdp = await page.context().newCDPSession(page)
+  const events: TraceEvent[] = []
+  cdp.on('Tracing.dataCollected', (e) => { events.push(...(e.value as unknown as TraceEvent[])) })
+  const complete = new Promise<void>((resolve) => cdp.once('Tracing.tracingComplete', () => resolve()))
+  await cdp.send('Tracing.start', { categories: 'devtools.timeline', transferMode: 'ReportEvents' })
+  return {
+    mark: (label: string) => page.evaluate((text) => {
+      void document.body.offsetHeight
+      console.timeStamp(text)
+    }, label),
+    stop: async (): Promise<TraceEvent[]> => {
+      await cdp.send('Tracing.end')
+      await complete
+      return events
+    },
+  }
+}
+
+/** Per capture, the largest layout tree among the layouts between its `start n` and `end n` marks, and
+ *  how many layouts there were. The largest is taken so a frame that paints mid-window cannot change it. */
+function layoutWindows(events: TraceEvent[]): Map<number, { objects: number; layouts: number }> {
+  const out = new Map<number, { objects: number; layouts: number }>()
+  let open = 0
+  for (const e of [...events].sort((a, b) => a.ts - b.ts)) {
+    if (e.name === 'TimeStamp') {
+      const message = String((e.args?.data as { message?: unknown } | undefined)?.message ?? '')
+      const m = /^(start|end) (\d+)$/.exec(message)
+      if (m !== null) open = m[1] === 'start' ? Number(m[2]) : 0
+      continue
+    }
+    if (e.name !== 'Layout' || open === 0) continue
+    const objects = Number((e.args?.beginData as { totalObjects?: unknown } | undefined)?.totalObjects ?? 0)
+    const seen = out.get(open) ?? { objects: 0, layouts: 0 }
+    out.set(open, { objects: Math.max(seen.objects, objects), layouts: seen.layouts + 1 })
+  }
+  return out
+}
+
+test('hand-fed, a capture lays out a tree no bigger at captures 51 to 60 than at captures 21 to 30', async ({ page }) => {
+  const CAPTURES = 60
+  test.setTimeout(300_000)
+  await handCamera(page)
+  await stubWire(page, CAPTURES)
+  await pickCameraAndBox(page)
+  await expect(page.getByRole('button', { name: 'Capture', exact: true })).toBeEnabled()
+  const timeline = await recordTimeline(page)
+  for (let n = 1; n <= CAPTURES; n += 1) {
+    await timeline.mark(`start ${n}`)
+    await page.keyboard.press('c')
+    await expect(page.locator('.capture-undo-row').first()).toHaveAttribute('aria-label', new RegExp(`Card ${n}$`), { timeout: 15_000 })
+    await timeline.mark(`end ${n}`)
+  }
+  const windows = layoutWindows(await timeline.stop())
+  const captures = Array.from({ length: CAPTURES }, (_, i) => i + 1)
+  // The scope first: a window with no layout measures nothing, so it must not read as a flat tree.
+  expect(captures.filter((n) => (windows.get(n)?.layouts ?? 0) === 0), 'every capture window holds a layout').toEqual([])
+  const early = median(captures.slice(20, 30).map((n) => windows.get(n)?.objects ?? 0))
+  const late = median(captures.slice(50, 60).map((n) => windows.get(n)?.objects ?? 0))
+  console.log(`LAYOUT OBJECTS median per capture: captures 21 to 30 ${early}, captures 51 to 60 ${late}`)
+  const verdict = late <= FLAT_SLACK * early
+    ? ''
+    : `layout objects per capture grew from ${early} (captures 21 to 30) to ${late} (captures 51 to 60), over ${FLAT_SLACK}x`
+  expect(verdict, `layout tree size over ${CAPTURES} hand-fed captures`).toBe('')
 })
 
 test('a tile press undoes exactly the depth its label shows, even from a handler painted before more captures landed', async ({ page }) => {
