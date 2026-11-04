@@ -45,7 +45,7 @@ from .records import (
     without_noqa,
 )
 
-# How a hook command names the project root. `:-.` keeps Codex, which does not set it, at cwd.
+# How a hook command names the project root. `:-.` keeps a session that does not set it at cwd.
 PROJECT_DIR_PREFIX = "${CLAUDE_PROJECT_DIR:-.}/"
 
 # `duplicated measurements` is CUT (test-audit plan Q2, 2026-09-28). It reconciled
@@ -914,28 +914,22 @@ def check_hook_roster(report: Report) -> None:
     )
 
 
-# --------------------------------------------------------------------- codex hooks (D135)
+# --------------------------------------------------------------------- claude hooks
 
-CODEX_HOOKS = ROOT / ".codex" / "hooks.json"
 CLAUDE_SETTINGS = ROOT / ".claude" / "settings.json"
 
-#: Hooks only Codex runs, on the owner's word: the shared layer's guard (`claude-settings`
-#: `hooks/guard.py`, rule 2) owns it for Claude Code, and Codex runs no shared guard.
-#: Every other hook must be in both files. An entry here that Claude Code runs again, or that
-#: Codex dropped, is a finding, so this list cannot go stale in either direction.
-CODEX_ONLY = frozenset({
-    ("PreToolUse", "Bash", "scripts/reap.py --hook"),
-})
-
-#: The value each file pins for `GUARD_SHELL_SKIP` on a `scripts/guard-shell.py` hook: Claude
-#: Code's Bash entry skips the three clauses the shared layer owns, every other entry sets it
-#: empty so an inherited value never narrows a guard. The triples below drop the prefix, so a
-#: pin that drifts is its own finding, not a hook mismatch.
+#: `.claude/settings.json` sets no `GUARD_SHELL_SKIP` on a `scripts/guard-shell.py` hook: Claude
+#: Code runs every clause the script has. The triples below drop a prefix, so a pin that appears
+#: is its own finding.
 _SKIP_ENV = re.compile(r"^GUARD_SHELL_SKIP=(\S*)\s+")
-CLAUDE_BASH_SKIP = "checkout,stash,reset"
+#: Every spelling `guard-shell.py`'s `main` reads as a skip: the variable as a word anywhere
+#: (a leading prefix, after other assignments, after `env` or `export`, quoted) and the `--skip`
+#: alias as `--skip NAMES` or `--skip=NAMES`. `--skip-x` is another word and does not match.
+_SKIP_PIN = re.compile(r"""(?:^|[\s;&|('"])(?:GUARD_SHELL_SKIP=|--skip(?:=|\s|$))""")
+_ENV_WORD = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
-#: The one hook Claude Code runs narrowed by an environment prefix, and Codex runs bare. The
-#: row expects the prefix on the Claude entry and its absence on the Codex entry.
+#: The one hook Claude Code runs narrowed by an environment prefix: the file and bash-c clauses
+#: alone (D171). The row expects the prefix on the entry.
 NARROWED_ENV = "BANCHI_SILENT_WRITE_ONLY=file,bash-c "
 NARROWED_HOOK = ("PreToolUse", "Bash", "scripts/silent-write-guard.py --hook")
 
@@ -943,20 +937,11 @@ NARROWED_HOOK = ("PreToolUse", "Bash", "scripts/silent-write-guard.py --hook")
 def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
     """(event, matcher, command) out of a settings-shaped `hooks` block.
 
-    Both files share one shape — `hooks.<Event> = [{matcher?, hooks: [{type, command}]}]` —
-    because `.codex/hooks.json` was written by copying `.claude/settings.json`'s own block
-    out of its wrapper (D135). `matcher` is absent on an event with no tool to match
-    (`SessionStart`, `Stop`, `SessionEnd`, `WorktreeRemove`), so it is read as `""` rather
-    than skipped — an event that gains a matcher in one file and not the other is exactly
-    the drift this reads for, and a triple can only report that by carrying the field.
-
-    The `GUARD_SHELL_SKIP` prefix is dropped for the same reason: the guard is the same
-    hook with fewer clauses.
-
-    `timeout` is deliberately not part of the triple. It changes how patient a hook is, not
-    which hooks fire, and folding it in would make a slower `session-teardown.sh` in one
-    file read as a MISSING hook rather than as a timing difference nobody asked this row to
-    referee.
+    `hooks.<Event> = [{matcher?, hooks: [{type, command}]}]`. `matcher` is absent on an event
+    with no tool to match (`SessionStart`, `Stop`, `SessionEnd`, `WorktreeRemove`), so it is read
+    as `""` rather than skipped. The `GUARD_SHELL_SKIP` prefix is dropped, because the pin is
+    checked on its own. `timeout` is not part of the triple: it changes how patient a hook is,
+    not which hooks fire.
     """
     triples: Set[Tuple[str, str, str]] = set()
     if not isinstance(data, dict):
@@ -982,70 +967,20 @@ def _hook_triples(data: object) -> Set[Tuple[str, str, str]]:
     return triples
 
 
-def check_codex_hooks(report: Report) -> None:
-    """`.codex/hooks.json` and `.claude/settings.json`'s `hooks` block name the same hooks.
+def check_claude_hooks(report: Report) -> None:
+    """`.claude/settings.json`'s `hooks` block runs the hooks it should, each naming a real file.
 
-    BUILT SO A CODEX SESSION IS NOT A SECOND, UNGUARDED WAY INTO THIS REPO (D135). Codex
-    reads `.codex/hooks.json` the way Claude Code reads `.claude/settings.json`'s `hooks`
-    key, and until this row nothing compared the two: a guard added to one tool's config and
-    not the other's is a guard that only some sessions run, silently, and the file's own
-    prose cannot say so — `.codex/hooks.json` carries none of `.claude/settings.json`'s
-    `_*_note` fields explaining what each hook is for or why it fails open, because those
-    notes are keys JSON tolerates and nothing reads.
-
-    MEASURED AT THE MOMENT THIS ROW WAS WRITTEN: the two files already disagreed.
-    `.claude/settings.json` runs `scripts/reap.py --hook` on every `Bash` call (D127, added
-    2026-09-10 for the pkill/lsof incidents) and `scripts/session-teardown.sh` on
-    `WorktreeRemove` (added with the janitor sweep, claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep") — `.codex/hooks.json` was written a day
-    earlier, on 2026-09-09, and has neither. A Codex session could run an unrestricted
-    `pkill` this repo's own Claude sessions cannot, and its `git worktree remove` would
-    never notify a supervisor to stop. Both are added to `.codex/hooks.json` in the same
-    change that adds this row, which is what makes the row start green rather than start by
-    reporting the gap it was built to close.
-
-    EVENT AND MATCHER ARE PART OF THE COMPARISON, NOT ONLY THE COMMAND. A command string
-    reused under a different event or a narrowed matcher is a different guard wearing the
-    same name — `scripts/guard-opsec.sh` on `Write|Edit` is the opsec check; the same script
-    on `Bash` would be a no-op with a name that reads as coverage. Comparing the full triple
-    is what catches that; comparing commands alone would not.
-
-    A COMMAND NAMED IN EITHER FILE MUST NAME A REAL FILE IN THE TREE. `.codex/hooks.json`
-    is untracked history's copy of a moving target, and a hook whose script has since been
-    renamed or deleted is silent in exactly the way `make reap` and `make janitor`'s own
-    liveness checks refuse to be — it does not error, it simply never runs.
+    THREE CLAIMS, EACH ONE A SILENT FAILURE WHEN WRONG. A hook whose script was renamed or
+    deleted does not error, it never runs. A `scripts/guard-shell.py` entry that sets
+    `GUARD_SHELL_SKIP`, or passes `--skip`, runs fewer clauses than the script has (D179). The silent-write hook that lost its `BANCHI_SILENT_WRITE_ONLY` prefix runs the
+    clauses the shared layer already owns (D171).
     """
     findings: List[Finding] = []
-    if not exists(CODEX_HOOKS):
-        report.add(
-            "codex hooks",
-            MECHANICAL,
-            [
-                Finding(
-                    ".codex/hooks.json",
-                    "does not exist. Codex reads no hooks at all here, which is a silent "
-                    "downgrade from what .claude/settings.json enforces for Claude Code — "
-                    "restore the file or delete this row with it (D135).",
-                )
-            ],
-            "",
-        )
-        return
     if not exists(CLAUDE_SETTINGS):
         report.add(
-            "codex hooks",
+            "claude hooks",
             MECHANICAL,
-            [Finding(".claude/settings.json", "does not exist; nothing to reconcile against.")],
-            "",
-        )
-        return
-
-    try:
-        codex_data = json.loads(read(CODEX_HOOKS))
-    except json.JSONDecodeError as exc:
-        report.add(
-            "codex hooks",
-            MECHANICAL,
-            [Finding(".codex/hooks.json", f"does not parse as JSON: {exc}")],
+            [Finding(".claude/settings.json", "does not exist; no hook is armed for Claude Code.")],
             "",
         )
         return
@@ -1053,95 +988,47 @@ def check_codex_hooks(report: Report) -> None:
         claude_data = json.loads(read(CLAUDE_SETTINGS))
     except json.JSONDecodeError as exc:
         report.add(
-            "codex hooks",
+            "claude hooks",
             MECHANICAL,
             [Finding(".claude/settings.json", f"does not parse as JSON: {exc}")],
             "",
         )
         return
 
-    codex_triples = _hook_triples(codex_data)
     claude_triples = _hook_triples(claude_data)
 
-    def describe(event: str, matcher: str, command: str) -> str:
-        return f"{event}" + (f" (matcher `{matcher}`)" if matcher else "") + f" -> `{command}`"
-
-    for label, data, path in (("claude", claude_data, ".claude/settings.json"),
-                              ("codex", codex_data, ".codex/hooks.json")):
-        for event, entries in (data.get("hooks") or {}).items():
-            for entry in entries or []:
-                matcher = entry.get("matcher") or ""
-                for hook in entry.get("hooks") or []:
-                    command = hook.get("command") or ""
-                    if "scripts/guard-shell.py" not in command:
-                        continue
-                    found = _SKIP_ENV.match(command)
-                    want = CLAUDE_BASH_SKIP if label == "claude" and matcher == "Bash" else ""
-                    if not found or found.group(1) != want:
-                        findings.append(
-                            Finding(
-                                path,
-                                f"{event} (matcher `{matcher}`) must set "
-                                f"`GUARD_SHELL_SKIP={want}` before guard-shell.py, got `{command}`.",
-                            )
+    for event, entries in (claude_data.get("hooks") or {}).items():
+        for entry in entries or []:
+            matcher = entry.get("matcher") or ""
+            for hook in entry.get("hooks") or []:
+                command = hook.get("command") or ""
+                if "scripts/guard-shell.py" not in command:
+                    continue
+                if _SKIP_PIN.search(command):
+                    findings.append(
+                        Finding(
+                            ".claude/settings.json",
+                            f"{event} (matcher `{matcher}`) must not set `GUARD_SHELL_SKIP` "
+                            f"or pass `--skip` to guard-shell.py, got `{command}`.",
                         )
+                    )
 
-    # The narrowed hook: Claude's entry carries the prefix and Codex's carries none. Strip the
-    # prefix from Claude's side after checking it, so the comparison below sees one hook.
+    # The silent-write hook carries its prefix exactly. Any other spelling of it runs clauses the
+    # shared layer already owns (D171).
     event, matcher, bare = NARROWED_HOOK
     narrowed = (event, matcher, NARROWED_ENV + bare)
-    if narrowed in claude_triples:
-        claude_triples = (claude_triples - {narrowed}) | {NARROWED_HOOK}
-    elif NARROWED_HOOK in claude_triples:
-        findings.append(Finding(".claude/settings.json",
-                                f"runs `{bare}` without the `{NARROWED_ENV.strip()}` prefix. "
-                                "Claude Code runs the file and bash-c clauses alone (D171)."))
-    if narrowed in codex_triples:
-        findings.append(Finding(".codex/hooks.json",
-                                f"runs `{narrowed[2]}`. Codex runs the full hook, with no "
-                                "prefix (D171)."))
-        codex_triples = (codex_triples - {narrowed}) | {NARROWED_HOOK}
+    for triple in sorted(claude_triples):
+        if bare in triple[2] and triple != narrowed:
+            findings.append(Finding(".claude/settings.json",
+                                    f"runs `{triple[2]}`; it must run `{narrowed[2]}`. "
+                                    "Claude Code runs the file and bash-c clauses alone (D171)."))
 
-    for event, matcher, command in sorted(claude_triples - codex_triples):
-        findings.append(
-            Finding(
-                ".codex/hooks.json",
-                f"missing {describe(event, matcher, command)}, which .claude/settings.json "
-                "runs.\n"
-                "  A hook armed for Claude Code and not for Codex is a guard some sessions "
-                "skip. Add the same event, matcher and command here.",
-            )
-        )
-    for event, matcher, command in sorted(CODEX_ONLY - codex_triples):
-        findings.append(
-            Finding(
-                ".codex/hooks.json",
-                f"lost {describe(event, matcher, command)}, which CODEX_ONLY says only Codex "
-                "runs. Codex has no shared guard, so restore it or drop it from CODEX_ONLY.",
-            )
-        )
-    for event, matcher, command in sorted(CODEX_ONLY & claude_triples):
-        findings.append(
-            Finding(
-                ".claude/settings.json",
-                f"runs {describe(event, matcher, command)} again, so CODEX_ONLY is stale. "
-                "Drop it from CODEX_ONLY, or drop it here (the shared layer owns it).",
-            )
-        )
-    for event, matcher, command in sorted(codex_triples - claude_triples - CODEX_ONLY):
-        findings.append(
-            Finding(
-                ".claude/settings.json",
-                f"does not run {describe(event, matcher, command)}, which .codex/hooks.json "
-                "runs.\n"
-                "  Either arm it here too, or drop it from .codex/hooks.json — a hook only "
-                "Codex runs is one no Claude Code session's behavior reflects, and the two "
-                "tools are meant to read the same guards.",
-            )
-        )
-
-    for event, _matcher, command in sorted(codex_triples | claude_triples):
-        script = command.split()[0].strip('"') if command else ""
+    for event, _matcher, command in sorted(claude_triples):
+        # Leading `NAME=value` words, and an `env` before them, are environment, not the script.
+        words = [w for w in command.split() if not _ENV_WORD.match(w)]
+        if words[:1] == ["env"]:
+            words = words[1:]
+        script = words[0].strip('"') if words else ""
         # A hook that must not resolve against the session's cwd names its project root
         # (worktree-create.sh: a tree cut before the script existed had no copy).
         script = script.removeprefix(PROJECT_DIR_PREFIX)
@@ -1154,11 +1041,10 @@ def check_codex_hooks(report: Report) -> None:
             )
 
     report.add(
-        "codex hooks",
+        "claude hooks",
         MECHANICAL,
         findings,
-        f"{len(claude_triples)} hooks in .claude/settings.json, all mirrored in "
-        f".codex/hooks.json, which also runs {len(CODEX_ONLY)} the shared layer owns for Claude Code",
+        f"{len(claude_triples)} hooks in .claude/settings.json, each naming a file in the tree",
         scanned=len(claude_triples),
     )
 

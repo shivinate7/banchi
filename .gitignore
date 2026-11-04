@@ -28,11 +28,7 @@ dist/
 # ignore-check: bare on purpose, see the note at the top of this file
 .serve
 .claude/settings.local.json
-
-# The same kind of file as the entry above, for the other tool: a machine-local shell
-# environment policy (whatever a checkout sets), never
-# committed for the same reason .claude/settings.local.json is not. .codex/hooks.json, the
-# hook roster beside it, IS tracked (D135) — this line is scoped to config.toml alone.
+# A stray local Codex config may hold a secret, and this repo is public.
 .codex/config.toml
 __pycache__/
 *.pyc

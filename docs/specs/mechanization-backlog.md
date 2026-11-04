@@ -219,8 +219,8 @@ Fix it and leave the pin: red (stale).
 
 **Cost:** small.
 
-**Status.** `scripts/guard-shell.py` has seven clauses (checkout, tree, wait, push, stash,
-reset, narrate) and none reads `.env`. `.claude/settings.json` denies `Read(./.env)` and nothing
+**Status.** `scripts/guard-shell.py` has four clauses (tree, wait, push,
+narrate) and none reads `.env`. `.claude/settings.json` denies `Read(./.env)` and nothing
 else screens the key.
 
 **Mechanism.** A clause in the same Bash hook. Refuse a command whose resolved read target is `./.env`
@@ -252,7 +252,7 @@ another checkout holds it, naming that tree and printing `make design-check PW_A
 `BANCHI_SUITE_LOCK=off`. Fail open on its own parse errors and on an unreadable lock directory.
 
 **Where.** `scripts/suite-lock.py --hook`, registered as a PreToolUse Bash matcher in
-`.claude/settings.json` and `.codex/hooks.json` (D135), with an arm in `make suite-lock-selftest`.
+`.claude/settings.json`, with an arm in `make suite-lock-selftest`.
 
 **Catches.** The one bypass left in the `suite lock` row: `npx playwright test` typed into a shell,
 which no Makefile recipe mediates. The row reads recipe lines and `app/package.json` scripts and
@@ -554,8 +554,8 @@ to be able to see. None of these entries has been re-checked against the code si
   can ask it to do. Nothing worth building.
 - **A compaction preserves the fixture schema facts, every `make` command and the list of modified
   files.** A machine would need to see the summary. A compaction leaves no artifact in the tree and none
-  in the transcript. A PreCompact hook is rejected on D135's grounds: whether Codex has that event is
-  unanswerable from this tree.
+  in the transcript. A PreCompact hook was rejected on grounds D135 no longer gives (whether Codex has
+  that event). Reopen it on its own merits.
 - **A control must be on the screen a human would look for it on.** A machine would need to know where a
   person would look. D20's defect proves it: route, client and control were all present and 12 of 13
   boxes were unselectable. That judgment needs `make design-check`, which is off the commit path. The
@@ -586,8 +586,7 @@ Kept so nobody re-proposes them. A rejected mechanism usually fires on honest wo
 - **A Stop hook that compares files named in a wrap-up against the turn's write targets.** Unmeasured. Its
   own author found no instance.
 - **A PreCompact hook that injects the fixture facts, `make` targets and modified-file list.** Breakage is
-  unobservable by construction. It also collides with D135's `codex hooks` row, which compares the full
-  event, matcher and command triple.
+  unobservable by construction.
 - **Registering a harness-running Stop hook on SubagentStop.** The path is unexercised (0 of 129,119
   assistant messages were sidechain). Arming it would spend the owner's CPU on the machine their rig and
   live capture server run on.
@@ -673,4 +672,3 @@ Kept so nobody re-proposes them. A rejected mechanism usually fires on honest wo
 - Nobody dry-ran the Bash write-target resolver that other shelved clauses would share. Its parse
   coverage over real session commands is unmeasured, so every clause is specified to fail open, and a
   "guard throws" arm belongs in its self-test.
-- Whether Codex exposes a PreCompact event is unanswerable from this tree.

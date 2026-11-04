@@ -34,7 +34,6 @@ running `pgrep` and `lsof` itself, read-only — and judges each pid. `pkill -f 
 is allowed when the only match is yours and refused when it is not, which is the same command
 being right on Monday and wrong on Tuesday. That is exactly the fact the text cannot carry.
 
-    scripts/reap.py --hook            the PreToolUse hook on Bash. Reads the payload on stdin.
     scripts/reap.py                   preview everything running under this checkout.
     scripts/reap.py --confirm         stop it.
     scripts/reap.py port:5484 --confirm      whatever holds that port, if it is ours.
@@ -43,23 +42,19 @@ being right on Monday and wrong on Tuesday. That is exactly the fact the text ca
     scripts/reap.py --explain pid:12345      why one pid is or is not ours. Presses nothing.
     scripts/reap.py --root PATH       judge against another checkout. Repo-agnostic on purpose.
 
-ONE FILE, TWO FACES, ONE PREDICATE. The hook and the reaper share `verdict_for`, and that is
-the point rather than a convenience: a guard that refuses on one notion of "safe to kill" while
-the tool it recommends uses another is a guard people learn to route around. `scripts/janitor.py`
-already owns the neighbouring notion — what a FINISHED session left behind — and this file
-deliberately does not duplicate it: the janitor sweeps trees, branches and orphans on its own
-schedule, this decides one signal at the moment it is sent. What they share is the reasoning
-(D138's server is untouchable, liveness is read and never guessed) and, where the shapes matched,
-the code was copied with its argument rather than re-derived (`_real`, the process table, the
-leader-only `killpg`).
+`scripts/janitor.py` already owns the neighbouring notion — what a FINISHED session left
+behind — and this file deliberately does not duplicate it: the janitor sweeps trees, branches and
+orphans on its own schedule, this decides one signal at the moment it is sent. What they share is
+the reasoning (D138's server is untouchable, liveness is read and never guessed) and, where the
+shapes matched, the code was copied with its argument rather than re-derived (`_real`, the
+process table, the leader-only `killpg`).
 
-IT IS REPO-AGNOSTIC AND IMPORTS ONLY `guard-shell.py`'s hatch reader (absent: the hatch is not read), for `janitor.py`'s reason: a hook can
-point it at any checkout, and an import from this one would break there.
+IT IS REPO-AGNOSTIC AND IMPORTS NOTHING FROM THIS TREE, for `janitor.py`'s reason: it can point at
+any checkout, and an import from this one would break there.
 
-THE ESCAPE HATCH IS `BANCHI_KILL=off` AND IT IS PRINTED IN EVERY REFUSAL, per the house rule
-`BANCHI_MAIN=off` set. A guard that is routinely bypassed is worse than none — CLAUDE.md says
-as much about inline lint disables — so the hatch is sized to be reached for rarely: everything
-provably yours is allowed without it, which is most of what a session ever wants to kill.
+THERE IS NO PreToolUse HOOK. This file once also judged a Bash `kill` command before it ran. The
+owner ruled that mode out (D135); the shared layer's machine-wide-kill rule owns that guard for
+Claude Code, so this file only stops what it is asked to stop.
 
 D18: this writes (it signals processes), so it is never on the commit path. Its SELF-TEST is,
 and that self-test writes only under `mktemp -d` and signals only processes it spawned there.
@@ -72,7 +67,6 @@ import contextlib
 import json
 import os
 import re
-import shlex
 import signal
 import subprocess
 import sys
@@ -80,29 +74,6 @@ import time
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Sequence, Set, Tuple
 
-
-def _hatch_set_by(name: str, command: str) -> bool:
-    """Whether `command` REALLY sets `name=off`: guard-shell's `_hatches_set`, the one parser.
-
-    A mention in an argument, comment or quoted string does not count. Unloadable: not set.
-    """
-    try:
-        import importlib.util
-        here = os.path.dirname(os.path.abspath(__file__))
-        spec = importlib.util.spec_from_file_location("guard_shell", os.path.join(here, "guard-shell.py"))
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        return name in mod._hatches_set(command)
-    except Exception:                                         # noqa: BLE001 — fail open
-        return False
-
-try:
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    import refusal_log                                        # the one refusal log
-except Exception:                                             # noqa: BLE001 — fail open
-    refusal_log = None                                        # type: ignore[assignment]
-
-WIDTH = 76
 
 # Every absolute path in a command line, as `ps -o command=` prints argv space-joined. A path
 # containing a space cannot be recovered from that, which is why a miss here resolves to
@@ -805,225 +776,6 @@ def pids_under(root: str, mine: int) -> Sweep:
     return Sweep(found, skipped)
 
 
-# ------------------------------------------------------------------- reading a shell command
-
-_KILL_WORDS = {"kill", "pkill", "killall"}
-
-# Words that may stand in front of the real command word without changing what it is.
-_PREFIXES = {
-    "sudo", "command", "exec", "nohup", "time", "then", "do", "else", "elif", "builtin",
-    "xargs", "env",
-}
-
-# A shell variable, a command substitution, a glob — anything whose value this file cannot know
-# by reading the string. A kill argument matching this is the whole reason `unresolved` exists.
-_OPAQUE = re.compile(r"[$`*?]")
-
-# A job spec (`%1`, `%+`) and `$!` name a job of the SHELL THAT IS RUNNING THE COMMAND, which is
-# the session's own one-shot shell. Whatever they refer to was started inside that same command,
-# so they are provably the session's and are not a target this guard has anything to say about.
-_OWN_JOB = re.compile(r"^(%[0-9%+-]*|\$!)$")
-
-# `-0` sends no signal (a liveness probe) and `-l` lists signal names. Neither can kill anything,
-# and refusing them would break the ordinary way a session waits for a process to exit.
-_NO_SIGNAL = {"-0", "-l", "-L"}
-
-
-class Intent(NamedTuple):
-    kills: bool
-    pids: List[int]
-    unresolved: List[str]
-    how: List[str]      # a sentence per resolved producer, for the refusal to quote
-
-
-# A run of any of these characters is a boundary between one shell segment and the next. Not
-# real shell grammar — reap.py never claims that, see the docstring above `_segments` — just
-# everywhere a NEW command word could start.
-_SEGMENT_DELIMS = ";\n&|(){}`"
-
-
-def _quote_aware_split(cmd: str, delimiters: str) -> List[str]:
-    """`cmd` cut at every unquoted character in `delimiters`, quoted text kept whole.
-
-    COPIED, NOT IMPORTED, from `scripts/shell_parse.py:split_segments`. That file's own header
-    explains why a shared piece is copied rather than re-derived when the copy cannot import
-    the original: "when one of these needs to change, change it THERE first and copy the
-    result back." This file's reason not to import is its own module docstring — `reap.py`
-    stays ONE FILE so the kill guard covers any checkout, and one that imported
-    `scripts/shell_parse.py` would break the moment it left this checkout. EXTENDED past the original's four delimiters (`;`, `|`,
-    `&&`, `\\n`) to the fuller set this file has always split on — `(`, `)`, `{`, `}`, a
-    backtick and a bare `&` — because a quoted one of any of them must not start a new segment
-    either. `2026-09-24`'s defect was `grep -nciE "process|pid|kill"`: the OLD regex-based
-    splitter could not see that the `|` characters sat inside a double-quoted pattern, so it
-    read `killall` out of an unrelated grep pattern three clauses later as a command word.
-    """
-    segments: List[str] = []
-    current: List[str] = []
-    quote = ""
-    index = 0
-    length = len(cmd)
-    while index < length:
-        char = cmd[index]
-        if quote:
-            current.append(char)
-            if char == quote:
-                quote = ""
-            index += 1
-            continue
-        if char in ("'", '"'):
-            quote = char
-            current.append(char)
-            index += 1
-            continue
-        if char in delimiters:
-            segments.append("".join(current))
-            current = []
-            index += 1
-            continue
-        current.append(char)
-        index += 1
-    segments.append("".join(current))
-    return segments
-
-
-def _segments(command: str) -> List[List[str]]:
-    """The command as a list of argv-ish word lists, one per shell segment.
-
-    HEREDOC BODIES ARE CUT FIRST, and that is not fastidiousness. Writing a script that mentions
-    `pkill` is an ordinary thing to do — this file was itself written through a heredoc — and a
-    guard that reads a document being written as a command to be judged fires on the one class
-    of command that can kill nothing at all. Everything from the first `<<` is dropped, which
-    also drops a kill placed after the heredoc's terminator; that trade is deliberate and the
-    cost is one extra line in a session's script.
-    """
-    head = command.split("<<", 1)[0]
-    words: List[List[str]] = []
-    for piece in _quote_aware_split(head, _SEGMENT_DELIMS):
-        piece = piece.strip()
-        if not piece:
-            continue
-        try:
-            argv = shlex.split(piece, comments=False)
-        except ValueError:
-            argv = piece.split()
-        if argv:
-            words.append(argv)
-    return words
-
-
-def _strip_prefixes(argv: List[str]) -> List[str]:
-    out = list(argv)
-    while out and (out[0] in _PREFIXES or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", out[0])):
-        out.pop(0)
-    return out
-
-
-def _producers(segments: List[List[str]]) -> Tuple[List[int], List[str]]:
-    """Every pid this command can name that this file can resolve by asking the system.
-
-    A PRODUCER IS RESOLVED WHEREVER IT SITS IN THE COMMAND, not only where it is a kill's direct
-    argument. `for p in $(lsof -ti tcp:5439); do kill $p; done` is the shape that cost incident 2,
-    and in it the kill's argument is a loop variable that no amount of reading will resolve while
-    the port is sitting in plain sight one clause away. So the question this asks is not "what is
-    this kill's argument" but "what pids could this command be about", which the string does
-    answer.
-    """
-    pids: List[int] = []
-    how: List[str] = []
-    for argv in segments:
-        head = _strip_prefixes(argv)
-        if not head:
-            continue
-        word, rest = head[0], head[1:]
-        if word == "lsof" and any(flag.startswith("-t") for flag in rest):
-            for token in rest:
-                match = re.search(r"(?::|tcp:|udp:)(\d+)$", token)
-                if match:
-                    port = int(match.group(1))
-                    found = pids_for_port(port)
-                    pids.extend(found)
-                    how.append("lsof on port {0} -> {1}".format(
-                        port, ", ".join(str(p) for p in found) or "nothing"))
-        elif word in ("pgrep", "pkill"):
-            full = any(flag.startswith("-") and "f" in flag.lstrip("-") for flag in rest)
-            pattern = next((token for token in reversed(rest) if not token.startswith("-")), "")
-            if pattern and not _OPAQUE.search(pattern):
-                found = pids_for_pattern(pattern, full)
-                pids.extend(found)
-                how.append("{0} {1} -> {2}".format(
-                    "pgrep -f" if full else "pgrep", pattern,
-                    ", ".join(str(p) for p in found) or "nothing"))
-        elif word == "killall":
-            for token in rest:
-                if token.startswith("-") or _OPAQUE.search(token):
-                    continue
-                found = pids_for_name(token)
-                pids.extend(found)
-                how.append("killall {0} -> {1}".format(
-                    token, ", ".join(str(p) for p in found) or "nothing"))
-    return pids, how
-
-
-def read_command(command: str) -> Intent:
-    """What this command would signal, and what about it could not be read.
-
-    THE DEFAULT IS "NOT A KILL". Most commands are not, and this returns as early as it can so
-    that a hook on every Bash call costs nothing on the calls it has no opinion about.
-    """
-    if not any(word in command for word in _KILL_WORDS):
-        return Intent(False, [], [], [])
-
-    segments = _segments(command)
-    kills = False
-    opaque: List[str] = []
-    literals: List[int] = []
-
-    for argv in segments:
-        head = _strip_prefixes(argv)
-        if not head or head[0] not in _KILL_WORDS:
-            continue
-        rest = head[1:]
-        if head[0] == "kill":
-            if any(flag in _NO_SIGNAL for flag in rest):
-                continue          # a probe, not a signal
-            kills = True
-            skip = False
-            for token in rest:
-                if skip:
-                    skip = False
-                    continue
-                if token == "-s" or token == "-n":
-                    skip = True
-                    continue
-                if token == "--" or re.match(r"^-\w+$", token):
-                    continue
-                if _OWN_JOB.match(token):
-                    continue      # this shell's own job — provably the session's
-                if re.match(r"^\d+$", token):
-                    literals.append(int(token))
-                    continue
-                opaque.append(token)
-        else:
-            kills = True
-            pattern = next((token for token in reversed(rest) if not token.startswith("-")), "")
-            if not pattern or _OPAQUE.search(pattern):
-                opaque.append(pattern or head[0])
-
-    if not kills:
-        return Intent(False, [], [], [])
-
-    resolved, how = _producers(segments)
-    pids = list(dict.fromkeys(literals + resolved))
-
-    # AN OPAQUE ARGUMENT IS FORGIVEN ONLY WHEN THE COMMAND ANSWERS IT ELSEWHERE. `kill $p` with a
-    # producer one clause away is the loop shape and is judged on the producer; `kill $p` alone
-    # is a command whose blast radius is genuinely unreadable, and that is refused rather than
-    # guessed at. The residual is a command that resolves one set and kills a different one,
-    # which no reading of a string can catch and which no session has ever written by accident.
-    unresolved = [] if resolved else opaque
-    return Intent(True, pids, unresolved, how)
-
-
 # ------------------------------------------------------------------------------ the refusals
 
 _REFUSED = {
@@ -1046,100 +798,6 @@ def _short(command: str, width: int = 96) -> str:
         return command
     head = (width - 3) // 3
     return command[:head] + "…" + command[-(width - 3 - head):]
-
-
-def hook(payload: dict) -> int:
-    """The PreToolUse hook on Bash. Exit 2 blocks the call and hands stderr back to the session.
-
-    IT FAILS OPEN ON ITS OWN BUGS, which is `guard-opsec.sh`'s hard-won rule and is not
-    negotiable here either: a guard that blocks every shell command when `lsof` is missing or
-    its own parser throws is a guard somebody switches off inside a day, and a switched-off
-    guard protects nothing. Note the asymmetry, because it is the design: a broken GUARD fails
-    open, an unreadable TARGET fails closed. The first is this file being wrong about itself,
-    the second is this file being right that it does not know.
-    """
-    command = str(payload.get("tool_input", {}).get("command", "") or "")
-    if not command:
-        return 0
-    if os.environ.get("BANCHI_KILL") == "off" or _hatch_set_by("BANCHI_KILL", command):
-        return 0
-
-    intent = read_command(command)
-    if not intent.kills:
-        return 0
-
-    root = checkout_root(os.getcwd())
-    main = main_checkout(root)
-    targets = verdict_for(intent.pids, root, main)
-    owner_map = _read_owner_marks(root)
-    caller = caller_id()
-    # A RAW `kill`/`pkill`/`killall` ALWAYS NAMES ITS TARGET, exactly as `pid:`/`port:`/`match:`
-    # do on `make reap`'s command line — so it is judged by the EXPLICIT branch of
-    # `_ownership_verdict` regardless of whether this session is the orchestrator or a subagent.
-    # The narrowing the owner asked for on 2026-09-27 is about `make reap`'s BLANKET default,
-    # which a raw shell command has no equivalent of: there is no "kill everything" spelling this
-    # hook would let through in the first place.
-    owner_bad = []
-    for target in targets:
-        if target.verdict != OURS:
-            continue
-        allowed, reason = _ownership_verdict(target.pid, owner_map, caller, True, False)
-        if not allowed:
-            owner_bad.append((target, reason))
-    bad = [t for t in targets if t.verdict in (MAIN, OUTSIDE, UNKNOWN)]
-    if not bad and not owner_bad and not intent.unresolved:
-        return 0
-
-    lines = ["BLOCKED: this would signal a process this session did not start."]
-    for target in bad:
-        lines.append("  pid {0} — {1}".format(target.pid, _REFUSED[target.verdict]))
-        if target.command:
-            lines.append("      {0}".format(_short(target.command)))
-        if target.where:
-            lines.append("      {0}".format(target.where))
-    for target, reason in owner_bad:
-        lines.append("  pid {0} — {1}".format(target.pid, reason))
-        if target.command:
-            lines.append("      {0}".format(_short(target.command)))
-    for token in intent.unresolved:
-        lines.append("  `{0}` — this guard cannot tell what pid that names, so it cannot tell "
-                     "whose it is.".format(token))
-    for note in intent.how:
-        lines.append("  resolved: {0}".format(note))
-    lines.append("")
-    if root:
-        lines.append("  Everything an agent session may kill was started BY that session and "
-                     "lives under")
-        lines.append("  {0}. What is refused above does not.".format(root))
-    else:
-        # `checkout_root` returned nothing, so this is not a workspace — a home directory, `/`,
-        # or somewhere else that contains everything. There is no checkout to be inside of, so
-        # nothing here can be shown to be this session's.
-        lines.append("  {0} is not a workspace — it contains everything, so nothing in it can "
-                     "be".format(os.getcwd()))
-        lines.append("  shown to be this session's. Run this from the checkout whose process it "
-                     "is.")
-    lines.append("")
-    lines.append("  Use the reaper, which signals only what is under this checkout and says "
-                 "what it")
-    lines.append("  refused:   make reap                     preview")
-    lines.append("             make reap ARGS=--confirm      stop it")
-    lines.append("             make reap ARGS=\"port:5484 --confirm\"")
-    if any(t.verdict == MAIN for t in targets):
-        lines.append("")
-        lines.append("  To stop the MAIN checkout's server on purpose, drain it rather than "
-                     "severing a")
-        lines.append("  write in flight:  make down ARGS=--confirm   (in that checkout)")
-    lines.append("")
-    lines.append("  BANCHI_KILL=off runs the command anyway.")
-    print("\n".join(lines), file=sys.stderr)
-    sys.stderr.flush()
-    if refusal_log:
-        refusal_log.log("reap", "kill",
-                        "{0} target(s), {1} unresolved".format(len(bad) + len(owner_bad),
-                                                               len(intent.unresolved)),
-                        str(payload.get("session_id") or ""), str(payload.get("cwd") or ""))
-    return 2
 
 
 # -------------------------------------------------------------------------------- the reaper
@@ -1284,29 +942,13 @@ def build_parser() -> argparse.ArgumentParser:
                         help="actually signal. Without it this previews and presses nothing.")
     parser.add_argument("--explain", action="store_true",
                         help="say why each target is or is not ours. Presses nothing.")
-    parser.add_argument("--hook", action="store_true",
-                        help="read a PreToolUse payload on stdin and judge its command.")
     parser.add_argument("--root", default="",
                         help="judge against this checkout instead of the current directory.")
     return parser
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    args, unknown = build_parser().parse_known_args(argv)
-    if unknown:
-        if not args.hook:
-            build_parser().error("unrecognized arguments: " + " ".join(unknown))
-        # A hook's flags come from the session's settings, its script from this branch: an older copy
-        # must ignore a newer flag, never block the tool call (docs/agent-traps.md).
-        print("warning: hook ignores unknown flags: " + " ".join(unknown), file=sys.stderr)
-    if args.hook:
-        try:
-            payload = json.load(sys.stdin)
-            if not isinstance(payload, dict):
-                return 0
-            return hook(payload)
-        except Exception:      # noqa: BLE001 — the header's rule: a broken guard fails open.
-            return 0
+    args = build_parser().parse_args(argv)
     root = _real(args.root) if args.root else checkout_root(os.getcwd())
     main_tree = main_checkout(root)
     if args.explain:

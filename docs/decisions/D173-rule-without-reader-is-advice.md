@@ -26,7 +26,7 @@ matched its
   (`make screen-freshness-selftest`, added to `make check` afterward) had to wait for PR #307
   to fill the eighteen missing exports first — a guard cannot be turned on red.
 
-**Against all of that, the mechanised rows have a clean record.** `raw color`, `storage keys`, `route census`, `check census`, `codex hooks`, `id claims` and `shell substitution` have not been bypassed once. Not because the sessions reading them were more careful — several are the same sessions — but because **none of them can be.** A commit that breaks one does not land.
+**Against all of that, the mechanised rows have a clean record.** `raw color`, `storage keys`, `route census`, `check census`, `id claims` and `shell substitution` have not been bypassed once. Not because the sessions reading them were more careful — several are the same sessions — but because **none of them can be.** A commit that breaks one does not land.
 
 So the difference in outcome does not track how well a rule is written, how emphatically, or how recently. It tracks whether anything reads it.
 

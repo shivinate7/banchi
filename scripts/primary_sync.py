@@ -34,7 +34,7 @@ separate test below — `refs/heads/main` must be an ancestor of `refs/remotes/o
 and it is the whole reason this file can be trusted with a ref D42 protects.
 
 IT FAILS OPEN ON ITS OWN BUGS AND CLOSED ON A TARGET IT CANNOT READ, which is
-`scripts/reap.py:hook`'s rule and its reason: *"a guard that blocks every shell command when
+D127's rule (the retired `reap.py` hook) and its reason: *"a guard that blocks every shell command when
 `lsof` is missing or its own parser throws is a guard somebody switches off inside a day."*
 Here the two directions are:
 
@@ -66,7 +66,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 from server import ports  # noqa: E402
 
-# The escape hatch, spelled the way `BANCHI_MAIN=off`, `BANCHI_KILL=off`,
+# The escape hatch, spelled the way `BANCHI_MAIN=off`,
 # `BANCHI_REVERT=off`, `BANCHI_SUITE_LOCK=off` and `BANCHI_SERVE_MAIN=off` already are.
 #
 # IT TURNS THE MECHANISM OFF RATHER THAN LETTING SOMETHING PAST, which is a departure from every

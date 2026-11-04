@@ -141,8 +141,8 @@ launch-config:
 # and fails outright offline.
 #
 # `make worktree-setup` copies no secret. `.env` reaches each Claude Code worktree through
-# `.worktreeinclude` instead (owner's ruling, 2026-09-28), with `.claude/settings.local.json`
-# and `.codex/config.toml`. T1 does not need it once the cache is warm.
+# `.worktreeinclude` instead, with `.claude/settings.local.json`.
+# T1 does not need it once the cache is warm.
 # `--foreground`: a needed `npm ci` finishes before this target returns (the SessionStart hook
 # omits the flag and backgrounds it); a current install is skipped, so a rerun is cheap.
 # The cache/mirror/node_modules provisioning below is shared with scripts/worktree-guard.sh
@@ -1347,11 +1347,10 @@ silent-write-selftest:
 
 .PHONY: silent-write-selftest
 
-# SEVEN SHELL MISTAKES THIS REPO HAS ALREADY PAID FOR, refused before they run. Every one was a
+# FOUR SHELL MISTAKES THIS REPO HAS ALREADY PAID FOR, refused before they run. Every one was a
 # rule somebody had written down and a later session broke anyway — which is D171's ruling
-# about what a rule IS, applied to seven more commands:
+# about what a rule IS, applied to four more commands:
 #
-#   `git checkout <modified path>`     2026-09-06, ~240 lines of uncommitted work destroyed
 #   a write outside this checkout      2026-09-06, ~1,500 lines into the owner's MAIN tree, on
 #                                      main, hot-reloaded into their live capture server
 #   a polling loop                     2026-09-12 twice: a `pgrep` waiter whose pattern is not
@@ -1360,12 +1359,12 @@ silent-write-selftest:
 #   `git push <remote> HEAD`           2026-09-12, a stray branch on origin while the real PR
 #                                      branch went untouched, the tracked upstream being a
 #                                      DIFFERENT name (D179, amended 2026-09-13)
-#   a bare `git stash` / `pop`         the stash stack is shared by every worktree of this
-#                                      clone, so a pop takes whatever another tree pushed
-#   `git reset --hard`/`--merge`       over uncommitted tracked work
+#   a narrated wait piped to `tail`    a working `make merge` read as a hang, because the pipe
+#                                      buffered its heartbeat and kept only the end of it
 #
+# The shared layer's guard owns `git checkout <path>`, a bare `git stash` and `git reset --hard`.
 # `scripts/guard-shell.py --hook` is a PreToolUse hook on Bash and on Write|Edit — not a target
-# you run — and this self-test is what proves it. FOUR OF THE INCIDENTS ARE PERFORMED in a
+# you run — and this self-test is what proves it. ALL FOUR INCIDENTS ARE PERFORMED in a
 # throwaway repository before the guard is asked about them, which is reap-selftest's standard;
 # the false positives are RUN there too, because a case that is secretly a typo passes for the
 # wrong reason. IN `check`, NEVER IN THE GIT HOOK: it writes a temp repository (D18).
@@ -1380,11 +1379,11 @@ guard-shell-selftest:
 .PHONY: guard-shell-selftest
 
 # RETIRED. `~/.claude/bin` is claude-settings' install.sh's, and its guard refuses a session's
-# write there. Banchi's own hooks run `scripts/session-teardown.sh` and `scripts/reap.py` from
+# write there. Banchi's own hook runs `scripts/session-teardown.sh` from
 # the repo, so nothing here needs a copy. This target copies nothing.
 janitor-install:
 	@echo "claude-settings' install.sh owns ~/.claude/bin. This target copies nothing."
-	@echo "Banchi's hooks run scripts/session-teardown.sh and scripts/reap.py from the repo."
+	@echo "Banchi's hook runs scripts/session-teardown.sh from the repo."
 
 .PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check ci-check-product ci-check-product-2 ci-check-product-3 ci-check-static ci-check-guards-1 ci-check-guards-2
 

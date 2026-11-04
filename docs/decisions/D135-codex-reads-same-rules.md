@@ -1,34 +1,23 @@
-# D135 — Codex reads the same rules as Claude
+# D135 — Banchi has no Codex setup
 
-OpenAI Codex was installed in this repository before this change. It left three untracked paths in the main checkout. The first is a 117 KB `AGENTS.md`. It is `sed 's/AGENTS\.md/CLAUDE.md/g' AGENTS.md | diff - CLAUDE.md` away from `CLAUDE.md`: 139 lines of drift. It lacks `make reap`, the eight-key storage roster and D132. The second is a byte-identical copy of `.claude/skills/tcgplayer-csv/SKILL.md` at the matching path under an untracked `.agents/skills/` directory. The third is `.codex/`. It holds `config.toml` (a shell-environment policy, machine-local) and `hooks.json`. `hooks.json` holds the hooks that `.claude/settings.json` runs, by the same scripts, plus the two named in `CODEX_ONLY`. None of the three was tracked. So none of it reached a clone, a worktree or a PR. Every Codex session outside that one Mac read stale prose, a stale skill, or no hooks at all.
+Banchi has no Codex setup. The owner ruled it on 2026-11-04 07:56 CST (Cockpit item 214 a): "Delete all of banchi's Codex setup".
 
-**A copy is a fork with a diff that nobody watches. A symlink has no diff to drift.** The fix is not a sync script. This repo already argued that case for the eval-image mirror and lost it (D47). The fix is to point Codex at the files Claude Code already reads. One edit then reaches both readers by construction:
+Kind: process
+Home: CLAUDE.md
 
-- **`AGENTS.md -> CLAUDE.md`**, at the root. A relative link in the same directory, committed.
-- **`<folder>/AGENTS.md`, a relative link to the rule file in `.claude/rules/`**, in each folder a path-scoped rule covers: `app/`, `server/`, `pipeline/`, `cli/`, `identify/`, `store/`, `codes/` and `code-card-fork/`. Claude Code loads a rule when it reads a file its `paths:` list matches. Codex reads no `.claude/rules/`, but it reads the `AGENTS.md` of each folder from the root down to the one it works in, so the link gives it the same rule from the same file. `code-card-fork/` takes the code-card rule because the codex track works there: a session in it reads the code-card rules and not only the singles rules. There is no sync script and no composed copy. The `agent links` row of `make docs-audit` derives each link from the rule's own `paths:` list, so a covered folder with no link, or a link no rule covers, fails.
-- **`code-card-fork/CLAUDE.md -> ../CLAUDE.md`**, so Claude Code's auto-load in that directory reads the root rules.
-- **`.agents/skills -> ../.claude/skills`**, a directory link. Every skill added under `.claude/skills/` is a skill Codex can load too. There is no second copy and no second place to remember it.
+**What the ruling removed.**
 
-**Every link follows D47's allowed shape and avoid its refused one.** Each is relative and resolves inside the repository. The check ran with `python3 -c "os.path.realpath(...)"` against each link before commit. The pre-commit hook reads mode `120000` from the index (D47). That makes the check durable. A later session cannot turn one of these into an absolute path or a copy without the hook refusing it.
+- The root `AGENTS.md` link to `CLAUDE.md`, and each folder's `AGENTS.md` link to its rule file in `.claude/rules/`: `app/`, `server/`, `pipeline/`, `cli/`, `identify/`, `store/`, `codes/` and `code-card-fork/`.
+- The `.agents/skills` link to `.claude/skills`.
+- `.codex/hooks.json`, the `.codex/config.toml` lines in `.gitignore` and `.worktreeinclude`, and the `agent links` and `codex hooks` rows of `make docs-audit`.
+- The three `scripts/guard-shell.py` clauses that only Codex ran: `checkout`, `stash` and `reset`. Claude Code skipped all three, because the shared layer's guard owns them (D179). Their hatches went with them, and so did their mutation arms. The `reset` clause went last, on the coordinator's ruling of 2026-11-04 10:13 CST under item 214 a: Claude Code skipped it and no session ran it. The `git reset --merge` and `--keep` refusal returns through the shared guard (`claude-settings` lane `guard-reset-merge-keep`).
 
-**This retires the allowlist line that predicted it.** `scripts/docs-audit-allow.txt` carried `code-card-fork/AGENTS.md` on the owner's instruction. Its reason said to delete the line if a tracked `AGENTS.md` were ever adopted, and then fix the pointer rather than excuse it. That condition is now met. The line is deleted, not edited. The entry it named now exists, and the audit confirms it.
+**What stays, because Claude Code reads it.**
 
-### The hook roster is reconciled mechanically, in both directions
+- `code-card-fork/CLAUDE.md -> ../CLAUDE.md`, so Claude Code's auto-load in that directory reads the root rules. The `fork claude link` row of `make docs-audit` checks it.
+- The hook checks that guarded `.claude/settings.json` alone. The `claude hooks` row keeps three of them: every hook command names a file in the tree, no `scripts/guard-shell.py` entry sets `GUARD_SHELL_SKIP`, and the silent-write hook keeps its `BANCHI_SILENT_WRITE_ONLY` prefix (D171).
+- A path-scoped rule may use any glob in its `paths:` list. The folder-only glob shape and the one-rule-per-folder limit existed only so each folder could hold an `AGENTS.md` link.
 
-**`.codex/hooks.json` and the `hooks` block of `.claude/settings.json` disagreed on arrival.** Codex's file was written first. `.claude/settings.json` later gained a `Bash`-matched `scripts/reap.py --hook` PreToolUse entry (D127, for the pkill and lsof incidents). It has always carried `scripts/session-teardown.sh` on `WorktreeRemove` (claude-settings decisions/the-janitor-is-one-machine-wide-sweep.md, "The janitor is one machine-wide sweep"). `.codex/hooks.json` had neither. So a Codex session could run an unrestricted `pkill` that a Claude Code session in this repo cannot run. A worktree that Codex removed would never notify a supervisor to stop. Both entries are added to `.codex/hooks.json` in the same change that adds the guard below. The row starts green, not with a known gap.
+**Also removed, on the coordinator's ruling of 2026-11-04 08:40 CST under item 214 a.** The `--hook` mode of `scripts/reap.py` (D127). Only `.codex/hooks.json` armed it. The shared layer's machine-wide-kill rule owns that guard for Claude Code. Every mode `make reap` uses stays.
 
-**One divergence is declared, on the owner's word.** The shared layer's guard owns the pkill rule for Claude Code. So `.claude/settings.json` no longer runs `scripts/reap.py --hook`. It runs `scripts/guard-shell.py` with `GUARD_SHELL_SKIP=checkout,stash,reset`. Every other guard-shell entry sets `GUARD_SHELL_SKIP=` empty, so an inherited value never narrows Codex. Codex runs no shared guard and keeps all of them in full. `CODEX_ONLY` in `check_codex_hooks` names the one hook that only Codex runs. The row fails when Claude Code runs it again, or when Codex loses it. The row compares commands exactly, so the `GUARD_SHELL_SKIP` value on each entry is pinned.
-
-Claude Code runs `BANCHI_SILENT_WRITE_ONLY=file,bash-c scripts/silent-write-guard.py --hook`. That runs only the unread-file clause and the `bash -c` clause. The shared silent-write rule (claude-settings PR 257 and PR 264) covers the rest. Codex keeps the full hook. The row pins the prefix on the Claude entry and its absence on the Codex entry. It is a variable, not a flag. An older branch's copy ignores a variable and runs the full check. An unknown flag exits 2 and blocks every Bash call. Both clauses are reviewed against their refusal-log counts with claude-settings (D171).
-
-**`scripts/docs_audit/env_map.py:check_codex_hooks` reads both files as `(event, matcher, command)` triples.** It reports whichever side lacks what the other runs. It also reports any command that names a script no longer in the tree. The check is mechanical. A hook roster is a literal that can be checked the same way `check_hook_roster` checks `scripts/githooks/` against `docs/map.py`. The row is a `ROWS` entry, and `--self-test` covers it. `--self-test` drives the extractor on synthetic dicts. So the mutation the row exists to catch can be proven: one hook removed from one file. That needs no change to either real file. Then it asserts that the two real files agree.
-
-**What this is not.** `.codex/config.toml` stays untracked and gitignored beside `.claude/settings.local.json`, with a comment that says why. A shell-environment policy is machine-local, as a local Claude Code settings override is. Neither belongs in the tree that ships to every checkout. Nothing about any value in it is asserted here.
-
-### What is BUILT, RECORDED, and NEITHER
-
-**BUILT:** the symlinks, committed and verified to resolve inside the repository. `.codex/hooks.json` tracked and brought to parity with `.claude/settings.json`'s hook roster. The `codex hooks` mechanical row in `scripts/docs-audit.py`, a `ROWS` entry covered by `--self-test`. The stale allowlist line was removed. The `.gitignore` line for `.codex/config.toml` was added. `docs/map.py`'s `governed_by` for `docs-audit.py` was extended with D127 and this entry.
-
-**RECORDED:** this entry, and the CLAUDE.md paragraph that names it.
-
-**NEITHER, left for the owner:** the three untracked copies in the main checkout are deleted only after this change is merged and pulled there. They are `~/Developer/banchi/AGENTS.md`, its `.agents/skills/` mirror, and `.codex/`. Deleting them from a worktree would not remove the main checkout's own untracked files. Deleting them before the merge would leave that Mac's Codex session with nothing to read in the meantime. `.codex/config.toml` is kept regardless. It was never one of the three copies.
+The owner deletes the untracked Codex files in the main checkout by hand: `~/Developer/banchi/AGENTS.md`, its `.agents/skills/` mirror, and `.codex/`.

@@ -29,9 +29,8 @@
 # is exactly reap-selftest's and janitor-selftest's standing.
 #
 # WHAT IT CANNOT PROVE. That Claude Code actually invokes the hook, or that exit 2 blocks a
-# tool call — both are the harness's behaviour and not this repo's. `.claude/settings.json` and
-# `.codex/hooks.json` are what arm it and `make docs-audit`'s `codex hooks` row is what keeps
-# those two rosters honest with each other.
+# tool call — both are the harness's behaviour and not this repo's. `.claude/settings.json` arms
+# it and `make docs-audit`'s `claude hooks` row keeps its prefix honest.
 
 set -uo pipefail          # NOT -e: every case must run and be scored
 
@@ -349,7 +348,7 @@ case "$out" in *"| tail -40"*) ok "and a git write, which does NOT block, still 
   *) bad "the ordinary advice was lost — a git write does not block and the pipe is right for it" ;; esac
 
 echo ""
-echo "  the escape hatch, in both of BANCHI_KILL's two forms"
+echo "  the escape hatch: inline and in the environment lift it, a mention does not"
 
 allows "inline in the command"  "BANCHI_SILENT=off git commit -m x >/dev/null 2>&1"
 refuses "a mere mention does not lift it" "echo BANCHI_SILENT=off; git commit -m x >/dev/null 2>&1"
@@ -362,7 +361,7 @@ if [ $? -eq 0 ]; then ok "in the environment"; else bad "BANCHI_SILENT=off in th
 echo ""
 echo "  a broken guard fails OPEN (reap.py's asymmetry, honoured)"
 
-# EVERY ONE OF THESE MUST EXIT 0. `reap.py:hook`'s docstring is the contract: a guard that
+# EVERY ONE OF THESE MUST EXIT 0. D127 (a session stops only what it started) sets the rule: a guard that
 # blocks every shell command when its own parser throws is a guard somebody switches off
 # inside a day. There is no fail-CLOSED case here — a command this file cannot read is a
 # command it has no opinion about, which is the same rule rather than an exception to it.

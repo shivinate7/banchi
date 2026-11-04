@@ -1,6 +1,6 @@
 # D157 — Reap self-test names its own fixture
 
-**The reap self-test's fixture carries a per-run name.** The process table is the one thing a run cannot have its own of. `scripts/reap.py --hook` resolves a kill's real targets with `pgrep -f` across the whole machine (D127). So a fixture that spawns a fixed-name script (`mine.py`) collides with any second live one in another checkout. The guard is right to refuse in that case.
+**The reap self-test's fixture carries a per-run name.** The process table is the one thing a run cannot have its own of. `scripts/reap.py --hook` (deleted under D135) resolved a kill's real targets with `pgrep -f` across the whole machine (D127). So a fixture that spawns a fixed-name script (`mine.py`) collides with any second live one in another checkout. The guard is right to refuse in that case.
 
 Two things can start a second one. A concurrent `make check` from another worktree of this clone is one cause. A `time.sleep(300)` leaked by a run that never reached its `EXIT` trap is the other. `spawn` uses `start_new_session=True`, so a `killpg` never reaches the suite. The SIGINT that stops a `make check` therefore never reaches the children either. A `-9` runs no trap.
 

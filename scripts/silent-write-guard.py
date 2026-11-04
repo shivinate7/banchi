@@ -33,7 +33,7 @@ THIS IS `reap.py`'S SHAPE AND IT DELIBERATELY DIFFERS IN ONE WAY. That guard can
 from the text alone — `pkill -f capture_server.py` is right on Monday and wrong on Tuesday —
 so it RESOLVES the command's real targets by asking the system. This one is the opposite case
 and it is the easier one: whether a stream reaches the session is a property of the string,
-decidable with no process table and no network. The asymmetry from `reap.py:hook` is honoured
+decidable with no process table and no network. The asymmetry from D127 is honoured
 unchanged, because it is the whole reason a guard survives its first week:
 
     a broken GUARD fails open — any parse error, any bug here, any unreadable payload exits 0
@@ -48,7 +48,7 @@ report. Every one of those passes, and `scripts/silent-write-selftest.sh` pins t
 passing rather than trusting this paragraph.
 
 THE ESCAPE HATCH IS `BANCHI_SILENT=off` AND IT IS PRINTED IN EVERY REFUSAL, per the house
-rule `BANCHI_MAIN=off` set, and honoured in both of `BANCHI_KILL`'s two forms — the
+rule `BANCHI_MAIN=off` set, and honoured in both forms — the
 environment, and inline in the command itself.
 
 WHAT IT COSTS, MEASURED, because it runs on EVERY Bash call in the session: 35 ms, and flat —
@@ -90,7 +90,7 @@ def _hatch_set_by(name: str, command: str) -> bool:
         return False
 
 # THE PARSER MOVED TO `scripts/shell_parse.py` ON 2026-09-12, UNCHANGED, because a second
-# guard needed it. `scripts/guard-shell.py` refuses five shell mistakes and every one of them
+# guard needed it. `scripts/guard-shell.py` refuses four shell mistakes and every one of them
 # has to read a command the same way this file does — and the four defects this tokenizer took
 # to get right (a newline is not whitespace, an operator is not a string, a heredoc body is a
 # document, `#` is not always a comment) are four defects that guard would have shipped again.
@@ -401,7 +401,7 @@ def _clauses() -> Optional[frozenset]:
 def hook(payload: dict, clauses: Optional[frozenset] = None) -> int:
     """The PreToolUse hook on Bash. Exit 2 blocks the call and hands stderr to the session.
 
-    IT FAILS OPEN ON ITS OWN BUGS. `reap.py:hook`'s docstring is the contract and it is not
+    IT FAILS OPEN ON ITS OWN BUGS. D127's standard (the retired `reap.py` hook) is the contract and it is not
     negotiable here either: a guard that blocks every shell command when its parser throws is
     a guard somebody switches off inside a day, and a switched-off guard protects nothing.
     """

@@ -1,6 +1,6 @@
 # D179 — Shell mistakes are refused by resolving them
 
-A read-only audit asked of every written rule: has it been broken, and can a machine see it? Forty rules were mechanizable. Five are one command away from a session. Each has a measured incident. `scripts/guard-shell.py` enforces those five as a PreToolUse hook on Bash and on Write|Edit, armed in both tools' rosters (D135).
+A read-only audit asked of every written rule: has it been broken, and can a machine see it? Forty rules were mechanizable. Five are one command away from a session. Each has a measured incident. `scripts/guard-shell.py` enforces the tree, wait and push clauses among them, and a later narrate clause, as a PreToolUse hook on Bash and on Write|Edit, armed in `.claude/settings.json`.
 
 D173 is that audit's ruling: a rule that can be enforced mechanically is enforced mechanically, and a rule with no reader is advice. This entry records which five, what each cost, and where these readers are blind.
 
@@ -12,7 +12,7 @@ D171: a rule is read once, at the start, then competes for attention with the wo
 
 ### Amended: what Claude Code runs
 
-The owner ruled that Claude Code runs `GUARD_SHELL_SKIP=checkout,stash,reset scripts/guard-shell.py --hook`. The shared guard (`claude-settings` `hooks/guard.py`, rule 1, shared-tree) owns clauses 1, 7 and 8 there. It refuses a checkout or restore over a modified path, a stash that takes another tree's entry, and a hard reset over uncommitted work. Each is judged against its subject's state. The Claude-side copy was cut so one refusal speaks once. `.codex/hooks.json` runs all seven, because Codex runs no shared guard (D135). `GUARD_SHELL_SKIP` and its alias `--skip` name clauses by table name. An unknown name skips nothing. Clauses 3 and 4 are gone for both tools.
+Claude Code runs `scripts/guard-shell.py --hook` with every clause, and no hook entry sets `GUARD_SHELL_SKIP` (D135). Before D135 it skipped the checkout, stash and reset clauses on the owner's ruling. The shared guard (`claude-settings` `hooks/guard.py`, rule 1, shared-tree) refuses a checkout or restore over a modified path, a stash that takes another tree's entry, and a hard reset over uncommitted work. Each is judged against its subject's state. The Claude-side copy was cut so one refusal speaks once. All three clauses, 1, 7 and 8, are gone from this script (D135). `GUARD_SHELL_SKIP` and its alias `--skip` name clauses by table name. An unknown name skips nothing. Clauses 3 and 4 are gone too.
 
 ### The five, and what each cost
 
@@ -40,9 +40,9 @@ A pass the guard could not decide is printed. An operand that resolves to neithe
 
 ### Hatches: none is printed to an agent
 
-`BANCHI_CHECKOUT`, `BANCHI_TREE`, `BANCHI_WAIT` and the later clauses' hatches each take `=off`, honoured in the environment. Each is the owner's to set. The owner ruled that a refusal never prints a blocked switch's name to an agent. It prints "owner-only: ask the owner to run this command". `clause_owner_only` refuses an agent's tool call that sets any real `BANCHI_*=off`, read by `_hatches_set`. So a mention passes.
+`BANCHI_TREE`, `BANCHI_WAIT` and the later clauses' hatches each take `=off`, honoured in the environment. Each is the owner's to set. The owner ruled that a refusal never prints a blocked switch's name to an agent. It prints "owner-only: ask the owner to run this command". `clause_owner_only` refuses an agent's tool call that sets any real `BANCHI_*=off`, read by `_hatches_set`. So a mention passes.
 
-Four recovery levers stay open to an agent. Each frees a stuck session: `BANCHI_KILL`, `BANCHI_SUITE_LOCK`, `BANCHI_SERVE_MAIN` and `BANCHI_SYNC`. They keep their printed names. The owner's terminal and CI are not tool calls, so the clause never sees them. The clause lives in `hook`, not `read_command`. The self-test's older cases call `hook(payload, owner_only=False)`. Only its owner-only cases call `--hook`. There is no switch for this clause.
+Three recovery levers stay open to an agent. Each frees a stuck session: `BANCHI_SUITE_LOCK`, `BANCHI_SERVE_MAIN` and `BANCHI_SYNC`. A fourth, `BANCHI_KILL`, went with the reaper's hook mode (D135). They keep their printed names. The owner's terminal and CI are not tool calls, so the clause never sees them. The clause lives in `hook`, not `read_command`. The self-test's older cases call `hook(payload, owner_only=False)`. Only its owner-only cases call `--hook`. There is no switch for this clause.
 
 **Known residual:** a Write of a script, then `bash script.sh`, sets a switch that no stage of a Bash command shows. The clause cannot see it. One switch for the whole hook would disarm the clause that guards uncommitted work, just to make a symlink. A hatch reached for by reflex is a guard already gone. The recovery the `cd` incident needed is one hatch away: `git checkout --` in the main tree, to unwind writes that landed there. The owner holds it.
 
@@ -146,8 +146,8 @@ The push clause's printed remedy names the branch's own name. It prints `git pus
 
 The owner ruled: log every deny or ask. `scripts/refusal_log.py` is the one helper. Each guard imports it, and the shell hooks call its CLI. It appends one line per refusal to `banchi-refusals.log`, beside the hatch log. A line holds the time, `guard:rule` (one stable id per clause), a snippet of at most 80 characters, the session id and the checkout. The snippet is a heading, a path or a masked verdict, never a whole command.
 
-The guards that write it are `guard-shell.py`, `reap.py --hook`, `silent-write-guard.py`, `guard-opsec.sh`, and the three hooks in `scripts/githooks/` that refuse. One `O_APPEND` write per line keeps concurrent agents apart. The log only records. It fails open. A log that cannot be written never changes a verdict or an output. `BANCHI_REFUSAL_LOG` names a file instead of the common-dir default. Each self-test uses it to point the log at a fixture and at an unwritable path. `make status` prints the last 24 hours per rule on one line, beside the hatch lines.
+The guards that write it are `guard-shell.py`, `silent-write-guard.py`, `guard-opsec.sh`, and the three hooks in `scripts/githooks/` that refuse. One `O_APPEND` write per line keeps concurrent agents apart. The log only records. It fails open. A log that cannot be written never changes a verdict or an output. `BANCHI_REFUSAL_LOG` names a file instead of the common-dir default. Each self-test uses it to point the log at a fixture and at an unwritable path. `make status` prints the last 24 hours per rule on one line, beside the hatch lines.
 
 ### Standing
 
-**BUILT and self-tested**: seven clauses, `scripts/guard-shell-selftest.sh` with four reproductions, the swept allow list, every hatch in both forms, and the fail-open floor. **RECORDED**: this entry, `docs/map.py`, CLAUDE.md, `scripts/checks.py` and both hook rosters. **NEITHER**: nothing. What is unproven is what every hook here shares. `silent-write-selftest.sh` says so in as many words. The harness invokes the hook, and exit 2 blocks a call. Both are the harness's behaviour, not this repository's.
+**BUILT and self-tested**: four clauses (tree, wait, push and narrate), `scripts/guard-shell-selftest.sh` with one reproduction per clause, the swept allow list, every hatch in both forms, and the fail-open floor. **RECORDED**: this entry, `docs/map.py`, CLAUDE.md, `scripts/checks.py` and the one hook roster, `.claude/settings.json`. **NEITHER**: nothing. What is unproven is what every hook here shares. `silent-write-selftest.sh` says so in as many words. The harness invokes the hook, and exit 2 blocks a call. Both are the harness's behaviour, not this repository's.

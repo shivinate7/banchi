@@ -24,7 +24,7 @@ from .core import (
     rel,
     rule_files,
 )
-from .env_map import _hook_triples, check_codex_hooks
+from .env_map import _hook_triples, check_claude_hooks
 from .registry_scopes import _spec_map_should_run
 from .rules import (
     HARD_RULE_FLOOR,
@@ -161,18 +161,16 @@ def run(ok) -> None:
         str(by_label["storage keys"]),
     )
 
-    # ------------------------------------------------------------------ codex hooks (D135)
+    # ------------------------------------------------------------------ claude hooks
     #
-    # `_hook_triples` is the extractor, pure and file-free, so the mutation this row exists
-    # for can be driven on synthetic dicts rather than on the real tree — the same split
-    # `_storage_sites` uses above, for the same reason: the logic that could be wrong lives
-    # here, not in which two paths the real check reads.
-    print("\ncodex hooks reads (event, matcher, command) out of a settings-shaped dict")
+    # `_hook_triples` is the extractor, pure and file-free, so the row's logic can be driven on
+    # synthetic dicts rather than on the real tree.
+    print("\nclaude hooks reads (event, matcher, command) out of a settings-shaped dict")
     claude_shaped = {
         "hooks": {
             "PreToolUse": [
                 {"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "scripts/guard-opsec.sh"}]},
-                {"matcher": "Bash", "hooks": [{"type": "command", "command": "scripts/reap.py --hook"}]},
+                {"matcher": "Bash", "hooks": [{"type": "command", "command": "scripts/guard-shell.py --hook"}]},
             ],
             "Stop": [{"hooks": [{"type": "command", "command": "scripts/typecheck-hook.py"}]}],
         }
@@ -180,7 +178,7 @@ def run(ok) -> None:
     triples = _hook_triples(claude_shaped)
     ok(
         ("PreToolUse", "Write|Edit", "scripts/guard-opsec.sh") in triples
-        and ("PreToolUse", "Bash", "scripts/reap.py --hook") in triples,
+        and ("PreToolUse", "Bash", "scripts/guard-shell.py --hook") in triples,
         "a matcher on the entry is carried into the triple",
         str(sorted(triples)),
     )
@@ -193,127 +191,99 @@ def run(ok) -> None:
        "a malformed hooks block reads as no hooks, not a crash")
     ok(not _hook_triples({"hooks": {"Stop": [{"hooks": [{"type": "prompt", "text": "x"}]}]}}),
        "a non-command hook (a prompt, say) contributes nothing to the roster")
-
-    # THE MUTATION: drop one hook from the Codex side, prove the row reports exactly the
-    # drop, restore it, prove the row is silent again. This is D135's own worked example —
-    # `.codex/hooks.json` really did ship a day behind `WorktreeRemove` and `reap.py --hook`
-    # — replayed here as data so it never depends on the two files staying out of sync.
-    print("\nremoving one hook from one side is reported, and restoring it clears the report")
-    codex_shaped = {
-        "hooks": {
-            "PreToolUse": [
-                {"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "scripts/guard-opsec.sh"}]},
-            ],
-            "Stop": [{"hooks": [{"type": "command", "command": "scripts/typecheck-hook.py"}]}],
-        }
-    }
-    missing = _hook_triples(claude_shaped) - _hook_triples(codex_shaped)
     ok(
-        missing == {("PreToolUse", "Bash", "scripts/reap.py --hook")},
-        "the row's own diff finds exactly the hook the mutation removed",
-        str(missing),
-    )
-    codex_shaped["hooks"]["PreToolUse"].append(
-        {"matcher": "Bash", "hooks": [{"type": "command", "command": "scripts/reap.py --hook"}]}
-    )
-    ok(
-        not (_hook_triples(claude_shaped) - _hook_triples(codex_shaped))
-        and not (_hook_triples(codex_shaped) - _hook_triples(claude_shaped)),
-        "restoring the hook clears the diff in both directions",
-        str(_hook_triples(claude_shaped) ^ _hook_triples(codex_shaped)),
-    )
-    ok(
-        ("PreToolUse", "Bash", "scripts/reap.py --hook") in _hook_triples(claude_shaped)
+        ("PreToolUse", "Bash", "scripts/guard-shell.py --hook") in _hook_triples(claude_shaped)
         and ("PreToolUse", "Write|Edit", "scripts/decision-context.py")
         not in _hook_triples(claude_shaped),
         "the triple is exact — same event and matcher, a different command is not a match",
     )
 
-    # And the real tree: the two files this row actually reads should already agree, because
-    # the change that added the row is the same change that brought .codex/hooks.json to
-    # parity (D135) — a self-test that could not pass against its own repository would be
-    # asserting a rule this tree does not follow.
+    # And the real tree: the row must pass against its own repository, or it asserts a rule this
+    # tree does not follow.
     report = Report()
-    check_codex_hooks(report)
+    check_claude_hooks(report)
     by_label = {row.check: row.findings for row in report.checks}
     ok(
-        not by_label["codex hooks"],
-        ".codex/hooks.json and .claude/settings.json name the same hooks in this tree",
-        str(by_label["codex hooks"]),
+        not by_label["claude hooks"],
+        ".claude/settings.json sets no guard-shell skip prefix, keeps the silent-write prefix and names real files",
+        str(by_label["claude hooks"]),
     )
 
-    # CODEX_ONLY: one hook the shared layer owns for Claude Code (silent-write runs on both sides).
-    # Driven on temp files through the row's own two path globals.
-    print("\ncodex hooks: the CODEX_ONLY hook is allowed in Codex only, in both directions")
+    # Driven on a temp settings file through the row's own path global.
+    print("\nclaude hooks: a skip prefix, the silent-write prefix and a missing script are each reported")
     import json
     from . import env_map
 
     def hook(matcher: str, command: str) -> dict:
         return {"matcher": matcher, "hooks": [{"type": "command", "command": command}]}
 
-    shared = hook("Write|Edit", "scripts/guard-opsec.sh")
-    reap = hook("Bash", "scripts/reap.py --hook")
-    silent = hook("Bash", "scripts/silent-write-guard.py --hook")
     narrow = "BANCHI_SILENT_WRITE_ONLY=file,bash-c "
     silent_c = hook("Bash", narrow + "scripts/silent-write-guard.py --hook")
-    extra = hook("Bash", "scripts/janitor.py --hook")
+    gs = "scripts/guard-shell.py --hook"
+    c_bash, c_edit = hook("Bash", gs), hook("Write|Edit", gs)
 
-    def codex_hooks_findings(claude: list, codex: list) -> list:
+    def claude_hooks_findings(entries: list) -> list:
         with tempfile.TemporaryDirectory() as tmp:
-            c, x = Path(tmp) / "settings.json", Path(tmp) / "hooks.json"
-            c.write_text(json.dumps({"hooks": {"PreToolUse": claude}}), encoding="utf-8")
-            x.write_text(json.dumps({"hooks": {"PreToolUse": codex}}), encoding="utf-8")
-            saved = env_map.CLAUDE_SETTINGS, env_map.CODEX_HOOKS
-            env_map.CLAUDE_SETTINGS, env_map.CODEX_HOOKS = c, x
+            c = Path(tmp) / "settings.json"
+            c.write_text(json.dumps({"hooks": {"PreToolUse": entries}}), encoding="utf-8")
+            saved = env_map.CLAUDE_SETTINGS
+            env_map.CLAUDE_SETTINGS = c
             try:
                 rep = Report()
-                check_codex_hooks(rep)
+                check_claude_hooks(rep)
             finally:
-                env_map.CLAUDE_SETTINGS, env_map.CODEX_HOOKS = saved
+                env_map.CLAUDE_SETTINGS = saved
         return [f for row in rep.checks for f in row.findings]
 
-    found = codex_hooks_findings([shared, silent_c], [shared, silent, reap])
-    ok(not found, "green: Claude lacks the CODEX_ONLY hook and Codex runs it", str(found))
-    found = codex_hooks_findings([shared, silent_c, reap], [shared, silent, reap])
-    ok(len(found) == 1 and "CODEX_ONLY is stale" in str(found[0]),
-       "red: Claude runs a CODEX_ONLY hook again", str(found))
-    found = codex_hooks_findings([shared, silent_c], [shared, silent])
-    ok(len(found) == 1 and "lost" in str(found[0]),
-       "red: Codex loses a CODEX_ONLY hook", str(found))
-    found = codex_hooks_findings([shared, silent_c], [shared, silent, reap, extra])
-    ok(len(found) == 1 and "does not run" in str(found[0]),
-       "red: an unlisted Codex-only hook appears", str(found))
-
-    # BANCHI_SILENT_WRITE_ONLY pin: Claude's entry carries `file,bash-c`, Codex's carries none.
-    found = codex_hooks_findings([shared, silent_c], [shared, silent, reap])
-    ok(not found, "green: Claude has the file,bash-c prefix and Codex has none", str(found))
-    for label, claude_entry in (
-        ("only `file`", hook("Bash", "BANCHI_SILENT_WRITE_ONLY=file scripts/silent-write-guard.py --hook")),
-        ("no prefix", silent),
+    found = claude_hooks_findings([c_bash, c_edit, silent_c])
+    ok(not found, "green: each guard-shell entry is bare and the silent-write prefix is present", str(found))
+    found = claude_hooks_findings([hook("Bash", "GUARD_SHELL_SKIP=checkout " + gs), c_edit, silent_c])
+    ok(len(found) == 1 and "must not set `GUARD_SHELL_SKIP`" in str(found[0]),
+       "red: Claude's Bash entry sets a skip prefix", str(found))
+    found = claude_hooks_findings([c_bash, hook("Write|Edit", "GUARD_SHELL_SKIP= " + gs), silent_c])
+    ok(len(found) == 1 and "must not set `GUARD_SHELL_SKIP`" in str(found[0]),
+       "red: Claude's Write|Edit entry sets an empty skip prefix", str(found))
+    found = claude_hooks_findings([hook("Bash", "GUARD_SHELL_SKIP=wait " + gs), c_edit, silent_c])
+    ok(len(found) == 1 and "must not set `GUARD_SHELL_SKIP`" in str(found[0]),
+       "red: a prefix naming a live clause is a finding too, not a pin", str(found))
+    # THE SKIP PIN IN EVERY SPELLING THE REGEX MUST CATCH. Each form rides as its own Bash entry beside
+    # the pinned guard-shell entries, so exactly one finding means the form was caught, and once.
+    skip_forms = (
+        ("a leading GUARD_SHELL_SKIP=", "GUARD_SHELL_SKIP=wait " + gs),
+        ("GUARD_SHELL_SKIP= after another assignment", "FOO=1 GUARD_SHELL_SKIP=wait " + gs),
+        ("GUARD_SHELL_SKIP= after env", "env GUARD_SHELL_SKIP=wait " + gs),
+        ("a quoted --skip=NAME", gs + ' "--skip=wait"'),
+        ("--skip NAME", gs + " --skip wait"),
+        ("--skip=NAME", gs + " --skip=wait"),
+        ("a trailing --skip with no name", gs + " --skip"),
+    )
+    for label, command in skip_forms:
+        found = claude_hooks_findings([c_bash, c_edit, silent_c, hook("Bash", command)])
+        ok(len(found) == 1 and "must not set `GUARD_SHELL_SKIP`" in str(found[0]),
+           f"red: {label} is flagged, once", str(found))
+    # A quoted assignment is flagged too. The file check does not unquote an assignment, so it also reads
+    # the quoted word as a missing file: the pin is asserted among the findings, not as the only one.
+    found = claude_hooks_findings([c_bash, c_edit, silent_c, hook("Bash", "env 'GUARD_SHELL_SKIP=wait' " + gs)])
+    ok(any("must not set `GUARD_SHELL_SKIP`" in str(f) for f in found),
+       "red: a quoted GUARD_SHELL_SKIP= is flagged", str(found))
+    # The spellings the pin must leave alone: another word, another variable, and the plain hook.
+    for label, command in (
+        ("--skip-x, another word", gs + " --skip-x"),
+        ("MY_GUARD_SHELL_SKIP=, another variable", "MY_GUARD_SHELL_SKIP=wait " + gs),
+        ("a plain --hook", gs),
     ):
-        found = codex_hooks_findings([shared, claude_entry], [shared, silent, reap])
+        found = claude_hooks_findings([c_bash, c_edit, silent_c, hook("Bash", command)])
+        ok(not found, f"green: {label} is not a skip pin", str(found))
+    for label, entry in (
+        ("only `file`", hook("Bash", "BANCHI_SILENT_WRITE_ONLY=file scripts/silent-write-guard.py --hook")),
+        ("no prefix", hook("Bash", "scripts/silent-write-guard.py --hook")),
+    ):
+        found = claude_hooks_findings([c_bash, c_edit, entry])
         ok(any(f.where == ".claude/settings.json" for f in found),
-           f"red: Claude's entry has {label}", str(found))
-    found = codex_hooks_findings([shared, silent_c], [shared, silent_c, reap])
-    ok(any(f.where == ".codex/hooks.json" and "full hook" in f.message for f in found),
-       "red: Codex's entry has the prefix", str(found))
-
-    # GUARD_SHELL_SKIP pin: Claude's Bash entry skips three clauses, every other guard-shell entry is empty.
-    gs = "scripts/guard-shell.py --hook"
-    sk = "GUARD_SHELL_SKIP=checkout,stash,reset "
-    c_bash, c_edit = hook("Bash", sk + gs), hook("Write|Edit", "GUARD_SHELL_SKIP= " + gs)
-    x_bash, x_edit = hook("Bash", "GUARD_SHELL_SKIP= " + gs), hook("Write|Edit", "GUARD_SHELL_SKIP= " + gs)
-    found = codex_hooks_findings([c_bash, c_edit], [x_bash, x_edit, reap])
-    ok(not found, "green: each guard-shell entry carries its pinned skip value", str(found))
-    found = codex_hooks_findings([hook("Bash", "GUARD_SHELL_SKIP=checkout " + gs), c_edit], [x_bash, x_edit, reap])
-    ok(len(found) == 1 and "GUARD_SHELL_SKIP=checkout,stash,reset" in str(found[0]),
-       "red: Claude's Bash entry carries a different skip value", str(found))
-    found = codex_hooks_findings([c_bash, c_edit], [hook("Bash", gs), x_edit, reap])
-    ok(len(found) == 1 and "must set `GUARD_SHELL_SKIP=`" in str(found[0]),
-       "red: a Codex entry misses the empty prefix", str(found))
-    found = codex_hooks_findings([c_bash, hook("Write|Edit", sk + gs)], [x_bash, x_edit, reap])
-    ok(len(found) == 1 and "must set `GUARD_SHELL_SKIP=`" in str(found[0]),
-       "red: Claude's Write|Edit entry carries a skip value", str(found))
+           f"red: the silent-write entry has {label}", str(found))
+    found = claude_hooks_findings([c_bash, c_edit, silent_c, hook("Bash", "scripts/no-such-hook.py --hook")])
+    ok(len(found) == 1 and "no such file" in str(found[0]),
+       "red: a hook names a script that is not in the tree", str(found))
 
     # The staged-mode primitives, which have no loud failure mode: every one of them
     # answers plausibly against the worktree while auditing a tree the commit will not

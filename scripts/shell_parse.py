@@ -36,7 +36,7 @@ and one must RESOLVE its targets against the filesystem and git (`guard-shell`, 
 
 EVERY FUNCTION HERE FAILS SOFT. A line that does not tokenize is reported as unreadable and
 dropped; an unterminated heredoc drops the remainder. Both directions lose a command rather
-than inventing one, which is the fail-open half of the asymmetry `scripts/reap.py:hook`
+than inventing one, which is the fail-open half of the asymmetry D127
 states: a broken guard must not block a shell.
 """
 

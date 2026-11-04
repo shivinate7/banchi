@@ -1,1 +1,0 @@
-../.claude/rules/code-cards.md

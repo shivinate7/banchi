@@ -180,11 +180,6 @@ GUARD_SHELL = SCRIPTS / "guard-shell.py"
 
 GUARD_SHELL_MUTATIONS: Tuple[Mutation, ...] = (
     Mutation(
-        "checkout clause: never recognise a restore verb",
-        '        if verb not in _RESTORE_VERBS:\n            continue',
-        '        if True:\n            continue',
-    ),
-    Mutation(
         "tree clause (Bash half): never flag a write outside the checkout",
         '        verdict = _outside(write.target, write.cwd, root)\n        if verdict:',
         '        verdict = _outside(write.target, write.cwd, root)\n        if False:',
@@ -207,16 +202,6 @@ GUARD_SHELL_MUTATIONS: Tuple[Mutation, ...] = (
         '            if tracked is None or tracked == branch:\n                continue',
         '            tracked = _tracked_branch(branch, remote, where)\n'
         '            if True:\n                continue',
-    ),
-    Mutation(
-        "stash clause: stop treating `git stash pop` as always-refused",
-        '_STASH_ALWAYS = {"pop", "clear"}',
-        '_STASH_ALWAYS = {"clear"}',
-    ),
-    Mutation(
-        "reset clause: never recognise a discarding mode",
-        '_RESET_DISCARDING_MODES = {"--hard", "--merge", "--keep"}',
-        '_RESET_DISCARDING_MODES = set()',
     ),
     Mutation(
         "narrate clause: a truncating filter is no longer one",

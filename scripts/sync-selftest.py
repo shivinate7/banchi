@@ -714,7 +714,7 @@ def main() -> int:  # noqa: C901 — one arm per state, flat on purpose
 
     # ------------------------------------------------- 12. fail OPEN on its own bugs
     #
-    # `scripts/reap.py:hook`'s rule, and the one arm that cannot be built from a repository
+    # D127's rule (a broken guard fails open), and the one arm that cannot be built from a repository
     # state: the module's own defect. Three callers run this unasked and none of them is the
     # place to learn it has one.
     print("\n  its own bugs fail OPEN and silently; an unreadable target fails CLOSED and loud")

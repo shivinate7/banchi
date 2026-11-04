@@ -1,5 +1,7 @@
 # D127 — A session stops only what it started
 
+**Status.** The PreToolUse hook mode of `scripts/reap.py` was deleted on the coordinator's ruling of 2026-11-04 08:40 CST, which follows the owner's ruling of 2026-11-04 07:56 CST (Cockpit item 214 a) to delete all of Banchi's Codex setup, because only the Codex setup armed it. D135 is the record. The shared layer's machine-wide-kill rule owns that guard for Claude Code. The reaper stays (`make reap`). The hook sections below record why the verdict works as it does. `BANCHI_KILL`, its escape hatch, has no reader left and is gone.
+
 **Built after two incidents in a single session.** Both happened while cleaning up dev servers the session had launched itself.
 
 1. `pkill -f "capture_server.py"` targeted a scratch capture server started in a worktree. `pkill -f` is machine-wide. It also matched `/Users/shivinate/Developer/banchi/server/capture_server.py`, the owner's live capture server on :8000 over their real 1,625-card store. That process is the one **D138** keeps alive at login. The supervisor restored it 25 seconds later. **D88** kept the store intact, because every write is one SQLite transaction. Requests in flight were severed.
@@ -15,7 +17,7 @@
 
 This is not a heuristic. It is a property of how this repo is worked in. **D43 makes it true.** D43 gave every checkout its own store and its own ports, so a session's processes are already separated by path. This entry uses that separation a second time.
 
-**So the guard does not read intent. It RESOLVES the command's real targets.** `scripts/reap.py --hook` runs `pgrep` and `lsof` itself, read-only. It judges each pid it gets back. Does any absolute path in that process's argv, or its working directory, live under this checkout? So `pkill -f capture_server.py` is ALLOWED when the only match is the session's own. It is refused when it is not. The same command is right on one day and wrong on another. No reading of the string could carry that fact.
+**So the guard does not read intent. It RESOLVES the command's real targets.** `scripts/reap.py` runs `pgrep` and `lsof` itself, read-only. It judges each pid it gets back. Does any absolute path in that process's argv, or its working directory, live under this checkout? So `pkill -f capture_server.py` is ALLOWED when the only match is the session's own. It is refused when it is not. The same command is right on one day and wrong on another. No reading of the string could carry that fact.
 
 **A loop variable is answered by the clause beside it.** `kill $p` cannot be resolved alone. But `for p in $(lsof -ti tcp:5439); do kill $p; done` has the port in plain sight. So the guard asks what pids the command could be about, not what the kill's argument is. The producers are `pgrep`, `lsof -ti`, a `pkill` pattern and a `killall` name. The guard resolves them wherever they sit in the command.
 
@@ -42,15 +44,15 @@ On a Bash call it has no opinion about, the guard costs 35 ms. Measured over fiv
 
 **A broken GUARD fails open. An unreadable TARGET fails closed.** The first is `guard-opsec.sh`'s rule, taken here unchanged and for its reason. That guard was disabled inside a day when it blocked on its own bugs. The second is not the same rule. It is the guard being right that it does not know. That is a fact about the world, not a defect in the code.
 
-**The escape hatch is `BANCHI_KILL=off`, and every refusal prints it.** It follows the house convention `BANCHI_MAIN=off` set. It is sized to be reached for rarely. Everything provably the session's own is already allowed. A session that wants the hatch is doing something unusual, and should notice that it is.
+**The escape hatch was `BANCHI_KILL=off`, and every refusal printed it. It is gone with the hook mode (see Status).** It follows the house convention `BANCHI_MAIN=off` set. It is sized to be reached for rarely. Everything provably the session's own is already allowed. A session that wants the hatch is doing something unusual, and should notice that it is.
 
 ### One file, two faces, one predicate
 
-`scripts/reap.py` is both the hook and the tool the hook recommends. **That is the point, not a convenience.** A guard that refuses on one notion of "safe to kill" while the tool it names uses another gets bypassed. `make reap` previews everything running under this checkout. `--confirm` stops it. `port:N`, `match:X` and `pid:N` narrow it. **It prints what it refused and why.** That is the half a `pkill` cannot do.
+`scripts/reap.py` was both the hook and the tool the hook recommends. **That is the point, not a convenience.** A guard that refuses on one notion of "safe to kill" while the tool it names uses another gets bypassed. `make reap` previews everything running under this checkout. `--confirm` stops it. `port:N`, `match:X` and `pid:N` narrow it. **It prints what it refused and why.** That is the half a `pkill` cannot do.
 
 **It does not duplicate `janitor.py`, and it was built not to.** The claude-settings sweep owns the neighbouring question. That is what a FINISHED session left behind, on its own schedule, across trees, branches and orphans. This entry owns one signal at the moment it is sent. The two share their reasoning. Where the shapes matched, the code was copied WITH its argument, not re-derived. That covers `_real` and its symlink trap, the process table, and the leader-only `killpg`. Neither grew a second, disagreeing notion of what is safe to stop.
 
-**It imports nothing from this tree**, for `janitor.py`'s reason. Both stay repo-agnostic, so a hook can point them at any checkout. **The repo's own `.codex/hooks.json` carries the hook.** The guard is armed in this tree and in every worktree cut from it. No per-machine step is needed. The repo's copy is the only one, and it runs from `scripts/`. `.claude/settings.json` does not carry it, on the owner's word. The shared layer's machine-wide-kill rule owns the Claude side.
+**It imports nothing from this tree**, for `janitor.py`'s reason. Both stay repo-agnostic, so a hook can point them at any checkout. **The hook mode is deleted** (see Status). `.claude/settings.json` never carried it, on the owner's word: the shared layer's machine-wide-kill rule owns the Claude side. `.codex/hooks.json` carried it until D135 removed the Codex setup.
 
 ### Amendment: a root may not be a directory that contains everything
 

@@ -193,7 +193,7 @@ defect is not the operator's business, and its inability to read their tree very
 ### The hatch stops the mechanism rather than letting something past
 
 `BANCHI_SYNC=off`, printed on every sync **and** every refusal, spelled the way
-`BANCHI_MAIN=off`, `BANCHI_KILL=off`, `BANCHI_REVERT=off`, `BANCHI_SUITE_LOCK=off` and
+`BANCHI_MAIN=off`, `BANCHI_REVERT=off`, `BANCHI_SUITE_LOCK=off` and
 `BANCHI_SERVE_MAIN=off` are.
 
 **It is the first hatch here that turns an act off rather than permitting one.** Every other stands

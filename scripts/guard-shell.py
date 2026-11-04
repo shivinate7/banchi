@@ -1,22 +1,17 @@
 #!/usr/bin/env python3
-"""Refuse seven shell mistakes this repo has already made and paid for.
+"""Refuse four shell mistakes this repo has already made and paid for.
 
 EVERY CLAUSE HERE HAS AN INCIDENT BEHIND IT, and not one of them was a lapse of care: each
 was a rule somebody had already written down, in a memory file or in CLAUDE.md, and then
 broken by a session that had read it. That is not a reason to write the rule again; it is
 what D171 rules a rule IS. A rule is read once, at the start, and then competes with the
-work. So these seven are mechanical. Their numbers are stable ids: 3 (`gh api -f`) and 4
-(`ln -s` over a path) are retired on the owner's word, and nothing renumbers.
+work. So these four are mechanical. Their numbers are stable ids: 1 (`git checkout <path>`),
+3 (`gh api -f`), 4 (`ln -s` over a path), 7 (`git stash`) and 8 (`git reset --hard`) are retired on
+the owner's word, and nothing renumbers.
 
-CLAUDE CODE RUNS THIS WITH `GUARD_SHELL_SKIP=checkout,stash,reset` (`--skip` is an alias). The shared layer's guard
-(`claude-settings/hooks/guard.py`, rule 1, shared-tree) owns clauses 1, 7 and 8 there, so the
-Claude-side copy is cut on the owner's word. Codex runs no shared guard and runs all seven.
-
-    1. `git checkout <path>` / `git restore <path>` over a file with uncommitted changes
-       2026-09-06: three mutation cases used `sed -i.bak` and the fourth used
-       `git checkout cli/cmd_reprice.py`. Nothing was committed, so it reverted to HEAD and
-       destroyed ~240 lines of that session's work. "Every other file survived, which made it
-       look at first like a smaller problem than it was."
+CLAUDE CODE RUNS EVERY CLAUSE HERE, with no skip. The shared layer's guard
+(`claude-settings/hooks/guard.py`, rule 1, shared-tree) owns the checkout, stash and reset
+refusals, so those three clauses are gone from this script (D135).
 
     2. A write outside the checkout this session is standing in
        2026-09-06: an absolute-path `cd` prefix wrote ~1,500 lines into the owner's MAIN
@@ -45,26 +40,6 @@ Claude-side copy is cut on the owner's word. Codex runs no shared guard and runs
        the fix — but naming a refspec, even an unqualified `HEAD`, is git's own signal that
        the caller knows what they want, and that signal was wrong.
 
-    7. `git stash pop` / `drop` / `clear`, or a bare `git stash`, in a clone with ~30
-       working trees sharing one stash stack
-       No single incident is behind this one — the owner's OWN parent CLAUDE.md names the
-       command outright before this repo ever mistyped it: "Never run `git stash` … in a
-       shared checkout." D173 is what a rule with no incident yet still gets: mechanised
-       now, on the strength of the argument alone, rather than waited on until it is paid
-       for. The argument: a stack entry made by another worktree's session is
-       indistinguishable, by index, from this session's own — `stash@{0}` names "whatever is
-       on top right now", not "the thing I pushed a minute ago" — so `pop`/`drop`/`clear`
-       consume or destroy an entry the caller never identified, and a bare `git stash` is the
-       same command habit uses interchangeably to mean "save" AND "restore".
-
-    8. `git reset --hard` / `--merge` / `--keep` over a working tree that still holds
-       uncommitted changes
-       Also named outright by the parent CLAUDE.md, and mechanised for D173's reason above
-       rather than after a loss. A hard-family reset overwrites the index and the working
-       tree from a commit with no confirmation and no record of what it overwrote — the same
-       "reverts to HEAD, silently, without asking" shape rank 1's `git checkout` already
-       covers for a single path, one level up: the whole tree instead of one file.
-
     9. A command that waits for minutes and NARRATES while it does, piped into `tail` or
        redirected away
        2026-09-20. `make merge` pushes a claim commit and waits for that commit's checks;
@@ -81,21 +56,19 @@ Claude-side copy is cut on the owner's word. Codex runs no shared guard and runs
        process table can answer in advance, so the roster is named, short, per-incident, and
        reconciled by the self-test against the heartbeat constant in the file that runs it.
 
-THE STANDARD IS `scripts/reap.py:hook`'S AND IT IS NOT NEGOTIABLE HERE EITHER:
+THE STANDARD IS D127'S (THE RETIRED `reap.py` HOOK) AND IT IS NOT NEGOTIABLE HERE EITHER:
 
     a broken GUARD fails OPEN — any parse error, any bug here, an unreadable payload, a
                                 missing `git`: exit 0 and refuse nothing
     an unreadable TARGET fails CLOSED — but only where "unreadable" is this file being right
                                 that it does not know AND the harm is unrecoverable, which is
-                                true of none of these seven: six of them RESOLVE
+                                true of none of these four: three of them RESOLVE
                                 their subject and clause 9 names a roster of two, and a subject
                                 a clause cannot resolve is a command it has no opinion about
 
-RESOLUTION, NEVER SPELLING, wherever the question has a real answer. `git checkout main` and
-`git checkout CLAUDE.md` are the same six characters of verb: the first is a branch and the
-second destroys work, and only the filesystem and `git status` can say which. `git push origin HEAD`
+RESOLUTION, NEVER SPELLING, wherever the question has a real answer. `git push origin HEAD`
 is right when the upstream is named the same and wrong when it is not, and only
-`branch.<name>.merge` can say which. That is reap.py's whole argument, applied to four more
+`branch.<name>.merge` can say which. That is reap.py's whole argument, applied to three more
 commands — and clause 9, which cannot be resolved that way, argues its own roster instead of
 pretending otherwise.
 
@@ -105,10 +78,10 @@ purpose, every legitimate shape this repo actually types is pinned as PASSING in
 `scripts/guard-shell-selftest.sh`, and each is RUN there before it is scored, because a case
 that is secretly a typo passes for the wrong reason.
 
-SEVEN CLAUSES, SEVEN HATCHES, AND THAT IS DELIBERATE. One switch for the whole hook would mean
-disarming the destructive-checkout clause in order to push once, which is how a guard
+FOUR CLAUSES, FOUR HATCHES, AND THAT IS DELIBERATE. One switch for the whole hook would mean
+disarming the tree clause in order to push once, which is how a guard
 stops being one. Each refusal prints only its own, each is honoured in the environment and
-inline, and all seven are documented in CLAUDE.md (`make docs-audit`'s `env names` row refuses
+inline, and all four are documented in CLAUDE.md (`make docs-audit`'s `env names` row refuses
 a variable the code reads and no markdown names).
 
     scripts/guard-shell.py --hook            the PreToolUse hook. Payload on stdin.
@@ -150,7 +123,7 @@ except Exception:                                             # noqa: BLE001 —
 
 # ----------------------------------------------------------------------------- the clauses
 #
-# DECLARED, because six clauses each with their own hatch is six names a reader has to be
+# DECLARED, because four clauses each with their own hatch is four names a reader has to be
 # able to find. The selftest reads this table so a clause added without a hatch, or a hatch
 # named in one place and printed in another, is a failing case rather than a silent hole.
 
@@ -161,8 +134,6 @@ class Clause(NamedTuple):
 
 
 CLAUSES = (
-    Clause("checkout", "BANCHI_CHECKOUT",
-           "never `git checkout <path>` or `git restore <path>` over a modified file"),
     Clause("tree", "BANCHI_TREE",
            "never write outside the checkout this session is standing in, and never `cd` "
            "into another one"),
@@ -171,12 +142,6 @@ CLAUSES = (
     Clause("push", "BANCHI_PUSH",
            "never `git push <remote> HEAD` / `<remote> <branch>` when the tracked upstream "
            "is a different, non-default branch"),
-    Clause("stash", "BANCHI_STASH",
-           "never a bare `git stash`, `git stash pop`, or `git stash drop`/`clear` with no "
-           "explicit entry — the stack is shared across every worktree"),
-    Clause("reset", "BANCHI_RESET",
-           "never `git reset --hard`/`--merge`/`--keep` over a tree that still holds "
-           "uncommitted tracked changes"),
     Clause("narrate", "BANCHI_NARRATE",
            "never hide the heartbeat of a command that waits for minutes — let its output "
            "reach the session as it happens"),
@@ -197,11 +162,12 @@ class Verdict(NamedTuple):
 
 
 #: Clauses the caller left to another guard (`GUARD_SHELL_SKIP`, or `--skip`). Set once, by `main`, for one hook run.
+#: No hook entry in this repo sets it now: Claude Code runs every clause.
 SKIPPED: Set[str] = set()
 
 
 def _off(clause: str, command: str) -> bool:
-    """Whether this clause is skipped, or its hatch is set, in either of `BANCHI_KILL`'s forms."""
+    """Whether this clause is skipped, or its hatch is set, in either form: environment or inline."""
     if clause in SKIPPED:
         return True
     name = HATCH[clause]
@@ -476,241 +442,8 @@ def _sanctioned_outside(target: str) -> str:
     return ""
 
 
-# ------------------------------------------------------------- 1. the destructive checkout
-
-_RESTORE_VERBS = {"checkout", "restore"}
-
-# Flags that consume the next word. `-b`/`-B`/`--orphan` are handled separately because they
-# make the whole invocation a branch creation, which can never discard a working file.
-_CHECKOUT_VALUE_FLAGS = {"--conflict", "--pathspec-from-file", "-t", "--track"}
-_RESTORE_VALUE_FLAGS = {"-s", "--source", "--conflict", "--pathspec-from-file"}
-_BRANCH_MAKERS = {"-b", "-B", "--orphan"}
-
-
-class Restoring(NamedTuple):
-    """What a `git checkout` / `git restore` invocation would do to the working tree."""
-    paths: List[str]              # operands this file reads as pathspecs
-    source_named: str             # a tree-ish the caller named, or ""
-    passes: str                   # non-empty when nothing can be discarded, and why
-    unresolved: List[str]         # operands that are neither a path nor a ref
-
-
 def _flag_value(token: str, flags: Set[str]) -> bool:
     return token in flags or any(token.startswith(flag + "=") for flag in flags)
-
-
-def _read_restore(verb: str, rest: Sequence[str], cwd: str) -> Restoring:
-    """The operands of a checkout/restore, classified by asking git and the filesystem.
-
-    THE DISCRIMINATOR IS RESOLUTION AND NEVER SPELLING, which is the only way `git checkout
-    main` and `git checkout CLAUDE.md` can be told apart. A token that resolves to neither a
-    path on disk nor a commit is reported and ALLOWED: this file not knowing is not evidence
-    the command is wrong.
-    """
-    value_flags = _RESTORE_VALUE_FLAGS if verb == "restore" else _CHECKOUT_VALUE_FLAGS
-    operands: List[str] = []
-    after_dashes: List[str] = []
-    source = ""
-    staged = worktree = False
-    index = 0
-    seen_dashes = False
-    while index < len(rest):
-        token = rest[index]
-        index += 1
-        if seen_dashes:
-            after_dashes.append(token)
-            continue
-        if token == "--":
-            seen_dashes = True
-            continue
-        if token in _BRANCH_MAKERS or _flag_value(token, _BRANCH_MAKERS):
-            return Restoring([], "", "it creates a branch, so no working file is restored", [])
-        if token in ("-p", "--patch"):
-            return Restoring([], "", "`--patch` asks about every hunk before it discards one", [])
-        if token in ("-S", "--staged"):
-            staged = True
-            continue
-        if token in ("-W", "--worktree"):
-            worktree = True
-            continue
-        if token in ("-s", "--source") and index < len(rest):
-            source = rest[index]
-            index += 1
-            continue
-        if token.startswith("--source="):
-            source = token.split("=", 1)[1]
-            continue
-        if _flag_value(token, value_flags):
-            if "=" not in token and index < len(rest):
-                index += 1
-            continue
-        if token.startswith("-"):
-            continue
-        operands.append(token)
-
-    if staged and not worktree:
-        return Restoring([], source,
-                         "`--staged` alone rewrites the index and leaves the file on disk", [])
-
-    if seen_dashes:
-        paths = after_dashes
-        if operands and not source:
-            source = operands[0]
-    elif verb == "restore":
-        paths = operands
-    elif len(operands) > 1:
-        # `git checkout <tree-ish> <path>...` — git's own reading with no `--`.
-        source, paths = operands[0], list(operands[1:])
-    else:
-        paths = operands
-
-    resolved: List[str] = []
-    unresolved: List[str] = []
-    for token in paths:
-        if token in (".", "./") or os.path.lexists(os.path.join(cwd, token)):
-            resolved.append(token)
-        elif source:
-            # A path operand after an explicit source is unambiguous by git's own grammar —
-            # never a second ref — so there is no "is this actually a branch" question to
-            # ask here the way there is for the no-source form below. A path git would refuse
-            # to resolve is still worth passing through so the modified-file check downstream
-            # can decide, rather than silently dropping it.
-            resolved.append(token)
-        elif _run(["git", "rev-parse", "--verify", "--quiet", token + "^{commit}"], cwd=cwd)[0]:
-            continue                      # a branch or a commit: nothing on disk is touched
-        else:
-            unresolved.append(token)
-    return Restoring(resolved, source, "", unresolved)
-
-
-def _modified(paths: Sequence[str], cwd: str) -> List[Tuple[str, str]]:
-    """(path, porcelain status) for every tracked change under these pathspecs.
-
-    `--porcelain -z` rather than a line split, because a rename carries TWO paths in one
-    record and a path may contain a space — reading those wrong would mean a refusal naming a
-    file the command does not touch.
-    """
-    ok, out = _run(["git", "status", "--porcelain", "-z", "--"] + list(paths), cwd=cwd)
-    if not ok:
-        return []
-    fields = out.split("\0")
-    changed: List[Tuple[str, str]] = []
-    index = 0
-    while index < len(fields):
-        record = fields[index]
-        index += 1
-        if len(record) < 4:
-            continue
-        status, path = record[:2], record[3:]
-        if status[0] in ("R", "C"):
-            index += 1                     # the rename's source, which is the next field
-        if status in ("??", "!!"):
-            continue                       # untracked or ignored: there is nothing to lose
-        changed.append((path, status))
-    return changed
-
-
-def _diffstat(path: str, cwd: str) -> str:
-    """`N added, M removed` across the index and the working tree, or `""`.
-
-    THE FIGURE IS WHY THE REFUSAL LANDS. "240 lines" is what made the 2026-09-06 incident
-    legible after the fact; saying it before the command runs is the whole point.
-    """
-    added = removed = 0
-    for extra in ([], ["--cached"]):
-        ok, out = _run(["git", "diff", "--numstat"] + extra + ["--", path], cwd=cwd)
-        if not ok:
-            continue
-        for line in out.splitlines():
-            parts = line.split("\t")
-            if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
-                added += int(parts[0])
-                removed += int(parts[1])
-    if not added and not removed:
-        return ""
-    return "{0} added, {1} removed".format(added, removed)
-
-
-def clause_checkout(reading: "shell_parse.Reading", cwd: str) -> Verdict:
-    refusals: List[Refusal] = []
-    notes: List[str] = []
-    for placed in reading.placed:
-        argv = shell_parse.strip_prefixes(placed.stage.argv)
-        verb, rest = shell_parse.git_verb(argv)
-        if verb not in _RESTORE_VERBS:
-            continue
-        where = shell_parse.git_cwd(argv) or cwd
-        if not os.path.isdir(where):
-            notes.append("`{0}` names a directory this guard cannot read, so it has no "
-                         "opinion about it".format(shell_parse.short(placed.stage.text)))
-            continue
-        read = _read_restore(verb, rest, where)
-        if read.passes:
-            continue
-        for token in read.unresolved:
-            # THE NON-VACUITY LINE. Zero resolved operands on a command that has one is a
-            # parse failure, and a guard that cannot say so is indistinguishable from a guard
-            # that found nothing to object to.
-            notes.append("`{0}` — `{1}` resolves to neither a path in this tree nor a "
-                         "commit, so this guard has no opinion about it"
-                         .format(shell_parse.short(placed.stage.text), token))
-        if not read.paths:
-            continue
-        changed = _modified(read.paths, where)
-        if not changed:
-            continue
-        lines = ["  git {0} — {1}".format(verb, shell_parse.short(placed.stage.text))]
-        for path, status in changed[:8]:
-            stat = _diffstat(path, where)
-            lines.append("      {0} is {1}{2}".format(
-                path, _porcelain(status), " ({0} lines)".format(stat) if stat else ""))
-        if len(changed) > 8:
-            lines.append("      and {0} more".format(len(changed) - 8))
-        if read.source_named:
-            lines.append("      `{0}` is named as the source, but that only means the "
-                         "REPLACEMENT is known — the file it overwrites still had "
-                         "uncommitted changes, and those are gone exactly the same way."
-                         .format(read.source_named))
-        else:
-            lines.append("      Nothing names a source, so this restores from the index and "
-                         "those changes are gone.")
-        lines.extend([
-            "",
-            "  On 2026-09-06 `git checkout cli/cmd_reprice.py` put one mutation back and took",
-            "  ~240 lines of that session's uncommitted work with it. Every other file "
-            "survived,",
-            "  which made it look at first like a smaller problem than it was.",
-            "",
-            "  A later session repeated the same shape with an explicit source —",
-            "  `git checkout origin/main -- .` — over a tree that happened to be clean at",
-            "  that moment, which is the only reason nothing was lost. Naming a source",
-            "  changes what gets written; it does not change whether something existing is",
-            "  discarded first.",
-            "",
-            "  Put a mutation back with a COPY, which cannot reach anything you did not copy:",
-            "      sed -i.bak 's/OLD/NEW/' path/to/file.py     # run the check",
-            "      mv path/to/file.py.bak path/to/file.py",
-            "  and where sed cannot express the edit, `cp file file.bak` … `cp file.bak file`.",
-            "  To look at another ref's content without touching the working tree at all:",
-            "      git show <ref>:<path>",
-            "  Committing first is the better fix: work in this repo lands in long "
-            "uncommitted",
-            "  stretches, so a checkout over a working file is almost always destroying "
-            "something.",
-        ])
-        refusals.append(Refusal(
-            "checkout", lines,
-            "BLOCKED: this would discard uncommitted work, and git will not ask first."))
-    return Verdict(refusals, notes)
-
-
-def _porcelain(status: str) -> str:
-    staged, tree = status[0], status[1]
-    if staged != " " and staged != "?" and tree not in (" ", "?"):
-        return "modified, with changes staged as well"
-    if staged not in (" ", "?"):
-        return "staged" + (" for deletion" if staged == "D" else "")
-    return "modified" + (" (deleted)" if tree == "D" else "")
 
 
 # ------------------------------------------------------------ 2. a write outside this tree
@@ -1299,245 +1032,6 @@ def clause_push(reading: "shell_parse.Reading", cwd: str) -> Verdict:
     return Verdict(refusals, notes)
 
 
-# --------------------------------------------------------- 7. a consuming/destructive stash
-
-# Subcommands git itself recognises. Anything else after `stash` — a flag, or nothing at
-# all — is the BARE form, which git reads as an implicit `push`.
-_STASH_SUBCOMMANDS = {"push", "save", "pop", "apply", "drop", "clear", "list", "show",
-                     "branch", "create", "store"}
-
-# `pop` and `clear` are refused UNCONDITIONALLY — see the ruling below. `drop` is refused
-# only with no explicit entry named; `push`/`save`/`apply`/`list`/`show`/`branch`/`create`/
-# `store` never destroy an entry that already exists, so this clause has no opinion about
-# them at all.
-_STASH_ALWAYS = {"pop", "clear"}
-
-
-def _stash_entries(cwd: str) -> Optional[List[str]]:
-    """One subject line per entry, newest first. None when the stack cannot be read at all.
-
-    THE RESOLUTION THIS CLAUSE WAS MISSING. Measured 2026-09-17, before this function
-    existed: over an EMPTY stack, in a throwaway fixture where `git stash pop` answers
-    "No stash entries found.", the clause refused `pop`, `clear`, `drop` and the bare form
-    with exactly the verdicts it gives over a real entry — the two arms were byte-identical.
-    A guard whose answer does not move when its subject does is testing the subcommand's
-    NAME, which is the `\\bpkill\\b` defect `reap.py` exists to not be, and which
-    `clause_checkout` and `clause_reset` both already avoid by reading
-    `git status --porcelain` before they refuse.
-    """
-    ok, out = _run(["git", "stash", "list", "--format=%gs"], cwd=cwd)
-    if not ok:
-        return None
-    return [line for line in out.splitlines() if line]
-
-
-def _worktree_count(cwd: str) -> Optional[int]:
-    """How many working trees share this clone's one stash stack.
-
-    Derived rather than typed: the refusal used to assert "~30 working trees" as a constant,
-    and the measurement on 2026-09-17 was 27. A number a reader is asked to believe is a
-    number this guard can read for itself.
-    """
-    ok, out = _run(["git", "worktree", "list", "--porcelain"], cwd=cwd)
-    if not ok:
-        return None
-    count = sum(1 for line in out.splitlines() if line.startswith("worktree "))
-    return count or None
-
-
-def _stash_refusal(text: str, why: List[str], heading: str,
-                   trees: Optional[int] = None) -> Refusal:
-    lines = ["  {0}".format(text)] + why + [
-        "",
-        "  The stash stack is per-CLONE, not per-worktree (D43 covers the store and the",
-        "  ports; the stash was never split the same way) — this clone runs {0}, often".format(
-            "{0} working tree{1}".format(trees, "" if trees == 1 else "s") if trees
-            else "many working trees"),
-        "  with a live session in each, all pushing onto ONE stack. An index",
-        "  like `stash@{0}` names \"whatever is on top right now\", which is a different",
-        "  entry from one call to the next as other sessions push and pop.",
-        "",
-        "  Set work aside with a commit on your own branch, never a stash. A stash entry",
-        "  belongs to no branch, and it outlives no session that holds its tag:",
-        "      git add -A && git commit -m \"WIP: <what this is>\"",
-        "  A commit is addressed by its own sha, cannot be reinterpreted by somebody else's",
-        "  push, and travels with the branch when you push it.",
-    ]
-    return Refusal("stash", lines, heading)
-
-
-def clause_stash(reading: "shell_parse.Reading", cwd: str) -> Verdict:
-    """`git stash pop`/`drop`/`clear`, and the bare form, refused; `push`/`apply` pass.
-
-    THE RULING THE MODULE DOCSTRING ASKS FOR, WRITTEN HERE RATHER THAN THERE SO IT STAYS
-    BESIDE THE CODE IT GOVERNS:
-
-    `pop` is refused EVEN WHEN THE CALLER NAMES AN EXPLICIT ENTRY, unlike `drop` below. `pop`
-    applies and drops in one atomic step — if the apply is wrong, the entry that would have
-    let you recover is already gone, and naming it first does not buy back that window;
-    "which entry" was never the risk `pop` carries, "no chance to check before it is gone"
-    is. Use `apply <sha>` (never dropped, so the mistake is inspectable) then a `drop <sha>`
-    once you have looked, which this clause DOES allow because `drop` names an explicit
-    entry — `pop` cannot be split into those two steps, so its whole verb is refused.
-
-    `clear` always refuses: it takes no target at all, so "no explicit entry" is not a
-    condition to check, it is the whole command.
-
-    `drop` refuses only bare (`stash@{0}` implied); a caller who types any operand at all —
-    an index, a sha, whatever — has identified something, and RESOLUTION rather than
-    spelling is what every other clause here does with an operand it cannot itself verify:
-    reported if it fails to resolve, allowed either way, because "this guard could not
-    confirm it" is not the same claim as "this destroys something".
-
-    A bare `git stash` (no subcommand, implicit `push`) is refused too, and it destroys
-    nothing — the reason is IDENTIFICATION, not survival. The same six characters are what a
-    single-user habit types to mean "save my work" AND "get my stash back", and in a clone
-    where entries pile up from other sessions an untagged, unindexed push is unfindable by
-    anything but luck. `push -u -m <tag>` costs one flag and turns every entry into something
-    `list`/`apply <sha>` can find again.
-    """
-    refusals: List[Refusal] = []
-    notes: List[str] = []
-    for placed in reading.placed:
-        argv = shell_parse.strip_prefixes(placed.stage.argv)
-        verb, rest = shell_parse.git_verb(argv)
-        if verb != "stash":
-            continue
-        where = shell_parse.git_cwd(argv) or cwd
-        if not os.path.isdir(where):
-            notes.append("`{0}` names a directory this guard cannot read, so it has no "
-                         "opinion about it".format(shell_parse.short(placed.stage.text)))
-            continue
-        sub = rest[0] if rest and rest[0] in _STASH_SUBCOMMANDS else ""
-        text = shell_parse.short(placed.stage.text)
-        trees = _worktree_count(where)
-        # THE BARE FORM IS JUDGED BEFORE THE STACK IS READ, AND THAT ASYMMETRY IS THE POINT.
-        # A bare `git stash` is an implicit PUSH: it CREATES an anonymous entry, so its
-        # hazard is identification and not consumption, and an entry pushed onto an empty
-        # stack is exactly as unfindable once other sessions push onto it. Gating it on
-        # current depth would be reading the wrong subject — the stack it will join, not the
-        # stack it finds.
-        if sub == "":
-            refusals.append(_stash_refusal(text, [
-                "      no subcommand is named, so this is an implicit `push` — an",
-                "      anonymous entry that nothing but luck finds again in a shared stack.",
-            ], "BLOCKED: name what this does — `push`, `list`, `apply` — a bare `git stash` "
-               "is ambiguous.", trees))
-            continue
-        # RESOLVE THE SUBJECT BEFORE REFUSING OVER IT — clause 1 and clause 8's standard,
-        # which this clause did not meet until 2026-09-17. Everything below CONSUMES an
-        # entry that already exists, so an empty stack is a pass: there is nothing on it to
-        # destroy, and git itself answers "No stash entries found." An unreadable stack is
-        # REPORTED rather than passed silently, per this guard's non-vacuity line.
-        entries = _stash_entries(where)
-        if entries is None:
-            notes.append("`{0}` — this guard could not read the stash stack, so it has no "
-                         "opinion about it".format(text))
-            continue
-        if not entries:
-            continue
-        if sub in _STASH_ALWAYS:
-            if sub == "pop":
-                why = [
-                    "      `git stash pop` applies AND drops an entry in one atomic step —",
-                    "      even a named one has no window to confirm the apply was right",
-                    "      before the entry that would undo it is gone.",
-                ]
-            else:
-                why = [
-                    "      `git stash clear` destroys EVERY entry on the shared stack at",
-                    "      once, including every other session's, and takes no target to",
-                    "      narrow it.",
-                ]
-            refusals.append(_stash_refusal(
-                text, why, "BLOCKED: this consumes or destroys a stash entry no caller here "
-                          "identified.", trees))
-            continue
-        if sub == "drop":
-            operand = [token for token in rest[1:] if not token.startswith("-")]
-            if not operand:
-                refusals.append(_stash_refusal(text, [
-                    "      no entry is named, so this drops `stash@{0}` — the top of a",
-                    "      stack every worktree in this clone shares.",
-                ], "BLOCKED: this consumes or destroys a stash entry no caller here "
-                   "identified.", trees))
-    return Verdict(refusals, notes)
-
-
-# --------------------------------------------------------------- 8. a hard-family reset
-
-_RESET_DISCARDING_MODES = {"--hard", "--merge", "--keep"}
-
-
-def _reset_refusal(text: str, mode: str, changed: List[Tuple[str, str]]) -> Refusal:
-    lines = ["  {0}".format(text)]
-    for path, status in changed[:8]:
-        lines.append("      {0} is {1}".format(path, _porcelain(status)))
-    if len(changed) > 8:
-        lines.append("      and {0} more".format(len(changed) - 8))
-    lines.extend([
-        "",
-        "  `reset {0}` overwrites the index AND the working tree from a commit, with no".format(
-            mode),
-        "  confirmation and no record of what it overwrote — `git checkout <path>`'s own",
-        "  shape (rank 1 above) one register up: the whole tree instead of one file.",
-        "",
-        "  Mutation-test with a copy instead, which cannot reach anything you did not copy:",
-        "      cp path/to/file.py path/to/file.py.bak    # before the mutation",
-        "      cp path/to/file.py.bak path/to/file.py     # restore it after",
-        "  Commit first when the work is real: `reset --hard` over a clean tree destroys",
-        "  nothing, because there is nothing uncommitted left for it to overwrite.",
-        "",
-        "  NOTE: `scripts/githooks/reference-transaction` already refuses this shape when it",
-        "  would MOVE A PROTECTED REF (`main`) — that hook and this clause see different",
-        "  halves: the ref hook guards which commit a branch points at, this guards the",
-        "  uncommitted work in the tree standing on it, and a reset can lose the second",
-        "  while never touching the first.",
-    ])
-    return Refusal("reset", lines,
-                   "BLOCKED: this would discard uncommitted work, and git will not ask first.")
-
-
-def clause_reset(reading: "shell_parse.Reading", cwd: str) -> Verdict:
-    """`git reset --hard`/`--merge`/`--keep` over a dirty tree, refused; everything else passes.
-
-    THE RULING THE MODULE DOCSTRING ASKS FOR. A path-form reset — `git reset [<commit>] --
-    <paths>...` — is NEVER refused, and that is not a gap: git itself refuses to combine a
-    pathspec with `--hard`/`--merge`/`--keep` ("fatal: Cannot do hard reset with paths."), so
-    the only mode a pathspec can ever reach is the mixed/soft one, which touches the INDEX
-    and never the working tree. Unstaging a file cannot discard its content — the content on
-    disk is exactly what it was before the command ran — so there is no discarding path-form
-    case for this clause to catch, and every path-form shape below is pinned as PASSING for
-    that reason rather than left untested. A bare `git reset` (no mode, no paths) is the same
-    mixed default and passes the same way; `--soft` never touches the working tree either.
-
-    So the whole predicate is: one of the three discarding modes, over a tree `git status`
-    says is not clean. Untracked files are excluded on purpose — `--hard` never touches them
-    (that is `git clean`'s job, not this clause's), and counting them would refuse a `--hard`
-    that discards nothing.
-    """
-    refusals: List[Refusal] = []
-    notes: List[str] = []
-    for placed in reading.placed:
-        argv = shell_parse.strip_prefixes(placed.stage.argv)
-        verb, rest = shell_parse.git_verb(argv)
-        if verb != "reset":
-            continue
-        where = shell_parse.git_cwd(argv) or cwd
-        if not os.path.isdir(where):
-            notes.append("`{0}` names a directory this guard cannot read, so it has no "
-                         "opinion about it".format(shell_parse.short(placed.stage.text)))
-            continue
-        mode = next((token for token in rest if token in _RESET_DISCARDING_MODES), "")
-        if not mode:
-            continue                       # soft/mixed, or a path-form reset: nothing to lose
-        changed = _modified([], where)
-        if not changed:
-            continue                       # a genuinely clean tree: nothing to lose either
-        refusals.append(_reset_refusal(shell_parse.short(placed.stage.text), mode, changed))
-    return Verdict(refusals, notes)
-
-
 # ------------------------------------------------ 9. a narrated wait with nobody watching it
 #
 # `make merge` pushes a claim commit (when a record is pending) and then waits for the checks, which take four
@@ -1710,8 +1204,7 @@ def clause_narrate(reading: "shell_parse.Reading") -> Verdict:
 #: THE RECOVERY LEVERS: the hatches an agent may still set, because each one frees a stuck
 #: session (a wedged process, a held lock, a main that will not sync). Every other
 #: `BANCHI_*=off` is the owner's to set, from the owner's terminal, never from a tool call.
-RECOVERY_LEVERS = frozenset({"BANCHI_KILL", "BANCHI_SUITE_LOCK", "BANCHI_SERVE_MAIN",
-                             "BANCHI_SYNC"})
+RECOVERY_LEVERS = frozenset({"BANCHI_SUITE_LOCK", "BANCHI_SERVE_MAIN", "BANCHI_SYNC"})
 OWNER_ONLY = "owner-only: ask the owner to run this command"
 
 
@@ -1755,12 +1248,9 @@ def read_command(command: str, cwd: str, backgrounded: bool = False) -> Verdict:
     notes: List[str] = []
     root = checkout_root(cwd)
     for clause, verdict in (
-        ("checkout", lambda: clause_checkout(reading, cwd)),
         ("tree", lambda: clause_tree_bash(reading, cwd, root)),
         ("wait", lambda: clause_wait(reading, command, cwd, backgrounded)),
         ("push", lambda: clause_push(reading, cwd)),
-        ("stash", lambda: clause_stash(reading, cwd)),
-        ("reset", lambda: clause_reset(reading, cwd)),
         ("narrate", lambda: clause_narrate(reading)),
     ):
         if _off(clause, command):
@@ -1793,7 +1283,7 @@ def render(refusals: Sequence[Refusal]) -> str:
 def hook(payload: dict, owner_only: bool = True) -> int:
     """The PreToolUse hook. Exit 2 blocks the call and hands stderr to the session.
 
-    IT FAILS OPEN ON ITS OWN BUGS. `reap.py:hook`'s docstring is the contract and it is not
+    IT FAILS OPEN ON ITS OWN BUGS. D127's standard (the retired `reap.py` hook) is the contract and it is not
     negotiable here: a guard that blocks every shell command when its parser throws is a
     guard somebody switches off inside a day, and a switched-off guard protects nothing.
     """
@@ -1842,7 +1332,7 @@ def explain(command: str, write: str, cwd: str) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="guard-shell",
-        description="Refuse seven shell mistakes this repo has already paid for.",
+        description="Refuse four shell mistakes this repo has already paid for.",
     )
     parser.add_argument("--hook", action="store_true",
                         help="run as a PreToolUse hook; reads the payload on stdin")
