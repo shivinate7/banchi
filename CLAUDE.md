@@ -31,6 +31,7 @@ name. Fixtures are never modified.
 `make help` lists every target. `make help ARGS=<target>` prints that target's whole Makefile comment: its flags, what it
 writes, what it costs. `make explain` lists what `make check` runs, and `ARGS=<target>` says what one row is worth.
 `./banchi <command> --help` does the same for the CLI. `make map ARGS=<package|path|D<n>|--stale|--decisions>` reads `docs/map.py`.
+`make map-check` holds `docs/map/`, the plain-English map of the code, in step with the code (config in `map.config.json`).
 
 - **Ask the owner before `make up`, `make down`, `make up ARGS=--restart` or `make restart-now`, and name the reason.**
   The capture server is threaded and holds the owner's live store (`.claude/rules/server.md`).
@@ -81,8 +82,8 @@ whole repo:
   reading from a guess. The drop half is `harness/tests/t3_join_coverage.py`.
 - **Report unmatched rows in both directions before you write output.** `harness/tests/t3_join_coverage.py` enforces it.
 - **Scope is argued, not gated.** New surface needs a reason, written into the decision that owns it.
-  The `repo map` row of `make docs-audit` fails a file with no map entry.
-  Its `decision ids` row fails an id with no entry.
+  `make map-check` fails a tracked code file under `map.config.json`'s `mapPaths` with no `docs/map/` line.
+  The `decision ids` row of `make docs-audit` fails an id with no entry.
 - **Parent rule `building-fix-cause-not-symptom` (root cause first) applies.** `make map ARGS=<path>` and `scripts/decision-context.py` find an existing primitive.
   A stopgap's commit says so, and its cause goes in `docs/debts/`.
   **NOT MECHANIZED:** a machine cannot read whether the author knew the cause and chose the symptom.
@@ -158,8 +159,11 @@ and shiv-stylisms `reports-blockquote-no-fence` (report shape). No task restatem
 
 ## Map
 
+- `docs/map/` is the plain-English map of the code: one file per area, one line per code file, a trace page per
+  screen. Read it before you answer how code works. `make map-check` holds it in sync with the code; the
+  `plain-english-map` skill says how to change it. `map.config.json` holds its repository settings.
 - `docs/map.py` is the repo as data: built, TBD, and the decisions that govern each file. Read it through `make map`,
-  never whole (parent rule `tokens-never-load-whole-doc`, read in sections). `make docs-audit` fails a file with no entry.
+  never whole (parent rule `tokens-never-load-whole-doc`, read in sections). The `map data` row of `make docs-audit` checks its claims, never which files it lists.
 - Build order is `SHIPPED` and `OPEN` (D80, a section with no reader). `n` is a stable id.
 - `docs/agent-traps.md` holds the tool and test traps that produced a false green or a lost tree. Read it before a mutation run or a worktree recovery.
 - `docs/decisions/` holds settled decisions, one file each (parent rule `git-record-own-file-per-kind`, own file per record). It is never `@`-loaded (D60, the @-loaded docs are dense).

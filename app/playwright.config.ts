@@ -64,7 +64,7 @@ export default defineConfig({
   // fail to render at all rather than slowly: with the allowance raised to 120s, 10 of 80
   // still failed and one took 122s. A wait cannot answer that, and that load is 4x
   // oversubscription — the rig's `make design-check` runs 7 workers; the runner runs
-  // `--workers=2` per shard (`.github/workflows/check.yml`). See docs/debts/.
+  // `--workers=2` per shard (`.github/workflows/checks.yml`). See docs/debts/.
   expect: { timeout: 15_000 },
   use: {
     baseURL: DEV_URL,
@@ -89,7 +89,7 @@ export default defineConfig({
     locale: 'en-US',
 
     /* A FAILURE ON THE RUNNER LEAVES A TRACE, BECAUSE UNTIL 2026-09-11 IT LEFT NOTHING. The one-test
-       red on `.github/workflows/check.yml`'s `design-check` job recurs about one run in ten, on a
+       red on `.github/workflows/checks.yml`'s `design-check` job recurs about one run in ten, on a
        Mac it has never once reproduced (40 of 40 under a 6x CPU throttle, the lever D128 used), and
        every instance so far was diagnosed from the reporter's four lines — locator, expected,
        received, line — because the job uploaded nothing. Playwright writes an ARIA snapshot beside

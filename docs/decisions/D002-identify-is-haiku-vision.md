@@ -20,7 +20,7 @@ Haiku's answer is never saved on its own. It goes to the review queue with the p
 
 **TCGplayer Scan & Identify was evaluated and rejected as a pipeline component.** It is UI-only with no API contract. It inserts a manual browser step into an autonomous flow. It does not guarantee a per-image mapping to position. It couples identification to one platform. No integration code is written, ever.
 
-**It is also not a precondition for anything.** A sub-floor T1 is worked directly. Scan & Identify is parked in the Someday list as an optional reference point. It answers one question: is the task hard, or is our prompt weak?
+**It is also not a precondition for anything.** A sub-floor T1 is worked directly. Comparing T1 with Scan & Identify is DEBT63 (T1 never compared with Scan & Identify), an optional reference point. It answers one question: is the task hard, or is our prompt weak?
 
 **Perceptual hashing stays rejected as an engine.** Measured on 500 real photographs, a 256-bit perceptual hash ranks the right card first for 51% of them. The matcher does so for 99%. Nothing here adds a hash layer (DEBT66, no perceptual-hash cross-check).
 

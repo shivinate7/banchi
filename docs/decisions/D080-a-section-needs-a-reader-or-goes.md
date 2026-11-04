@@ -1,6 +1,6 @@
 # D80 — A section needs a reader or goes
 
-**The map was never stale in the part anybody checked. That is the finding.** `docs/map.py` took 75 commits in one day. `git blame` on the map's own lines for each of its 155 module entries, against that file's last commit, gives this result. **142 of 155 entries were written at or after the file they describe last moved.** The worst gap was 17 days. The `repo map` row was green throughout, at 166 entries. No other prose in this repo is maintained that well.
+**The map was never stale in the part anybody checked. That is the finding.** `docs/map.py` took 75 commits in one day. `git blame` on the map's own lines for each of its 155 module entries, against that file's last commit, gives this result. **142 of 155 entries were written at or after the file they describe last moved.** The worst gap was 17 days. The map's audit was green throughout, at 166 entries. No other prose in this repo is maintained that well.
 
 **What went wrong was everything the map says about itself. It matches having no reader.**
 

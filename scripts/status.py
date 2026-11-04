@@ -5,7 +5,7 @@ Written for one case: you step away, forget where you were, come back and need t
 oriented without reading four files and running the harness.
 
 NOTHING HERE IS A FACT ABOUT THE PROJECT. Every value is read at run time from a source
-that something else already enforces — `docs/map.py` by the audit's repo-map check, the T1
+that something else already enforces — `docs/map.py` by the audit's `map data` row, the T1
 score by the test that writes it, the branch by git. If the map says step 6, this says
 step 6.
 There is no second place to update, which is the whole reason this file is worth having
@@ -588,7 +588,7 @@ def blind_spots(mapdata: Dict[str, object]) -> List[str]:
     """From structured fields, never from prose.
 
     The T1 caveat is written into the score file by the test itself; the T6 caveat is the
-    `note` on the map's geometry entry, which the repo-map check audits. Rewording
+    `note` on the map's geometry entry, which the `map data` row audits. Rewording
     docs/GATES.md cannot break either one.
     """
     notes: List[str] = []

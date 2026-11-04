@@ -6,6 +6,6 @@
 - **`:not([data-rail='true'])` is not the mechanism.** The attribute lies between 768 and 1023. There `App.css` rails the shell by media query. It costs every declaration twice. It hardcodes the 172px delta. `ReviewQueue.css` keeps its pattern only because `container-type` would capture its `position: fixed` sheet.
 - **The vocabulary is enforceable.** A `min-width` is the step and a `max-width` is the step minus one. `@media` and `@container` are separate namespaces, since a 640px pane and a 640px window are different quantities. `docs/DESIGN.md` carries the register. `make docs-audit`'s `breakpoints` row is mechanical (an integer against an integer). `breakpoint columns` is advisory, because whether a `min-width` asks the wrong question depends on what the rule does.
 - **Not a defect:** `app/src/Fulfillment.css` reads `--bn-control-h*` zero times, and no control there is under 44px (the shortest is 60px). Coupling his contractual floors to a token would check nothing.
-- **The caps have a re-checker.** `wide.spec.ts` runs in `make design-check`. `.github/workflows/check.yml` runs that suite as a second job. It checks D50's floors, D117's thumb floor, D118's stability floor and the Fulfiller's constraints.
+- **The caps have a re-checker.** `wide.spec.ts` runs in `make design-check`. `.github/workflows/checks.yml` runs that suite as a second job. It checks D50's floors, D117's thumb floor, D118's stability floor and the Fulfiller's constraints.
 
 Reopen for a screen that needs more than 1536px of content, or an operator who wants the density lever.

@@ -66,4 +66,4 @@ Automatic rather than a command, unlike D86's `prices adopt`. There is no decisi
 
 **The whole-store read is still O(cards)**, and `GET /inventory` at 100,000 cards is ~1 s. That route is polled. The honest fix when it bites is a box-scoped read, which the `cards` table's index already supports.
 
-**What would reopen this: a second writer that is not this process.** The flock and the WAL both assume one machine and a local filesystem. That is the assumption the NAS entry under Someday already refuses to break. SQLite over a network filesystem is the classic way to corrupt one.
+**What would reopen this: a second writer that is not this process.** The flock and the WAL both assume one machine and a local filesystem. That is the assumption a store on a NAS would break. SQLite over a network filesystem is the classic way to corrupt one.

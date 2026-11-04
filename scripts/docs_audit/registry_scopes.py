@@ -67,10 +67,10 @@ CHECK_ENTRY_KEYS = (
 # The one entry no shard runs: its own required CI job does. Any other None is a silent CI gap.
 SHARDLESS = ("revert-guard",)
 
-# The parallel shards `.github/workflows/check.yml` runs in place of one `make ci-check`.
+# The parallel shards `.github/workflows/checks.yml` runs in place of one `make ci-check`.
 # A registry entry's `shard` names one of these (without the `ci-check-` prefix), or is None.
 CI_SHARD_RULES = ("ci-check-product", "ci-check-product-2", "ci-check-product-3", "ci-check-static", "ci-check-guards-1", "ci-check-guards-2")
-CHECK_WORKFLOW = ROOT / ".github" / "workflows" / "check.yml"
+CHECK_WORKFLOW = ROOT / ".github" / "workflows" / "checks.yml"
 
 
 # The marker a non-gating target's recipe has to print, so a reader of a green `make check`
@@ -231,13 +231,13 @@ def _scan_shard_steps(workflow: str) -> Tuple[Set[str], List[str]]:
 
 
 def workflow_step_problems(workflow: str) -> List[str]:
-    """What is wrong with a shard step in `check.yml`: not the counted-skip shape, or in a step or
+    """What is wrong with a shard step in `checks.yml`: not the counted-skip shape, or in a step or
     job that can end a red run green. See SKIP_COUNT_STEP."""
     return _scan_shard_steps(workflow)[1]
 
 
 def workflow_shards(workflow: str) -> Set[str]:
-    """The shards `check.yml` runs: the matrix targets, and each job that runs one as a
+    """The shards `checks.yml` runs: the matrix targets, and each job that runs one as a
     `make ci-check-*` step of the exact counted-skip shape (`workflow_step_problems` names the
     rest). A commented line is not a run."""
     live = "\n".join(ln for ln in workflow.splitlines() if not ln.lstrip().startswith("#"))
@@ -258,7 +258,7 @@ def _check_registry() -> Row:
       - every entry's target is a rule in the Makefile, so a typo is a finding here and not a
         `make` error on the runner;
       - every `shard` is None or one of CI_SHARD_RULES, every shard has an entry (a shard
-        with none fails its job), and `check.yml`'s matrix lists exactly those shards;
+        with none fails its job), and `checks.yml`'s matrix lists exactly those shards;
       - a slot that cannot fail (`gates: False`) says so in its recipe, in both directions.
     """
     loaded = _checks_registry()
@@ -311,7 +311,7 @@ def _check_registry() -> Row:
     for rule in CI_SHARD_RULES:
         if rule not in rules:
             findings.append(Finding("Makefile", (
-                "has no `{0}` rule, and `check.yml` runs it as a shard."
+                "has no `{0}` rule, and `checks.yml` runs it as a shard."
             ).format(rule)))
     # The harness slices: harness/run.py's PARTS and the `harness-K` entries must agree, or a
     # slice of T7 runs in no shard (or twice).
@@ -1017,7 +1017,7 @@ def check_suite_lock(report: Report) -> None:
 
 # ------------------------------------------------------------ the browser matrix's scope
 #
-# `.github/workflows/check.yml` runs its browser matrix on a pull request only when the change
+# `.github/workflows/checks.yml` runs its browser matrix on a pull request only when the change
 # touches a path `scripts/browser-scope.py:SCOPE` names (D141). A path filter is the one gate
 # whose failure is INVISIBLE: too narrow, and the matrix stops running for a class of change,
 # the run is green because it never happened, and the green is believed. That is the armed
@@ -1048,7 +1048,7 @@ BROWSER_SCOPE_SCRIPT = ROOT / "scripts" / "browser-scope.py"
 SERVE_SCOPE_SCRIPT = ROOT / "scripts" / "serve-scope.py"
 SERVE_SELFTEST_SCRIPT = ROOT / "scripts" / "serve-selftest.py"
 GUARD_SCOPE_SCRIPT = ROOT / "scripts" / "guard-scope.py"
-CHECK_WORKFLOW = ROOT / ".github" / "workflows" / "check.yml"
+CHECK_WORKFLOW = ROOT / ".github" / "workflows" / "checks.yml"
 PLAYWRIGHT_CONFIG = ROOT / "app" / "playwright.config.ts"
 VITE_CONFIG = ROOT / "app" / "vite.config.ts"
 APP_DIR = ROOT / "app"
@@ -1288,7 +1288,7 @@ def check_browser_scope(report: Report) -> None:
     if not exists(BROWSER_SCOPE_SCRIPT):
         report.add("browser scope", MECHANICAL, [Finding(
             rel(BROWSER_SCOPE_SCRIPT),
-            "does not exist, and `.github/workflows/check.yml` gates its browser matrix on it.")])
+            "does not exist, and `.github/workflows/checks.yml` gates its browser matrix on it.")])
         return
     if not exists(CHECK_WORKFLOW):
         report.add("browser scope", MECHANICAL, [Finding(
@@ -1580,7 +1580,7 @@ def _rollup_step(job: List[str]) -> Tuple[Optional[str], List[str]]:
 def all_jobs_passed_findings(files: Dict[str, str], stamp: Optional[str],
                              excluded: Optional[Dict[str, str]] = None) -> List[Tuple[str, str]]:
     """The required check's wiring, as (where, message) pairs. `files` maps each workflow's
-    repo-relative path to its text, and must hold `check.yml`; `stamp` is the text of the stamp
+    repo-relative path to its text, and must hold `checks.yml`; `stamp` is the text of the stamp
     config or None. Pure, so `--self-test` can mutate one defect at a time."""
     excluded = EXCLUDED if excluded is None else excluded
     out: List[Tuple[str, str]] = []
@@ -1731,7 +1731,7 @@ def _stamp_findings(stamp: Optional[str]) -> List[Tuple[str, str]]:
 
 
 def check_all_jobs_passed(report: Report) -> None:
-    """`check.yml`'s rollup against its jobs, its pin and the stamp config (claude-settings
+    """`checks.yml`'s rollup against its jobs, its pin and the stamp config (claude-settings
     decision same-check-kinds).
 
     MECHANICAL: a job missing from `needs`, a needed job with a skipping `if:` and a second pin are

@@ -78,8 +78,10 @@
     "111-palette-focus-red.md",
     "112-request-budget-leave.md",
     "113-single-reds-on-main.md",
-    "114-waiting-scan-misses.md",
     "115-new-copy-tick-keyed-by-sku.md",
-    "116-past-cap-tick-ignores-source.md"
+    "116-past-cap-tick-ignores-source.md",
+    "117-markdown-r-key-no-test.md",
+    "118-commit-hook-skips-map-check.md",
+    "119-stale-cache-fault-looks-like-id.md"
   ]
 }

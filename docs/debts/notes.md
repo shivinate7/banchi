@@ -20,7 +20,7 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - The T7 contract's `Pass` line must equal `PASS_CRITERIA` in `harness/tests/t7_store_and_seams.py`, and that string runs 36 words. The line carries an `ste-disable-next-line STE001` comment. Shorten the string, then the line, and drop the comment.
 - No `scope` job: scope lives in make targets, env vars and the browser-scope job, and skips at steps; a restructure is lane-sized.
 - `registry_scopes._scan_shard_steps` (and main's `workflow_shards` before it) read a shard target named after the word make anywhere in a `run:` block, so a `cd app` line that runs one, or an echo that names one, is read as a shard step. No such step exists now.
-- `.github/workflows/check.yml`: the "Image matches" step compares the Playwright image tag only, not its digest. A wrong digest fails loudly at browser launch.
+- `.github/workflows/checks.yml`: the "Image matches" step compares the Playwright image tag only, not its digest. A wrong digest fails loudly at browser launch.
 - `labels_guards.check_labels_answer_write_once` fails the label answer write once, and `shipping_routes._make_one`'s second try absorbs it, so no red check covers an answer held in `_HELD` after two failed writes. A reviewer probe proved that path.
 - `pipeline/rosterholdings.py`'s `read_roster`: a bad roster row that spans lines is named by its last line, a missing header column gets an error with no line, and an amount of `-0` reads as `Decimal('-0')`.
 - `pipeline/rosterholdings.py` has its own `SkuRow`, beside `store/skus.py`'s; the totals line shows one price date, the newest, so an older price on another line is not shown.
@@ -39,6 +39,15 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - `pipeline/rosterholdings.py`'s `build_roster_report`: a product id whose archive SKUs are only partly in `skus` prices from the ones present, so a foil line can take a non-foil price. `no_sku_row` covers only all-missing. `skus` has no delete path today.
 - `pipeline/rosterholdings.py`'s `_id_of` reads ids with `int()`, so `09001` and `+9001` become separate rows. Roster ids are plain integers today.
 - `#/pricing` Now column: its width comes from a hidden "Now $9,999.99" in each row, so a live price of $10,000 or more widens only its own row (about 7px at $12,345), and that row's Market column drifts left. Nothing clips.
+- `map.config.json`'s `mapPaths` lists `harness/run.py` only, so `make map-check` does not refuse a new top-level `harness/<x>.py`; main's flat scan did.
+- On the GitHub macOS runner `socket.getfqdn` hangs, so a plain `python3 -m http.server` never listens. Banchi's bind no longer calls it (`CaptureServer.server_bind`). Outside banchi, bind with `socketserver.TCPServer.server_bind` or expect the same hang.
+- `scripts/worktree-create.sh`'s `take_lock`: a takeover that loses the rename puts no lock back. This is the put-back gap from PR #1033 (the worktree lock).
+- `scripts/worktree-create.sh`'s `lock_is_stale`: a reused pid makes a dead holder read as live, so a waiter sits until the lock wait limit runs out.
+- `scripts/worktree-create.sh`: the re-entry `git worktree list` read runs outside the lock.
+- `app/src/CaptureScreen.tsx` `capture-undo-far` (PR #1038, the flat rail): a far tile woken by scroll shows its trash button one frame late.
+- `app/src/CaptureScreen.tsx` `capture-undo-far`: a far tile woken while its write is still in flight shows the drop button enabled.
+- `app/tests/stability.spec.ts`'s case S17 (web fonts): flaky in the cloud container, 7 of 25 runs on main. Not seen in CI.
+- The claude-settings code-check comment rule flags `owner's ruling` in a code comment as history narration. This is a false alarm owned by claude-settings, not banchi.
 - `docs_audit.paths_commands`'s `_commented_targets` counts a banner comment above a target (a comment that describes a block of targets) as that target's own, so a target with no description of its own can pass `commands roster`. `make help` would print the banner for it.
 - `docs_audit.status_reach`'s `model_disagreement` compares only the first "Batch API ... Model:" line in CLAUDE.md and the rule files joined, so a second, stale copy of that line in another rule file passes `paid-read model`.
 - Lane banchi-waiting-data-home: the auto-mode classifier refused `Bash` for a `git push --force-with-lease --force-if-includes` of a rebased lane branch, so the lane pushed the rebase under a new branch name (`-r2`) instead.

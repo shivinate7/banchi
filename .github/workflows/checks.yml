@@ -102,7 +102,7 @@
 # IT GATES AND NOTHING ELSE. No commit, no branch move, no publish — D42 keeps main moving by
 # pull request only, and a workflow that wrote would be a second way. It reads the repo.
 
-name: check
+name: checks
 
 on:
   # A draft runs no job at all (each job's `if` skips it); `ready_for_review` starts the full run when the person marks it ready.
@@ -140,7 +140,7 @@ permissions:
 # main, a nightly and a manual run each get a group of their own (the run id), so a second
 # merge can neither cancel the first one's verdict nor replace it while it waits.
 concurrency:
-  group: check-${{ github.event_name == 'pull_request' && format('{0}-{1}', github.ref, github.event.pull_request.draft) || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('{0}-{1}', github.ref, github.event.pull_request.draft) || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -227,6 +227,8 @@ jobs:
         env:
           BANCHI_GUARD_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
           BANCHI_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
+          # Only `serve-selftest` reads this, and `scripts/checks.py` files it in guards-2: it turns on its real `vite build` arm.
+          BANCHI_SERVE_REAL_BUILD: ${{ matrix.target == 'ci-check-guards-2' && '1' || '' }}
           TARGET: ${{ matrix.target }}
         # A SKIP SHOWS AND NEVER FAILS. The shard's own exit code is kept (`rc`). The count reads the
         # markers the tools already print (`scripts/ci-skip-count.sh` is the one home of the reader).
@@ -306,6 +308,30 @@ jobs:
           print('FTS5 is available.')
           "
 
+      # THE MAP CHECK'S SKILL COMES FROM THE PINNED claude-settings, never a second pin
+      # (`make map-check`, `scripts/map-check.py`). The runner downloads the whole pinned
+      # repository for every `uses:` line of a job before any step runs, an `if: false` step
+      # included, and the `all jobs passed` row reads this line with every other pin. The
+      # step below finds that download and runs `npm ci` in it, because the skill loads
+      # `typescript` from the `node_modules` beside it. It names no sha: a glob that finds
+      # not exactly one pinned copy fails.
+      - name: Download the pinned claude-settings for the map check
+        if: false
+        uses: shivinate7/claude-settings/actions/ci-alarm@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
+
+      - name: Install the map check's skill from the pinned claude-settings
+        run: |
+          set -eu
+          cached="$(dirname "$RUNNER_WORKSPACE")/_actions/shivinate7/claude-settings"
+          set -- "$cached"/*/
+          if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
+            echo "expected exactly one pinned claude-settings under $cached, found: $*" >&2
+            exit 1
+          fi
+          root="${1%/}"
+          npm ci --prefix "$root" --ignore-scripts
+          echo "CLAUDE_SETTINGS_DIR=$root" >> "$GITHUB_ENV"
+
       # A schedule or a dispatch runs every self-test: the two path gates answer "run" on
       # their own hatches, which is what those hatches are for. A PR keeps its scope.
       - name: make ci-check-static
@@ -334,12 +360,12 @@ jobs:
   # recorder that skips on purpose), `nightly-alarm` (a reporter that skips unless something
   # failed) and `ci-done` (the last job; it reads the rollup's needs and reports a red run).
   all-jobs-passed:
-    needs: [ci-check, ci-static, revert-guard, records, code-check, zizmor, already-passed, browser-scope, design-check]
+    needs: [ci-check, ci-static, revert-guard, records, checks, zizmor, already-passed, browser-scope, design-check]
     if: ${{ always() && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: shivinate7/claude-settings/actions/all-jobs-passed@49a41651a3f8182b211db3b1a4596933ca4eca58 # main, 2026-11-01
+      - uses: shivinate7/claude-settings/actions/all-jobs-passed@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
         with:
           needs: ${{ toJSON(needs) }}
 
@@ -381,7 +407,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: shivinate7/claude-settings/actions/stamp@49a41651a3f8182b211db3b1a4596933ca4eca58 # main, 2026-11-01
+      - uses: shivinate7/claude-settings/actions/stamp@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
         with:
           mode: check
           config: .github/stamp.json
@@ -397,7 +423,7 @@ jobs:
   # merge through `all-jobs-passed`, which lists it in `needs` and fails unless it succeeded, the
   # same way `records` does.
   # `npm ci` because tsc reads app/'s types from app/node_modules.
-  code-check:
+  checks:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 9
@@ -420,10 +446,11 @@ jobs:
       - name: Install
         run: npm ci --prefix app
 
-      - uses: shivinate7/claude-settings/actions/code-check@49a41651a3f8182b211db3b1a4596933ca4eca58 # main, 2026-11-01
+      - uses: shivinate7/claude-settings/actions/code-check@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
         with:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
+  # zizmor stays its own job: ci-job cannot read its step `if: steps.changed.outputs.run == 'true'`, so folding it into `checks` would make the lint unknown.
   # THE WORKFLOWS' OWN LINT. zizmor reads `.github/workflows/` and `.github/dependabot.yml` for unpinned actions, persisted
   # checkout tokens, template injection and over-broad permissions. Pinned to one version so a
   # release cannot turn this red on its own. It is a needed job of `all-jobs-passed`, so a red
@@ -615,7 +642,7 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: |
           pin="$(node -p "require('./app/package.json').devDependencies['@playwright/test']")"
-          tag="$(grep -oE 'mcr.microsoft.com/playwright:v[0-9.]+' .github/workflows/check.yml | head -1 | sed 's/.*:v//')"
+          tag="$(grep -oE 'mcr.microsoft.com/playwright:v[0-9.]+' .github/workflows/checks.yml | head -1 | sed 's/.*:v//')"
           if [ "$pin" != "$tag" ]; then
             echo "image is Playwright $tag but app/package.json pins $pin: move them together" >&2
             exit 1
@@ -748,7 +775,7 @@ jobs:
   # a week of red nights is one issue and not seven. `issues: write` is the whole grant: the
   # job checks nothing out and reads its verdict from `needs`. A skipped job is not a failure.
   nightly-alarm:
-    needs: [ci-check, ci-static, revert-guard, zizmor, design-check, records, code-check]
+    needs: [ci-check, ci-static, revert-guard, zizmor, design-check, records, checks]
     if: ${{ always() && !github.event.pull_request.draft && (github.event_name == 'schedule' || inputs.report_failure) && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -780,7 +807,7 @@ jobs:
   # cancelled and posts nothing. The action is pinned to the same commit as every other
   # claude-settings action here (the `all jobs passed` row of `make docs-audit` holds that).
   ci-done:
-    needs: [ci-check, ci-static, revert-guard, records, code-check, zizmor, already-passed, browser-scope, design-check, design-check-passed, all-jobs-passed, nightly-alarm]
+    needs: [ci-check, ci-static, revert-guard, records, checks, zizmor, already-passed, browser-scope, design-check, design-check-passed, all-jobs-passed, nightly-alarm]
     if: ${{ !cancelled() && github.event_name == 'pull_request' && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 2   # provisional: a comment post takes seconds; 60 would pass the merge deadline of 45
@@ -788,6 +815,6 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: shivinate7/claude-settings/actions/ci-done-comment@49a41651a3f8182b211db3b1a4596933ca4eca58 # main, 2026-11-01
+      - uses: shivinate7/claude-settings/actions/ci-done-comment@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
         with:
           needs: ${{ toJSON(needs) }}

@@ -4,7 +4,7 @@
 
 ### The five files, and the two that were nearly broken with them
 
-Wrong, all citing section 11 for the one-in-thirteen `design-check` flake, which is section 8's: `CLAUDE.md` line 174, `Makefile` line 835, `.github/workflows/check.yml` lines 81 and 246, and the old decisions file lines 9522 and 9553 (D136) and 10084 (D141).
+Wrong, all citing section 11 for the one-in-thirteen `design-check` flake, which is section 8's: `CLAUDE.md` line 174, `Makefile` line 835, `.github/workflows/checks.yml` lines 81 and 246, and the old decisions file lines 9522 and 9553 (D136) and 10084 (D141).
 
 **Nine other sites cite section 11 and are RIGHT** — not merely untouched: every one is about the capture server's concurrency, which is what section 11 is. They are `CLAUDE.md` lines 916 and 932, the old decisions file line 6111, `docs/map.py` line 2483, `harness/tests/t7_store_and_seams.py` line 21593, `scripts/docs-audit.py` lines 2456 and 2509, `scripts/serve.py` line 1393, and `server/capture_server.py` lines 10196 and 11049. **A blanket find-and-replace would have broken nine to fix seven**, and not one of the nine quotes anything distinctive, so nothing in the text separates them from the wrong ones. The repair was per-site and subject-checked.
 
@@ -34,7 +34,7 @@ A row would have to decide what a sentence is ABOUT. The nearest mechanical prox
 
 ### A probe that cannot express a failure is the purest form of this
 
-**This entry's own verification had the defect the entry is about, and it took two rounds to see.** The first probe read `r['name']` and `r['status']` where `scripts/docs-audit.py --json` emits `label`, `severity` and `findings`. Every row therefore read as ok, the audit was reported clean three times, and the reading was worth nothing — `make check`'s exit code was the only real signal in play. Re-running it with the right keys immediately surfaced a genuine `repo map` finding the broken probe had been hiding.
+**This entry's own verification had the defect the entry is about, and it took two rounds to see.** The first probe read `r['name']` and `r['status']` where `scripts/docs-audit.py --json` emits `label`, `severity` and `findings`. Every row therefore read as ok, the audit was reported clean three times, and the reading was worth nothing — `make check`'s exit code was the only real signal in play. Re-running it with the right keys immediately surfaced a genuine finding from the map audit that the broken probe had been hiding.
 
 **That is worse than a check with a gap, and it is the same shape as the five unreadable headings above.** A guard that is too narrow measures something adjacent to what it claims. A probe keyed to fields that do not exist measures NOTHING, and nothing renders as clean — which is why `_debts_section` returning None for an unparseable heading was never a failure anywhere, and why three separate searches for these citations each reported a population smaller than the real one and each read as complete. **A pattern that finds nothing reports nothing, and nothing reads as green.** The countermeasure is the one this repo already applies to its rows and did not apply to a throwaway probe: make it fail once, on purpose, before believing it.
 

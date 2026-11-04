@@ -4,7 +4,7 @@
 
 ### Two routes, because they are two questions at two moments
 
-**Their inputs do not touch.** The order screen reads `inventory/orders.json` and `inventory/inventory.json` through one store snapshot. The shipping screen reads a CSV the operator uploads. That CSV carries no line items. `pipeline/shipping.py:Shipment` says so in its docstring, and the ledger has never seen it. Neither can be derived from the other. One screen would have to explain why half of it went stale when the other half refreshed.
+**Their inputs do not touch.** The order screen reads the order ledger and the cards from `inventory/store.sqlite` through one store snapshot. The shipping screen reads a CSV the operator uploads. That CSV carries no line items. `pipeline/shipping.py:Shipment` says so in its docstring, and the ledger has never seen it. Neither can be derived from the other. One screen would have to explain why half of it went stale when the other half refreshed.
 
 **The build-order plan named this collision and gave two options:**
 
@@ -46,7 +46,7 @@ The lane got its own surface. That is the second option.
 
 **Captured from the owner's logged-in browser.** Request shapes were read from an in-page interceptor. Response schemas were walked with the values discarded. A third-party bridge extension the owner supplied corroborated them. No credential value was read, logged or echoed.
 
-**The order host is a cookie session, not a Bearer challenge.** `order-management-api.tcgplayer.com` authenticates with `credentials: 'include'` and the `TCGAuthTicket_Production` cookie. That is the `.tcgplayer.com` cookie `server/tcg_export.py:_cookie()` already names, so one account session serves both hosts. No `www-authenticate` header appeared on any probed path. The portal's own XHR sets no `Authorization` header. The bridge extension authenticates by cookie alone.
+**The order host is a cookie session, not a Bearer challenge.** `order-management-api.tcgplayer.com` authenticates with `credentials: 'include'` and the `TCGAuthTicket_Production` cookie. That is the `.tcgplayer.com` cookie `server/portal_http.py:read_cookie` already names, so one account session serves both hosts. No `www-authenticate` header appeared on any probed path. The portal's own XHR sets no `Authorization` header. The bridge extension authenticates by cookie alone.
 
 **This repo recorded the opposite in three places and repeated it in a fourth.** They are `server/tcg_export.py`'s docstring, D65's probe table, the build-order plan's exclusion paragraph, and `docs/specs/order-pipeline.md`'s T0. All four are amended in place, not deleted. Sound reasoning that reached a wrong conclusion is worth finding again. D65 treated its own price-history correction the same way.
 

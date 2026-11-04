@@ -38,7 +38,7 @@ The owner hit it on a box sorted by rarity. Some cards carried a set hint. Most 
 
 ### What was deliberately not surfaced beside it
 
-**`--rule` and `--basis` stay off `#/runs`.** D86 makes `decisions.json` the one place a pricing answer is written. `#/pricing` is the press that writes it. `check_pricing_presets` exists because a second place to say `rule` already produced 48 cards about to list at a price nobody had chosen. A third place would repeat that defect.
+**`--rule` and `--basis` stay off `#/runs`.** D86 makes the store's pricing corpus, `inventory/prices.json`, the one place a pricing answer is written. `#/pricing` is the press that writes it. `check_pricing_presets` exists because a second place to say `rule` already produced 48 cards about to list at a price nobody had chosen. A third place would repeat that defect.
 
 **`--review-below-confidence` is surfaced.** It is a routing question, not a pricing one. It is written nowhere else, and it was reachable only from a terminal.
 

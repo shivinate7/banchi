@@ -20,7 +20,7 @@ Six views, because six questions get asked of this file:
                                  the decision index CLAUDE.md used to hand-type (D60)
 
 `--stale` is the one view that reports something no other check in this repo can. The
-repo-map row proves a path exists and that its citations resolve; nothing anywhere asks
+`map data` row proves a path exists and that its citations resolve; nothing anywhere asks
 whether the SENTENCE is still true, because that is not decidable. This gets as close as a
 machine can: `git blame` on the map's own lines against the file's last commit. It ranks
 suspicion and never fails — a note that was written to outlive a refactor is not a defect,
@@ -120,7 +120,7 @@ def entry_path(name: str) -> Optional[Path]:
     trade a working listing order for a working glob.
 
     That sentence deliberately spells no id. Written out, the four ids an unpadded sort
-    mangles read to `make docs-audit`'s `repo map` row as four citations this file does not
+    mangles read to `make docs-audit`'s `map data` row as four citations this file does not
     have, and the row is right to say so — an illustration is not a citation and no checker
     can tell them apart.
 

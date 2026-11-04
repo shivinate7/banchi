@@ -608,7 +608,7 @@ Kept so nobody re-proposes them. A rejected mechanism usually fires on honest wo
 - **A PreToolUse Bash hook that refuses a bare `gh pr merge` without an env marker.** Every measured
   incident went through `make merge` from the wrong tree, so the tree is the subject. Rank 28 fixes it
   there.
-- **A non-empty `governed_by` branch in `check_map`.** Any D number that resolves satisfies it, so
+- **A non-empty `governed_by` branch in `check_map_data`.** Any D number that resolves satisfies it, so
   during a file split the cheapest compliance is pasting the nearest plausible one. It corrupts the
   field `scripts/decision-context.py` reads.
 - **A `sole writer` row that counts import-CSV writers.** A count of one survives substitution. Pin the
@@ -666,7 +666,7 @@ Kept so nobody re-proposes them. A rejected mechanism usually fires on honest wo
   rules surface. They carry at least four imperative rules, of which only the mark's `border-radius`
   rule is in this file.
 - `code-card-fork/CLAUDE.md`, a separate track with its own schema, was unread.
-- The harness modules' `PASS_CRITERIA` strings, `app/tests/`'s specs and the workflows beyond `check.yml`
+- The harness modules' `PASS_CRITERIA` strings, `app/tests/`'s specs and the workflows beyond `checks.yml`
   were sampled or unread. The skills (`tcgplayer-csv`, `docs-audit`) were not opened.
 - The transcript evidence rests on one reader's scan of 389 sessions. Two proposals were declined for want
   of a dry run: the derived deletion-needle table and a "watched counts" row over every published integer.

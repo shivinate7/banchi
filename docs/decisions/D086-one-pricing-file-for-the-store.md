@@ -37,7 +37,7 @@ The policy default is D9's amendment of the same day.
 
 `#/pricing` opens on every run that still has pricing. It merges one SKU across runs into one row, and it writes one answer into the corpus. Built on the owner's instruction. Boxes captured together are priced together. The general form: unprocessed items are processed all at once. The owner also set a boundary: pricing by box must not be lost.
 
-This is D180's resolution one register over, and it overturns nothing. D180 ruled that a send is a cart of boxes and that a run is still one box. A run carries a reading, a `--bypass` ruling and a `decisions.json`. All three are properties of what is in the drawer. The view merges. The file does not. Nothing downstream learns a new shape. D180 protects that property.
+This is D180's resolution one register over, and it overturns nothing. D180 ruled that a send is a cart of boxes and that a run is still one box. The cart design argued that a run carries a reading, a `--bypass` ruling and a `decisions.json`; D180 records that all three supports are gone. The view merges. The file does not. Nothing downstream learns a new shape. D180 protects that property.
 
 The single-select this replaces had no argument for it. The design defends where the run comes from (`GET /pipeline/runs` is the one source) and says nothing about how many runs may be picked. A set over the same source has the same property. D39's one-mass-select rule covers cards, not runs. `#/inventory` keeps the only one.
 
@@ -136,6 +136,10 @@ The earlier text here said the owner's store was unaffected because it held $0.4
 A hold is a stated reason, never a zero price. A suggestion writes nothing until typed.
 
 - A hold is absent from `dispositions()`. `emit` and `prices_for` refuse a run when that mapping names a SKU the batch does not hold. A withheld SKU is the one most likely to go stale. A hold in it would break `emit` for the whole run, with nothing able to clear it.
-- A preset writes `rule` and `basis` and never an override, because an override beats the rule. It prices what it can and names what it could not. `cli/cmd_join.py:PRESETS` and `app/src/Pricing.tsx:PRESETS` agree on key, rule and basis. The `pricing presets` row of `make docs-audit` checks that.
+- A preset writes `rule` and `basis` and never an override, because an override beats the rule. It prices what it can and names what it could not. `pipeline/pricing.py:PRESETS` and `app/src/Pricing.tsx:PRESETS` agree on key, rule and basis. The `pricing presets` row of `make docs-audit` checks that.
 - The active preset chip comes from `rule` and `basis` and is never stored. A remembered chip would name a live rule while the run used another.
 - `withheld` means that this SKU is kept out of the import (`pipeline/decisions.py`). `held` means that copies TCGplayer holds (`store/master.py:Listing.held`), the opposite direction. A box that may not be deleted for a listing is a third thing, `_listing_hold`. Keep the three words apart.
+
+### What is still open
+
+- **Whether the merged view overturns nothing.** "The merged view" says so. D180 records that the three supports for one box per run are gone. Whether the claim still holds without them is not argued. Owner's ruling, Cockpit item 230 b: kept as an open question.

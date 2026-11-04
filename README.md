@@ -14,7 +14,7 @@ reaches no real store ([`docs/specs/demo.md`](docs/specs/demo.md)).
 ## Quick start
 
 You need `make`, `git`, and the Python and Node.js versions that CI pins in
-[`check.yml`](.github/workflows/check.yml).
+[`checks.yml`](.github/workflows/checks.yml).
 
 ```sh
 git clone https://github.com/shivinate7/banchi.git banchi
@@ -26,7 +26,7 @@ cp .env.example .env        # add ANTHROPIC_API_KEY
 make up                     # serve the app; open the link it prints
 ```
 
-[`check.yml`](.github/workflows/check.yml) shows what CI runs from these steps.
+[`checks.yml`](.github/workflows/checks.yml) shows what CI runs from these steps.
 
 ## Usage
 
@@ -82,7 +82,8 @@ make ci-check         # what a fresh clone can prove
 make check            # the whole suite; `make explain` lists it
 ```
 
-[`check.yml`](.github/workflows/check.yml) shows what CI runs.
+[`checks.yml`](.github/workflows/checks.yml) shows what CI runs. [`mac.yml`](.github/workflows/mac.yml)
+runs the product checks on macOS, weekly.
 
 Main moves by pull request only (D42, main moves by pull request). `make docs-audit` checks
 this file against the code: paths, make targets, commands, route table and decision ids.
@@ -92,6 +93,7 @@ Naming follows D94 (Banchi names everything).
 ## More
 
 - [`CLAUDE.md`](CLAUDE.md): the rules agents work by, and the command list.
+- [`docs/map/`](docs/map/): the plain-English map of the code, one line per file. `make map-check` holds it in sync.
 - [`docs/decisions/`](docs/decisions/): each settled decision. `make map ARGS=D<n>` prints one.
 - [`docs/specs/`](docs/specs/): the spec for each feature.
 - [`docs/DESIGN.md`](docs/DESIGN.md): the design tokens.

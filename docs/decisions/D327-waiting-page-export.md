@@ -28,12 +28,9 @@ The writer edits or deletes that item on the page first.
 **NOT MECHANIZED:** a buyer's name with no address beside it. A pattern cannot tell a buyer's name
 from a card's name.
 
-**The shared scan misses shapes banchi's old scan refused.** It refuses tokens and keys of known
-shapes, `Cookie:` headers, auth headers, passwords, email addresses and phone numbers. DEBT114 (the
-waiting-page scan misses address and credential-name shapes) lists what passes it: addresses, a
-`NAME=value` or `name: value` line whose name ends in key, secret, token or cookie and whose value
-has no known token shape, bare cookies, and a bare `Bearer` or `Basic` value. The writer's read
-of the diff is the cover until the shared scan refuses them.
+**The shared scan.** It refuses tokens and keys, credential names set to a value, cookies, auth
+headers, passwords, email addresses, phone numbers and street addresses. A refusal writes nothing.
+The writer fixes the item on the page and reads again.
 
 **Not exported.** `receipts/` (when a session read and filed an answer) and the page's roadmap
 block. The mockups' design data is exported, as `waiting/page/designData.json`. The answers and

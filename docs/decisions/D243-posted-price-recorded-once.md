@@ -12,13 +12,13 @@ built is a day of postings this table will never recover.
 
 **The fix records the price at the moment it is decided, on the paths that decide it.**
 `pipeline/tcgcsv.py`'s `set_writable` is the one function that ever composes a `TCG
-Marketplace Price` cell. It is reached from three places. `pipeline/join.py:import_rows`
+Marketplace Price` cell. Seven call sites reach it. `pipeline/join.py:import_rows`
 serves a single run's `emit`. `pipeline/merge.py:import_rows` serves a merged send's
-`emit`. `pipeline/reprice.py:import_rows` serves `reprice apply`. All three were checked.
-There is no fourth writer. `store/postings.py`'s `Postings.record()` is called once per SKU
+`emit`. `pipeline/reprice.py:import_rows` serves `reprice apply`. All three were checked. The other four are `cli/cmd_emit.py:_price_row` (an emit's price-only rows), `cli/cmd_emit.py:run_prices_only` (a price-only send, recorded through `_record_prices`), `cli/cmd_reprice.py:_write_worklist` (a markdown worklist, which is a proposal and not a posting) and `server/send_routes.py:_master_take_off` (a take-off send).
+`store/postings.py`'s `Postings.record()` is called once per SKU
 at the exact point each caller already decides a row reached a file. That point is
 `cli/cmd_emit.py`'s existing `pushed` gate for both emit paths, and `reprice apply`'s
-`--write` gate for the third. It is never earlier, and never for a price only proposed.
+`--write` gate for the third. It is never earlier, and never for a price only proposed. `_master_take_off` calls no `Postings.record()`, so its price is recorded nowhere.
 
 **The table is `price_postings`, one row per SKU per press, and it is never an upsert.**
 `store/pricearchive.py` (D219) and `store/readings.py` (D189) are the same shape one

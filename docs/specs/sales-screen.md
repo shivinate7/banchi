@@ -163,7 +163,7 @@ A server sum would be a second home for it.
 - `app/src/server.ts` gets one client function, `getStockMix`. `app/src/types.ts` gets its type.
 - The browser pivots. Pivot math lives in one pure file, `app/src/mixPivot.ts`, with the
   dimension and measure tables. Every control press is a local recompute and fetches nothing.
-- A new `pipeline/` file needs its `docs/map.py` entry in the same commit (`repo map` row).
+- A new `pipeline/` file needs its `docs/map/` line in the same commit (`make map-check`).
 
 ### Controls
 

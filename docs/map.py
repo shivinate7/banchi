@@ -10,7 +10,7 @@ Read by four consumers, which is the reason it is data and not another markdown 
   scripts/status.py           `make status` — the human view. THE ONE A PERSON RUNS, and it
                               was missing from this list from 2026-08-13 to 2026-08-31 while
                               being the answer to "how do I look at this file"
-  scripts/docs-audit.py       its repo-map check verifies every claim below against the tree
+  scripts/docs-audit.py       its map data row verifies every claim below against the tree
   scripts/decision-context.py the PreToolUse hook that tells you which decisions govern a
                               file before you edit it
   you, or an agent            `make map` renders it — a package, a path, or a decision id.
@@ -25,14 +25,14 @@ and a codes track "gated on singles Gate B" months after Gate B passed and the g
 was retired — and nothing anywhere could tell. A section nobody reads is not free; it is a
 claim the repo makes about itself with no way of being wrong out loud.
 
-THIS FILE GOES STALE LIKE ANY OTHER DOC, so it is audited like one. The repo-map check
-fails when a `built` path is missing, when a `planned` path has quietly arrived, when a
-`governed_by` cites a decision that does not exist, and — the one that actually keeps this
-honest — when a source file exists that no entry here mentions. Adding a module without
-touching this file fails the commit.
+THIS FILE GOES STALE LIKE ANY OTHER DOC, so it is audited like one. The map data row
+fails when a `built` path is missing, when a `planned` path has quietly arrived, and when a
+`governed_by` cites a decision that does not exist. WHICH FILES THE REPO HAS IS NOT THIS
+FILE'S JOB: `docs/map/` lists every code file, and `make map-check` fails a file with no line
+there. A module absent from this file only means no decision governs it here.
 
 `governed_by` is a superset of the `D<n>` citations in the file's own comments; the
-repo-map check enforces that direction. Entries beyond the citations are curated:
+map data row enforces that direction. Entries beyond the citations are curated:
 `pipeline/pricing.py` never says "D8" in a comment, but D8 is what makes the TCGplayer
 export the only pricing source, and someone editing that file needs to know.
 
@@ -339,7 +339,7 @@ GATES = []
 # status: built | stub | planned
 #   built    code exists. `tested_by` names the harness tests that reach it, where any do
 #   stub     the file exists and deliberately does nothing yet
-#   planned  no file yet; `step` says what creates it. The repo-map check FAILS if it
+#   planned  no file yet; `step` says what creates it. The map data row FAILS if it
 #            exists, which forces the entry to be updated the day it is written.
 #
 # `step` links an entry to the build-order step whose work happens there — the step that
@@ -1365,7 +1365,8 @@ COMPONENTS = [
                                         "and IN `make check` as of D247's sixteenth entry "
                                         "(owner's word, 2026-09-23) — no network call. A "
                                         "FakeMarket and a RecordingMarket stand in for the "
-                                        "network; 106 assertions, including the D278 "
+                                        "network; refusal texts come from the reader's own raise "
+                                        "path (`harness/tests/price_refusals.py`). Includes the D278 "
                                         "collision arm run both ways, an interrupted "
                                         "one-shot sweep proven to lose everything BEFORE the "
                                         "chunked fix is proven to keep what it already "
@@ -2323,8 +2324,8 @@ COMPONENTS = [
                 "D81 carries the argument.",
         "modules": {
             "run.py": {"does": "the explicit ordered TESTS registry — no discovery magic", "governed_by": ["D1"]},
-            # The tests themselves live under harness/tests/ and the orphan rule does not
-            # scan that far, so they are not listed one by one. `traces/` is listed because
+            # The tests themselves live under harness/tests/, and `mapPaths` in map.config.json
+            # lists only harness/run.py, so `make map-check` does not scan that far. The tests are not listed one by one. `traces/` is listed because
             # it is DATA rather than a test, and tracked data with no entry is how a
             # directory ends up in the tree with nobody able to say what it is for.
         },
@@ -2361,8 +2362,8 @@ COMPONENTS = [
                 "is not a thing to route around. `harness/` is where the test that reads them "
                 "lives anyway, and its two gitignored neighbors (`images`, `.cache`) are "
                 "named individually in .gitignore, so this one is tracked by default.\n\n"
-                "No per-file entries: this component declares no source_suffixes, so the "
-                "orphan rule does not scan it — the same arrangement `fixtures/` uses, for "
+                "No per-file entries: this component lists no modules, so nothing "
+                "compares it to the tree — the same arrangement `fixtures/` uses, for "
                 "the same reason. A sixth trace is added by copying it in, never by editing "
                 "one of these.",
     },
@@ -2380,7 +2381,7 @@ COMPONENTS = [
                 "and its metadata, nothing derived.",
         "governed_by": ["D15", "D18"],
         # No per-file entries, for `harness/traces/`'s own reason: this is 176 vendored data
-        # files (26.5 MB) with no source suffix the orphan rule should scan, and a new set
+        # files (26.5 MB) outside `mapPaths`, which `make map-check` does not scan, and a new set
         # released upstream arrives by running `make catalog-refresh` — never by hand-editing
         # one of these files.
         "note": "Narrower than the whole upstream tree on purpose: decks/ (83 files, 688 KB) "
@@ -2401,49 +2402,18 @@ COMPONENTS = [
                 "and the launch-config writer it calls, the screenshot runner and its "
                 "manifest, and audit-history — diagnostic, never gating, per D18.",
         "governed_by": ["D14", "D16", "D17", "D18", "D42", "D207"],
-        # What the orphan rule covers here, and the one hole no declaration can close.
-        # Declaring the key is also what makes the scan recursive, which is the only way
-        # scripts/githooks/ is reached at all.
+        # `make map-check` covers scripts/ recursively, because `mapPaths` in map.config.json
+        # names it, but it reads only the suffixes in `codeExtensions` (`.sh` and `.txt`
+        # among them, so the opsec hook and the tracked inputs are covered, and `.md` is
+        # absent on purpose: no markdown lives here).
         #
-        # `.sh` is most of the reason to declare anything. guard-opsec.sh and the
-        # pre-commit hook ARE the opsec enforcement, and a repo whose one repo-wide rule
-        # is that a live code card is a bearer instrument cannot leave its enforcement in
-        # the directory the index does not scan. `.txt` because both files carrying it are
-        # tracked INPUTS that tooling reads and fails against — the allowlist and the
-        # screenshot manifest — not notes; a third arriving unnamed is exactly the drift
-        # this rule exists for. `.md` is deliberately absent: no markdown lives here, and
-        # declaring a suffix for a language a directory does not contain is how a scan
-        # reports a clean run over nothing, which is the failure `app/` spent a day on.
-        #
-        # THE HOLE: `githooks/pre-commit` has no suffix, and scan_plan rejects any entry
-        # that does not start with a dot, so no value here can reach it. It is listed
-        # below, so its *disappearance* is caught — but a second extensionless hook
-        # (`pre-push`, `commit-msg`) would land unnamed and nothing would fail. Left to
-        # docs/debts/ rather than worked around: the limit is in scripts/docs-audit.py,
-        # and inventing a second key in this file to route around it would put the
-        # workaround inside the thing the rule audits.
-        #
-        # THE HYPOTHETICAL IN THAT PARAGRAPH CAME TRUE ON 2026-08-29 AND IT NAMED THE FILE
-        # CORRECTLY. D42 added `githooks/reference-transaction` and `githooks/pre-push`, and
-        # the orphan rule was silent for both exactly as predicted — they are listed below by
-        # hand, and nothing would have failed had the author forgotten. What DID catch a
-        # missing entry that day was `githooks-selftest.sh`, one directory up and carrying a
-        # declared suffix, which failed the commit until it was described. The two outcomes
-        # from one change are the clearest statement of this hole available, so they are
-        # recorded here rather than only in docs/debts/.
-        "source_suffixes": [".py", ".sh", ".txt", ".mjs"],
-        "note": "THIS ENTRY HAD NO MODULE LIST UNTIL 2026-08-13, so the orphan rule never "
-                "scanned this directory — the rule is guarded on `modules`, and an entry "
-                "with none has nothing to be an orphan of. Measured before the fix: "
-                "`touch scripts/__probe.py` left the row reading `ok repo map`, while the "
-                "same file under pipeline/ failed the commit. That is how audit-history.py "
-                "was added — into the one directory the rule did not cover, with this "
-                "file's prose updated by hand and nothing that would have failed had the "
-                "author forgotten. Writing the list is why it stayed open: a `does` and a "
-                "`governed_by` per file is a content decision about what governs the "
-                "tooling, not a mechanical repair. "
-                "WHAT IS STILL UNPROVEN, and it is the same limit app/ carries: the rule "
-                "proves a file has an entry, never that the entry is true. A `does` "
+        # THE HOLE: `githooks/pre-commit`, `githooks/reference-transaction` and
+        # `githooks/pre-push` have no suffix, so the map check cannot see them. They are
+        # listed below, and the `hook roster` row of `make docs-audit` fails a hook on disk
+        # with no entry here. A second extensionless file elsewhere in scripts/ would land
+        # unnamed and nothing would fail.
+        "note": "WHAT IS STILL UNPROVEN, and it is the same limit app/ carries: the map "
+                "check proves a file has a line, never that the line is true. A `does` "
                 "describing the wrong file passes exactly as well.",
         "modules": {
             # ---- the commit path. D18's rule is not advice here; this IS the path ----
@@ -2468,9 +2438,9 @@ COMPONENTS = [
                 # on the shared rig handles bearer instruments.
                 "governed_by": ["D11", "D14", "D16", "D18", "D24", "D47", "D58", "D70",
                                 "D92", "D295", "D303", "D312"],
-                "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
-                        "declare. Listed, so its absence would be a finding; a sibling "
-                        "hook's arrival is caught by `hook roster` since 2026-09-05. "
+                "note": "`make map-check` CANNOT SEE THIS FILE — it has no suffix. Listed, so "
+                        "the `hook roster` row of `make docs-audit` fails on its absence "
+                        "and on a sibling hook's arrival. "
                         "IT ALSO CHECKS ITS OWN ARMED COPY, first, before any other rule: "
                         "`make hooks` COPIES this file into .git/hooks-armed and nothing "
                         "keeps the copy in step, so on 2026-09-01 the armed pre-commit fell "
@@ -2498,8 +2468,8 @@ COMPONENTS = [
                 # rather than the content: this file is on the path that decides whether a
                 # commit proceeds, so it reads and refuses and never writes.
                 "governed_by": ["D18", "D42"],
-                "note": "THE ORPHAN RULE CANNOT SEE THIS FILE either — no suffix. It is the "
-                        "case the comment above this modules block predicted by name.",
+                "note": "`make map-check` CANNOT SEE THIS FILE either — no suffix. The "
+                        "`hook roster` row fails on its absence.",
             },
             "githooks/pre-push": {
                 "does": "D42's remote half: refuses any push whose REMOTE ref is main, which "
@@ -2575,7 +2545,7 @@ COMPONENTS = [
             "browser-scope.py": {
                 "does": "does a change reach what a browser draws? The list of every path "
                         "`make design-check` loads, each with the reason it is there, and the "
-                        "classifier `.github/workflows/check.yml`'s `browser-scope` job runs "
+                        "classifier `.github/workflows/checks.yml`'s `browser-scope` job runs "
                         "on a pull request to decide whether the three-shard browser matrix "
                         "runs at all (D141). `classify` diffs what the branch would LAND from "
                         "the merge-base; `history N` replays main's last N merges, which is "
@@ -2695,7 +2665,15 @@ COMPONENTS = [
                         "the way launchd starts it, which is not `make up` and is the shape "
                         "the second incident was in. Only three files are tracked in that "
                         "fixture, because the switch has to CHANGE a watched file or no "
-                        "reload is scheduled and the guard is never reached.",
+                        "reload is scheduled and the guard is never reached. "
+                        "ONE ARM IS THE EXCEPTION TO THE STUB: `check_real_build`, gated by "
+                        "BANCHI_SERVE_REAL_BUILD=1 and SKIPPED without it, runs the real "
+                        "`vite build` through the real `serve.py up` over a copy of the real "
+                        "`app/` (node_modules linked per package, never as one link). It "
+                        "asserts the port opens only after the build, `/` is the built "
+                        "index.html byte for byte and not the dev page, every /assets/ file "
+                        "the page names answers 200 with a browser's type, a path that is no "
+                        "route is refused (D138: no catch-all), and `down` leaves no process.",
                 "governed_by": ["D18", "D43", "D138", "D127", "D158", "D176", "D261"],
                 "tested_by": [],
             },
@@ -3091,7 +3069,8 @@ COMPONENTS = [
                         "(identity-follows-sku.md lane 4, moved off a disk walk), and "
                         "`pipeline/productview.py:row_for_sku` preferring the skus-table row "
                         "over a misread stored name, each with its own mutation guard. "
-                        "106 assertions.",
+                        "Its refusal cases take their texts from the reader's own raise "
+                        "path, `harness/tests/price_refusals.py`.",
                 "governed_by": ["D18", "D21", "D35", "D278", "D219", "D222", "D231", "D224",
                                 "D234", "D247", "D254"],
             },
@@ -3167,9 +3146,10 @@ COMPONENTS = [
             },
             "archive-review-selftest.py": {
                 "does": "proves cli/archive_review.py against a throwaway store, no "
-                        "network. Fabricates refusal strings shaped exactly like "
-                        "pipeline/pricehistory.py:NotResolvable/Unreachable's own "
-                        "messages, never calls a market. Proves: an identification "
+                        "network. Its real-text cases take their texts from the reader's own "
+                        "raise path (`harness/tests/price_refusals.py`), with only "
+                        "pipeline/net.py:request stubbed; no case calls a market. "
+                        "Proves: an identification "
                         "refusal reaches the review queue with its photograph; a "
                         "network-shaped refusal never does; a card sharing the refused "
                         "SKU but carrying a DIFFERENT stored number is never queued (the "
@@ -3610,7 +3590,17 @@ COMPONENTS = [
                         "`git worktree add` at `.claude/worktrees/<name>` on `worktree-<name>`, "
                         "cut from a fresh origin/main with --no-track (no shared .git/config write, so parallel "
                         "Agents do not race on its lock; the branch has no upstream), so githooks/post-checkout provisions it. "
-                        "Claude Code's own creation never fires post-checkout. Prints only the "
+                        "Claude Code's own creation never fires post-checkout. The add runs under a "
+                        "lock directory at `<git common dir>/banchi-worktree-add.lock` (`take_lock`, "
+                        "`release_lock`), so adds in one clone run one at a time: git reads a "
+                        "sibling's half-written worktree record otherwise. The lock is built "
+                        "privately with its pid inside and renamed into place in one step "
+                        "(`rename_noreplace`), so it never shows without a pid. A live holder's "
+                        "pid makes the add wait and say so. A dead pid is judged once "
+                        "(`lock_is_stale`) and taken by one waiter's move to a private name "
+                        "(`reap_stale`), which checks the moved lock holds the judged pid and "
+                        "otherwise puts it back, never deleting a lock it did not judge. "
+                        "`BANCHI_WORKTREE_LOCK_WAIT` seconds (default 120) fails the creation. Prints only the "
                         "path on stdout; exits non-zero only when git cannot make the tree.",
                 "governed_by": ["D18"],
             },
@@ -3618,7 +3608,13 @@ COMPONENTS = [
                 "does": "`make worktree-create-selftest`: runs worktree-create.sh for four "
                         "names at once, five rounds, in a throwaway repo with an origin. Every "
                         "tree and branch must exist and no config.lock may remain. Red on the "
-                        "hook without --no-track.",
+                        "hook without --no-track. Arms for the add lock: a free lock, a lock "
+                        "held by a live pid (the add waits and says so), a lock with a dead "
+                        "pid (taken over); two waiters on one stale lock (seams order their "
+                        "reads, no two adds overlap); a pid this user cannot signal counts as "
+                        "live; the wait cap; INT and TERM release the lock. Red on the hook "
+                        "without the lock. A sweep arm "
+                        "proves an old sibling run folder is removed and a new one stays.",
                 "governed_by": ["D18"],
             },
             "session-teardown-selftest.sh": {
@@ -3628,7 +3624,7 @@ COMPONENTS = [
                 "governed_by": ["D18", "D138"],
             },
             "ci-skip-count.sh": {
-                "does": "the one reader of a CI shard's skip count: `check.yml`'s matrix step and "
+                "does": "the one reader of a CI shard's skip count: `checks.yml`'s matrix step and "
                         "its `ci-static` job call it over the shard's log. It prints "
                         "`skipped in <target>: ...` to the job log and the step summary, and "
                         "never fails: the calling step keeps make's exit code.",
@@ -4049,7 +4045,7 @@ COMPONENTS = [
                         "subject-count row and the coupling question.",
                 "governed_by": []},
             "docs_audit/env_map.py": {
-                "does": "The rows over environment variables, hatches, the subagent override, the repo map, the "
+                "does": "The rows over environment variables, hatches, the subagent override, the map data, the "
                         "hook roster, Codex hooks and the build-order mirror.",
                 "governed_by": ["D2", "D31", "D80", "D127", "D135", "D140", "D171", "D178", "D280"]},
             "docs_audit/games.py": {
@@ -4768,6 +4764,21 @@ COMPONENTS = [
                         "table of components is invisible to it, and it says so in its own "
                         "output every time it runs.",
             },
+            "map-check.py": {
+                "does": "`make map-check` — finds claude-settings' shared plain-english-map "
+                        "skill (`$CLAUDE_SETTINGS_DIR`, `~/claude-settings`, the `~/.claude` link) "
+                        "and runs its check over `docs/map/` and `map.config.json` from the repo "
+                        "root. It fails, and never skips, when it finds no skill or no node. The "
+                        "rules live in claude-settings, never here.",
+                "governed_by": ["D17", "D18"],
+            },
+            "map-check-selftest.py": {
+                "does": "`make map-check-selftest` — proves `map-check.py` fails closed against "
+                        "stub skills built in a run folder: no skill, a named dir with none, a "
+                        "skill folder with no `map-check.mjs`, no node, and the skill's own exit "
+                        "code. Each mutant of the script must turn a check red.",
+                "governed_by": ["D18"],
+            },
             "map-fix.py": {
                 "does": "`make map-fix` — add the decision ids a file cites to that file's "
                         "`governed_by` here. THE ONE GENERATOR THAT WRITES INTO A DOC, and it "
@@ -4780,7 +4791,7 @@ COMPONENTS = [
                         "each list survives untouched.",
                 "governed_by": ["D16", "D17", "D18", "D140", "D173"],
                 "note": "IT ONLY EVER ADDS. An id in `governed_by` that the file does not "
-                        "cite is invisible to the `repo map` row and to this alike, because "
+                        "cite is invisible to the `map data` row and to this alike, because "
                         "that check is one-directional — so removing one stays a person's "
                         "judgement. WRITTEN 2026-09-17 after a cost measurement: 112 of the "
                         "last 200 non-merge commits touch this file, 416 of the 2,620 lines "
@@ -5127,7 +5138,7 @@ COMPONENTS = [
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
                         "mechanical could have caught the disagreement — a `note` is prose "
-                        "and the orphan rule only proves the entry exists. The auditor is "
+                        "and `make map-check` only proves a file has a line. The auditor is "
                         "in SOURCES for the same reason: it is a subprocess rather than a "
                         "read, which is exactly why its path sat hardcoded and uncovered "
                         "while every other path here was audited.",
@@ -5688,8 +5699,8 @@ COMPONENTS = [
                 "highest-risk assumption in D22: TCGplayer does carry both as Product Line "
                 "values, on the identical 16-column header. They also refuted three guesses "
                 "the registry had been written around — see D22. No per-file entries here "
-                "because this component declares no source_suffixes, so the orphan rule does "
-                "not scan it; the audit's game rows read the directory instead. THE TWO "
+                "because this component lists no modules, so nothing compares it to the "
+                "tree; the audit's game rows read the directory instead. THE TWO "
                 "JSON CAPTURES ARE NOT EXPORTS and are here for the property that makes "
                 "this directory what it is: they carry the SHAPE nothing invented would "
                 "get wrong in the same way — every number arriving as a string, a "
@@ -6228,21 +6239,10 @@ COMPONENTS = [
                 "specs assert docs/DESIGN.md's Fulfillment floors, one against the kit's "
                 "pull-confirm and one against the Fulfillment view.",
         "governed_by": ["D3", "D4", "D5", "D6", "D7", "D9", "D10", "D13", "D18"],
-        # What the orphan rule scans here, and the reason this directory needs the key at
-        # all: the default is `.py` one level deep, which over a tree holding no Python and
-        # keeping all of it in subdirectories is a check that reports a clean scan for having
-        # looked at no file in the entry it names. It was inert exactly that way until
-        # 2026-08-13 — see the note. `.json` is deliberately absent: it would conscript
-        # package-lock.json, and a manifest is not a module anyone writes a `does` for.
-        "source_suffixes": [".ts", ".tsx", ".css", ".js", ".html"],
-        "note": "THE ORPHAN RULE WAS INERT OVER THIS DIRECTORY UNTIL 2026-08-13, AND IT COST "
-                "EXACTLY WHAT docs/debts/ SAID IT WOULD. It filtered on one repo-wide `.py` "
-                "suffix, one level deep, so step 7a's thirteen new files landed beside the "
-                "described modules and this list named none of them — a green row over an "
-                "entry nothing had checked. The rule reaches here now because the entry "
-                "declares `source_suffixes` above and scripts/docs-audit.py reads it, which is "
-                "the half of that fix that lives in this file. It did its job on the same day: "
-                "7b's seven files could not land here unnamed. "
+        # `.json` is deliberately absent from `codeExtensions` in map.config.json: it would
+        # conscript package-lock.json, and a manifest is not a module anyone writes a `does` for.
+        "note": "`make map-check` covers this directory through `mapPaths`, and docs/map/ "
+                "lists every file here. "
                 "Nothing here imports the static palette sheets: they were drawings of the spec, and "
                 "this is built from docs/DESIGN.md itself. "
                 "NO ENTRY BELOW CARRIES tested_by, and that is a measurement rather than an "
@@ -6378,7 +6378,7 @@ COMPONENTS = [
                                              "wait — never an assertion — was the whole of the "
                                              "flake DEBTS.md recorded on 2026-08-30. Under CI a "
                                              "failing case keeps its trace (`retain-on-failure`) "
-                                             "and check.yml uploads it: the one-test runner red "
+                                             "and checks.yml uploads it: the one-test runner red "
                                              "has never reproduced on the rig (D128), so the run "
                                              "that fails is the only witness there is",
                                      "governed_by": ["D5", "D16", "D128", "D261"]},
@@ -7655,7 +7655,7 @@ COMPONENTS = [
                         "before that \u2014 `.inventory-lone-place` had not existed since the "
                         "Banchi rebuild, neither rule was at 20px, and the total said seven "
                         "where D41 says five and the stylesheets say six. NO ROW READS THAT "
-                        "TOTAL: `check_map` reads paths, orphans, `governed_by` and "
+                        "TOTAL: `check_map_data` reads paths, `governed_by` and "
                         "`tested_by`, never a `does` string's prose. So it is not restated "
                         "here \u2014 a count with no reader is how this one drifted. WHAT IS "
                         "GONE WITH THE LOCATION CARD: the address, the neighbours band, the "

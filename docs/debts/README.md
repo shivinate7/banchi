@@ -103,7 +103,9 @@ DEBT110 the merge-speed guard's 10 s wall-clock backstop can fail on a loaded ma
 DEBT111 the palette input's focus check goes red on design-check shard 8
 DEBT112 the Capture screen's sweep read is counted as still asking after the screen is left
 DEBT113 three design-check tests went red once on main, with no cause read
-DEBT114 the waiting-page scan misses address and credential-name shapes
 DEBT115 a new copy's tick on the pricing list outlives a change to its price
 DEBT116 the send skips the cap check for any row marked ticked, typed prices too
+DEBT117 The markdown sheet's R-key stand-down has no test
+DEBT118 a new code file with no map line passes the commit and fails only in make check and CI
+DEBT119 a stale list makes a network fault look like an unknown set
 ```

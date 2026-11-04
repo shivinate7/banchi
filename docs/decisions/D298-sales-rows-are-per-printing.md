@@ -2,9 +2,9 @@
 
 **Amends D214** (the gross-revenue retrospective) and **D217** (Sales becomes a tool: sort,
 filter, cross-filter, drill down and deep-link). Builds Direction B
-(`sales-directions.md`, the owner's choice, RULINGS.md "## Sales") on `#/revenue`.
+(the owner's choice, owner, 2026-09-23) on `#/revenue`.
 
-### Multi-SKU rows (RULINGS.md, "Multi-SKU Sales rows")
+### Multi-SKU rows (owner, 2026-09-23, "Multi-SKU Sales rows")
 
 `Revenue.tsx`'s `products` map grouped by `sale.name` and kept only the last SKU sold under
 that name (`Product.lastSku`). Confirmed true on this store's own shape. A foil and a normal
@@ -16,7 +16,7 @@ printings sharing a name draw as two rows, name first on both — "separately id
 (the ruling's own words), with no invented second label. `row.name` still leads every row.
 `row.sku` decides whether two rows merge, nothing else does.
 
-### The $0.00 line (sales-directions.md, finding 1)
+### The $0.00 line (owner, 2026-09-23, finding 1)
 
 `salesOf`'s price guard tested only for `null`. TCGplayer's feed sends `unit_price: ""` for a
 line it never priced, not `null`. `Number('')` is `0`. The line landed at $0.00 and counted as
@@ -43,7 +43,7 @@ unpriced draws "TCGplayer sent no price" in place of a dollar figure, never `$0.
 row draws its known gross plus a note naming how many copies had no price. This is `salesOf`'s
 own change, so `#/orders` and any other reader of `OrderRow` is untouched.
 
-### Thumbnails (RULINGS.md, "## Sales": "a server lookup by SKU for another copy's photo")
+### Thumbnails (owner, 2026-09-23, "a server lookup by SKU for another copy's photo")
 
 D89 reclaims a sold card's own photograph on purpose, so a sales row cannot show the
 photograph of the copy that actually sold. `GET /skus/photos?sku=<s>&sku=<s>`
@@ -69,7 +69,7 @@ plain read, costs nothing, called on arrival — unlike `getSoldPrices`/`getHold
 beside it, which stay presses (D225, D236). A thumbnail is not a number a reader could
 mistake for live market data.
 
-### "On the shelf" on arrival (sales-directions.md, finding 3)
+### "On the shelf" on arrival (owner, 2026-09-23, finding 3)
 
 Moves the existing `holdingsSection` fetch from behind "Value my stock" to firing on mount,
 matching the ruling. `getHoldingsValue`'s own cost is unchanged. Only when this screen asks
