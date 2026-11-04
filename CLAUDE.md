@@ -290,13 +290,13 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 
 ## Hard rules
 
-- **A RULE THAT CAN BE MECHANICALLY ENFORCED MUST BE.** A new rule needs its enforcement before it is done.
+- **Parent rule `outcomes-mechanize-rules` (each rule becomes a hook or check) applies.** A new rule needs its enforcement before it is done.
   Without one, it carries a bold NOT MECHANIZED line that says what a machine would have to see
   (D173, a rule that can be enforced is).
   The `rule enforcement` row of `make docs-audit` parses every rule here.
   `HARD_RULE_FLOOR` and `PROSE_ONLY_EXPECTED` pin its count.
-- **One home per capability, called from everywhere.** Find the home before you build (`make map ARGS=<path>`,
-  `scripts/decision-context.py`). Extend it before you build a second. A second needs a written reason.
+- **Parent rule `building-one-home-per-capability` (one home per capability, called from everywhere) applies.** Find the home before you build (`make map ARGS=<path>`,
+  `scripts/decision-context.py`).
   The `capability homes` row of `make docs-audit` holds each named capability's home and refuses a call to its
   primitives outside it. **NOT MECHANIZED:** a machine cannot tell that two differently named functions do the same job.
 - **A route is not a feature. Nothing is built until a screen reaches it.** Done is the route, a client function in
@@ -310,18 +310,16 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 - **Scope is argued, not gated.** New surface needs a reason, written into the decision that owns it.
   The `repo map` row of `make docs-audit` fails a file with no map entry.
   Its `decision ids` row fails an id with no entry.
-- **Fix the cause, never the symptom. Check whether the primitive exists first.**
+- **Parent rule `building-fix-cause-not-symptom` (fix the cause, not the symptom) applies.** Check whether the primitive exists first.
   `make map ARGS=<path>` and `scripts/decision-context.py` find it.
   Name a stopgap a stopgap in the commit, with the cause in `docs/debts/`.
   **NOT MECHANIZED:** a machine cannot read whether the author knew the cause and chose the symptom.
-- **A settled decision is an argument, not an authority. Think in outcomes.** Cite the entry.
-  Name the premise that no longer holds, and how you know (measure it or say "unmeasured").
-  Name what it protected, and what protects that now. Propose the fix, and wait for the owner's word.
+- **A settled decision is an argument, not an authority.** Parent rules `outcomes-decision-is-argument` (a recorded decision is an argument) and `outcomes-stale-decision-protocol` (name the premise, propose the fix, wait for the owner's word) apply. Cite the entry.
   Never quietly work around or repeal it. **NOT MECHANIZED:** a machine cannot tell a rotted premise from a live one without judging the outcome it protected.
 - **Check whether a task is yours before you hand it to the owner.** Grep the routes, the Commands block and
   `docs/map.py` first. **NOT MECHANIZED:** a machine cannot read a sentence to a person and decide whether
   this repo can already do it.
-- **No history date in repo prose.** D308 (no dates in repo prose) allows a deadline date. History is git's. Rewrite a claim in place, and keep only what is true now.
+- **No history date in repo prose.** D308 (no dates in repo prose) allows a deadline date. Parent rule `speak-rewrite-superseded-in-place` (rewrite superseded text in place) applies.
   Old dates go when their file is next rewritten. Never in a sweep. A decision file is a rule, not a log. A change rewrites it.
   Old records are deleted, not archived. See D308 (no dates in repo prose).
   **NOT MECHANIZED:** a machine cannot tell a date from a version number, a port or a test fixture without intent.
@@ -340,15 +338,12 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   A record that must quote a line writes it in words.
 - **A screen answers to the system.** `--bn-*` tokens only, checked at 1440 and 820, light and dark.
   `docs/DESIGN.md` is the record. The `design tokens` row of `make docs-audit` locks every name and hex both ways.
-- **Main moves by pull request. A session never commits to it and never pushes it** (D42, main moves by pull request).
-  The batch runner, the session the coordinator starts and tags `cs-build:batch-runner` (claude-settings decision session-tiers), runs merges under the coordinator's standing merge grant and holds none of its own. It batches every reviewed
-  lane the owner set out, across all sessions, into one integration branch, waits on its CI, merges it under that grant and
-  archives the finished lanes. The coordinator starts lanes and talks with the owner. Any other merge happens only on the
-  owner's named act ("merge", not "ship it"), and the batch runner runs it. The coordinator holds the standing merge grant
-  (owner, 2026-10-29 16:47 CDT, "for now"; claude-settings decision standing-merge-grant). It merges on green checks and a done review.
-  It never asks the owner to merge. The owner withdraws the grant in chat. A lane session never merges. It hands the batch
-  runner each reviewed lane branch with its head commit and review verdict. It never builds an integration branch, opens
-  an integration PR or marks a PR ready. A session's role comes from its own `cs-build` tag (claude-settings decision session-tiers). A merge uses `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
+- **Main moves by pull request. A session never commits to main or pushes it** (D42, main moves by pull request).
+  Parent rules `git-main-only-by-pr` (main moves only by pull request) and `git-integration-branch-merge` (how lanes join one integration branch) apply.
+  Parent records `standing-merge-grant` (standing merge grant) and `session-tiers` (session tiers) say who merges, and when.
+  The coordinator holds the grant and never merges. The batch runner runs each merge under it.
+  The owner's named act for a merge is "merge", not "ship it". The owner can withdraw the grant in chat.
+  A session's role comes from its own `cs-build` tag. Lane sessions pass their work to the batch runner. They never merge, build an integration branch, open an integration PR or mark a PR ready. A merge uses `make merge ARGS="<n> --confirm"` with CI green, never `--admin`.
   One standing exception (D42, main moves by pull request):
   the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
   GitHub branch protection has 0 reviews and `strict: false`. The one check it is to require is `all-jobs-passed`,
@@ -360,25 +355,22 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
 
 ## Working agreement
 
-Report format: **Done, Deviations, Input Needed, Next**, in that order (parent CLAUDE.md). Done is one line per item:
+Report format: parent rule `reports-order-of-labels` (Done, Deviations, Input Needed, Next, in that order). Each Done line is one item:
 **BUILT**, **RECORDED** or **OTHER**, with its PR or commit. "Solved" with no bucket named is refused.
-Use bold labels in one quoted block, never a code fence. Start with the point. No task restatement.
+Use bold labels in one quoted block, never a code fence. No task restatement.
 
-- Run `make harness` before you say something works. Give the verdict, never the output.
+- Run `make harness` before you say something works, through `verdict` (parent rule `tokens-run-through-verdict`: verdict prints the verdict and keeps the output in a log).
 - Screen work: experience is everything (D307, rulings CLAUDE.md carried). Run a design pass
   before you build. Review the built screen against it before you call it done.
-- A lane session runs Opus (claude-settings decision session-tiers). The agents it starts follow `agent-model-cap`:
-  Sonnet is the default and the ceiling. Plan, the built-in advisor, the designer, the design reviewer and a builder's
-  third try run Opus. Reviewers run Sonnet from round 2; round 1 uses the role's model. Any other Opus agent needs the
-  owner's grant. Say an Opus agent in one line first, and raise it only on the owner's grant, in `.claude/settings.local.json`.
+- Model caps: parent records `agent-model-cap` (model and effort per agent role) and `session-tiers` (lane sessions run Opus). Say an Opus agent in one line first. Raise an agent to Opus only with the owner's grant, set in `.claude/settings.local.json`.
 - A builder commits and pushes its branch after every pass, even red. Each commit message ends with `Done:` and
   `Next:` lines, so a lane resumes from its branch alone.
 - Read `docs/decisions/` before you propose an architecture change (`scripts/decision-context.py` finds the entry,
   `make map ARGS=--decisions` indexes them). Reopen one only by citing it and waiting for the owner's word.
-- Design work is repo work. Land it in `docs/specs/` or the decision that owns it in the same session, or declare it abandoned.
+- Parent rule `building-land-design-or-abandon` (a design not landed is not done) applies. Land it in `docs/specs/` or the decision that owns it in the same session, or declare it abandoned.
 - The waiting page's writer exports the page's data to `docs/waiting/` at each wake and before any republish
   (D327, the waiting page is a committed record). `scripts/waiting-export.py --calls` prints the reads.
-- When compacting, keep the fixture schema facts, every `make` command and the modified-file list.
+- Parent rule `tokens-compacting-keep-essentials` (what a compaction keeps) applies. Also keep the fixture schema facts and every `make` command.
 
 ### Writing a brief
 
@@ -390,7 +382,7 @@ Use bold labels in one quoted block, never a code fence. Start with the point. N
 - **State a fence by intent and name the exception.** Example: "Do not change which cards a walk holds. Rendering
   changes inside `WalkView` are in scope." **NOT MECHANIZED:** a machine cannot tell a fence around
   behavior from one around files.
-- **Show the screen before you say it looks right.** Render at 1440 and 820, both themes, and look at the images.
+- **Show the screen before you say it looks right.** Parent rule `verification-screens-verdict` (a verdict per screen, never a description) applies. Render at 1440 and 820, both themes, and look at the images.
 
 ## Map
 
