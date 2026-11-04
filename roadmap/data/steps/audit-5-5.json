@@ -1,10 +1,10 @@
 {
-  "title": "Unclear: copy-list height at 820, photo at 410, sheet 3 rows vs 5 stored.…",
+  "title": "Unclear: s/card-detail copy-list height at 820 (+2 more)",
   "status": "todo",
   "phase": "Audit: unclear",
   "why": "Source: docs/specs/todo-audit.md, section 5 (Unclear (9)), line 5 of that section, at main 06571635.",
   "note": "s/card-detail (3 items): copy-list height at 820, photo at 410, sheet 3 rows vs 5 stored. Each needs a render.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 62
 }

@@ -1,10 +1,10 @@
 {
-  "title": "Needs owner call: make step 13 (track back, IMb encoder parked on…) (+1 more)",
+  "title": "Needs owner call: s/order-pipeline make step 13 live work? (+4 more)",
   "status": "todo",
   "phase": "Audit: needs owner call",
   "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 10 of that section, at main 06571635.",
   "note": "Orders (s/order-pipeline, d026): make step 13 (track back, IMb encoder parked on claude/tcgtracking-in-house-a7cb43) live work? Build the T4 tcgtracking call with a money gate? Run the order \"detail\" call live (you only; .env is denied to agents)? Import one Pirate Ship CSV to see if it is accepted? What does the loser see when two devices pull one copy?",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 50
 }

@@ -1,10 +1,10 @@
 {
-  "title": "Unclear: not re-read against code. s/sales-findings prior-window overlap of 1…",
+  "title": "Unclear: s/mechanization prose-only rules list (+1 more)",
   "status": "todo",
   "phase": "Audit: unclear",
   "why": "Source: docs/specs/todo-audit.md, section 5 (Unclear (9)), line 6 of that section, at main 06571635.",
   "note": "s/mechanization prose-only rules list: not re-read against code. s/sales-findings prior-window overlap of 1 to 3 days: never measured. Correction: todo-audit-verify.md measured the prior-window overlap as a real defect (Revenue.windowsOf, 1.9 to 2.9 days) and moves it to to-do; see step sales-window-overlap.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 63
 }

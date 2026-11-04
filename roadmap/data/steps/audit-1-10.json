@@ -1,10 +1,10 @@
 {
-  "title": "Close the record: chart rescale is fixed (bars start at zero). The chart question is…",
+  "title": "Close the record: s/sales-findings chart rescale is fixed",
   "status": "todo",
   "phase": "Audit: close the record",
   "why": "Source: docs/specs/todo-audit.md, section 1 (Close the record (20)), line 10 of that section, at main 06571635.",
   "note": "s/sales-findings: chart rescale is fixed (bars start at zero). The chart question is stale. It also needs your call (section 3).",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 24
 }

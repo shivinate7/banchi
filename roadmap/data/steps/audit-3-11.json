@@ -1,10 +1,10 @@
 {
-  "title": "Needs owner call: Money (s/sales-plan layers 2 and 3, s/sales-findings): pass the…",
+  "title": "Needs owner call: s/sales-plan pass marketplace refunds through? (+3 more)",
   "status": "todo",
   "phase": "Audit: needs owner call",
   "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 11 of that section, at main 06571635.",
   "note": "Money (s/sales-plan layers 2 and 3, s/sales-findings): pass the marketplace \"refunds\" field through, and add a refund state to the data model (L)? Show gap months in the strip? Export sales for a tax preparer? Capture cost basis, at what grain (L)?",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 51
 }

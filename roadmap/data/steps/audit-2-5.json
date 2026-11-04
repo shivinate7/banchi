@@ -1,10 +1,10 @@
 {
-  "title": "To do: one percent formatter (S) (+2 more)",
+  "title": "To do: d086 one percent formatter (+2 more)",
   "status": "todo",
   "phase": "Audit: to do",
   "why": "Source: docs/specs/todo-audit.md, section 2 (To do (104; no owner call; ranked by user impact, then size)), line 5 of that section, at main 06571635.",
   "note": "Kit homes (d086): one percent formatter (S); 61 bare toLocaleString calls (M); one disclosure primitive for about 10 details (M).",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 29
 }

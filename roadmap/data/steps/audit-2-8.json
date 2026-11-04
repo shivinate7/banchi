@@ -1,10 +1,10 @@
 {
-  "title": "To do: Test gaps and measurements (42) (+9 more)",
+  "title": "To do: d088 send bar height at 768 to 819 (+7 more)",
   "status": "todo",
   "phase": "Audit: to do",
   "why": "Source: docs/specs/todo-audit.md, section 2 (To do (104; no owner call; ranked by user impact, then size)), line 8 of that section, at main 06571635.",
   "note": "Test gaps and measurements (42; I fold measurements in here). Screens: d088 send bar height at 768 to 819 (S); d092 unit case for tile lead proper noun (S); d093 show Show Held and Price Them tests red (S); d023 flag post-click mutation in sale fixtures (M); d022 narrow n.contains (S, low: phone specs are off); s/sales-findings gap-month and order-dedup cases (S); d003 wire types on 41 spec files (M); s/demo read the real store twice to prove the mirror deterministic (M).",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 32
 }

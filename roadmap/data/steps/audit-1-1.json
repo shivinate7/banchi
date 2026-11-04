@@ -1,10 +1,10 @@
 {
-  "title": "Close the record: mark fixed. Fix two comments that now lie: the CardHero.CardPane \"NO…",
+  "title": "Close the record: d076 phone walk sheet is fixed (+1 more)",
   "status": "todo",
   "phase": "Audit: close the record",
   "why": "Source: docs/specs/todo-audit.md, section 1 (Close the record (20)), line 1 of that section, at main 06571635.",
   "note": "d076: mark fixed. Fix two comments that now lie: the CardHero.CardPane \"NO detail\" note and the OrdersWalkPane onSell note. d011: the lane roster is old. PHOTO_LANE_EXACT now has the pipeline match route and a match sweep prefix.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 15
 }

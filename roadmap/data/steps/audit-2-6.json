@@ -1,10 +1,10 @@
 {
-  "title": "To do: d011 heavy reads wait behind four writers (L, capture_server.py) (+4 more)",
+  "title": "To do: d011 heavy reads wait behind four writers (+4 more)",
   "status": "todo",
   "phase": "Audit: to do",
   "why": "Source: docs/specs/todo-audit.md, section 2 (To do (104; no owner call; ranked by user impact, then size)), line 6 of that section, at main 06571635.",
   "note": "Server load: d011 heavy reads wait behind four writers (L, capture_server.py); s/lean-server /capture/sitting and /search still grow (M); s/efficiency price archive sweep rewrites unchanged rows (M); s/efficiency join folds every row under the store lock (M); s/efficiency --crop prices whole frames (M).",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 30
 }

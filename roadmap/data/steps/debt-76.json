@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Known gaps (debts)",
   "why": "Source: docs/debts/076-phone-walk-sheet-no-mark-sold.md (DEBT76), at main 06571635.",
-  "note": "On a phone, a tap on a walk row opens the card in a sheet. The sheet draws `Orders.OrderPickPane`, the same pane the desk draws. That pane passes `detail` to `CardHero.CardPane`. `detail` holds the copy rows, and each row carries `OrdersWalkPane.RowAction`, so Mark sold is in the sheet. The gap this entry first recorded, a sheet with no Mark sold, is fixed in code. Action line: step audit-1-1. The to-do audit says close it; the close is step audit-1-1.",
+  "note": "On a phone, a tap on a walk row opens the card in a sheet. The sheet draws `Orders.OrderPickPane`, the same pane the desk draws. That pane passes `detail` to `CardHero.CardPane`. `detail` holds the copy rows, and each row carries `OrdersWalkPane.RowAction`, so Mark sold is in the sheet. The gap this entry first recorded, a sheet with no Mark sold, is fixed in code. Action line: step audit-1-1. The to-do audit says close it.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 108
 }

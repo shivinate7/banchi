@@ -1,10 +1,10 @@
 {
-  "title": "Needs owner call: pick one of three layouts so Fulfiller boxes stop sliding when owed…",
+  "title": "Needs owner call: d082 pick a layout so Fulfiller boxes stop sliding (+1 more)",
   "status": "todo",
   "phase": "Audit: needs owner call",
   "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 9 of that section, at main 06571635.",
   "note": "d082 with s/stability: pick one of three layouts so Fulfiller boxes stop sliding when owed cards land. d083: build only nearby rail tiles (you deferred it)?",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 49
 }

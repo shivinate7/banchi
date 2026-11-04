@@ -1,10 +1,10 @@
 {
-  "title": "Needs owner call: Archive sweep (d032, d069, s/sales-plan, s/sales-findings): schedule…",
+  "title": "Needs owner call: d032 schedule the archive sweep?",
   "status": "todo",
   "phase": "Audit: needs owner call",
   "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 7 of that section, at main 06571635.",
   "note": "Archive sweep (d032, d069, s/sales-plan, s/sales-findings): schedule it? It needs one decision entry against D224.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 47
 }

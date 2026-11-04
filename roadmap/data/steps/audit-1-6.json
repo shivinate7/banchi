@@ -1,10 +1,10 @@
 {
-  "title": "Close the record: header says no product code and lanes follow. The lanes are built.… (+1 more)",
+  "title": "Close the record: s/stability header says no product code (+1 more)",
   "status": "todo",
   "phase": "Audit: close the record",
   "why": "Source: docs/specs/todo-audit.md, section 1 (Close the record (20)), line 6 of that section, at main 06571635.",
   "note": "s/stability: header says no product code and lanes follow. The lanes are built. s/box-map: drop the 390 side-by-side open item; the shelf pair is a column at every width.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 20
 }

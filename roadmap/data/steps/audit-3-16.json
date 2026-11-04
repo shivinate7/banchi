@@ -1,10 +1,10 @@
 {
-  "title": "Needs owner call: measure real publish lag (now a 15-minute guess), run the markdown…",
+  "title": "Needs owner call: s/stale-listings measure real publish lag (+2 more)",
   "status": "todo",
   "phase": "Audit: needs owner call",
   "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 16 of that section, at main 06571635.",
   "note": "s/stale-listings: measure real publish lag (now a 15-minute guess), run the markdown rule at scale, and decide what to show for cards with no price history?",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 56
 }

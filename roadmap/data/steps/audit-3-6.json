@@ -1,10 +1,10 @@
 {
-  "title": "Needs owner call: back up inventory/ and captures/ with Time Machine, rsync or…",
+  "title": "Needs owner call: d067 back up inventory and captures how? (+2 more)",
   "status": "todo",
   "phase": "Audit: needs owner call",
   "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 6 of that section, at main 06571635.",
   "note": "d067 (also s/home-assistant R1): back up inventory/ and captures/ with Time Machine, rsync or Litestream (M)? d069: is the daily price refresh enough, or must it cover held cards outside open runs? d070: may realized sale prices ever feed a listing rule (L)?",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 46
 }

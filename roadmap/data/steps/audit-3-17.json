@@ -1,10 +1,10 @@
 {
-  "title": "Needs owner call: s/motion name the screens for custom skeletons (+3 more)",
+  "title": "Needs owner call: s/motion name screens for custom skeletons (+2 more)",
   "status": "todo",
   "phase": "Audit: needs owner call",
   "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 17 of that section, at main 06571635.",
   "note": "Small rulings: s/motion name the screens for custom skeletons; s/box-map and D264 confirm a box emptied by merge may be deleted (code already allows it; then rewrite D83); s/card-detail keep the amber state at 3 days?",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 57
 }

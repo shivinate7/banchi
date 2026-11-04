@@ -1,10 +1,10 @@
 {
-  "title": "Needs owner call: s/capture-app Fulfillment with a non-technical person, price bands… (+2 more)",
+  "title": "Needs owner call: s/capture-app Fulfillment with a non-technical person (+5 more)",
   "status": "todo",
   "phase": "Audit: needs owner call",
   "why": "Source: docs/specs/todo-audit.md, section 3 (Needs your call (63)), line 15 of that section, at main 06571635.",
   "note": "Real use: s/capture-app Fulfillment with a non-technical person, price bands on a mixed lot, which device the Fulfiller uses; s/one-process open localhost:8000 and run make lan-check; s/dispenser dock-app Bluetooth and the 10-card hardware check.",
   "ask": null,
-  "updatedAt": "2026-11-04T02:55:00Z",
+  "updatedAt": "2026-11-04T03:00:00Z",
   "order": 55
 }
