@@ -1,0 +1,30 @@
+{
+  "added": "2026-10-28T01:51:00Z",
+  "context": "The wire lane passed all three reviews, and the full test suite passes. After round 3, the shared rule weighs safety holes closed against holes opened. It found one opened and none closed, so it scored zero and the lane is held for you.\nThe opened hole: today Banchi refuses a send that names no run. This lane allows one, but only when the send holds only suggestions you kept, and each passes four gates: priced from today's reading, within 25% of the fresh live price, equal to the server's own rebuild, and with held cards left out.\nThat send is the one-list send you ruled for. Claude cannot trigger it by mistake; you press it on the Pricing screen.\nThe floating history card depends on this lane. It passed design review and waits with it.",
+  "home": "pricing-suggest spec section 5",
+  "id": "pricing-wire-held",
+  "kind": "decision",
+  "n": 37,
+  "options": [
+    {
+      "gain": "The one pricing list and its history card can reach the screen next.",
+      "how": "Batch the wire lane, then the history card, and merge on green.",
+      "key": "merge",
+      "label": "Merge both",
+      "lose": "A send with no run named is now possible, behind the four gates."
+    },
+    {
+      "gain": "No new kind of send.",
+      "how": "Neither merges until you say.",
+      "key": "park",
+      "label": "Keep both parked",
+      "lose": "The one-list screen and the history card wait."
+    }
+  ],
+  "owner": "pricing-tools",
+  "pick": "merge",
+  "ref": "Pricing one-list wire lane (head 62b31dde4); your one-list ruling (item 35, spec pricing-suggest section 5 step 4); net-value hold after 3 review rounds",
+  "status": "closed",
+  "title": "May the one-list send lane merge? It opens the send you ruled for",
+  "why": "The opened act is the send you ruled for. You press it, behind four gates, so Claude cannot hit it by mistake."
+}

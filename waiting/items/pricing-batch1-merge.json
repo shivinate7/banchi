@@ -1,0 +1,30 @@
+{
+  "added": "2026-10-27T21:20:00Z",
+  "context": "Batch 1 holds the pricing spec and mockups, the floor text, and the suggestion engine. The engine had three review rounds, and the test suite passes.\nThe Floor and hold wording lane was dropped: CI was red on 4 stale checks and a badge 2px too wide at 820. It is being fixed in its own lane and joins batch 2.\nCI is green: 11 checks pass, none fail. Nothing on screen changes yet; no screen calls the engine until batch 2.",
+  "home": "PR 980",
+  "id": "pricing-batch1-merge",
+  "kind": "decision",
+  "n": 36,
+  "options": [
+    {
+      "gain": "The suggestion engine and spec land; batch 2 builds on them.",
+      "how": "The pricing session merges once CI passes.",
+      "key": "merge",
+      "label": "Merge on green",
+      "lose": "Nothing known."
+    },
+    {
+      "gain": "Time to look first.",
+      "how": "Leave it open.",
+      "key": "hold",
+      "label": "Hold",
+      "lose": "Batch 2 waits."
+    }
+  ],
+  "owner": "pricing-tools",
+  "pick": "merge",
+  "ref": "PR 980 (pricing by suggestion, batch 1), which replaces PR 967",
+  "status": "closed",
+  "title": "Merge pricing batch 1 once CI is green?",
+  "why": "Every lane in it passed review, and only CI is left."
+}

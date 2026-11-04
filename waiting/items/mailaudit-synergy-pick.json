@@ -1,0 +1,37 @@
+{
+  "added": "2026-10-27T16:30:00Z",
+  "context": "Redone on your premise: the mailaudit roster is your investment buys.\nHoldings: 1,175 units, $65.6k paid. Singles $43.7k, sealed $22.0k. 117 lines at $100+ a unit are 68% of the money.\nBanchi's prices match 376 of 893 lines by exact name: $32.2k paid, $34.2k at market today (+6%, rough: no printing or condition match).\nAll 892 sale orders in the OrderWand export are already in Banchi, so that file holds Banchi's own sales only. Sales of the investment buys are in sales exports the lane does not have, so units already sold are not netted out yet.",
+  "home": "a brief from the Banchi orchestrator to a builder lane; the ruling goes in a new decision entry",
+  "id": "mailaudit-synergy-pick",
+  "kind": "decision",
+  "n": 20,
+  "options": [
+    {
+      "gain": "Paid vs now for $65.6k of holdings, using prices Banchi already refreshes.",
+      "how": "A one-off report outside the app: received units minus units sold (from your sales exports) times Banchi's market price, against price paid, per line.",
+      "key": "value",
+      "label": "Holdings value report",
+      "lose": "Covers 42% of lines today. Needs your sales exports. A one-off that goes stale."
+    },
+    {
+      "gain": "Tells you when a big line moves.",
+      "how": "The value report, then flag $100+ lines when the price-TA signals fire.",
+      "key": "watch",
+      "label": "Value plus sell signals",
+      "lose": "Needs the report first. Matching and signal quality are unproven. Couples two repos' data."
+    },
+    {
+      "gain": "No coupling, no private data in Banchi.",
+      "how": "Banchi stays for cards that run through a machine.",
+      "key": "nothing",
+      "label": "Nothing",
+      "lose": "The price pipeline is not used on your largest holdings."
+    }
+  ],
+  "owner": "mailaudit-synergy",
+  "pick": "value",
+  "ref": "cost next to sales = lot-level spend beside gross on #/revenue (D214, gross-revenue retrospective); received-but-not-scanned = mailaudit ledger vs Banchi captured cards",
+  "status": "closed",
+  "title": "Should Banchi's prices be used to value your investment holdings?",
+  "why": "Smallest step, uses prices that exist, and shows whether anything deeper is worth building. Seller and buyer names stay out."
+}

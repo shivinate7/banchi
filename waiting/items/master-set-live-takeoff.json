@@ -1,0 +1,30 @@
+{
+  "added": "2026-10-27T14:23:00Z",
+  "context": "Today emit writes negative quantity rows only for SKUs you hold back. One pulled copy shows on the reconcile phantoms list, which only reports it.",
+  "home": "docs/specs/master-set.md section 7.2, PR 965",
+  "id": "master-set-live-takeoff",
+  "kind": "decision",
+  "n": 11,
+  "options": [
+    {
+      "gain": "No new build.",
+      "how": "Keep today's path: the phantoms list names it, and you lower it.",
+      "key": "phantoms",
+      "label": "The phantoms list is enough",
+      "lose": "An extra step per pull of a live card."
+    },
+    {
+      "gain": "The listing follows the pull with no extra step.",
+      "how": "The pull receipt offers a press that queues a minus-one row for that SKU in the next send.",
+      "key": "one-press",
+      "label": "One press after the pull",
+      "lose": "More build, and it touches the send path (D54, re-emit adds, never subtracts)."
+    }
+  ],
+  "owner": "sets-pull",
+  "pick": "phantoms",
+  "ref": "PR 965, draft master-set spec; D100, never delete to lower a price",
+  "status": "closed",
+  "title": "After you pull a card that is live on TCGplayer, should taking the listing down be one press?",
+  "why": "Ship the checklist first; add the press if the extra step bites."
+}

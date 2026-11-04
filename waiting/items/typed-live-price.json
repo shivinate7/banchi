@@ -1,0 +1,31 @@
+{
+  "added": "2026-10-28T04:55:00Z",
+  "context": "Goal: price a live listing by typing it on the one list.\nProblem: today a typed price on a live listing, sent with no new copy, is refused. Item 37 approved kept suggestions only, so allowing typed prices opens that refusal again for an act you have not named.\nBased on: your item 37 'merge' answer (ruling); the spec line 'one send takes new copies, kept suggestions and typed prices' (spec).\nPricing builds it as a separate commit, held out of the batch until you answer.",
+  "home": "pricing-suggest spec and the one-list wire lane",
+  "id": "typed-live-price",
+  "kind": "decision",
+  "n": 112,
+  "options": [
+    {
+      "gain": "The one list does what the spec says.",
+      "how": "A typed live price goes out like a kept suggestion, under the same checks: a fresh price reading and the cap.",
+      "key": "allow",
+      "label": "Allow it",
+      "lose": "One more way past the refusal."
+    },
+    {
+      "gain": "No new path.",
+      "how": "Typed live prices go out only with new copies in the same send.",
+      "key": "refuse",
+      "label": "Keep the refusal",
+      "lose": "Repricing one listing needs a new copy alongside, or a kept suggestion instead."
+    }
+  ],
+  "owner": "banchi-coordinator",
+  "pick": "allow",
+  "rank": 3,
+  "ref": "Item 37 (one-list merge); pricing-suggest spec section 5",
+  "status": "open",
+  "title": "May a typed price on a live listing go out by itself?",
+  "why": "Same checks as kept suggestions, and it is what the spec already promises."
+}

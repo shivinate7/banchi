@@ -1,0 +1,30 @@
+{
+  "added": "2026-10-27T17:20:00Z",
+  "context": "PR 966 writes this page's link into Banchi's layout extras file. That same file tells the shared tools Banchi uses the shared record layout. Then the merge tool rebuilds a records page, which needs a one-line summary in every decision and debt record. About 300 decisions and 90 debts have none, so every merge would be refused.\nI dropped PR 966 from the batch so the other four can merge. Nothing else needs the link file: lanes bring their questions to me, and I know the page.",
+  "home": "PR 966",
+  "id": "waiting-page-link-rollout",
+  "kind": "decision",
+  "n": 91,
+  "options": [
+    {
+      "gain": "No work, and merges keep working.",
+      "how": "Close it for now. The page keeps working; the link lives in my handoff.",
+      "key": "park",
+      "label": "Park PR 966",
+      "lose": "Shared tools that look up a repo's waiting page find none for Banchi."
+    },
+    {
+      "gain": "Banchi's records show on the shared records page, and the link is found by every tool.",
+      "how": "A records lane adds a summary line to every decision and debt record, then PR 966 merges.",
+      "key": "rollout",
+      "label": "Move Banchi to the shared record layout",
+      "lose": "A large records-only change touching about 390 files."
+    }
+  ],
+  "owner": "orchestrator",
+  "pick": "park",
+  "ref": "PR 966 (waiting-page link in the layout extras file)",
+  "status": "closed",
+  "title": "Park the waiting-page link file, or move Banchi's records to the shared layout?",
+  "why": "The link file buys little today, and the roll-out is a large change nobody asked for yet."
+}

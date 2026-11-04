@@ -1,0 +1,37 @@
+{
+  "added": "2026-10-27T19:40:00Z",
+  "context": "TCGplayer covers untracked envelopes up to $49.99 for orders from Aug 17, but only for sellers with 1,000+ lifetime orders. Your store holds 912 (850 not canceled), so that cover is close but not yet yours.",
+  "home": "docs/specs/order-pipeline.md",
+  "id": "tcgtracking-direction",
+  "kind": "decision",
+  "n": 101,
+  "options": [
+    {
+      "gain": "No spend.",
+      "how": "No tracked envelopes; nothing is bought or built now.",
+      "key": "stand-down",
+      "label": "Stand down envelope tracking",
+      "lose": "Untracked envelopes have no TCGplayer cover until you pass 1,000 orders."
+    },
+    {
+      "gain": "Parcels get tracking on TCGplayer with no typing.",
+      "how": "Banchi turns Pirate Ship tracking into TCGplayer's Import Shipping Info file, for parcels only. Free.",
+      "key": "parcels",
+      "label": "Build tracking-back for parcels",
+      "lose": "Needs one real Pirate Ship round from you to build against."
+    },
+    {
+      "gain": "Every envelope tracked.",
+      "how": "Pay for tracked envelopes, behind the money gate.",
+      "key": "buy",
+      "label": "Buy TCGTracking envelopes",
+      "lose": "The fee was never measured."
+    }
+  ],
+  "owner": "tcgtracking",
+  "pick": "stand-down",
+  "ref": "TCGTracking review, order-pipeline spec step 13",
+  "status": "closed",
+  "title": "Which way for shipping and tracking now?",
+  "why": "No spend now; you are close to the 1,000-order cover. Parcels can follow as a second step."
+}

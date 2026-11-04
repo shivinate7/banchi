@@ -1,0 +1,37 @@
+{
+  "added": "2026-10-27T14:44:00Z",
+  "context": "TCGCSV is the only large free price history found. It has 992 daily files, from 2024-02-08 to yesterday (about 2.7 years), covering every Pokemon set back to Base Set and all 14 Riftbound groups. Each day holds market price and the lowest, median and highest listing for every product, but no sales or volume.\nSize is unmeasured: its docs say about 1 GB, but 2-4 MB a day comes to 1-4 GB, and the site refused a size check. The Mac has 124 GB free.\nCost: free. It asks that each file be downloaded once, slowly, and its FAQ calls card-game copyright a gray area. Unpacking needs a small 7-Zip tool from Homebrew (p7zip, a few MB). Files stay on this Mac, outside the repo.\nItem 70 also leans to TCGCSV, so one download can serve both. Widening Banchi's own price sweep for real sold prices is a separate question for later.",
+  "home": "PR 964, docs/research/price-ta/README.md, 'The data' table",
+  "id": "price-ta-history-fetch",
+  "kind": "decision",
+  "n": 51,
+  "options": [
+    {
+      "gain": "Measured size and coverage before the full pull.",
+      "how": "Fetch one day's file (2-4 MB) and install p7zip. Report its true size and whether Riftbound is in it, then ask again.",
+      "key": "one-file",
+      "label": "One file first",
+      "lose": "One more round trip before the backtest starts."
+    },
+    {
+      "gain": "About 2.7 years of daily prices for every Pokemon and Riftbound product.",
+      "how": "Check one file first, then fetch the rest once each with a pause between files. Install p7zip. Keep the files under ~/.banchi/research/.",
+      "key": "yes",
+      "label": "Yes, download it all",
+      "lose": "1-4 GB of disk, a p7zip install, and still no sales volume."
+    },
+    {
+      "gain": "Nothing changes.",
+      "how": "Download nothing.",
+      "key": "no",
+      "label": "No",
+      "lose": "The backtest stays at your store's own year of cards."
+    }
+  ],
+  "owner": "price-ta",
+  "pick": "one-file",
+  "ref": "PR 964, price-pattern research; D222, the archive sweep paces itself",
+  "status": "closed",
+  "title": "Download the TCGCSV daily price archive for backtesting?",
+  "why": "Size and access are unmeasured, and one 2-4 MB file settles both."
+}

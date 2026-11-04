@@ -1,0 +1,38 @@
+{
+  "added": "2026-10-28T04:55:00Z",
+  "context": "The sweep you asked for is done. No old branch retires 'run' or 'box', and none picks replacement words or bans them. The glossary draft (PR 961) keeps 'Box', and the term-audit spec on main says 'Box everywhere', which is the opposite of this cull. So the lane starts fresh. It rewrites the glossary's Box row and term-audit clash 14 to your words first, so the records do not contradict the cull. Options are as before.",
+  "home": "a new decision record for the retired words",
+  "id": "cull-runs-boxes-scope",
+  "kind": "decision",
+  "n": 94,
+  "options": [
+    {
+      "gain": "You never see the words, and no rename touches stored data.",
+      "how": "One lane culls screen text, server messages and the top docs, and adds both words to the on-screen word ban so they stay out. Other records change as each is next touched. Code keeps 'box' as an internal address.",
+      "key": "screen-docs",
+      "label": "Screen and docs; keep code names",
+      "lose": "Code and old records still say them internally."
+    },
+    {
+      "gain": "The words are gone everywhere.",
+      "how": "As above, plus rename the table, wire routes, CLI flags and folders, split by seam.",
+      "key": "full",
+      "label": "Full rename, code too",
+      "lose": "The largest change by far: stored data, the wire and the CLI all move. Slow, and risky for live data."
+    },
+    {
+      "gain": "Smallest lane.",
+      "how": "Cull only what you see on screen, plus the word ban.",
+      "key": "screen-only",
+      "label": "Screen only",
+      "lose": "Docs and agent briefs keep teaching the old words."
+    }
+  ],
+  "owner": "banchi-coordinator",
+  "pick": "screen-docs",
+  "rank": 1,
+  "ref": "Your note on item 37; D180 (a press names the cards), D291 (runs fold into Review), D259 (boxes show names only)",
+  "status": "open",
+  "title": "How far should the 'run' and 'box' clean-up go?",
+  "why": "It removes the words from everything you and the agents read, and keeps stored data and the wire stable."
+}
