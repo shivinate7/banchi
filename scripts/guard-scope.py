@@ -274,14 +274,15 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
     if not test_path.exists():
         return ()
     try:
-        text = test_path.read_text()
+        data = test_path.read_bytes()
     except OSError:
         return ()
+    text = data.decode("utf-8", errors="replace")
     hits: Set[str] = set()
     if test_path.suffix == ".py":
         try:
-            tree = ast.parse(text)
-        except SyntaxError:
+            tree = ast.parse(data)  # bytes: ast decodes by the PEP 263 cookie, as the interpreter does
+        except (SyntaxError, ValueError):
             return ()
         scan_root: ast.AST = tree
         if func is not None:
@@ -326,8 +327,8 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
         queue.append(own)
     while queue:
         try:
-            tree = ast.parse((ROOT / queue.pop()).read_text())
-        except (OSError, SyntaxError):
+            tree = ast.parse((ROOT / queue.pop()).read_bytes())
+        except (OSError, SyntaxError, ValueError):
             # unreadable: its imports are unknown, so every script counts as read (fail safe)
             resolved |= {f"scripts/{q.name}" for q in (ROOT / "scripts").glob("*.py")}
             break
@@ -416,8 +417,8 @@ def _package_imports(rel: str, packages: Sequence[str] = LOCAL_PACKAGES,
     (the test-level `_PathCollector` does follow them).
     """
     try:
-        tree = ast.parse((ROOT / rel).read_text())
-    except (OSError, SyntaxError):
+        tree = ast.parse((ROOT / rel).read_bytes())
+    except (OSError, SyntaxError, ValueError):
         return {str(q.relative_to(ROOT)) for p in packages if (ROOT / p).is_dir()
                 for q in (ROOT / p).rglob("*.py")}
     return _tree_package_imports(tree, rel, packages, import_time)
@@ -528,7 +529,7 @@ def harness_subjects() -> Tuple[str, ...]:
         if module in seen:
             continue
         seen.add(module)
-        tree = ast.parse(module.read_text())
+        tree = ast.parse(module.read_bytes())
         collector = _PathCollector()
         collector.visit(tree)
         hits = set(collector.hits)

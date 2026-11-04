@@ -15,10 +15,11 @@ scripts it loads always come from beside this file, so a tree with no `scripts/`
 
 A suite REACHES a file when it loads it by an import (at any depth), a literal path (a `ROOT / "a" / "b"`
 chain, a string such as `scripts/x.py` or `./banchi`), a literal `importlib.import_module` name, a
-`python3 -c "from pkg import m"` snippet, or, for a unit test, a text read (a literal path resolved
+`python3 -c "from pkg import m"` snippet, a module run by `-m` (`[sys.executable, "-m", "cli"]`, or the
+`python3 -m cli` line of a shell shim such as `./banchi`), or, for a unit test, a text read (a literal path resolved
 against the test's folder, the repo root or a folder the test names, `new URL(...)`, a `readdirSync` of
 a folder, narrowed by an `endsWith('.ext')` it finds). A text read is a leaf: it reads the file, not
-what the file imports. A script it runs is followed: Python by its imports, `.mjs` by its relative imports.
+what the file imports. A script it runs is followed: Python by its imports, `.mjs` by its relative imports. A unit test's `import('./x')` is followed like an import.
 
 THE REACH RULES (each is a case of `scripts/tests-for-selftest.py`):
 - Every Python suite inherits the import-time closure of `harness/tests/home.py`, which the runner imports for
@@ -26,7 +27,8 @@ THE REACH RULES (each is a case of `scripts/tests-for-selftest.py`):
 - Every T7 group inherits the import-time closure of `harness/tests/t7/common.py` (the hermetic setup) and of
   `harness/tests/t7_store_and_seams.py` (the module every group run loads), whether it imports them or not.
 - What a group loads only inside a check body reaches that group, and the aggregator that runs it, alone.
-- A `tN_*.py` module with no top-level `run` is no suite: its checks run inside the aggregator.
+- A `tN_*.py` module with no top-level `run` is no suite: its checks run inside the aggregator. A module that cannot be
+  parsed might be one, so it is printed.
 
 THE HOMES IT REUSES, never copies: `scripts/guard-scope.py` for the Python scan (`_PathCollector`,
 `_tree_package_imports` read at any depth or at import time, `derive_subjects` for a script a suite runs) and
@@ -54,6 +56,9 @@ import sys
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
+# The scope scripts are loaded from beside this file. Loading them must leave no bytecode there: the run is a read.
+sys.dont_write_bytecode = True
+
 SCRIPTS = Path(__file__).resolve().parent
 
 HOME = "harness/tests/home.py"
@@ -65,6 +70,7 @@ _WEB_SUFFIXES = (".ts", ".tsx", ".js", ".mjs", ".cjs", ".jsx", ".css")
 _SCRIPT_SUFFIXES = (".js", ".mjs", ".cjs")  # a literal that is run, so its imports are followed
 _SUITE_NAME = re.compile(r"^t\d+_\w+\.py$")
 _MAX_PATH = 200
+_DASH_M = re.compile(r"(?:^|\s)-m\s+([A-Za-z_][\w.]*)")  # `python3 -m cli`, in a shim or a command string
 
 
 def _load(filename: str, alias: str):
@@ -79,11 +85,13 @@ def _load(filename: str, alias: str):
     return module
 
 
-def defines_top_level(path: Path, name: str) -> bool:
+def defines_top_level(path: Path, name: str) -> Optional[bool]:
+    """Whether the module defines `name` at its top level; None when it cannot be read or parsed. Bytes go to
+    `ast.parse`, which decodes by the PEP 263 cookie as the interpreter does."""
     try:
-        body = ast.parse(path.read_text(encoding="utf-8")).body
-    except (OSError, SyntaxError, UnicodeDecodeError):
-        return False
+        body = ast.parse(path.read_bytes()).body
+    except (OSError, SyntaxError, ValueError):
+        return None
     for node in body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == name:
             return True
@@ -96,24 +104,144 @@ def defines_top_level(path: Path, name: str) -> bool:
 
 # --------------------------------------------------------------------------- TypeScript strings, in one pass
 
-# Comments and strings in one scan, so a `//` inside a string is no comment and an apostrophe inside a
-# comment opens no string.
-_TOKEN = re.compile(r"//[^\n]*|/\*.*?\*/|'(?:\\.|[^'\\\n])*'|\"(?:\\.|[^\"\\\n])*\"|`(?:\\.|[^`\\])*`", re.S)
-_IMPORT_LEAD = re.compile(r"(?:\bfrom|\bimport|\bimport\s*\()\s*$")
+# One pass over the source reads comments, strings, templates (a `${...}` is read through, nested) and regex
+# literals, so a quote inside a regex or a comment opens no string and a `//` inside a string is no comment.
+# A `/` opens a regex when the token before it cannot end a value; a regex that does not close on its line is a
+# division. This is the one scanner of TypeScript text in this repo: browser-scope's `strip_comments` is
+# regex-only and string-blind, so it cannot serve the read of a literal.
+_IMPORT_LEAD = re.compile(r"(?:\bfrom|\bimport)\s*$")
+_DYNAMIC_LEAD = re.compile(r"\bimport\s*\(\s*$")
 _RUN_GAP = re.compile(r"\s*,\s*")
+_WORD = re.compile(r"[A-Za-z_$][\w$]*|\d[\w.]*")
+_BEFORE_REGEX = frozenset("return typeof case in of delete void throw new else do instanceof yield await".split())
+_VALUE = ("v", "")  # the token before a `/` ended a value, so the `/` divides
+_Token = Tuple[int, int, str, str]
 
 
-def ts_strings(text: str) -> List[Tuple[int, int, str, str]]:
+def _regex_allowed(prev: Optional[Tuple[str, str]]) -> bool:
+    if prev is None:
+        return True
+    kind, word = prev
+    if kind == "v":
+        return False
+    if kind == "w":
+        return word in _BEFORE_REGEX
+    return word not in (")", "]")
+
+
+def _template_end(text: str, i: int) -> int:
+    """Index after the backtick that closes the template opened at `i`, or -1 when it never closes."""
+    j, n = i + 1, len(text)
+    while j < n:
+        ch = text[j]
+        if ch == "\\":
+            j += 2
+        elif ch == "`":
+            return j + 1
+        elif text.startswith("${", j):
+            j = _walk(text, j + 2, True, None)
+        else:
+            j += 1
+    return -1
+
+
+def _walk(text: str, i: int, in_expr: bool, out: Optional[List[_Token]]) -> int:
+    """Scan code from `i`. In a template expression, stop after its closing `}` and return that index; else read to
+    the end. Strings found go to `out` (None while reading a template's expression)."""
+    n = len(text)
+    depth = 0
+    prev: Optional[Tuple[str, str]] = None
+    while i < n:
+        c = text[i]
+        if c in " \t\r\n":
+            i += 1
+            continue
+        pair = text[i:i + 2]
+        if pair == "//":
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        if pair == "/*":
+            j = text.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            continue
+        if c in "'\"":
+            j = i + 1
+            while j < n and text[j] != c and text[j] != "\n":
+                j += 2 if text[j] == "\\" else 1
+            if j < n and text[j] == c:  # a quote that never closes on its line is text, not a string
+                if out is not None:
+                    out.append((i, j + 1, text[i + 1:j], c))
+                i, prev = j + 1, _VALUE
+            else:
+                i += 1
+            continue
+        if c == "`":
+            end = _template_end(text, i)
+            if end < 0:
+                i += 1
+                continue
+            if out is not None:
+                out.append((i, end, text[i + 1:end - 1], "`"))
+            i, prev = end, _VALUE
+            continue
+        if c == "/":
+            if _regex_allowed(prev):
+                j, in_class = i + 1, False
+                while j < n and text[j] != "\n":
+                    ch = text[j]
+                    if ch == "\\":
+                        j += 2
+                        continue
+                    if ch == "[":
+                        in_class = True
+                    elif ch == "]":
+                        in_class = False
+                    elif ch == "/" and not in_class:
+                        break
+                    j += 1
+                if j < n and text[j] == "/":
+                    j += 1
+                    while j < n and text[j].isalpha():
+                        j += 1
+                    i, prev = j, _VALUE
+                    continue
+            i, prev = i + 1, ("p", "/")
+            continue
+        word = _WORD.match(text, i)
+        if word:
+            i, prev = word.end(), ("w", word.group(0))
+            continue
+        if in_expr and c == "{":
+            depth += 1
+        elif in_expr and c == "}":
+            if depth == 0:
+                return i + 1
+            depth -= 1
+        i, prev = i + 1, (_VALUE if c in ")]" else ("p", c))
+    return n
+
+
+def ts_scan(text: str) -> Tuple[List[_Token], List[str]]:
+    """(strings, dynamic imports) of one TypeScript source. A string is (start, end, value, quote), and an import
+    specifier is left out of it: `from 'x'` and `import 'x'` are modules, not text reads. The specifier of an
+    `import('x')` call is returned in the second list, in order."""
+    found: List[_Token] = []
+    _walk(text, 0, False, found)
+    strings: List[_Token] = []
+    dynamic: List[str] = []
+    for item in found:
+        lead = text[max(0, item[0] - 40):item[0]]
+        if _DYNAMIC_LEAD.search(lead) and item[3] != "`":
+            dynamic.append(item[2])
+        elif not _IMPORT_LEAD.search(lead):
+            strings.append(item)
+    return strings, dynamic
+
+
+def ts_strings(text: str) -> List[_Token]:
     """(start, end, value, quote) of every string literal that is not an import specifier."""
-    out: List[Tuple[int, int, str, str]] = []
-    for match in _TOKEN.finditer(text):
-        token = match.group(0)
-        if token[0] == "/":
-            continue
-        if _IMPORT_LEAD.search(text[max(0, match.start() - 40):match.start()]):
-            continue
-        out.append((match.start(), match.end(), token[1:-1], token[0]))
-    return out
+    return ts_scan(text)[0]
 
 
 class Reach:
@@ -132,6 +260,7 @@ class Reach:
         self._web: Dict[str, Set[str]] = {}
         self._edges: Dict[Tuple[str, bool], Tuple[Set[str], Set[str], Set[str]]] = {}
         self._ts_hits: Dict[str, Tuple[Set[str], Set[str], Set[str]]] = {}
+        self._ts_dynamic: Dict[str, List[str]] = {}
 
     def _packages(self) -> Tuple[str, ...]:
         names = {p.name for p in self.root.iterdir() if p.is_dir() and not p.name.startswith(".")}
@@ -193,15 +322,44 @@ class Reach:
     def parse(self, rel: str) -> Optional[ast.AST]:
         if rel not in self._trees:
             try:
-                self._trees[rel] = ast.parse((self.root / rel).read_text(encoding="utf-8"))
-            except (OSError, SyntaxError, UnicodeDecodeError, ValueError):
+                self._trees[rel] = ast.parse((self.root / rel).read_bytes())
+            except (OSError, SyntaxError, ValueError):
                 self._trees[rel] = None
         return self._trees[rel]
 
     def file_of(self, rel: str, bucket: Tuple[Set[str], Set[str], Set[str]]) -> None:
-        """File one reached path into the (python, web, leaf) bucket by kind."""
+        """File one reached path into the (python, web, leaf) bucket by kind. A shell shim that execs
+        `python -m pkg` also files the module it runs."""
         py, web, leaf = bucket
-        {"py": py, "web": web}.get(self.kind(rel), leaf).add(rel)
+        kind = self.kind(rel)
+        {"py": py, "web": web}.get(kind, leaf).add(rel)
+        if kind == "leaf":
+            py.update(self.shim_modules(rel))
+
+    def module_files(self, dotted: str) -> List[str]:
+        """The files `python -m <dotted>` runs: the module or the package's `__main__.py`, and the `__init__.py` of
+        each package above it. A name outside the repo's own packages is no file."""
+        parts = dotted.split(".")
+        if parts[0] not in self.packages:
+            return []
+        base = "/".join(parts)
+        out = [cand for cand in (f"{base}.py", f"{base}/__main__.py", f"{base}/__init__.py") if self.is_file(cand)]
+        out += [init for i in range(1, len(parts)) if self.is_file(init := "/".join(parts[:i]) + "/__init__.py")]
+        return out
+
+    def shim_modules(self, rel: str) -> List[str]:
+        """The modules a shell script runs with `python -m` (`./banchi` is `exec python3 -m cli`); [] for any other file."""
+        base = posixpath.basename(rel)
+        if "." in base:
+            return []
+        try:
+            with open(self.root / rel, "rb") as handle:
+                head = handle.read(20000).decode("utf-8", errors="replace")
+        except OSError:
+            return []
+        if not head.startswith("#!") or "python" not in head:
+            return []
+        return [path for name in _DASH_M.findall(head) for path in self.module_files(name)]
 
     # ---- Python: what one module loads
 
@@ -228,9 +386,20 @@ class Reach:
                 if norm and self.is_file(norm):
                     self.file_of(norm, bucket)
         for node in (self.gs.walk_import_time(tree) if import_time else ast.walk(tree)):
+            if isinstance(node, (ast.List, ast.Tuple)):  # argv `[sys.executable, "-m", "cli"]`
+                for flag, arg in zip(node.elts, node.elts[1:]):
+                    if (isinstance(flag, ast.Constant) and flag.value == "-m"
+                            and isinstance(arg, ast.Constant) and isinstance(arg.value, str)):
+                        for path in self.module_files(arg.value):
+                            self.file_of(path, bucket)
+                continue
             if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
                 continue
             value = node.value
+            if " -m " in value and len(value) < 5000:  # a command string, `python3 -m cli identify`
+                for name in _DASH_M.findall(value):
+                    for path in self.module_files(name):
+                        self.file_of(path, bucket)
             if value and len(value) < _MAX_PATH and not re.search(r"\s", value):
                 norm = self.inside(value[2:] if value.startswith("./") else value)
                 if norm and self.is_file(norm):
@@ -294,9 +463,9 @@ class Reach:
     def python_suites(self) -> List[str]:
         tests = self.root / "harness/tests"
         found = [f"harness/tests/{p.name}" for p in sorted(tests.glob("t*.py"))
-                 if _SUITE_NAME.match(p.name) and defines_top_level(p, "run")]
+                 if _SUITE_NAME.match(p.name) and defines_top_level(p, "run") is not False]
         found += [f"harness/tests/t7/{p.name}" for p in sorted((tests / "t7").glob("*.py"))
-                  if p.name != "__init__.py" and defines_top_level(p, "CHECKS")]
+                  if p.name != "__init__.py" and defines_top_level(p, "CHECKS") is not False]
         return found
 
     def python_reach(self, suite: str, inherited_all: Set[str], inherited_group: Set[str]) -> Set[str]:
@@ -326,7 +495,8 @@ class Reach:
             text = (self.root / rel).read_text(encoding="utf-8", errors="replace")
         except OSError:
             return self._ts_hits[rel]
-        strings = ts_strings(text)
+        strings, dynamic = ts_scan(text)
+        self._ts_dynamic[rel] = dynamic
         folder = posixpath.dirname(rel)
         runs: List[List[str]] = []
         previous_end: Optional[int] = None
@@ -371,6 +541,7 @@ class Reach:
                         run_script.add(norm)
                     else:
                         text_read.add(norm)
+                        run_py.update(self.shim_modules(norm))
                 elif wants_dir and self.is_dir(norm):
                     walk = (self.root / norm).rglob("*") if recursive else (self.root / norm).iterdir()
                     for child in walk:
@@ -384,9 +555,17 @@ class Reach:
         return self._ts_hits[rel]
 
     def unit_reach(self, suite: str) -> Set[str]:
+        """The suite's static import closure, plus what each test file in it reads, runs or loads by
+        `import('...')`. A dynamically loaded module brings its own closure, and its tests are read in turn."""
         files = set(self.bs.import_closure([suite]))
         reach = set(files)
-        for rel in sorted(files):
+        queue = sorted(files)
+        done: Set[str] = set()
+        while queue:
+            rel = queue.pop()
+            if rel in done:
+                continue
+            done.add(rel)
             if not rel.startswith("app/tests/") or not rel.endswith((".ts", ".tsx")):
                 continue
             run_py, run_script, text_read = self.ts_reads(rel)
@@ -394,6 +573,12 @@ class Reach:
             for script in run_script:
                 reach |= set(self.bs.import_closure([script]))
             reach |= text_read
+            for module in self._ts_dynamic.get(rel, []):
+                target = self.bs.resolve_relative(rel, module) if module.startswith(".") else None
+                if target:
+                    loaded = set(self.bs.import_closure([target]))
+                    queue.extend(loaded - done)
+                    reach |= loaded
         return reach
 
 
