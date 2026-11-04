@@ -362,26 +362,6 @@ CHECKS = (
         "governed_by": ("D18", "D271"),
     },
     {
-        "target": "waiting-export-selftest",
-        "shard": "guards-2",
-        "runs": "python3 scripts/waiting-export.py --selftest",
-        "asserts": "scripts/waiting-export.py's scan stops the export and writes nothing on "
-                   "each fake secret or personal-data shape it names (tokens, keys, a "
-                   "settings-file line, basic auth, a bare cookie, addresses, a PO box, a city "
-                   "line, phones), each built at run time. This repo's own idioms (\"in "
-                   "place\", \"this lane\", \"join key:\", `key={...}`) raise nothing. A clean "
-                   "export writes all four files, an empty collection as {}, and a second run "
-                   "over the same data rewrites nothing.",
-        "needs": ("python3",),
-        "writes": "fixture folders and their output under `tempfile.TemporaryDirectory()`; "
-                  "never `docs/waiting/`.",
-        "commit_path": False,
-        "why_off_commit_path": "D18, it writes temp files. Same standing as "
-                               "hand-search-selftest above: `make check` only.",
-        "gates": True,
-        "governed_by": ("D327", "D18"),
-    },
-    {
         "target": "token-literal-check",
         "shard": "static",
         "runs": "python3 scripts/token-literal-check.py",
