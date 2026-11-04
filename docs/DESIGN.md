@@ -581,8 +581,8 @@ ways. Before this was written, four edges were spelled twice — 559/560, 639/64
 LADDER          the shared vocabulary. Any sheet may use these.
   480           the narrow phone
   560           the wide phone: a receipt, a box bar and a hero fold here
-  640           the phone/tablet seam
-  768           the tablet, and the shell's own rail boundary
+  640           the phone/tablet seam, where the desktop rail starts
+  768           the tablet
   900           a two-column body becomes one, ahead of the tablet step
   1024          the desk: at and above this the sidebar is 236px, or 64px railed
   1280          the wide desk
