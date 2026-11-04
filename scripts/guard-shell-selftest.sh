@@ -1319,9 +1319,8 @@ LIBDIR="$HERE"
 echo ""
 echo "  --skip: clauses another guard owns, through the real CLI"
 
-# THE REAL CLI, NOT `hook()`: `--skip` is parsed by `main`, and Claude Code runs exactly
-# `--hook --skip checkout,stash,reset`. Earlier sections leave the tree in unknown states,
-# so it is dirtied again here, and a refused case is meaningless on a clean tree.
+# THE REAL CLI, NOT `hook()`: `--skip` is parsed by `main`. Earlier sections leave the tree in
+# unknown states, so it is dirtied again here, and a refused case is meaningless on a clean tree.
 (cd "$tmp/main" && git checkout -q main 2>/dev/null; printf 'one\ntwo\nthree\nskip-section\n' > work.py)
 skip_cli() {   # skip_cli <skip-list|-> <cwd> <command> -> exit code
   local args=(--hook); [ "$1" = "-" ] || args+=(--skip "$1")
@@ -1335,13 +1334,6 @@ skip_cli_write() {   # skip_cli_write <skip-list> <cwd> <file_path>
         | python3 "$GUARD" --hook --skip "$1" 2>&1)"
   return $?
 }
-SKIPS="checkout,stash,reset"
-for c in "git stash pop" "git reset --hard" "git checkout work.py"; do
-  skip_cli - "$tmp/main" "$c"; a=$?
-  skip_cli "$SKIPS" "$tmp/main" "$c"; b=$?
-  if [ $a -eq 2 ] && [ $b -eq 0 ]; then ok "\`$c\`: refused without --skip, allowed with it"
-  else bad "\`$c\`: exit $a without --skip, $b with it (want 2 and 0)"; fi
-done
 skip_cli "bogus,,nonsense" "$tmp/main" "git checkout work.py"
 [ $? -eq 2 ] && ok "an unknown name in --skip skips nothing" || bad "an unknown name in --skip skipped a clause"
 skip_cli "checkout,bogus" "$tmp/main" "git stash pop"
@@ -1370,19 +1362,59 @@ skip_env checkout --skip stash -- "$tmp/main" "git reset --hard"; c=$?
 if [ $a -eq 0 ] && [ $b -eq 0 ] && [ $c -eq 2 ]; then ok "the variable and --skip together skip the union, and no more"
 else bad "variable plus flag: checkout $a, stash $b, reset $c (want 0, 0, 2)"; fi
 
-# Re-arm the mismatch: a branch tracking a DIFFERENTLY named upstream (later sections repoint it).
-(cd "$tmp/main" && git checkout -q -B skip-mismatch main 2>/dev/null \
-  && git config branch.skip-mismatch.remote origin \
-  && git config branch.skip-mismatch.merge refs/heads/claude/skip-mismatch)
-skip_cli - "$tmp/main" "git push origin HEAD"
-[ $? -eq 2 ] || bad "the skip-section push fixture did not arm: the mismatch is not refused without --skip"
-skip_cli "$SKIPS" "$tmp/main" "git push origin HEAD"
-[ $? -eq 2 ] && ok "with --skip, the push mismatch is still refused" || bad "--skip let the push mismatch through"
-(cd "$tmp/main" && git checkout -q main 2>/dev/null)
-skip_cli "$SKIPS" "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
-[ $? -eq 2 ] && ok "with --skip, a polling loop is still refused" || bad "--skip let a polling loop through"
-skip_cli_write "$SKIPS" "$WT" "$tmp/main/work.py"
-[ $? -eq 2 ] && ok "with --skip, a write outside the checkout is still refused" || bad "--skip let a write outside the checkout through"
+# THE SKIP LISTS COME FROM THE CONFIG, NOT FROM A COPY HERE. Each harness runs the guard with a
+# `GUARD_SHELL_SKIP=<list>` prefix on its Bash entry: Claude Code's is in .claude/settings.json and
+# Codex's is in .codex/hooks.json. An entry that is missing or doubled is a failed read, not an
+# empty list, so a dropped prefix cannot pass as "nothing is skipped".
+REPO_ROOT="$(cd "$HERE/.." && pwd)"
+bash_skip_list() {   # bash_skip_list <hooks-file> -> the list on its one guard-shell Bash entry
+  python3 -I -c '
+import json, re, sys
+found = []
+for entry in json.load(open(sys.argv[1]))["hooks"]["PreToolUse"]:
+    if entry.get("matcher") != "Bash":
+        continue
+    for hook in entry.get("hooks", []):
+        m = re.match(r"GUARD_SHELL_SKIP=(\S*) scripts/guard-shell\.py --hook$", hook.get("command", ""))
+        if m:
+            found.append(m.group(1))
+if len(found) != 1:
+    sys.exit("want one guard-shell Bash entry in " + sys.argv[1] + ", found " + str(len(found)))
+print(found[0])
+' "$1"
+}
+CLAUDE_SKIPS="$(bash_skip_list "$REPO_ROOT/.claude/settings.json")"; cs=$?
+CODEX_SKIPS="$(bash_skip_list "$REPO_ROOT/.codex/hooks.json")"; xs=$?
+if [ $cs -ne 0 ] || [ $xs -ne 0 ]; then
+  bad "the skip lists: no single guard-shell Bash entry in .claude/settings.json or .codex/hooks.json, so no list was read"
+else
+  ok "the skip lists come from the config: Claude's \`$CLAUDE_SKIPS\`, Codex's \`${CODEX_SKIPS:-none}\`"
+  SKIPS="$CLAUDE_SKIPS"
+  for c in "git stash pop" "git reset --hard" "git checkout work.py"; do
+    skip_cli - "$tmp/main" "$c"; a=$?
+    skip_cli "$SKIPS" "$tmp/main" "$c"; b=$?
+    if [ $a -eq 2 ] && [ $b -eq 0 ]; then ok "\`$c\`: refused without --skip, allowed with it"
+    else bad "\`$c\`: exit $a without --skip, $b with it (want 2 and 0)"; fi
+  done
+  # Re-arm the mismatch: a branch tracking a DIFFERENTLY named upstream (later sections repoint it).
+  (cd "$tmp/main" && git checkout -q -B skip-mismatch main 2>/dev/null \
+    && git config branch.skip-mismatch.remote origin \
+    && git config branch.skip-mismatch.merge refs/heads/claude/skip-mismatch)
+  skip_cli - "$tmp/main" "git push origin HEAD"
+  [ $? -eq 2 ] || bad "the skip-section push fixture did not arm: the mismatch is not refused without --skip"
+  # Each harness runs the hook with its list as the environment prefix, so the push cases do too.
+  skip_env "$CLAUDE_SKIPS" -- "$tmp/main" "git push origin HEAD"; p=$?
+  if [ $p -eq 0 ]; then ok "Claude Code's list skips the push clause: \`$CLAUDE_SKIPS\` lets the push mismatch through"
+  else bad "Claude Code's list does not skip the push clause: \`GUARD_SHELL_SKIP=$CLAUDE_SKIPS\` in .claude/settings.json leaves the push mismatch refused, exit $p (want 0)"; fi
+  skip_env "$CODEX_SKIPS" -- "$tmp/main" "git push origin HEAD"; p=$?
+  if [ $p -eq 2 ]; then ok "Codex's list keeps the push clause: \`${CODEX_SKIPS:-none}\` still refuses the push mismatch"
+  else bad "Codex's list lets the push mismatch through: \`GUARD_SHELL_SKIP=$CODEX_SKIPS\` in .codex/hooks.json gave exit $p (want 2)"; fi
+  (cd "$tmp/main" && git checkout -q main 2>/dev/null)
+  skip_cli "$SKIPS" "$tmp/main" "until ! pgrep -f 'scratchpad/drive.sh'; do sleep 5; done"
+  [ $? -eq 2 ] && ok "with Claude's list, a polling loop is still refused" || bad "Claude's list let a polling loop through"
+  skip_cli_write "$SKIPS" "$WT" "$tmp/main/work.py"
+  [ $? -eq 2 ] && ok "with Claude's list, a write outside the checkout is still refused" || bad "Claude's list let a write outside the checkout through"
+fi
 
 echo ""
 echo "  the refusal log"
