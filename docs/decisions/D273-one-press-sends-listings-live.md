@@ -46,8 +46,9 @@ accepted that cost. These protections stay, and they are the two-press design's 
 - The upload id comes off disk, never off the request.
 - A failed push rolls back at TCGplayer. Its copies go back to the list ONLY when TCGplayer
   answered the rollback, or when no upload was opened (the 2026-09-24 review).
-- The one press is the only route that publishes. No session, test or dry run calls it. Two older routes, `POST /pipeline/markdowns/<stamp>/push` and `.../publish` (`pipeline_routes.do_markdown_push`, `do_markdown_publish`), still move an upload live with only a confirm and no live read. Nothing in the repo calls them. They are to be deleted, with their uncalled client functions, their `scripts/screen-freshness.mjs` rows, their harness cases and their spec lines (owner, 2026-11-03 19:05 CST, waiting-page item 185 `oq-publish-route`, pick a). The delete lane first reads git history for why they were added. It deletes only if no live reason turns up. Otherwise it brings the reason back to the owner. The
+- The one press is the only route the app or a session uses to publish. No session, test or dry run calls it. The
   repo's rule that a block-list fails open applies here: a dry run uses an allow-list.
+- Two older routes, `POST /pipeline/markdowns/<stamp>/push` and `.../publish` (`pipeline_routes.do_markdown_push`, `do_markdown_publish`), still move an upload live with a push receipt and a confirm, and no live read. No app code or session calls them. They are to be deleted, with the uncalled client functions `pushMarkdown` and `publishMarkdown`, their entries in `scripts/screen-freshness.mjs`, their harness cases and their push and publish lines in `docs/specs/stale-listings.md` (owner, 2026-11-03 19:05 CST, waiting-page item 185 `oq-publish-route`, pick a). The rollback route stays. The delete lane first reads git history for why the two routes were added. It deletes only if no live reason turns up. Otherwise it brings the reason back to the owner.
 
 The owner still decides every price on Pricing before the press. The live check after the lag
 reports any copy that did not land.
