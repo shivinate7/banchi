@@ -170,7 +170,7 @@ def run(ok) -> None:
         "hooks": {
             "PreToolUse": [
                 {"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "scripts/guard-opsec.sh"}]},
-                {"matcher": "Bash", "hooks": [{"type": "command", "command": "scripts/reap.py --hook"}]},
+                {"matcher": "Bash", "hooks": [{"type": "command", "command": "scripts/guard-shell.py --hook"}]},
             ],
             "Stop": [{"hooks": [{"type": "command", "command": "scripts/typecheck-hook.py"}]}],
         }
@@ -178,7 +178,7 @@ def run(ok) -> None:
     triples = _hook_triples(claude_shaped)
     ok(
         ("PreToolUse", "Write|Edit", "scripts/guard-opsec.sh") in triples
-        and ("PreToolUse", "Bash", "scripts/reap.py --hook") in triples,
+        and ("PreToolUse", "Bash", "scripts/guard-shell.py --hook") in triples,
         "a matcher on the entry is carried into the triple",
         str(sorted(triples)),
     )
@@ -192,7 +192,7 @@ def run(ok) -> None:
     ok(not _hook_triples({"hooks": {"Stop": [{"hooks": [{"type": "prompt", "text": "x"}]}]}}),
        "a non-command hook (a prompt, say) contributes nothing to the roster")
     ok(
-        ("PreToolUse", "Bash", "scripts/reap.py --hook") in _hook_triples(claude_shaped)
+        ("PreToolUse", "Bash", "scripts/guard-shell.py --hook") in _hook_triples(claude_shaped)
         and ("PreToolUse", "Write|Edit", "scripts/decision-context.py")
         not in _hook_triples(claude_shaped),
         "the triple is exact — same event and matcher, a different command is not a match",
@@ -246,6 +246,34 @@ def run(ok) -> None:
     found = claude_hooks_findings([hook("Bash", "GUARD_SHELL_SKIP=wait " + gs), c_edit, silent_c])
     ok(len(found) == 1 and "must not set `GUARD_SHELL_SKIP`" in str(found[0]),
        "red: a prefix naming a live clause is a finding too, not a pin", str(found))
+    # THE SKIP PIN IN EVERY SPELLING THE REGEX MUST CATCH. Each form rides as its own Bash entry beside
+    # the pinned guard-shell entries, so exactly one finding means the form was caught, and once.
+    skip_forms = (
+        ("a leading GUARD_SHELL_SKIP=", "GUARD_SHELL_SKIP=wait " + gs),
+        ("GUARD_SHELL_SKIP= after another assignment", "FOO=1 GUARD_SHELL_SKIP=wait " + gs),
+        ("GUARD_SHELL_SKIP= after env", "env GUARD_SHELL_SKIP=wait " + gs),
+        ("a quoted --skip=NAME", gs + ' "--skip=wait"'),
+        ("--skip NAME", gs + " --skip wait"),
+        ("--skip=NAME", gs + " --skip=wait"),
+        ("a trailing --skip with no name", gs + " --skip"),
+    )
+    for label, command in skip_forms:
+        found = claude_hooks_findings([c_bash, c_edit, silent_c, hook("Bash", command)])
+        ok(len(found) == 1 and "must not set `GUARD_SHELL_SKIP`" in str(found[0]),
+           f"red: {label} is flagged, once", str(found))
+    # A quoted assignment is flagged too. The file check does not unquote an assignment, so it also reads
+    # the quoted word as a missing file: the pin is asserted among the findings, not as the only one.
+    found = claude_hooks_findings([c_bash, c_edit, silent_c, hook("Bash", "env 'GUARD_SHELL_SKIP=wait' " + gs)])
+    ok(any("must not set `GUARD_SHELL_SKIP`" in str(f) for f in found),
+       "red: a quoted GUARD_SHELL_SKIP= is flagged", str(found))
+    # The spellings the pin must leave alone: another word, another variable, and the plain hook.
+    for label, command in (
+        ("--skip-x, another word", gs + " --skip-x"),
+        ("MY_GUARD_SHELL_SKIP=, another variable", "MY_GUARD_SHELL_SKIP=wait " + gs),
+        ("a plain --hook", gs),
+    ):
+        found = claude_hooks_findings([c_bash, c_edit, silent_c, hook("Bash", command)])
+        ok(not found, f"green: {label} is not a skip pin", str(found))
     for label, entry in (
         ("only `file`", hook("Bash", "BANCHI_SILENT_WRITE_ONLY=file scripts/silent-write-guard.py --hook")),
         ("no prefix", hook("Bash", "scripts/silent-write-guard.py --hook")),

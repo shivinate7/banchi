@@ -8,15 +8,16 @@
 # reproduction: `reap-selftest.sh` reproduces both 2026-09-10 kill incidents with real
 # processes and a real socket, `revert-selftest.sh` rebuilds PR #218 and #221, and
 # `silent-write-selftest.sh` reproduces the refused commit whose refusal went to /dev/null. So
-# three of the four incidents are PERFORMED here first, in a throwaway repository, and only then
+# all four incidents are PERFORMED here first, in a throwaway repository, and only then
 # is the guard asked about them:
 #
 #   2. a worktree is made, and its root is a different directory from the main checkout's
 #   5. `pgrep -f <tag>` matches the shell whose own command line carries that tag
 #   6. a local branch is really made to track a differently-named remote branch — the exact
 #      way a background agent's push created one — and `git push origin HEAD` is asked about
+#   9. a narrated wait, run with a real narrator, a real pipe and a real `tail`
 #
-# The last reproduction is the one that earns its place: rank 19's rule was written correctly
+# The pgrep reproduction is the one that earns its place: rank 19's rule was written correctly
 # and in full, and then broken four days later by a session that had read it, because the
 # mechanism — a pattern matching the searcher — is not what anybody expects. Here it is a
 # measurement.
