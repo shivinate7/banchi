@@ -34,7 +34,7 @@ So the digest travels: `Markdown` takes `revision` and hands back `onCorpusWritt
 
 `#/pricing` takes two unmodified keys — `R` reloads, held `T` peeks a price history — and both list the open surfaces they stand down for by name. The sheet is a surface that did not exist when they were written.
 
-`R` is the harmful one, and it is not cosmetic. Typed into the sheet's *"Cut, percent"* field, it would call `load()`. It would re-read the worklist and the corpus. It would **discard an in-flight survey out from under the operator**: bytes the screen is holding for an export they just waited on. `app/tests/markdown.spec.ts` carries a case for it that watches the host's own reads.
+`R` is the harmful one, and it is not cosmetic. Typed into the sheet's *"Percent under"* field, it would call `load()`. It would re-read the worklist and the corpus. It would **discard an in-flight survey out from under the operator**: bytes the screen is holding for an export they just waited on. `app/tests/markdown.spec.ts` carries a case for it that watches the host's own reads.
 
 ### A route is still not the answer
 

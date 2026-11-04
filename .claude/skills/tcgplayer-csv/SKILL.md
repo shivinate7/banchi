@@ -46,7 +46,7 @@ the moment the button was pressed, and nothing in it is a window onto anything.
 `TCG Market Price` is the only column with sales behind it. It is TCGplayer's own
 aggregate over recent sales rather than a sale. It is one number. It has no window. **There are no
 last-sold rows in this export, and TCGplayer publishes none anywhere.** So this is not a
-gap to be filled from another one of their files. `docs/decisions/`'s Someday list
+gap to be filled from another one of their files. The sales-history read in `docs/specs/stale-listings.md`
 carries what is available instead.
 
 ## Variant lives in the Condition string
