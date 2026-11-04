@@ -82,6 +82,7 @@
     "115-new-copy-tick-keyed-by-sku.md",
     "116-past-cap-tick-ignores-source.md",
     "117-markdown-r-key-no-test.md",
-    "118-commit-hook-skips-map-check.md"
+    "118-commit-hook-skips-map-check.md",
+    "119-stale-cache-fault-looks-like-id.md"
   ]
 }
