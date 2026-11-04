@@ -312,7 +312,7 @@ you build here. The track's settled decisions, C1 to C11, are sections of that s
   reading from a guess. The drop half is `harness/tests/t3_join_coverage.py`.
 - **Report unmatched rows in both directions before you write output.** `harness/tests/t3_join_coverage.py` enforces it.
 - **Scope is argued, not gated.** New surface needs a reason, written into the decision that owns it.
-  `make map-check` fails a tracked code file with no `docs/map/` line.
+  `make map-check` fails a tracked code file under `map.config.json`'s `mapPaths` with no `docs/map/` line.
   The `decision ids` row of `make docs-audit` fails an id with no entry.
 - **Fix the cause, never the symptom. Check whether the primitive exists first.**
   `make map ARGS=<path>` and `scripts/decision-context.py` find it.

@@ -2323,8 +2323,8 @@ COMPONENTS = [
                 "D81 carries the argument.",
         "modules": {
             "run.py": {"does": "the explicit ordered TESTS registry — no discovery magic", "governed_by": ["D1"]},
-            # The tests themselves live under harness/tests/ and the orphan rule does not
-            # scan that far, so they are not listed one by one. `traces/` is listed because
+            # The tests themselves live under harness/tests/, and `mapPaths` in map.config.json
+            # lists only harness/run.py, so `make map-check` does not scan that far, so they are not listed one by one. `traces/` is listed because
             # it is DATA rather than a test, and tracked data with no entry is how a
             # directory ends up in the tree with nobody able to say what it is for.
         },
@@ -2380,7 +2380,7 @@ COMPONENTS = [
                 "and its metadata, nothing derived.",
         "governed_by": ["D15", "D18"],
         # No per-file entries, for `harness/traces/`'s own reason: this is 176 vendored data
-        # files (26.5 MB) with no source suffix the orphan rule should scan, and a new set
+        # files (26.5 MB) outside `mapPaths`, which `make map-check` does not scan, and a new set
         # released upstream arrives by running `make catalog-refresh` — never by hand-editing
         # one of these files.
         "note": "Narrower than the whole upstream tree on purpose: decks/ (83 files, 688 KB) "
@@ -2401,48 +2401,18 @@ COMPONENTS = [
                 "and the launch-config writer it calls, the screenshot runner and its "
                 "manifest, and audit-history — diagnostic, never gating, per D18.",
         "governed_by": ["D14", "D16", "D17", "D18", "D42", "D207"],
-        # What the orphan rule covers here, and the one hole no declaration can close.
-        # Declaring the key is also what makes the scan recursive, which is the only way
-        # scripts/githooks/ is reached at all.
+        # `make map-check` covers scripts/ recursively, because `mapPaths` in map.config.json
+        # names it, but it reads only the suffixes in `codeExtensions` (`.sh` and `.txt`
+        # among them, so the opsec hook and the tracked inputs are covered, and `.md` is
+        # absent on purpose: no markdown lives here).
         #
-        # `.sh` is most of the reason to declare anything. guard-opsec.sh and the
-        # pre-commit hook ARE the opsec enforcement, and a repo whose one repo-wide rule
-        # is that a live code card is a bearer instrument cannot leave its enforcement in
-        # the directory the index does not scan. `.txt` because both files carrying it are
-        # tracked INPUTS that tooling reads and fails against — the allowlist and the
-        # screenshot manifest — not notes; a third arriving unnamed is exactly the drift
-        # this rule exists for. `.md` is deliberately absent: no markdown lives here, and
-        # declaring a suffix for a language a directory does not contain is how a scan
-        # reports a clean run over nothing, which is the failure `app/` spent a day on.
-        #
-        # THE HOLE: `githooks/pre-commit` has no suffix, and the orphan scan rejected any entry
-        # that did not start with a dot, so no value here could reach it. It is listed
-        # below, so its *disappearance* is caught — but a second extensionless hook
-        # (`pre-push`, `commit-msg`) would land unnamed and nothing would fail. Left to
-        # docs/debts/ rather than worked around: the limit is in scripts/docs-audit.py,
-        # and inventing a second key in this file to route around it would put the
-        # workaround inside the thing the rule audits.
-        #
-        # THE HYPOTHETICAL IN THAT PARAGRAPH CAME TRUE ON 2026-08-29 AND IT NAMED THE FILE
-        # CORRECTLY. D42 added `githooks/reference-transaction` and `githooks/pre-push`, and
-        # the orphan rule was silent for both exactly as predicted — they are listed below by
-        # hand, and nothing would have failed had the author forgotten. What DID catch a
-        # missing entry that day was `githooks-selftest.sh`, one directory up and carrying a
-        # declared suffix, which failed the commit until it was described. The two outcomes
-        # from one change are the clearest statement of this hole available, so they are
-        # recorded here rather than only in docs/debts/.
-        "note": "THIS ENTRY HAD NO MODULE LIST UNTIL 2026-08-13, so the orphan rule never "
-                "scanned this directory — the rule is guarded on `modules`, and an entry "
-                "with none has nothing to be an orphan of. Measured before the fix: "
-                "`touch scripts/__probe.py` left the row reading `ok repo map`, while the "
-                "same file under pipeline/ failed the commit. That is how audit-history.py "
-                "was added — into the one directory the rule did not cover, with this "
-                "file's prose updated by hand and nothing that would have failed had the "
-                "author forgotten. Writing the list is why it stayed open: a `does` and a "
-                "`governed_by` per file is a content decision about what governs the "
-                "tooling, not a mechanical repair. "
-                "WHAT IS STILL UNPROVEN, and it is the same limit app/ carries: the rule "
-                "proves a file has an entry, never that the entry is true. A `does` "
+        # THE HOLE: `githooks/pre-commit`, `githooks/reference-transaction` and
+        # `githooks/pre-push` have no suffix, so the map check cannot see them. They are
+        # listed below, and the `hook roster` row of `make docs-audit` fails a hook on disk
+        # with no entry here. A second extensionless file elsewhere in scripts/ would land
+        # unnamed and nothing would fail.
+        "note": "WHAT IS STILL UNPROVEN, and it is the same limit app/ carries: the map "
+                "check proves a file has a line, never that the line is true. A `does` "
                 "describing the wrong file passes exactly as well.",
         "modules": {
             # ---- the commit path. D18's rule is not advice here; this IS the path ----
@@ -2467,9 +2437,9 @@ COMPONENTS = [
                 # on the shared rig handles bearer instruments.
                 "governed_by": ["D11", "D14", "D16", "D18", "D24", "D47", "D58", "D70",
                                 "D92", "D295", "D303", "D312"],
-                "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
-                        "declare. Listed, so its absence would be a finding; a sibling "
-                        "hook's arrival is caught by `hook roster` since 2026-09-05. "
+                "note": "`make map-check` CANNOT SEE THIS FILE — it has no suffix. Listed, so "
+                        "the `hook roster` row of `make docs-audit` fails on its absence "
+                        "and on a sibling hook's arrival. "
                         "IT ALSO CHECKS ITS OWN ARMED COPY, first, before any other rule: "
                         "`make hooks` COPIES this file into .git/hooks-armed and nothing "
                         "keeps the copy in step, so on 2026-09-01 the armed pre-commit fell "
@@ -2497,8 +2467,8 @@ COMPONENTS = [
                 # rather than the content: this file is on the path that decides whether a
                 # commit proceeds, so it reads and refuses and never writes.
                 "governed_by": ["D18", "D42"],
-                "note": "THE ORPHAN RULE CANNOT SEE THIS FILE either — no suffix. It is the "
-                        "case the comment above this modules block predicted by name.",
+                "note": "`make map-check` CANNOT SEE THIS FILE either — no suffix. The "
+                        "`hook roster` row fails on its absence.",
             },
             "githooks/pre-push": {
                 "does": "D42's remote half: refuses any push whose REMOTE ref is main, which "
@@ -4798,7 +4768,7 @@ COMPONENTS = [
                         "each list survives untouched.",
                 "governed_by": ["D16", "D17", "D18", "D140", "D173"],
                 "note": "IT ONLY EVER ADDS. An id in `governed_by` that the file does not "
-                        "cite is invisible to the `repo map` row and to this alike, because "
+                        "cite is invisible to the `map data` row and to this alike, because "
                         "that check is one-directional — so removing one stays a person's "
                         "judgement. WRITTEN 2026-09-17 after a cost measurement: 112 of the "
                         "last 200 non-merge commits touch this file, 416 of the 2,620 lines "
@@ -5146,7 +5116,7 @@ COMPONENTS = [
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
                         "mechanical could have caught the disagreement — a `note` is prose "
-                        "and the orphan rule only proves the entry exists. The auditor is "
+                        "and `make map-check` only proves a file has a line. The auditor is "
                         "in SOURCES for the same reason: it is a subprocess rather than a "
                         "read, which is exactly why its path sat hardcoded and uncovered "
                         "while every other path here was audited.",
@@ -6228,20 +6198,10 @@ COMPONENTS = [
                 "specs assert docs/DESIGN.md's Fulfillment floors, one against the kit's "
                 "pull-confirm and one against the Fulfillment view.",
         "governed_by": ["D3", "D4", "D5", "D6", "D7", "D9", "D10", "D13", "D18"],
-        # What the orphan rule scans here, and the reason this directory needs the key at
-        # all: the default is `.py` one level deep, which over a tree holding no Python and
-        # keeping all of it in subdirectories is a check that reports a clean scan for having
-        # looked at no file in the entry it names. It was inert exactly that way until
-        # 2026-08-13 — see the note. `.json` is deliberately absent: it would conscript
-        # package-lock.json, and a manifest is not a module anyone writes a `does` for.
-        "note": "THE ORPHAN RULE WAS INERT OVER THIS DIRECTORY UNTIL 2026-08-13, AND IT COST "
-                "EXACTLY WHAT docs/debts/ SAID IT WOULD. It filtered on one repo-wide `.py` "
-                "suffix, one level deep, so step 7a's thirteen new files landed beside the "
-                "described modules and this list named none of them — a green row over an "
-                "entry nothing had checked. The rule reaches here now because the entry "
-                "was widened to the web suffixes in the audit that has since been retired; "
-                "docs/map/ now lists every file here. It did its job on the same day: "
-                "7b's seven files could not land here unnamed. "
+        # `.json` is deliberately absent from `codeExtensions` in map.config.json: it would
+        # conscript package-lock.json, and a manifest is not a module anyone writes a `does` for.
+        "note": "`make map-check` covers this directory through `mapPaths`, and docs/map/ "
+                "lists every file here. "
                 "Nothing here imports the static palette sheets: they were drawings of the spec, and "
                 "this is built from docs/DESIGN.md itself. "
                 "NO ENTRY BELOW CARRIES tested_by, and that is a measurement rather than an "

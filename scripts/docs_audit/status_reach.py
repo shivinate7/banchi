@@ -255,7 +255,7 @@ def reach_findings(
 def check_tested_by_reach(report: Report) -> None:
     """A `tested_by` claim in docs/map.py, against what the cited test actually imports.
 
-    The repo-map row proves a cited test id is registered in `harness/run.py:TESTS`. It has
+    The `map data` row proves a cited test id is registered in `harness/run.py:TESTS`. It has
     never proved the test goes anywhere near the module claiming it, and docs/debts/
     recorded the measurement: of the eleven entries audited by hand on 2026-08-11, ten were
     true and one was false — `store/queues.py` claimed T3 and T4 while nothing under

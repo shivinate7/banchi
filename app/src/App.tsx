@@ -270,7 +270,7 @@ export const ROUTES: readonly Route[] = [
   { path: '/runs', label: 'Runs', screenKey: 'runs', icon: 'play', view: RunsRedirect, persona: 'owner', redirect: true, group: 'aside', keywords: 'pipeline identify join emit import csv reconcile the store live quantities my pricing' },
 ]
 
-/** Every screen's `screenKey`, in table order. `map.config.json` names this list as its `screenKeys`, because the map check reads a plain list of names and not the rows. */
+/** Every screen's `screenKey`, in table order. `map.config.json` names this list as its `screenKeys`, because the map check follows the spread to each row's `screenKey`. */
 export const SCREEN_KEYS = [...ROUTES.map((route) => route.screenKey)]
 
 const GROUPS: readonly { readonly id: Group; readonly label: string | null }[] = [

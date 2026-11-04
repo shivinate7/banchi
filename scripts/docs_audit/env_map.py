@@ -890,9 +890,8 @@ def check_hook_roster(report: Report) -> None:
                     f"scripts/githooks/{hook}",
                     f"runs on the commit path and has no entry in docs/map.py.\n"
                     f"  Add `\"githooks/{hook}\"` to the `scripts/` component's `modules`, "
-                    f"with a `does` and its `governed_by`. The orphan scan cannot find this "
-                    f"directory — the suffix rule rejects an extensionless key — so this row "
-                    f"is the only thing that will.",
+                    f"with a `does` and its `governed_by`. The shared map check (`make map-check`) cannot "
+                    f"see an extensionless file, so this row is the only thing that will.",
                 )
             )
     for key in sorted(listed):
