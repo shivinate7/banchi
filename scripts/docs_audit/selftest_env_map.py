@@ -15,6 +15,7 @@ from .core import (
     _STAGED_PATHS,
     _walk,
     child_names,
+    claude_and_rules,
     exists,
     glob_files,
     leave_staged_mode,
@@ -32,7 +33,6 @@ from .rules import (
     check_rule_enforcement,
 )
 from .screens import _ROSTER_RE, _storage_sites, check_storage_keys
-from .selftest_data import claude_and_rules
 from .spelling import check_shell_substitution
 
 

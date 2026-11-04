@@ -5,12 +5,11 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from .core import ROOT, Report, exists, read, registered_tests
+from .core import ROOT, Report, claude_and_rules, exists, read, registered_tests
 from .design import COLOR, TYPEFACE, token_value
 from .env_map import DEFAULT_SOURCE_SUFFIXES, SOURCE_SUFFIXES_KEY, scan_plan, source_names
 from .hygiene import _VERDICT_CONFIG, _VERDICT_REPORTER, verdict_disagreements
 from .paths_commands import phony_gaps
-from .selftest_data import claude_and_rules
 from .status_reach import (
     check_tested_by_reach,
     follow_target,
