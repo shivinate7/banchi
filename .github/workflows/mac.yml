@@ -11,8 +11,6 @@ name: mac
 on:
   schedule:
     - cron: '23 5 * * 1'
-  push:
-    branches: [lane/tci-5-mac-job]
   workflow_dispatch:
     inputs:
       report_failure:
