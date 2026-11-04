@@ -2,10 +2,10 @@
 
 The palette is renamed Go to, and it lists every screen, the off-nav ones included.
 
-**The owner's ruling, 2026-09-23.** The palette is relabelled honestly, as "Go to". It lists every
+**The owner's ruling.** The palette is relabelled honestly, as "Go to". It lists every
 screen, the off-nav ones included. It finds cards. The drawer and the palette hold focus, and
 "More" is lit when the screen is behind it. This amends D95 (the shell is a rail, a palette and a
-reference sheet). It records only what the shell lane of the 2026-09-23 overhaul adds. The
+reference sheet). It records only what the shell lane's overhaul adds. The
 drawer's foot is D266. The tab title and the page scaffold are
 D275. The 720 ruling is D272.
 
@@ -38,8 +38,9 @@ D275. The 720 ruling is D272.
 - **One door to the drawer.** The phone's top bar lost its Menu button. "More" in the tab bar is
   the one door, and it is lit (`aria-current`) when the screen is behind it (UX-046, UX-072).
 - **The rail starts at 640.** The desktop rail now covers 640 to 1023, so 720 is a desk. The
-  phone chrome is below 640. `App.tsx`'s `TABLET_RAIL` and `App.css` name the same edge, and
-  `scripts/js-breakpoints.py` checks that they agree. From 640 up, `App.css` sets
+  phone chrome is below 640. From 1024 up, the width that starts a device railed with no stored
+  choice is `--bn-rail-break-px`'s (D95). `App.tsx`'s `TABLET_RAIL` and `App.css` name the same
+  edge, and `scripts/js-breakpoints.py` checks that they agree. From 640 up, `App.css` sets
   `--bn-topbar-h` and `--bn-tabbar-h` to zero. So a screen's own phone rule at 767 leaves no gap
   for a bar that the shell does not draw.
 - **The keyboard sheet is derived from `ROUTES`.** A route carries its own keys (`Route.keys`).
