@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+
 from .core import ROOT, Report, exists, read, registered_tests
 from .design import COLOR, TYPEFACE, token_value
 from .hygiene import _VERDICT_CONFIG, _VERDICT_REPORTER, verdict_disagreements
