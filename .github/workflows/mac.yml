@@ -147,13 +147,35 @@ jobs:
           set +e
           ulimit -n; sysctl kern.ipc.somaxconn; uname -a
           tmp="$(mktemp -d)"
-          BANCHI_HOME="$tmp/home" BANCHI_PORT=18765 python3 server/capture_server.py > "$tmp/cap.log" 2>&1 &
+          cat > "$tmp/wrap.py" <<'PY'
+          import faulthandler, runpy, sys
+          faulthandler.dump_traceback_later(8, exit=False, file=sys.stderr)
+          sys.path.insert(0, "server")
+          sys.argv = ["server/capture_server.py"]
+          runpy.run_path("server/capture_server.py", run_name="__main__")
+          PY
+          BANCHI_HOME="$tmp/home" BANCHI_PORT=18765 python3 -u "$tmp/wrap.py" > "$tmp/cap.log" 2>&1 &
           pid=$!
-          sleep 10
+          python3 -m http.server 18766 --bind 127.0.0.1 > "$tmp/ctl.log" 2>&1 &
+          ctl=$!
+          sleep 12
+          echo "--- control http.server on 18766"
+          curl -sS -o /dev/null -w 'control status %{http_code} in %{time_connect}s\n' --max-time 5 http://127.0.0.1:18766/
+          echo "--- capture server /status"
           curl -sv --max-time 5 http://127.0.0.1:18765/status
+          echo "--- lsof"
+          lsof -nP -iTCP:18765 -iTCP:18766
+          echo "--- netstat"
+          netstat -an -p tcp | grep -E '1876[56]'
+          netstat -L -an 2>&1 | grep -E '1876[56]|Listen'
+          echo "--- firewall and pf"
+          /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate 2>&1
+          sudo pfctl -s info 2>&1 | head -3
+          echo "--- process alive?"
+          ps -p "$pid" -o pid,state,command
           echo "--- capture log"
           cat "$tmp/cap.log"
-          kill "$pid"
+          kill "$pid" "$ctl"
 
   alarm:
     needs: [mac-product]
