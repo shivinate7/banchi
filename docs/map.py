@@ -2695,7 +2695,16 @@ COMPONENTS = [
                         "the way launchd starts it, which is not `make up` and is the shape "
                         "the second incident was in. Only three files are tracked in that "
                         "fixture, because the switch has to CHANGE a watched file or no "
-                        "reload is scheduled and the guard is never reached.",
+                        "reload is scheduled and the guard is never reached. "
+                        "ONE ARM IS THE EXCEPTION TO THE STUB: `check_real_build`, gated by "
+                        "BANCHI_SERVE_REAL_BUILD=1 and SKIPPED without it, runs the real "
+                        "`vite build` through the real `serve.py up` over a copy of the real "
+                        "`app/` (node_modules linked per package, never as one link). It "
+                        "asserts the port opens only after the build, `/` is the built "
+                        "index.html byte for byte and not the dev page, every /assets/ file "
+                        "the page names answers 200 with a browser's type, a path that is no "
+                        "route is refused (D138: no catch-all), and `down` leaves no process. "
+                        "`check_run_folder_sweep` proves the run-folder sweep it uses.",
                 "governed_by": ["D18", "D43", "D138", "D127", "D158", "D176", "D261"],
                 "tested_by": [],
             },

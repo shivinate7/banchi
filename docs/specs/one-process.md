@@ -262,6 +262,11 @@ A row's run id is the last green run, read from the job's own history.
 | The camera at the capture port, port 8000 | untested; the owner's press in §10 | none |
 | Chrome on the Mac against the built app | untested; `design-check` runs Chromium on Linux only | none |
 
+`BANCHI_SERVE_REAL_BUILD=1` runs the real `vite build` in `make serve-selftest`'s supervisor arm
+(`serve-selftest.py`'s `check_real_build`). Unset, it is SKIPPED. It needs node and `app/node_modules`.
+`mac.yml` and `check.yml` both set it. The arm refuses a path that is no route with 404 and serves no
+catch-all `index.html`, which is D138's ruling.
+
 
 
 Two presses on the owner's own machine. A session cannot do either:

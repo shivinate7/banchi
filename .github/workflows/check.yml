@@ -227,6 +227,8 @@ jobs:
         env:
           BANCHI_GUARD_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
           BANCHI_SERVE_SCOPE: ${{ github.event_name != 'pull_request' && 'all' || '' }}
+          # Only `serve-selftest` (in a guards shard) reads this: it turns on its real `vite build` arm.
+          BANCHI_SERVE_REAL_BUILD: '1'
           TARGET: ${{ matrix.target }}
         # A SKIP SHOWS AND NEVER FAILS. The shard's own exit code is kept (`rc`). The count reads the
         # markers the tools already print (`scripts/ci-skip-count.sh` is the one home of the reader).
