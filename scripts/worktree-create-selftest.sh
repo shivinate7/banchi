@@ -133,7 +133,9 @@ export RUN_MAIN="$MAIN" RUN_SCRIPT="$SCRIPT" RUN_OUT
 CTL="$tmp/ctl"
 WRAP="$tmp/wrap"
 mkdir -p "$CTL" "$WRAP"
-export SELFTEST_CTL="$CTL" SELFTEST_REAL_GIT="$(command -v git)" SELFTEST_REAL_CAT="$(command -v cat)"
+SELFTEST_REAL_GIT="$(command -v git)"
+SELFTEST_REAL_CAT="$(command -v cat)"
+export SELFTEST_CTL="$CTL" SELFTEST_REAL_GIT SELFTEST_REAL_CAT
 cat > "$WRAP/git" <<'WRAPGIT'
 #!/usr/bin/env bash
 case " $* " in
@@ -184,10 +186,10 @@ start_creation_signalable() {
 # Waits, bounded at 300 polls 0.1 s apart, for pid to leave the process table, then reaps it. Sets
 # REAPED (yes or no) and REAP_RC (its exit status, or none when it had to be killed).
 reap() {
-  local pid="$1" i
+  local pid="$1" _
   REAPED=no
-  for i in $(seq 1 300); do
-    if [ -z "$(ps -o stat= -p "$pid" 2>/dev/null | grep -v '^ *Z')" ]; then REAPED=yes; break; fi
+  for _ in $(seq 1 300); do
+    if ! ps -o stat= -p "$pid" 2>/dev/null | grep -qv '^ *Z'; then REAPED=yes; break; fi
     sleep 0.1
   done
   if [ "$REAPED" = yes ]; then
@@ -200,8 +202,8 @@ reap() {
   fi
 }
 # Bounded polls, 300 checks 0.1 s apart. Each returns 0 when its condition holds, 1 at the bound.
-wait_for_file() { local i; for i in $(seq 1 300); do [ -e "$1" ] && return 0; sleep 0.1; done; return 1; }
-wait_for_line() { local i; for i in $(seq 1 300); do grep -qx "$1" "$2" 2>/dev/null && return 0; sleep 0.1; done; return 1; }
+wait_for_file() { local _; for _ in $(seq 1 300); do [ -e "$1" ] && return 0; sleep 0.1; done; return 1; }
+wait_for_line() { local _; for _ in $(seq 1 300); do grep -qx "$1" "$2" 2>/dev/null && return 0; sleep 0.1; done; return 1; }
 # Adds in flight at once, from an add log: an enter while another add has not exited.
 overlap_count() {
   awk '$1 == "enter" { if (n > 0) o++; n++ } $1 == "exit" { n-- } END { print o + 0 }' "$1"
@@ -246,7 +248,7 @@ if [ "$(cat "$LOCK/pid" 2>/dev/null)" = "$$" ]; then ok "held lock: the test hol
 
 bash "$tmp/run_one.sh" held &
 bg=$!
-for i in $(seq 1 300); do
+for _ in $(seq 1 300); do
   grep -q "$WAIT_LINE" "$RUN_OUT/held.err" 2>/dev/null && break
   kill -0 "$bg" 2>/dev/null || break
   sleep 0.1
@@ -258,7 +260,7 @@ if [ -d "$MAIN/.claude/worktrees/held" ]; then bad "held lock: tree made while t
 
 rm -rf "$LOCK"
 exited=no
-for i in $(seq 1 300); do
+for _ in $(seq 1 300); do
   [ -s "$RUN_OUT/held.rc" ] && { exited=yes; break; }
   sleep 0.1
 done
