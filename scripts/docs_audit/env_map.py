@@ -924,6 +924,7 @@ CLAUDE_SETTINGS = ROOT / ".claude" / "settings.json"
 #: drifts is its own finding.
 _SKIP_ENV = re.compile(r"^GUARD_SHELL_SKIP=(\S*)\s+")
 CLAUDE_BASH_SKIP = "reset"
+_ENV_WORD = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
 #: The one hook Claude Code runs narrowed by an environment prefix: the file and bash-c clauses
 #: alone (D171). The row expects the prefix on the entry.
@@ -1013,19 +1014,20 @@ def check_claude_hooks(report: Report) -> None:
                         )
                     )
 
-    # The narrowed hook carries its prefix. Strip it after checking, so the file check below
-    # sees the script's own name.
+    # The silent-write hook carries its prefix exactly. Any other spelling of it runs clauses the
+    # shared layer already owns (D171).
     event, matcher, bare = NARROWED_HOOK
     narrowed = (event, matcher, NARROWED_ENV + bare)
-    if narrowed in claude_triples:
-        claude_triples = (claude_triples - {narrowed}) | {NARROWED_HOOK}
-    elif NARROWED_HOOK in claude_triples:
-        findings.append(Finding(".claude/settings.json",
-                                f"runs `{bare}` without the `{NARROWED_ENV.strip()}` prefix. "
-                                "Claude Code runs the file and bash-c clauses alone (D171)."))
+    for triple in sorted(claude_triples):
+        if bare in triple[2] and triple != narrowed:
+            findings.append(Finding(".claude/settings.json",
+                                    f"runs `{triple[2]}`; it must run `{narrowed[2]}`. "
+                                    "Claude Code runs the file and bash-c clauses alone (D171)."))
 
     for event, _matcher, command in sorted(claude_triples):
-        script = command.split()[0].strip('"') if command else ""
+        # Leading `NAME=value` words are environment, not the script.
+        words = [w for w in command.split() if not _ENV_WORD.match(w)]
+        script = words[0].strip('"') if words else ""
         # A hook that must not resolve against the session's cwd names its project root
         # (worktree-create.sh: a tree cut before the script existed had no copy).
         script = script.removeprefix(PROJECT_DIR_PREFIX)

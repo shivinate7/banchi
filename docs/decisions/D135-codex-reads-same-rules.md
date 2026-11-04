@@ -10,13 +10,13 @@ Home: CLAUDE.md
 - The root `AGENTS.md` link to `CLAUDE.md`, and each folder's `AGENTS.md` link to its rule file in `.claude/rules/`: `app/`, `server/`, `pipeline/`, `cli/`, `identify/`, `store/`, `codes/` and `code-card-fork/`.
 - The `.agents/skills` link to `.claude/skills`.
 - `.codex/hooks.json`, the `.codex/config.toml` lines in `.gitignore` and `.worktreeinclude`, and the `agent links` and `codex hooks` rows of `make docs-audit`.
-- The two `scripts/guard-shell.py` clauses that only Codex ran: `checkout` and `stash`. Claude Code skipped both, because the shared layer's guard owns them (D179). Their hatches `BANCHI_CHECKOUT` and `BANCHI_STASH` went with them. The `reset` clause stays for now: it also refuses `git reset --merge` and `--keep`, which the shared guard does not yet. A later change deletes it.
+- The two `scripts/guard-shell.py` clauses that only Codex ran: `checkout` and `stash`. Claude Code skipped both, because the shared layer's guard owns them (D179). The two hatches of those clauses went with them. The `reset` clause stays for now: it also refuses `git reset --merge` and `--keep`, which the shared guard does not yet. A later change deletes it.
 
 **What stays, because Claude Code reads it.**
 
 - `code-card-fork/CLAUDE.md -> ../CLAUDE.md`, so Claude Code's auto-load in that directory reads the root rules. The `fork claude link` row of `make docs-audit` checks it.
 - The hook checks that guarded `.claude/settings.json` alone. The `claude hooks` row keeps three of them: every hook command names a file in the tree, each `scripts/guard-shell.py` entry pins its `GUARD_SHELL_SKIP` value, and the silent-write hook keeps its `BANCHI_SILENT_WRITE_ONLY` prefix (D171).
-- A path-scoped rule may use any glob in its `paths:` list. The `<folder>/**` shape and the one-rule-per-folder limit existed only so each folder could hold an `AGENTS.md` link.
+- A path-scoped rule may use any glob in its `paths:` list. The folder-only glob shape and the one-rule-per-folder limit existed only so each folder could hold an `AGENTS.md` link.
 
 **Not done here.** `scripts/reap.py --hook` was armed only by `.codex/hooks.json` (D127). Nothing in this repo arms it now. The shared layer's machine-wide-kill rule owns that guard for Claude Code. The script's `--hook` mode stays until the owner rules on it.
 
