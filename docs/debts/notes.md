@@ -50,4 +50,5 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - The claude-settings code-check comment rule flags `owner's ruling` in a code comment as history narration. This is a false alarm owned by claude-settings, not banchi.
 - `docs_audit.paths_commands`'s `_commented_targets` counts a banner comment above a target (a comment that describes a block of targets) as that target's own, so a target with no description of its own can pass `commands roster`. `make help` would print the banner for it.
 - `docs_audit.status_reach`'s `model_disagreement` compares only the first "Batch API ... Model:" line in CLAUDE.md and the rule files joined, so a second, stale copy of that line in another rule file passes `paid-read model`.
-- Lane banchi-waiting-data-home: the auto-mode classifier refused `Bash` for a `git push --force-with-lease --force-if-includes` of a rebased lane branch, so the lane pushed the rebase under a new branch name (`-r2`) instead.
+- The shared waiting-page scan (`export_page.py`) has false alarms, each costing one reword before an export: `idempotency key: 8f3a2c91`, "Round 3 Review Lane" and `react@19.0.0-rc`.
+- The auto-mode classifier refuses `Bash` for `git push --force-with-lease --force-if-includes` of a rebased lane branch. A push under a new branch name, or a merge of the base in place of a rebase, needs no force.
