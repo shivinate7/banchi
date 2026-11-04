@@ -430,7 +430,7 @@ class Run:
 
     @property
     def created_at(self) -> Optional[str]:
-        """When this run directory was made — the manifest's own stamp: UTC, to the second."""
+        """When this run directory was made — the manifest's own stamp: UTC, to the millisecond (older runs: to the second)."""
         return self.manifest.get("created_at")
 
     @property
@@ -536,8 +536,10 @@ def create(label: str, root: Optional[Path] = None) -> Run:
         ordinal += 1
     directory = base / f"{prefix}{ordinal:02d}"
     directory.mkdir(parents=True)
+    # Millisecond precision, as the box registry stamps (`store/master.now`): `newer_stamp`
+    # orders a run against its box, and a seconds stamp reads older than a box made the same second.
     run = Run(directory=directory, manifest={"created_at": datetime.now(timezone.utc)
-                                             .isoformat(timespec="seconds")})
+                                             .isoformat(timespec="milliseconds")})
     run._base = {}
     run.save()
     return run
