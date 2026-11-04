@@ -148,7 +148,7 @@ def _flatten_div(node: ast.AST) -> Optional[List[str]]:
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
         left = _flatten_div(node.left)
         if left is None:
-            if isinstance(node.left, (ast.Name, ast.Attribute, ast.Call)):
+            if isinstance(node.left, (ast.Name, ast.Attribute, ast.Call, ast.Subscript)):
                 left = []
             else:
                 return None
@@ -194,8 +194,19 @@ class _PathCollector(ast.NodeVisitor):
     resolves those two calls' own literal arguments directly.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, import_time: bool = False) -> None:
         self.hits: Set[str] = set()
+        self.import_time = import_time  # skip function bodies: only what runs at import
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if not self.import_time:
+            self.generic_visit(node)
+            return
+        for part in (*node.decorator_list, *node.args.defaults,
+                     *(d for d in node.args.kw_defaults if d is not None)):
+            self.visit(part)
+
+    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
 
     def visit_BinOp(self, node: ast.BinOp) -> None:
         if isinstance(node.op, ast.Div):
@@ -347,20 +358,25 @@ def derive_subjects(test_path: Path, func: Optional[str] = None) -> Tuple[str, .
     return tuple(sorted(resolved))
 
 
-def _package_imports(rel: str) -> Set[str]:
-    """Repo files of LOCAL_PACKAGES that the module `rel` imports, absolute or relative.
+def walk_import_time(tree: ast.AST):
+    """`ast.walk`, minus every function body: the nodes that run when the module is imported (a class
+    body and a module-level `try`/`if` included, a `def`'s own body not; its decorators and defaults are)."""
+    stack = [tree]
+    while stack:
+        node = stack.pop()
+        yield node
+        is_def = isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        stack.extend(child for child in ast.iter_child_nodes(node)
+                     if not (is_def and child in node.body))  # type: ignore[attr-defined]
 
-    Unparseable: every file of the packages, fail safe. Known gap: a module that only a
-    subprocess runs (`-m pkg.mod`, or a script path in argv) is not followed, and a literal
-    `importlib.import_module("...")` call inside a package module is not followed either
-    (the test-level `_PathCollector` does follow them).
-    """
-    try:
-        tree = ast.parse((ROOT / rel).read_text())
-    except (OSError, SyntaxError):
-        return {str(q.relative_to(ROOT)) for p in LOCAL_PACKAGES for q in (ROOT / p).rglob("*.py")}
+
+def _tree_package_imports(tree: ast.AST, rel: str, packages: Sequence[str],
+                          import_time: bool = False) -> Set[str]:
+    """Repo files of `packages` that `tree`, the module at `rel`, imports, absolute or relative.
+    `rel` is `""` for a source string that is no file (a `python3 -c` snippet). `import_time`
+    skips function bodies (`walk_import_time`)."""
     found: Set[str] = set()
-    for n in ast.walk(tree):
+    for n in (walk_import_time(tree) if import_time else ast.walk(tree)):
         if isinstance(n, ast.Import):
             pairs = [(a.name, [""]) for a in n.names]
         elif isinstance(n, ast.ImportFrom):
@@ -373,7 +389,7 @@ def _package_imports(rel: str) -> Set[str]:
         else:
             continue
         for mod, names in pairs:
-            if mod.split(".")[0] not in LOCAL_PACKAGES:
+            if mod.split(".")[0] not in packages:
                 continue
             stem = mod.replace(".", "/")
             parts = stem.split("/")  # Python runs every parent package's `__init__` first
@@ -387,13 +403,34 @@ def _package_imports(rel: str) -> Set[str]:
     return found
 
 
-def _follow_package_imports(resolved: Set[str], start: Sequence[str]) -> Set[str]:
+def _package_imports(rel: str, packages: Sequence[str] = LOCAL_PACKAGES,
+                     import_time: bool = False) -> Set[str]:
+    """Repo files of `packages` that the module `rel` imports, absolute or relative.
+
+    `import_time` keeps only what runs when the module is imported (`walk_import_time`); the
+    default reads every import at any depth. `scripts/tests-for.py` passes its own `packages`.
+
+    Unparseable: every file of the packages, fail safe. Known gap: a module that only a
+    subprocess runs (`-m pkg.mod`, or a script path in argv) is not followed, and a literal
+    `importlib.import_module("...")` call inside a package module is not followed either
+    (the test-level `_PathCollector` does follow them).
+    """
+    try:
+        tree = ast.parse((ROOT / rel).read_text())
+    except (OSError, SyntaxError):
+        return {str(q.relative_to(ROOT)) for p in packages if (ROOT / p).is_dir()
+                for q in (ROOT / p).rglob("*.py")}
+    return _tree_package_imports(tree, rel, packages, import_time)
+
+
+def _follow_package_imports(resolved: Set[str], start: Sequence[str],
+                            packages: Sequence[str] = LOCAL_PACKAGES) -> Set[str]:
     """`resolved` plus every package module reached transitively from `start` and from its own
     .py members: a planted raise in `store/rows.py` reaches a test that only imports `store.db`."""
     out = set(resolved)
     queue = [f for f in [*start, *resolved] if f.endswith(".py")]
     while queue:
-        for f in _package_imports(queue.pop()) - out:
+        for f in _package_imports(queue.pop(), packages) - out:
             out.add(f)
             queue.append(f)
     return out
