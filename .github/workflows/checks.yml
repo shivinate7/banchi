@@ -360,7 +360,7 @@ jobs:
   # recorder that skips on purpose), `nightly-alarm` (a reporter that skips unless something
   # failed) and `ci-done` (the last job; it reads the rollup's needs and reports a red run).
   all-jobs-passed:
-    needs: [ci-check, ci-static, revert-guard, records, checks, zizmor, already-passed, browser-scope, design-check]
+    needs: [ci-check, ci-static, revert-guard, records, checks, zizmor, mutation-report, already-passed, browser-scope, design-check]
     if: ${{ always() && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -485,6 +485,36 @@ jobs:
       - name: zizmor
         if: steps.changed.outputs.run == 'true'
         run: pipx run zizmor==1.30.1 .github/workflows .github/dependabot.yml
+
+  # THE MUTATION REPORT OF A BATCH. Only the integration PR goes ready, so a non-draft PR is the
+  # batch run and the job needs no head-ref gate. The action reports the catch share of the lines the change adds and never
+  # fails on it; it fails only when a known defect of `.github/known-defects.json` is MISS or UNKNOWN. A push or a schedule
+  # reaches the action, which skips there itself. The profile builds its own venv and runs `npm ci` in `app/`.
+  # Cap (ci-job-caps): claude-settings' own run took 34 s (run 42064515414; wall budget 300 s plus setup). Banchi's cost is
+  # unmeasured, and the first run on a batch replaces the 60 min.
+  mutation-report:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60   # provisional, step 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: shivinate7/claude-settings/actions/mutation-report@5b306ab1dfe8bd150d83f9d4f2ef83f526392435 # main, 2026-11-05
+        with:
+          profile: banchi
 
   # HAS THIS TREE ALREADY PASSED? Asked on a push to main only (D136), on the owner's word. The
   # job itself runs on every non-draft event, because `all-jobs-passed` fails on a skipped need;
@@ -807,10 +837,10 @@ jobs:
   # cancelled and posts nothing. The action is pinned to the same commit as every other
   # claude-settings action here (the `all jobs passed` row of `make docs-audit` holds that).
   ci-done:
-    needs: [ci-check, ci-static, revert-guard, records, checks, zizmor, already-passed, browser-scope, design-check, design-check-passed, all-jobs-passed, nightly-alarm]
+    needs: [ci-check, ci-static, revert-guard, records, checks, zizmor, mutation-report, already-passed, browser-scope, design-check, design-check-passed, all-jobs-passed, nightly-alarm]
     if: ${{ !cancelled() && github.event_name == 'pull_request' && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
-    timeout-minutes: 2   # provisional: a comment post takes seconds; 60 would pass the merge deadline of 45
+    timeout-minutes: 2   # provisional: a comment post takes seconds; the 60 default is far too long
     permissions:
       contents: read
       pull-requests: write
