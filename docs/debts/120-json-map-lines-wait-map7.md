@@ -1,4 +1,4 @@
-## DEBT-json-map-lines-wait-map7 — tracked json files have no map line, so the decision hook gives no hint for them
+## DEBT120 — tracked json files have no map line, so the decision hook gives no hint for them
 
 **What.** The 14 json files under `mapPaths` that carried decisions on the old map file have no `docs/map/` line, and neither do 8 other non-code files, so the decision hook names nothing when one is edited.
 
