@@ -1,6 +1,6 @@
 # D179 — Shell mistakes are refused by resolving them
 
-A read-only audit asked of every written rule: has it been broken, and can a machine see it? Forty rules were mechanizable. Five are one command away from a session. Each has a measured incident. `scripts/guard-shell.py` enforces the tree, wait and push clauses among them, and a later narrate clause, as a PreToolUse hook on Bash and on Write|Edit, armed in `.claude/settings.json`.
+A read-only audit asked of every written rule: has it been broken, and can a machine see it? Forty rules were mechanizable. Five are one command away from a session. Each has a measured incident. `scripts/guard-shell.py` enforces the tree and wait clauses among them, and a later narrate clause, as a PreToolUse hook on Bash and on Write|Edit, armed in `.claude/settings.json`.
 
 D173 is that audit's ruling: a rule that can be enforced mechanically is enforced mechanically, and a rule with no reader is advice. This entry records which five, what each cost, and where these readers are blind.
 
@@ -12,7 +12,7 @@ D171: a rule is read once, at the start, then competes for attention with the wo
 
 ### Amended: what Claude Code runs
 
-Claude Code runs `scripts/guard-shell.py --hook` with every clause (D135). The shared guard (`claude-settings` `hooks/guard.py`, rule 1, shared-tree) refuses a checkout or restore over a modified path, a stash that takes another tree's entry, and a hard reset over uncommitted work. Each is judged against its subject's state. The Claude-side copy was cut so one refusal speaks once. All three clauses, 1, 7 and 8, are gone from this script (D135). Clauses 3 and 4 are gone too.
+Claude Code runs `scripts/guard-shell.py --hook` with every clause (D135). The shared guard (`claude-settings` `hooks/guard.py`, rule 1, shared-tree) refuses a checkout or restore over a modified path, a stash that takes another tree's entry, and a hard reset over uncommitted work. Each is judged against its subject's state. The Claude-side copy was cut so one refusal speaks once. All three clauses, 1, 7 and 8, are gone from this script (D135). Clauses 3 and 4 are gone too, and so is clause 6, `git push` (below).
 
 ### The five, and what each cost
 
@@ -26,6 +26,8 @@ Claude Code runs `scripts/guard-shell.py --hook` with every clause (D135). The s
 
 D305 is the other half of that incident. This clause does not duplicate it. D305 teaches the sweep to ask whether anything still owns a process. A loop whose session is gone is offered up, not read as busy. This clause refuses the loop when it is created. D305 finds the one already running. Neither makes the other redundant. A poller started before this hook is D305's. A poller this hook refuses never becomes anybody's to find.
 
+**6 is retired.** It refused `git push <remote> HEAD` from a branch whose tracked upstream is a different, non-default branch. The incident: a coordinator's `git push origin HEAD` created a stray branch on origin and left the real PR branch untouched, because naming a refspec put the push outside git's own `push.default=simple` net. The owner ruled this clause, its hatch, its self-test cases and its mutation arm deleted, knowing the cost: the shared push-stray-branch ask (`plain-push-asks`) asks on a bare or `HEAD` stray push, and a `-u` push of the branch's own name is silent there. The number stays as a stable id. Nothing renumbers.
+
 ### The predicate is resolution
 
 `git checkout main` and `git checkout CLAUDE.md` are the same verb. The first switches branch. The second destroys work. A backgrounded script's loop is not in the command. It is in the file. So the guard asks the system, read-only, as `scripts/reap.py:hook` does for a kill. `git status --porcelain` decides whether an operand is a modified path. `git rev-parse --verify` decides whether it is a commit. A backgrounded command's shell script is read. `reap.py`'s standard: `pkill -f capture_server.py` is allowed when the only match is yours. Here, `git checkout main` is allowed because `main` is not a file.
@@ -34,7 +36,7 @@ The Write|Edit half of clause 2 parses nothing. No shell form can skirt it. The 
 
 ### Fail open on our own bugs, never silently
 
-`reap.py`'s asymmetry holds. A broken guard fails open. An unreadable target is a command this guard has no opinion about. A parse error, a missing `git`, an unreadable payload, or a missing `scripts/shell_parse.py` each exit 0. No case fails closed. None of these five harms is unrecoverable the way a signal to a stranger's process is.
+`reap.py`'s asymmetry holds. A broken guard fails open. A parse error, a missing `git`, an unreadable payload, or a missing `scripts/shell_parse.py` each exit 0. A cwd that does not exist is not one of those. `git` cannot place it, so the checkout root falls back to that path itself, unless the path is too broad to be a root, and then the tree clause says it has no opinion. With a root, the tree clause still refuses a write into another checkout. The wait clause never reads the cwd to find a poll in the command text, so it still refuses one. None of these five harms is unrecoverable the way a signal to a stranger's process is.
 
 A pass the guard could not decide is printed. An operand that resolves to neither a path nor a commit says so. A checkout root it could not resolve says so. A guard that cannot tell "nothing to object to" from "I could not read this" has D171's failure class.
 
@@ -77,37 +79,6 @@ A named source is allowed, on the ground that it WRITES a known version rather t
 
 **Proved by reproducing the near miss.** The self-test's two "names a source" cases were instances of the bug. Both ran against `work.py`, modified earlier in the fixture, and asserted `allows`. They are now `refuses` cases: `git checkout <sha> --` and `git restore --source=`. A new `allows` case uses their old name against `clean.txt`. The safe path is proven separately. 167 cases pass, up from 165 (2 rewritten, 1 added), with 0 failed.
 
-### AMENDED: a sixth clause, because a named refspec sits outside git's net
-
-Git refuses the bare form of this mistake, which is why it survives. `push.default=simple`, git's modern default, refuses a bare `git push` whose tracked upstream name differs from the current branch's name. It even prints the fix. But the refusal keys on the absence of a refspec, not on the mismatch. Once a caller names one, even the unqualified `HEAD` the printed fix offers, git treats it as an informed choice. It pushes to a branch of that literal name, creating one on the remote if none exists, silently.
-
-That happened. A coordinating session resolving a merge conflict stood on a local branch a background agent had named `pr-h-readings-table-local`. The agent had pushed its squashed commit to the real PR branch under another name. So the local branch tracked `origin/claude/pr-h-readings-table`. Meaning to update the PR branch, the session ran `git push origin HEAD`. Git pushed `[new branch] HEAD -> pr-h-readings-table-local` to origin. The PR branch was untouched. No error was raised. The session caught it only because the next output looked wrong.
-
-`clause_push` resolves the fact that git's own safety net already holds. `git rev-parse --abbrev-ref HEAD` gives the current branch. `branch.<name>.remote` and `branch.<name>.merge` give the tracked pair. They are read as git reads them, not re-derived from the command text. A push is refused when three things hold. Its remote matches `branch.<name>.remote`. Its lone refspec is an unqualified `HEAD` or the branch's own literal name. The tracked name differs.
-
-Everything else passes as before. A branch with no configured upstream (an ordinary first push). A name matching its upstream. An explicit `HEAD:<branch>`. A push to a remote the branch does not track (a fork workflow). `--all`, `--mirror`, `--tags` and `--delete`, which push something other than this branch under its own name. `BANCHI_PUSH=off` is its hatch, honoured in both forms.
-
-Reproduced, not argued. `scripts/guard-shell-selftest.sh` builds a real bare origin. It pushes a branch under one name while its tracking points to a differently named branch. That is the incident's mechanism, `git push -u origin <local>:<remote>`. The guard is asked about that mismatch. The cases the ordinary first push, a matching upstream and fork workflows must never trip are asked too.
-
-### AMENDED: the ordinary first push of a feature branch was refused, and its printed remedy pushed to main
-
-The exemption above names "no configured upstream at all (the ordinary first push of a new branch)". A branch cut the way this repo makes one does get an upstream. `git switch -c <name> origin/main` sets `branch.<name>.merge` to `refs/heads/main` at creation. So the most common shape here, cut from `origin/main` and then `git push -u origin <that-name>`, had a tracked-versus-named mismatch. The rule meant to protect it refused it. Its two-line remedy read:
-
-```
-git push                       # let git's safety net name the fix
-git push origin HEAD:main      # push to the branch actually tracked
-```
-
-Both lines push to `main`. The second names it outright. For the ordinary case, the guard told the operator to do what D42, `scripts/githooks/pre-push`, `scripts/githooks/reference-transaction` and GitHub branch protection exist to prevent. Other guards would have caught the result, and this was never a live incident. A refusal whose remedy is the forbidden act teaches the wrong reflex. `no-bandaids` and D171 hold this repo to that standard.
-
-The fix exempts only the shape that was never the incident. `pr-h-readings-table-local` tracked `origin/claude/pr-h-readings-table`, a different feature branch, so it stays refused. `_default_branch(remote, cwd)` answers what this checkout treats as `<remote>`'s default. It prefers git's own record, `refs/remotes/<remote>/HEAD`, which a real `git clone` or `git remote set-head <remote> -a` sets. If that ref was never written, it falls back to the claude-settings sweep's rule for the primary checkout. That rule takes the first of `main`, `master` that exists as a local branch. Nothing is guessed. An unreadable remote and an absent local branch both answer `""`, which never equals a real tracked name. That case is refused as before. `clause_push` exempts a mismatch only when `tracked == _default_branch(remote, where)`. Every other mismatch, including the incident's, reaches the refusal unchanged.
-
-Why git's record comes first: the claude-settings sweep answers this question for the primary checkout, so a hardcoded `"main"` would be a second, divergent answer. `janitor.py`'s answer is local-only. This clause asks about a specific remote, and a fork's default can differ from `origin`'s. So `refs/remotes/<remote>/HEAD` is asked first. The local guess runs only when that ref was never written. That covers this guard's own fixtures and any `git init`-then-`push` clone that never ran `git clone` or `git remote set-head`.
-
-Reproduced red first, in a real throwaway repo. A branch made with `git switch -c feature-x origin/main`, then pushed with `git push -u origin HEAD`, was refused (`exit 2`), with the remedy naming `HEAD:main`. After the fix, the same sequence exits `0`. `scripts/guard-shell-selftest.sh` checks both directions. The fixture switches to a branch cut from `origin/main`. It asserts the upstream is `refs/heads/main` before it trusts the case. It asserts the push is never refused, with or without `-u`. It asserts no still-refused case's remedy names the default branch. It sets `refs/remotes/origin/HEAD` by hand, as a real `git clone` would, so the primary read runs and not only the fallback. The incident reproduction and its five must-never-refuse cases are unchanged and pass. Those five are a fresh branch with no upstream, a matching upstream, a different remote, `--all`, `--tags` and `--delete`, and a detached HEAD.
-
-Mutation-tested. The sixth clause's original count is untouched: six arms over the colon check and refspec resolution, five caught, one equivalent mutant. A colon-bearing refspec can never equal `HEAD` or a bare branch name, so the colon check's guard is never reached. This amendment's logic was mutated eight more ways and re-run against the full selftest. Equality flipped to `!=`: caught, 14 failures. Exemption deleted: caught, 4 failures, the original bug reproduced. `branch` read instead of `tracked`: caught, 4. Always exempt: caught, 10. `main` dropped from the local fallback: caught, 3. The `<remote>/` prefix not stripped from a real `origin/HEAD` symbolic ref: caught, 1. Two survive, and both are equivalent. Swapping the fallback order to `("master", "main")` and corrupting the symbolic-ref path's ref name both still land on `"main"`. Every fixture branch is `main`, never `master`. A repo whose local branch and remote default disagreed would tell them apart. None built here does. Fourteen arms across both amendments: eleven caught, three equivalent-mutant survivors. That replaces the "six arms, five caught" figure CLAUDE.md published before this amendment, which covered only the colon check.
-
 ### AMENDED: a quoted script is not a command
 
 Clause 2 refused this command from a real session:
@@ -132,15 +103,13 @@ Two things are this repo's own, and the code names each. The splitter takes the 
 
 `_sanctioned_outside` lists the folders outside the checkout where a write passes: `/dev`, `~/.claude`, a temp directory that is no checkout, and `~/Library/Application Support/Claude-Work/side-session-notes/`. The notes folder holds a space. Quoted and backslash-escaped spellings both pass, and a sibling folder is still refused.
 
-### Every hatch use is logged, and the push remedy names the branch's own name
+### Every hatch use is logged
 
 The owner ruled: log and surface every `BANCHI_*=off` use. A hatch lifts its guard and prints nothing, so a run of hatch uses was invisible. `guard-shell.py --hook` sees every Bash command, so it is the one home.
 
 A command can set any `BANCHI_<NAME>=off` by env prefix, `export`, or `env`. The hook reads that from the parsed stages. A mention in an argument, a comment or a heredoc is not a use. `_off` reads the same parsed set, so a hatch counts only as a real assignment. Every hatch a command sets is logged. A mention never lifts a guard. The three scope switches take `=all`, not `=off`. They only add checks, so they are not hatches and the log never counts them. A hatch honoured from the environment is not logged here. `make status` names it under `hatches`.
 
 The hook appends one line per name to `banchi-hatches.log` in `git rev-parse --git-common-dir`. Every worktree of the clone shares that file. A line holds the time, the hatch, the checkout, the branch and the first 120 characters of the command. The log never changes a verdict. It fails open on any logging error. `make status` prints the last 24 hours (name, checkout, branch), or nothing when there are none. The self-test pins that a hatch command writes one line and a plain command writes none.
-
-The push clause's printed remedy names the branch's own name. It prints `git push -u <remote> HEAD:<branch>` and never the upstream it refused, since a refusal's remedy never names the forbidden target. A push that names the branch's own name as its destination lands on that name, so the clause allows it. `HEAD` stays refused when the upstream is a different non-default branch.
 
 ### Every refusal is logged, so a rule is judged by how often it fires
 
@@ -150,4 +119,4 @@ The guards that write it are `guard-shell.py`, `silent-write-guard.py`, `guard-o
 
 ### Standing
 
-**BUILT and self-tested**: four clauses (tree, wait, push and narrate), `scripts/guard-shell-selftest.sh` with one reproduction per clause, the swept allow list, every hatch in both forms, and the fail-open floor. **RECORDED**: this entry, `docs/map/`, CLAUDE.md, `scripts/checks.py` and the one hook roster, `.claude/settings.json`. **NEITHER**: nothing. What is unproven is what every hook here shares. `silent-write-selftest.sh` says so in as many words. The harness invokes the hook, and exit 2 blocks a call. Both are the harness's behaviour, not this repository's.
+**BUILT and self-tested**: three clauses (tree, wait and narrate), `scripts/guard-shell-selftest.sh` with one reproduction per clause, the swept allow list, every hatch in both forms, and the fail-open floor. **RECORDED**: this entry, `docs/map/`, CLAUDE.md, `scripts/checks.py` and the one hook roster, `.claude/settings.json`. **NEITHER**: nothing. What is unproven is what every hook here shares. `silent-write-selftest.sh` says so in as many words. The harness invokes the hook, and exit 2 blocks a call. Both are the harness's behaviour, not this repository's.

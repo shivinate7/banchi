@@ -102,9 +102,9 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
   - Decisions: `D16`, `D24`, `D11`, `D14`
 - `scripts/guard-scope.py` — Does this branch reach what one of the gated self-tests proves?
   - Decisions: `D247`, `D18`
-- `scripts/guard-shell-selftest.sh` — Proves guard-shell.py by COMMITTING its four mistakes in a throwaway repository with a linked worktree.
+- `scripts/guard-shell-selftest.sh` — Proves guard-shell.py by COMMITTING its three mistakes in a throwaway repository with a linked worktree.
   - Decisions: `D18`, `D42`, `D179`, `D43`, `D127`, `D171`, `D173`
-- `scripts/guard-shell.py` — The PreToolUse hook on Bash AND Write|Edit that refuses four shell mistakes this repo has already paid for, each with a measured incident: a write outside this checkout (~`1,500` lines into the owner's main tree on `main`, hot-reloaded into their live capture server).
+- `scripts/guard-shell.py` — The PreToolUse hook on Bash AND Write|Edit that refuses three shell mistakes this repo has already paid for, each with a measured incident: a write outside this checkout (~`1,500` lines into the owner's main tree on `main`, hot-reloaded into their live capture server).
   - Decisions: `D179`, `D157`, `D42`, `D18`, `D43`, `D127`, `D135`, `D171`, `D173`, `D305`
 - `scripts/hand-search-selftest.py` — `make hand-search-selftest` — proves app/eslint.config.js's HAND_SEARCH_RULES sees the shape it is for, on fixtures over the real `npx eslint --stdin` (F11c, the reviewer's own finding: the round-one rule matched only `x.toLowerCase().includes(y)` and let `.startsWith`/`.endsWith`/`.indexOf`, `.toLocaleLowerCase()`, and a fold on the ARGUMENT instead of the receiver (`x.includes(y.toLowerCase())`) through silently).
   - Decisions: `D18`, `D247`, `D271`

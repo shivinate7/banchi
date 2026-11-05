@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `make guard-shell-selftest` — scripts/guard-shell.py, proved by committing its four mistakes.
+# `make guard-shell-selftest` — scripts/guard-shell.py, proved by committing its three mistakes.
 # Protects: The shell guard refuses each of its mistakes, proved by committing each mistake in a throwaway repository.
 # Governs: D18
 #
@@ -8,13 +8,11 @@
 # reproduction: `reap-selftest.sh` reproduces both 2026-09-10 kill incidents with real
 # processes and a real socket, `revert-selftest.sh` rebuilds PR #218 and #221, and
 # `silent-write-selftest.sh` reproduces the refused commit whose refusal went to /dev/null. So
-# all four incidents are PERFORMED here first, in a throwaway repository, and only then
+# all three incidents are PERFORMED here first, in a throwaway repository, and only then
 # is the guard asked about them:
 #
 #   2. a worktree is made, and its root is a different directory from the main checkout's
 #   5. `pgrep -f <tag>` matches the shell whose own command line carries that tag
-#   6. a local branch is really made to track a differently-named remote branch — the exact
-#      way a background agent's push created one — and `git push origin HEAD` is asked about
 #   9. a narrated wait, run with a real narrator, a real pipe and a real `tail`
 #
 # The pgrep reproduction is the one that earns its place: rank 19's rule was written correctly
@@ -462,15 +460,14 @@ if [ $? -eq 0 ]; then ok "a backgrounded \`make check\` passes"
 else bad "a backgrounded make check was refused"; fi
 
 echo ""
-echo "  6. a push to the wrong branch name, reproduced"
+echo "  6. a push to a branch of the wrong name: no clause refuses it"
 
-# ------------------------------------------------- 6a. the incident, performed in the fixture
+# ------------------------------------------------- 6a. the fixture: a mismatched upstream
 #
-# A REAL BARE ORIGIN, because what this clause reads is git CONFIG —
-# `branch.<name>.remote` / `.merge` — and the honest way to arm it is the way a background
-# agent actually created it: `git push -u origin <local>:<remote>` sets exactly that pair,
-# under a DIFFERENT name on each side. A file this section writes is its own
-# (`pr-work.txt`), never `work.py`.
+# A REAL BARE ORIGIN, and a branch tracking a DIFFERENTLY named upstream, armed the way a
+# background agent arms one: `git push -u origin <local>:<remote>` sets exactly that pair, under
+# a different name on each side. The allow below is posed against it. A file this section writes
+# is its own (`pr-work.txt`), never `work.py`.
 git init -q --bare "$tmp/origin.git" 2>/dev/null
 (
   cd "$tmp/main" || exit 1
@@ -486,146 +483,15 @@ git init -q --bare "$tmp/origin.git" 2>/dev/null
 if [ "$(cd "$tmp/main" && git rev-parse --abbrev-ref HEAD)" = "pr-h-readings-table-local" ] &&
    [ "$(cd "$tmp/main" && git config --get branch.pr-h-readings-table-local.merge)" = \
      "refs/heads/claude/pr-h-readings-table" ]; then
-  ok "the fixture reproduces the incident: a local branch tracking a DIFFERENTLY named upstream"
+  ok "the fixture is armed: a local branch tracking a DIFFERENTLY named upstream"
 else
-  bad "the push fixture did not arm — the incident cannot be posed"
+  bad "the push fixture did not arm — the mismatch cannot be posed"
 fi
 
 echo ""
-echo "  the guard refuses it, exactly as it happened"
+echo "  the mismatch the retired clause refused: no clause refuses it now"
 
-refuses "the 2026-09-12 command — a coordinator's \`git push origin HEAD\`" \
-  "$tmp/main" "git push origin HEAD"
-refuses "\`-u\` does not launder it — it would re-point the tracking AFTER the wrong push" \
-  "$tmp/main" "git push -u origin HEAD"
-refuses "\`--force\` does not launder it either" \
-  "$tmp/main" "git push --force origin HEAD"
-refuses "an env prefix does not launder it" \
-  "$tmp/main" "BANCHI_MAIN=off git push origin HEAD"
-
-judge "$tmp/main" "git push origin HEAD"
-case "$out" in *"pr-h-readings-table-local"*) ok "the refusal names the current branch" ;;
-  *) bad "the refusal does not name the current branch" ;; esac
-case "$out" in *"claude/pr-h-readings-table"*) ok "the refusal names the tracked upstream" ;;
-  *) bad "the refusal does not name the tracked upstream" ;; esac
-case "$out" in
-  *"BANCHI_PUSH=off"*) bad "the refusal names the PUSH switch to an agent" ;;
-  *"owner-only: ask the owner to run this command"*) ok "the refusal is owner-only and names no switch" ;;
-  *) bad "the refusal carries no owner-only line" ;; esac
-# (a) the trap is still refused: `git push origin HEAD` above, on a branch whose upstream is
-# ANOTHER branch. (A bare `git push` is git's own net, allowed below.)
-remedy="$(printf '%s\n' "$out" | sed -n '/Name the branch/,/git push -u/p')"
-case "$remedy" in *"git push -u origin HEAD:pr-h-readings-table-local"*) \
-  ok "(b) the refusal's remedy pushes to the branch's OWN name" ;;
-  *) bad "the remedy does not name the branch's own name: $remedy" ;; esac
-case "$remedy" in *"claude/pr-h-readings-table"*) \
-  bad "the remedy names the upstream it refused: $remedy" ;;
-  *) ok "(b) the remedy does not name the refused upstream" ;; esac
-
-echo ""
-echo "  what clause 6 must NEVER refuse"
-
-allows "(c) the explicit own-name push, HEAD:<own> — the remedy as printed" \
-  "$tmp/main" "git push -u origin HEAD:pr-h-readings-table-local"
-allows "(c) the own name as a plain refspec — it lands on that name" \
-  "$tmp/main" "git push origin pr-h-readings-table-local"
-allows "(c) \`-u\` with the own name as a plain refspec" \
-  "$tmp/main" "git push -u origin pr-h-readings-table-local"
-allows "an explicit form to the tracked branch, spelled out by the caller" \
-  "$tmp/main" "git push origin HEAD:claude/pr-h-readings-table"
-allows "an explicit form to somewhere else entirely — not this clause's business" \
-  "$tmp/main" "git push origin HEAD:some-other-branch"
-allows "a bare \`git push\` — git's OWN safety net owns this shape" \
-  "$tmp/main" "git push"
-allows "\`git push origin\` with no refspec — same shape, still git's own net" \
-  "$tmp/main" "git push origin"
-
-# THE ORDINARY "OPEN A NEW PR" FLOW — no upstream configured at all, the single most common
-# case in this repo's own workflow (D42: "a session pushes the branch, `gh pr create` opens
-# the PR"). This must never be refused.
-(cd "$tmp/main" && git checkout -q -b fresh-pr-branch)
-allows "a brand-new branch with no upstream yet — the ordinary first push" \
-  "$tmp/main" "git push origin HEAD"
-allows "…and with \`-u\`, which is how this repo's own workflow spells it" \
-  "$tmp/main" "git push -u origin HEAD"
-
-# AN UPSTREAM THAT ALREADY MATCHES ITS OWN NAME is the safe, ordinary case D42 documents —
-# the state every branch here is in the moment after that first push lands.
-(cd "$tmp/main" && git push -q -u origin fresh-pr-branch:fresh-pr-branch 2>/dev/null)
-allows "an upstream whose name already matches its branch's own" \
-  "$tmp/main" "git push origin HEAD"
-
-# THE ORDINARY FIRST PUSH OF A BRANCH CUT *FROM* THE DEFAULT BRANCH — amended 2026-09-13
-# (D179). `git switch -c X origin/main` (or `git checkout -b X origin/main`) is how this repo's
-# own workflow starts a feature branch, and it DOES configure an upstream — `origin/main` — from
-# birth, unlike `fresh-pr-branch` above. Before this amendment that upstream's mismatch with the
-# branch's own name refused the push, and the refusal's own remedy told the operator to push at
-# `main` by name (`git push origin HEAD:main`) — the one act D42, both git hooks and branch
-# protection exist to prevent. `$tmp/origin.git` already carries `main` (line ~614's own push),
-# so `origin/main` resolves here exactly as it would for a real `git switch -c X origin/main`.
-(cd "$tmp/main" && git switch -q -c cut-from-main origin/main 2>/dev/null)
-if [ "$(cd "$tmp/main" && git config --get branch.cut-from-main.merge)" = "refs/heads/main" ]; then
-  ok "the fixture reproduces the ordinary case: a branch tracking the DEFAULT branch from birth"
-else
-  bad "cut-from-main does not track origin/main — this arm cannot be posed"
-fi
-allows "the ordinary first push of a branch cut from the default branch — must never refuse" \
-  "$tmp/main" "git push origin HEAD"
-allows "…and with \`-u\`, the same shape this repo's own workflow types" \
-  "$tmp/main" "git push -u origin HEAD"
-
-judge "$tmp/main" "git push origin HEAD"
-case "$out" in
-  *"HEAD:main"*|*"branch --unset-upstream"*)
-    bad "a still-refused case's remedy must never name the default branch, and this one did" ;;
-  *) ok "no remedy naming the default branch appears (there is no refusal at all)" ;;
-esac
-
-# THE PRIMARY PATH, NOT ONLY THE FALLBACK. `refs/remotes/<remote>/HEAD` is what a real
-# `git clone` sets, and it is what `_default_branch` reads FIRST — but this fixture is built by
-# `git init` + `remote add` + `push`, never a `clone`, so nothing above has exercised that read
-# at all; every "cut-from-main" case so far passed off the local `main`/`master` fallback alone.
-# Set the symbolic ref by hand, the way `git remote set-head origin -a` would, so the
-# symbolic-ref branch and its `origin/` prefix-stripping are actually proven rather than merely
-# unreached.
-(cd "$tmp/main" && git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main)
-if [ "$(cd "$tmp/main" && git symbolic-ref --quiet --short refs/remotes/origin/HEAD)" = "origin/main" ]; then
-  ok "the fixture now carries a real \`origin/HEAD\` symbolic ref, unstripped, as git writes it"
-else
-  bad "refs/remotes/origin/HEAD did not take — the primary-path arm cannot be posed"
-fi
-allows "the primary default-branch path (a real \`origin/HEAD\`) exempts the same push" \
-  "$tmp/main" "git push origin HEAD"
-(cd "$tmp/main" && git symbolic-ref --delete refs/remotes/origin/HEAD 2>/dev/null)
-
-# A DIFFERENT REMOTE THAN THE ONE TRACKED — a fork workflow, untouched by this clause: the
-# mismatch this clause reads is specific to the remote the command is about to push to.
-(cd "$tmp/main" && git remote add fork "$tmp/origin.git" 2>/dev/null)
-allows "a push to a remote this branch does not track — a fork workflow" \
-  "$tmp/main" "git push fork HEAD"
-
-(cd "$tmp/main" && git checkout -q pr-h-readings-table-local)
-# THE SAME FORK CHECK, AGAINST THE ACTUALLY-MISMATCHED BRANCH — the discriminating version.
-# `fresh-pr-branch`'s tracked name matched its own, so a guard that forgot to compare the
-# REMOTE at all could still pass that case by coincidence, off the name check alone. This
-# branch's tracked name genuinely differs, so only a real remote comparison keeps it a pass.
-allows "the mismatch is REMOTE-specific — a different remote sees no upstream at all" \
-  "$tmp/main" "git push fork HEAD"
-allows "an entirely unrelated branch name — not HEAD-shaped at all" \
-  "$tmp/main" "git push origin some-other-branch-entirely"
-allows "\`--all\` pushes something other than \"this branch\"" \
-  "$tmp/main" "git push origin --all"
-allows "\`--tags\`, the same reason" \
-  "$tmp/main" "git push origin --tags"
-# NAMES THE CURRENT BRANCH ITSELF, on purpose — deleting a remote ref by that name is not
-# "pushing this branch under its own name", and a mutation that stopped recognising `--delete`
-# as special would refuse this one for the wrong reason (it would read the deleted name as a
-# HEAD-shaped refspec and find the same mismatch clause 6 exists for).
-allows "\`--delete\`, the same reason — even naming the branch itself" \
-  "$tmp/main" "git push origin --delete pr-h-readings-table-local"
-
-(cd "$tmp/main" && git checkout -q --detach 2>/dev/null)
-allows "a detached HEAD — nothing this clause can name as \"the current branch\"" \
+allows "the mismatch: \`git push origin HEAD\` on a branch tracking a differently named upstream" \
   "$tmp/main" "git push origin HEAD"
 
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
@@ -840,45 +706,44 @@ echo "  the escape hatches: inline lifts, a mention does not"
 allows "wait, inline"     "$tmp/main" "BANCHI_WAIT=off until ! pgrep -f x; do sleep 5; done"
 allows "tree, inline"     "$WT" "BANCHI_TREE=off cat > $tmp/main/work.py"
 
-# THE PUSH HATCH IS TESTED AGAINST THE MISMATCHED BRANCH, not against `main` — `main` never
-# had a tracked upstream configured in this fixture, so the command would pass with or
-# without the hatch and the test would prove nothing about the hatch itself.
-(cd "$tmp/main" && git checkout -q pr-h-readings-table-local 2>/dev/null)
-allows "push, inline"    "$tmp/main" "BANCHI_PUSH=off git push origin HEAD"
 # A HATCH IS HONOURED ONLY AS A REAL ASSIGNMENT: a mention never lifts, so every lift is logged.
+# These run from the main checkout, whose hatch log is `.git/banchi-hatches.log`. A linked
+# worktree writes its own log, so a count taken from one would read the wrong file.
 refuses "a hatch in a trailing comment does not lift" \
-  "$tmp/main" "git push origin HEAD # BANCHI_PUSH=off"
+  "$tmp/main" "until ! pgrep -f x; do sleep 5; done # BANCHI_WAIT=off"
 refuses "a hatch echoed before the command does not lift" \
-  "$tmp/main" "echo BANCHI_PUSH=off; git push origin HEAD"
+  "$tmp/main" "echo BANCHI_WAIT=off; until ! pgrep -f x; do sleep 5; done"
 b="$(cat "$tmp/main/.git/banchi-hatches.log" | wc -l | tr -d ' ')"
-judge "$tmp/main" "BANCHI_PUSH=off git push origin HEAD"
+judge "$tmp/main" "BANCHI_WAIT=off until ! pgrep -f x; do sleep 5; done"
 a="$(cat "$tmp/main/.git/banchi-hatches.log" | wc -l | tr -d ' ')"
-if [ "$a" = "$((b + 1))" ]; then ok "a real push hatch lifts AND logs exactly one line"
-else bad "the push hatch wrote $((a - b)) log line(s)"; fi
-# A `-c` SCRIPT IS READ LIKE A BARE COMMAND: the shared reading unwraps it once.
-refuses "bash -c reads the push inside" \
-  "$tmp/main" "bash -c 'git push origin HEAD'"
-refuses "sh -c with -u reads the push inside" \
-  "$tmp/main" "sh -c \"git push -u origin HEAD\""
-allows "bash -c with the branch's own name is fine" \
-  "$tmp/main" "bash -c 'git push origin HEAD:pr-h-readings-table-local'"
+if [ "$a" = "$((b + 1))" ]; then ok "a real wait hatch lifts AND logs exactly one line"
+else bad "the wait hatch wrote $((a - b)) log line(s)"; fi
+# A `-c` SCRIPT IS READ LIKE A BARE COMMAND: the shared reading unwraps it once. These run through
+# the tree clause, which judges a `-c` body; the wait clause judges a bare loop only.
+refuses "bash -c reads the write inside" \
+  "$WT" "bash -c \"echo x > $tmp/main/work.py\""
+refuses "sh -c reads the write inside" \
+  "$WT" "sh -c \"echo x > $tmp/main/work.py\""
+allows "bash -c with a write inside this checkout is fine" \
+  "$WT" "bash -c 'echo x > notes.txt'"
 refuses "a hatch merely echoed inside -c does not lift" \
-  "$tmp/main" "bash -c 'echo BANCHI_PUSH=off; git push origin HEAD'"
+  "$WT" "bash -c 'echo BANCHI_TREE=off; echo x > $tmp/main/work.py'"
+allows "a hatch inside -c lifts" \
+  "$WT" "bash -c 'BANCHI_TREE=off echo x > $tmp/main/work.py'"
 b="$(cat "$tmp/main/.git/banchi-hatches.log" | wc -l | tr -d ' ')"
-judge "$tmp/main" "bash -c 'BANCHI_PUSH=off git push origin HEAD'"
+judge "$tmp/main" "bash -c 'BANCHI_WAIT=off until ! pgrep -f x; do sleep 5; done'"
 a="$(cat "$tmp/main/.git/banchi-hatches.log" | wc -l | tr -d ' ')"
-if [ "$a" = "$((b + 1))" ] && [ -z "$out" ]; then ok "a hatch inside -c lifts AND logs exactly one line"
+if [ "$a" = "$((b + 1))" ] && [ -z "$out" ]; then ok "a hatch inside -c is logged exactly once"
 else bad "the -c hatch wrote $((a - b)) log line(s), out=[$out]"; fi
-(cd "$tmp/main" && git checkout -q main 2>/dev/null)
 
 hatchlog="$tmp/main/.git/banchi-hatches.log"
 before="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
 judge "$tmp/main" "git status --porcelain"
-judge "$tmp/main" "echo BANCHI_PUSH=offish BANCHI_x=on"
+judge "$tmp/main" "echo BANCHI_WAIT=offish BANCHI_x=on"
 for mention in \
   "grep -n 'BANCHI_TREE=off' README.md" \
   "echo BANCHI_TREE=off" \
-  "git commit -m 'doc: BANCHI_PUSH=off is the hatch'" \
+  "git commit -m 'doc: BANCHI_WAIT=off is the hatch'" \
   "cat <<EOF
 BANCHI_NARRATE=off
 EOF" \
@@ -890,7 +755,7 @@ done
 after_plain="$(cat "$hatchlog" 2>/dev/null | wc -l | tr -d ' ')"
 if [ "$before" = "$after_plain" ]; then ok "a plain command and six MENTIONS of a hatch write no hatch-log line"
 else bad "a plain command or a mention wrote $((after_plain - before)) hatch-log line(s)"; fi
-for real in "BANCHI_PUSH=off git status" "BANCHI_WAIT=off echo hi"; do
+for real in "BANCHI_TREE=off git status" "BANCHI_WAIT=off echo hi"; do
   b="$(cat "$hatchlog" | wc -l | tr -d ' ')"
   judge "$tmp/main" "$real"
   a="$(cat "$hatchlog" | wc -l | tr -d ' ')"
@@ -914,7 +779,7 @@ hatch_env() {   # hatch_env <name> <cwd> <command>
   if [ $? -eq 0 ]; then ok "$1=off in the environment"; else bad "$1=off in the environment did not disarm it"; fi
 }
 hatch_env BANCHI_WAIT     "$tmp/main" "until ! pgrep -f x; do sleep 5; done"
-hatch_env BANCHI_PUSH     "$tmp/main" "git push origin HEAD"
+hatch_env BANCHI_TREE     "$WT" "cat > $tmp/main/work.py"
 hatch_env BANCHI_NARRATE  "$tmp/main" "make merge ARGS=\"437 --confirm\" | tail -5"
 (cd "$tmp/main" && git checkout -q main 2>/dev/null)
 
@@ -923,10 +788,11 @@ out="$(CWD="$WT" TARGET="$tmp/main/work.py" python3 -c 'import json,os; print(js
 if [ $? -eq 0 ]; then ok "BANCHI_TREE=off in the environment"; else bad "BANCHI_TREE=off in the environment did not disarm it"; fi
 
 # EVERY CLAUSE HAS A HATCH AND EVERY HATCH IS PRINTED. The table is read rather than retyped,
-# so a clause added without one fails here instead of shipping unescapable.
-count="$(python3 "$GUARD" --clauses | wc -l | tr -d ' ')"
-if [ "$count" = "4" ]; then ok "four clauses, four hatches, read from the guard's own table"
-else bad "the clause table has $count rows; this file scores four"; fi
+# so a clause added without one fails here instead of shipping unescapable. The NAMES are
+# asserted, not counted: a count of three would pass a table that dropped `wait` and kept `push`.
+names="$(python3 "$GUARD" --clauses | awk '{print $1}' | paste -sd' ' -)"
+if [ "$names" = "tree wait narrate" ]; then ok "three clauses, read from the guard's own table: tree, wait, narrate"
+else bad "the clause table names [$names]; this file scores tree, wait and narrate"; fi
 if python3 "$GUARD" --clauses | grep -qv "BANCHI_.*=off"; then
   bad "a clause in the table names no escape hatch"
 else
@@ -955,6 +821,14 @@ refuses "control: the polling loop is refused" "$tmp/main" "until ! pgrep -f x; 
 fails_open "an unbalanced quote"         "{\"cwd\":\"$tmp/main\",\"tool_input\":{\"command\":\"until ! pgrep -f x; do sleep 5; done 'HEAD\"}}"
 fails_open "an empty file_path"          '{"tool_input":{"file_path":""}}'
 
+# A MISSING CWD IS NOT FAIL-OPEN (D179). The tree clause takes the missing path as the checkout
+# root and still refuses a write into another checkout; the wait clause refuses a poll whatever
+# the cwd is. Both are posed from a directory that does not exist under the fixture.
+refuses "a missing cwd: a write into another checkout is still refused" \
+  "$tmp/no-such-checkout" "echo x > $tmp/main/work.py"
+refuses "a missing cwd: a polling loop is still refused" \
+  "$tmp/no-such-checkout" "until ! pgrep -f x; do sleep 5; done"
+
 # THE SHARED PARSER IS A DEPENDENCY, AND A MISSING DEPENDENCY IS A BROKEN GUARD. Copied into
 # a throwaway directory WITHOUT `shell_parse.py`, the guard must have no opinion about
 # anything rather than raise — the import is guarded for exactly this.
@@ -980,21 +854,6 @@ if [ -f "$HERE/silent-write-guard.py" ]; then
 fi
 
 LIBDIR="$HERE"
-echo ""
-echo "  the push mismatch, and a missing cwd"
-
-# Arm the mismatch: a branch tracking a DIFFERENTLY named upstream.
-(cd "$tmp/main" && git checkout -q -B push-mismatch main 2>/dev/null \
-  && git config branch.push-mismatch.remote origin \
-  && git config branch.push-mismatch.merge refs/heads/claude/push-mismatch)
-judge "$tmp/main" "git push origin HEAD"
-[ $? -eq 2 ] || bad "the push-mismatch fixture did not arm: the mismatch is not refused"
-# A MISSING CWD FAILS OPEN ONLY FOR A CLAUSE THAT READS THE REPOSITORY THERE. The push clause reads the
-# tracked upstream at cwd, so it is the subject: the armed mismatch is refused from a real checkout
-# (the arm above) and must be allowed, not crash, from a directory that does not exist.
-fails_open "a cwd that does not exist: the push the mismatch refuses is allowed" "{\"cwd\":\"/no/such/place\",\"tool_input\":{\"command\":\"git push origin HEAD\"}}"
-(cd "$tmp/main" && git checkout -q main 2>/dev/null)
-
 echo ""
 echo "  the refusal log"
 . "$LIBDIR/refusal-log-assert.sh"
