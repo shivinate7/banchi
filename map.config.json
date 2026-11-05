@@ -1,7 +1,17 @@
 {
-  "formatVersion": 3,
+  "formatVersion": 4,
   "title": "Banchi",
-  "codeExtensions": ["py", "ts", "tsx", "js", "mjs", "sh", "css", "html", "txt"],
+  "codeExtensions": [
+    "py",
+    "ts",
+    "tsx",
+    "js",
+    "mjs",
+    "sh",
+    "css",
+    "html",
+    "txt"
+  ],
   "mapPaths": [
     "app/",
     "cli/",
@@ -14,7 +24,12 @@
     "store/",
     "harness/run.py"
   ],
-  "screenKeys": { "file": "app/src/App.tsx", "name": "SCREEN_KEYS" },
-  "modelSeam": { "file": "identify/batch.py" },
+  "screenKeys": {
+    "file": "app/src/App.tsx",
+    "name": "SCREEN_KEYS"
+  },
+  "modelSeam": {
+    "file": "identify/batch.py"
+  },
   "requireAllKeys": false
 }
