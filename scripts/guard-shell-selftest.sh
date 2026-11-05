@@ -1403,6 +1403,7 @@ else
   skip_cli - "$tmp/main" "git push origin HEAD"
   [ $? -eq 2 ] || bad "the skip-section push fixture did not arm: the mismatch is not refused without --skip"
   # Each harness runs the hook with its list as the environment prefix, so the push cases do too.
+  # Claude Code skips the push clause (D179, shell mistakes are refused): the shared push-stray-branch ask takes it.
   skip_env "$CLAUDE_SKIPS" -- "$tmp/main" "git push origin HEAD"; p=$?
   if [ $p -eq 0 ]; then ok "Claude Code's list skips the push clause: \`$CLAUDE_SKIPS\` lets the push mismatch through"
   else bad "Claude Code's list does not skip the push clause: \`GUARD_SHELL_SKIP=$CLAUDE_SKIPS\` in .claude/settings.json leaves the push mismatch refused, exit $p (want 0)"; fi
