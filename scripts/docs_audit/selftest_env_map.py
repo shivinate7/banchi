@@ -43,8 +43,9 @@ def audit_runs_without_map_py(ok) -> None:
     repository, so the audit reads the worktree view, as `make docs-audit` does. The whole audit
     runs, so a row that still reads the file is caught whatever it is named. A crashed audit prints
     a traceback, and the first assert reads for one, so a crash cannot pass as silence. Costs one
-    full audit (about 20 s) and a copy of the tracked tree (about 20 MB). Red today: the `map data`
-    and `build order mirror` rows read the retired module with no existence check.
+    full audit (about 20 s) and a copy of the tracked tree (about 20 MB). On the commit before the
+    retirement it was red: the hook roster row read the retired module with no existence check, and
+    the audit crashed.
     """
     import os
     import shutil

@@ -40,11 +40,9 @@ from harness.tests.t7.common import (
 # ------------------------------------------------------------------ price history (D8, D86)
 
 
-# Named as relative paths rather than assembled from segments, which is T2's shape and is
-# what `scripts/docs-audit.py`'s `tested_by reach` row can actually see: it parses this file
-# for a string under `fixtures/`, and a path built out of `/ "fixtures" /` is invisible to it.
-# The audit is right to insist — `fixtures/` holds no Python, so a literal is the only
-# evidence that a test reaches it at all.
+# Named as relative paths rather than assembled from segments, which is T2's shape. A literal
+# names the path where a text search of this file finds it, and `fixtures/` holds no Python,
+# so the literal is the only place this file says what it reads.
 TCGCSV_PRODUCTS_FIXTURE = "fixtures/tcgcsv_riftbound_unleashed_products.json"
 
 TCGCSV_PRICES_FIXTURE = "fixtures/tcgcsv_riftbound_unleashed_prices.json"

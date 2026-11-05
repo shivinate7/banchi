@@ -97,11 +97,7 @@ PASS_CRITERIA = (
     "while every pre-rescue session keeps the verdict count it had"
 )
 
-# NAMED LITERALLY, resolved against the repo root, rather than composed out of `parent`
-# hops. `make docs-audit`'s `tested_by reach` row asks that a test naming a component in the
-# map name it in CODE — a composed path is invisible to a parse, and a docstring mention is
-# prose. The map claims `harness/traces/` is tested by T9; this line is what makes that
-# claim checkable rather than asserted.
+# NAMED LITERALLY, resolved against the repo root, rather than composed out of `parent` hops.
 ROOT = Path(__file__).resolve().parent.parent.parent
 TRACES = ROOT / "harness/traces"
 
@@ -166,12 +162,9 @@ D84 = {
 # reading a correct refusal as a fault, the mirror of the mistake D81 is about. A clock
 # threshold is used rather than "whatever the gate let through" because the gate is what is
 # on trial here and may not supply its own answer key.
-# KEYED BY FULL REPO-RELATIVE PATH rather than by basename, for two reasons that turned out
-# to be the same reason. `make docs-audit`'s `tested_by reach` row asks a test to name the
-# component it claims to cover in CODE, and a bare filename names nothing a parse can
-# resolve. And an answer key is a set of labels attached to specific files: the moment it is
-# keyed by something ambiguous, it is one careless copy away from labelling the wrong
-# session, which is the whole failure D81 is about.
+# KEYED BY FULL REPO-RELATIVE PATH rather than by basename. An answer key is a set of labels
+# attached to specific files: the moment it is keyed by something ambiguous, it is one careless
+# copy away from labelling the wrong session, which is the whole failure D81 is about.
 EXPECTED = {
     "harness/traces/motion-trace-2026-08-23T03-09-19-299Z.json": {"live": 86, "adaptive": 86, "arrival": 15000},
     # The two D84 sessions. `adaptive` is under the SHIPPED rule — `stillFrames` of the

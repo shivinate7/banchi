@@ -162,12 +162,7 @@ def check_crop_preview(checks: Checks) -> None:
 
         # --- the cut, and the seam it shares with the run --------------------------------
         #
-        # `geometry` IS DELIBERATELY NOT IMPORTED HERE, and the reason is a check in
-        # `scripts/docs-audit.py`'s own self-test rather than taste: it proves the `tested_by
-        # reach` row does not follow imports transitively by asserting that T7 reaches `store`
-        # directly and does NOT reach `geometry` through `cli`. A direct import here would make
-        # that fixture unable to tell a transitive follow from a real one, and it went red the
-        # first time this block was written.
+        # `geometry` IS DELIBERATELY NOT IMPORTED HERE.
         #
         # Nothing is lost. The identity — that the rectangle the screen draws is the one
         # `card_crop` cuts — is T6's, asserted there against the detector and observed failing
