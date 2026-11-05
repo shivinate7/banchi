@@ -486,16 +486,16 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: pipx run zizmor==1.30.1 .github/workflows .github/dependabot.yml
 
-  # THE MUTATION REPORT OF A BATCH. Only the batch's integration pull request goes ready, so a non-draft pull request is the
+  # THE MUTATION REPORT OF A BATCH. Only the integration PR goes ready, so a non-draft PR is the
   # batch run and the job needs no head-ref gate. The action reports the catch share of the lines the change adds and never
   # fails on it; it fails only when a known defect of `.github/known-defects.json` is MISS or UNKNOWN. A push or a schedule
   # reaches the action, which skips there itself. The profile builds its own venv and runs `npm ci` in `app/`.
   # Cap (ci-job-caps): claude-settings' own run took 34 s (run 42064515414; wall budget 300 s plus setup). Banchi's cost is
-  # unmeasured, so 15 min is provisional and the first run on a batch replaces it.
+  # unmeasured, and the first run on a batch replaces the 60 min.
   mutation-report:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60   # provisional, step 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -840,7 +840,7 @@ jobs:
     needs: [ci-check, ci-static, revert-guard, records, checks, zizmor, mutation-report, already-passed, browser-scope, design-check, design-check-passed, all-jobs-passed, nightly-alarm]
     if: ${{ !cancelled() && github.event_name == 'pull_request' && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
-    timeout-minutes: 2   # provisional: a comment post takes seconds; 60 would pass the merge deadline of 45
+    timeout-minutes: 2   # provisional: a comment post takes seconds; the 60 default is far too long
     permissions:
       contents: read
       pull-requests: write
