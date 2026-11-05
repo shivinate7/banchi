@@ -246,6 +246,7 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
   - Decisions: `D138`, `D176`, `D158`, `D43`, `D18`, `D127`, `D261`
 - `scripts/serve.py` — `make up` / `make down` / `make launch-agent`.
   - Decisions: `D43`, `D138`, `D176`, `D70`, `D47`, `D158`, `D261`, `D13`, `D18`, `D127`
+  - Tested by: `harness/tests/t7/pipeline_fetch.py`, `harness/tests/t7/server_lanes.py`, `harness/tests/t7/store_core.py`
 - `scripts/session-teardown-selftest.sh` — `make session-teardown-selftest`: session-teardown.sh's branch step in a throwaway repo.
   - Decisions: `D18`, `D138`
 - `scripts/session-teardown.sh` — The SessionEnd / WorktreeRemove hook.
