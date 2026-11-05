@@ -821,6 +821,14 @@ refuses "control: the polling loop is refused" "$tmp/main" "until ! pgrep -f x; 
 fails_open "an unbalanced quote"         "{\"cwd\":\"$tmp/main\",\"tool_input\":{\"command\":\"until ! pgrep -f x; do sleep 5; done 'HEAD\"}}"
 fails_open "an empty file_path"          '{"tool_input":{"file_path":""}}'
 
+# A MISSING CWD IS NOT FAIL-OPEN (D179). The tree clause takes the missing path as the checkout
+# root and still refuses a write into another checkout; the wait clause refuses a poll whatever
+# the cwd is. Both are posed from a directory that does not exist under the fixture.
+refuses "a missing cwd: a write into another checkout is still refused" \
+  "$tmp/no-such-checkout" "echo x > $tmp/main/work.py"
+refuses "a missing cwd: a polling loop is still refused" \
+  "$tmp/no-such-checkout" "until ! pgrep -f x; do sleep 5; done"
+
 # THE SHARED PARSER IS A DEPENDENCY, AND A MISSING DEPENDENCY IS A BROKEN GUARD. Copied into
 # a throwaway directory WITHOUT `shell_parse.py`, the guard must have no opinion about
 # anything rather than raise — the import is guarded for exactly this.
