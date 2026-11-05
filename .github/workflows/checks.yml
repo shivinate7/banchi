@@ -317,7 +317,7 @@ jobs:
       # not exactly one pinned copy fails.
       - name: Download the pinned claude-settings for the map check
         if: false
-        uses: shivinate7/claude-settings/actions/ci-alarm@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
+        uses: shivinate7/claude-settings/actions/ci-alarm@0497265b0cb2c9e99e9de5430d86600fac604296 # main, 2026-11-05
 
       - name: Install the map check's skill from the pinned claude-settings
         run: |
@@ -365,7 +365,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: shivinate7/claude-settings/actions/all-jobs-passed@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
+      - uses: shivinate7/claude-settings/actions/all-jobs-passed@0497265b0cb2c9e99e9de5430d86600fac604296 # main, 2026-11-05
         with:
           needs: ${{ toJSON(needs) }}
 
@@ -407,7 +407,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: shivinate7/claude-settings/actions/stamp@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
+      - uses: shivinate7/claude-settings/actions/stamp@0497265b0cb2c9e99e9de5430d86600fac604296 # main, 2026-11-05
         with:
           mode: check
           config: .github/stamp.json
@@ -446,7 +446,7 @@ jobs:
       - name: Install
         run: npm ci --prefix app
 
-      - uses: shivinate7/claude-settings/actions/code-check@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
+      - uses: shivinate7/claude-settings/actions/code-check@0497265b0cb2c9e99e9de5430d86600fac604296 # main, 2026-11-05
         with:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
@@ -815,6 +815,6 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: shivinate7/claude-settings/actions/ci-done-comment@da8d8073ca5b7b0d670c7b71cf5acc9604aa3277 # main, 2026-11-03
+      - uses: shivinate7/claude-settings/actions/ci-done-comment@0497265b0cb2c9e99e9de5430d86600fac604296 # main, 2026-11-05
         with:
           needs: ${{ toJSON(needs) }}
