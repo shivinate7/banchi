@@ -317,7 +317,7 @@ jobs:
       # not exactly one pinned copy fails.
       - name: Download the pinned claude-settings for the map check
         if: false
-        uses: shivinate7/claude-settings/actions/ci-alarm@5b306ab1dfe8bd150d83f9d4f2ef83f526392435 # main, 2026-11-05
+        uses: shivinate7/claude-settings/actions/ci-alarm@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
 
       - name: Install the map check's skill from the pinned claude-settings
         run: |
@@ -365,7 +365,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: shivinate7/claude-settings/actions/all-jobs-passed@5b306ab1dfe8bd150d83f9d4f2ef83f526392435 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/all-jobs-passed@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
         with:
           needs: ${{ toJSON(needs) }}
 
@@ -407,7 +407,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: shivinate7/claude-settings/actions/stamp@5b306ab1dfe8bd150d83f9d4f2ef83f526392435 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/stamp@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
         with:
           mode: check
           config: .github/stamp.json
@@ -446,7 +446,7 @@ jobs:
       - name: Install
         run: npm ci --prefix app
 
-      - uses: shivinate7/claude-settings/actions/code-check@5b306ab1dfe8bd150d83f9d4f2ef83f526392435 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/code-check@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
         with:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
@@ -512,7 +512,7 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - uses: shivinate7/claude-settings/actions/mutation-report@5b306ab1dfe8bd150d83f9d4f2ef83f526392435 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/mutation-report@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
         with:
           profile: banchi
 
@@ -845,6 +845,6 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: shivinate7/claude-settings/actions/ci-done-comment@5b306ab1dfe8bd150d83f9d4f2ef83f526392435 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/ci-done-comment@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
         with:
           needs: ${{ toJSON(needs) }}

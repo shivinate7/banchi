@@ -7,20 +7,25 @@ Argument parsing and sequencing for the four commands.
 - `cli/__init__.py` — Makes `cli` a package.
 - `cli/__main__.py` — Parser, COMMANDS dispatch, exit codes.
   - Decisions: `D180`, `D36`, `D210`, `D259`, `D2`, `D172`, `D86`, `D7`, `D273`, `D87`, `D189`, `D324`, `D219`, `D100`, `D1`, `D3`, `D9`, `D21`, `D25`, `D145`, `D213`, `D239`, `D242`
+  - Tested by: `harness/tests/t7/cli_identify.py`, `harness/tests/t7/emit_pricing.py`, `harness/tests/t7/empty_slot.py`, `harness/tests/t7/engine_pick.py`, `harness/tests/t7/free_adopt.py`, `harness/tests/t7/match_audit.py`, `harness/tests/t7/send_markdown.py`, `harness/tests/t7/undo_built_on.py`
 - `cli/archive_review.py` — Routes one `archive sweep` pass's own identification-shaped refusals (never a network-shaped one) to the standing review queue, with each card's own photograph, over `store/queues.py:Queue.upsert` — never a new queue or write primitive.
   - Decisions: `D231`, `D234`, `D167`, `D219`, `D26`, `D58`, `D89`, `D247`
 - `cli/cmd_boxes.py` — `banchi boxes names` — the one-time backfill that gives every unnamed box the stored name `Box <number>` (`store/master.py:Inventory.box_name_plan`).
   - Decisions: `D259`, `D20`
+  - Tested by: `harness/tests/t7/inventory_routes.py`
 - `cli/cmd_cards.py` — `banchi cards <name|audit|checks|identity|contradictions|sku-names|photos|variants>` — the card's stable name (D172) and, since lane `2` of identity-follows-sku.md, its identity.
   - Decisions: `D172`, `D37`, `D167`, `D4`, `D183`, `D26`, `D88`, `D89`, `D162`, `D213`, `D239`, `D240`, `D242`, `D253`
+  - Tested by: `harness/tests/t7/store_core.py`
 - `cli/cmd_emit.py` — Write ONE import CSV, `import.csv`; refuses while a price is unanswered.
   - Decisions: `D86`, `D7`, `D277`, `D54`, `D59`, `D100`, `D243`, `D9`, `D10`, `D26`, `D253`, `D25`, `D58`, `D88`, `D99`, `D172`, `D174`, `D213`
+  - Tested by: `harness/tests/t7/emit_pricing.py`, `harness/tests/t7/one_list_wire.py`, `harness/tests/t7/send_markdown.py`
 - `cli/cmd_holdingsroster.py` — `banchi holdings-roster <csv>` — the owner's investment roster valued at this store's prices (D324).
   - Decisions: `D324`
 - `cli/cmd_identify.py` — Submit, wait, collect, cache.
   - Decisions: `D36`, `D21`, `D23`, `D163`, `D125`, `D180`, `D174`, `D145`, `D172`, `D3`, `D1`, `D2`, `D33`, `D43`, `D63`, `D166`
 - `cli/cmd_join.py` — Resolve identifications against the export; --dry-run previews.
   - Decisions: `D9`, `D99`, `D7`, `D87`, `D8`, `D11`, `D34`, `D115`, `D86`, `D180`, `D36`, `D137`, `D25`, `D59`, `D189`, `D88`, `D170`, `D3`, `D12`, `D16`, `D54`, `D58`, `D188`
+  - Tested by: `harness/tests/t7/free_adopt.py`, `harness/tests/t7/second_look_counts.py`
 - `cli/cmd_match.py` — `banchi match status | prepare | audit | --sweep-worker` — the free reader's setup and the background reader's worker (D2): it reads the queue and exits, writing only `marqo-b` identifications rows.
   - Decisions: `D2`, `D33`, `D65`, `D88`, `D166`, `D170`, `D301`
 - `cli/cmd_pricearchive.py` — `archive sweep` builds a `Market` before it reads `rows_from_store(market=..., refusals=..., include_catalog=True)` (sold value first, sealed product folded in, then up to `CATALOG_SKUS_PER_PASS` Riftbound catalog SKUs, stalest first), prints any ledger SKU that could not be resolved to a subject, then previews: subject count, what the archive already holds, what is fresh enough to skip.
@@ -29,14 +34,18 @@ Argument parsing and sequencing for the four commands.
   - Decisions: `D86`, `D278`, `D9`
 - `cli/cmd_queue.py` — `banchi queue refresh` — re-resolve every OPEN queue entry against a current export, store-wide.
   - Decisions: `D25`, `D4`, `D9`, `D28`, `D35`, `D36`, `D37`, `D87`, `D137`
+  - Tested by: `harness/tests/t7/undo_queues.py`
 - `cli/cmd_readings.py` — `banchi readings adopt` runs `pipeline/readings.py:collect` and folds the result into the `readings` table with `Readings.replace()` — a full clear-then-reinsert, on `--write`.
   - Decisions: `D189`, `D86`
 - `cli/cmd_reconcile.py` — Diff intent against TCGplayer's Export From Staged; --phantoms lists live copies beyond what is really on hand.
   - Decisions: `D273`, `D8`, `D11`, `D87`, `D115`, `D59`, `D100`, `D54`, `D9`, `D7`, `D86`
+  - Tested by: `harness/tests/t7/cli_identify.py`, `harness/tests/t7/emit_pricing.py`
 - `cli/cmd_reprice.py` — `banchi reprice list` reports which live listings are not selling and writes a WORKLIST with a price already proposed on every row; `reprice apply` reads the operator's edited worklist back and writes the price-only import CSV (D100).
   - Decisions: `D109`, `D100`, `D9`, `D103`, `D107`, `D86`, `D243`, `D7`, `D8`, `D11`, `D54`, `D87`, `D105`, `D273`
+  - Tested by: `harness/tests/t7/price_history.py`, `harness/tests/t7/read_budget.py`, `harness/tests/t7/send_markdown.py`, `harness/tests/t7/undo_built_on.py`
 - `cli/cmd_rescue.py` — `banchi rescue <run>` re-addresses a STRANDED run's cards to the positions their photographs are at now and derives a SECOND run over the drawer they are actually in, carrying that drawer's `bid` (D145).
   - Decisions: `D188`, `D36`, `D180`, `D183`, `D145`, `D7`, `D10`, `D25`, `D83`, `D86`, `D134`, `D26`, `D210`
+  - Tested by: `harness/tests/t7/cli_identify.py`
 - `cli/cmd_scan.py` — Read the QR codes off a directory of code-card photos into the ledger.
   - Decisions: `D14`, `D21`, `D24`
 - `cli/cmd_sku_contradictions.py` — `banchi cards contradictions` — RETIRED.
@@ -47,7 +56,10 @@ Argument parsing and sequencing for the four commands.
   - Decisions: `D88`, `D189`
 - `cli/requeue.py` — The store-wide queue refresh's engine.
   - Decisions: `D253`, `D28`, `D36`, `D35`, `D26`, `D83`, `D10`, `D3`, `D4`, `D9`, `D25`, `D37`, `D87`, `D137`
+  - Tested by: `harness/tests/t7/engine_pick.py`, `harness/tests/t7/undo_queues.py`
 - `cli/resolve.py` — Turning a run's identifications into a join; shared by join and emit.
   - Decisions: `D58`, `D9`, `D36`, `D253`, `D259`, `D59`, `D87`, `D115`, `D7`, `D8`, `D11`, `D150`, `D188`, `D21`, `D166`, `D33`, `D10`, `D183`, `D89`, `D262`, `D145`, `D25`, `D3`, `D26`, `D23`, `D4`, `D12`, `D20`, `D22`, `D24`, `D34`, `D86`, `D56`, `D65`, `D137`, `D147`, `D156`, `D180`
+  - Tested by: `harness/tests/t7/cli_identify.py`, `harness/tests/t7/empty_slot.py`, `harness/tests/t7/engine_pick.py`, `harness/tests/t7/free_adopt.py`, `harness/tests/t7/inventory_routes.py`, `harness/tests/t7/orders.py`, `harness/tests/t7/pipeline_fetch.py`, `harness/tests/t7/price_fresh.py`, `harness/tests/t7/send_markdown.py`, `harness/tests/t7/shipping.py`, `harness/tests/t7/store_core.py`, `harness/tests/t7/undo_queues.py`, `harness/tests/t7_store_and_seams.py`
 - `cli/runs.py` — Run directories and manifest.json.
   - Decisions: `D86`, `D65`, `D1`, `D25`, `D54`, `D166`
+  - Tested by: `harness/tests/t7/cli_identify.py`, `harness/tests/t7/emit_pricing.py`, `harness/tests/t7/empty_slot.py`, `harness/tests/t7/engine_pick.py`, `harness/tests/t7/free_adopt.py`, `harness/tests/t7/manifest_merge.py`, `harness/tests/t7/orders.py`, `harness/tests/t7/pipeline_fetch.py`, `harness/tests/t7/price_fresh.py`, `harness/tests/t7/price_history.py`, `harness/tests/t7/send_markdown.py`, `harness/tests/t7/undo_built_on.py`, `harness/tests/t7/undo_queues.py`

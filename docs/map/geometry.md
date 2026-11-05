@@ -9,8 +9,10 @@ Find the card in the frame; cut the crop-retry bands.
   - Decisions: `D125`
 - `geometry/crop.py` — Cut the crop-retry regions out of a registered card.
   - Decisions: `D22`, `D1`, `D75`
+  - Tested by: `harness/tests/t6_geometry.py`
 - `geometry/detect.py` — Card-boundary detection by tone, and by border when tone refuses, and the shape correction both crop paths share.
   - Decisions: `D1`, `D22`, `D23`, `D75`
+  - Tested by: `harness/tests/t6_geometry.py`
 - `geometry/model/labels.json` — Corner labels on the owner's rig photographs, the first batch, with rejected rows dropped at build.
   - Decisions: `D125`
 - `geometry/model/labels_new.json` — Corner labels on the owner's rig photographs, the last batch.

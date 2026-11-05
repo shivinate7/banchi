@@ -248,7 +248,7 @@ def run_checks(script: Path, work: Path, t: Tally) -> None:
 def make_map_on_fixture(work: Path, t: Tally) -> None:
     """`make map ARGS=<path>` prints that file's docs/map/ line through the skill's map-show.mjs, with no retired map module.
 
-    THE FIXTURE is this repo's Makefile and scripts/, a format-4 map.config.json, one docs/map/ page
+    THE FIXTURE is this repo's Makefile and scripts/, a map.config.json at the repo's formatVersion, one docs/map/ page
     and a git index, which map-show reads through `git ls-files`. The skill is the REAL
     plain-english-map skill, found by map-check.py's finder. The first two checks prove it is there,
     so this case never passes on a stub. A `make map` that still reads the retired module finds none
@@ -265,8 +265,9 @@ def make_map_on_fixture(work: Path, t: Tally) -> None:
     t.check(skill is not None, "precondition: map-check.py's finder finds the real plain-english-map skill")
     shutil.copy(ROOT / "Makefile", fx / "Makefile")
     shutil.copytree(ROOT / "scripts", fx / "scripts", ignore=shutil.ignore_patterns("__pycache__"))
+    repo_format = json.loads((ROOT / "map.config.json").read_text(encoding="utf-8"))["formatVersion"]
     (fx / "map.config.json").write_text(json.dumps({
-        "formatVersion": 4, "title": "Fixture", "codeExtensions": ["py"], "mapPaths": ["pipeline/"],
+        "formatVersion": repo_format, "title": "Fixture", "codeExtensions": ["py"], "mapPaths": ["pipeline/"],
     }) + "\n", encoding="utf-8")
     (fx / "pipeline").mkdir()
     (fx / "pipeline" / "variant.py").write_text("VARIANT = 1\n", encoding="utf-8")
