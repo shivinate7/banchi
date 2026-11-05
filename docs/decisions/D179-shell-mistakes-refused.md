@@ -12,7 +12,7 @@ D171: a rule is read once, at the start, then competes for attention with the wo
 
 ### Amended: what Claude Code runs
 
-The owner ruled that Claude Code runs `GUARD_SHELL_SKIP=checkout,stash,reset scripts/guard-shell.py --hook`. The shared guard (`claude-settings` `hooks/guard.py`, rule 1, shared-tree) owns clauses 1, 7 and 8 there. It refuses a checkout or restore over a modified path, a stash that takes another tree's entry, and a hard reset over uncommitted work. Each is judged against its subject's state. The Claude-side copy was cut so one refusal speaks once. `.codex/hooks.json` runs all seven, because Codex runs no shared guard (D135). `GUARD_SHELL_SKIP` and its alias `--skip` name clauses by table name. An unknown name skips nothing. Clauses 3 and 4 are gone for both tools.
+The owner ruled that Claude Code runs `GUARD_SHELL_SKIP=checkout,stash,reset,push scripts/guard-shell.py --hook`, so four clauses are skipped. The shared guard (`claude-settings` `hooks/guard.py`, rule 1, shared-tree) owns clauses 1, 7 and 8 there. It refuses a checkout or restore over a modified path, a stash that takes another tree's entry, and a hard reset over uncommitted work. The push clause is cut because the shared push-stray-branch ask (`claude-settings` `hooks/guard_push_delete.py`, record `plain-push-asks`) covers it. Each is judged against its subject's state. The Claude-side copy was cut so one refusal speaks once. `.codex/hooks.json` runs all seven, because Codex runs no shared guard (D135). `GUARD_SHELL_SKIP` and its alias `--skip` name clauses by table name. An unknown name skips nothing. Clauses 3 and 4 are gone for both tools.
 
 ### The five, and what each cost
 
