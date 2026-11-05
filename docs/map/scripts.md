@@ -157,7 +157,6 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
   - Decisions: `D17`, `D18`
 - `scripts/map-check-selftest.py` — `make map-check-selftest` — proves `scripts/map-check.py` fails closed against stub skills built in a run folder: no skill, a named dir with none, no `map-check.mjs`, no node, and the skill's exit code, with a mutant of the script for each.
   - Decisions: `D18`
-  - Decisions: `D17`, `D18`
 - `scripts/map-tool.py` — `make map` and `make map-fix` — finds claude-settings' plain-english-map skill through `scripts/map-check.py` and runs its show, stale or fix tool over `docs/map/`.
   - Decisions: `D17`, `D18`
 - `scripts/markdown-spelling-allow.json` — The shrinking offender list for the identifier-spelling row, markdown half: file to lane, and spelling to the British words that file uses.
