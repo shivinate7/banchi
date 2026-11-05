@@ -11,6 +11,7 @@ Home: CLAUDE.md
 - The `.agents/skills` link to `.claude/skills`.
 - `.codex/hooks.json`, the `.codex/config.toml` lines in `.gitignore` and `.worktreeinclude`, and the `agent links` and `codex hooks` rows of `make docs-audit`.
 - The three `scripts/guard-shell.py` clauses that only Codex ran: `checkout`, `stash` and `reset`. Claude Code skipped all three, because the shared layer's guard owns them (D179). Their hatches went with them, and so did their mutation arms. The `reset` clause went last, on the coordinator's ruling of 2026-11-04 10:13 CST under item 214 a: Claude Code skipped it and no session ran it. The `git reset --merge` and `--keep` refusal returns through the shared guard (`claude-settings` lane `guard-reset-merge-keep`).
+- The `scripts/guard-shell.py` `push` clause and its hatch. Claude Code ran it, but the shared guard's push-stray-branch ask (`plain-push-asks`) takes that push now, so the owner ruled it deleted. Its self-test cases and mutation arm went with it.
 
 **What stays, because Claude Code reads it.**
 

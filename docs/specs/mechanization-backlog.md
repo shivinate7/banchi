@@ -219,7 +219,7 @@ Fix it and leave the pin: red (stale).
 
 **Cost:** small.
 
-**Status.** `scripts/guard-shell.py` has four clauses (tree, wait, push,
+**Status.** `scripts/guard-shell.py` has three clauses (tree, wait,
 narrate) and none reads `.env`. `.claude/settings.json` denies `Read(./.env)` and nothing
 else screens the key.
 
