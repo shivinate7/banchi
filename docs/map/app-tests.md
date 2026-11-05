@@ -7,17 +7,17 @@ The Playwright specs and unit tests of the app, and the helpers they share.
 - `app/tests/absent-photo.spec.ts` — A photograph that `404s` says so the same way on Review and Pricing (`D196`, `D118`): one plain sentence, a Re-shoot link, no address and no machine noun, in both themes at `1440` and `820`.
   - Decisions: `D118`, `D196`, `D172`
 - `app/tests/boxmap.spec.ts` — The Shelf (`D264`), stubbed: the map draws counts and no money, a gap press sends the section, the gap and the aim, U sends the undo, the keyboard and a pointer drag each move a section, a split names a new box, and every press is `40px` or more.
-  - Decisions: `D264`, `D313`
+  - Decisions: `D264`, `D313`, `D117`
 - `app/tests/brand.spec.ts` — The mark, in the browser that draws it: the sidebar brand names itself without the mark and does not become a second `bn-nav-link` outside `<nav>` (which `cursor.spec.ts` counts), the SMALL cut ships below `64px` carrying no filter and no cap discs, the DISPLAY cut is what `#/gallery` shows at `64` and above, all six locked palettes are drawn and differ, and the mark does not invert with the theme.
-  - Decisions: `D102`, `D134`, `D136`, `D266`, `D5`
+  - Decisions: `D102`, `D134`, `D136`, `D266`, `D5`, `D94`, `D152`, `D214`
 - `app/tests/button-stack.spec.ts` — Same-role buttons stacked in one sector share a width (`D195`), asserted the way `cursor.spec.ts` asserts a pointer: DISCOVERED, never read off a declared class.
-  - Decisions: `D195`
+  - Decisions: `D195`, `D50`
 - `app/tests/capture-claims.spec.ts` — The capture screen's claim controls in a real browser: the Finish track is a MULTI-SELECT (D3 rung `1`'s set), the claim is held in the game's enum order rather than tap order, re-tapping the last cell clears it and stores nothing, a sessionStorage value written before the claim was a set reads back as one member, and narrowing a two-member claim to one CLEARS it rather than promoting a filter into a determination.
-  - Decisions: `D3`, `D10`, `D27`, `D65`, `D118`, `D142`, `D145`, `D218`, `D101`, `D23`, `D22`, `D299`, `D211`, `D20`, `D56`, `D205`
+  - Decisions: `D3`, `D10`, `D27`, `D65`, `D118`, `D142`, `D145`, `D218`, `D101`, `D23`, `D22`, `D299`, `D211`, `D20`, `D56`, `D205`, `D153`
 - `app/tests/capture-freeze.spec.ts` — A long sitting must not freeze Capture.
   - Decisions: `D10`, `D164`, `D313`, `D316`
 - `app/tests/capture-section.spec.ts` — Sub-box capture's Section row (docs/specs/subbox-capture.md): the row names the pick, its count and where it physically goes; `[`/`]` step it; S sent with `after` in the middle renumbers later sections and picks the new one; a stale pick falls back to the last section with one sentence, proved with a real fake clock past `GAP_MINUTES`; and a pick or an S never moves the shutter (D118, a rect diff).
-  - Decisions: `D118`, `D128`, `D164`, `D260`, `D264`
+  - Decisions: `D118`, `D128`, `D164`, `D260`, `D264`, `D13`, `D58`, `D117`, `D145`, `D153`, `D218`
 - `app/tests/capture-undo.spec.ts` — The undo STACK on the capture screen: the session's captures newest first and capped at ten, the top row carrying `U` and every other row its own depth, `U` undoing exactly one, a row undoing that card AND everything after it, and a walk refused partway reporting how far it got in the server's own words.
   - Decisions: `D10`, `D41`, `D58`, `D101`, `D117`, `D118`, `D164`, `D196`, `D259`, `D218`, `D153`, `D67`, `D211`, `D136`
 - `app/tests/capture-width.spec.ts` — The Capture screen leaves no unused horizontal band at `1440` and `820`, both themes: every `8px` row from the stage's top to the photo's bottom, the shell width no painted box covers stays within the grid gaps plus `24px`.
@@ -25,39 +25,43 @@ The Playwright specs and unit tests of the app, and the helpers they share.
 - `app/tests/card-variants.spec.ts` — The name -> variant chooser drawn against the owner's own two real collisions (D213): two SKUs identical in name, number, rarity AND condition, `set_hint` null on both, differing only by `set`; and two SKUs identical but for `condition`.
   - Decisions: `D213`
 - `app/tests/confirm-identity.spec.ts` — The confirm press `identity-follows-sku.md` §`8.1` adds beside `ListingCorrection`'s existing correction — `correct-answer.spec.ts`'s own sibling and its own minimal boot, on a HELD card fixture (`identity_source: 'read'`, `read_disputes: true`, a `Rell, Noxus` read under a `Rell, Magnetic` SKU, echoing §`5.5`'s own worked example).
-  - Decisions: `D118`, `D252`, `D269`
+  - Decisions: `D118`, `D252`, `D269`, `D28`
 - `app/tests/copy-checks.spec.ts` — ONE sweep, TWO copy checks over every nav route and the Fulfiller's: voice (no I, my, me or mine on screen) and casing (Title Case on labels and headings), the two DESIGN.md copy rules.
   - Decisions: `D196`, `D284`, `D173`
 - `app/tests/copyRules.ts` — The word rules the copy checks read: which words are first person, which short words Title Case keeps lower, and which text is exempt.
+  - Decisions: `D173`
 - `app/tests/copySource.ts` — Reads the reason labels and Review questions straight from source, so the voice check covers labels no fixture puts on screen.
+  - Decisions: `D173`
 - `app/tests/correct-answer.spec.ts` — `CardHero.tsx:ListingCorrection` is reachable on `#/inventory` for a card the review queue holds no entry for — the same `CLAUDE.md` route-is-not-a-feature check `inventory.spec.ts` runs, narrowed to the one new control.
-  - Decisions: `D77`, `D252`
+  - Decisions: `D77`, `D252`, `D4`, `D28`
 - `app/tests/cursor.spec.ts` — What every control says to the pointer, in two cases that cover different things.
-  - Decisions: `D43`, `D50`, `D70`, `D110`, `D118`
+  - Decisions: `D43`, `D50`, `D70`, `D110`, `D118`, `D28`, `D69`
 - `app/tests/deleted-boxes.spec.ts` — Inventory's Deleted boxes shelf and `CardHero.tsx:movedFromFact`, in a browser (D134 point `5`).
-  - Decisions: `D134`, `D196`, `D313`
+  - Decisions: `D134`, `D196`, `D313`, `D259`
 - `app/tests/demo-coverage.spec.ts` — The BUILT public demo (`dist-demo/`), served on this checkout's own origin under its base path as a static host serves it, or read from a running preview when `DEMO_PREVIEW_URL` is set.
-  - Decisions: `D183`, `D227`, `D271`, `D277`, `D298`, `D295`, `D301`
+  - Decisions: `D183`, `D227`, `D271`, `D277`, `D298`, `D295`, `D301`, `D213`
 - `app/tests/did-you-mean-coverage.spec.ts` — Reads the screen sources: every file that runs the one matcher or the store's search must draw the Did you mean hint, unless it is named as not a list search.
   - Decisions: `D271`
 - `app/tests/dispenser.spec.ts` — The dispenser control on the real capture screen with the same fake: the reason shows in Manual, "Needs Chrome" with no Bluetooth, and a fire with no box stops dealing with STOP the last write.
-  - Decisions: `D316`, `D19`, `D313`
+  - Decisions: `D316`, `D19`, `D313`, `D18`
 - `app/tests/dispenserRig.ts` — The dispenser's browser rig shared by dispenser.spec.ts and capture-freeze.spec.ts: the fake Bluetooth device, the canvas camera, motion armed, and the scene the test drives.
+  - Decisions: `D313`, `D316`
 - `app/tests/empty-section.spec.ts` — F9: a section with no card on hand does not draw in the walk's own strip OR in `BoxOps.tsx:BoxIdentity`'s own box-header track, and the caption's denominator is the highest non-empty section number rather than a count of every declared one, so a hidden middle section cannot shrink `N` below a section still drawn.
-  - Decisions: `D118`, `D181`, `D57`
+  - Decisions: `D118`, `D181`, `D57`, `D58`, `D260`, `D264`
 - `app/tests/filter-standard.spec.ts` — On the kit's filter popover, at `1440` and `820` in both themes: every filter and sort row has one width, the sort direction sits inside the sort field, one value style at rest, and a set filter changes ink, edge and ground while its weight stays the same.
   - Decisions: `D311`, `D195`
 - `app/tests/filters.spec.ts` — `FilterBar`, `HideToggle`, `SortHeader`, `Highlight`, `kit/facets.ts` and `kit/viewState.ts`'s hooks, each guard shown red on its own defect.
-  - Decisions: `D118`, `D132`, `D270`, `D288`
+  - Decisions: `D118`, `D132`, `D270`, `D288`, `D285`
 - `app/tests/filters/harness.tsx` — The test page's entry: the tokens, the kit styles, `FilterSpecimens`, and `ViewStateDemo` — a real `FilterBar` bound to every `viewState.ts` hook, with a few presses and a readout of what each hook thinks the URL says — plus a bar with a failed search and a bar handed an unknown pick.
-  - Decisions: `D132`
+  - Decisions: `D132`, `D5`
 - `app/tests/filters/index.html` — A test page the dev server serves and the build never ships: it mounts `FilterSpecimens` and a small view-state demo, so `filters.spec.ts` does not wait on a real screen to mount either.
+  - Decisions: `D5`
 - `app/tests/fontsReady.ts` — One helper, `settleFonts`, awaited after every `page.goto` in the seven specs that measure type — it said FOUR, and the three that joined since arrived with nothing reading the sentence.
-  - Decisions: `D124`
+  - Decisions: `D124`, `D16`, `D38`, `D50`
 - `app/tests/fulfillment.spec.ts` — All nine rows of the Fulfillment constraints table against the rendered view, with every contrast ratio computed from the colors the page actually painted rather than from a number published in docs/DESIGN.md.
-  - Decisions: `D5`, `D10`, `D13`, `D93`, `D115`, `D136`, `D212`, `D218`, `D7`, `D288`, `D259`, `D31`, `D193`, `D118`, `D28`, `D57`
+  - Decisions: `D5`, `D10`, `D13`, `D93`, `D115`, `D136`, `D212`, `D218`, `D7`, `D288`, `D259`, `D31`, `D193`, `D118`, `D28`, `D57`, `D21`, `D24`, `D41`, `D125`
 - `app/tests/gallery.spec.ts` — The four row shapes `CardLocations` draws that no other spec reaches — the departed shell (`is-gone is-nobar`), the pooled one, the current one — which since D118 is an ORDINARY row carrying a bar, marked by a `Viewing` pill and a rail rather than by its shape — and the state cell's single pill — asserted against `#/gallery`'s own fixtures rather than a server.
-  - Decisions: `D24`, `D68`, `D41`, `D118`, `D119`, `D269`, `D272`
+  - Decisions: `D24`, `D68`, `D41`, `D118`, `D119`, `D269`, `D272`, `D6`, `D58`, `D93`
 - `app/tests/history-float.spec.ts` — The floating price-history card on `#/gallery`'s `history-float` section: opens by focus or by its door, sits above its row by default and below when there is no room, covers neither its row nor a price field, takes focus only in door mode, holds its size while history loads, and draws the product chart with the asking step line and the suggestion dot, in tokens and `.bn-money`.
   - Decisions: `D313`, `D278`, `D227`
 - `app/tests/home-deck.spec.ts` — `#/`'s verdict sits within `64px` of the greeting at `1440` and `820`, both themes: the card deck lives beside the verdict, never in `Page`'s header slot, where its `310px` once left an empty band.
@@ -69,91 +73,95 @@ The Playwright specs and unit tests of the app, and the helpers they share.
 - `app/tests/icon-button.spec.ts` — `IconButton`, the round-`2` findings kept as browser assertions, each case observed red on the review's own measurements first: the `40px` hit area reaching past the visual face (a real click, not just the pseudo's geometry); the tooltip on hover and keyboard focus, and dismissed by a click; showing it moving nothing else (D118).
   - Decisions: `D118`, `D288`
 - `app/tests/iconTooltip.ts` — One helper, `iconTip`, the one way a test finds an `IconButton`'s tooltip since round `3` portals it to `<body>` (D288, kit/index.tsx's own block comment above `IconButton`) — `button.querySelector('.bn-icon-tip')` can no longer reach a body-level sibling.
-  - Decisions: `D288`
+  - Decisions: `D288`, `D50`, `D117`, `D118`
 - `app/tests/inventory-neighbor-side.spec.ts` — A card at a box's end names its one neighbor with its side (`D58`, `D260`): the first card reads `Next: X (first in the box)`, the last `Previous: X (last in the box)`, a middle card the two-name form.
   - Decisions: `D58`, `D260`
 - `app/tests/inventory-sets.spec.ts` — THE OWNER'S "BY SET" VIEW (D293), in a browser.
-  - Decisions: `D172`, `D264`, `D285`, `D293`, `D301`
+  - Decisions: `D172`, `D264`, `D285`, `D293`, `D301`, `D201`
 - `app/tests/inventory.spec.ts` — The owner's inventory screen in a browser: the unified box walk, the folding sections, mass-select, and the FOUR WRITES — box-wide claims, per-card claims, the mid-box delete and the whole-box delete — asserted at the request boundary against a stubbed server, so a control that draws but sends the wrong body fails here.
-  - Decisions: `D10`, `D92`, `D58`, `D20`, `D23`, `D22`, `D3`, `D67`, `D89`, `D172`, `D21`, `D213`, `D259`, `D68`, `D7`, `D83`, `D34`, `D9`, `D101`, `D115`, `D57`, `D132`, `D192`, `D63`, `D37`, `D27`, `D33`, `D31`, `D119`, `D45`, `D118`, `D195`, `D313`, `D218`, `D13`, `D196`, `D38`, `D41`, `D284`, `D299`, `D288`, `D314`, `D26`, `D134`, `D260`, `D300`, `D117`, `D277`, `D124`, `D310`, `D155`, `D8`, `D55`, `D24`, `D142`, `D28`, `D136`
+  - Decisions: `D10`, `D92`, `D58`, `D20`, `D23`, `D22`, `D3`, `D67`, `D89`, `D172`, `D21`, `D213`, `D259`, `D68`, `D7`, `D83`, `D34`, `D9`, `D101`, `D115`, `D57`, `D132`, `D192`, `D63`, `D37`, `D27`, `D33`, `D31`, `D119`, `D45`, `D118`, `D195`, `D313`, `D218`, `D13`, `D196`, `D38`, `D41`, `D284`, `D299`, `D288`, `D314`, `D26`, `D134`, `D260`, `D300`, `D117`, `D277`, `D124`, `D310`, `D155`, `D8`, `D55`, `D24`, `D142`, `D28`, `D136`, `D5`, `D43`, `D86`, `D125`, `D181`, `D271`
 - `app/tests/kit-data.spec.ts` — The kit's data primitives and the one matcher.
-  - Decisions: `D118`, `D195`, `D288`
+  - Decisions: `D118`, `D195`, `D288`, `D212`, `D218`, `D221`
 - `app/tests/kit-data/harness.tsx` — The test page's entry: the tokens, the kit styles and the specimens, with `?theme=dark` for the dark theme.
+  - Decisions: `D5`
 - `app/tests/kit-data/index.html` — A test page the dev server serves and the build never ships: it mounts `DataSpecimens` alone, so `kit-data.spec.ts` does not wait on the kit page to mount them.
+  - Decisions: `D5`
 - `app/tests/layoutShift.ts` — The one reader of the browser's `layout-shift` entries: `watchShifts` (an init script), `readShifts`, `sumOf`, `describeShifts` and `markNow`.
   - Decisions: `D313`
 - `app/tests/live-reconcile.spec.ts` — The store-wide reconcile in a browser (D87): that it is reachable from #/runs at all, that the preview asks for no write, and that the settle control does not EXIST until the preview has answered — absent rather than disabled, D33's shape applied to the press that settles the ledger.
   - Decisions: `D33`, `D87`, `D118`, `D174`, `D218`, `D7`
 - `app/tests/locating.spec.ts` — Where a card is, said one way (the locating lane): at `1440`, `820`, `720` and `390` in both themes, `#/inventory?box=N&card=<cid>` opens that card; its place names the box by name and never by number; the ruler's ends are section numbers, `back` sits before `front` (card `1` at the far back).
-  - Decisions: `D260`, `D259`, `D310`
+  - Decisions: `D260`, `D259`, `D310`, `D58`, `D155`, `D218`
 - `app/tests/machineWords.ts` — `scanMachineWords`, the one measurement `text-checks.spec.ts` runs, self-contained the same way `measureTextShape` is.
   - Decisions: `D196`, `D284`, `D269`
 - `app/tests/match.spec.ts` — `kit/match.cases.json`'s case table, run data-driven, one Playwright test per row: `matchQuery` against every case, pure, no browser.
-  - Decisions: `D271`
+  - Decisions: `D271`, `D5`
 - `app/tests/money.spec.ts` — `src/money.ts`'s `money()` and `moneyField`, pure, no browser: the cent rounding, and which typed text becomes a price and which is refused.
   - Decisions: `D221`
 - `app/tests/moneyFace.ts` — `scanMoneyFace`, the one measurement `text-checks.spec.ts` runs, self-contained.
-  - Decisions: `D221`
+  - Decisions: `D221`, `D284`
 - `app/tests/motion-live.spec.ts` — The DOM half in a real browser against the real capture screen: the mode toggle arms the machine, a canvas stream stands in for the Cam Link, a settle becomes a fire, and a fire with no box selected is COUNTED as dropped rather than silently eaten.
-  - Decisions: `D19`, `D81`, `D84`, `D218`
+  - Decisions: `D19`, `D81`, `D84`, `D218`, `D5`, `D13`, `D144`
 - `app/tests/motion-theme-flash.spec.ts` — Two motion guards from `docs/specs/motion.md`.
   - Decisions: `D50`
 - `app/tests/motion.spec.ts` — The MotionMachine against synthetic frame sequences with an exact answer key: settle fires once, the novelty gate refuses the same card, an empty stand is suppressed, a jam stalls without firing, the refractory defers instead of dropping, and a reused mutated buffer cannot zero the diff.
-  - Decisions: `D81`, `D84`, `D131`
+  - Decisions: `D81`, `D84`, `D131`, `D19`
 - `app/tests/motionSettled.ts` — One helper, `settleMotion`, the sibling of `fontsReady.ts` one layer out: it waits until every FINITE animation in the document has reached `finished`, so a `boundingBox()` is never taken while `kit.css`'s `bn-page-in` is still running `translateY(6px)` to `none` under `.bn-stagger`'s per-row delay.
-  - Decisions: `D118`
+  - Decisions: `D118`, `D16`, `D50`
 - `app/tests/nav.spec.ts` — The shell's keyboard, and the first test this app has had of the strip every screen sits under: D51's Cmd-arrow steps the ring in the order the nav draws it, both ends stop, and the three refusals hold — a bare arrow belongs to the screens, a held Cmd in a text field belongs to the caret, and a screen outside the ring keeps the browser's key.
-  - Decisions: `D20`, `D43`, `D51`, `D70`, `D86`, `D105`, `D134`, `D192`, `D298`, `D174`, `D291`, `D109`, `D275`, `D276`, `D95`
+  - Decisions: `D20`, `D43`, `D51`, `D70`, `D86`, `D105`, `D134`, `D192`, `D298`, `D174`, `D291`, `D109`, `D275`, `D276`, `D95`, `D5`, `D31`, `D39`, `D69`, `D100`
 - `app/tests/order-walk.spec.ts` — `OrdersWalkPane.tsx`'s OWN undo, and nothing else `tests/orders.spec.ts` already covers (that file's own docstring names this file so a reader is not sent looking for two copies of the same case).
-  - Decisions: `D118`, `D136`, `D164`, `D252`, `D304`, `D313`
+  - Decisions: `D118`, `D136`, `D164`, `D252`, `D304`, `D313`, `D57`, `D58`, `D113`, `D212`, `D220`
 - `app/tests/orders.spec.ts` — The order screen in a browser: that the six-way counts render including the zeros, that a pick already held by another line is drawn as spoken for, that the pull sends the row's own capture_id, and that the receipt reads the pre-write place rather than the sale's departed label.
-  - Decisions: `D91`, `D97`, `D113`, `D118`, `D132`, `D193`, `D203`, `D58`, `D63`, `D304`, `D57`, `D263`, `D218`, `D24`, `D90`, `D123`, `D296`, `D285`, `D181`, `D171`, `D212`, `D50`, `D221`, `D274`, `D270`
+  - Decisions: `D91`, `D97`, `D113`, `D118`, `D132`, `D193`, `D203`, `D58`, `D63`, `D304`, `D57`, `D263`, `D218`, `D24`, `D90`, `D123`, `D296`, `D285`, `D181`, `D171`, `D212`, `D50`, `D221`, `D274`, `D270`, `D20`, `D27`, `D28`, `D36`, `D86`, `D69`, `D73`, `D93`, `D103`, `D284`, `D196`, `D220`, `D289`
 - `app/tests/page-edge.spec.ts` — One left edge for every screen (`D197`): `.bn-page`'s `margin: 0 auto` centered a screen with a lower `--bn-page-max` inside the shell's own column instead of anchoring it, so the gutter grew with the window and differed between routes — `#/pricing`'s content sat roughly `330px` right of `#/review`'s at the same width, the owner's own report.
   - Decisions: `D5`, `D197`
 - `app/tests/phone.spec.ts` — The owner's screens at `390` x `844`: every interactive control's HIT AREA reaches the `40px` thumb floor, no route scrolls sideways, no sticky bar leaves a control it sits over unpressable, and the shell's own three surfaces — the tab bar, the More drawer and the palette — hold the same floor.
-  - Decisions: `D117`, `D134`, `D266`, `D288`, `D291`
+  - Decisions: `D117`, `D134`, `D266`, `D288`, `D291`, `D50`, `D95`
 - `app/tests/phoneSwitch.ts` — The one switch for every phone-width spec, `PHONE_SPECS_ON`, off by the owner's word.
+  - Decisions: `D16`
 - `app/tests/photo-cache.spec.ts` — Home, Review and Pricing draw every photograph by name and version (`D172`, `D26`): a by-card URL carries `?v=<capture_id>` because a re-shoot writes new bytes under the same name, and never a bare or slot URL.
   - Decisions: `D26`, `D172`
 - `app/tests/pricing-markdown.spec.ts` — `#/pricing` AS A LENS OVER LIVE TCGPLAYER LISTINGS (D103), in its own file so that `tests/pricing.spec.ts` could stay UNEDITED through every commit of that work — which is the only thing that proves the second source cost the run path nothing.
-  - Decisions: `D28`, `D278`, `D103`, `D107`, `D118`, `D218`, `D273`, `D277`, `D9`, `D99`, `D101`, `D221`, `D54`, `D197`
+  - Decisions: `D28`, `D278`, `D103`, `D107`, `D118`, `D218`, `D273`, `D277`, `D9`, `D99`, `D101`, `D221`, `D54`, `D197`, `D100`
 - `app/tests/pricing.spec.ts` — The pricing screen, asserted where nothing else can see it.
-  - Decisions: `D86`, `D59`, `D278`, `D277`, `D118`, `D218`, `D156`, `D168`, `D273`, `D9`, `D56`, `D180`, `D20`, `D259`, `D301`, `D313`, `D196`, `D269`, `D103`, `D28`, `D8`, `D7`, `D54`, `D115`, `D181`, `D99`
+  - Decisions: `D86`, `D59`, `D278`, `D277`, `D118`, `D218`, `D156`, `D168`, `D273`, `D9`, `D56`, `D180`, `D20`, `D259`, `D301`, `D313`, `D196`, `D269`, `D103`, `D28`, `D8`, `D7`, `D54`, `D115`, `D181`, `D99`, `D33`, `D51`, `D57`, `D58`, `D68`, `D92`, `D117`
 - `app/tests/product-history.spec.ts` — `#/product`'s own hard rule (D227): the market series and the owner's own fills draw as two different SVG shapes, never one line — counted by class name, a `<polyline>` for a market run and a `<path>` for a fill.
-  - Decisions: `D278`, `D227`
+  - Decisions: `D278`, `D227`, `D212`, `D219`
 - `app/tests/request-budget.spec.ts` — The client request budget per screen.
   - Decisions: `D207`
 - `app/tests/revenue-math.spec.ts` — `src/revenueMath.ts`'s `salesOf` and `sum`, pure, no browser: gross is quantity times price, canceled orders and lines closed as not shipping are left out, an unpriced line is never a guessed price, and the result carries no profit field.
   - Decisions: `D214`, `D225`, `D298`
 - `app/tests/revenue.spec.ts` — `#/revenue`'s own suite (`D217`): the empty and failure states, every column's sort and its reverse, the search field, the month strip's cross-filter and its Clear, a drill-down's nested orders table, a custom range's week-granularity switch, the in-progress bucket mark, and full state round-tripping through the URL, including a reload.
-  - Decisions: `D278`, `D201`, `D214`, `D217`, `D225`, `D196`, `D298`, `D271`, `D89`, `D301`, `D313`
+  - Decisions: `D278`, `D201`, `D214`, `D217`, `D225`, `D196`, `D298`, `D271`, `D89`, `D301`, `D313`, `D50`, `D103`, `D118`, `D193`, `D277`
 - `app/tests/review.spec.ts` — The review queue's geometry and its two guarantees: the photograph at >=`23%` of the viewport with a >=`700px` long edge, zero page scroll for one card, every candidate row on screen beside the photo, D28's frame not moving between cards, the `1`:`1` loupe — HIDDEN AT REST, aimed by the pointer.
-  - Decisions: `D23`, `D24`, `D28`, `D32`, `D77`, `D118`, `D218`, `D13`, `D16`, `D35`, `D136`, `D37`, `D284`, `D29`, `D291`, `D76`, `D174`, `D221`, `D313`
+  - Decisions: `D23`, `D24`, `D28`, `D32`, `D77`, `D118`, `D218`, `D13`, `D16`, `D35`, `D136`, `D37`, `D284`, `D29`, `D291`, `D76`, `D174`, `D221`, `D313`, `D4`, `D41`
 - `app/tests/routeExclusions.ts` — `EXCLUDED_FROM_SWEEP` (`#/fulfillment`, `#/gallery`), a REGEX rather than a quoted `'#/…'` string literal, read by `text-checks.spec.ts`.
   - Decisions: `D69`, `D70`, `D284`
 - `app/tests/routeFixtures.ts` — The fixture BUILDERS `run-panel.spec.ts`, `orders.spec.ts` and `shipping.spec.ts` already wrote — `runRow`, `place`/`pick`/`line`/`order`/`payloadOf`, `shippingRow`/`batchOf` — moved here so a fourth file could reuse the same proven shapes instead of a competing copy, plus two fresh ones (`codeEntry`/`codeLedgerOf`, `departedCard`) for `#/codes` and `#/graveyard`, which no existing spec seeded at all.
-  - Decisions: `D284`, `D20`, `D23`, `D77`, `D221`
+  - Decisions: `D284`, `D20`, `D23`, `D77`, `D221`, `D83`, `D134`
 - `app/tests/routeSweep.ts` — `sweepEveryRoute`, the one sweep `text-checks.spec.ts` runs for all three text checks, and `make text-density` through it.
   - Decisions: `D284`
 - `app/tests/routes.ts` — One helper, `routesFromNav`, which harvests the owner's route roster off `.bn-side a.bn-nav-link` and names `#/gallery` beside it, joined by `#/product` for the identical reason (D227): off-nav, so undiscoverable, but still an owner screen D284's ratchet must reach.
-  - Decisions: `D123`, `D69`, `D70`, `D50`, `D227`, `D284`, `D291`
+  - Decisions: `D123`, `D69`, `D70`, `D50`, `D227`, `D284`, `D291`, `D31`, `D95`
 - `app/tests/run-panel.spec.ts` — The pipeline panel in a browser: that all four commands are reachable from #/inventory at all, and that the money gate holds.
-  - Decisions: `D32`, `D33`, `D36`, `D56`, `D65`, `D174`, `D180`, `D291`, `D259`, `D20`, `D76`, `D13`, `D3`, `D54`, `D145`, `D275`, `D86`, `D166`, `D118`, `D136`, `D57`, `D207`, `D43`, `D210`, `D196`, `D218`
+  - Decisions: `D32`, `D33`, `D36`, `D56`, `D65`, `D174`, `D180`, `D291`, `D259`, `D20`, `D76`, `D13`, `D3`, `D54`, `D145`, `D275`, `D86`, `D166`, `D118`, `D136`, `D57`, `D207`, `D43`, `D210`, `D196`, `D218`, `D1`, `D9`, `D31`, `D39`, `D277`, `D117`
 - `app/tests/scaffold.spec.ts` — Every screen inherits the page scaffold, in a browser (D275).
-  - Decisions: `D121`, `D275`, `D276`, `D291`
+  - Decisions: `D121`, `D275`, `D276`, `D291`, `D5`, `D173`
 - `app/tests/section-ruler.spec.ts` — The section ruler never passes its card: at `12` and `30` sections, at `1440` and `390`, the box strip's `scrollWidth` never exceeds its own `clientWidth` by more than the OR the brief allows — a scroll track with the current section fully in view — and the page itself never gains a horizontal scroll either way.
-  - Decisions: `D155`
+  - Decisions: `D155`, `D118`, `D260`, `D310`
 - `app/tests/shell.ts` — One call, `sealEveryTest()`, at the top of every spec that mounts the app — all seventeen of them.
-  - Decisions: `D43`, `D124`, `D58`, `D259`, `D172`, `D301`, `D273`, `D276`, `D125`, `D56`, `D10`, `D192`, `D63`, `D70`, `D37`, `D174`, `D86`, `D134`, `D298`, `D77`
+  - Decisions: `D43`, `D124`, `D58`, `D259`, `D172`, `D301`, `D273`, `D276`, `D125`, `D56`, `D10`, `D192`, `D63`, `D70`, `D37`, `D174`, `D86`, `D134`, `D298`, `D77`, `D16`
 - `app/tests/shipping-width.spec.ts` — The empty states of Shipping, Orders and Review fill the frame to --bn-empty-w, centered, at `1440`, `820` and `2000` (rail collapsed), both themes; Shipping's loaded lanes leave no band.
   - Decisions: `D197`, `D309`
 - `app/tests/shipping.spec.ts` — The shipping screen in a browser, and its strongest cases are ABSENCES: no buyer name, address, city or postcode appears anywhere on the rendered screen, the three lane counts including the zeros do, and the file link points at /shipping/batches/<batch>/file?name=.
-  - Decisions: `D16`, `D61`, `D63`, `D117`, `D196`, `D218`, `D284`
+  - Decisions: `D16`, `D61`, `D63`, `D117`, `D196`, `D218`, `D284`, `D69`
 - `app/tests/slabs.spec.ts` — The Slabs screen with the four slab routes stubbed: the `18` headers in the owner's order, a typed dash in each cell no route fills, the sort by Card Ladder value with a slab that never sold last, the Conf words, no cert and no settings key anywhere on screen, a refusal in words with no Retry for a rate limit (on add.
   - Decisions: `D320`, `D196`, `D218`, `D221`, `D275`, `D313`
 - `app/tests/stability.spec.ts` — The case table for layout shift.
   - Decisions: `D313`, `D280`, `D296`
 - `app/tests/staggerCheck.ts` — One helper, `expectOneStagger`: every row of a list has an `animation-delay` of min(i, `--bn-stagger-cap`) times `--bn-stagger`, both read from the tokens.
+  - Decisions: `D50`
 - `app/tests/status-busy.spec.ts` — A `503 photo_busy` from the shell's `/status` poll leaves the app online (`D207`): `/status` shares the photo lane and can be turned away under a photo flood, and a refusal the server sent is an answer.
   - Decisions: `D207`
 - `app/tests/text-checks.spec.ts` — ONE sweep, THREE checks (D284): every route is opened once through `routeSweep.ts:sweepEveryRoute` and read by money-face (D221, over `moneyFace.ts:scanMoneyFace`), machine-words (D196, over `machineWords.ts:scanMachineWords`, `.bn-view`'s rendered `innerText`, so a closed `<details>` contributes nothing) and text-shape.
@@ -167,10 +175,14 @@ The Playwright specs and unit tests of the app, and the helpers they share.
 - `app/tests/unit/dispenser.unit.ts` — `dealer.ts`'s link and paced loop against a fake `navigator.bluetooth` that replays tcg-dealer's recorded sequences (paced loop, empty hopper) plus labeled synthetic ones (fault, silence, lost link, Stop mid-write).
   - Decisions: `D316`, `D19`
 - `app/tests/unit/formatter-homes.unit.ts` — The four formatter homes: the ago phrase (`dates.relativeDate`), the count word and byte size (`kit/dataRules`), the local day key (`dates.localDay`).
+  - Decisions: `D5`, `D275`
 - `app/tests/unit/pricing-send-refusals.unit.ts` — Every refusal the Send press raises before TCGplayer is asked has its own sentence in SendCard, so none falls to the line that blames TCGplayer.
+  - Decisions: `D196`
 - `app/tests/unit/slab-graders.unit.ts` — The grader list the Slabs screen offers (`src/slabGraders.ts`) equals `store/slabs.GRADERS`, in order, read by running Python.
   - Decisions: `D320`
 - `app/tests/unit/tab-title.unit.ts` — The tab title function over every ROUTES entry, read through `scripts/kit-adoption.mjs --routes`: the unit tier's pilot, no browser.
+  - Decisions: `D5`, `D275`
 - `app/tests/unit/unit.ts` — The unit tier's `test`: Playwright's, with the `page`, `context` and `browser` fixtures made to throw, so a unit case cannot open a browser.
+  - Decisions: `D18`
 - `app/tests/wide.spec.ts` — The owner's screens ABOVE the desk, which nothing in this suite had ever rendered.
-  - Decisions: `D27`, `D123`, `D275`
+  - Decisions: `D27`, `D123`, `D275`, `D50`, `D95`

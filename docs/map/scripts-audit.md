@@ -6,63 +6,72 @@ The checks behind `make docs-audit`, one module for each row group, with each ro
 
 - `scripts/docs_audit/__init__.py` — Imports every module of the docs-audit package in dependency order and lists them in `MODULES`, which is what `scripts/docs-audit.py` copies onto its own namespace.
 - `scripts/docs_audit/capability_homes.py` — The capability homes row: each named capability has one home, and a call to its primitives outside it is a finding, past an allow list that only shrinks.
+  - Decisions: `D173`
 - `scripts/docs_audit/code_invariants.py` — The rows that read an invariant out of code with `ast`: import layering, identity writers, claim decode and clients, server concurrency, estimate wire and column counts.
-  - Decisions: `D70`, `D101`
+  - Decisions: `D70`, `D101`, `D9`, `D26`, `D33`, `D63`, `D83`, `D138`, `D173`, `D196`
 - `scripts/docs_audit/core.py` — The shared half of the audit: `Finding`, `Row` and `Report`, the staged-mode readers (`read`, `exists`, `glob_files`), `ROOT` and `set_root`, the module-globals mapping the self-test patches through, and the helpers two row modules both use.
-  - Decisions: `D16`, `D60`, `D280`, `D284`, `D218`, `D18`, `D277`, `D192`, `D213`
+  - Decisions: `D16`, `D60`, `D280`, `D284`, `D218`, `D18`, `D277`, `D192`, `D213`, `D191`
 - `scripts/docs_audit/design.py` — The design-token, raw-color, breakpoint and JS-breakpoint rows over `docs/DESIGN.md`, `tokens.css` and the stylesheets.
-  - Decisions: `D17`
+  - Decisions: `D17`, `D80`, `D123`, `D141`
 - `scripts/docs_audit/dispatch.py` — The row that reconciles every defined check with the ones `rows.audit` runs, the subject-count row and the coupling question.
   - Decisions: `D18`, `D16`
 - `scripts/docs_audit/env_map.py` — The rows over environment variables, hatches, the subagent override, the map data and map sections rows, the hook roster, Claude hooks and the build-order mirror.
-  - Decisions: `D31`, `D2`, `D280`, `D178`, `D80`, `D171`, `D140`
+  - Decisions: `D31`, `D2`, `D280`, `D178`, `D80`, `D171`, `D140`, `D127`, `D135`, `D179`
 - `scripts/docs_audit/games.py` — The rows over game and export vocabulary: the registry against the committed exports, coverage, the matrix superset and the join-key shape.
-  - Decisions: `D22`, `D18`, `D23`, `D65`, `D104`, `D16`, `D76`
+  - Decisions: `D22`, `D18`, `D23`, `D65`, `D104`, `D16`, `D76`, `D3`, `D12`, `D87`
 - `scripts/docs_audit/harness_criteria.py` — The rows that reconcile harness test counts, published pass criteria and their evidence with `harness/run.py` and `docs/GATES.md`.
   - Decisions: `D39`, `D16`
 - `scripts/docs_audit/hygiene.py` — The doc-hygiene, route-roster, recorded-deletion, spec-seal, design-check verdict and positional-reference rows.
-  - Decisions: `D149`, `D119`, `D132`, `D97`, `D90`, `D113`, `D110`
+  - Decisions: `D149`, `D119`, `D132`, `D97`, `D90`, `D113`, `D110`, `D69`, `D70`, `D135`, `D144`, `D155`
 - `scripts/docs_audit/paths_commands.py` — The rows that read paths, line anchors, `make` targets, the commands roster and `banchi` subcommands out of the markdown.
-  - Decisions: `D16`, `D135`, `D245`, `D60`
+  - Decisions: `D16`, `D135`, `D245`, `D60`, `D248`, `D305`
 - `scripts/docs_audit/reasons.py` — The rows over reason codes and their neighbors: motion params, pricing presets, hint reasons, the transport promise and the export request.
-  - Decisions: `D22`, `D104`
+  - Decisions: `D22`, `D104`, `D63`, `D65`, `D69`, `D81`, `D84`, `D86`, `D138`
 - `scripts/docs_audit/records.py` — The rows over the decision, gate and debt records: decision ids, id claims, numbering growth, heading structure and the debts index.
-  - Decisions: `D92`, `D140`, `D16`, `D2`, `D50`, `D60`, `D182`
+  - Decisions: `D92`, `D140`, `D16`, `D2`, `D50`, `D60`, `D182`, `D149`, `D160`, `D280`
 - `scripts/docs_audit/registry_scopes.py` — The rows over the check registry, the commit path, the suite lock, the browser, spec, serve and guard scopes, and how callers invoke the audit.
-  - Decisions: `D92`, `D18`, `D80`, `D43`, `D122`, `D141`, `D136`
+  - Decisions: `D92`, `D18`, `D80`, `D43`, `D122`, `D141`, `D136`, `D74`, `D215`, `D247`
 - `scripts/docs_audit/rows.py` — `ROWS`, the mode filter and `audit()`: the one table that names every row with its tier, and the loop that runs it.
 - `scripts/docs_audit/rules.py` — The rule-enforcement row over CLAUDE.md's hard rules and the identifier-spelling row.
+  - Decisions: `D7`, `D43`, `D60`, `D280`
 - `scripts/docs_audit/screens.py` — The logo, storage-key, views-manifest and render rows over the front end's screens.
-  - Decisions: `D102`, `D24`, `D6`, `D27`, `D94`
+  - Decisions: `D102`, `D24`, `D6`, `D27`, `D94`, `D140`, `D142`
 - `scripts/docs_audit/selftest.py` — The `--self-test` driver.
 - `scripts/docs_audit/selftest_capability_homes.py` — Self-test cases for the capability homes row, called by `selftest.self_test`.
+  - Decisions: `D173`
 - `scripts/docs_audit/selftest_code_invariants_1.py` — Self-test cases for the code invariants rows, part `1`, called by `selftest.self_test`.
   - Decisions: `D141`
 - `scripts/docs_audit/selftest_code_invariants_2.py` — Self-test cases for the code invariants rows, part `2`, called by `selftest.self_test`.
-  - Decisions: `D63`
+  - Decisions: `D63`, `D134`, `D210`
 - `scripts/docs_audit/selftest_code_invariants_3.py` — Self-test cases for the code invariants rows, part `3`, called by `selftest.self_test`.
+  - Decisions: `D9`
 - `scripts/docs_audit/selftest_data.py` — Fixture lines the path-extractor self-test cases read.
+  - Decisions: `D10`
 - `scripts/docs_audit/selftest_design.py` — Self-test cases for the design rows, called by `selftest.self_test`.
 - `scripts/docs_audit/selftest_env_map.py` — Self-test cases for the env map rows, called by `selftest.self_test`.
-  - Decisions: `D141`, `D27`
+  - Decisions: `D141`, `D27`, `D135`
 - `scripts/docs_audit/selftest_paths_commands_1.py` — Self-test cases for the paths commands rows, part `1`, called by `selftest.self_test`.
   - Decisions: `D007`
 - `scripts/docs_audit/selftest_paths_commands_2.py` — Self-test cases for the paths commands rows, part `2`, called by `selftest.self_test`.
   - Decisions: `D17`
 - `scripts/docs_audit/selftest_records.py` — Self-test cases for the records rows, called by `selftest.self_test`.
-  - Decisions: `D140`, `D101`, `D24`, `D16`
+  - Decisions: `D140`, `D101`, `D24`, `D16`, `D9`, `D70`, `D92`
 - `scripts/docs_audit/selftest_registry_scopes.py` — Self-test cases for the registry scopes rows, called by `selftest.self_test`.
 - `scripts/docs_audit/selftest_sleeps.py` — Self-test cases for the fixed sleeps row, called by `selftest.self_test`.
+  - Decisions: `D280`
 - `scripts/docs_audit/selftest_spelling.py` — Self-test cases for the spelling rows, called by `selftest.self_test`.
 - `scripts/docs_audit/selftest_stability.py` — Self-test cases for the stability rows, called by `selftest.self_test`.
+  - Decisions: `D313`
 - `scripts/docs_audit/selftest_status_reach.py` — Self-test cases for the status reach rows, called by `selftest.self_test`.
   - Decisions: `D7`, `D16`
 - `scripts/docs_audit/selftest_strings.py` — Self-test cases for the strings rows, called by `selftest.self_test`.
   - Decisions: `D280`, `D18`
 - `scripts/docs_audit/sleeps.py` — The fixed sleeps row: a `waitForTimeout` in the browser specs carries a `keep:` reason or waits on a condition, past a per-file allow list that only shrinks.
+  - Decisions: `D280`
 - `scripts/docs_audit/spelling.py` — The American-spelling reader and the shell-substitution row.
-  - Decisions: `D60`, `D280`, `D007`
+  - Decisions: `D60`, `D280`, `D007`, `D88`
 - `scripts/docs_audit/stability.py` — The rows that read the causes of screen shake out of the source: the stable scrollbar gutter, the font preloads and metric fallbacks, transitions on layout properties and hover or focus rules that resize a box.
+  - Decisions: `D280`, `D313`
 - `scripts/docs_audit/status_reach.py` — The closed-vocabulary, tested-by reach and status-source rows.
 - `scripts/docs_audit/strings.py` — The rows over screen strings: mechanism words, the typed interpunct, the offender-list ratchet and views opsec.
-  - Decisions: `D196`, `D284`, `D134`, `D210`, `D94`, `D16`, `D218`, `D41`, `D280`
+  - Decisions: `D196`, `D284`, `D134`, `D210`, `D94`, `D16`, `D218`, `D41`, `D280`, `D24`, `D177`

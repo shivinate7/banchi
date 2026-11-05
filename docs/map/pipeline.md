@@ -6,68 +6,84 @@ CSV, variant ladder, pricing, join, routing, run decisions, per-game taxonomy.
 
 - `pipeline/__init__.py` — Makes `pipeline` a package.
 - `pipeline/cardladder.py` — The Card Ladder client for My Slabs: the owner's refresh token exchanged for a one-hour ID token, then one function per read point of spec `3.1` to `3.6`.
-  - Decisions: `D63`
+  - Decisions: `D63`, `D320`, `D319`
 - `pipeline/catalog.py` — Build-order step `9`, piece `2`'s READER: opens vendor/pokemon-tcg-data/catalog.sqlite (built by scripts/catalog-index.py) and answers cards_by_join_key, cards_by_name, card_by_id and set_by_id.
+  - Decisions: `D15`, `D18`, `D77`
 - `pipeline/corpus.py` — Inventory/prices.json — ONE listing answer per SKU for the whole store, plus the standing policy (rule, basis, sub_threshold) and an optional per-run policy override.
-  - Decisions: `D99`, `D9`, `D86`, `D7`, `D277`
+  - Decisions: `D99`, `D9`, `D86`, `D7`, `D277`, `D8`, `D43`, `D180`, `D278`, `D100`, `D103`
 - `pipeline/dailyprices.py` — `run_pass` asks `last-updated.txt` first and skips when that update is already saved whole.
+  - Decisions: `D88`, `D219`, `D325`
 - `pipeline/decisions.py` — The pricing decision, parsed — the corpus's parser (D86): pipeline/corpus.py projects inventory/prices.json into one `Decisions` per run, this module owns what an answer MEANS, and it reads and writes no file.
-  - Decisions: `D86`, `D7`, `D26`, `D22`, `D9`, `D16`
+  - Decisions: `D86`, `D7`, `D26`, `D22`, `D9`, `D16`, `D37`, `D39`, `D277`
 - `pipeline/games.py` — The per-game taxonomy: Product Line cell, ordered Rarity cells in STACK order, finish enum, finish -> Condition map, and the rarity -> finish matrix, plus join-key/prompt/crop-band/located facts per game.
-  - Decisions: `D76`, `D65`, `D21`, `D3`, `D11`, `D23`, `D22`, `D24`, `D14`, `D25`, `D12`, `D2`, `D10`
+  - Decisions: `D76`, `D65`, `D21`, `D3`, `D11`, `D23`, `D22`, `D24`, `D14`, `D25`, `D12`, `D2`, `D10`, `D8`, `D16`, `D18`, `D137`, `D170`
 - `pipeline/holdings.py` — `on_hand_quantities`/`on_hand_names` walk the `cards` table once for every SKU not in `TERMINAL_STATES`.
-  - Decisions: `D236`
+  - Decisions: `D236`, `D278`, `D277`, `D189`, `D212`, `D219`, `D225`, `D247`, `D224`
 - `pipeline/identity_binding.py` — §`7.2`'s ladder — T3 (a human act chose this SKU), T5 (the read disputes the row, or is blank, no human act), T4s (number disagrees, name names more than one product), T4u (the same, but exactly one — D162), T1 (name equal after the fold), T2 (a near miss, not disputed), T6 (no SKU), `sku_unknown`.
-  - Decisions: `D162`, `D242`
+  - Decisions: `D162`, `D242`, `D37`, `D55`, `D63`, `D67`, `D81`, `D23`, `D167`, `D172`, `D253`
 - `pipeline/identity_checks.py` — Four review-signal checks over already-stored card fields, no catalog, no network: a name too long to be a name, a denominator or digit count that disagrees with its set's own dominant reading, and a name one edit from a different name this store holds in the same set.
-  - Decisions: `D239`
+  - Decisions: `D239`, `D23`, `D173`, `D234`, `D247`
 - `pipeline/join.py` — Catalog join by SKU, aggregation, bidirectional unmatched reporting.
-  - Decisions: `D63`, `D7`, `D259`, `D294`, `D10`, `D58`, `D3`, `D23`, `D21`, `D77`, `D35`, `D29`, `D253`, `D22`, `D16`, `D25`, `D137`, `D162`, `D12`, `D65`, `D76`, `D2`, `D9`, `D54`, `D59`, `D87`, `D196`, `D213`, `D4`, `D86`, `D277`
+  - Decisions: `D63`, `D7`, `D259`, `D294`, `D10`, `D58`, `D3`, `D23`, `D21`, `D77`, `D35`, `D29`, `D253`, `D22`, `D16`, `D25`, `D137`, `D162`, `D12`, `D65`, `D76`, `D2`, `D9`, `D54`, `D59`, `D87`, `D196`, `D213`, `D4`, `D86`, `D277`, `D11`, `D20`, `D24`, `D36`, `D41`, `D55`, `D56`, `D67`, `D68`, `D218`, `D260`
 - `pipeline/livecheck.py` — The whole store against one live TCGplayer export (My Pricing), both directions.
-  - Decisions: `D109`
+  - Decisions: `D109`, `D7`, `D8`, `D11`, `D86`, `D54`, `D59`, `D87`
 - `pipeline/merge.py` — One import file over several runs: the copies union, deduped on (box, index), and any cap the send asked for spent ONCE over that union.
-  - Decisions: `D7`, `D277`
+  - Decisions: `D7`, `D277`, `D180`, `D86`, `D54`, `D59`, `D87`, `D99`
 - `pipeline/movers.py` — Which listed SKUs moved more than ten percent in the market since they were listed.
+  - Decisions: `D189`, `D219`
 - `pipeline/namefold.py` — The one name fold: apostrophe and dash look-alikes to ASCII, then accents off.
+  - Decisions: `D35`
 - `pipeline/net.py` — The one retry home: `net.open` and `net.request` carry every network call.
-  - Decisions: `D102`
+  - Decisions: `D102`, `D319`
 - `pipeline/orders.py` — The order resolver: (sku, quantity) -> the copies that fill it, for EVERY open order in one pass over a shared per-SKU pool.
-  - Decisions: `D10`, `D26`
+  - Decisions: `D10`, `D26`, `D7`, `D21`, `D24`, `D36`, `D58`, `D90`, `D97`
 - `pipeline/pirateship.py` — The Pirate Ship import spreadsheet — the one supported entry point, because Pirate Ship has NO API.
-  - Decisions: `D86`
+  - Decisions: `D86`, `D58`, `D61`
 - `pipeline/pricearchive.py` — `rows_from_store` reads the `cards` table for every distinct, non-empty SKU (and, with `include_catalog`, appends up to `CATALOG_SKUS_PER_PASS` Riftbound `skus` rows after the revenue-ranked head, stalest first by the newest bucket or `load_attempts`/`save_attempts` stamp), builds one export-shaped row per SKU.
-  - Decisions: `D222`, `D224`, `D231`, `D240`
+  - Decisions: `D222`, `D224`, `D231`, `D240`, `D9`, `D21`, `D22`, `D26`, `D278`, `D134`, `D166`, `D214`, `D216`, `D219`, `D234`, `D254`
 - `pipeline/pricehistory.py` — What a SKU has been selling for: the public infinite-api price-history endpoint, reached through a LOCAL sku -> productId join against tcgcsv.com's mirror of TCGplayer's own catalog.
-  - Decisions: `D216`, `D65`, `D319`, `D171`
+  - Decisions: `D216`, `D65`, `D319`, `D171`, `D8`, `D16`, `D22`, `D25`, `D35`, `D47`, `D55`, `D86`, `D234`, `D240`, `D254`, `D277`, `D278`
 - `pipeline/pricerefresh.py` — The daily market read's notes and saved Trends strips.
+  - Decisions: `D104`, `D189`
 - `pipeline/pricing.py` — Rules, rounding, floor clamp, threshold, no_market_data refusal.
-  - Decisions: `D7`, `D9`, `D86`
+  - Decisions: `D7`, `D9`, `D86`, `D8`, `D99`
 - `pipeline/productview.py` — `row_for_sku` looks up one SKU's export-shaped row without walking the whole `cards` table.
+  - Decisions: `D278`, `D219`, `D227`, `D247`, `D254`, `D224`
 - `pipeline/readings.py` — `collect()` — every run's pricing.json and the newest live export, compared on a clock, newest wins.
+  - Decisions: `D189`, `D86`, `D87`
 - `pipeline/realized.py` — `read_sales` reads an OrderWand sales export with `csv`, keeping nine columns and dropping every buyer field at parse time.
+  - Decisions: `D214`, `D219`, `D227`
 - `pipeline/reprice.py` — Which live listings are not selling, and what each would be re-priced to (D100).
-  - Decisions: `D86`, `D100`, `D7`, `D107`
+  - Decisions: `D86`, `D100`, `D7`, `D107`, `D8`, `D9`, `D11`, `D87`, `D103`, `D109`
 - `pipeline/rosterholdings.py` — `read_roster` keeps a roster CSV's TCG purchases that are not canceled and drops every counterparty column at read, counting the rest by reason.
+  - Decisions: `D324`
 - `pipeline/routing.py` — Which queue a card lands in — batch script v2 section `5.4`.
-  - Decisions: `D3`, `D35`, `D29`, `D23`
+  - Decisions: `D3`, `D35`, `D29`, `D23`, `D4`, `D9`
 - `pipeline/selection.py` — WHICH CARDS A PRESS IS OVER — one object, read by thewire and the CLI alike, and the drawer is a TERM in it rather than the unit of work.
-  - Decisions: `D145`, `D180`, `D10`, `D58`, `D294`
+  - Decisions: `D145`, `D180`, `D10`, `D58`, `D294`, `D21`, `D22`, `D33`, `D36`, `D39`, `D43`, `D56`, `D65`, `D76`, `D172`, `D174`
 - `pipeline/sendguard.py` — THE DOUBLE-SEND GUARD. After a send, live at TCGplayer plus Add to Quantity may never pass the copies on hand, per SKU.
+  - Decisions: `D7`, `D59`, `D87`, `D100`, `D273`
 - `pipeline/setnames.py` — Does this hint name this set — the one ladder the export fetch and the join both read.
-  - Decisions: `D213`
+  - Decisions: `D213`, `D2`, `D3`, `D22`, `D65`
 - `pipeline/shipping.py` — The TCGplayer Export Shipping reader, and the router that puts one order in one of THREE lanes: a tcgtracking envelope (<$`50`, all cards), a Pirate Ship parcel (contains a non-card, OR >=$`50` because TCGplayer mandates tracking above $`49.99`), or UNJUDGED.
+  - Decisions: `D9`, `D19`, `D24`, `D86`, `D61`
 - `pipeline/sku_name_contradictions.py` — One SKU, two stored names.
+  - Decisions: `D137`, `D23`, `D172`, `D239`, `D240`, `D242`
 - `pipeline/sku_number_contradictions.py` — Two copies of one SKU disagreeing about the card's stored number.
+  - Decisions: `D23`, `D167`, `D173`, `D234`, `D242`, `D247`
 - `pipeline/skus.py` — `stamp_of` reads the UNIX second out of a fetched or live export's own filename (never its mtime — D166's own rule applied here).
+  - Decisions: `D63`, `D166`, `D189`
 - `pipeline/stockimages.py` — `(game, set_name, number) -> a hotlinked stock photo URL, or None` (D301).
-  - Decisions: `D25`, `D22`, `D301`, `D35`
+  - Decisions: `D25`, `D22`, `D301`, `D35`, `D8`, `D15`, `D86`, `D170`, `D278`, `D254`, `D299`
 - `pipeline/stockmix.py` — `GET /stock/mix`, the Mix lens of Sales: one row per card still in stock (retired and moved cards are skipped), in ONE statement over `cards` joined to `skus`, `readings` and `boxes`.
+  - Decisions: `D214`, `D225`, `D31`, `D88`
 - `pipeline/suggest.py` — Pricing by suggestion, pure over plain dicts (spec docs/specs/pricing-suggest.md): `fired` names which of three triggers (market moved, unsold above market, undercut with shipping) fire on a live listing, and `review` sorts every listing into Needs you, Suggested changes or Going at the rule.
+  - Decisions: `D9`
 - `pipeline/tcgcsv.py` — TCGplayer Filtered CSV read/write and byte-format inspection.
-  - Decisions: `D86`, `D9`, `D137`, `D12`, `D25`, `D22`
+  - Decisions: `D86`, `D9`, `D137`, `D12`, `D25`, `D22`, `D11`
 - `pipeline/variant.py` — The variant ladder: four rungs that infer, under a rung `0` that does not, over a per-game finish vocabulary and a set-valued rung `1` claim.
-  - Decisions: `D22`, `D12`, `D23`, `D3`, `D9`
+  - Decisions: `D22`, `D12`, `D23`, `D3`, `D9`, `D21`
 - `pipeline/walkplan.py` — The order walk as a PLAN: the fewest SECTIONS a hand must open to fill a ticked set of orders.
-  - Decisions: `D294`
+  - Decisions: `D294`, `D10`, `D21`, `D24`, `D26`, `D36`, `D58`, `D63`, `D93`, `D97`, `D172`, `D183`, `D212`, `D220`, `D259`
 - `pipeline/worklist.py` — ONE SKU as `#/pricing` draws it — the twenty-field row `pricing.json` carries, declared in one place.
-  - Decisions: `D86`, `D87`, `D59`
+  - Decisions: `D86`, `D87`, `D59`, `D7`, `D9`, `D99`, `D115`, `D156`
