@@ -5,7 +5,7 @@
     "file": "pipeline/pricearchive.py",
     "old": "if pricehistory.BLOCKED_MESSAGE in message:",
     "new": "if \"answered HTTP 403\" in message:",
-    "argv": ["bash", "-c", "set -o pipefail; python3 scripts/pricearchive-selftest.py 2>&1 | sed 's/^ *FAIL/FAIL/'"],
+    "argv": ["python3", "scripts/pricearchive-selftest.py"],
     "classify": "fail_line"
   },
   {
@@ -14,7 +14,7 @@
     "file": "cli/archive_review.py",
     "old": "_NETWORK_SIGNATURES = (*pricehistory.NETWORK_SIGNATURES, pricearchive.THROTTLE_REWRITE)",
     "new": "_NETWORK_SIGNATURES = (\"answered HTTP\", \"could not be reached\", \"did not answer JSON\")",
-    "argv": ["bash", "-c", "set -o pipefail; python3 scripts/archive-review-selftest.py 2>&1 | sed 's/^ *FAIL/FAIL/'"],
+    "argv": ["python3", "scripts/archive-review-selftest.py"],
     "classify": "fail_line"
   }
 ]
