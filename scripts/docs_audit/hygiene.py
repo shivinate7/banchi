@@ -1110,7 +1110,7 @@ def check_positional_references(report: Report, docs: List[Path]) -> None:
                         Finding(
                             f"{rel(path)}:{number}",
                             f"`{hit}` names a check by its position. Use the label the "
-                            f"report prints — `map data`, `status sources`, and so on "
+                            f"report prints — `status sources`, `hook roster`, and so on "
                             f"(D17). If this is ordinary English about a count, reword it: "
                             f"there is no allowlist for a phrase.",
                         )

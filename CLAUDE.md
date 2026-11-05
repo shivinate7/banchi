@@ -137,7 +137,7 @@ and shiv-stylisms `reports-blockquote-no-fence` (report shape). No task restatem
 - A builder commits and pushes its branch after every pass, even red. Each commit message ends with `Done:` and
   `Next:` lines, so a lane resumes from its branch alone.
 - Read `docs/decisions/` before you propose an architecture change (`scripts/decision-context.py` finds the entry,
-  `make map ARGS=--decisions` indexes them). Reopening one follows parent rule `outcomes-stale-decision-protocol` (stale decisions).
+  `ls docs/decisions/` lists them). Reopening one follows parent rule `outcomes-stale-decision-protocol` (stale decisions).
 - Parent rule `building-land-design-or-abandon` (land it or drop it) applies. Its homes here: `docs/specs/`, or the decision that owns it.
 - The waiting page's writer copies the page's data to `waiting/` on the record branch at each wake and before
   any republish, with the shared skill `waiting-page` (D327, the waiting page is a committed record; parent record

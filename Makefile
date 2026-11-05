@@ -432,7 +432,7 @@ audit-history:
 # path — which makes it the right home for the one check that verifies the checker.
 #
 # It sat red and unnoticed until 2026-08-24 because nothing ran it at all: a stale fixture in
-# the `tested_by reach` case had stopped being false, and `make docs-audit` was green
+# a docs-audit case had stopped being false, and `make docs-audit` was green
 # throughout. A checker whose own self-test nobody runs is a checker nobody has watched fail.
 check: ci-check
 

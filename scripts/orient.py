@@ -2,7 +2,7 @@
 """WHICH COMPONENT RENDERS THE THING, AND WHAT SELECTS IT.
 
 A RENDERER. It writes nothing and gates nothing, so D18 does not reach it — the same
-standing `scripts/map-view.py` has, and for the same reason: it may be as clever as it likes
+standing `scripts/map-tool.py` has, and for the same reason: it may be as clever as it likes
 because nothing downstream believes it.
 
 WHAT IT IS FOR, and the defect that earned it. On 2026-09-17 a fix to `#/orders` was briefed

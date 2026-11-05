@@ -523,8 +523,8 @@ def top_level_names() -> Set[str]:
 
 
 # D60's row. Reads docs/decisions/ by hard-coded path, so it answers on every run rather
-# than only when that file is staged — the same asymmetry check_map_data and check_pass_criteria
-# already have, and for the same reason: a broken heading there breaks every consumer, not
+# than only when that file is staged — the same asymmetry check_pass_criteria
+# already has, and for the same reason: a broken heading there breaks every consumer, not
 # only the commit that wrote it.
 #
 # `entry budget`, which used to sit beside this row, is CUT (owner ruling, test-audit-

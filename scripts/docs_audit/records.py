@@ -102,7 +102,7 @@ def is_slug(identifier: str) -> bool:
 # fixing it, and why the widen could not land without this.
 #
 # MEASURED, NOT PREDICTED. With the cap at three and this strip disabled, `decision ids in
-# code` reported all three as dangling citations and `map data` — which is MECHANICAL —
+# code` reported all three as dangling citations and the old map-data row — which was MECHANICAL —
 # blocked the commit over four files.
 #
 # THE DIRECTIVE IS BLANKED, NEVER THE LINE. This repo writes prose after the codes, an
@@ -939,7 +939,7 @@ def check_decision_slug_length(report: Report) -> None:
 # joined D140's claim path (the owner's word), so a debt's own unclaimed slug
 # (`DEBT-<slug>`) is exempt from "must appear in the index" for the identical reason a
 # decision's used to be, before CLAUDE.md's decision index was retired (D60 amended) —
-# `make map ARGS=--decisions` renders that one now, off the corpus directly, so there is no
+# `ls docs/decisions/` lists that one now, off the corpus directly, so there is no
 # stub left for a decision-side exemption to guard.
 _ID_UNCLAIMED_DEBT_RE = re.compile(r"^DEBT" + _ID_SLUG + r"$")
 
@@ -962,8 +962,8 @@ def _decision_index_findings(
 
     ONE CALLER LEFT: `check_debt_index`, with `_is_unclaimed_debt` and `docs/debts/`. The
     decision-side twin this was built beside (`check_decision_index`, `_is_unclaimed`) is
-    retired along with CLAUDE.md's decision index (D60 amended) — `make map
-    ARGS=--decisions` renders that list off the corpus now, and a rendered view has nothing
+    retired along with CLAUDE.md's decision index (D60 amended) — `ls docs/decisions/`
+    lists the corpus now, and a listing has nothing
     to drift, so there is no decision-side row left to reuse this comparison.
     """
     findings: List[Finding] = []

@@ -12,8 +12,8 @@ Do not append history.
 ## How to find one
 
 - **By id.** Open the file that starts with the number. Cite an entry as `D<n>`.
-- **By subject.** `make map ARGS=--decisions` prints the id and title of every entry.
-  `make map ARGS="D<n> --full"` prints one entry in full.
+- **By subject.** `ls docs/decisions/` lists every entry, and the file name carries the title.
+  Open the file to read one entry in full.
 - **By the file you are about to edit.** `scripts/decision-context.py` runs as a hook before an
   edit and names the entries that govern the file.
 

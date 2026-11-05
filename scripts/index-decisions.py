@@ -2,8 +2,8 @@
 """Register every unregistered `docs/decisions/` entry into `docs/decisions/ORDER.json`.
 
 FORMERLY ALSO WROTE CLAUDE.md'S DECISION INDEX. That half is retired: CLAUDE.md no longer
-hand-carries an index for a corpus this size to drift against. `make map ARGS=--decisions`
-renders the same id-and-title list straight off the corpus's own headings, on demand, so
+hand-carries an index for a corpus this size to drift against. `ls docs/decisions/`
+lists the same ids and titles straight off the corpus's own file names, on demand, so
 there is no second copy left for a branch's entry to collide on or go missing from. This
 file's remaining job is the manifest half, which a rendered view cannot replace: a branch
 still adds only its own entry FILE, and something still has to fold that file into the
@@ -21,7 +21,7 @@ disambiguated with a numeric suffix, and it is a convenience for a human running
 
 the v1 bug table sat between two entries. This file no longer emits that order
 into CLAUDE.md either — `decision index`'s own row is retired, the check side alongside the
-write side, now that `make map ARGS=--decisions` renders the same list off the corpus (D60
+write side, now that `ls docs/decisions/` lists the same corpus (D60
 amended) — but the manifest half stays, because a rendered view still needs a manifest to
 render from.
 
@@ -191,8 +191,8 @@ def main(argv: List[str]) -> int:
     else:
         print("manifest is current — nothing unregistered")
 
-    # DECISIONS STOP HERE. CLAUDE.md no longer carries a decision index (D60 amended) — `make
-    # map ARGS=--decisions` renders that list off the corpus, on demand, so there is no stub
+    # DECISIONS STOP HERE. CLAUDE.md no longer carries a decision index (D60 amended) — `ls
+    # docs/decisions/` lists the corpus, on demand, so there is no stub
     # left for this generator to rewrite. `docs/debts/` still hand-carries one, so the debt
     # spec's own `stub_file` still gets regenerated below.
     if spec is not DEBT_SPEC:
