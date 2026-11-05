@@ -43,7 +43,7 @@ TWO MODES:
                                                      one is wrong.
 
 SCOPE. This does not attempt every mutation-tested guard in `make check` — the brief that built
-this file named five in priority order and this covers those five: `guard-shell.py` (7
+this file named five in priority order and this covers those five: `guard-shell.py` (3
 clauses), `silent-write-guard.py`, `reap.py`, `primary_sync.py`, `revert-audit.py`. Each guard's
 mutation list writes at least one arm per RULE that guard enforces, following the parent
 model's own comment ("Each one breaks exactly one rule. One mutation per rule at least"). A
@@ -195,13 +195,6 @@ GUARD_SHELL_MUTATIONS: Tuple[Mutation, ...] = (
         "wait clause: never refuse a loop that polls a pattern",
         '        poller = _polls_a_pattern(loop.condition)\n        if poller:',
         '        poller = _polls_a_pattern(loop.condition)\n        if False:',
-    ),
-    Mutation(
-        "push clause: never refuse a push to a differently-named tracked upstream",
-        '            tracked = _tracked_branch(branch, remote, where)\n'
-        '            if tracked is None or tracked == branch:\n                continue',
-        '            tracked = _tracked_branch(branch, remote, where)\n'
-        '            if True:\n                continue',
     ),
     Mutation(
         "narrate clause: a truncating filter is no longer one",

@@ -1347,24 +1347,23 @@ silent-write-selftest:
 
 .PHONY: silent-write-selftest
 
-# FOUR SHELL MISTAKES THIS REPO HAS ALREADY PAID FOR, refused before they run. Every one was a
+# THREE SHELL MISTAKES THIS REPO HAS ALREADY PAID FOR, refused before they run. Every one was a
 # rule somebody had written down and a later session broke anyway — which is D171's ruling
-# about what a rule IS, applied to four more commands:
+# about what a rule IS, applied to three more commands:
 #
 #   a write outside this checkout      2026-09-06, ~1,500 lines into the owner's MAIN tree, on
 #                                      main, hot-reloaded into their live capture server
 #   a polling loop                     2026-09-12 twice: a `pgrep` waiter whose pattern is not
 #                                      the process, and a backgrounded driver that ran 119
 #                                      rounds over 3h58m across a compaction
-#   `git push <remote> HEAD`           2026-09-12, a stray branch on origin while the real PR
-#                                      branch went untouched, the tracked upstream being a
-#                                      DIFFERENT name (D179, amended 2026-09-13)
 #   a narrated wait piped to `tail`    a working `make merge` read as a hang, because the pipe
 #                                      buffered its heartbeat and kept only the end of it
 #
 # The shared layer's guard owns `git checkout <path>`, a bare `git stash` and `git reset --hard`.
+# The shared push-stray-branch ask (`plain-push-asks`) asks on a bare or `HEAD` stray push; a `-u`
+# push of the branch's own name is silent there.
 # `scripts/guard-shell.py --hook` is a PreToolUse hook on Bash and on Write|Edit — not a target
-# you run — and this self-test is what proves it. ALL FOUR INCIDENTS ARE PERFORMED in a
+# you run — and this self-test is what proves it. ALL THREE INCIDENTS ARE PERFORMED in a
 # throwaway repository before the guard is asked about them, which is reap-selftest's standard;
 # the false positives are RUN there too, because a case that is secretly a typo passes for the
 # wrong reason. IN `check`, NEVER IN THE GIT HOOK: it writes a temp repository (D18).

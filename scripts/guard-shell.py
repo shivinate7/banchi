@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Refuse four shell mistakes this repo has already made and paid for.
+"""Refuse three shell mistakes this repo has already made and paid for.
 
 EVERY CLAUSE HERE HAS AN INCIDENT BEHIND IT, and not one of them was a lapse of care: each
 was a rule somebody had already written down, in a memory file or in CLAUDE.md, and then
 broken by a session that had read it. That is not a reason to write the rule again; it is
 what D171 rules a rule IS. A rule is read once, at the start, and then competes with the
-work. So these four are mechanical. Their numbers are stable ids: 1 (`git checkout <path>`),
-3 (`gh api -f`), 4 (`ln -s` over a path), 7 (`git stash`) and 8 (`git reset --hard`) are retired on
-the owner's word, and nothing renumbers.
+work. So these three are mechanical. Their numbers are stable ids: 1 (`git checkout <path>`),
+3 (`gh api -f`), 4 (`ln -s` over a path), 6 (`git push`), 7 (`git stash`) and 8 (`git reset --hard`)
+are retired on the owner's word, and nothing renumbers.
 
 CLAUDE CODE RUNS EVERY CLAUSE HERE, with no skip. The shared layer's guard
 (`claude-settings/hooks/guard.py`, rule 1, shared-tree) owns the checkout, stash and reset
-refusals, so those three clauses are gone from this script (D135).
+refusals, so those three clauses are gone from this script (D135). Clause 6 (`git push`) is
+gone too: the shared push-stray-branch ask (`plain-push-asks`) asks on a bare or `HEAD` stray
+push; a `-u` push of the branch's own name is silent there.
 
     2. A write outside the checkout this session is standing in
        2026-09-06: an absolute-path `cd` prefix wrote ~1,500 lines into the owner's MAIN
@@ -27,18 +29,6 @@ refusals, so those three clauses are gone from this script (D135).
        3h58m — across a compaction — racing the session's own merges. Nothing in this repo
        could see it: `make janitor` reads a live process as live, and `make reap` acts only
        when asked. A human noticed it in their UI.
-
-    6. `git push <remote> HEAD` (or `<remote> <the-branch's-own-name>`) when the branch
-       tracks a DIFFERENT name upstream
-       2026-09-12: a coordinator resolving a merge conflict stood on a local branch a
-       background agent had named `pr-h-readings-table-local`, whose configured upstream was
-       actually `origin/claude/pr-h-readings-table` — the agent had pushed its squashed
-       commit to the real PR branch under a name that did not match the local one. `git push
-       origin HEAD` reported success, `[new branch] HEAD -> pr-h-readings-table-local`, and
-       had created a stray branch on origin without touching the PR branch at all. Git's own
-       `push.default=simple` refuses exactly this shape for a BARE `git push` and even prints
-       the fix — but naming a refspec, even an unqualified `HEAD`, is git's own signal that
-       the caller knows what they want, and that signal was wrong.
 
     9. A command that waits for minutes and NARRATES while it does, piped into `tail` or
        redirected away
@@ -62,14 +52,13 @@ THE STANDARD IS D127'S (THE RETIRED `reap.py` HOOK) AND IT IS NOT NEGOTIABLE HER
                                 missing `git`: exit 0 and refuse nothing
     an unreadable TARGET fails CLOSED — but only where "unreadable" is this file being right
                                 that it does not know AND the harm is unrecoverable, which is
-                                true of none of these four: three of them RESOLVE
+                                true of none of these three: two of them RESOLVE
                                 their subject and clause 9 names a roster of two, and a subject
                                 a clause cannot resolve is a command it has no opinion about
 
-RESOLUTION, NEVER SPELLING, wherever the question has a real answer. `git push origin HEAD`
-is right when the upstream is named the same and wrong when it is not, and only
-`branch.<name>.merge` can say which. That is reap.py's whole argument, applied to three more
-commands — and clause 9, which cannot be resolved that way, argues its own roster instead of
+RESOLUTION, NEVER SPELLING, wherever the question has a real answer. A write is right or
+wrong by the checkout it lands in, and only the filesystem can say which. That is reap.py's
+whole argument, applied to two more commands — and clause 9, which cannot be resolved that way, argues its own roster instead of
 pretending otherwise.
 
 FALSE POSITIVES ARE THE ONLY WAY A GUARD LIKE THIS DIES, and it dies silently — the hatch
@@ -78,10 +67,10 @@ purpose, every legitimate shape this repo actually types is pinned as PASSING in
 `scripts/guard-shell-selftest.sh`, and each is RUN there before it is scored, because a case
 that is secretly a typo passes for the wrong reason.
 
-FOUR CLAUSES, FOUR HATCHES, AND THAT IS DELIBERATE. One switch for the whole hook would mean
-disarming the tree clause in order to push once, which is how a guard
+THREE CLAUSES, THREE HATCHES, AND THAT IS DELIBERATE. One switch for the whole hook would mean
+disarming the tree clause in order to pipe one merge, which is how a guard
 stops being one. Each refusal prints only its own, each is honoured in the environment and
-inline, and all four are documented in CLAUDE.md (`make docs-audit`'s `env names` row refuses
+inline, and all three are documented in CLAUDE.md (`make docs-audit`'s `env names` row refuses
 a variable the code reads and no markdown names).
 
     scripts/guard-shell.py --hook            the PreToolUse hook. Payload on stdin.
@@ -123,7 +112,7 @@ except Exception:                                             # noqa: BLE001 —
 
 # ----------------------------------------------------------------------------- the clauses
 #
-# DECLARED, because four clauses each with their own hatch is four names a reader has to be
+# DECLARED, because three clauses each with their own hatch is three names a reader has to be
 # able to find. The selftest reads this table so a clause added without a hatch, or a hatch
 # named in one place and printed in another, is a failing case rather than a silent hole.
 
@@ -139,9 +128,6 @@ CLAUSES = (
            "into another one"),
     Clause("wait", "BANCHI_WAIT",
            "never poll in a loop — background the work and take its notification"),
-    Clause("push", "BANCHI_PUSH",
-           "never `git push <remote> HEAD` / `<remote> <branch>` when the tracked upstream "
-           "is a different, non-default branch"),
     Clause("narrate", "BANCHI_NARRATE",
            "never hide the heartbeat of a command that waits for minutes — let its output "
            "reach the session as it happens"),
@@ -433,10 +419,6 @@ def _sanctioned_outside(target: str) -> str:
                 return "a temporary directory, which belongs to no checkout"
             return ""
     return ""
-
-
-def _flag_value(token: str, flags: Set[str]) -> bool:
-    return token in flags or any(token.startswith(flag + "=") for flag in flags)
 
 
 # ------------------------------------------------------------ 2. a write outside this tree
@@ -849,182 +831,6 @@ _WAIT_ADVICE = [
 ]
 
 
-# ------------------------------------------------------- 6. a push to the wrong branch name
-
-# Flags git push takes that consume the NEXT token. `--force-with-lease` and friends can
-# also take a value with `=`, handled by the `=`-prefix check below rather than listed twice.
-_PUSH_VALUE_FLAGS = {"--repo", "-o", "--push-option", "--receive-pack", "--exec",
-                     "--recurse-submodules"}
-
-# Flags that take no value and say nothing about WHICH branch this pushes. `--all`,
-# `--mirror`, `--tags` and `-d`/`--delete` are handled separately below: each of them pushes
-# something other than "this branch under its own name", so this clause has nothing to say
-# about them and reading them as ordinary flags would misread the operand that follows.
-_PUSH_BARE_FLAGS = {"-f", "--force", "--force-with-lease", "--force-if-includes", "-u",
-                    "--set-upstream", "-n", "--dry-run", "-q", "--quiet", "-v", "--verbose",
-                    "--porcelain", "--atomic", "--no-verify", "--thin", "--no-thin",
-                    "--progress", "--no-progress", "-4", "--ipv4", "-6", "--ipv6",
-                    "--signed", "--no-signed", "--follow-tags", "--prune"}
-_PUSH_SPECIAL_FLAGS = {"--all", "--mirror", "--tags", "-d", "--delete"}
-
-
-def _push_operands(rest: Sequence[str]) -> Tuple[str, List[str], bool]:
-    """(remote, refspecs, special) for a `git push` invocation.
-
-    `special` marks a flag that pushes something other than "this branch under its own
-    name" — `--all`, `--mirror`, `--tags`, `-d`/`--delete` — which is a different operation
-    this clause has no opinion about. AN UNKNOWN FLAG IS STEPPED OVER, the fail-open reading:
-    the worst outcome is a
-    push this clause says nothing about, never a wrong verdict.
-    """
-    remote = ""
-    refspecs: List[str] = []
-    special = False
-    index = 0
-    while index < len(rest):
-        token = rest[index]
-        index += 1
-        if token in _PUSH_SPECIAL_FLAGS:
-            special = True
-            continue
-        if token in _PUSH_VALUE_FLAGS:
-            index += 1
-            continue
-        if any(token.startswith(flag + "=") for flag in _PUSH_VALUE_FLAGS):
-            continue
-        if token in _PUSH_BARE_FLAGS or _flag_value(token, _PUSH_BARE_FLAGS):
-            continue
-        if token.startswith("-"):
-            continue
-        if not remote:
-            remote = token
-        else:
-            refspecs.append(token)
-    return remote, refspecs, special
-
-
-def _tracked_branch(branch: str, remote: str, cwd: str) -> Optional[str]:
-    """The branch name `branch` is configured to track on `remote`, or `None`.
-
-    `None` covers two cases this clause reads alike: no upstream configured at all — the
-    ordinary first push of a new branch — and an upstream configured for a DIFFERENT remote,
-    which is a fork workflow this clause has no business in. Neither is the incident's shape:
-    the trap is a mismatch on the SAME remote the command is about to push to.
-    """
-    remote_ok, remote_out = _run(
-        ["git", "config", "--get", "branch.{0}.remote".format(branch)], cwd=cwd)
-    if not remote_ok or remote_out.strip() != remote:
-        return None
-    merge_ok, merge_out = _run(
-        ["git", "config", "--get", "branch.{0}.merge".format(branch)], cwd=cwd)
-    if not merge_ok or not merge_out.strip():
-        return None
-    tracked = merge_out.strip()
-    if tracked.startswith("refs/heads/"):
-        tracked = tracked[len("refs/heads/"):]
-    return tracked
-
-
-def _default_branch(remote: str, cwd: str) -> str:
-    """The branch this checkout treats as the remote's default, or "" if it cannot tell.
-
-    `refs/remotes/<remote>/HEAD` is git's OWN record of it — set by `git clone`, or by
-    `git remote set-head <remote> -a` — and is specific to the remote actually being pushed
-    to, which matters for a fork workflow whose fork defaults to a different branch than
-    `origin`'s. A throwaway repo that has never had that symbolic ref written (this guard's
-    own selftest fixture, most `git init`-then-`push` clones) falls back to the same rule
-    the claude-settings sweep uses for the primary checkout: the first of
-    `main`, `master` that exists as a local branch. Nothing here is a guess dressed as
-    a read — an unreadable remote and an absent local branch both return "", and the caller
-    treats that exactly like the pre-2026-09-13 code did: no exemption, still refused.
-    """
-    ok, out = _run(["git", "symbolic-ref", "--quiet", "--short",
-                    "refs/remotes/{0}/HEAD".format(remote)], cwd=cwd)
-    if ok and out.strip():
-        head = out.strip()
-        prefix = remote + "/"
-        return head[len(prefix):] if head.startswith(prefix) else head
-    for name in ("main", "master"):
-        ok, _ = _run(["git", "rev-parse", "--verify", "--quiet",
-                      "refs/heads/" + name], cwd=cwd)
-        if ok:
-            return name
-    return ""
-
-
-def _push_refusal(text: str, remote: str, spec: str, branch: str, tracked: str) -> Refusal:
-    return Refusal("push", [
-        "  {0}".format(text),
-        "      the current branch is `{0}`; its tracked upstream is `{1}/{2}` — a DIFFERENT "
-        "name.".format(branch, remote, tracked),
-        "      naming `{0}` here does not push to that upstream. It pushes HEAD to "
-        "`{1}/{2}` instead —".format(spec, remote, branch),
-        "      a BRAND NEW branch on {0}, or an update to a stray one already there. "
-        "`{0}/{1}` is untouched.".format(remote, tracked),
-        "",
-        "  On 2026-09-12 a coordinator resolving a merge conflict stood on a local branch a",
-        "  background agent had named `pr-h-readings-table-local`, whose configured upstream "
-        "was",
-        "  actually `origin/claude/pr-h-readings-table` — the agent had pushed its squashed "
-        "commit",
-        "  to the real PR branch under a name that never matched the local one. `git push "
-        "origin",
-        "  HEAD` reported success — `[new branch] HEAD -> pr-h-readings-table-local` — having",
-        "  created a stray branch on origin and left the actual PR branch untouched. It was "
-        "caught",
-        "  only because the next command's output looked wrong.",
-        "",
-        "  Name the branch's OWN name as the destination. That is a real push to the branch",
-        "  you are on:",
-        "      git push -u {0} HEAD:{1}".format(remote, branch),
-    ], "BLOCKED: this pushes to a branch of the WRONG name, not the one tracked.")
-
-
-def clause_push(reading: "shell_parse.Reading", cwd: str) -> Verdict:
-    refusals: List[Refusal] = []
-    notes: List[str] = []
-    for placed in reading.placed:
-        argv = shell_parse.strip_prefixes(placed.stage.argv)
-        verb, rest = shell_parse.git_verb(argv)
-        if verb != "push":
-            continue
-        where = shell_parse.git_cwd(argv) or cwd
-        if not os.path.isdir(where):
-            notes.append("`{0}` names a directory this guard cannot read, so it has no "
-                         "opinion about it".format(shell_parse.short(placed.stage.text)))
-            continue
-        remote, refspecs, special = _push_operands(rest)
-        if special or not remote or not refspecs:
-            continue                       # no plain "push this branch" shape to judge
-        ok, out = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=where)
-        branch = out.strip() if ok else ""
-        if not branch or branch == "HEAD":
-            continue                       # detached, or unresolvable: no opinion
-        for spec in refspecs:
-            if ":" in spec:
-                continue                   # an explicit destination; this IS the fix, not the trap
-            if spec != "HEAD":
-                continue                   # a ref named outright (the branch's own name too) lands on that name: no trap
-            tracked = _tracked_branch(branch, remote, where)
-            if tracked is None or tracked == branch:
-                continue                   # no upstream on this remote, or it already matches
-            # THE ORDINARY FIRST PUSH OF A FEATURE BRANCH IS EXEMPT, amended 2026-09-13 (D179).
-            # A branch cut with `git switch -c X origin/main` tracks `origin/main` from birth —
-            # that is what "cut from" means — and its first push names its OWN branch, never
-            # `main`. Before this line that push was refused, and the refusal's own remedy told
-            # the operator to push at `main` by name (`git push origin HEAD:main`), which is the
-            # one act D42, both git hooks and GitHub branch protection all exist to prevent. The
-            # incident this clause exists for tracked a DIFFERENT FEATURE branch
-            # (`claude/pr-h-readings-table`, not `main`), so keeping that shape refused needs
-            # nothing here but excluding the default branch from it.
-            if tracked == _default_branch(remote, where):
-                continue
-            refusals.append(_push_refusal(
-                shell_parse.short(placed.stage.text), remote, spec, branch, tracked))
-            break
-    return Verdict(refusals, notes)
-
-
 # ------------------------------------------------ 9. a narrated wait with nobody watching it
 #
 # `make merge` pushes a claim commit (when a record is pending) and then waits for the checks, which take four
@@ -1243,7 +1049,6 @@ def read_command(command: str, cwd: str, backgrounded: bool = False) -> Verdict:
     for clause, verdict in (
         ("tree", lambda: clause_tree_bash(reading, cwd, root)),
         ("wait", lambda: clause_wait(reading, command, cwd, backgrounded)),
-        ("push", lambda: clause_push(reading, cwd)),
         ("narrate", lambda: clause_narrate(reading)),
     ):
         if _off(clause, command):
@@ -1325,7 +1130,7 @@ def explain(command: str, write: str, cwd: str) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="guard-shell",
-        description="Refuse four shell mistakes this repo has already paid for.",
+        description="Refuse three shell mistakes this repo has already paid for.",
     )
     parser.add_argument("--hook", action="store_true",
                         help="run as a PreToolUse hook; reads the payload on stdin")

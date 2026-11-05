@@ -3427,68 +3427,50 @@ COMPONENTS = [
                 "governed_by": ["D18", "D127", "D171", "D173"],
             },
             "guard-shell.py": {
-                "does": "the PreToolUse hook on Bash AND Write|Edit that refuses four shell "
+                "does": "the PreToolUse hook on Bash AND Write|Edit that refuses three shell "
                         "mistakes this repo has already paid for, each with a measured "
                         "incident: a write outside this checkout (~1,500 "
                         "lines into the owner's main tree on `main`, hot-reloaded into their "
                         "live capture server); a polling loop (a `pgrep` waiter whose pattern is "
                         "not the process, and a backgrounded driver that ran 119 rounds over "
-                        "3h58m across a compaction); a narrated wait; and "
-                        "`git push <remote> HEAD` (or the "
-                        "current branch's own literal name) when the tracked upstream is a "
-                        "different, NON-DEFAULT branch (a coordinator's push silently created "
-                        "a stray `pr-h-readings-table-local` on origin instead of updating the "
-                        "real PR branch, `origin/claude/pr-h-readings-table`, on 2026-09-12). "
-                        "A tracked upstream that IS the default branch — the ordinary state of "
-                        "a branch cut with `git switch -c X origin/main` — passes, amended "
-                        "2026-09-13 (D179) after that exact shape was refused with a remedy "
-                        "that named `main` outright; `_default_branch` reads "
-                        "`refs/remotes/<remote>/HEAD` first and falls back to the first of "
-                        "`main`/`master` that exists locally. IT "
+                        "3h58m across a compaction); and a narrated wait. IT "
                         "RESOLVES RATHER THAN MATCHES TEXT, "
                         "which is reap.py's standard and the only way these have answers: "
                         "a backgrounded command's loop is READ out of the shell script it "
-                        "names, and `branch.<name>.remote`/`.merge` are read exactly as git "
-                        "itself reads them. The Write|Edit half parses nothing at all, so no "
+                        "names. The Write|Edit half parses nothing at all, so no "
                         "shell form "
                         "skirts it. ONE HATCH PER CLAUSE, so no clause can be disarmed by the "
-                        "switch that guards another. Claude Code runs every clause. Fails OPEN on "
+                        "switch that guards another. Claude Code runs every clause. The shared "
+                        "layer owns the checkout, stash and reset refusals, so those "
+                        "clauses are gone. The `git push` clause is gone too: the shared "
+                        "push-stray-branch ask (`plain-push-asks`) asks on a bare or `HEAD` "
+                        "stray push, and a `-u` push of the branch's own name is silent there. Fails OPEN on "
                         "its own bugs, including a missing `shell_parse.py`, and an operand it "
                         "cannot resolve is REPORTED rather than passed silently.",
                 # D171 is the ruling that a rule read once competes with the work, which is
-                # why all four are mechanical. D127 is the guard whose resolution standard and
+                # why all three are mechanical. D127 is the guard whose resolution standard and
                 # fail-open asymmetry this one takes unchanged. D43 is the second clause's
                 # whole subject. D18 keeps its self-test off the commit path.
                 "governed_by": ["D179", "D18", "D43", "D127", "D135", "D157",
                                 "D171", "D173", "D305"],
             },
             "guard-shell-selftest.sh": {
-                "does": "proves guard-shell.py by COMMITTING its four mistakes in a throwaway "
-                        "repository with a linked worktree. All four incidents are "
+                "does": "proves guard-shell.py by COMMITTING its three mistakes in a throwaway "
+                        "repository with a linked worktree. All three incidents are "
                         "PERFORMED before the guard is asked about them: a worktree whose root "
                         "really differs from its main checkout's, "
                         "`pgrep -f` really reporting a process that merely "
-                        "NAMES its pattern, a real local branch made to track a "
-                        "differently-named remote branch — the exact mechanism a background "
-                        "agent's push created one by (`git push -u origin <local>:<remote>`) — "
+                        "NAMES its pattern, "
                         "and a narrated wait really piped into `tail`. "
                         "THE FALSE POSITIVES ARE THE OTHER "
                         "HALF and the git ones are RUN in the fixture first: "
                         "a pid wait, a bounded retry, a foreground loop, a backgrounded "
-                        "`make design-check ARGS=--wait`, the ordinary first push of a new "
-                        "branch, an upstream already matching its own name, the ordinary first "
-                        "push of a branch cut FROM the default branch (its upstream IS the "
-                        "default, set at birth — the case refused until the 2026-09-13 "
-                        "amendment), the same case read off a real `origin/HEAD` symbolic ref "
-                        "rather than the local-branch fallback, and every "
+                        "`make design-check ARGS=--wait`, and every "
                         "`git`/`gh` line swept "
                         "out of this repo's own tooling. It also asserts the platform fact the "
                         "refusal declines to assume — BSD `pgrep` excludes its own ancestors "
                         "unless `-a` — and scores every hatch in both forms off the guard's "
-                        "own clause table. The push clause carries fourteen arms of its own as of the "
-                        "2026-09-13 default-branch amendment — six over the original "
-                        "colon-check and refspec resolution, eight over `_default_branch` and "
-                        "the exemption it feeds — eleven caught and three equivalent mutants.",
+                        "own clause table.",
                 "governed_by": ["D179", "D18", "D43", "D127", "D171", "D173"],
             },
             "subagent-override-selftest.py": {
