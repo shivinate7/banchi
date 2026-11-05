@@ -67,6 +67,19 @@ def _fixture_root(root: Path):
         here["ROOT"], here["_INDEX_PATHS"] = saved
 
 
+@contextmanager
+def _swapped(module, **values):
+    """Set module-level names for the block, then put each back. The seam a row reads its inputs through."""
+    saved = {name: getattr(module, name) for name in values}
+    for name, value in values.items():
+        setattr(module, name, value)
+    try:
+        yield
+    finally:
+        for name, value in saved.items():
+            setattr(module, name, value)
+
+
 def run(ok) -> None:
     print("\nallowlist is self-cleaning")
     report = Report()

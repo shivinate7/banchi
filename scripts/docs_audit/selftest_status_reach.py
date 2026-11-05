@@ -68,6 +68,7 @@ def run(ok) -> None:
         "this repo's CLAUDE.md (and its rule files) and prompt.py agree",
     )
     status_reads_gates_not_map(ok)
+    status_sources_see_a_deleted_tracks_file(ok)
 
 
 def status_reads_gates_not_map(ok) -> None:
@@ -112,3 +113,35 @@ def status_reads_gates_not_map(ok) -> None:
         ok("Alpha shipped fixture title" in out and "Beta open fixture title" in out,
            "make status prints the shipped and the open step from docs/gates/",
            f"rc {done.returncode}: {out.strip()[-400:]}")
+
+
+def status_sources_see_a_deleted_tracks_file(ok) -> None:
+    """The status-sources row sees a deleted tracks file, with no citation of it left in the fixture.
+
+    Main's map carried TRACKS, and the row caught its deletion because SOURCES declared that map with
+    TRACKS among its requires. The tracks file holds that data now, so SOURCES has to declare the file.
+    THE FIXTURE holds only scripts/status.py: no tracks file and no citation of one, so no other row can
+    see the deletion. The control is another declared source that is absent (the decisions index), which
+    the row reports today, so the fixture is read. Each assert names one cause.
+    """
+    import shutil
+
+    from . import status_reach
+    from .core import Report
+    from .selftest_paths_commands_2 import _run_folder, _swapped
+
+    print("\nthe status-sources row sees a deleted tracks file")
+    with _run_folder() as run_dir:
+        fx = run_dir / "status-sources"
+        (fx / "scripts").mkdir(parents=True)
+        shutil.copy(ROOT / "scripts" / "status.py", fx / "scripts" / "status.py")
+        report = Report()
+        with _swapped(status_reach, ROOT=fx, STATUS=fx / "scripts" / "status.py"):
+            status_reach.check_status_sources(report)
+    findings = report.checks[0].findings
+    ok(any("docs/decisions/ORDER.json" in f.where for f in findings),
+       "control: a declared source that is absent is a finding, so the row reads this fixture",
+       "\n".join(f.where for f in findings[:6]))
+    ok(any("docs/tracks.json" in f.where for f in findings),
+       "deleting the tracks file is a finding of the status-sources row",
+       f"{len(findings)} findings, none names the tracks file")
