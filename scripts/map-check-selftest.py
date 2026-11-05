@@ -265,8 +265,9 @@ def make_map_on_fixture(work: Path, t: Tally) -> None:
     t.check(skill is not None, "precondition: map-check.py's finder finds the real plain-english-map skill")
     shutil.copy(ROOT / "Makefile", fx / "Makefile")
     shutil.copytree(ROOT / "scripts", fx / "scripts", ignore=shutil.ignore_patterns("__pycache__"))
+    repo_format = json.loads((ROOT / "map.config.json").read_text(encoding="utf-8"))["formatVersion"]
     (fx / "map.config.json").write_text(json.dumps({
-        "formatVersion": 4, "title": "Fixture", "codeExtensions": ["py"], "mapPaths": ["pipeline/"],
+        "formatVersion": repo_format, "title": "Fixture", "codeExtensions": ["py"], "mapPaths": ["pipeline/"],
     }) + "\n", encoding="utf-8")
     (fx / "pipeline").mkdir()
     (fx / "pipeline" / "variant.py").write_text("VARIANT = 1\n", encoding="utf-8")
