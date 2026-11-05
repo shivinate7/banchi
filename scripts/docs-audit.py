@@ -83,7 +83,7 @@ finally:
 docs_audit.core.entry_parser_hook = lambda: build_parser()
 
 # EVERY NAME THE ONE-FILE SCRIPT HAD IS STILL ON THIS MODULE. Callers load this file by path and
-# read its functions (`markdown_files`, `cited_decisions`, `Report`, ...), so the package is
+# read its functions (`markdown_files`, `exists`, `Report`, ...), so the package is
 # copied onto it. A copy is a snapshot: `ROOT` is moved with `set_root`, never by assigning here.
 for _module in docs_audit.MODULES:
     globals().update({name: value for name, value in vars(_module).items() if not name.startswith("__")})

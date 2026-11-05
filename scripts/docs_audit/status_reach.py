@@ -1,4 +1,4 @@
-"""Closed vocabularies, the tested-by reach and status sources."""
+"""Closed vocabularies, status sources and the paid-read model."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import ast
 import json
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Set, Tuple
+from typing import List, Optional, Set
 
 from .core import (
     CLAUDE_OR_RULES,
@@ -15,13 +15,11 @@ from .core import (
     ROOT,
     Report,
     _merge_rows,
-    child_names,
     claude_and_rules,
     exists,
     glob_files,
     literals_from_module,
     read,
-    registered_tests,
     rel,
 )
 from .reasons import (
@@ -32,25 +30,6 @@ from .reasons import (
     _terminal_statuses,
     _withhold_reasons,
 )
-
-# ------------------------------------------------ whether a cited test reaches what it claims
-
-# Where the one-level follow stops, and the reason this row says anything at all.
-#
-# A test's own scaffolding is part of the test: harness/eval/ holds the fixture loader and
-# the run cache, and a test that kept its imports there would otherwise be reported as
-# reaching nothing — a false positive, on a blocking row, over a correct claim. So the
-# follow reaches modules under here and no further.
-#
-# PRODUCT PACKAGES ARE DELIBERATELY NOT FOLLOWED, and that is the whole design. Measured on
-# this tree: `cli/cmd_identify.py` imports `geometry`, `cli/resolve.py` imports `store`, and
-# `harness/tests/t7_store_and_seams.py` imports `cli`. One transitive hop would therefore
-# prove "T7 reaches geometry" — a package T7 does not touch and whose two modules correctly
-# cite T6. Transitive reachability through the product's own graph makes almost every claim
-# true and asserts nothing, which is to say it recreates the unenforced field this row
-# exists to enforce, using the machinery meant to enforce it.
-FOLLOW_ROOT = "harness/"
-
 
 def check_closed_vocabularies(report: Report) -> None:
     """Six closed vocabularies, one row: withhold reasons, order reasons, terminal
@@ -72,196 +51,6 @@ def check_closed_vocabularies(report: Report) -> None:
     ])
     report.add("closed vocabularies", merged.severity, merged.findings, merged.summary,
                scanned=merged.scanned)
-
-
-def imported_names(source: str) -> Set[str]:
-    """Every absolute dotted module name a source imports. The whole tree, not just its body.
-
-    `ast.walk` rather than `tree.body`, because two of the seven tests import the thing they
-    are named for from inside a function: `harness/tests/t6_geometry.py` imports `geometry`
-    after its Pillow/numpy availability check, and `harness/tests/t7_store_and_seams.py`
-    imports `cli.__main__` inside the case that drives it. A module-level read would call
-    both of those claims false and block a commit over them.
-
-    `from . import x` is dropped rather than resolved: a relative import names no package
-    this check can compare against a map entry, and no test in this repo writes one.
-    """
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return set()
-    names: Set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                names.add(alias.name)
-        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
-            names.add(node.module)
-            # `from harness.eval import fixtures, runcache` — each name is a submodule or an
-            # attribute, and only the filesystem knows which. Both forms are recorded; the
-            # resolver below finds no file for an attribute and moves on.
-            for alias in node.names:
-                names.add(node.module + "." + alias.name)
-    return names
-
-
-def string_literals(source: str) -> Set[str]:
-    """Every string constant in a source that is not a docstring.
-
-    Docstrings are excluded because they are prose, and prose is what this whole script
-    treats as unverified. `harness/tests/t2_round_trip.py` opens with "Load
-    fixtures/sv09_export_untouched.csv" in its module docstring and then assigns the same
-    path to `SOURCE_FIXTURE` two dozen lines down. Only the second is the test reading the
-    file; counting the first would let a sentence satisfy the claim.
-    """
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return set()
-    docstrings: Set[int] = set()
-    for node in ast.walk(tree):
-        body = getattr(node, "body", None)
-        if not isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            continue
-        if (
-            body
-            and isinstance(body[0], ast.Expr)
-            and isinstance(body[0].value, ast.Constant)
-            and isinstance(body[0].value.value, str)
-        ):
-            docstrings.add(id(body[0].value))
-    return {
-        node.value
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Constant)
-        and isinstance(node.value, str)
-        and id(node) not in docstrings
-    }
-
-
-def follow_target(dotted: str) -> Optional[Path]:
-    """A dotted module name as a file under FOLLOW_ROOT, or None for anything else."""
-    stem = dotted.replace(".", "/")
-    for candidate in (ROOT / (stem + ".py"), ROOT / stem / "__init__.py"):
-        if rel(candidate).startswith(FOLLOW_ROOT) and exists(candidate):
-            return candidate
-    return None
-
-
-def test_reach(path: Path) -> Tuple[Set[str], Set[str]]:
-    """(top-level packages the test imports, path literals it names). One level deep."""
-    source = read(path)
-    names = imported_names(source)
-    literals = string_literals(source)
-    # `sorted()` copies, so the sets may grow inside the loop without the new entries being
-    # followed in turn. That is not an implementation detail — it IS the one level.
-    for dotted in sorted(names):
-        helper = follow_target(dotted)
-        if helper is None or helper == path:
-            continue
-        helper_source = read(helper)
-        names |= imported_names(helper_source)
-        literals |= string_literals(helper_source)
-    return {name.split(".", 1)[0] for name in names}, literals
-
-
-def is_importable(target: Path) -> bool:
-    """Does this directory hold Python at all?
-
-    Not `__init__.py`: `server/` and `harness/` have none and are imported anyway, as
-    namespace packages. Holding a `.py` child is the property that matters, and it is what
-    separates a package from `fixtures/`, which holds CSVs, and `app/`, which holds
-    TypeScript. Those two have no import to check, so the claim on them is checked the only
-    other way a parse can see — a path literal.
-    """
-    return any(name.endswith(".py") for name in child_names(target))
-
-
-def reach_findings(
-    components: Sequence[Dict[str, object]], tests: Dict[str, Path]
-) -> Tuple[List[Finding], int]:
-    """(findings, claims checked). Split out from the check so the self-test can drive it.
-
-    The self-test feeds it the exact false claim docs/debts/ recorded — `store/queues.py`
-    citing T3 — against the real harness, rather than a synthetic stand-in for it.
-    """
-    findings: List[Finding] = []
-    claims = 0
-    cache: Dict[str, Tuple[Set[str], Set[str]]] = {}
-
-    def reach(name: str) -> Tuple[Set[str], Set[str]]:
-        if name not in cache:
-            cache[name] = test_reach(tests[name])
-        return cache[name]
-
-    for component in components:
-        path = str(component.get("path", ""))
-        target = ROOT / path
-        if not path or not exists(target):
-            continue  # a component path that is not there is not this reader's finding
-        package = path.strip("/").split("/")[0]
-        importable = is_importable(target)
-
-        entries: List[Tuple[str, Sequence[str]]] = [(path, component.get("tested_by") or [])]
-        for module_name, entry in (component.get("modules") or {}).items():
-            entries.append((path + str(module_name), list(entry.get("tested_by") or [])))
-
-        for where, cited in entries:
-            for name in cited:
-                # An id that is not a registered test is not this reader's finding
-                # row, and there is no file here to parse. Reporting it twice under two
-                # labels would make one defect read as two.
-                if name not in tests or not exists(tests[name]):
-                    continue
-                claims += 1
-                packages, literals = reach(name)
-
-                if importable:
-                    if package in packages:
-                        continue
-                    in_repo = sorted(
-                        found
-                        for found in packages
-                        if exists(ROOT / found) or exists(ROOT / (found + ".py"))
-                    )
-                    findings.append(
-                        Finding(
-                            f"tested_by -> {where}",
-                            f"tested_by claims {name}, and {rel(tests[name])} imports no "
-                            f"`{package}`.\n"
-                            f"  {name} reaches: {', '.join(in_repo) or '(nothing in this repo)'}\n"
-                            f"  Either the claim is false and goes, or the test should import "
-                            f"what it is credited with. Do not answer this in prose: the "
-                            f"entry's `note` is read by people and this row is not.",
-                        )
-                    )
-                    continue
-
-                if any(literal.startswith(where) for literal in literals):
-                    continue
-                findings.append(
-                    Finding(
-                        f"tested_by -> {where}",
-                        f"tested_by claims {name}, and {rel(tests[name])} names no path "
-                        f"under `{where}`.\n"
-                        f"  `{path}` holds no Python, so there is no import to check. The "
-                        f"only evidence a parse can see is the test naming a path under it "
-                        f"in its code — a mention in its docstring is prose and does not "
-                        f"count.",
-                    )
-                )
-    return findings, claims
-
-
-def check_tested_by_reach(report: Report) -> None:
-    """RETIRED, and kept only so `selftest_status_reach` still imports. It checks nothing.
-
-    The row read the `tested_by` claims of the old map file, which `docs/map/` does not carry,
-    so no row calls this. The reader below it (`reach_findings` and the import-graph helpers
-    above) has no caller but its own self-test cases. The test-author deletes those cases;
-    this function and those helpers go in the same change.
-    """
-    return
 
 
 # ----------------------------------------------------------- status.py's declared sources

@@ -34,7 +34,7 @@ from .core import (
 )
 from .paths_commands import PROPOSED_SIGIL, marked_proposed
 from .registry_scopes import _tracked_paths
-from .records import _DECISION_RE, _ENV_RE, without_noqa
+from .records import _ENV_RE
 
 # How a hook command names the project root. `:-.` keeps a session that does not set it at cwd.
 PROJECT_DIR_PREFIX = "${CLAUDE_PROJECT_DIR:-.}/"
@@ -203,35 +203,6 @@ def _env_names() -> Row:
 # rather than only in git, because the signal this row used to carry — "CLAUDE.md and
 # GATES.md disagree about where the project is" — genuinely is gone, and a later session
 # wondering why nothing checks that should find the answer at the site.
-
-# ------------------------------------- kept only so the self-test modules still import
-
-# `selftest_records` imports `cited_decisions` and `selftest_registry_scopes` imports
-# `_consumer_block` and `_map_sections` and patches `MAP`. No row calls any of them: the rows that read
-# the old map file are gone. The test-author deletes those cases, and these names go in the same change.
-MAP = None
-
-BINARY_SUFFIXES = frozenset({
-    ".png", ".jpg", ".jpeg", ".webp", ".heic", ".gif", ".avif", ".pdf",
-    ".ico", ".woff", ".woff2", ".ttf", ".otf", ".zip", ".sqlite", ".onnx",
-})
-
-
-def cited_decisions(path: Path) -> Set[str]:
-    """Every decision id a file cites, suppressions excluded. A binary file cites nothing."""
-    if path.suffix.lower() in BINARY_SUFFIXES:
-        return set()
-    lines = (without_noqa(line) for line in read(path).splitlines())
-    return {"D" + digits for line in lines for digits in _DECISION_RE.findall(line)}
-
-
-def _map_sections() -> List[str]:
-    return []
-
-
-def _consumer_block() -> Tuple[Optional[str], List[str]]:
-    return None, []
-
 
 #: The shape of a hatch's VALUE. Every one of them is `<NAME>=off`, printed in the refusal
 #: it lifts, so "set to something" is not the question — "set to off" is.
