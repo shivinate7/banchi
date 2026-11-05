@@ -68,7 +68,7 @@ LABEL = 15  # column where values start, so the left rail reads as a column
 # `kind` says what must be true of the target:
 #   literals  a .py whose module-level literal assignments include every name in `requires`
 #   defs      a .py whose module-level `def`s include every name in `requires`
-#   json      a path or glob; every match must carry every key in `requires`
+#   json      a path or glob; every match must carry every key in `requires` (a list: every item must)
 #   file/dir  presence only
 #
 # Resolve reads through `resolve()` below, so this list is not decoration — it is the only
@@ -81,6 +81,13 @@ SOURCES = (
         "requires": ("steps", "files"),
         "why": "which build-order steps shipped and which are open, in the order docs/gates/ keeps "
                "them. The step's own file gives its title and, through git, the date it last changed",
+    },
+    {
+        "path": "docs/tracks.json",
+        "kind": "json",
+        "requires": ("name", "owns", "decisions", "rules"),
+        "why": "the two tracks, a JSON list: `scripts/decision-context.py` routes an edit under a track's "
+               "`owns` prefix to its `decisions` file and `rules` file, and prints the track banner",
     },
     {
         "path": "docs/gates/steps",

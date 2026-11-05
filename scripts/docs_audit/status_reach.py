@@ -149,9 +149,12 @@ def check_status_sources(report: Report) -> None:
                 except ValueError as exc:
                     findings.append(Finding(spot, f"not valid JSON — {exc}"))
                     continue
-                for req in requires:
-                    if req not in payload:
-                        findings.append(Finding(spot, f"`{name}` has no `{req}` key."))
+                holders = payload if isinstance(payload, list) else [payload]
+                for index, holder in enumerate(holders):
+                    for req in requires:
+                        if not isinstance(holder, dict) or req not in holder:
+                            where = f" in item {index}" if isinstance(payload, list) else ""
+                            findings.append(Finding(spot, f"`{name}` has no `{req}` key{where}."))
 
     report.add("status sources", MECHANICAL, findings, f"{checked} declared, all resolve",
                scanned=checked)
