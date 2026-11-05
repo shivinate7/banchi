@@ -210,8 +210,8 @@ def render(relative: str, entry: Dict[str, object]) -> str:
     """One line per governing decision: id and title, no rulings.
 
     A ruling was the expensive part: 108 decisions on `server/capture_server.py` cost
-    38,130 bytes on every single edit, most of it text the record gives on demand. The
-    owner's ruling, from the token-budget review: "Id + title only (Recommended)."
+    38,130 bytes on every single edit, most of it text the record gives on demand, so the
+    render prints id and title only.
     `decision_gists()` still computes rulings, and `scripts/status.py` still reads titles off
     the same call, so nothing is removed, only what THIS render prints.
     """
