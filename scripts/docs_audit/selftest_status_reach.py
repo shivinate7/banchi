@@ -197,3 +197,49 @@ def run(ok) -> None:
         model_disagreement(claude_and_rules(), read(ROOT / "identify" / "prompt.py")) is None,
         "this repo's CLAUDE.md (and its rule files) and prompt.py agree",
     )
+    status_reads_gates_not_map(ok)
+
+
+def status_reads_gates_not_map(ok) -> None:
+    """`make status` takes Shipped and Open from docs/gates/, and asks for no docs/map.py.
+
+    status.py has no self-test of its own. Its docstring names this row, the status-sources check, as the
+    audit that holds its reader contract, so the case lives here. THE FIXTURE HAS NO docs/map.py. It holds
+    scripts/status.py, its gates reader and the decision-context hook that status loads, plus docs/gates/
+    with one shipped step and one open step. Today status prints `MISSING: docs/map.py SHIPPED / OPEN` and
+    no step title. Each assert below names one cause.
+    """
+    import shutil
+    import subprocess
+    import sys
+
+    from .selftest_paths_commands_2 import _run_folder
+
+    print("\nmake status reads Shipped and Open from docs/gates/, with no docs/map.py")
+    with _run_folder() as run_dir:
+        fx = run_dir / "status"
+        (fx / "scripts").mkdir(parents=True)
+        for name in ("status.py", "gates_corpus.py", "decision-context.py"):
+            shutil.copy(ROOT / "scripts" / name, fx / "scripts" / name)
+        gates = fx / "docs" / "gates" / "steps"
+        gates.mkdir(parents=True)
+        (gates / "step001-alpha.md").write_text(
+            "1. ~~Alpha shipped fixture title~~ — done.\n", encoding="utf-8")
+        (gates / "step002-beta.md").write_text(
+            "2. **Beta open fixture title** — not started.\n", encoding="utf-8")
+        (fx / "docs" / "gates" / "ORDER.json").write_text(
+            '{"order": ["steps/step001-alpha.md", "steps/step002-beta.md"], "tests": [],'
+            ' "steps": {"shipped": ["step001"], "open": ["step002"]}}\n',
+            encoding="utf-8",
+        )
+        done = subprocess.run(
+            [sys.executable, str(fx / "scripts" / "status.py")], cwd=fx,
+            capture_output=True, text=True, timeout=300,
+        )
+        out = done.stdout + done.stderr
+        ok("MISSING: docs/map.py" not in out,
+           "make status does not ask for docs/map.py",
+           "\n".join(line for line in out.splitlines() if "docs/map.py" in line)[:400])
+        ok("Alpha shipped fixture title" in out and "Beta open fixture title" in out,
+           "make status prints the shipped and the open step from docs/gates/",
+           f"rc {done.returncode}: {out.strip()[-400:]}")
