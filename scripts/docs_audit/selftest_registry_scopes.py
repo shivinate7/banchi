@@ -16,7 +16,6 @@ from .core import (
     Report,
     _strip_ts_comments,
     entry_parser,
-    module_globals,
     rel,
 )
 from .dispatch import UNDISPATCHED, check_dispatch
