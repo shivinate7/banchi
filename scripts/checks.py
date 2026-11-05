@@ -19,8 +19,8 @@ them as one `make` call each, so the suite runs in a known order and stops at th
 failure. Adding a check is one entry here and a Makefile rule. Registry order is the run
 order: product first, guard self-tests last.
 
-`CHECKS` is a tuple of pure literals for the reason `docs/map.py` and `scripts/status.py`'s
-`SOURCES` are: the audit parses it with `ast.literal_eval` rather than importing it, because a
+`CHECKS` is a tuple of pure literals for the reason `scripts/status.py`'s
+`SOURCES` is: the audit parses it with `ast.literal_eval` rather than importing it, because a
 read-only check must not execute the code it is checking.
 
 Stdlib only, no venv, no network — `python3` and not `$(PYTHON)` in the Makefile, same as

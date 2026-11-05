@@ -383,7 +383,7 @@ export function useInOverlay(): boolean {
 
 /* ---- Dialog: the bare panel, for a caller that builds its own head -------------------------------- */
 
-/** PROMOTED FROM `InventoryOverlay.tsx` (round 4, docs/map.py's own note on `runsOverlay.ts`:
+/** PROMOTED FROM `InventoryOverlay.tsx` (round 4; the note on `runsOverlay.ts` read:
  *  "the behavior `InventoryOverlay` has, waiting to be promoted to a kit Dialog so the product
  *  has one of these rather than two"). Unlike `Sheet`/`Modal`, `Dialog` owns no title, no icon
  *  and no Close of its own — every caller here already builds its own head (BoxOps' sheet

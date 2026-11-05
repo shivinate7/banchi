@@ -34,7 +34,6 @@ again. No session id in the payload means no memory, so the nudge prints every t
 
 from __future__ import annotations
 
-import ast
 import json
 import re
 import sys
@@ -43,7 +42,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
-MAP = ROOT / "docs" / "map.py"
+MAP_DIR = ROOT / "docs" / "map"  # the plain-English map: one page per area, one line per code file
+TRACKS = ROOT / "docs" / "tracks.json"  # the two tracks, a JSON list of {name, owns, decisions, rules, status, note}
 # The corpus is `docs/decisions/`, one file per entry, and was one file until the split.
 # `scripts/decisions_corpus.py` reassembles it, so the parsing below is unchanged — and
 # `path_for` now makes "the file holding this entry" a real answer, which the entry that
@@ -74,22 +74,6 @@ def _corpus_text() -> str:
         return "\n".join(read(directory / name) for name in order)
     except Exception:
         return ""
-
-
-def literals(path: Path) -> Dict[str, object]:
-    """Module-level literal assignments, without importing. Same rule as docs-audit.py:
-    a hook that runs project code to describe project code is a hook with side effects."""
-    out: Dict[str, object] = {}
-    for node in ast.parse(read(path)).body:
-        if not isinstance(node, ast.Assign):
-            continue
-        for target in node.targets:
-            if isinstance(target, ast.Name):
-                try:
-                    out[target.id] = ast.literal_eval(node.value)
-                except (ValueError, SyntaxError):
-                    continue
-    return out
 
 
 def decision_gists(path: Optional[Path] = None, prefix: str = "D") -> Dict[str, Tuple[str, List[str]]]:
@@ -164,19 +148,19 @@ def pick_rulings(bolds: Sequence[str]) -> List[str]:
 
 
 def track_for(relative: str) -> Optional[Dict[str, object]]:
-    """The track that owns this path, per docs/map.py's TRACKS. Longest `owns` prefix wins.
+    """The track that owns this path, per docs/tracks.json. Longest `owns` prefix wins.
 
-    THE ONLY READER TRACKS HAS. It sat in the map with none from 2026-08-07 to 2026-08-31
-    and went wrong twice unnoticed; a section with no consumer cannot be caught being
-    false. What it buys is real rather than ceremonial: a session editing `codes/` was
-    shown the D decisions the rig shares and was never told that C1-C11 and a second rules
-    file exist at all, which is D14's two-tracks-one-rig arriving as a surprise (D80).
+    What it buys is real rather than ceremonial: a session editing `codes/` was shown the D
+    decisions the rig shares and was never told that C1-C11 and a second rules file exist at
+    all, which is D14's two-tracks-one-rig arriving as a surprise (D80).
     """
-    if not MAP.exists():
+    try:
+        tracks = json.loads(read(TRACKS))
+    except (OSError, ValueError):
         return None
     best: Optional[Dict[str, object]] = None
-    for track in literals(MAP).get("TRACKS") or []:  # type: ignore[union-attr]
-        owns = str(track.get("owns") or "")
+    for track in tracks if isinstance(tracks, list) else []:
+        owns = str(track.get("owns") or "") if isinstance(track, dict) else ""
         if owns and relative.startswith(owns) and (
             best is None or len(owns) > len(str(best.get("owns") or ""))
         ):
@@ -184,65 +168,65 @@ def track_for(relative: str) -> Optional[Dict[str, object]]:
     return best
 
 
+_MAP_LINE = re.compile(r"^- `([^`]+)` — (.*)$")
+_DECISIONS_LINE = "  - Decisions: "
+
+
 def lookup(relative: str) -> Optional[Dict[str, object]]:
-    """What docs/map.py says about this file: the module entry, falling back to its package."""
-    if not MAP.exists():
+    """The docs/map/ line for this file: its sentence, and the ids on the decisions line under it.
+
+    ONE MORE READER OF THE MAP FORMAT, because this is a PreToolUse hook that runs on every edit
+    and must run alone: its self-test copies only this file, so there is no `map.config.json` to
+    read and no node to start. The skill's `map-show.mjs` (`make map`) is the full reader and stays
+    the one for people. Only the two line shapes below are read here, and a line this does not
+    parse costs the nudge, never the edit.
+    """
+    try:
+        pages = sorted(MAP_DIR.glob("*.md"))
+    except OSError:
         return None
-    components = literals(MAP).get("COMPONENTS") or []
-    best: Optional[Dict[str, object]] = None
-    for component in components:
-        path = str(component.get("path", ""))
-        if not path or not relative.startswith(path):
-            continue
-        modules = component.get("modules") or {}
-        name = relative[len(path):]
-        if name in modules:
-            # The module's own list, NOT merged with the package's. The package list is the
-            # union of everything any module under it touches, so merging would tell you
-            # that pipeline/pricing.py is governed by D2 (Haiku vision) — true of the
-            # package, useless here, and the fastest way to make this hook noise.
-            entry = dict(modules[name])
-            entry["scope"] = relative
-            return entry
-        # Package-level fallback, but keep looking for a more specific component.
-        if best is None or len(path) > len(str(best.get("scope_path", ""))):
-            best = {
-                "does": component.get("does", ""),
-                "governed_by": list(component.get("governed_by") or []),
-                "tested_by": list(component.get("tested_by") or []),
-                "note": component.get("note", ""),
-                "scope": path,
-                "scope_path": path,
-            }
-    return best
+    for page in pages:
+        lines = read(page).splitlines()
+        for number, line in enumerate(lines):
+            found = _MAP_LINE.match(line)
+            if not found or found.group(1) != relative:
+                continue
+            governed: List[str] = []
+            for under in lines[number + 1:]:
+                if not under.startswith("  "):
+                    break
+                if under.startswith(_DECISIONS_LINE):
+                    governed = re.findall(r"`([^`]+)`", under[len(_DECISIONS_LINE):])
+            return {"does": found.group(2).strip(), "governed_by": governed}
+    return None
+
+
+def normal_id(name: str) -> str:
+    """`D092` and `D92` are one decision: the map line carries the form a comment cites."""
+    return re.sub(r"\d+", lambda match: str(int(match.group())), name)
 
 
 def render(relative: str, entry: Dict[str, object]) -> str:
-    """One line per governing decision — id and title, no rulings.
+    """One line per governing decision: id and title, no rulings.
 
     A ruling was the expensive part: 108 decisions on `server/capture_server.py` cost
-    38,130 bytes on every single edit, most of it text `make map ARGS="D<n> --full"` (or
-    `make map ARGS=<path>`) already gives on demand. The owner's ruling, from
-    the token-budget review (2026-09-27): "Id + title only (Recommended)."
-    `decision_gists()` still computes rulings — `scripts/map-view.py`'s `make map ARGS=D<n>`
-    still shows them, and `scripts/status.py` still reads titles off the same call — so
-    nothing here is removed, only what THIS render prints.
+    38,130 bytes on every single edit, most of it text the record gives on demand. The
+    owner's ruling, from the token-budget review: "Id + title only (Recommended)."
+    `decision_gists()` still computes rulings, and `scripts/status.py` still reads titles off
+    the same call, so nothing is removed, only what THIS render prints.
     """
-    governed = [d for d in (entry.get("governed_by") or [])]
+    governed = sorted(
+        {normal_id(d) for d in (entry.get("governed_by") or [])},  # type: ignore[union-attr]
+        key=lambda d: int(re.sub(r"\D", "", d) or 0),
+    )
     if not governed:
         return ""
     gists = decision_gists()
-    lines = [f"{relative} — {entry.get('does') or 'no description in docs/map.py'}"]
-    scope = str(entry.get("scope", ""))
-    if scope and scope != relative:
-        lines.append(f"(no entry for this file; showing what governs {scope})")
+    lines = [f"{relative} — {entry.get('does') or 'no description in docs/map/'}"]
     lines.append("Settled decisions that govern it — docs/decisions/, do not re-litigate:")
-    for name in sorted(governed, key=lambda d: int(d[1:])):
+    for name in governed:
         title, _ = gists.get(name, ("(no such entry)", []))
         lines.append(f"  {name:<4} {title}")
-    tested = entry.get("tested_by") or []
-    if tested:
-        lines.append(f"Covered by: {', '.join(tested)}. Run `make harness` before claiming it works.")
     track = track_for(relative)
     if track:
         track_file = ROOT / str(track.get("decisions"))
@@ -251,15 +235,7 @@ def render(relative: str, entry: Dict[str, object]) -> str:
             f"the shared rig's; this path ALSO answers to {track_file.relative_to(ROOT)} and to "
             f"{track.get('rules')}, which is auto-loaded in that directory."
         )
-        codes = [d for d in governed if d.startswith("C")]
-        if codes:
-            track_gists = decision_gists(track_file, prefix="C")
-            for name in sorted(codes, key=lambda d: int(d[1:])):
-                title, _ = track_gists.get(name, ("(no such entry)", []))
-                lines.append(f"  {name:<4} {title}")
-    if entry.get("note"):
-        lines.append(f"Also: {entry['note']}")
-    lines.append('Full text: `make map ARGS="D<n> --full"`, or `make map ARGS=<path>` for the module.')
+    lines.append("Full text: docs/decisions/<id>-<slug>.md, or `make map ARGS=<path>` for the file's map line.")
     return "\n".join(lines)
 
 
@@ -303,7 +279,7 @@ def main(argv: Sequence[str]) -> int:
     if len(argv) >= 2 and argv[0] == "--check":
         relative = relative_to_root(argv[1]) or argv[1]
         entry = lookup(relative)
-        print(render(relative, entry) if entry else f"{relative}: no entry in docs/map.py")
+        print(render(relative, entry) if entry else f"{relative}: no map line in docs/map/")
         return 0
 
     payload = json.loads(sys.stdin.read() or "{}")
@@ -331,7 +307,7 @@ def main(argv: Sequence[str]) -> int:
     # Hook payload shape has moved between Claude Code releases (see the _comment in
     # .claude/settings.json). If a release ignores this field the JSON is merely printed,
     # which is still readable and still harmless — the failure mode is a lost nudge, never
-    # a blocked edit. CLAUDE.md points at docs/map.py directly for that reason.
+    # a blocked edit. CLAUDE.md points at docs/map/ directly for that reason.
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",

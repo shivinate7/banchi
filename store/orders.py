@@ -78,7 +78,7 @@ collision exactly, and this module stays on the other side of it by holding no s
 all.
 
 IT IMPORTS NOTHING FROM `pipeline/`, WHICH IS WHY `OrderLine` IS DECLARED TWICE. The edge
-runs the other way — `pipeline/orders.py` imports `store`, and `docs/map.py` records that
+runs the other way — `pipeline/orders.py` imports `store`, and D63 records that
 `store/` imports nothing from `pipeline/` so there is no cycle — so the resolver's frozen,
 coercing `OrderLine` cannot be reused here and this file declares a stored one of its own.
 They are not redundant: the same split `store/queues.py:QueueEntry` has against

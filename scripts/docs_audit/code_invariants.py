@@ -580,7 +580,7 @@ def _pipeline_imports(path: Path) -> List[Tuple[int, str]]:
 def check_import_layering(report: Report) -> None:
     """`store/` may not import `pipeline/` (D63): the arrow runs one way only.
 
-    `docs/decisions/D063-…md` and `docs/map.py`'s `pipeline/orders.py` entry both record
+    `docs/decisions/D063-…md` records
     it in the same words — "store/ imports nothing from pipeline/, so there is no cycle" —
     because `pipeline/orders.py`, `pipeline/readings.py` and `pipeline/selection.py` all
     import `store`, and a `store -> pipeline -> store` cycle is exactly the shape that

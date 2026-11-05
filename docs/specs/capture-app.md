@@ -111,7 +111,7 @@ The app must not paraphrase it into something less actionable.
 
 ## 5. capture-screen
 
-The owner spends hours on this screen. `docs/map.py`'s `CaptureScreen.tsx` entry and the
+The owner spends hours on this screen. `docs/map/`'s `CaptureScreen.tsx` line and the
 component's own comments carry the current control layout. The SESSION panel is at the top, the
 claims are in the middle, and the shutter and undo are at the foot.
 

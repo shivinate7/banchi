@@ -84,7 +84,7 @@ _NO_MECHANISM_RE = re.compile(
 )
 
 # A repository path, never something a person types or reads off a download. Every
-# top-level package `docs/map.py` maps, plus `scripts` (where this row itself lives): any
+# top-level package `map.config.json` maps, plus `scripts` (where this row itself lives): any
 # of them followed by `/` is a filesystem fact about this checkout, not a sentence about a
 # card. `docs/decisions/` is covered by the bare `docs` prefix, deliberately — a path INTO
 # it is exactly the citation-by-path `cite-decisions-by-id-not-path` already warns against.

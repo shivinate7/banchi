@@ -4,7 +4,7 @@
 
 **The table holds eleven routes, and `#/` changed meaning.** `#/` is a new Home screen. Capture moved to `#/capture`, and `#/gallery` is labelled "Kit". Main's table held ten with Capture at the root. Routes carry a `group`: `home`, `work`, `sell` or `library`. The nav draws them in that order under those headings. The order is the workflow: capture, runs, review, pricing, then orders and shipping, then inventory and codes. `OFF_NAV` names the one group the nav omits, `aside`. It holds the Fulfiller's screen and the kit. It is a constant because `scripts/docs-audit.py`'s `route rosters` row reads it. Without it, that row can only conclude that two routes are unreachable.
 
-**Recounting is owed, and this entry is not where it lands.** Moving Capture off the root and adding Home changes every published route count. It also changes every spec that pins `#/` as the capture screen. `CLAUDE.md`, `README.md` and `docs/map.py` carry the counts the `route census` row reconciles. `app/tests/nav.spec.ts` and `app/tests/cursor.spec.ts` carry the pinned rosters. All of them are owed a recount from the table, never an increment.
+**Recounting is owed, and this entry is not where it lands.** Moving Capture off the root and adding Home changes every published route count. It also changes every spec that pins `#/` as the capture screen. `CLAUDE.md` and `README.md` carried the counts the `route census` row reconciles. `app/tests/nav.spec.ts` and `app/tests/cursor.spec.ts` carry the pinned rosters. All of them are owed a recount from the table, never an increment.
 
 ### Three shells for three widths, and one of them is nothing at all
 

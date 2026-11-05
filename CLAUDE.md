@@ -5,8 +5,8 @@ every card physically is.
 
 Code cards are a feature of this product, not a second track (D248, turn end never runs the harness, and code cards
 share one rules file). The feature is DORMANT (below).
-D14 (two tracks, one rig) still stands in structure. `codes/` is its own package. `docs/map.py`
-carries a `TRACKS` list. `scripts/decision-context.py` prints a track banner. Repeal needs the
+D14 (two tracks, one rig) still stands in structure. `codes/` is its own package. `docs/tracks.json`
+carries the track list. `scripts/decision-context.py` prints a track banner. Repeal needs the
 owner's word.
 
 Banchi has no Codex setup (D135, no Codex setup). A rule that matters under one folder lives in
@@ -28,7 +28,7 @@ name. Fixtures are never modified.
 
 `make help` lists every target. `make help ARGS=<target>` prints that target's whole Makefile comment: its flags, what it
 writes, what it costs. `make explain` lists what `make check` runs, and `ARGS=<target>` says what one row is worth.
-`./banchi <command> --help` does the same for the CLI. `make map ARGS=<package|path|D<n>|--stale|--decisions>` reads `docs/map.py`.
+`./banchi <command> --help` does the same for the CLI. `make map ARGS=<file|area|folder/|--stale>` reads `docs/map/`.
 `make map-check` holds `docs/map/`, the plain-English map of the code, in step with the code (config in `map.config.json`).
 
 - **Ask the owner before `make up`, `make down`, `make up ARGS=--restart` or `make restart-now`, and name the reason.**
@@ -88,7 +88,7 @@ whole repo:
 - **A settled decision is an argument, not an authority.** Parent rules `outcomes-decision-is-argument` (recorded decisions) and `outcomes-stale-decision-protocol` (stale decisions) apply. Cite the entry.
   **NOT MECHANIZED:** a machine cannot tell a rotted premise from a live one without judging the outcome it protected.
 - **Check whether a task is yours before you hand it to the owner.** Grep the routes, `make help` and
-  `docs/map.py` first. **NOT MECHANIZED:** a machine cannot read a sentence to a person and decide whether
+  `docs/map/` first. **NOT MECHANIZED:** a machine cannot read a sentence to a person and decide whether
   this repo can already do it.
 - **No history date in repo prose.** D308 (no dates in repo prose) allows a deadline date. Parent rule `speak-rewrite-superseded-in-place` (superseded text) applies.
   Old dates go when their file is next rewritten, never in a sweep. Old records are deleted, not archived.
@@ -161,9 +161,9 @@ and shiv-stylisms `reports-blockquote-no-fence` (report shape). No task restatem
 - `docs/map/` is the plain-English map of the code: one file per area, one line per code file, a trace page per
   screen. Read it before you answer how code works. `make map-check` holds it in sync with the code; the
   `plain-english-map` skill says how to change it. `map.config.json` holds its repository settings.
-- `docs/map.py` is the repo as data: built, TBD, and the decisions that govern each file. Read it through `make map`,
-  never whole (parent rule `tokens-never-load-whole-doc`, read in sections). The `map data` row of `make docs-audit` checks its claims, never which files it lists.
-- Build order is `SHIPPED` and `OPEN` (D80, a section with no reader). `n` is a stable id.
+- A decisions line under a map line names the decisions that govern the file, and `scripts/decision-context.py` reads it. `make map ARGS=<path>` prints a file's map line
+  (parent rule `tokens-never-load-whole-doc`, read in sections). `make map-fix` adds the ids a file's comments cite.
+- Build order is `docs/gates/ORDER.json`'s `steps.shipped` and `steps.open` (D80, a section with no reader). `n` is a stable id.
 - `docs/agent-traps.md` holds the tool and test traps that produced a false green or a lost tree. Read it before a mutation run or a worktree recovery.
 - `docs/decisions/` holds settled decisions, one file each (parent rule `git-record-own-file-per-kind`, own file per record). It is never `@`-loaded (D60, the @-loaded docs are dense).
   `scripts/decision-context.py` names the governing ones.

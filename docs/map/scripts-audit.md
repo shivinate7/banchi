@@ -15,7 +15,7 @@ The checks behind `make docs-audit`, one module for each row group, with each ro
   - Decisions: `D17`, `D80`, `D123`, `D141`
 - `scripts/docs_audit/dispatch.py` — The row that reconciles every defined check with the ones `rows.audit` runs, the subject-count row and the coupling question.
   - Decisions: `D18`, `D16`
-- `scripts/docs_audit/env_map.py` — The rows over environment variables, hatches, the subagent override, the map data and map sections rows, the hook roster, Claude hooks and the build-order mirror.
+- `scripts/docs_audit/env_map.py` — The rows over environment variables, hatches, the subagent override, the hook roster, Claude hooks and the build-order mirror.
   - Decisions: `D31`, `D2`, `D280`, `D178`, `D80`, `D171`, `D140`, `D127`, `D135`, `D179`
 - `scripts/docs_audit/games.py` — The rows over game and export vocabulary: the registry against the committed exports, coverage, the matrix superset and the join-key shape.
   - Decisions: `D22`, `D18`, `D23`, `D65`, `D104`, `D16`, `D76`, `D3`, `D12`, `D87`
@@ -72,6 +72,6 @@ The checks behind `make docs-audit`, one module for each row group, with each ro
   - Decisions: `D60`, `D280`, `D007`, `D88`
 - `scripts/docs_audit/stability.py` — The rows that read the causes of screen shake out of the source: the stable scrollbar gutter, the font preloads and metric fallbacks, transitions on layout properties and hover or focus rules that resize a box.
   - Decisions: `D280`, `D313`
-- `scripts/docs_audit/status_reach.py` — The closed-vocabulary, tested-by reach and status-source rows.
+- `scripts/docs_audit/status_reach.py` — The closed-vocabulary and status-source rows, and the paid-read model row.
 - `scripts/docs_audit/strings.py` — The rows over screen strings: mechanism words, the typed interpunct, the offender-list ratchet and views opsec.
   - Decisions: `D196`, `D284`, `D134`, `D210`, `D94`, `D16`, `D218`, `D41`, `D280`, `D24`, `D177`

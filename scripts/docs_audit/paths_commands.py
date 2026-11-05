@@ -670,8 +670,7 @@ def code_files() -> List[Path]:
 
 def comment_units(path: Path, text: str) -> List[Tuple[int, Optional[str]]]:
     """`(line number, comment or docstring text or None)` per line of a code file. `None` is a line
-    with none, which ends a paragraph. Scope by file type: comments, plus Python docstrings, plus
-    every string in `docs/map.py`."""
+    with none, which ends a paragraph. Scope by file type: comments, plus Python docstrings."""
     lines = text.splitlines()
     found: Dict[int, str] = {}
     if path.suffix == ".py":
@@ -681,23 +680,19 @@ def comment_units(path: Path, text: str) -> List[Tuple[int, Optional[str]]]:
                     found[tok.start[0]] = tok.string
         except (tokenize.TokenError, IndentationError, SyntaxError):
             pass
-        # DOCSTRINGS ARE PROSE: every module, class and function docstring, line by line. In
-        # `docs/map.py` (the repo as data) every string constant is prose, so all are read.
+        # DOCSTRINGS ARE PROSE: every module, class and function docstring, line by line.
         try:
             tree = ast.parse(text)
         except SyntaxError:
             tree = None
         if tree is not None:
             spans: List[ast.Constant] = []
-            if path.name == "map.py" and path.parent.name == "docs":
-                spans = [n for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
-            else:
-                for node in ast.walk(tree):
-                    if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-                        body = node.body
-                        if (body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
-                                and isinstance(body[0].value.value, str)):
-                            spans.append(body[0].value)
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                    body = node.body
+                    if (body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
+                            and isinstance(body[0].value.value, str)):
+                        spans.append(body[0].value)
             rows = {
                 row
                 for const in spans

@@ -8,7 +8,7 @@ them. Each is the owner's, and each is settled until the owner reopens it.
 
 **Code cards are a feature, not a second track.** The owner has not used the feature. It stays in the build.
 It is marked DORMANT in one place, the "Code cards (dormant feature)" section of CLAUDE.md.
-D14 (two tracks, one rig) keeps its structural half. `codes/` is its own package. `docs/map.py` keeps `TRACKS`.
+D14 (two tracks, one rig) keeps its structural half. `codes/` is its own package. `docs/tracks.json` keeps the tracks.
 `scripts/decision-context.py` keeps its banner. Repeal of those needs the owner's word.
 D248 (code cards fold into one rules file) folded the code-card rules into the one file.
 

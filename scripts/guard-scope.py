@@ -465,10 +465,6 @@ def subjects_for(entry: dict) -> Tuple[str, ...]:
 # test never runs. The selftest fails when a key here is no longer a derived subject, so a stale
 # entry cannot hide.
 NARROW = {
-    "audit-self-test": {
-        "docs/map.py": ("header", "`_consumer_block` reads its docstring and `_map_sections` its "
-                                  "UPPERCASE names; nothing else of it."),
-    },
     "browser-scope-selftest": {
         "app/src/kit.css": ("exists", "read only through `is_file`."),
         "app/src/kit/index.tsx": ("exists", "read only through `is_file`."),

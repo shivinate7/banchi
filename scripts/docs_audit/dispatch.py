@@ -33,6 +33,11 @@ from .core import (
 # an entry naming a check `ROWS` does name is stale and reported, and an entry naming
 # nothing defined here is dangling and reported. A list that only grows stops being read.
 UNDISPATCHED: Dict[str, str] = {
+    "check_tested_by_reach":
+        "RETIRED, AND KEPT ONLY SO THE SELF-TEST MODULE STILL IMPORTS IT. The row read the "
+        "`tested_by` claims of the old map file, which `docs/map/` does not carry, so it has "
+        "nothing to read and `ROWS` does not name it. It goes when the test-author deletes the "
+        "cases that import it.",
     "corpus_is_empty":
         "A HELPER THAT EMITS ON BEHALF OF A REAL CHECK, not a check of its own. "
         "`check_decision_structure` iterates the entry files in docs/decisions/, and "

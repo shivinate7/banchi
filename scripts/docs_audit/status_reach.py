@@ -24,7 +24,6 @@ from .core import (
     registered_tests,
     rel,
 )
-from .env_map import MAP
 from .reasons import (
     _order_reasons,
     _pricing_presets,
@@ -199,7 +198,7 @@ def reach_findings(
         path = str(component.get("path", ""))
         target = ROOT / path
         if not path or not exists(target):
-            continue  # the map data row already reports a component path that is not there
+            continue  # a component path that is not there is not this reader's finding
         package = path.strip("/").split("/")[0]
         importable = is_importable(target)
 
@@ -209,7 +208,7 @@ def reach_findings(
 
         for where, cited in entries:
             for name in cited:
-                # An id that is not a registered test is already a finding on the map data row
+                # An id that is not a registered test is not this reader's finding
                 # row, and there is no file here to parse. Reporting it twice under two
                 # labels would make one defect read as two.
                 if name not in tests or not exists(tests[name]):
@@ -227,7 +226,7 @@ def reach_findings(
                     )
                     findings.append(
                         Finding(
-                            f"docs/map.py -> {where}",
+                            f"tested_by -> {where}",
                             f"tested_by claims {name}, and {rel(tests[name])} imports no "
                             f"`{package}`.\n"
                             f"  {name} reaches: {', '.join(in_repo) or '(nothing in this repo)'}\n"
@@ -242,7 +241,7 @@ def reach_findings(
                     continue
                 findings.append(
                     Finding(
-                        f"docs/map.py -> {where}",
+                        f"tested_by -> {where}",
                         f"tested_by claims {name}, and {rel(tests[name])} names no path "
                         f"under `{where}`.\n"
                         f"  `{path}` holds no Python, so there is no import to check. The "
@@ -255,53 +254,14 @@ def reach_findings(
 
 
 def check_tested_by_reach(report: Report) -> None:
-    """A `tested_by` claim in docs/map.py, against what the cited test actually imports.
+    """RETIRED, and kept only so `selftest_status_reach` still imports. It checks nothing.
 
-    The `map data` row proves a cited test id is registered in `harness/run.py:TESTS`. It has
-    never proved the test goes anywhere near the module claiming it, and docs/debts/
-    recorded the measurement: of the eleven entries audited by hand on 2026-08-11, ten were
-    true and one was false — `store/queues.py` claimed T3 and T4 while nothing under
-    `harness/` imported `store` at all. D17 says the map is audited exactly as hard as it is
-    trusted, and this was the field where it was trusted and not audited.
-
-    **WHAT A PASSING CLAIM PROVES, EXACTLY**: the cited test's import graph — the test module
-    plus one level into its own `harness/` helpers — contains the top-level package the
-    entry lives in. For a directory holding no Python, that the test names a path under it in
-    a string literal outside its docstrings.
-
-    **WHAT IT DOES NOT PROVE, AND THE DISTANCE IS LARGE**: not that the test imports the
-    *module*, not that it calls anything the module defines, and not that any assertion
-    depends on it. `from pipeline import join` satisfies every entry in `pipeline/` at once.
-    A test could import a package and exercise none of it and this row would stay green.
-    Overclaiming here would be the same defect one level up — an unenforced claim about a
-    checker for unenforced claims — so the label is `tested_by reach` and not `tested_by
-    coverage`, and the summary says "reaches" rather than "tests".
-
-    **Package granularity, not module granularity, and that was measured too.**
-    `harness/tests/t6_geometry.py` imports the bare package (`import geometry`) and then uses
-    `geometry.detect` through it, so a module-granular rule would call both correct
-    `geometry/` entries false. A false positive that blocks is worse than one that prints
-    (D16), and this row blocks — so it asks the question it can answer without judgment.
-
-    **Blocking, because an import either is in the parse or is not.** That is D16's test for
-    a mechanical finding. The residual risk is a test that reaches code without importing
-    it — through a subprocess or a generated file. No harness test does today (`subprocess`
-    appears nowhere under `harness/tests/`), and if one ever does the fix is to drop the
-    claim or to make the test import what it is credited with. It is deliberately not
-    something a `note` can talk its way out of: that is what "unenforced" meant.
+    The row read the `tested_by` claims of the old map file, which `docs/map/` does not carry,
+    so no row calls this. The reader below it (`reach_findings` and the import-graph helpers
+    above) has no caller but its own self-test cases. The test-author deletes those cases;
+    this function and those helpers go in the same change.
     """
-    if not exists(MAP):
-        return  # the map data row above already reports a missing map, loudly
-    components = literals_from_module(MAP).get("COMPONENTS") or []
-    tests = {name: path for name, path in registered_tests()}
-    findings, claims = reach_findings(components, tests)
-    report.add(
-        "tested_by reach",
-        MECHANICAL,
-        findings,
-        f"{claims} claims, every cited test reaches what it names",
-        scanned=claims,
-    )
+    return
 
 
 # ----------------------------------------------------------- status.py's declared sources

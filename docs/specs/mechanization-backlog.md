@@ -550,7 +550,7 @@ to be able to see. None of these entries has been re-checked against the code si
   citation-density heuristic to tell "long because it re-derives" from "long because it measured a lot",
   and D16 keeps heuristics off a blocking row. The honest alternative is a declaration in the entry's own
   first line.
-- **Before you hand the owner a task, check whether it is yours.** A machine would need to know two things. Does a step need the owner's body or judgment? Does any route, subcommand or `make` target perform the named action? The capability index is prose: `docs/map.py` says what a module is and not what a person
+- **Before you hand the owner a task, check whether it is yours.** A machine would need to know two things. Does a step need the owner's body or judgment? Does any route, subcommand or `make` target perform the named action? The capability index is prose: `docs/map/` says what a module is and not what a person
   can ask it to do. Nothing worth building.
 - **A compaction preserves the fixture schema facts, every `make` command and the list of modified
   files.** A machine would need to see the summary. A compaction leaves no artifact in the tree and none

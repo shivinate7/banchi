@@ -527,7 +527,7 @@ vanished state until it does.
 - **An overlay owes the keyboard three things**: focus lands inside it, Tab stays inside it,
   and focus returns to the control that opened it. `InventoryOverlay.tsx` does this for the
   inventory screen's four kinds and `runsOverlay.ts` for the two runs overlays. That there
-  are two of them is a debt, written down in `docs/map.py`: it wants to be one kit `Dialog`.
+  are two of them is a debt: it wants to be one kit `Dialog`.
 - **Same-role buttons stacked in one sector share a width** (`D195`):
   the widest sibling's own intrinsic width, left-aligned, never the sector's full width and
   never a hard-coded pixel. `.bn-actions-stack` in `kit.css` is the wrapper form; the capture

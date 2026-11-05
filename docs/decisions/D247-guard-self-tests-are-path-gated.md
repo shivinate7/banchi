@@ -94,8 +94,8 @@ only in prose — "its pre-push sibling". The reader widens any hit under
 `scripts/githooks/` to the whole directory for this reason. It does not trust the one name
 it can see over the two it cannot. No other roster entry needed that widening. If a
 future one does, the same rule applies with no new list. A new guard self-test is not
-scoped until it is added to `ROSTER` by hand. That is the same rule `docs/map.py` already
-applies. A new file is not covered until an entry names it.
+scoped until it is added to `ROSTER` by hand. That is the same rule `docs/map/` already
+applies. A new file is not covered until a line names it.
 
 **THE SAVING, MEASURED ON THIS BRANCH.** `make check` on this machine, in this worktree,
 measured 93.3s with every guard self-test running. The same tree, one trivial follow-up
@@ -124,7 +124,7 @@ Second, a non-spec file under `app/tests/` selects the specs whose import closur
 (`browser-scope.py:build_reverse_map`). One no spec imports still selects every spec.
 Third, `guard-scope.py:NARROW` narrows a derived subject to what is read.
 `exists` is for a subject where only `is_file` reads it. `header` (docstring and UPPERCASE names)
-is for `docs/map.py` under `audit-self-test`. A drop is for `silent-write-selftest`'s `docs-audit.py` command string.
+once served the old map file under `audit-self-test`, and no subject uses it now. A drop is for `silent-write-selftest`'s `docs-audit.py` command string.
 `EXTRA_SUBJECTS` adds what `browser-scope-selftest` reads and the deriver cannot see.
 Fourth, `serve-selftest` and `audit-self-test` skip a Python subject whose AST, docstrings
 stripped, is equal on both sides (`browser-scope.py:ast_equal`). A parse error, a module that

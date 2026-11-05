@@ -40,7 +40,7 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
   - Decisions: `D240`, `D242`, `D18`, `D35`, `D37`, `D55`, `D239`, `D251`
 - `scripts/debts_corpus.py` — The debts corpus, read as one text or as one entry — the same seam decisions_corpus.py builds for docs/decisions/, applied to docs/debts/.
   - Decisions: `D16`, `D18`, `D120`, `D140`, `D149`, `D160`
-- `scripts/decision-context.py` — D17's PreToolUse hook: reads this file and emits one id-and-title line per governing decision as additionalContext, with `make map` for the full text — never permissionDecision, which would auto-approve every Write in the project.
+- `scripts/decision-context.py` — D17's PreToolUse hook: reads the decisions line under a file's map line in `docs/map/` and emits one id-and-title line per governing decision as additionalContext, plus the track from `docs/tracks.json` — never permissionDecision, which would auto-approve every Write in the project.
   - Decisions: `D140`, `D2`, `D3`, `D17`, `D80`
 - `scripts/decisions_corpus.py` — The decision corpus, read as one text or as one entry.
   - Decisions: `D16`, `D18`, `D58`, `D60`, `D277`, `D80`, `D140`, `D160`
@@ -90,6 +90,14 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
   - Decisions: `D16`, `D18`, `D80`, `D160`
 - `scripts/githooks-selftest.sh` — Builds an origin and a clone in a temp directory, points core.hooksPath at the real hook files, and runs the gestures against them: nineteen cases over what is refused, what stays open, the legitimate pull, the escape hatch and a fresh clone.
   - Decisions: `D18`, `D42`, `D303`, `D312`
+- `scripts/githooks/post-checkout` — Provisions a worktree that `git worktree add` just made, by calling `scripts/worktree-guard.sh`; it runs only when the previous HEAD is all zeros, and fails open.
+  - Decisions: `D18`
+- `scripts/githooks/pre-commit` — The commit gate: fixtures read-only, every staged image decoded for a QR, no printed code-card layout, no symlink that leaves the repository, then the docs audit, whose exit code it maps.
+  - Decisions: `D11`, `D14`, `D16`, `D18`, `D24`, `D47`, `D58`, `D70`, `D92`, `D295`, `D303`, `D312`
+- `scripts/githooks/pre-push` — Refuses any push whose remote ref is main, and runs `scripts/revert-audit.py branch` on a branch push so a stale copy of a file main has moved on is refused.
+  - Decisions: `D42`, `D133`
+- `scripts/githooks/reference-transaction` — Refuses any move of `refs/heads/main` from any worktree of this clone, except a move to a commit origin/main already carries.
+  - Decisions: `D18`, `D42`
 - `scripts/guard-opsec.sh` — The PreToolUse opsec twin, with a narrowed shape match: a code stands alone, mixes letters and digits and has no repeated group.
   - Decisions: `D16`, `D24`, `D11`, `D14`
 - `scripts/guard-scope.py` — Does this branch reach what one of the gated self-tests proves?
@@ -138,10 +146,8 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
   - Decisions: `D17`, `D18`
 - `scripts/map-check-selftest.py` — `make map-check-selftest` — proves `scripts/map-check.py` fails closed against stub skills built in a run folder: no skill, a named dir with none, no `map-check.mjs`, no node, and the skill's exit code, with a mutant of the script for each.
   - Decisions: `D18`
-- `scripts/map-fix.py` — `make map-fix` — add the decision ids a file cites to that file's `governed_by` here.
-  - Decisions: `D16`, `D17`, `D18`, `D140`, `D173`
-- `scripts/map-view.py` — `make map` — docs/map.py rendered for a person, in four views: the shape, one package, one module, everything a decision governs, and `--stale`.
-  - Decisions: `D17`, `D18`, `D60`, `D80`
+- `scripts/map-tool.py` — `make map` and `make map-fix` — finds claude-settings' plain-english-map skill through `scripts/map-check.py` and runs its show, stale or fix tool over `docs/map/`.
+  - Decisions: `D17`, `D18`
 - `scripts/match-heldout.py` — The held-out check on the free reader's accept rule, a gate before adoption and not part of `make check`: reads photographs the spike never saw (the store read-only, minus an exclude list, or a manifest), scores each answer against the owner's confirmed identification, and fails on any wrong answer accepted or any absent-truth card accepted.
   - Decisions: `D2`, `D88`
 - `scripts/match-parity.py` — Proves a matcher model file against torch's answer with onnxruntime alone: the pinned size and SHA-`256`, and a cosine of at least `0.9999` on every reference vector through the shipped Pillow and numpy preprocessing.
@@ -254,7 +260,7 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
   - Decisions: `D140`, `D58`, `D16`, `D18`, `D60`, `D277`, `D80`, `D160`
 - `scripts/split-gates.py` — Performed the split of docs/GATES.md into docs/gates/, and proves it lost nothing.
   - Decisions: `D16`, `D18`, `D80`, `D160`
-- `scripts/status.py` — `make status`. Holds no fact about the project: the step and the gate come from this file, the T1 score from harness/results/, the branch from git, the health line from docs-audit.py's `--json`.
+- `scripts/status.py` — `make status`. Holds no fact about the project: the steps come from `docs/gates/`, the T1 score from harness/results/, the branch from git, the health line from docs-audit.py's `--json`.
   - Decisions: `D16`, `D158`, `D43`, `D127`, `D138`, `D176`, `D18`, `D17`, `D42`, `D80`, `D86`, `D88`, `D179`
 - `scripts/ste/ste_lint.py` — The STE prose check's linter, VENDORED verbatim from $HOME/.claude/lint/ste_lint.py (MIT, LICENSE-ste_lint beside it) — a COPY, never a symlink (D47): a fresh clone, a CI runner and this repo's own git history all lack $HOME/.claude, so a gate here cannot point at a path outside its own tree.
   - Decisions: `D60`, `D47`, `D18`

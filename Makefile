@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: map-check map-check-selftest help status restart-now map explain harness harness-1 harness-2 harness-3 harness-part check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest rosterholdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest tests-for tests-for-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint pytypes typecheck unit venv launch-config worktree-setup worktree-provision-selftest worktree-create-selftest session-teardown-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent backup backup-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
+.PHONY: map-check map-check-selftest help status restart-now map explain harness harness-1 harness-2 harness-3 harness-part check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest rosterholdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest tests-for tests-for-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint pytypes typecheck unit venv launch-config worktree-setup worktree-provision-selftest worktree-create-selftest session-teardown-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent backup backup-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -286,11 +286,12 @@ hooks:
 status:
 	@python3 scripts/status.py
 
-# The map, rendered. ARGS=<package|path|D<n>|--stale|--decisions>, and ARGS="D<n> --full" prints that
-# entry verbatim. Stdlib only and no project import, same as `status` — see the module
-# docstring for why the raw file could not be the only way to read it.
+# The map, rendered, by claude-settings' `plain-english-map` skill (`scripts/map-tool.py` finds it through
+# `scripts/map-check.py`'s finder). ARGS=<file path|area|folder/> prints that part of docs/map/ with its
+# decisions line; ARGS=--stale lists the map lines whose file changed after the line was written. Reads
+# only, and gates nothing, so D18 does not reach it. Needs node. A decision's text is docs/decisions/.
 map:
-	@python3 scripts/map-view.py $(ARGS)
+	@python3 scripts/map-tool.py show $(ARGS)
 
 # THE COMPOSITION OF `check` BELOW, AS DATA WITH A READER. The recipe is eleven lines of
 # `$(MAKE)`, and everything a session needs to know about them — which are on the commit path,
@@ -354,30 +355,20 @@ docs-audit:
 	if [ $$status -eq 1 ]; then exit 1; fi
 
 # THE ONE GENERATOR INTO A DOC, AND IT GATES NOTHING (D18, amended 2026-09-17). It previews, and
-# ARGS=--write applies. It adds
-# the decision ids a file cites to that file's `governed_by` in docs/map.py — the answer
-# `make docs-audit`'s `map data` row already computes to decide the commit. It imports that
-# row's own `cited_decisions()` rather than reimplementing it, so the two cannot disagree.
+# ARGS=--write applies. It adds the decision ids a file's comments cite to that file's decisions line in
+# docs/map/ — the answer `make map-check`'s MAP10 already computes to decide the commit. The tool is
+# claude-settings' `map-fix.mjs`, found through `scripts/map-check.py`, so the two cannot disagree.
 #
 # NOT A PREREQUISITE OF ANYTHING, and never wired to a hook. That is the whole of D18: a
-# generator on the commit path regenerates, the audit passes, and the doc now says whatever
-# the code said. Run it when the row refuses you. The row is still what says you are right.
-#
-# ITS SELF-TEST IS NOT IN `make check`, on `catalog-index-selftest`'s precedent. What this
-# writes is verified by a gate that runs on every commit already, so a second reader on the
-# commit path would be proving the same thing one step further from the damage.
+# generator on the commit path regenerates, the check passes, and the doc now says whatever
+# the code said. Run it when MAP10 refuses you. MAP10 is still what says you are right.
 map-fix:
-	@python3 scripts/map-fix.py $(ARGS)
+	@python3 scripts/map-tool.py fix $(ARGS)
 
 # THE TEST PAGE, docs/TESTS.md. Writes, so it is never on the commit path (D18).
 # `make docs-audit`'s `test purposes` row regenerates in memory and compares. ARGS=--write applies.
 tests-page:
 	@python3 scripts/tests_page.py $(ARGS)
-
-# That generator, over a throwaway map it writes and drops. Not in `make check`,
-# on `map-fix`'s own precedent above.
-map-fix-selftest:
-	@python3 scripts/map-fix.py --selftest
 
 # A DELETING GENERATOR, AND IT GATES NOTHING (D18; D-ratchets-become-offender-lists). It deletes
 # the STALE entries from the two shrinking offender lists, scripts/typed-interpunct-allow.json
@@ -396,7 +387,7 @@ offenders-prune:
 	@python3 scripts/offenders-prune.py $(ARGS)
 
 # That pruner, in memory and in a throwaway repo. Not in `make check`, on the
-# same precedent as `map-fix-selftest`.
+# same precedent as `catalog-index-selftest`.
 offenders-prune-selftest:
 	@python3 scripts/offenders-prune.py --selftest
 

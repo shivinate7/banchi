@@ -1071,7 +1071,7 @@ def check_spec_seal(report: Report) -> None:
 
 # `route census` is CUT (test-audit plan Q2, 2026-09-28). It reconciled a hand-typed
 # route/screen count against ROUTES; the counts it watched are deleted from CLAUDE.md,
-# README.md and docs/map.py rather than kept in step.
+# README.md rather than kept in step.
 
 
 def check_positional_references(report: Report, docs: List[Path]) -> None:

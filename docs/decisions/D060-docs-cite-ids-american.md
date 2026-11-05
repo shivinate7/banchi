@@ -36,7 +36,7 @@ Measured at **94 paragraphs over 600 bytes, 77,811 bytes**, across 433 cross-ref
 
 **Cut the paragraph that re-argues an entry it cites.** Keep how a cited rule bears on this entry. Cut the re-derivation of why that rule exists.
 
-**Two limits on cutting one.** A removed citation must leave at least one `D<n>` token wherever `docs/map.py` names the entry in `governed_by`. It must not remove the last mention the audit resolves.
+**Two limits on cutting one.** A removed citation must leave at least one `D<n>` token wherever a decisions line in `docs/map/` names the entry. It must not remove the last mention the audit resolves.
 
 ### The structural invariants
 
