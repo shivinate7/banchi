@@ -37,14 +37,14 @@ from .spelling import check_shell_substitution
 
 
 def audit_runs_without_map_py(ok) -> None:
-    """`make docs-audit` says nothing about docs/map.py once the file is gone.
+    """`make docs-audit` says nothing about the retired map module.
 
-    THE FIXTURE is every tracked file in this repo except docs/map.py, copied outside any git
+    THE FIXTURE is every tracked file in this repo except that module, copied outside any git
     repository, so the audit reads the worktree view, as `make docs-audit` does. The whole audit
     runs, so a row that still reads the file is caught whatever it is named. A crashed audit prints
     a traceback, and the first assert reads for one, so a crash cannot pass as silence. Costs one
     full audit (about 20 s) and a copy of the tracked tree (about 20 MB). Red today: the `map data`
-    and `build order mirror` rows report docs/map.py as missing.
+    and `build order mirror` rows read the retired module with no existence check.
     """
     import os
     import shutil
@@ -53,7 +53,7 @@ def audit_runs_without_map_py(ok) -> None:
 
     from .selftest_paths_commands_2 import _run_folder
 
-    print("\ndocs-audit with docs/map.py absent: the audit completes, and no finding names the file")
+    print("\ndocs-audit with the retired map module absent: the audit completes, and no finding names it")
     with _run_folder() as run_dir:
         tree = run_dir / "tree"
         listed = subprocess.run(
@@ -77,7 +77,7 @@ def audit_runs_without_map_py(ok) -> None:
         )
         out = audit.stdout + audit.stderr
         ok("BANCHI docs audit" in out and "Traceback" not in out,
-           "the audit runs to its report with docs/map.py absent, and prints no traceback", out[-400:])
+           "the audit runs to its report with the retired map module absent, and prints no traceback", out[-400:])
         named = [line for line in out.splitlines() if "docs/map.py" in line]
         ok(not named, "no finding of the audit names docs/map.py", "\n".join(named[:8]))
 

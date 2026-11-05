@@ -246,13 +246,13 @@ def run_checks(script: Path, work: Path, t: Tally) -> None:
 
 
 def make_map_on_fixture(work: Path, t: Tally) -> None:
-    """`make map ARGS=<path>` prints that file's docs/map/ line through the skill's map-show.mjs, with no docs/map.py.
+    """`make map ARGS=<path>` prints that file's docs/map/ line through the skill's map-show.mjs, with no retired map module.
 
     THE FIXTURE is this repo's Makefile and scripts/, a format-4 map.config.json, one docs/map/ page
     and a git index, which map-show reads through `git ls-files`. The skill is the REAL
     plain-english-map skill, found by map-check.py's finder. The first two checks prove it is there,
-    so this case never passes on a stub. Today `make map` runs scripts/map-view.py, which reads
-    docs/map.py, finds none, and exits 1. That is the one red cause.
+    so this case never passes on a stub. A `make map` that still reads the retired module finds none
+    and exits 1, and that is the one red cause this case names.
     """
     import json
     import shutil
@@ -282,7 +282,7 @@ def make_map_on_fixture(work: Path, t: Tally) -> None:
         capture_output=True, text=True, timeout=300,
     )
     t.check(done.returncode == 0,
-            "make map exits 0 for a file with a docs/map/ line, and no docs/map.py",
+            "make map exits 0 for a file with a docs/map/ line, and no retired map module",
             f"rc {done.returncode}: {done.stderr.strip()[:160]}")
     t.check("UNIQ-4411" in done.stdout,
             "make map prints that file's docs/map/ line, through map-show.mjs",
@@ -326,7 +326,7 @@ def main(argv: list[str]) -> int:
         t = Tally()
         print("map-check.py as it is:")
         run_checks(REAL, run / "real", t)
-        print("make map on a fixture with no docs/map.py:")
+        print("make map on a fixture with no retired map module:")
         make_map_on_fixture(run / "make-map", t)
         print("run_folder sweep:")
         sweep_check(run / "sweep", t)

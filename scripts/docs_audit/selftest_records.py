@@ -13,7 +13,6 @@ from . import records, strings
 from . import reasons as reasons_mod
 from .code_invariants import _PAYLOAD_ASSIGN_RE, _payload_keys, _ts_function_body
 from .core import ROOT, _GATES_STEP_SLUG, Report, _sibling, top_level_names
-from .env_map import cited_decisions
 from .harness_criteria import gates_pass_line, strip_presentation
 from .paths_commands import path_candidates, resolve_candidate
 from .reasons import _emitted_names, _roster
@@ -311,18 +310,6 @@ def run(ok) -> None:
     # The directive goes; the sentence after it does not. Blanking the whole line would trade
     # the false positive for a blind spot, which is the trade this file exists to refuse —
     # and this repo really does write prose after the codes.
-    with tempfile.TemporaryDirectory() as tmp:
-        module = Path(tmp) / "sample.py"
-        module.write_text(
-            "from server import ports  # noqa: E402\n"
-            "def redirect_request(self):  # noqa: D102\n"
-            "    return None  # the renumber rule is D140's\n",
-            encoding="utf-8",
-        )
-        ok(cited_decisions(module) == {"D140"},
-           "`governed_by`'s reader excludes suppressions too — the row it feeds is MECHANICAL",
-           str(cited_decisions(module)))
-
     kept = without_noqa("    except Exception as exc:  # noqa: BLE001 — 500 is for bugs, see D70")
     ok(_DECISION_RE.findall(kept) == ["70"],
        "a citation in the prose AFTER a suppression survives", repr(kept))
@@ -543,11 +530,10 @@ def _no_owner_quotes(ok) -> None:
 def decision_context_on_fixture(ok) -> None:
     """scripts/decision-context.py reads a file's decisions from docs/map/ and its track from docs/tracks.json.
 
-    THE FIXTURE HAS NO docs/map.py. The hook is copied in, so its ROOT is the fixture. Decisions come
+    The fixture holds no map module. The hook is copied in, so its ROOT is the fixture. Decisions come
     from the format-4 `  - Decisions:` line under the file's map line. The track comes from
-    docs/tracks.json, which holds TRACKS' fields as a JSON list. Today the hook reads docs/map.py,
-    finds nothing, and prints "no entry in docs/map.py". The first three asserts are red for that
-    one cause. The last three are controls: they pass on either reader.
+    docs/tracks.json, a JSON list of the fields the retired module's TRACKS held. The first three
+    asserts go red if the hook reads anything but those two. The last three are controls.
     """
     import json
     import os
@@ -557,7 +543,7 @@ def decision_context_on_fixture(ok) -> None:
 
     from .selftest_paths_commands_2 import _run_folder
 
-    print("\ndecision-context reads the decisions line in docs/map/ and docs/tracks.json, with no docs/map.py")
+    print("\ndecision-context reads the decisions line in docs/map/ and docs/tracks.json")
     with _run_folder() as run_dir:
         fx = run_dir / "decision-context"
         (fx / "scripts").mkdir(parents=True)

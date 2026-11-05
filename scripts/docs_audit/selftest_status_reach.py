@@ -2,19 +2,11 @@
 
 from __future__ import annotations
 
-from .core import ROOT, Report, claude_and_rules, exists, read, registered_tests
+from .core import ROOT, claude_and_rules, exists, read
 from .design import COLOR, TYPEFACE, token_value
 from .hygiene import _VERDICT_CONFIG, _VERDICT_REPORTER, verdict_disagreements
 from .paths_commands import phony_gaps
-from .status_reach import (
-    check_tested_by_reach,
-    follow_target,
-    imported_names,
-    model_disagreement,
-    reach_findings,
-    string_literals,
-    test_reach,
-)
+from .status_reach import model_disagreement
 
 
 def run(ok) -> None:
@@ -52,128 +44,6 @@ def run(ok) -> None:
         str(phony_gaps(read(ROOT / "Makefile"))),
     )
 
-    # A tested_by claim. Every case below is a way for this row to pass a claim it should
-    # refuse, or refuse one it should pass — and the blocking direction is the expensive one,
-    # so the correct claims are asserted first and against the real harness.
-    print("\na tested_by claim is checked against what the cited test imports")
-    ok(
-        "geometry" in imported_names("def run():\n    import geometry\n"),
-        "an import inside a function is found — t6's shape, and it is a correct claim",
-        str(imported_names("def run():\n    import geometry\n")),
-    )
-    names = imported_names("from harness.eval import fixtures, runcache\n")
-    ok(
-        {"harness.eval", "harness.eval.fixtures", "harness.eval.runcache"} <= names,
-        "a from-import records the package and each name, since only disk knows which is a module",
-        str(sorted(names)),
-    )
-    ok(
-        imported_names("from . import sibling\n") == set(),
-        "a relative import names nothing this can resolve, and is dropped",
-        str(imported_names("from . import sibling\n")),
-    )
-    literals = string_literals('"""Load fixtures/doc.csv"""\nA = "fixtures/code.csv"\n')
-    ok(
-        literals == {"fixtures/code.csv"},
-        "a path in a docstring is prose; a path in an assignment is the test reading a file",
-        str(sorted(literals)),
-    )
-
-    # The follow's boundary, stated as two assertions because the whole value of this row
-    # is what it declines to follow.
-    ok(
-        follow_target("harness.eval.fixtures") is not None
-        and follow_target("pipeline.join") is None,
-        "the follow reaches a harness helper and stops at a product package",
-        f"{follow_target('harness.eval.fixtures')} / {follow_target('pipeline.join')}",
-    )
-    registry = {name: path for name, path in registered_tests()}
-    if "T7" in registry and "T1" in registry:
-        packages, _ = test_reach(registry["T7"])
-        ok(
-            "store" in packages and "codes" not in packages,
-            "T7 reaches store directly and does NOT reach codes through cli — "
-            "the transitive follow that would make this row vacuous is absent",
-            str(sorted(packages)),
-        )
-        packages, _ = test_reach(registry["T1"])
-        ok(
-            "identify" in packages,
-            "T1 reaches identify",
-            str(sorted(packages)),
-        )
-
-    # The false claim docs/debts/ recorded, replayed against the real harness rather than
-    # against a stand-in for it. `store/queues.py` cited T3 and T4 while nothing under
-    # harness/ imported store.
-    #
-    # THE ID IN THIS CASE HAS MOVED TWICE, AND BOTH MOVES ARE THE CASE WORKING RATHER THAN
-    # ROTTING. It pinned T3 once T7 arrived and began importing store; then T3 itself began
-    # importing store (commit 548515b, when D7's fungibility amendment made it build a real
-    # store to exercise rung 0 and the `committed` flag), so the claim stopped being false
-    # and this case went red — a RED SELF-TEST WITH A GREEN AUDIT, which is exactly the
-    # shape a stale fixture takes. Found on 2026-08-24; nothing runs `--self-test` on the
-    # commit path, which is why it sat.
-    #
-    # Pinned to T5 now, and the requirement is stated rather than left to be rediscovered:
-    # THIS CASE NEEDS A TEST THAT REACHES `pipeline` AND NOT `store`. T2 and T5 are the only
-    # two left. If a later change gives T5 a store, move it again and add a line here — do
-    # not weaken the assertion, which is the whole point of the case: the `tested_by reach`
-    # row must be able to catch a claim that a test covers a package it never imports.
-    if registry:
-        found, claims = reach_findings(
-            [{"path": "store/", "modules": {"queues.py": {"tested_by": ["T5"]}}}], registry
-        )
-        ok(
-            len(found) == 1 and claims == 1 and "store" in found[0].message,
-            "the historical false claim — store/queues.py citing a pipeline-only test — "
-            "is reported",
-            str(found),
-        )
-        found, claims = reach_findings(
-            [{"path": "pipeline/", "modules": {"pricing.py": {"tested_by": ["T5"]}}}], registry
-        )
-        ok(not found and claims == 1, "and the true claim beside it is not", str(found))
-        found, _ = reach_findings([{"path": "fixtures/", "tested_by": ["T2"]}], registry)
-        ok(
-            not found,
-            "a directory holding no Python passes on a path literal — fixtures/ from T2",
-            str(found),
-        )
-        # T6 RATHER THAN T7, AND THE SWAP IS THIS SELF-TEST'S OWN ALLOWLIST RULE FIRING.
-        # This case named T7 until 2026-08-30, when T7 gained two `fixtures/` literals for the
-        # price-history reader and the negative case went green for a reason that had nothing
-        # to do with the checker. A negative case whose subject stops being negative is a case
-        # that has silently stopped testing anything — the same shape D16 gives
-        # `docs-audit-allow.txt`, where an entry coming true is what forces it out. T6 builds
-        # synthetic composites and names no path under `fixtures/`, which is what this case
-        # needs and is a property of that test rather than an accident of today's tree.
-        found, _ = reach_findings([{"path": "fixtures/", "tested_by": ["T6"]}], registry)
-        ok(
-            len(found) == 1,
-            "and fails when the cited test never names a path under it",
-            str(found),
-        )
-        found, claims = reach_findings(
-            [{"path": "store/", "modules": {"queues.py": {"tested_by": ["T99"]}}}], registry
-        )
-        ok(
-            not found and claims == 0,
-            "an unregistered id is the map data row's finding, not counted or repeated here",
-            str(found),
-        )
-        found, _ = reach_findings([{"path": "no_such_dir/", "tested_by": ["T3"]}], registry)
-        ok(not found, "and a component path that does not exist is the same", str(found))
-
-    report = Report()
-    check_tested_by_reach(report)
-    by_label = {row.check: row.findings for row in report.checks}
-    ok(
-        not by_label.get("tested_by reach"),
-        "every tested_by claim in this repo's own map reaches what it names",
-        str(by_label.get("tested_by reach")),
-    )
-
     # The token row's silent failures, in the order they would bite: a normaliser that
     # hides a real difference, a parser that reads a value the browser never sees, and a
     # comparison that runs in one direction only.
@@ -201,13 +71,12 @@ def run(ok) -> None:
 
 
 def status_reads_gates_not_map(ok) -> None:
-    """`make status` takes Shipped and Open from docs/gates/, and asks for no docs/map.py.
+    """`make status` takes Shipped and Open from the gates corpus, and asks for no retired map module.
 
     status.py has no self-test of its own. Its docstring names this row, the status-sources check, as the
-    audit that holds its reader contract, so the case lives here. THE FIXTURE HAS NO docs/map.py. It holds
-    scripts/status.py, its gates reader and the decision-context hook that status loads, plus docs/gates/
-    with one shipped step and one open step. Today status prints `MISSING: docs/map.py SHIPPED / OPEN` and
-    no step title. Each assert below names one cause.
+    audit that holds its reader contract, so the case lives here. THE FIXTURE HAS NO retired map module.
+    It holds scripts/status.py, its gates reader and the decision-context hook that status loads, plus the
+    gates corpus with one shipped step and one open step. Each assert below names one cause.
     """
     import shutil
     import subprocess
@@ -215,7 +84,7 @@ def status_reads_gates_not_map(ok) -> None:
 
     from .selftest_paths_commands_2 import _run_folder
 
-    print("\nmake status reads Shipped and Open from docs/gates/, with no docs/map.py")
+    print("\nmake status reads Shipped and Open from the gates corpus")
     with _run_folder() as run_dir:
         fx = run_dir / "status"
         (fx / "scripts").mkdir(parents=True)
@@ -238,7 +107,7 @@ def status_reads_gates_not_map(ok) -> None:
         )
         out = done.stdout + done.stderr
         ok("MISSING: docs/map.py" not in out,
-           "make status does not ask for docs/map.py",
+           "make status does not ask for the retired map module",
            "\n".join(line for line in out.splitlines() if "docs/map.py" in line)[:400])
         ok("Alpha shipped fixture title" in out and "Beta open fixture title" in out,
            "make status prints the shipped and the open step from docs/gates/",

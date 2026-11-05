@@ -23,8 +23,8 @@ def run(ok) -> None:
     print("\nunscoped walk: the row itself, against the two failure shapes item 1's spec names")
 
     # These three arms call `check_unscoped_walk(report)` ITSELF, with the module globals
-    # it reads patched for the duration — the same save/patch/restore-in-`finally` shape
-    # used above for `MAP`. Driving only `unscoped_walk_sites` (the pure matcher) and the
+    # it reads patched for the duration — the same save/patch/restore-in-`finally` shape.
+    # Driving only `unscoped_walk_sites` (the pure matcher) and the
     # comparison arithmetic inline, as the first draft of this block did, proved nothing
     # about the ROW: `check_unscoped_walk` walks the REAL `_UNSCOPED_WALK_ROOTS` regardless
     # of what a fixture computes, so a mutation that broke the row's own comparison loops
