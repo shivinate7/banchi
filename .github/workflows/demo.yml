@@ -160,7 +160,7 @@ jobs:
       # `npm-ci` is off because the Install step above already ran `npm ci --prefix app`.
       - name: Install the browser
         timeout-minutes: 5
-        uses: shivinate7/claude-settings/actions/playwright-setup@0497265b0cb2c9e99e9de5430d86600fac604296 # main, 2026-11-05
+        uses: shivinate7/claude-settings/actions/playwright-setup@5b306ab1dfe8bd150d83f9d4f2ef83f526392435 # main, 2026-11-05
         with:
           package-dir: app
           npm-ci: 'false'

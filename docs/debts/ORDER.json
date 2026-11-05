@@ -83,7 +83,6 @@
     "116-past-cap-tick-ignores-source.md",
     "117-markdown-r-key-no-test.md",
     "118-commit-hook-skips-map-check.md",
-    "119-stale-cache-fault-looks-like-id.md",
-    "120-json-map-lines-wait-map7.md"
+    "119-stale-cache-fault-looks-like-id.md"
   ]
 }

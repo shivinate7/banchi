@@ -16,9 +16,12 @@ The app's build, dev-server and test-runner setup.
   - Decisions: `D27`, `D13`, `D16`, `D18`, `D271`, `D91`, `D132`, `D142`
 - `app/index.html` — The single page: the root element that `main.tsx` mounts into, the Banchi title, the SVG favicon and a link to `src/fonts.css`, where the three Banchi faces come from this checkout.
   - Decisions: `D5`, `D13`, `D94`, `D124`
+- `app/package-lock.json` — The locked dependency tree of the app, written by npm.
+- `app/package.json` — The app's npm manifest: its dependencies and the scripts the Makefile runs.
 - `app/playwright.config.ts` — How `make design-check` runs the spec, including the Vite it starts for itself. reuseExistingServer stays ON, and `globalSetup` (checkoutIdentity.ts) refuses the run unless the server names this checkout.
   - Decisions: `D261`, `D16`, `D128`, `D5`
 - `app/playwright.unit.config.ts` — The unit tier: the same runner as playwright.config.ts with no browser, no dev server and no globalSetup, over `tests/unit/*.unit.ts`.
   - Decisions: `D18`
+- `app/tsconfig.json` — The TypeScript compiler settings for the app.
 - `app/vite.config.ts` — The dev server, strictPort — a busy port fails loudly rather than serving on `5174`, where CLAUDE.md, the Makefile and scripts/views.txt would all three be wrong.
   - Decisions: `D43`, `D13`, `D261`
