@@ -82,6 +82,90 @@ def audit_runs_without_map_py(ok) -> None:
         ok(not named, "no finding of the audit names docs/map.py", "\n".join(named[:8]))
 
 
+def hook_roster_sees_a_deleted_map_line(ok) -> None:
+    """The hook roster row turns red when a commit-path hook loses its map line.
+
+    THE FIXTURE is the real hook directory and the real map pages, copied. The control is the copy as
+    it stands, which must pass. The case deletes the one map line for a real hook, `pre-push`, from the
+    copy and asserts the row names that hook. Each assert names one cause.
+    """
+    import shutil
+
+    from . import env_map
+    from .core import Report
+    from .selftest_paths_commands_2 import _run_folder, _swapped
+
+    print("\nthe hook roster row turns red when a commit-path hook loses its map line")
+    with _run_folder() as run_dir:
+        fx = run_dir / "hook-roster"
+        shutil.copytree(ROOT / "scripts" / "githooks", fx / "scripts" / "githooks")
+        shutil.copytree(ROOT / "docs" / "map", fx / "docs" / "map")
+
+        def roster() -> list:
+            report = Report()
+            with _swapped(env_map, ROOT=fx):
+                env_map.check_hook_roster(report)
+            return report.checks[0].findings
+
+        as_copied = roster()
+        page = fx / "docs" / "map" / "scripts.md"
+        lines = page.read_text(encoding="utf-8").splitlines(keepends=True)
+        kept = [line for line in lines if not line.startswith("- `scripts/githooks/pre-push` — ")]
+        ok(len(lines) - len(kept) == 1,
+           "fixture: the copy holds exactly one map line for pre-push, which the case deletes",
+           f"{len(lines) - len(kept)} lines matched")
+        page.write_text("".join(kept), encoding="utf-8")
+        without = roster()
+    ok(not as_copied,
+       "control: the copy as it stands has a map line for every hook",
+       "\n".join(f"{f.where}: {f.message[:120]}" for f in as_copied[:4]))
+    ok(any("scripts/githooks/pre-push" in f.where for f in without),
+       "deleting the pre-push map line is a finding that names pre-push",
+       "\n".join(f.where for f in without[:6]))
+
+
+def build_order_mirror_sees_a_renumbered_step(ok) -> None:
+    """The build order mirror turns red when a step file's number stops matching its manifest id.
+
+    THE FIXTURE is the real gates corpus and the gates reader beside it, copied. The control is the
+    copy as it stands, which must pass. The case renumbers step 24's file (its leading `24.` becomes
+    `25.`) and asserts the row names step 24, which the manifest still lists. Each assert names one cause.
+    """
+    import shutil
+
+    from . import core
+    from .core import Report
+    from .env_map import check_build_order_mirror
+    from .selftest_paths_commands_2 import _run_folder, _swapped
+
+    print("\nthe build order mirror turns red when a step file is renumbered")
+    with _run_folder() as run_dir:
+        fx = run_dir / "build-order"
+        shutil.copytree(ROOT / "docs" / "gates", fx / "docs" / "gates")
+        (fx / "scripts").mkdir()
+        shutil.copy(ROOT / "scripts" / "gates_corpus.py", fx / "scripts" / "gates_corpus.py")
+
+        def mirror() -> list:
+            report = Report()
+            with _swapped(core, ROOT=fx):
+                check_build_order_mirror(report)
+            return report.checks[0].findings
+
+        as_copied = mirror()
+        step = next((fx / "docs" / "gates" / "steps").glob("step024-*.md"))
+        text = step.read_text(encoding="utf-8")
+        renumbered = text.replace("24. ", "25. ", 1)
+        ok(renumbered != text, "fixture: step 24's file opens with its number, which the case changes")
+        step.write_text(renumbered, encoding="utf-8")
+        after = mirror()
+    ok(not as_copied,
+       "control: the copy as it stands has the same step ids in the manifest and the corpus",
+       "\n".join(f"{f.where}: {f.message[:120]}" for f in as_copied[:4]))
+    ok(any("step 24" in f.message for f in after),
+       "renumbering step 24's file is a finding that names step 24",
+       "\n".join(f"{f.where}: {f.message[:120]}" for f in after[:6]))
+
+
 def run(ok) -> None:
     report = Report()
     check_identifier_spelling(report)
@@ -390,5 +474,7 @@ def run(ok) -> None:
     # pre-commit hook prints and allows. A caller that grew a stale flag would switch the
     # gate off and look routine doing it.
     audit_runs_without_map_py(ok)
+    hook_roster_sees_a_deleted_map_line(ok)
+    build_order_mirror_sees_a_renumbered_step(ok)
 
     print("\ninvoking this script wrongly is not mistaken for an advisory")
