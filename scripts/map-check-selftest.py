@@ -248,7 +248,7 @@ def run_checks(script: Path, work: Path, t: Tally) -> None:
 def make_map_on_fixture(work: Path, t: Tally) -> None:
     """`make map ARGS=<path>` prints that file's docs/map/ line through the skill's map-show.mjs, with no retired map module.
 
-    THE FIXTURE is this repo's Makefile and scripts/, a format-4 map.config.json, one docs/map/ page
+    THE FIXTURE is this repo's Makefile and scripts/, a map.config.json at the repo's formatVersion, one docs/map/ page
     and a git index, which map-show reads through `git ls-files`. The skill is the REAL
     plain-english-map skill, found by map-check.py's finder. The first two checks prove it is there,
     so this case never passes on a stub. A `make map` that still reads the retired module finds none
