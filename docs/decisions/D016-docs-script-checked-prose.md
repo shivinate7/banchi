@@ -10,7 +10,7 @@
 
    **The roster is not restated here.** `make docs-audit` names every check, and marks each blocking or advisory. That output is the register. A restated count cost more machinery to keep honest than any other check, all of it guarding a fact nothing downstream consumed. So the claim was deleted. D18 records the general rule.
 
-   **A check is named, never numbered.** D17 sets this rule for the map's checks, now the `map data` row and `make map-check`, and it now covers all checks. Positions move. The report's labels are the names.
+   **A check is named, never numbered.** D17 sets this rule for the map's checks, now `make map-check`, and it now covers all checks. Positions move. The report's labels are the names.
 
    **A decision id names one entry.** The old single decisions file carried three entries numbered `D50` at once: the feedback states, the Cmd-arrow nav and the photo URL. Three sessions had each taken the next free number against the same base. Every row stayed green. The cause was the reader's shape. `decision_headings` returned a set, so three headings collapsed to one. The published count was of distinct ids and read 51 over a file holding 53. The citation scan passed when a heading existed, not when exactly one did. A reader that collapses its input cannot report what it collapsed. So the list is now the primitive, and the set is derived from it.
 

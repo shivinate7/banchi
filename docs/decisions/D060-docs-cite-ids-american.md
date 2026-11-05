@@ -84,7 +84,7 @@ The owner ruled Vale retired (L3) and American spelling kept in docs-audit. The 
 
 ### The index is rendered, not hand-typed
 
-**CLAUDE.md's hand-typed index is retired. the file names in `docs/decisions/` replace it.** A hand-typed index drifts as the corpus grows. A rendered view cannot drift, because no second copy of the corpus's headings exists to disagree with it. `scripts/index-decisions.py` no longer writes CLAUDE.md at merge time. It only folds a claimed branch's entry into `docs/decisions/ORDER.json`, the manifest half a rendered view still needs. No `docs-audit` row checks the index now, since there is no second copy left to check.
+**CLAUDE.md's hand-typed index is retired. The file names in `docs/decisions/` replace it.** A hand-typed index drifts as the corpus grows. A rendered view cannot drift, because no second copy of the corpus's headings exists to disagree with it. `scripts/index-decisions.py` no longer writes CLAUDE.md at merge time. It only folds a claimed branch's entry into `docs/decisions/ORDER.json`, the manifest half a rendered view still needs. No `docs-audit` row checks the index now, since there is no second copy left to check.
 
 The conversational-path argument above is unchanged. Only its premise moved: the index is now a command, not a paragraph in this file.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Write the `docs/map/` lines for this repo's tracked json files, with the decisions each one carried.
 
-THE REMEDY FOR THE DEBT `json-map-lines-wait-map7`. The shared map check reads every tracked file whose
+THE REMEDY FOR THE DEBT `DEBT-json-map-lines-wait-map7`. The shared map check reads every tracked file whose
 extension is in `map.config.json`'s `codeExtensions`, so adding `json` there stalls it on the large json
 files outside `mapPaths`. Once the shared check reads only `mapPaths`: add `json` to `codeExtensions`, run
 this script with `--write`, then run `make map-check`.
