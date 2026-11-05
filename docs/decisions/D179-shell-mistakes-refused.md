@@ -26,7 +26,7 @@ Claude Code runs `scripts/guard-shell.py --hook` with every clause (D135). The s
 
 D305 is the other half of that incident. This clause does not duplicate it. D305 teaches the sweep to ask whether anything still owns a process. A loop whose session is gone is offered up, not read as busy. This clause refuses the loop when it is created. D305 finds the one already running. Neither makes the other redundant. A poller started before this hook is D305's. A poller this hook refuses never becomes anybody's to find.
 
-**6 is retired.** It refused `git push <remote> HEAD` from a branch whose tracked upstream is a different, non-default branch. The incident: a coordinator's `git push origin HEAD` created a stray branch on origin and left the real PR branch untouched, because naming a refspec put the push outside git's own `push.default=simple` net. The shared guard's push-stray-branch ask (`plain-push-asks`) takes that push now, so the owner ruled this clause, its hatch, its self-test cases and its mutation arm deleted. The number stays as a stable id. Nothing renumbers.
+**6 is retired.** It refused `git push <remote> HEAD` from a branch whose tracked upstream is a different, non-default branch. The incident: a coordinator's `git push origin HEAD` created a stray branch on origin and left the real PR branch untouched, because naming a refspec put the push outside git's own `push.default=simple` net. The owner ruled this clause, its hatch, its self-test cases and its mutation arm deleted, knowing the cost: the shared push-stray-branch ask (`plain-push-asks`) asks on a bare or `HEAD` stray push, and a `-u` push of the branch's own name is silent there. The number stays as a stable id. Nothing renumbers.
 
 ### The predicate is resolution
 
@@ -36,7 +36,7 @@ The Write|Edit half of clause 2 parses nothing. No shell form can skirt it. The 
 
 ### Fail open on our own bugs, never silently
 
-`reap.py`'s asymmetry holds. A broken guard fails open. An unreadable target is a command this guard has no opinion about. A parse error, a missing `git`, an unreadable payload, or a missing `scripts/shell_parse.py` each exit 0. No case fails closed. None of these five harms is unrecoverable the way a signal to a stranger's process is.
+`reap.py`'s asymmetry holds. A broken guard fails open. A parse error, a missing `git`, an unreadable payload, or a missing `scripts/shell_parse.py` each exit 0. A cwd that does not exist is not one of those. `git` cannot place it, so the checkout root falls back to that path itself, unless the path is too broad to be a root, and then the tree clause says it has no opinion. With a root, the tree clause still refuses a write into another checkout. The wait clause never reads the cwd to find a poll in the command text, so it still refuses one. None of these five harms is unrecoverable the way a signal to a stranger's process is.
 
 A pass the guard could not decide is printed. An operand that resolves to neither a path nor a commit says so. A checkout root it could not resolve says so. A guard that cannot tell "nothing to object to" from "I could not read this" has D171's failure class.
 

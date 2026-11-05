@@ -98,7 +98,7 @@ whole repo:
   `scripts/githooks/pre-commit` enforces it, armed by `make hooks`.
 - **Three shell mistakes are refused before they run** by `scripts/guard-shell.py --hook` on Bash and Write/Edit.
   Claude Code runs every clause.
-  The shared layer's guard owns the checkout, stash and reset refusals, and its push-stray-branch ask (`plain-push-asks`) takes `git push`, so those clauses are gone from this script.
+  The shared layer's guard owns the checkout, stash and reset refusals, so those clauses are gone from this script. The shared push-stray-branch ask (`plain-push-asks`) asks on a bare or `HEAD` stray push; a `-u` push of the branch's own name is silent there.
   Each clause fails open on its own bugs. A tool call that sets a real `BANCHI_*=off` is refused as owner-only, with no switch named, unless it is a recovery lever (`BANCHI_SUITE_LOCK`, `BANCHI_SERVE_MAIN`, `BANCHI_SYNC`). Only the owner's terminal and CI set the rest (D42 (main moves by pull request) and D179 (shell mistakes are refused by resolving)). Each has an owner-held escape hatch, never printed to an agent: `BANCHI_TREE`,
   `BANCHI_WAIT`, `BANCHI_NARRATE`
   (D235, the heartbeat is refused a pipe). The narrate clause names its subjects, a short per-incident roster

@@ -3441,9 +3441,10 @@ COMPONENTS = [
                         "shell form "
                         "skirts it. ONE HATCH PER CLAUSE, so no clause can be disarmed by the "
                         "switch that guards another. Claude Code runs every clause. The shared "
-                        "layer owns the checkout, stash and reset refusals and takes `git push` "
-                        "through its push-stray-branch ask (`plain-push-asks`), so those "
-                        "clauses are gone. Fails OPEN on "
+                        "layer owns the checkout, stash and reset refusals, so those "
+                        "clauses are gone. The `git push` clause is gone too: the shared "
+                        "push-stray-branch ask (`plain-push-asks`) asks on a bare or `HEAD` "
+                        "stray push, and a `-u` push of the branch's own name is silent there. Fails OPEN on "
                         "its own bugs, including a missing `shell_parse.py`, and an operand it "
                         "cannot resolve is REPORTED rather than passed silently.",
                 # D171 is the ruling that a rule read once competes with the work, which is

@@ -11,8 +11,9 @@ are retired on the owner's word, and nothing renumbers.
 
 CLAUDE CODE RUNS EVERY CLAUSE HERE, with no skip. The shared layer's guard
 (`claude-settings/hooks/guard.py`, rule 1, shared-tree) owns the checkout, stash and reset
-refusals, so those three clauses are gone from this script (D135). Its push-stray-branch ask
-(`plain-push-asks`) takes `git push`, so clause 6 is gone too.
+refusals, so those three clauses are gone from this script (D135). Clause 6 (`git push`) is
+gone too: the shared push-stray-branch ask (`plain-push-asks`) asks on a bare or `HEAD` stray
+push; a `-u` push of the branch's own name is silent there.
 
     2. A write outside the checkout this session is standing in
        2026-09-06: an absolute-path `cd` prefix wrote ~1,500 lines into the owner's MAIN
