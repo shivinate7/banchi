@@ -11,7 +11,7 @@ work. So these seven are mechanical. Their numbers are stable ids: 3 (`gh api -f
 CLAUDE CODE RUNS THIS WITH `GUARD_SHELL_SKIP=checkout,stash,reset,push` (`--skip` is an alias), so four clauses are
 skipped there. The shared layer's guard (`claude-settings/hooks/guard.py`, rule 1, shared-tree) owns clauses 1, 7 and 8,
 and the push clause (6) is cut because the shared push-stray-branch ask (`claude-settings/hooks/guard_push_delete.py`,
-record `plain-push-asks`) covers it. Each Claude-side copy is cut on the owner's word. Codex runs no shared guard and
+record `plain-push-asks`) asks on a stray push, where this clause refused; its `-u` push is silent. Each Claude-side copy is cut on the owner's word. Codex runs no shared guard and
 runs all seven.
 
     1. `git checkout <path>` / `git restore <path>` over a file with uncommitted changes

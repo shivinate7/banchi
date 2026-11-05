@@ -3460,7 +3460,7 @@ COMPONENTS = [
                         "skirts it. ONE HATCH PER CLAUSE, so no clause can be disarmed by the "
                         "switch that guards another. Claude Code sets `GUARD_SHELL_SKIP="
                         "checkout,stash,reset,push` (`--skip` is an alias) and skips four clauses: the shared layer owns three, "
-                        "and its `plain-push-asks` ask covers the push clause; "
+                        "and its push-stray-branch ask (`plain-push-asks`) takes push; "
                         "Codex runs all seven. Fails OPEN on "
                         "its own bugs, including a missing `shell_parse.py`, and an operand it "
                         "cannot resolve is REPORTED rather than passed silently.",
@@ -4059,7 +4059,7 @@ COMPONENTS = [
             "docs_audit/env_map.py": {
                 "does": "The rows over environment variables, hatches, the subagent override, the map data, the "
                         "hook roster, Codex hooks and the build-order mirror.",
-                "governed_by": ["D2", "D31", "D80", "D127", "D135", "D140", "D171", "D178", "D280"]},
+                "governed_by": ["D2", "D31", "D80", "D127", "D135", "D140", "D171", "D178", "D179", "D280"]},
             "docs_audit/games.py": {
                 "does": "The rows over game and export vocabulary: the registry against the committed exports, "
                         "coverage, the matrix superset and the join-key shape.",
