@@ -31,5 +31,7 @@
   "modelSeam": {
     "file": "identify/batch.py"
   },
+  "decisionsDir": "docs/decisions/",
+  "decisionIdPattern": "D\\d+",
   "requireAllKeys": false
 }
