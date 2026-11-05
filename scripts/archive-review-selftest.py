@@ -354,6 +354,9 @@ def main() -> int:
 
     print("\narchive-review self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))
+    # Column 0 on purpose: `.github/known-defects.json` counts a kill only on a column-0 FAIL line.
+    if FAIL:
+        print(f"FAIL: {FAIL} of {PASS + FAIL} cases failed")
     return 1 if FAIL else 0
 
 
