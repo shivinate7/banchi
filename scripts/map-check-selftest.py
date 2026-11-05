@@ -7,8 +7,9 @@ copy, and neither does a named dir with a skill folder but no map-check.mjs. nod
 non-zero. The skill's own exit code is map-check.py's exit code.
 Governs: D18
 
-NO NETWORK, NO REAL SKILL. Each skill is a stub `map-check.mjs` that prints a marker and exits
-with `STUB_EXIT`. Every fixture is a folder under this run's run folder (harness/tests/home.py's
+NO NETWORK, NO REAL SKILL, WITH ONE EXCEPTION: `make_map_on_fixture` runs `make map` against the real
+skill, because the case is that `make map` prints through the skill's map-show.mjs. Each other skill
+is a stub `map-check.mjs` that prints a marker and exits with `STUB_EXIT`. Every fixture is a folder under this run's run folder (harness/tests/home.py's
 `run_folder`, test-temp-standard), removed on exit.
 
 THE MUTANTS. Each is map-check.py with one exact text replaced, built in the run folder. The
@@ -244,6 +245,50 @@ def run_checks(script: Path, work: Path, t: Tally) -> None:
     main_checks(script, work, t)
 
 
+def make_map_on_fixture(work: Path, t: Tally) -> None:
+    """`make map ARGS=<path>` prints that file's docs/map/ line through the skill's map-show.mjs, with no docs/map.py.
+
+    THE FIXTURE is this repo's Makefile and scripts/, a format-4 map.config.json, one docs/map/ page
+    and a git index, which map-show reads through `git ls-files`. The skill is the REAL
+    plain-english-map skill, found by map-check.py's finder. The first two checks prove it is there,
+    so this case never passes on a stub. Today `make map` runs scripts/map-view.py, which reads
+    docs/map.py, finds none, and exits 1. That is the one red cause.
+    """
+    import json
+    import shutil
+
+    fx = work
+    fx.mkdir(parents=True)
+    skill = load(REAL).find_skill()
+    t.check(shutil.which("node") is not None,
+            "precondition: node is on PATH, so the skill's map-show.mjs can run")
+    t.check(skill is not None, "precondition: map-check.py's finder finds the real plain-english-map skill")
+    shutil.copy(ROOT / "Makefile", fx / "Makefile")
+    shutil.copytree(ROOT / "scripts", fx / "scripts", ignore=shutil.ignore_patterns("__pycache__"))
+    (fx / "map.config.json").write_text(json.dumps({
+        "formatVersion": 4, "title": "Fixture", "codeExtensions": ["py"], "mapPaths": ["pipeline/"],
+    }) + "\n", encoding="utf-8")
+    (fx / "pipeline").mkdir()
+    (fx / "pipeline" / "variant.py").write_text("VARIANT = 1\n", encoding="utf-8")
+    (fx / "docs" / "map").mkdir(parents=True)
+    (fx / "docs" / "map" / "pipeline.md").write_text(
+        "# Pipeline\n\n## Code files\n\n- `pipeline/variant.py` — Resolves variants UNIQ-4411.\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "init", "-q"], cwd=fx, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=fx, check=True)
+    done = subprocess.run(
+        ["make", "-C", str(fx), "map", "ARGS=pipeline/variant.py"],
+        capture_output=True, text=True, timeout=300,
+    )
+    t.check(done.returncode == 0,
+            "make map exits 0 for a file with a docs/map/ line, and no docs/map.py",
+            f"rc {done.returncode}: {done.stderr.strip()[:160]}")
+    t.check("UNIQ-4411" in done.stdout,
+            "make map prints that file's docs/map/ line, through map-show.mjs",
+            done.stdout.strip()[:160])
+
+
 def sweep_check(work: Path, t: Tally) -> None:
     """run_folder's sweep: an old sibling goes, a new one stays, and its own folder goes on exit."""
     root = work / "sweep-root"
@@ -281,6 +326,8 @@ def main(argv: list[str]) -> int:
         t = Tally()
         print("map-check.py as it is:")
         run_checks(REAL, run / "real", t)
+        print("make map on a fixture with no docs/map.py:")
+        make_map_on_fixture(run / "make-map", t)
         print("run_folder sweep:")
         sweep_check(run / "sweep", t)
         print("mutants, each must turn a check red:")

@@ -36,6 +36,52 @@ from .screens import _ROSTER_RE, _storage_sites, check_storage_keys
 from .spelling import check_shell_substitution
 
 
+def audit_runs_without_map_py(ok) -> None:
+    """`make docs-audit` says nothing about docs/map.py once the file is gone.
+
+    THE FIXTURE is every tracked file in this repo except docs/map.py, copied outside any git
+    repository, so the audit reads the worktree view, as `make docs-audit` does. The whole audit
+    runs, so a row that still reads the file is caught whatever it is named. A crashed audit prints
+    a traceback, and the first assert reads for one, so a crash cannot pass as silence. Costs one
+    full audit (about 20 s) and a copy of the tracked tree (about 20 MB). Red today: the `map data`
+    and `build order mirror` rows report docs/map.py as missing.
+    """
+    import os
+    import shutil
+    import subprocess
+    import sys
+
+    from .selftest_paths_commands_2 import _run_folder
+
+    print("\ndocs-audit with docs/map.py absent: the audit completes, and no finding names the file")
+    with _run_folder() as run_dir:
+        tree = run_dir / "tree"
+        listed = subprocess.run(
+            ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, text=True, check=True,
+        ).stdout
+        for rel in filter(None, listed.split("\0")):
+            if rel == "docs/map.py":
+                continue
+            source = ROOT / rel
+            if not os.path.lexists(source):
+                continue
+            target = tree / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if source.is_symlink():
+                os.symlink(os.readlink(source), target)
+            else:
+                shutil.copy2(source, target)
+        audit = subprocess.run(
+            [sys.executable, "scripts/docs-audit.py"], cwd=tree, capture_output=True,
+            text=True, timeout=900,
+        )
+        out = audit.stdout + audit.stderr
+        ok("BANCHI docs audit" in out and "Traceback" not in out,
+           "the audit runs to its report with docs/map.py absent, and prints no traceback", out[-400:])
+        named = [line for line in out.splitlines() if "docs/map.py" in line]
+        ok(not named, "no finding of the audit names docs/map.py", "\n".join(named[:8]))
+
+
 def run(ok) -> None:
     report = Report()
     check_identifier_spelling(report)
@@ -343,4 +389,6 @@ def run(ok) -> None:
     # Argparse's own exit for a bad flag is 2 — this script's advisory code, which the
     # pre-commit hook prints and allows. A caller that grew a stale flag would switch the
     # gate off and look routine doing it.
+    audit_runs_without_map_py(ok)
+
     print("\ninvoking this script wrongly is not mistaken for an advisory")
