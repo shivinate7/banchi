@@ -49,9 +49,8 @@ def shipping_refusal(checks: Checks, fn, code: str, label: str) -> None:
 
 # ------------------------------------------------------- the shipping lane (D61)
 
-# A relative literal, which is what `scripts/docs-audit.py`'s `tested_by reach` row can
-# actually see — see the note above the price-history fixtures for why a path assembled
-# from segments is invisible to it.
+# A relative literal, so the path is written out where a text search of this file finds it.
+# See the note above the price-history fixtures.
 SHIPPING_FIXTURE = "fixtures/orders-shipping.csv"
 
 SHIPPING_EXPORT = REPO_ROOT / SHIPPING_FIXTURE
