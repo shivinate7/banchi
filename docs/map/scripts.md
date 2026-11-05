@@ -146,6 +146,8 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
   - Decisions: `D17`, `D18`
 - `scripts/map-check-selftest.py` — `make map-check-selftest` — proves `scripts/map-check.py` fails closed against stub skills built in a run folder: no skill, a named dir with none, no `map-check.mjs`, no node, and the skill's exit code, with a mutant of the script for each.
   - Decisions: `D18`
+- `scripts/map-json-lines.py` — The remedy for the json debt: writes a `docs/map/` line for each tracked json file under `mapPaths`, with the decisions it carried, once the shared map check reads only `mapPaths`.
+  - Decisions: `D17`, `D18`
 - `scripts/map-tool.py` — `make map` and `make map-fix` — finds claude-settings' plain-english-map skill through `scripts/map-check.py` and runs its show, stale or fix tool over `docs/map/`.
   - Decisions: `D17`, `D18`
 - `scripts/match-heldout.py` — The held-out check on the free reader's accept rule, a gate before adoption and not part of `make check`: reads photographs the spike never saw (the store read-only, minus an exclude list, or a manifest), scores each answer against the owner's confirmed identification, and fails on any wrong answer accepted or any absent-truth card accepted.

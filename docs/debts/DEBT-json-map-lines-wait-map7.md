@@ -1,0 +1,12 @@
+## DEBT-json-map-lines-wait-map7 — tracked json files have no map line, so the decision hook gives no hint for them
+
+**What.** The 14 json files under `mapPaths` that carried decisions on the old map file have no `docs/map/` line, and neither do 8 other non-code files, so the decision hook names nothing when one is edited.
+
+- **Result:** an edit to one of these files shows no governing decision. 91 file-and-decision pairs are lost: 72 on the json files and 19 on the others.
+- **The 14 json files, with their decisions:** `app/src/kit/match.cases.json` (D5), `app/tests/machine-words-allow.json` (D196, D274, D284), `app/tests/money-face-allow.json` (D221, D284), `app/tests/request-budget-allow.json` (D207), `app/tests/stability-allow.json` (D313), `app/tests/text-shape-allow.json` (D284), `geometry/model/labels.json` and `geometry/model/labels_new.json` (D125), `scripts/error-words-allow.json` (D22, D32, D58, D91, D196, D284), `scripts/machine-words-allow.json` (D196, D284), `scripts/machine-words.json` (D1, D2, D9, D11, D24, D58, D63, D86, D87, D99, D273, D174, D181, D196, D260, D284), `scripts/markdown-spelling-allow.json` (D60, D280), `scripts/no-owner-quotes-allow.json` (32 decisions, D100 to D318) and `scripts/typed-interpunct-allow.json` (D41, D218, D280).
+- **The 8 other files:** `geometry/model/dfine_card_640.onnx` (D125), `scripts/ste/LICENSE-ste_lint` (D60), `app/public/favicon.svg` (D5, D94, D102), `app/public/manifest.webmanifest` (D94, D102, D108), `app/public/icon-touch-1024.png` (D94, D102), and `app/public/icon-192.png`, `app/public/icon-512.png`, `app/public/icon-1024.png` (each D94, D102, D108). Their extensions are not worth adding to `codeExtensions`, so they stay unmapped.
+- **Cause:** the shared map check's MAP7 reads every tracked file whose extension is in `codeExtensions`, not only the files under `mapPaths`. With `json` added it also reads the 600 tracked json files elsewhere, and stalls on `demo-assets/mirror/bundle/chunk-0.json`, a single line of tens of megabytes.
+- **Not fixed because** the fix is in claude-settings, not here. It is the roadmap step `map7-scope-mappaths`.
+- **Closes when** that step lands. Then add `json` to `codeExtensions` in `map.config.json`, run `python3 scripts/map-json-lines.py --write`, and run `make map-check`. The script writes a line for each of the 28 json files under `mapPaths` and a decisions line for the 14 above.
+
+**Outcome at risk.** An agent edits a json list that a settled decision governs, and is shown none of it.
