@@ -26,8 +26,10 @@ The Playwright specs and unit tests of the app, and the helpers they share.
   - Decisions: `D213`
 - `app/tests/confirm-identity.spec.ts` — The confirm press `identity-follows-sku.md` §`8.1` adds beside `ListingCorrection`'s existing correction — `correct-answer.spec.ts`'s own sibling and its own minimal boot, on a HELD card fixture (`identity_source: 'read'`, `read_disputes: true`, a `Rell, Noxus` read under a `Rell, Magnetic` SKU, echoing §`5.5`'s own worked example).
   - Decisions: `D118`, `D252`, `D269`, `D28`
+- `app/tests/copy-casing-allow.json` — The pending list of casing findings, route to finding to lane. It starts empty and only shrinks.
 - `app/tests/copy-checks.spec.ts` — ONE sweep, TWO copy checks over every nav route and the Fulfiller's: voice (no I, my, me or mine on screen) and casing (Title Case on labels and headings), the two DESIGN.md copy rules.
   - Decisions: `D196`, `D284`, `D173`
+- `app/tests/copy-voice-allow.json` — The pending list of first-person strings, route to finding to lane. It starts empty and only shrinks.
 - `app/tests/copyRules.ts` — The word rules the copy checks read: which words are first person, which short words Title Case keeps lower, and which text is exempt.
   - Decisions: `D173`
 - `app/tests/copySource.ts` — Reads the reason labels and Review questions straight from source, so the voice check covers labels no fixture puts on screen.
@@ -92,10 +94,14 @@ The Playwright specs and unit tests of the app, and the helpers they share.
   - Decisions: `D33`, `D87`, `D118`, `D174`, `D218`, `D7`
 - `app/tests/locating.spec.ts` — Where a card is, said one way (the locating lane): at `1440`, `820`, `720` and `390` in both themes, `#/inventory?box=N&card=<cid>` opens that card; its place names the box by name and never by number; the ruler's ends are section numbers, `back` sits before `front` (card `1` at the far back).
   - Decisions: `D260`, `D259`, `D310`, `D58`, `D155`, `D218`
+- `app/tests/machine-words-allow.json` — The shrinking pending list `text-checks.spec.ts` reads, route to word or path to lane, with no wildcard.
+  - Decisions: `D196`, `D274`, `D284`
 - `app/tests/machineWords.ts` — `scanMachineWords`, the one measurement `text-checks.spec.ts` runs, self-contained the same way `measureTextShape` is.
   - Decisions: `D196`, `D284`, `D269`
 - `app/tests/match.spec.ts` — `kit/match.cases.json`'s case table, run data-driven, one Playwright test per row: `matchQuery` against every case, pure, no browser.
   - Decisions: `D271`, `D5`
+- `app/tests/money-face-allow.json` — The shrinking pending list `text-checks.spec.ts` reads, route to amount to lane. An entry excuses one figure on one route.
+  - Decisions: `D221`, `D284`
 - `app/tests/money.spec.ts` — `src/money.ts`'s `money()` and `moneyField`, pure, no browser: the cent rounding, and which typed text becomes a price and which is refused.
   - Decisions: `D221`
 - `app/tests/moneyFace.ts` — `scanMoneyFace`, the one measurement `text-checks.spec.ts` runs, self-contained.
@@ -128,6 +134,8 @@ The Playwright specs and unit tests of the app, and the helpers they share.
   - Decisions: `D86`, `D59`, `D278`, `D277`, `D118`, `D218`, `D156`, `D168`, `D273`, `D9`, `D56`, `D180`, `D20`, `D259`, `D301`, `D313`, `D196`, `D269`, `D103`, `D28`, `D8`, `D7`, `D54`, `D115`, `D181`, `D99`, `D33`, `D51`, `D57`, `D58`, `D68`, `D92`, `D117`
 - `app/tests/product-history.spec.ts` — `#/product`'s own hard rule (D227): the market series and the owner's own fills draw as two different SVG shapes, never one line — counted by class name, a `<polyline>` for a market run and a `<path>` for a fill.
   - Decisions: `D278`, `D227`, `D212`, `D219`
+- `app/tests/request-budget-allow.json` — The shrinking list `request-budget.spec.ts` reads, rule and route to measurement. A screen on it is measured and not failed.
+  - Decisions: `D207`
 - `app/tests/request-budget.spec.ts` — The client request budget per screen.
   - Decisions: `D207`
 - `app/tests/revenue-math.spec.ts` — `src/revenueMath.ts`'s `salesOf` and `sum`, pure, no browser: gross is quantity times price, canceled orders and lines closed as not shipping are left out, an unpriced line is never a guessed price, and the result carries no profit field.
@@ -158,6 +166,8 @@ The Playwright specs and unit tests of the app, and the helpers they share.
   - Decisions: `D16`, `D61`, `D63`, `D117`, `D196`, `D218`, `D284`, `D69`
 - `app/tests/slabs.spec.ts` — The Slabs screen with the four slab routes stubbed: the `18` headers in the owner's order, a typed dash in each cell no route fills, the sort by Card Ladder value with a slab that never sold last, the Conf words, no cert and no settings key anywhere on screen, a refusal in words with no Retry for a rate limit (on add.
   - Decisions: `D320`, `D196`, `D218`, `D221`, `D275`, `D313`
+- `app/tests/stability-allow.json` — The shrinking list `stability.spec.ts` reads, case and route to reason. A screen on it is measured and not failed.
+  - Decisions: `D313`
 - `app/tests/stability.spec.ts` — The case table for layout shift.
   - Decisions: `D313`, `D280`, `D296`
 - `app/tests/staggerCheck.ts` — One helper, `expectOneStagger`: every row of a list has an `animation-delay` of min(i, `--bn-stagger-cap`) times `--bn-stagger`, both read from the tokens.
@@ -166,6 +176,8 @@ The Playwright specs and unit tests of the app, and the helpers they share.
   - Decisions: `D207`
 - `app/tests/text-checks.spec.ts` — ONE sweep, THREE checks (D284): every route is opened once through `routeSweep.ts:sweepEveryRoute` and read by money-face (D221, over `moneyFace.ts:scanMoneyFace`), machine-words (D196, over `machineWords.ts:scanMachineWords`, `.bn-view`'s rendered `innerText`, so a closed `<details>` contributes nothing) and text-shape.
   - Decisions: `D18`, `D196`, `D221`, `D269`, `D284`
+- `app/tests/text-shape-allow.json` — The shrinking pending list `text-checks.spec.ts` reads, route to assertion to finding key to lane.
+  - Decisions: `D284`
 - `app/tests/textShape.ts` — `measureTextShape`, the one measurement `text-checks.spec.ts` runs through `page.evaluate` — a self-contained function (Playwright serializes it by `toString()`, so it closes over nothing outside itself).
   - Decisions: `D284`, `D18`, `D269`
 - `app/tests/themes.spec.ts` — The theme button over four themes: it cycles light, dark, Abyssal Bloom and Carnival Midway in that order, names the next one in its title, keeps the choice over a reload and ignores an unknown stored value.

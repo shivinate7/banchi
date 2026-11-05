@@ -12,6 +12,7 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
   - Decisions: `D26`, `D43`, `D88`, `D89`, `D172`
 - `scripts/browser-scope.py` — Does a change reach what a browser draws?
   - Decisions: `D215`, `D141`, `D16`, `D18`, `D136`, `D196`, `D261`, `D275`, `D284`, `D305`
+- `scripts/browser-spec-times.json` — The measured run time of each Playwright spec, which `scripts/browser-scope.py` reads to split the browser shards.
 - `scripts/build-lockup.mjs` — Generates the LOCKUP — app/src/kit/lockupGeometry.ts — by reading docs/specs/logo.md section `13`'s settled table and running docs/specs/logo/sheets/lockup-core.js in a real browser.
   - Decisions: `D18`, `D102`
 - `scripts/build-mark.mjs` — Generates the app's mark — app/src/kit/markGeometry.ts, markPalettes.ts and app/public/favicon.svg — by READING docs/specs/logo/sheets/small-cut.html and evaluating the drawing routine out of it, so there is exactly one implementation of the geometry in this repo.
@@ -34,6 +35,7 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
   - Decisions: `D136`
 - `scripts/cid-selftest.py` — Proves D172's card name and the photograph store filed under it by violating both, against a throwaway store with photographs this script draws — the operator's corpus cannot be re-taken, so pointing a destructive suite at it is the incident rather than the test.
   - Decisions: `D18`, `D26`, `D80`, `D83`, `D88`, `D89`, `D172`, `D183`, `D294`
+- `scripts/commands-internal.json` — The make targets that exist for CI or for another target and are not for a person to run, each with the reason.
 - `scripts/css-var-check.py` — `make css-var-check` — a `var(--x)` with no fallback, where `--x` is defined nowhere, drops the whole declaration silently.
   - Decisions: `D18`, `D173`
 - `scripts/d240-tolerance-fit.py` — RESCUED, INCOMPLETE — the sweep exists, the measurement it takes has never been run.
@@ -80,12 +82,15 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
   - Decisions: `D15`, `D16`, `D23`, `D39`, `D38`, `D90`, `D97`, `D105`, `D123`, `D284`, `D218`, `D60`, `D280`, `D245`, `D248`, `D271`, `D277`, `D304`
 - `scripts/docs-audit.py` — The entry script for D16's layers `1` and `2`: `build_parser` and `main`, with the mechanical checks and the coupling question under `--staged` in the `docs_audit/` modules listed below.
   - Decisions: `D1`, `D2`, `D3`, `D6`, `D7`, `D8`, `D9`, `D10`, `D11`, `D12`, `D16`, `D17`, `D18`, `D22`, `D23`, `D24`, `D26`, `D27`, `D31`, `D33`, `D39`, `D41`, `D43`, `D47`, `D50`, `D51`, `D60`, `D63`, `D65`, `D67`, `D69`, `D70`, `D74`, `D75`, `D76`, `D80`, `D81`, `D83`, `D84`, `D86`, `D87`, `D88`, `D90`, `D92`, `D94`, `D97`, `D101`, `D102`, `D104`, `D110`, `D113`, `D119`, `D122`, `D123`, `D127`, `D132`, `D134`, `D135`, `D136`, `D138`, `D140`, `D141`, `D142`, `D144`, `D149`, `D155`, `D160`, `D161`, `D173`, `D174`, `D177`, `D178`, `D181`, `D182`, `D185`, `D191`, `D192`, `D196`, `D210`, `D213`, `D215`, `D218`, `D245`, `D247`, `D248`, `D277`, `D280`, `D284`, `D305`
+- `scripts/error-words-allow.json` — The shrinking offender list for the error-words row: file to the start of a message to the lane that owes it.
+  - Decisions: `D22`, `D32`, `D58`, `D91`, `D196`, `D284`
 - `scripts/error-words.py` — The refusal half of D196, read at the source.
   - Decisions: `D196`, `D284`
 - `scripts/export-matcher-model.py` — A developer step, run once per model in a throwaway venv that has torch: exports Marqo ecommerce-B's image tower to ONNX and writes the parity reference (torch's own vectors for fixed synthetic images).
   - Decisions: `D2`
 - `scripts/extract_real_facts.py` — Reads a READ-ONLY COPY of the owner's store (never the owner's own checkout) and writes demo-assets/real-facts.json: a typed price per SKU (from prices.json, only for SKUs a vendored fixture also prices, so a mismatch is checkable against the demo's own real arithmetic), a short list of real sale lines per SKU.
   - Decisions: `D18`, `D43`
+- `scripts/fixed-sleep-allow.json` — The browser specs allowed to keep a fixed sleep, each with its count and reason.
 - `scripts/gates_corpus.py` — The gates corpus, read as one text — decisions_corpus.py's twin.
   - Decisions: `D16`, `D18`, `D80`, `D160`
 - `scripts/githooks-selftest.sh` — Builds an origin and a clone in a temp directory, points core.hooksPath at the real hook files, and runs the gestures against them: nineteen cases over what is refused, what stays open, the legitimate pull, the escape hatch and a fresh clone.
@@ -132,6 +137,7 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
   - Decisions: `D18`, `D42`, `D47`, `D138`, `D127`, `D305`
 - `scripts/js-breakpoints.py` — The pure extraction, IMPORT-GRAPH PAIRING and comparison behind `make docs-audit`'s `js breakpoints` row (D123): every `(min|max)-width: NNNpx)` a `.ts`/`.tsx` file under app/src spells inside a media-query string, against only the `@media` widths of the stylesheets THAT FILE ITSELF IMPORTS (direct `.css` imports.
   - Decisions: `D16`, `D18`, `D123`, `D141`, `D173`
+- `scripts/kit-adoption-allow.json` — The shrinking offender list for `scripts/kit-adoption.mjs` (static, file to rule to lane) and `app/tests/scaffold.spec.ts` (runtime, route to assertion to lane).
 - `scripts/kit-adoption.mjs` — `make kit-adoption` — does every screen inherit the page scaffold (D275)?
   - Decisions: `D173`, `D275`, `D311`, `D288`, `D259`, `D18`, `D280`
 - `scripts/lan-check.py` — Answers whether the owner's LAN URL still works, end to end and from this machine: the name resolves and to an address this Mac actually holds, Vite accepts the Host, the capture server answers on the same name, and A REAL WRITE IS ACCEPTED FROM THAT ORIGIN.
@@ -140,24 +146,32 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
   - Decisions: `D261`, `D18`, `D43`
 - `scripts/launchagent.py` — The shared launchd install and remove for a daily job on the owner's Mac, main tree only.
   - Decisions: `D295`
+- `scripts/layout-transition-allow.json` — The layout properties allowed to transition, by file, selector and property, each with its reason.
+- `scripts/machine-words-allow.json` — The shrinking offender list for the no-mechanism-on-screen row, file to word to lane.
+  - Decisions: `D196`, `D284`
+- `scripts/machine-words.json` — The word list for the no-mechanism-on-screen row, and `repoTopDirs`, the repository's top directories. The audit and `app/tests/text-checks.spec.ts` both read it.
+  - Decisions: `D1`, `D2`, `D9`, `D11`, `D24`, `D58`, `D63`, `D86`, `D87`, `D99`, `D273`, `D174`, `D181`, `D196`, `D260`, `D284`
 - `scripts/make-help.py` — `make help` — one line per Makefile target, derived from the comment directly above the target's own rule.
   - Decisions: `D18`, `D60`
 - `scripts/map-check.py` — `make map-check` — finds claude-settings' shared plain-english-map skill and runs its check over `docs/map/` and `map.config.json`, and fails when it finds no skill.
   - Decisions: `D17`, `D18`
 - `scripts/map-check-selftest.py` — `make map-check-selftest` — proves `scripts/map-check.py` fails closed against stub skills built in a run folder: no skill, a named dir with none, no `map-check.mjs`, no node, and the skill's exit code, with a mutant of the script for each.
   - Decisions: `D18`
-- `scripts/map-json-lines.py` — The remedy for the json debt: writes a `docs/map/` line for each tracked json file under `mapPaths`, with the decisions it carried, once the shared map check reads only `mapPaths`.
-  - Decisions: `D17`, `D18`
 - `scripts/map-tool.py` — `make map` and `make map-fix` — finds claude-settings' plain-english-map skill through `scripts/map-check.py` and runs its show, stale or fix tool over `docs/map/`.
   - Decisions: `D17`, `D18`
+- `scripts/markdown-spelling-allow.json` — The shrinking offender list for the identifier-spelling row, markdown half: file to lane, and spelling to the British words that file uses.
+  - Decisions: `D60`, `D280`
 - `scripts/match-heldout.py` — The held-out check on the free reader's accept rule, a gate before adoption and not part of `make check`: reads photographs the spike never saw (the store read-only, minus an exclude list, or a manifest), scores each answer against the owner's confirmed identification, and fails on any wrong answer accepted or any absent-truth card accepted.
   - Decisions: `D2`, `D88`
 - `scripts/match-parity.py` — Proves a matcher model file against torch's answer with onnxruntime alone: the pinned size and SHA-`256`, and a cosine of at least `0.9999` on every reference vector through the shipped Pillow and numpy preprocessing.
   - Decisions: `D2`
 - `scripts/match-selftest.py` — FLT-`06`/`04`'s one forgiving matcher, server side (UX-`173`).
   - Decisions: `D271`, `D166`, `D213`
+- `scripts/motion-literal-allow.json` — The files allowed to carry a raw motion literal. It holds none.
 - `scripts/mutate-guards.py` — A mutation runner over five of this repo's guards (guard-shell.py, silent-write-guard.py, reap.py, primary_sync.py, revert-audit.py), built because the hand-kept arm counts drift — a sentence once claimed sixteen arms over a file that held eighteen, caught by a person rather than a check.
   - Decisions: `D18`, `D42`, `D138`, `D133`, `D158`, `D305`, `D171`, `D173`
+- `scripts/no-owner-quotes-allow.json` — The shrinking offender list for the no-owner-quotes row: file to lane, and marker to one marker per occurrence in `docs/`.
+  - Decisions: `D280`, `D318`, `D100`, `D136`, `D141`, `D287`, `D103`, `D134`, `D145`, `D155`, `D162`, `D164`, `D176`, `D179`, `D213`, `D220`, `D241`, `D242`, `D254`, `D259`, `D260`, `D264`, `D271`, `D272`, `D273`, `D291`, `D293`, `D296`, `D299`, `D300`, `D301`, `D307`
 - `scripts/offenders-prune.py` — `make offenders-prune` — delete the STALE entries from the three shrinking offender lists (`typed-interpunct-allow.json`, `markdown-spelling-allow.json`, `no-owner-quotes-allow.json`), and re-key a listed file that git's rename detection (`git diff -M` from the merge-base with origin/main) says moved.
   - Decisions: `D18`, `D60`, `D218`, `D280`
 - `scripts/only_shrinks.py` — THE ONE only-shrinks helper for every shrinking offender list (D280).
@@ -288,12 +302,16 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
   - Decisions: `D18`, `D173`
 - `scripts/text-density/density.mjs` — `make text-density` — the third piece of `D284`, a REPEATABLE, ON-DEMAND density pass that prints a CUT TABLE, never a gate (D18: it writes one receipt, `.serve/text-density.json`, gitignored).
   - Decisions: `D284`, `D18`, `D43`
+- `scripts/token-literal-allow.json` — The files allowed to carry a raw token literal. It holds none.
 - `scripts/token-literal-check-pin.py` — `python3 scripts/token-literal-check-pin.py --pin` — the ONE thing allowed to write `scripts/token-literal-check.json`, token-literal-check.py's own per-file ratchet ceiling (D18, D280's shape).
   - Decisions: `D18`, `D280`, `D256`
+- `scripts/token-literal-check.json` — The per-file ceiling of the token-literal ratchet, written by `scripts/token-literal-check-pin.py`.
 - `scripts/token-literal-check.py` — `make token-literal-check` — a CSS literal exactly equal to a design token's value, in its own property family: `font-size: 22px` where `--bn-fs-2xl: 22px`, `padding: 8px` where `--bn-2: 8px`. css-var-check's sibling, the opposite direction — that one catches a `var()` pointed at nothing, this one catches a value that should have BEEN a `var()`.
   - Decisions: `D102`, `D18`, `D173`, `D280`, `D256`
 - `scripts/typecheck-hook.py` — PostToolUse hook: runs app/'s own tsc --noEmit, and only after a `.ts` or `.tsx` under app/ is written.
   - Decisions: `D13`, `D17`
+- `scripts/typed-interpunct-allow.json` — The shrinking offender list for the typed-interpunct row: file to lane, and the strings that type a middle dot or bullet.
+  - Decisions: `D41`, `D218`, `D280`
 - `scripts/user-strings.mjs` — The AST half of the `no mechanism on screen` row — walks every `.tsx` under app/src through app/node_modules/typescript (the compiler the app itself builds with, the same choice screen-freshness.mjs makes and for the same reason) and prints one JSON array of every USER-VISIBLE string: JSX text nodes.
   - Decisions: `D134`, `D218`, `D196`, `D280`
 - `scripts/verdict-selftest.py` — PROVES `app/design-check-reporter.ts` STILL WRITES A VERDICT, BY RUNNING IT.

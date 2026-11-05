@@ -251,6 +251,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
   - Decisions: `D259`, `D145`, `D132`, `D142`
 - `app/src/kit/dialog.css` — `Dialog`'s own inner rhythm — the sheet's width, the head padding, the lightbox's `44px` circular Close and its backdrop blur.
   - Decisions: `D5`, `D31`, `D94`
+- `app/src/kit/didyoumean.cases.json` — The case table for the did-you-mean suggester: a query, the names on offer and the expected suggestion.
 - `app/src/kit/facets.ts` — THE FACET COUNTS, one way: given the rows, the facets and the picks, each option's count under the OTHER active filters and the screen's own `keep` (its search, its Hide sold).
   - Decisions: `D270`
 - `app/src/kit/filters.css` — The filter bar's styles. One line at every width: no container query decides the layout any more — the compact trigger is always shown, and its overlay (`.bn-menu.bn-filterbar-popover`, or the kit's own `Sheet` styling) is picked by the `compact` prop.
@@ -269,6 +270,8 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
   - Decisions: `D94`, `D102`
 - `app/src/kit/markPalettes.ts` — Docs/specs/logo.md section `9`'s seven locked marks — prism, bracket, ground and card base per variant, bluesteel the default.
   - Decisions: `D102`, `D94`
+- `app/src/kit/match.cases.json` — The one case table for `kit/match.ts`: query, fields and the expected verdict, one row per rule the matcher states.
+  - Decisions: `D5`
 - `app/src/kit/match.ts` — ONE FORGIVING MATCHER for every search the browser runs: every word in any order; case, accents and punctuation folded; a card number with or without its leading zeros, split by a space, a hyphen or a slash; a box by its name only, never by its number; a SKU by its start.
   - Decisions: `D271`, `D5`
 - `app/src/kit/overlay.tsx` — The kit's overlays: `Sheet`, `Modal`, `Popover` and `ConfirmSheet`, each with one header and one Close, focus kept inside and given back, Escape for the top one only, portalled to <body>.

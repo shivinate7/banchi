@@ -11,5 +11,9 @@ Find the card in the frame; cut the crop-retry bands.
   - Decisions: `D22`, `D1`, `D75`
 - `geometry/detect.py` — Card-boundary detection by tone, and by border when tone refuses, and the shape correction both crop paths share.
   - Decisions: `D1`, `D22`, `D23`, `D75`
+- `geometry/model/labels.json` — Corner labels on the owner's rig photographs, the first batch, with rejected rows dropped at build.
+  - Decisions: `D125`
+- `geometry/model/labels_new.json` — Corner labels on the owner's rig photographs, the last batch.
+  - Decisions: `D125`
 - `geometry/model/rebuild.py` — Rebuild the ONNX: labels to COCO, then the export of a trained D-FINE-N checkpoint.
   - Decisions: `D125`

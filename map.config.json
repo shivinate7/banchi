@@ -10,7 +10,8 @@
     "sh",
     "css",
     "html",
-    "txt"
+    "txt",
+    "json"
   ],
   "mapPaths": [
     "app/",
