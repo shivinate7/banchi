@@ -523,8 +523,8 @@ def top_level_names() -> Set[str]:
 
 
 # D60's row. Reads docs/decisions/ by hard-coded path, so it answers on every run rather
-# than only when that file is staged — the same asymmetry check_map_data and check_pass_criteria
-# already have, and for the same reason: a broken heading there breaks every consumer, not
+# than only when that file is staged — the same asymmetry check_pass_criteria
+# already has, and for the same reason: a broken heading there breaks every consumer, not
 # only the commit that wrote it.
 #
 # `entry budget`, which used to sit beside this row, is CUT (owner ruling, test-audit-
@@ -648,6 +648,17 @@ def gates_text() -> str:
         return ""
 
 
+def gates_steps(list_name: str) -> List[str]:
+    """The manifest's step ids in the `shipped` or `open` list, or [] when the corpus cannot be read."""
+    corpus = _gates_corpus()
+    if corpus is None:
+        return []
+    try:
+        return list(corpus.steps(list_name))
+    except Exception:
+        return []
+
+
 _HAYSTACK: Optional[str] = None
 
 
@@ -672,7 +683,7 @@ def code_haystack() -> str:
 
 
 def literals_from_module(path: Path) -> Dict[str, object]:
-    """Module-level literal assignments, without importing. See docs/map.py."""
+    """Module-level literal assignments, without importing: an audit must not run project code."""
     try:
         tree = ast.parse(read(path))
     except SyntaxError:

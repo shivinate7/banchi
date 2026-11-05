@@ -46,7 +46,7 @@ def run(ok) -> None:
     #
     # Seven arms, each patching its row's own path constant (or, for the table-driven row,
     # one group's site tuple) to a throwaway fixture — the same save/patch/restore-in-
-    # `finally` shape used above for `MAP` — and calling the ROW ITSELF, never the bare
+    # `finally` shape — and calling the ROW ITSELF, never the bare
     # comparison logic, on `unscoped walk`'s own argument: a fixture-only test proves the
     # matcher works and nothing about whether the row still calls it. `code_agreement_arms`
     # counts how many actually ran, and the last line of this section asserts it against

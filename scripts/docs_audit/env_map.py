@@ -1,8 +1,7 @@
-"""Environment variables, hatches, the map data, hooks and build order."""
+"""Environment variables, hatches, the git and Claude hooks, and the build order."""
 
 from __future__ import annotations
 
-import ast
 import json
 import os
 import re
@@ -20,30 +19,22 @@ from .core import (
     Row,
     SELF,
     _GATES_STEP_SLUG,
-    _NUMBER_WORDS,
     _merge_rows,
     _walk,
     child_names,
     code_haystack,
     exists,
+    gates_steps,
     gates_text,
-    literals_from_module,
     markdown_files,
     nested_worktrees,
     python_files,
     read,
-    registered_tests,
     rel,
 )
 from .paths_commands import PROPOSED_SIGIL, marked_proposed
 from .registry_scopes import _tracked_paths
-from .records import (
-    _DECISION_RE,
-    _ENV_RE,
-    decision_files,
-    decision_heading_lines_across,
-    without_noqa,
-)
+from .records import _ENV_RE
 
 # How a hook command names the project root. `:-.` keeps a session that does not set it at cwd.
 PROJECT_DIR_PREFIX = "${CLAUDE_PROJECT_DIR:-.}/"
@@ -51,7 +42,7 @@ PROJECT_DIR_PREFIX = "${CLAUDE_PROJECT_DIR:-.}/"
 # `duplicated measurements` is CUT (test-audit plan Q2, 2026-09-28). It reconciled
 # copies of three hand-taken measurements (cid lookup latency, the store card total,
 # the largest drawer size) scattered across store/, cli/, server/, pipeline/, app/src/,
-# CLAUDE.md and docs/map.py against EACH OTHER, never against a live re-measurement.
+# CLAUDE.md against EACH OTHER, never against a live re-measurement.
 # The scattered copies are left as each site's own local documentation; a full
 # de-duplication across that many product files is a separate, larger pass.
 
@@ -68,7 +59,7 @@ PROJECT_DIR_PREFIX = "${CLAUDE_PROJECT_DIR:-.}/"
 # copy in docs/specs/order-pipeline.md, which now points at the module instead.
 # `transport standing` is CUT (test-audit plan Q2, 2026-09-28). It reconciled which
 # order-transport calls server/order_transport.py's STATUS block marks proven against
-# claims in docs/map.py, docs/specs/order-pipeline.md and CLAUDE.md.
+# claims in docs/specs/order-pipeline.md and CLAUDE.md.
 
 
 def _env_vars(docs: List[Path], allowed: Dict[str, str]) -> Row:
@@ -212,54 +203,6 @@ def _env_names() -> Row:
 # rather than only in git, because the signal this row used to carry — "CLAUDE.md and
 # GATES.md disagree about where the project is" — genuinely is gone, and a later session
 # wondering why nothing checks that should find the answer at the site.
-
-# ----------------------------------------------------------------------- the map data
-
-MAP = ROOT / "docs" / "map.py"
-
-# Files whose bytes are not prose. `cited_decisions` reads every mapped file looking for `D<n>`
-# and a compressed image will eventually contain those three bytes by chance — icon-touch-1024.png
-# "cited" D31 and icon-512.png "cited" D2 on the day they were added.
-BINARY_SUFFIXES = frozenset({
-    ".png", ".jpg", ".jpeg", ".webp", ".heic", ".gif", ".avif", ".pdf",
-    ".ico", ".woff", ".woff2", ".ttf", ".otf", ".zip", ".sqlite", ".onnx",
-})
-
-
-# A PATH INDEX CITED NOTHING, AND THE ONE THERE WAS IS GONE. `PATH_INDEX_FILES` skipped the
-# retired per-file prose pin, whose keys were decision FILENAMES. Its replacement,
-# `scripts/ste-offenders.json`, keyed a decision entry by its tail and folded every decision id
-# in a label (`scripts/ste_measure.py:list_key`, `fold`), so it held no id to skip, and the skip
-# was deleted with its only member (D280). That list is itself CUT now (test-audit plan,
-# 2026-09-27); `scripts/markdown-spelling-allow.json` keys the same way, through the same
-# `list_key`, and needs no skip for the same reason.
-
-
-def cited_decisions(path: Path) -> Set[str]:
-    """Every decision id a file cites, suppressions excluded.
-
-    THE THIRD SITE, and the one docs/debts/ got wrong. That entry judged this reader "not
-    separately broken — it compares against `decision_headings`", and about the CAP it was
-    right: an id it cannot read is one `governed_by` never asks about. About the WIDEN it was
-    wrong in the other direction. This is a `map data` finding, which is MECHANICAL, so the
-    three real `# noqa: D102` / `# noqa: D401` lines in server/ turned into four blocked
-    commits the moment the third digit came into reach — measured, on the first full run
-    after the widen, and the reason `without_noqa` is applied here and not only to the
-    citation scan.
-
-    A BINARY FILE CITES NOTHING, and reading one as text is how it comes to. The map gained
-    entries for `app/public/icon-*.png` on 2026-09-05 and this reader found `D31` in one and
-    `D2` in another — byte sequences inside compressed image data, matched by a regular
-    expression that had no reason to expect anything but source. The finding is MECHANICAL, so
-    it blocked the commit, and the remedy it names is to add a decision id to `governed_by`
-    that the file does not cite and nobody chose. A citation is a thing a person wrote; a file
-    with no text to read has written none.
-    """
-    if path.suffix.lower() in BINARY_SUFFIXES:
-        return set()
-    lines = (without_noqa(line) for line in read(path).splitlines())
-    return {"D" + digits for line in lines for digits in _DECISION_RE.findall(line)}
-
 
 #: The shape of a hatch's VALUE. Every one of them is `<NAME>=off`, printed in the refusal
 #: it lifts, so "set to something" is not the question — "set to off" is.
@@ -617,234 +560,26 @@ def check_subagent_override(report: Report) -> None:
     )
 
 
-def check_map_data(report: Report, allowed: Dict[str, str]) -> None:
-    """docs/map.py is data that other tools read; this is where its claims are checked.
-
-    It checks the data and never the coverage. Which tracked code file has no description is
-    the shared plain-english-map check's question (`make map-check`, over `docs/map/`).
-    What is checked here is what that check cannot see: each `governed_by` names a decision
-    that exists, each `tested_by` names a registered harness test, a listed path exists (a
-    `planned` one does not yet), a module's own `D<n>` citations are all in its
-    `governed_by`, and the `SHIPPED` and `OPEN` rows have unique ids and the right `on`.
-    """
-    findings: List[Finding] = []
-    if not exists(MAP):
-        report.add("map data", MECHANICAL, [Finding("docs/map.py", "does not exist")])
-        return
-
-    data = literals_from_module(MAP)
-    components = data.get("COMPONENTS") or []
-    shipped = data.get("SHIPPED") or []
-    open_steps = data.get("OPEN") or []
-    if not components:
-        report.add("map data", MECHANICAL, [Finding("docs/map.py", "no COMPONENTS list to read")])
-        return
-
-    singles = {i for i, _, _ in decision_heading_lines_across(decision_files(), "D")}
-    test_names = {name for name, _ in registered_tests()}
-    claimed = 0
-
-    def check_decisions(where: str, names: Sequence[str]) -> None:
-        for name in names:
-            if name not in singles:
-                findings.append(Finding(where, f"governed_by cites {name}, which has no heading in docs/decisions/."))
-
-    def check_tests(where: str, names: Sequence[str]) -> None:
-        for name in names:
-            if name not in test_names and name not in allowed:
-                findings.append(
-                    Finding(
-                        where,
-                        f"tested_by cites {name}, which is not registered in "
-                        f"harness/run.py:TESTS.\n"
-                        f"  This field names harness tests and nothing else. A Playwright "
-                        f"spec under app/tests/ is run by `make design-check`, not at turn "
-                        f"end, and belongs in the entry's `note` — see the two spec entries "
-                        f"in docs/map.py, which say so in prose for exactly this reason.",
-                    )
-                )
-
-    for component in components:
-        path = component.get("path", "")
-        status = component.get("status", "")
-        target = ROOT / path
-        claimed += 1
-        where = f"docs/map.py -> {path}"
-
-        if status == "planned":
-            if exists(target):
-                findings.append(
-                    Finding(
-                        where,
-                        f"`{path}` is marked planned but exists now (build-order step "
-                        f"{component.get('step', '?')}). Update the entry to built and "
-                        f"list its modules.",
-                    )
-                )
-        elif not exists(target):
-            findings.append(Finding(where, f"`{path}` is marked {status or 'built'} but does not exist."))
-
-        check_decisions(where, component.get("governed_by") or [])
-        check_tests(where, component.get("tested_by") or [])
-
-        modules = component.get("modules") or {}
-        for name, entry in modules.items():
-            module_path = target / name
-            module_where = f"docs/map.py -> {path}{name}"
-            claimed += 1
-            if not exists(module_path):
-                findings.append(Finding(module_where, f"`{path}{name}` is listed but does not exist."))
-                continue
-            declared = set(entry.get("governed_by") or [])
-            check_decisions(module_where, sorted(declared))
-            check_tests(module_where, entry.get("tested_by") or [])
-            # The map must not know less than the code does.
-            missing = cited_decisions(module_path) - declared - set(component.get("governed_by") or [])
-            if missing:
-                findings.append(
-                    Finding(
-                        module_where,
-                        f"{path}{name} cites {', '.join(sorted(missing))} in its own comments "
-                        f"but the map does not list it under governed_by.",
-                    )
-                )
-
-    # THE `status` FIELD IS GONE AND SO IS THE RULE THAT READ IT. This block enforced
-    # "exactly one build-order step is `next`", which was right while the build order was a
-    # sequence and became the thing forcing a false answer once it was not: step 9 held
-    # `next` for nine days while the work went to pricing, orders and the codes track,
-    # because the rule required SOMETHING to hold it. The list a step is in is its status
-    # now — `SHIPPED` or `OPEN` — and `OPEN` is deliberately unranked (D80).
-    #
-    # What replaces it is the invariant a two-list shape actually has: an id is in exactly
-    # one list, ids are unique, and a shipped step carries the date it landed. Those are the
-    # ways this shape can be wrong, and each is decidable.
-    seen: Dict[int, str] = {}
-    for label, rows in (("SHIPPED", shipped), ("OPEN", open_steps)):
-        for row in rows:
-            number = row.get("n")
-            if number is None:
-                findings.append(Finding("docs/map.py", f"a {label} step carries no `n`: {str(row)[:60]}…"))
-                continue
-            if number in seen:
-                findings.append(Finding(
-                    "docs/map.py",
-                    f"step {number} is in {seen[number]} and in {label}. An id is in exactly "
-                    f"one list — the list IS the status.",
-                ))
-            seen[number] = label
-            if label == "SHIPPED" and not row.get("on"):
-                findings.append(Finding(
-                    "docs/map.py",
-                    f"SHIPPED step {number} carries no `on` date. SHIPPED is ordered by when "
-                    f"the work landed, so a row with no date cannot be placed in it.",
-                ))
-            if label == "OPEN" and row.get("on"):
-                findings.append(Finding(
-                    "docs/map.py",
-                    f"OPEN step {number} carries `on: {row.get('on')}` — a landing date on "
-                    f"something that has not landed. Move it to SHIPPED or drop the field.",
-                ))
-
-    # THE GATE-STATUS RECONCILIATION IS RETIRED. It compared docs/map.py's `GATES` list against
-    # the `### Gate X` headings of the Gate A/B/C run records, and those records were deleted
-    # (the owner's ruling: old records are deleted and history lives in version control).
-    # Nothing is left to reconcile against, so a row over `GATES` would only ever be red.
-
-    # THE STEP-SET RECONCILIATION THAT LIVED HERE MOVED TO `build order mirror` (D80). It
-    # scanned docs/GATES.md for `^\d+\.` across the WHOLE FILE, so any numbered list anywhere
-    # in it joined the step set, and it knew nothing about which list a step was in — it
-    # could not have told a shipped step from an open one, which is now half the claim. The
-    # replacement reads the two headings and reconciles each separately, in both directions.
-
-    report.add("map data", MECHANICAL, findings, f"{claimed} entries match the tree",
-               scanned=claimed)
+_HOOK_LINE = re.compile(r"^- `(scripts/githooks/[^`]+)` — ", re.M)
 
 
-# --------------------------------------------------- the map's sections, and its readers
-
-# `Read by four consumers` in docs/map.py's docstring, and the indented block under it. The
-# word is checked against the number of entries, and every entry that looks like a path is
-# checked to exist — a consumer list is a claim about the tree like any other.
-_CONSUMER_HEAD = re.compile(r"Read by ([a-z]+) consumers", re.I)
-_CONSUMER_ROW = re.compile(r"^ {2}(\S.*?)\s{2,}\S")
-
-# Files that may be a section's reader. Everything tracked under scripts/ plus the audit's
-# own tree walk would be circular here, so this is deliberately the same walk `paths` uses,
-# minus the map itself.
-_SECTION_SKIP = {"docs/map.py"}
-
-
-def _map_sections() -> List[str]:
-    """Top-level literal names in docs/map.py, in file order."""
-    if not exists(MAP):
-        return []
-    names: List[str] = []
-    for node in ast.parse(read(MAP)).body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1:
-            target = node.targets[0]
-            if isinstance(target, ast.Name) and target.id.isupper():
-                names.append(target.id)
-    return names
-
-
-def _consumer_block() -> Tuple[Optional[str], List[str]]:
-    """The docstring's declared consumer count word, and the names in the block under it.
-
-    The block is a two-column layout, so the name is taken by COLUMN rather than by a run
-    of spaces: the longest path in it — `scripts/decision-context.py` — fills its column
-    and is separated from its description by a single space, and one entry is the phrase
-    `you, or an agent`, which has spaces of its own. A separator-based reader got both
-    wrong in opposite directions.
-    """
-    if not exists(MAP):
-        return None, []
-    text = read(MAP)
-    head = _CONSUMER_HEAD.search(text)
-    if head is None:
-        return None, []
-    rows: List[str] = []
-    column: Optional[int] = None
-    for line in text[head.end():].splitlines()[1:]:
-        if not line.strip():
-            if rows:
-                break
-            continue
-        if line.startswith("   "):  # a description wrapping onto the next line
-            continue
-        if not line.startswith("  "):
-            if rows:
-                break
-            continue
-        if column is None:
-            gap = re.search(r"\S\s+(?=\S)", line)
-            if gap is None:
-                continue
-            column = gap.end()
-        rows.append(line[:column].strip())
-    return head.group(1).lower(), rows
-
-
-def _map_component(path: str) -> Optional[Dict[str, object]]:
-    """One entry out of docs/map.py's COMPONENTS, by its `path`."""
-    components = literals_from_module(MAP).get("COMPONENTS")
-    if not isinstance(components, list):
-        return None
-    for entry in components:
-        if isinstance(entry, dict) and entry.get("path") == path:
-            return entry
-    return None
+def _hooks_in_map() -> Set[str]:
+    """The `scripts/githooks/<file>` names that a docs/map/ page has a map line for."""
+    listed: Set[str] = set()
+    for page in sorted((ROOT / "docs" / "map").glob("*.md")):
+        listed.update(name.rsplit("/", 1)[1] for name in _HOOK_LINE.findall(read(page)))
+    return listed
 
 
 def check_hook_roster(report: Report) -> None:
-    """Every file in `scripts/githooks/` has an entry in docs/map.py.
+    """Every file in `scripts/githooks/` has a map line in docs/map/.
 
     THE SHARED MAP CHECK DOES NOT COVER THIS DIRECTORY: a git hook is extensionless by git's
     requirement, and `map.config.json` lists code files by extension. So the hooks are listed
     BY HAND, and a list kept by hand is a list that stops being kept.
 
-    It stopped once. D42 added `reference-transaction` and `pre-push` and wrote both entries;
-    two later hooks landed with no entry. Measured: five hooks on disk, three in the map.
+    It stopped once. D42 added `reference-transaction` and `pre-push` and wrote both lines;
+    two later hooks landed with no line. Measured: five hooks on disk, three in the map.
 
     **This is the narrowest possible reader of that hole**, and deliberately not a widening of
     the extension list to admit extensionless files, which would conscript `views.txt` and a
@@ -870,46 +605,34 @@ def check_hook_roster(report: Report) -> None:
         )
         return
 
-    component = _map_component("scripts/")
-    if component is None:
-        report.add(
-            "hook roster",
-            MECHANICAL,
-            [Finding("docs/map.py", "no COMPONENTS entry has `path: 'scripts/'` to read.")],
-            "",
-        )
-        return
-
-    listed = set((component.get("modules") or {}).keys())
+    listed = _hooks_in_map()
     on_disk = sorted(child_names(hooks))
     findings: List[Finding] = []
     for hook in on_disk:
-        if f"githooks/{hook}" not in listed:
+        if hook not in listed:
             findings.append(
                 Finding(
                     f"scripts/githooks/{hook}",
-                    f"runs on the commit path and has no entry in docs/map.py.\n"
-                    f"  Add `\"githooks/{hook}\"` to the `scripts/` component's `modules`, "
-                    f"with a `does` and its `governed_by`. The shared map check (`make map-check`) cannot "
+                    f"runs on the commit path and has no map line in docs/map/.\n"
+                    f"  Add `- `scripts/githooks/{hook}` — <what it does>` to docs/map/scripts.md, "
+                    f"and a decisions line under it. The shared map check (`make map-check`) cannot "
                     f"see an extensionless file, so this row is the only thing that will.",
                 )
             )
-    for key in sorted(listed):
-        if not key.startswith("githooks/"):
-            continue
-        if key.split("/", 1)[1] not in set(on_disk):
-            findings.append(
-                Finding(
-                    "docs/map.py",
-                    f"`{key}` has an entry but no file. A roster kept by hand goes stale in "
-                    f"both directions; this is the half that describes a hook that has left.",
-                )
+    for hook in sorted(listed - set(on_disk)):
+        findings.append(
+            Finding(
+                "docs/map/scripts.md",
+                f"`scripts/githooks/{hook}` has a map line but no file. A roster kept by hand "
+                f"goes stale in both directions; this is the half that describes a hook that "
+                f"has left.",
             )
+        )
     report.add(
         "hook roster",
         MECHANICAL,
         findings,
-        f"{len(on_disk)} hooks, all in docs/map.py",
+        f"{len(on_disk)} hooks, all with a map line in docs/map/",
         scanned=len(on_disk),
     )
 
@@ -1023,90 +746,11 @@ def check_claude_hooks(report: Report) -> None:
     )
 
 
-def check_map_sections(report: Report) -> None:
-    """Every top-level section of docs/map.py is read by something, and the docstring's
-    consumer list is true.
-
-    **`TRACKS` is why this row exists.** It sat in that file from 2026-08-07 to 2026-08-31
-    with no reader anywhere in the repo and no check over it, and it went wrong twice
-    without anything being able to tell: it said `C1-C7` after the codes decisions file
-    had reached C11, and it said the codes track's delivery automation was gated on Gate B
-    months after that gate passed and the gating system was retired outright. Three weeks
-    wrong, in the file whose entire argument — D17 — is that it is audited exactly as hard
-    as it is trusted.
-
-    **A section with no consumer is worse than a section that is wrong**, which is the part
-    worth stating. Wrong-with-a-reader gets found the first time somebody runs the reader.
-    Wrong-with-no-reader is a claim the repo makes about itself that has no way of ever
-    being contradicted, and it decays silently while looking exactly like the sections that
-    do work. The remedy is the one this repo reaches for everywhere else: give it a job, or
-    delete it (D80). `TRACKS` got a job — `scripts/decision-context.py` routes a `codes/` edit to
-    C decisions by it, and `scripts/status.py` declares it in SOURCES.
-
-    MECHANICAL. Each of the three conditions is decidable on the committed tree, which is
-    D16's test: a name is read or it is not, a count matches or it does not, a path exists
-    or it does not. There is no judgement here for a blocking row to settle by fiat.
-    """
-    findings: List[Finding] = []
-    sections = _map_sections()
-    if not sections:
-        report.add("map sections", MECHANICAL,
-                   [Finding(rel(MAP), "no top-level sections could be read.")])
-        return
-
-    haystack: Dict[str, str] = {}
-    for path in python_files() + list(_walk(ROOT / "scripts", (".mjs", ".sh"))):
-        if rel(path) in _SECTION_SKIP or not exists(path):
-            continue
-        haystack[rel(path)] = read(path)
-
-    readers: Dict[str, List[str]] = {}
-    for name in sections:
-        hits = sorted(where for where, text in haystack.items() if name in text)
-        readers[name] = hits
-        if not hits:
-            findings.append(Finding(
-                f"{rel(MAP)} -> {name}",
-                f"`{name}` is a top-level section of the map that NOTHING reads. Give it a "
-                f"consumer or delete it: a section no code reads cannot be caught being "
-                f"wrong, and `TRACKS` was wrong for three weeks exactly this way (D17, D80).",
-            ))
-
-    word, rows = _consumer_block()
-    if word is None:
-        findings.append(Finding(
-            rel(MAP),
-            "its docstring no longer says `Read by <word> consumers`, so the consumer list "
-            "is reconciled against nothing. Restore the sentence or re-point this check.",
-        ))
-    else:
-        declared = _NUMBER_WORDS.get(word)
-        if declared is None:
-            findings.append(Finding(rel(MAP), f"`Read by {word} consumers` is not a number this check knows."))
-        elif declared != len(rows):
-            findings.append(Finding(
-                rel(MAP),
-                f"the docstring says {word} consumers and lists {len(rows)}: "
-                f"{', '.join(rows) or 'none'}.",
-            ))
-        for row in rows:
-            if "/" in row and not row.endswith("/") and not exists(ROOT / row):
-                findings.append(Finding(
-                    rel(MAP),
-                    f"the docstring names `{row}` as a consumer and no such file exists.",
-                ))
-
-    covered = sum(1 for name in sections if readers[name])
-    report.add("map sections", MECHANICAL, findings,
-               f"{covered} of {len(sections)} sections have a reader, consumer list agrees",
-               scanned=len(sections))
-
-
 # ------------------------------------------------- the build order against its own source
 
-# The numbered lists under `## What shipped` and `## What is open` in docs/GATES.md, which
-# docs/map.py's SHIPPED and OPEN say in their own header that they mirror. Each is bounded
-# at the next `## ` so a numbered list anywhere else in that file cannot join in.
+# The numbered lists under `## What shipped` and `## What is open` in the gates corpus, which
+# `docs/gates/ORDER.json`'s step lists mirror. Each is bounded at the next `## ` so a numbered
+# list anywhere else in the corpus cannot join in.
 # A STEP IS ITS LIST MARKER, AND AN UNCLAIMED ONE CANNOT BE (D80 amended 2026-09-11).
 # Markdown has no ordered-list marker that can hold `merge-time-ids`, so a step whose number is
 # not allocated yet is written with a `0.` marker carrying its slug in backticks, and
@@ -1121,42 +765,34 @@ _GATES_STEP = re.compile(r"^(\d+)\.\s", re.M)
 
 
 def check_build_order_mirror(report: Report) -> None:
-    """docs/map.py's SHIPPED and OPEN ids are docs/GATES.md's two lists, in both directions.
+    """`docs/gates/ORDER.json`'s two step lists are the corpus's own two lists, in both directions.
 
-    The map has claimed to mirror that file since 2026-08-04 and nothing checked it, which is
-    this repo's recurring failure class — two decisions that must agree, only one of which
-    moves — sitting on the sentence that says they agree.
+    The build order is kept twice: the manifest's `steps.shipped` and `steps.open` (which
+    `scripts/status.py` reads) and the numbered lines the step files put under `## What shipped`
+    and `## What is open` in the corpus text. Two places that must agree, only one of which moves
+    when a step file is moved, is this repo's recurring failure class (D80).
 
-    **Ids, and which list they are in. Deliberately not the titles or the prose.** The two
-    files word a step differently on purpose and GATES.md marks one done by striking it
-    through rather than by a field, so reconciling text would fail on files that are both
-    correct. What must be identical is the id set per list, because that is the whole of what
-    `mirrors` promises — and a step landing in one file and not the other, or done in one and
-    open in the other, is the only drift that has happened here.
-
-    **This row is what made culling step 12 a two-file edit instead of a four-file one.**
-    GATES.md used to carry a paragraph explaining that steps were APPENDED rather than
-    inserted because renumbering "would have to land in four files at once" and nothing
-    watched them. One of those files now watches the other three (D80).
+    **Ids, and which list they are in. Deliberately not the titles or the prose.** What must be
+    identical is the id set per list, because the list a step is in IS its status.
     """
     text = gates_text()
-    if not exists(MAP) or not text:
+    if not text:
         report.add("build order mirror", MECHANICAL,
-                   [Finding("docs/", "docs/map.py is missing, or docs/GATES.md's corpus "
-                                     "(docs/gates/) read as empty or unreadable.")])
+                   [Finding("docs/gates/", "the corpus read as empty or unreadable.")])
         return
 
-    data = literals_from_module(MAP)
     findings: List[Finding] = []
     total = 0
-
-    for name, heading in (("SHIPPED", "What shipped"), ("OPEN", "What is open")):
-        mine = {row.get("n") for row in (data.get(name) or [])}
+    for name, heading in (("shipped", "What shipped"), ("open", "What is open")):
+        mine = set()
+        for step_id in gates_steps(name):
+            number = re.match(r"step0*(\d+)", step_id)
+            mine.add(int(number.group(1)) if number else step_id)
         start = re.search(r"^##\s+" + re.escape(heading) + r"\s*$", text, re.M)
         if start is None:
             findings.append(Finding(
-                "docs/GATES.md",
-                f"has no `## {heading}` heading, so docs/map.py's `{name}` is reconciled "
+                "docs/gates/",
+                f"has no `## {heading}` heading, so the manifest's `{name}` list is reconciled "
                 f"against nothing.",
             ))
             continue
@@ -1169,18 +805,18 @@ def check_build_order_mirror(report: Report) -> None:
         total += len(mine)
         for number in sorted(listed - mine, key=str):
             findings.append(Finding(
-                "docs/map.py",
-                f"docs/GATES.md lists step {number} under `{heading}`; the map's `{name}` "
+                "docs/gates/ORDER.json",
+                f"the corpus lists step {number} under `{heading}`; the manifest's `steps.{name}` "
                 f"has no such id.",
             ))
         for number in sorted(mine - listed, key=str):
             findings.append(Finding(
-                "docs/GATES.md",
-                f"the map's `{name}` has step {number}; `## {heading}` does not list it.",
+                "docs/gates/",
+                f"the manifest's `steps.{name}` has step {number}; `## {heading}` does not list it.",
             ))
 
     report.add("build order mirror", MECHANICAL, findings,
-               f"{total} steps, the same ids in both files, in the same two lists",
+               f"{total} steps, the same ids in the manifest and the corpus, in the same two lists",
                scanned=total)
 
 

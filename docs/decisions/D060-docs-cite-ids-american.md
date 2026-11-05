@@ -6,7 +6,7 @@
 
 **The `@`-references are gone.** Rewriting twenty entries moved the four docs from 635,411 to 627,725 bytes. That is about 2,000 tokens. These files are ~85% identifiers, paths, measurements and dates. Only ~15% is rhetorical framing. Dropping the prefix moves the figure to **~7,700 tokens**. The two are not close enough to argue about.
 
-**What replaces the load.** `scripts/decision-context.py` names the governing decisions before any edit under the mapped directories. That covers the edit path. The conversational path (an architecture question with no file open) is covered by the rendered index, `make map ARGS=--decisions`.
+**What replaces the load.** `scripts/decision-context.py` names the governing decisions before any edit under the mapped directories. That covers the edit path. The conversational path (an architecture question with no file open) is covered by the file names in `docs/decisions/`, which carry each title.
 
 **The index is a table of contents, never a substitute for the entry.** `CLAUDE.md` still says to read the entry before proposing an architecture change. That costs a `Read` now, where it cost nothing before. That is the trade. The file is one tool call away rather than already present.
 
@@ -36,7 +36,7 @@ Measured at **94 paragraphs over 600 bytes, 77,811 bytes**, across 433 cross-ref
 
 **Cut the paragraph that re-argues an entry it cites.** Keep how a cited rule bears on this entry. Cut the re-derivation of why that rule exists.
 
-**Two limits on cutting one.** A removed citation must leave at least one `D<n>` token wherever `docs/map.py` names the entry in `governed_by`. It must not remove the last mention the audit resolves.
+**Two limits on cutting one.** A removed citation must leave at least one `D<n>` token wherever a decisions line in `docs/map/` names the entry. It must not remove the last mention the audit resolves.
 
 ### The structural invariants
 
@@ -84,7 +84,7 @@ The owner ruled Vale retired (L3) and American spelling kept in docs-audit. The 
 
 ### The index is rendered, not hand-typed
 
-**CLAUDE.md's hand-typed index is retired. `make map ARGS=--decisions` replaces it.** A hand-typed index drifts as the corpus grows. A rendered view cannot drift, because no second copy of the corpus's headings exists to disagree with it. `scripts/index-decisions.py` no longer writes CLAUDE.md at merge time. It only folds a claimed branch's entry into `docs/decisions/ORDER.json`, the manifest half a rendered view still needs. No `docs-audit` row checks the index now, since there is no second copy left to check.
+**CLAUDE.md's hand-typed index is retired. The file names in `docs/decisions/` replace it.** A hand-typed index drifts as the corpus grows. A rendered view cannot drift, because no second copy of the corpus's headings exists to disagree with it. `scripts/index-decisions.py` no longer writes CLAUDE.md at merge time. It only folds a claimed branch's entry into `docs/decisions/ORDER.json`, the manifest half a rendered view still needs. No `docs-audit` row checks the index now, since there is no second copy left to check.
 
 The conversational-path argument above is unchanged. Only its premise moved: the index is now a command, not a paragraph in this file.
 

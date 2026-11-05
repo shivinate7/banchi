@@ -378,7 +378,7 @@ None are kept. Section 4 holds the invariants. Measure the live store when a num
 
 ## 10. Lanes
 
-File ownership is in `docs/map.py`.
+File ownership is in `docs/map/`.
 
 ## 11. The Move-to-box section choice
 

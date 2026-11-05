@@ -54,7 +54,7 @@ The ruling names two jobs and one value that does both. The fix separates the jo
 
 ### What this does not do
 
-**It does not renumber anything, and it closes no gap.** A deleted drawer's id is spent forever. `docs/map.py`'s culled step 12 follows the same rule for a build-order id. D10 follows it for a card index. A reused identifier revives every reference to the thing that used to wear it. Nothing can detect that, because a stale id still resolves.
+**It does not renumber anything, and it closes no gap.** A deleted drawer's id is spent forever. The culled step 12 follows the same rule for a build-order id. D10 follows it for a card index. A reused identifier revives every reference to the thing that used to wear it. Nothing can detect that, because a stale id still resolves.
 
 **It does not make the id an address.** No route takes one, no screen shows one, and the capture screen still finds a box by name (D20). Adding `/boxes/by-id/<n>` would make the id a second way to address a live box. The owner's ruling says it must not be that.
 

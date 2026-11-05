@@ -13,7 +13,6 @@ from . import records, strings
 from . import reasons as reasons_mod
 from .code_invariants import _PAYLOAD_ASSIGN_RE, _payload_keys, _ts_function_body
 from .core import ROOT, _GATES_STEP_SLUG, Report, _sibling, top_level_names
-from .env_map import cited_decisions
 from .harness_criteria import gates_pass_line, strip_presentation
 from .paths_commands import path_candidates, resolve_candidate
 from .reasons import _emitted_names, _roster
@@ -311,18 +310,6 @@ def run(ok) -> None:
     # The directive goes; the sentence after it does not. Blanking the whole line would trade
     # the false positive for a blind spot, which is the trade this file exists to refuse —
     # and this repo really does write prose after the codes.
-    with tempfile.TemporaryDirectory() as tmp:
-        module = Path(tmp) / "sample.py"
-        module.write_text(
-            "from server import ports  # noqa: E402\n"
-            "def redirect_request(self):  # noqa: D102\n"
-            "    return None  # the renumber rule is D140's\n",
-            encoding="utf-8",
-        )
-        ok(cited_decisions(module) == {"D140"},
-           "`governed_by`'s reader excludes suppressions too — the row it feeds is MECHANICAL",
-           str(cited_decisions(module)))
-
     kept = without_noqa("    except Exception as exc:  # noqa: BLE001 — 500 is for bugs, see D70")
     ok(_DECISION_RE.findall(kept) == ["70"],
        "a citation in the prose AFTER a suppression survives", repr(kept))
@@ -384,6 +371,8 @@ def run(ok) -> None:
         ok(fire() == first, "after --reset it prints again")
         ok(fire(session=None) == first and fire(session=None) == first,
            "with no session id it prints every time")
+
+    decision_context_on_fixture(ok)
 
     print("\nextractor finds real references")
     for line, expected in REAL_PATHS:
@@ -536,3 +525,109 @@ def _no_owner_quotes(ok) -> None:
     printed, after = _prune_no_owner_quotes()
     ok("no owner quotes" in printed and after.get("files") == {},
        "12. offenders-prune deletes a stale entry from the no-owner-quotes list", f"{printed!r} {after}")
+
+
+def decision_context_on_fixture(ok) -> None:
+    """scripts/decision-context.py reads a file's decisions from docs/map/ and its track from docs/tracks.json.
+
+    The fixture holds no map module. The hook is copied in, so its ROOT is the fixture. Decisions come
+    from the format-4 `  - Decisions:` line under the file's map line. The track comes from
+    docs/tracks.json, a JSON list of the fields the retired module's TRACKS held. The first three
+    asserts go red if the hook reads anything but those two. The last three are controls.
+    """
+    import json
+    import os
+    import shutil
+    import subprocess
+    import sys
+
+    from .selftest_paths_commands_2 import _run_folder
+
+    print("\ndecision-context reads the decisions line in docs/map/ and docs/tracks.json")
+    with _run_folder() as run_dir:
+        fx = run_dir / "decision-context"
+        (fx / "scripts").mkdir(parents=True)
+        shutil.copy(ROOT / "scripts" / "decision-context.py", fx / "scripts" / "decision-context.py")
+
+        def put(rel: str, text: str) -> None:
+            target = fx / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text, encoding="utf-8")
+
+        records = [
+            ("D1", "D1-capture-toggle-is-trusted.md", "Capture toggle is trusted", "**The toggle is trusted here.**"),
+            ("D2", "D2-variant-fills-gaps.md", "Variant fills gaps", "**Variant fills gaps and never overrides.**"),
+            ("D3", "D3-unlisted.md", "Unlisted decision", "**No map line names this one.**"),
+        ]
+        for code, name, title, rule in records:
+            put(f"docs/decisions/{name}", f"# {code} — {title}\n\n{rule}\n")
+        put("docs/decisions/ORDER.json", json.dumps({"order": [name for _, name, _, _ in records]}))
+        put(
+            "docs/map/pipeline.md",
+            "# Pipeline\n\n## Code files\n\n"
+            "- `pipeline/variant.py` — Resolves variants.\n"
+            "  - Decisions: `D1`, `D2`\n"
+            "- `pipeline/empty.py` — Names no decision.\n"
+            "- `codes/reader.py` — Reads code cards.\n"
+            "  - Decisions: `D1`\n",
+        )
+        put("docs/tracks.json", json.dumps([
+            {"name": "singles", "owns": "", "decisions": "docs/decisions/", "rules": "CLAUDE.md",
+             "status": "current", "note": "fixture default track"},
+            {"name": "codes", "owns": "codes/", "decisions": "docs/specs/code-cards.md",
+             "rules": "code-card-fork/CLAUDE.md", "status": "shakedown", "note": "fixture codes track"},
+        ]))
+
+        tmp = run_dir / "tmp"
+        tmp.mkdir()
+        env = {**os.environ, "TMPDIR": str(tmp)}
+        hook = fx / "scripts" / "decision-context.py"
+
+        def run_hook(args, stdin_text: str = ""):
+            return subprocess.run(
+                [sys.executable, str(hook), *args], input=stdin_text, capture_output=True,
+                text=True, env=env, timeout=60,
+            )
+
+        variant = fx / "pipeline" / "variant.py"
+        shown = run_hook(["--check", str(variant)])
+        ok(
+            shown.returncode == 0 and "Capture toggle is trusted" in shown.stdout
+            and "Variant fills gaps" in shown.stdout and "Unlisted decision" not in shown.stdout,
+            "--check lists the two decisions the Decisions line of pipeline/variant.py names, and no others",
+            f"rc {shown.returncode}: {shown.stdout.strip()[:240]} {shown.stderr.strip()[:200]}",
+        )
+
+        payload = json.dumps({"session_id": "fixture-a", "tool_input": {"file_path": str(variant)}})
+        fired = run_hook([], payload)
+        try:
+            context = str(json.loads(fired.stdout)["hookSpecificOutput"]["additionalContext"])
+        except (ValueError, KeyError, TypeError):
+            context = ""
+        ok(
+            "Capture toggle is trusted" in context and "Variant fills gaps" in context,
+            "the PreToolUse hook gives the session the decisions named on an edit of pipeline/variant.py",
+            f"rc {fired.returncode}: {fired.stdout.strip()[:240]} {fired.stderr.strip()[:200]}",
+        )
+
+        tracked = run_hook(["--check", str(fx / "codes" / "reader.py")])
+        ok(
+            tracked.returncode == 0 and "TRACK: codes" in tracked.stdout,
+            "--check on codes/reader.py names the codes track, read from docs/tracks.json",
+            f"rc {tracked.returncode}: {tracked.stdout.strip()[:240]}",
+        )
+
+        empty = run_hook(["--check", str(fx / "pipeline" / "empty.py")])
+        ok(
+            empty.returncode == 0 and "Settled decisions" not in empty.stdout,
+            "control: a map line with no Decisions line lists no decisions, and exits 0",
+            f"rc {empty.returncode}: {empty.stdout.strip()[:240]}",
+        )
+        garbled = run_hook([], "{not json")
+        ok(garbled.returncode == 0 and not garbled.stdout.strip(),
+           "control: a hook payload that is not JSON exits 0 and prints nothing",
+           f"rc {garbled.returncode}: {garbled.stderr.strip()[:200]}")
+        outside = run_hook([], json.dumps({"tool_input": {"file_path": "/nowhere/x.py"}}))
+        ok(outside.returncode == 0 and not outside.stdout.strip(),
+           "control: an edit outside the repo exits 0 and prints nothing",
+           f"rc {outside.returncode}: {outside.stdout.strip()[:200]}")

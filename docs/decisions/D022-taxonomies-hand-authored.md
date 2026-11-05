@@ -1,6 +1,6 @@
 # D22 — Taxonomies are hand-authored and audited
 
-`pipeline/games.py` holds one entry per game: the exact `Product Line` cell, the ordered `Rarity` cells, the finish enum, the finish→`Condition` map, and the rarity→finish matrix. It holds pure literals and imports nothing from this repo. So `scripts/docs-audit.py` can read it with `ast` **without running project code**. That is the same rule `docs/map.py` follows, and the audit enforces it on itself.
+`pipeline/games.py` holds one entry per game: the exact `Product Line` cell, the ordered `Rarity` cells, the finish enum, the finish→`Condition` map, and the rarity→finish matrix. It holds pure literals and imports nothing from this repo. So `scripts/docs-audit.py` can read it with `ast` **without running project code**. That is the same rule `scripts/status.py`'s `SOURCES` follows, and the audit enforces it on itself.
 
 **Hand-authored, never generated.** Every field is ARGUMENT in D18's sense. A later session could reasonably disagree with the stack order of the rarities. It could also disagree with which finishes a rarity is allowed to claim. D18's seam list stays empty, and this entry is not a request to open it.
 

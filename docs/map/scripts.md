@@ -5,152 +5,308 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
 ## Code files
 
 - `scripts/archive-review-selftest.py` — Proves cli/archive_review.py against a throwaway store, no network.
+  - Decisions: `D234`, `D167`, `D219`, `D231`, `D238`, `D247`
 - `scripts/audit-history.py` — Replays today's auditor over every historical tree to answer one question: which checks have ever had something to say.
+  - Decisions: `D16`, `D18`
 - `scripts/backup-daily.py` — The one-time copy to iCloud Drive on the owner's Mac, run by hand (first copy of DEBT67; the launchd agent is not installed): `photos/` and `captures/` as files, never overwritten and never deleted in the destination.
+  - Decisions: `D26`, `D43`, `D88`, `D89`, `D172`
 - `scripts/browser-scope.py` — Does a change reach what a browser draws?
+  - Decisions: `D215`, `D141`, `D16`, `D18`, `D136`, `D196`, `D261`, `D275`, `D284`, `D305`
 - `scripts/build-lockup.mjs` — Generates the LOCKUP — app/src/kit/lockupGeometry.ts — by reading docs/specs/logo.md section `13`'s settled table and running docs/specs/logo/sheets/lockup-core.js in a real browser.
+  - Decisions: `D18`, `D102`
 - `scripts/build-mark.mjs` — Generates the app's mark — app/src/kit/markGeometry.ts, markPalettes.ts and app/public/favicon.svg — by READING docs/specs/logo/sheets/small-cut.html and evaluating the drawing routine out of it, so there is exactly one implementation of the geometry in this repo.
+  - Decisions: `D18`, `D102`, `D94`
 - `scripts/capture-gate.py` — Ship gate (b) for the background reader: p50 and p99 of `300` feeder-paced capture requests on a scratch store with the reader off, on in the gaps, and on always.
+  - Decisions: `D2`, `D1`
 - `scripts/cardladder-selftest.py` — Proves `pipeline/cardladder.py` stays inside the owner's bounds for the Card Ladder login, against a fake transport and a fake clock: no network, no real sleep, no secrets file read.
+  - Decisions: `D320`, `D319`
 - `scripts/catalog-image-mirror.py` — Build-order step `9`, piece `3`: derive the image-mirror manifest from the vendored snapshot (no network) and fill it — resumable (a non-empty destination file is skipped without a request) and rate-limited.
+  - Decisions: `D15`
 - `scripts/catalog-index-selftest.py` — Scripts/catalog-index.py and pipeline/catalog.py, proved against a throwaway two-set fixture rather than the real `26` MB snapshot, so it is fast enough for `make check`.
+  - Decisions: `D15`, `D18`
 - `scripts/catalog-index.py` — Build-order step `9`, piece `2`: build vendor/pokemon-tcg-data/catalog.sqlite from the vendored snapshot — cards join to sets BY FILENAME, because printedTotal lives only in sets/en.json.
+  - Decisions: `D15`, `D18`
 - `scripts/catalog-refresh.py` — Build-order step `9`, piece `1` (D15): shallow-clone PokemonTCG/pokemon-tcg-data, diff it against the committed vendor/pokemon-tcg-data/ snapshot, and — unless `--dry-run` — replace it and record the upstream commit SHA in SNAPSHOT.json.
+  - Decisions: `D15`, `D18`
 - `scripts/checks.py` — `make explain` — what `make check` runs, as a CHECKS literal plus its own renderer, one entry per target in the recipe: what it asserts, what toolchain it needs, whether it writes, whether it is on the commit path and why not, whether a finding gates.
+  - Decisions: `D18`, `D7`, `D16`, `D17`, `D23`, `D25`, `D26`, `D36`, `D42`, `D43`, `D47`, `D54`, `D58`, `D60`, `D63`, `D65`, `D67`, `D68`, `D74`, `D76`, `D80`, `D82`, `D83`, `D86`, `D87`, `D88`, `D89`, `D92`, `D104`, `D122`, `D123`, `D127`, `D133`, `D135`, `D137`, `D138`, `D140`, `D141`, `D149`, `D158`, `D160`, `D162`, `D166`, `D167`, `D171`, `D172`, `D173`, `D176`, `D178`, `D180`, `D183`, `D189`, `D193`, `D196`, `D212`, `D213`, `D215`, `D219`, `D222`, `D224`, `D225`, `D227`, `D231`, `D234`, `D236`, `D239`, `D240`, `D242`, `D243`, `D247`, `D252`, `D253`, `D254`, `D256`, `D261`, `D269`, `D271`, `D275`, `D277`, `D278`, `D280`, `D295`, `D301`, `D320`, `D324`
 - `scripts/ci-skip-count.sh` — The one reader of a CI shard's skip count: `checks.yml`'s matrix step and its `ci-static` job call it over the shard's log.
+  - Decisions: `D136`
 - `scripts/cid-selftest.py` — Proves D172's card name and the photograph store filed under it by violating both, against a throwaway store with photographs this script draws — the operator's corpus cannot be re-taken, so pointing a destructive suite at it is the incident rather than the test.
+  - Decisions: `D18`, `D26`, `D80`, `D83`, `D88`, `D89`, `D172`, `D183`, `D294`
 - `scripts/css-var-check.py` — `make css-var-check` — a `var(--x)` with no fallback, where `--x` is defined nowhere, drops the whole declaration silently.
+  - Decisions: `D18`, `D173`
 - `scripts/d240-tolerance-fit.py` — RESCUED, INCOMPLETE — the sweep exists, the measurement it takes has never been run.
+  - Decisions: `D240`, `D242`, `D18`, `D35`, `D37`, `D55`, `D239`, `D251`
 - `scripts/debts_corpus.py` — The debts corpus, read as one text or as one entry — the same seam decisions_corpus.py builds for docs/decisions/, applied to docs/debts/.
-- `scripts/decision-context.py` — D17's PreToolUse hook: reads this file and emits one id-and-title line per governing decision as additionalContext, with `make map` for the full text — never permissionDecision, which would auto-approve every Write in the project.
+  - Decisions: `D16`, `D18`, `D120`, `D140`, `D149`, `D160`
+- `scripts/decision-context.py` — D17's PreToolUse hook: reads the decisions line under a file's map line in `docs/map/` and emits one id-and-title line per governing decision as additionalContext, plus the track from `docs/tracks.json` — never permissionDecision, which would auto-approve every Write in the project.
+  - Decisions: `D140`, `D2`, `D3`, `D17`, `D80`
 - `scripts/decisions_corpus.py` — The decision corpus, read as one text or as one entry.
+  - Decisions: `D16`, `D18`, `D58`, `D60`, `D277`, `D80`, `D140`, `D160`
 - `scripts/demo-extra-real.py` — Curates a SECOND, small, real card set — its own manifest and photographs under demo-assets/extra/, never touching the default `132`-card demo-assets/cards.json or its photos.
+  - Decisions: `D172`, `D18`, `D43`
 - `scripts/demo-histories.py` — `make demo-histories`: records every demo card's price history, all four ranges, from infinite-api into a NEW dated directory under `fixtures/demo-price-history/`, on the owner's Mac only, with the browser User-Agent the owner allows there (D216) and never from CI.
+  - Decisions: `D278`, `D216`, `D219`
 - `scripts/demo-hold.py` — The demo workflow's hold.
+  - Decisions: `D295`
 - `scripts/demo-mirror-daily-photos-selftest.py` — `make demo-mirror-daily-photos-selftest`: the weekly mirror ships every photograph its bundle names.
+  - Decisions: `D172`, `D295`
 - `scripts/demo-mirror-daily.py` — The weekly demo refresh on the owner's Mac (the owner can also run `make demo-mirror` by hand).
+  - Decisions: `D42`, `D70`, `D295`
 - `scripts/demo-mirror.py` — Builds the published demo as a scrubbed mirror of the owner's real store (`D295`, the public demo is the scrubbed real store).
+  - Decisions: `D301`, `D295`, `D326`, `D61`, `D70`, `D193`, `D216`
 - `scripts/demo-photos.py` — Curates the owner's own card photographs, and the identification each one actually got, into the tracked `demo-assets/` the demo is built from.
+  - Decisions: `D67`, `D24`, `D25`, `D70`
 - `scripts/demo-record-resume-selftest.py` — `WorkArea`/`snapshot_key`, the resume cache PR `4B` lane M added to `demo-record.py`, proved with a `FakeServer` rather than a real server or store: a route already on disk is never asked for again, a killed-then-resumed sweep's finished bundle is byte-identical to a clean one.
+  - Decisions: `D18`, `D86`, `D88`, `D193`, `D295`
 - `scripts/demo-record-selftest.py` — Server's stdout-drain, proved on a bare subprocess rather than by spending a full sweep: a child that floods stdout past the OS pipe buffer with nobody reading it does not exit in time; the same child DOES exit once Server's own drain thread is reading it.
+  - Decisions: `D18`
 - `scripts/demo-record-walkplan-selftest.py` — `record_walk_plans`, proved on the failure a real `71`-open-order rebuild hit: the OLD rule recorded every SUBSET of the ticked open orders (`2^n` sets), refusing outright past `7` — shown here to reach an astronomical count at `71` and to have been refused by the real recorder's own message.
+  - Decisions: `D18`, `D97`, `D220`, `D269`, `D295`
 - `scripts/demo-record.py` — Spawns its own capture server over the demo store on its own port, sweeps every GET the client can build against the parameter space the store actually holds, and writes app/demo/bundle.json plus the photographs Vite will bundle.
+  - Decisions: `D301`, `D295`, `D216`, `D76`, `D61`, `D278`, `D213`, `D277`, `D298`, `D227`, `D183`, `D13`, `D43`, `D70`, `D86`, `D88`, `D97`, `D172`, `D193`, `D220`, `D269`
 - `scripts/demo-seed.py` — Writes a demo store — real catalog rows out of fixtures/, invented positions, drawn card photographs, a corpus with three deliberate holds, and two run directories in the shape `identify` leaves behind.
+  - Decisions: `D67`, `D10`, `D21`, `D277`, `D26`, `D83`, `D172`, `D7`, `D87`, `D4`, `D77`, `D216`, `D39`, `D3`, `D13`, `D20`, `D25`, `D43`, `D86`, `D70`, `D213`, `D219`, `D227`, `D236`
 - `scripts/demo_scrub.py` — Strips machine-local absolute paths out of the bundle before it is published, and audits its own output for anything that still looks like a home directory.
+  - Decisions: `D295`, `D183`, `D18`
 - `scripts/derived-numbers-pin.py` — `python3 scripts/derived-numbers-pin.py --write` rewrote every `<!-- derived:<name> -->`-marked number in the tracked markdown to match `derived_numbers.py:REGISTRY[<name>].compute(ROOT)`.
+  - Decisions: `D18`
 - `scripts/derived_numbers.py` — A named registry of tree-descriptive numbers: one pure `compute(root) -> int` function per figure, and `MARKER_RE`/`find_markers()`, the `<!-- derived:<name> -->` marker syntax a number in prose once used to name its own derivation.
+  - Decisions: `D18`
 - `scripts/docs-audit-allow-game-coverage.txt` — `game key rarity` pairs the `game coverage` row may not ask about, one `pair # reason` line each.
+  - Decisions: `D16`, `D23`
 - `scripts/docs-audit-allow.txt` — Paths and identifiers the docs name before they exist, one `path # reason` line each.
+  - Decisions: `D15`, `D16`, `D23`, `D39`, `D38`, `D90`, `D97`, `D105`, `D123`, `D284`, `D218`, `D60`, `D280`, `D245`, `D248`, `D271`, `D277`, `D304`
 - `scripts/docs-audit.py` — The entry script for D16's layers `1` and `2`: `build_parser` and `main`, with the mechanical checks and the coupling question under `--staged` in the `docs_audit/` modules listed below.
+  - Decisions: `D1`, `D2`, `D3`, `D6`, `D7`, `D8`, `D9`, `D10`, `D11`, `D12`, `D16`, `D17`, `D18`, `D22`, `D23`, `D24`, `D26`, `D27`, `D31`, `D33`, `D39`, `D41`, `D43`, `D47`, `D50`, `D51`, `D60`, `D63`, `D65`, `D67`, `D69`, `D70`, `D74`, `D75`, `D76`, `D80`, `D81`, `D83`, `D84`, `D86`, `D87`, `D88`, `D90`, `D92`, `D94`, `D97`, `D101`, `D102`, `D104`, `D110`, `D113`, `D119`, `D122`, `D123`, `D127`, `D132`, `D134`, `D135`, `D136`, `D138`, `D140`, `D141`, `D142`, `D144`, `D149`, `D155`, `D160`, `D161`, `D173`, `D174`, `D177`, `D178`, `D181`, `D182`, `D185`, `D191`, `D192`, `D196`, `D210`, `D213`, `D215`, `D218`, `D245`, `D247`, `D248`, `D277`, `D280`, `D284`, `D305`
 - `scripts/error-words.py` — The refusal half of D196, read at the source.
+  - Decisions: `D196`, `D284`
 - `scripts/export-matcher-model.py` — A developer step, run once per model in a throwaway venv that has torch: exports Marqo ecommerce-B's image tower to ONNX and writes the parity reference (torch's own vectors for fixed synthetic images).
+  - Decisions: `D2`
 - `scripts/extract_real_facts.py` — Reads a READ-ONLY COPY of the owner's store (never the owner's own checkout) and writes demo-assets/real-facts.json: a typed price per SKU (from prices.json, only for SKUs a vendored fixture also prices, so a mismatch is checkable against the demo's own real arithmetic), a short list of real sale lines per SKU.
+  - Decisions: `D18`, `D43`
 - `scripts/gates_corpus.py` — The gates corpus, read as one text — decisions_corpus.py's twin.
+  - Decisions: `D16`, `D18`, `D80`, `D160`
 - `scripts/githooks-selftest.sh` — Builds an origin and a clone in a temp directory, points core.hooksPath at the real hook files, and runs the gestures against them: nineteen cases over what is refused, what stays open, the legitimate pull, the escape hatch and a fresh clone.
+  - Decisions: `D18`, `D42`, `D303`, `D312`
+- `scripts/githooks/post-checkout` — Provisions a worktree that `git worktree add` just made, by calling `scripts/worktree-guard.sh`; it runs only when the previous HEAD is all zeros, and fails open.
+  - Decisions: `D18`
+- `scripts/githooks/pre-commit` — The commit gate: fixtures read-only, every staged image decoded for a QR, no printed code-card layout, no symlink that leaves the repository, then the docs audit, whose exit code it maps.
+  - Decisions: `D11`, `D14`, `D16`, `D18`, `D24`, `D47`, `D58`, `D70`, `D92`, `D295`, `D303`, `D312`
+- `scripts/githooks/pre-push` — Refuses any push whose remote ref is main, and runs `scripts/revert-audit.py branch` on a branch push so a stale copy of a file main has moved on is refused.
+  - Decisions: `D42`, `D133`
+- `scripts/githooks/reference-transaction` — Refuses any move of `refs/heads/main` from any worktree of this clone, except a move to a commit origin/main already carries.
+  - Decisions: `D18`, `D42`
 - `scripts/guard-opsec.sh` — The PreToolUse opsec twin, with a narrowed shape match: a code stands alone, mixes letters and digits and has no repeated group.
+  - Decisions: `D16`, `D24`, `D11`, `D14`
 - `scripts/guard-scope.py` — Does this branch reach what one of the gated self-tests proves?
+  - Decisions: `D247`, `D18`
 - `scripts/guard-shell-selftest.sh` — Proves guard-shell.py by COMMITTING its three mistakes in a throwaway repository with a linked worktree.
+  - Decisions: `D18`, `D42`, `D179`, `D43`, `D127`, `D171`, `D173`
 - `scripts/guard-shell.py` — The PreToolUse hook on Bash AND Write|Edit that refuses three shell mistakes this repo has already paid for, each with a measured incident: a write outside this checkout (~`1,500` lines into the owner's main tree on `main`, hot-reloaded into their live capture server).
+  - Decisions: `D179`, `D157`, `D42`, `D18`, `D43`, `D127`, `D135`, `D171`, `D173`, `D305`
 - `scripts/hand-search-selftest.py` — `make hand-search-selftest` — proves app/eslint.config.js's HAND_SEARCH_RULES sees the shape it is for, on fixtures over the real `npx eslint --stdin` (F11c, the reviewer's own finding: the round-one rule matched only `x.toLowerCase().includes(y)` and let `.startsWith`/`.endsWith`/`.indexOf`, `.toLocaleLowerCase()`, and a fold on the ARGUMENT instead of the receiver (`x.includes(y.toLowerCase())`) through silently).
+  - Decisions: `D18`, `D247`, `D271`
 - `scripts/holdings-selftest.py` — Proves pipeline/holdings.py against fixtures built in the file (`D236`) — no store on disk, no network.
+  - Decisions: `D18`, `D278`, `D277`, `D189`, `D212`, `D219`, `D236`, `D247`
 - `scripts/identity-binding-selftest.py` — Proves pipeline/identity_binding.py, the migration's classifier and the merged D242 report (identity-follows-sku.md §`5.5`, §`7`, lane `2`), over plain Card/SkuRow objects — no store.
+  - Decisions: `D162`, `D37`, `D55`, `D63`, `D67`, `D167`, `D172`, `D242`, `D253`
 - `scripts/identity-checks-selftest.py` — Proves pipeline/identity_checks.py against literal CardRecord fixtures (D239), and the `identity`, `photos` and `checks` subcommands of cli/cmd_cards.py against a temp store.
+  - Decisions: `D234`, `D239`, `D23`, `D173`, `D247`
 - `scripts/identity-cli-selftest.py` — Proves the CLI writers (identity-follows-sku.md §`4.2`, lane `3b`) against a real throwaway store and the real CLI dispatch.
+  - Decisions: `D21`, `D25`, `D36`, `D54`, `D63`, `D65`, `D87`, `D104`, `D137`, `D166`, `D172`, `D213`, `D253`
 - `scripts/identity-readers-selftest.py` — Proves the evidence readers (identity-follows-sku.md §`5.1`, lane `4`), added on a review finding, HIGH: reading read_name/read_number/read_printed_total unconditionally left cli/requeue.py:identified answering None for every open entry and cli/resolve.py:store_payload filing {'name': None.
+  - Decisions: `D63`, `D172`, `D213`, `D253`
 - `scripts/identity-replay.py` — The migration's replay, before any write (identity-follows-sku.md §`7.4`, lane `2`): reads a COPY of the store, read-only (store/db.py:open_read_only, never db.connect), simulates the whole press in memory through pipeline/identity_binding.py's own plan_migration, and asserts the six things §`7.4` names.
+  - Decisions: `D63`, `D162`, `D172`, `D242`, `D253`
 - `scripts/identity-store-selftest.py` — Proves Inventory.bind_sku/unbind_sku, the one writer (identity-follows-sku.md §`4.1`, lane `1`), and record_identification's narrowed write, over an in-memory Inventory and Skus table — no store, no disk write at all. bind_sku stamps name/number/printed_total/rarity/set_name/condition off a skus row for a Pokemon card.
+  - Decisions: `D36`, `D63`, `D67`, `D88`, `D172`, `D183`, `D213`, `D252`
 - `scripts/ignore-check.sh` — The other half of D47: `git check-ignore` over every path a worktree provisions, asserting each is ignored WHATEVER kind of thing is at it.
+  - Decisions: `D47`, `D18`, `D172`
 - `scripts/index-decisions.py` — Folds every unregistered docs/decisions/ entry into docs/decisions/ORDER.json, at claim time.
+  - Decisions: `D160`, `D60`, `D16`, `D18`, `D43`, `D277`, `D80`, `D140`
 - `scripts/janitor-selftest.sh` — Proves janitor.py against a throwaway clone, with a fake liveness oracle and real processes.
+  - Decisions: `D18`, `D138`, `D127`, `D305`
 - `scripts/janitor.py` — The part of the janitor that is Banchi's own.
+  - Decisions: `D18`, `D42`, `D47`, `D138`, `D127`, `D305`
 - `scripts/js-breakpoints.py` — The pure extraction, IMPORT-GRAPH PAIRING and comparison behind `make docs-audit`'s `js breakpoints` row (D123): every `(min|max)-width: NNNpx)` a `.ts`/`.tsx` file under app/src spells inside a media-query string, against only the `@media` widths of the stylesheets THAT FILE ITSELF IMPORTS (direct `.css` imports.
+  - Decisions: `D16`, `D18`, `D123`, `D141`, `D173`
 - `scripts/kit-adoption.mjs` — `make kit-adoption` — does every screen inherit the page scaffold (D275)?
+  - Decisions: `D173`, `D275`, `D311`, `D288`, `D259`, `D18`, `D280`
 - `scripts/lan-check.py` — Answers whether the owner's LAN URL still works, end to end and from this machine: the name resolves and to an address this Mac actually holds, Vite accepts the Host, the capture server answers on the same name, and A REAL WRITE IS ACCEPTED FROM THAT ORIGIN.
+  - Decisions: `D138`, `D43`, `D47`
 - `scripts/launch-config.py` — Writes `.claude/launch.json` for THIS checkout's dev port, which is what the Browser pane opens.
+  - Decisions: `D261`, `D18`, `D43`
 - `scripts/launchagent.py` — The shared launchd install and remove for a daily job on the owner's Mac, main tree only.
+  - Decisions: `D295`
 - `scripts/make-help.py` — `make help` — one line per Makefile target, derived from the comment directly above the target's own rule.
+  - Decisions: `D18`, `D60`
 - `scripts/map-check.py` — `make map-check` — finds claude-settings' shared plain-english-map skill and runs its check over `docs/map/` and `map.config.json`, and fails when it finds no skill.
+  - Decisions: `D17`, `D18`
 - `scripts/map-check-selftest.py` — `make map-check-selftest` — proves `scripts/map-check.py` fails closed against stub skills built in a run folder: no skill, a named dir with none, no `map-check.mjs`, no node, and the skill's exit code, with a mutant of the script for each.
-- `scripts/map-fix.py` — `make map-fix` — add the decision ids a file cites to that file's `governed_by` here.
-- `scripts/map-view.py` — `make map` — docs/map.py rendered for a person, in four views: the shape, one package, one module, everything a decision governs, and `--stale`.
+  - Decisions: `D18`
+- `scripts/map-json-lines.py` — The remedy for the json debt: writes a `docs/map/` line for each tracked json file under `mapPaths`, with the decisions it carried, once the shared map check reads only `mapPaths`.
+  - Decisions: `D17`, `D18`
+- `scripts/map-tool.py` — `make map` and `make map-fix` — finds claude-settings' plain-english-map skill through `scripts/map-check.py` and runs its show, stale or fix tool over `docs/map/`.
+  - Decisions: `D17`, `D18`
 - `scripts/match-heldout.py` — The held-out check on the free reader's accept rule, a gate before adoption and not part of `make check`: reads photographs the spike never saw (the store read-only, minus an exclude list, or a manifest), scores each answer against the owner's confirmed identification, and fails on any wrong answer accepted or any absent-truth card accepted.
+  - Decisions: `D2`, `D88`
 - `scripts/match-parity.py` — Proves a matcher model file against torch's answer with onnxruntime alone: the pinned size and SHA-`256`, and a cosine of at least `0.9999` on every reference vector through the shipped Pillow and numpy preprocessing.
+  - Decisions: `D2`
 - `scripts/match-selftest.py` — FLT-`06`/`04`'s one forgiving matcher, server side (UX-`173`).
+  - Decisions: `D271`, `D166`, `D213`
 - `scripts/mutate-guards.py` — A mutation runner over five of this repo's guards (guard-shell.py, silent-write-guard.py, reap.py, primary_sync.py, revert-audit.py), built because the hand-kept arm counts drift — a sentence once claimed sixteen arms over a file that held eighteen, caught by a person rather than a check.
+  - Decisions: `D18`, `D42`, `D138`, `D133`, `D158`, `D305`, `D171`, `D173`
 - `scripts/offenders-prune.py` — `make offenders-prune` — delete the STALE entries from the three shrinking offender lists (`typed-interpunct-allow.json`, `markdown-spelling-allow.json`, `no-owner-quotes-allow.json`), and re-key a listed file that git's rename detection (`git diff -M` from the merge-base with origin/main) says moved.
+  - Decisions: `D18`, `D60`, `D218`, `D280`
 - `scripts/only_shrinks.py` — THE ONE only-shrinks helper for every shrinking offender list (D280).
+  - Decisions: `D18`, `D280`
 - `scripts/orient.py` — `make orient <file.tsx>` — every component in a .tsx file, its line span, which component draws it, and the expression that decides whether it is drawn.
+  - Decisions: `D17`, `D18`
 - `scripts/pipeline-trends-archive-ids-selftest.py` — Proves `server/pipeline_routes.py:_trends_for_entries` passes the archive's already-verified productId per SKU (`store/pricearchive.py:PriceArchive.for_sku`, D254) into `Market.readings_for_rows`, by poisoning `category_id`/`group_id` to raise if either is ever called for a SKU the archive already resolves.
+  - Decisions: `D18`, `D219`, `D254`
 - `scripts/port-agreement.py` — Proves `server/ports.py` and `app/devPort.ts` still answer the same numbers.
+  - Decisions: `D18`, `D43`, `D261`
 - `scripts/port-slots.py` — The port slot registry's one writer.
+  - Decisions: `D18`, `D43`, `D122`, `D261`
 - `scripts/ports-machine-selftest.py` — Proves `server/ports.py`'s `machine_dir` (the one-time move of the old machine dir to `~/.banchi`) and `remove_old_agent` (deletes an old launchd plist, never a current one) against a temp HOME.
+  - Decisions: `D43`, `D94`
 - `scripts/price-postings-recovery.py` — Read-only measurement against the owner's real inventory/store.sqlite (opened through `store/db.py:open_read_only`, never `store.db.connect`, no `banchi` command run): how much price HISTORY survives before `price_postings` existed to record it.
+  - Decisions: `D243`
 - `scripts/price-postings-selftest.py` — Proves store/postings.py's `price_postings` table against a throwaway store, no network (D243).
+  - Decisions: `D88`, `D189`, `D212`, `D219`, `D243`, `D247`
 - `scripts/price-refresh-daily.py` — The daily market read on the owner's Mac: one call to `do_prices_refresh` (the live listings, the catalog per game, a re-join of every open run, then the Trends preload), each step leaving a note `#/pricing` shows.
+  - Decisions: `D104`, `D189`, `D222`, `D224`, `D278`, `D295`, `D325`
 - `scripts/pricearchive-selftest.py` — Proves store/pricearchive.py and pipeline/pricearchive.py against a throwaway store, no network (D219).
+  - Decisions: `D234`, `D231`, `D35`, `D254`, `D224`, `D222`, `D219`, `D18`, `D21`, `D278`, `D247`
 - `scripts/pricehistory-cache-selftest.py` — Proves pipeline/pricehistory.py's two cache lifetimes against a fake clock and a counting fetcher, no network.
+  - Decisions: `D216`, `D219`, `D234`
 - `scripts/pricehistory-offline-selftest.py` — Proves `pipeline/pricehistory.fetch_json`'s one retry rule over a scripted `urlopen` and one fake clock, no network, no real sleep: which failures retry, the time budget and `Retry-After`, and that a host that lost `PAUSE_AFTER_FAILURES` calls in a row gets one attempt per call, shared by every `Market`, never refused unsent and with no retry pause.
+  - Decisions: `D18`, `D278`, `D319`
 - `scripts/primary_sync.py` — THE PRIMARY CHECKOUT PUTS ITSELF BACK ON main AND FAST-FORWARDS IT.
+  - Decisions: `D158`, `D43`, `D18`, `D42`, `D127`, `D138`, `D176`
 - `scripts/product-history-selftest.py` — Proves pipeline/productview.py and server/pipeline_routes.py:do_product_history against a throwaway store (D227).
+  - Decisions: `D18`, `D22`, `D278`, `D60`, `D227`, `D247`
 - `scripts/prose-guard.py` — D60's two guards over the four docs CLAUDE.md names.
+  - Decisions: `D57`, `D140`, `D42`, `D10`, `D16`, `D17`, `D18`, `D58`, `D60`
 - `scripts/qr-clear-check.py` — Re-decodes every STAGED image under demo-assets/photos/ and demo-assets/extra/photos/ with codes/qr.py, reading the STAGED BLOB (`git show :<path>`) rather than the working-tree file.
+  - Decisions: `D70`
 - `scripts/readiness-agreement.py` — Reconciles app/src/readiness.ts's second implementation of pipeline/decisions.py:blocking against the Python it re-implements (D54, docs/debts/`003`).
+  - Decisions: `D245`, `D185`, `D277`, `D54`, `D149`
 - `scripts/readings-selftest.py` — Proves store/readings.py and pipeline/readings.py against a throwaway store (D189).
+  - Decisions: `D189`, `D18`, `D86`, `D88`
 - `scripts/readme_gen.py` — Regenerates README.md's `<!-- gen:NAME -->` blocks from their sources.
+  - Decisions: `D18`
 - `scripts/reap-selftest.sh` — Proves reap.py by pointing it at processes it must not kill.
+  - Decisions: `D18`, `D138`, `D122`, `D157`, `D43`, `D127`, `D305`
 - `scripts/reap.py` — The reaper: stops what this session started, and prints what it refused.
+  - Decisions: `D127`, `D43`, `D138`, `D305`, `D18`, `D88`, `D135`
 - `scripts/reap_mark.py` — Stamps the process a launcher is about to become with the session that started it — `.serve/owners/<pid>.json`, `{pid, owner, label, startedAt}` — so `reap.py` can tell WHOSE a process is, not only whether it is under this checkout.
+  - Decisions: `D43`, `D138`, `D127`, `D305`
 - `scripts/refusal-log-assert.sh` — Sourced by each guard's self-test: asserts the refusal log holds exactly one well-formed line for a refusal.
+  - Decisions: `D18`, `D179`
 - `scripts/refusal_log.py` — The one refusal log. Every guard that denies or asks appends one TAB-separated line to `.git/banchi-refusals.log`, beside the hatch log: time, `guard:rule`, a snippet of at most `80` characters, the session id, the checkout.
+  - Decisions: `D18`, `D127`, `D179`
 - `scripts/repair-born-game-selftest.py` — Proves `repair-born-game.py` on a throwaway store: a resolvable NULL-game card gets the right game, a card that already has one is never planned or touched, a card whose sku's product line maps to no game is refused and named, a card whose sku this store has never seen is refused and named.
+  - Decisions: `D18`
 - `scripts/repair-born-game.py` — The one-off repair for the F1 defect: a card born with `game IS NULL` although its sku is already bound.
+  - Decisions: `D18`, `D21`, `D258`
 - `scripts/revert-audit.py` — One question of a change, asked of every commit on main's first-parent line (`history`) or of what a branch would land there (`branch`, which is `make revert-guard`, the pre-push hook and the PR check): does it put a file back the way main had it BEFORE a commit main already carries?
+  - Decisions: `D119`, `D18`, `D42`, `D133`
 - `scripts/rosterholdings-selftest.py` — Proves pipeline/rosterholdings.py against a roster CSV string, a SKU list and a PriceArchive built in the file (`D324`) — no store on disk, no network.
+  - Decisions: `D247`, `D324`
 - `scripts/score-detect.py` — `scripts/score-detect.py scan|sweep [<captures dir>]` — re-scores geometry.detect_card over real capture directories, which is D75's one-off measurement made repeatable.
+  - Decisions: `D43`, `D18`, `D21`, `D22`, `D75`
 - `scripts/score-trace.py` — `scripts/score-trace.py summary|presence|sweep|stalls|camera|gain|contact` — re-scores a saved motion trace offline, which is docs/specs/motion-trigger.md §`4`'s "Scoring a trace offline" written down.
+  - Decisions: `D131`, `D144`, `D154`, `D18`, `D19`, `D81`, `D84`
 - `scripts/screen-freshness.mjs` — Proves every server WRITE in app/src has a way back — a re-read, an invalidation signal, or a reason in the code why none is owed.
+  - Decisions: `D13`, `D14`, `D89`, `D86`, `D87`, `D277`, `D76`, `D83`, `D97`, `D100`, `D134`, `D103`, `D278`, `D273`, `D174`, `D225`, `D189`, `D192`, `D227`, `D236`, `D298`, `D293`, `D320`, `D168`, `D167`, `D104`, `D113`, `D193`, `D203`, `D145`, `D210`, `D252`, `D28`, `D264`, `D291`, `D207`, `D18`, `D58`
 - `scripts/screenshot.mjs` — The browser half of `make screenshot`: one render, and the proof that it is complete.
+  - Decisions: `D5`, `D13`, `D16`, `D18`
 - `scripts/screenshot.sh` — The manifest loop, THIS CHECKOUT'S DEV PORT, and every message a person reads; screenshot.mjs is the browser half.
+  - Decisions: `D43`, `D261`, `D5`, `D13`, `D18`
 - `scripts/serve-scope.py` — Does this branch reach what `make serve-selftest` reads?
+  - Decisions: `D18`, `D138`, `D141`
 - `scripts/serve-selftest.py` — THE SUPERVISOR'S BUILD JOB, PROVED AGAINST A THROWAWAY TREE (D138).
+  - Decisions: `D138`, `D176`, `D158`, `D43`, `D18`, `D127`, `D261`
 - `scripts/serve.py` — `make up` / `make down` / `make launch-agent`.
+  - Decisions: `D43`, `D138`, `D176`, `D70`, `D47`, `D158`, `D261`, `D13`, `D18`, `D127`
 - `scripts/session-teardown-selftest.sh` — `make session-teardown-selftest`: session-teardown.sh's branch step in a throwaway repo.
+  - Decisions: `D18`, `D138`
 - `scripts/session-teardown.sh` — The SessionEnd / WorktreeRemove hook.
+  - Decisions: `D18`, `D138`
 - `scripts/set-hint-agreement.py` — Port-agreement.py's shape, one decision over: proves `server/tcg_export.py:match_sets` and `app/src/setHint.ts` resolve a capture-time set hint to the same set.
+  - Decisions: `D18`, `D65`
 - `scripts/shell_parse.py` — ONE READER FOR A SHELL COMMAND, shared by the two guards that need one.
+  - Decisions: `D18`, `D127`, `D171`, `D173`
 - `scripts/sigil-check.py` — `make sigil-check` — a bare `#` on an owner-side screen draws D58's COUNT of the cards in a box and never the store key, and a key is drawn only with D68's `B<box>` sigil (D92).
+  - Decisions: `D92`, `D58`, `D68`, `D16`, `D18`, `D45`
 - `scripts/silent-write-guard.py` — The PreToolUse hook on Bash that refuses a git WRITE whose own output is thrown away.
+  - Decisions: `D18`, `D42`, `D127`, `D133`, `D171`
 - `scripts/silent-write-selftest.sh` — Proves silent-write-guard.py by violating it.
+  - Decisions: `D18`, `D127`, `D171`
 - `scripts/sku-name-contradictions-selftest.py` — Proves pipeline/sku_name_contradictions.py against literal tcgcsv.Row fixtures, no store, no network.
+  - Decisions: `D23`, `D239`, `D240`, `D242`
 - `scripts/sku-number-contradictions-selftest.py` — Proves pipeline/sku_number_contradictions.py against literal NumberRecord fixtures and duck-typed Market fakes, no store, no network (D242).
+  - Decisions: `D23`, `D167`, `D173`, `D234`, `D242`, `D247`
 - `scripts/skus-selftest.py` — Proves store/skus.py and pipeline/skus.py against a throwaway store (identity-follows-sku.md §`3.2`, lane `0`). split_condition over every recognized grade plus Unopened; rows equal distinct ids (a repeated SKU line folds to one row); a second adopt is a no-op; an older file never overwrites a newer one's facts (STALE).
+  - Decisions: `D88`, `D166`, `D189`, `D219`
 - `scripts/slabs-routes-selftest.py` — Proves `server/slabs_routes.py`, the My Slabs routes, against the real Card Ladder client on a fake transport, a fake clock and a throwaway store: add reads three callables and writes the slab, the day's snapshot and the sales once, an update replaces the day's row, any failed or limited read writes nothing.
+  - Decisions: `D320`, `D196`, `D88`, `D319`
 - `scripts/slabs-store-selftest.py` — Proves `store/slabs.py`, the My Slabs tables, against a throwaway store: a slab is one row per cert and grader with the grader in Card Ladder's name; a snapshot is one row per slab per day and a second write that day replaces it; a sale is keyed by its id, kept when a later read drops it and shared by every slab that read it.
+  - Decisions: `D320`, `D88`, `D63`
 - `scripts/split-debts.py` — Performed the split of docs/debts/ into docs/debts/, and proves it lost nothing — split-decisions.py's chunk model applied to docs/debts/'s plain-numbered `## <n> — <title>` headings instead of `# D<id>`.
+  - Decisions: `D16`, `D18`, `D149`, `D160`
 - `scripts/split-decisions.py` — Performed the split of docs/decisions/ into docs/decisions/, and proves it lost nothing.
+  - Decisions: `D140`, `D58`, `D16`, `D18`, `D60`, `D277`, `D80`, `D160`
 - `scripts/split-gates.py` — Performed the split of docs/GATES.md into docs/gates/, and proves it lost nothing.
-- `scripts/status.py` — `make status`. Holds no fact about the project: the step and the gate come from this file, the T1 score from harness/results/, the branch from git, the health line from docs-audit.py's `--json`.
+  - Decisions: `D16`, `D18`, `D80`, `D160`
+- `scripts/status.py` — `make status`. Holds no fact about the project: the steps come from `docs/gates/`, the T1 score from harness/results/, the branch from git, the health line from docs-audit.py's `--json`.
+  - Decisions: `D16`, `D158`, `D43`, `D127`, `D138`, `D176`, `D18`, `D17`, `D42`, `D80`, `D86`, `D88`, `D179`
 - `scripts/ste/ste_lint.py` — The STE prose check's linter, VENDORED verbatim from $HOME/.claude/lint/ste_lint.py (MIT, LICENSE-ste_lint beside it) — a COPY, never a symlink (D47): a fresh clone, a CI runner and this repo's own git history all lack $HOME/.claude, so a gate here cannot point at a path outside its own tree.
+  - Decisions: `D60`, `D47`, `D18`
 - `scripts/ste_measure.py` — The STE prose check's ONE measurer.
+  - Decisions: `D280`, `D60`, `D140`, `D18`, `D218`
 - `scripts/stockimages-cache-selftest.py` — Proves `pipeline/stockimages.py`'s disk cache offline, both ways: a `Market` whose fetcher always raises `Offline` (the same failure `demo-record.py`'s `OFFLINE_BOOT` produces for a real socket), pointed at an empty directory, answers `url_for` as `None`; pointed at one seeded with a `tcgcsv/<category>/<group>/products` cache entry, answers the product's `imageUrl`.
+  - Decisions: `D301`
 - `scripts/subagent-override-selftest.py` — Proves the `subagent override` row of `make docs-audit` by breaking it in a real throwaway repository with a real nested worktree.
+  - Decisions: `D18`, `D135`, `D161`, `D173`, `D178`
 - `scripts/submission-selftest.py` — Proves the identify claim table by violating it.
+  - Decisions: `D174`, `D7`, `D18`, `D180`, `D88`, `D136`
 - `scripts/suite-lock.py` — `make design-check`'s doorman, and `make suite-lock-selftest`.
+  - Decisions: `D18`, `D43`, `D122`
 - `scripts/sweep-memory.py` — Ship gate (a) for the background reader: the watcher's idle RSS with an empty queue and the worker's peak RSS over a queue of captures, on a scratch store.
+  - Decisions: `D2`, `D1`
 - `scripts/sweep_scratch.py` — A scratch capture server over a temporary store (own free port, the model symlinked, the index copied) for the background reader's two measurements.
+  - Decisions: `D43`, `D2`
 - `scripts/sync-selftest.py` — The self-sync, PROVED BY VIOLATING IT in throwaway clones with real bare origins and real linked worktrees.
+  - Decisions: `D158`, `D43`, `D42`, `D127`, `D18`, `D176`
 - `scripts/tests-for-selftest.py` — `make tests-for-selftest` — proves tests-for.py on the real tree and on fixture trees (a direct import, a package import, a subprocess run, `importlib`, the T7 group rules, `--root`), plus one planted break per language: the selected suite goes red and an unselected one stays green.
 - `scripts/tests-for.py` — `make tests-for ARGS=<path>` — prints the harness modules and unit tests that reach one product file by an import, a literal path, a subprocess argument or a text read, one per line, so a mutation run need not run every suite (D247's reach reader, reused from guard-scope.py and browser-scope.py).
 - `scripts/tests_page.py` — `make tests-page` — writes `docs/TESTS.md`, one page of what each test file protects.
+  - Decisions: `D18`, `D173`
 - `scripts/text-density/density.mjs` — `make text-density` — the third piece of `D284`, a REPEATABLE, ON-DEMAND density pass that prints a CUT TABLE, never a gate (D18: it writes one receipt, `.serve/text-density.json`, gitignored).
+  - Decisions: `D284`, `D18`, `D43`
 - `scripts/token-literal-check-pin.py` — `python3 scripts/token-literal-check-pin.py --pin` — the ONE thing allowed to write `scripts/token-literal-check.json`, token-literal-check.py's own per-file ratchet ceiling (D18, D280's shape).
+  - Decisions: `D18`, `D280`, `D256`
 - `scripts/token-literal-check.py` — `make token-literal-check` — a CSS literal exactly equal to a design token's value, in its own property family: `font-size: 22px` where `--bn-fs-2xl: 22px`, `padding: 8px` where `--bn-2: 8px`. css-var-check's sibling, the opposite direction — that one catches a `var()` pointed at nothing, this one catches a value that should have BEEN a `var()`.
+  - Decisions: `D102`, `D18`, `D173`, `D280`, `D256`
 - `scripts/typecheck-hook.py` — PostToolUse hook: runs app/'s own tsc --noEmit, and only after a `.ts` or `.tsx` under app/ is written.
+  - Decisions: `D13`, `D17`
 - `scripts/user-strings.mjs` — The AST half of the `no mechanism on screen` row — walks every `.tsx` under app/src through app/node_modules/typescript (the compiler the app itself builds with, the same choice screen-freshness.mjs makes and for the same reason) and prints one JSON array of every USER-VISIBLE string: JSX text nodes.
+  - Decisions: `D134`, `D218`, `D196`, `D280`
 - `scripts/verdict-selftest.py` — PROVES `app/design-check-reporter.ts` STILL WRITES A VERDICT, BY RUNNING IT.
+  - Decisions: `D16`, `D18`
 - `scripts/views.txt` — The manifest `make screenshot` walks: one `<name> <url> <selectors>` line per view worth looking at.
+  - Decisions: `D5`, `D13`, `D24`, `D31`, `D39`, `D43`, `D86`, `D63`, `D69`, `D227`
 - `scripts/worktree-create-selftest.sh` — `make worktree-create-selftest`: runs worktree-create.sh for four names at once, five rounds, in a throwaway repo with an origin.
+  - Decisions: `D18`
 - `scripts/worktree-create.sh` — The WorktreeCreate hook. Makes every Claude Code worktree with a plain `git worktree add` at `.claude/worktrees/<name>` on `worktree-<name>`, cut from a fresh origin/main with --no-track (no shared .git/config write, so parallel Agents do not race on its lock; the branch has no upstream), so githooks/post-checkout provisions it.
+  - Decisions: `D18`
 - `scripts/worktree-guard.sh` — The SessionStart hook: provisions a git worktree's UNTRACKED state before any work starts.
+  - Decisions: `D47`, `D43`, `D18`, `D261`, `D176`, `D158`, `D16`, `D42`, `D138`, `D257`
 - `scripts/worktree-provision-selftest.sh` — `make worktree-provision-selftest` — worktree-provision.sh's app/node_modules clone/install/staleness logic, proved against a throwaway two-tree fixture with a stubbed `npm` rather than a real network install.
+  - Decisions: `D257`, `D18`
 - `scripts/worktree-provision.sh` — The cache-copy, image-mirror-symlink and node_modules provisioning shared by worktree-guard.sh (above) and `make worktree-setup` — extracted so a fix like D47's lands once rather than twice.
+  - Decisions: `D47`, `D18`, `D257`

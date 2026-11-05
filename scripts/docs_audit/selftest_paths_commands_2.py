@@ -67,6 +67,19 @@ def _fixture_root(root: Path):
         here["ROOT"], here["_INDEX_PATHS"] = saved
 
 
+@contextmanager
+def _swapped(module, **values):
+    """Set module-level names for the block, then put each back. The seam a row reads its inputs through."""
+    saved = {name: getattr(module, name) for name in values}
+    for name, value in values.items():
+        setattr(module, name, value)
+    try:
+        yield
+    finally:
+        for name, value in saved.items():
+            setattr(module, name, value)
+
+
 def run(ok) -> None:
     print("\nallowlist is self-cleaning")
     report = Report()
@@ -167,17 +180,6 @@ def run(ok) -> None:
             report = Report()
             check_line_anchors(report, [], [code])
             ok(not report.checks[0].findings, label, str(report.checks[0].findings))
-        (Path(tmp) / "docs").mkdir()
-        mapfile = Path(tmp) / "docs" / "map.py"
-        for planted, want, label in (
-            ('X = {"why": "see `cli/resolve.py:669`"}\n', 1, "a docs/map.py prose string path:N is refused"),
-            ('X = {"why": "`cli/resolve.py` opens at :669"}\n', 1, "a docs/map.py prose string bare :N is refused"),
-            ('X = {"why": "the main tree keeps :8000"}\n', 0, "a docs/map.py port is clean"),
-        ):
-            mapfile.write_text(planted, encoding="utf-8")
-            report = Report()
-            check_line_anchors(report, [], [mapfile])
-            ok(len(report.checks[0].findings) == want, label, str(report.checks[0].findings))
     report = Report()
     check_line_anchors(report, markdown_files())
     ok(not report.checks[0].findings and report.checks[0].scanned > 0,

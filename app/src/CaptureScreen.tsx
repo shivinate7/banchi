@@ -746,7 +746,7 @@ const OPTION_INDEX: ReadonlyMap<string, number> = new Map(
 
 /* The fourth copy of the editable-target predicate in this app, after trigger.ts,
  * ReviewQueue.tsx and App.tsx — PullPreview.tsx records that the hoist is due, and App.tsx
- * records why it has not happened (the shared module needs a docs/map.py entry, which is a
+ * records why it has not happened (the shared module needs a docs/map/ line, which is a
  * commit made on purpose). Same members for the same reasons: SELECT because its letter
  * typeahead makes a focused native picker a real collision, contentEditable for
  * completeness. A field letter typed into the set hint must be a letter. */

@@ -2458,8 +2458,8 @@ def check_catalog_number_fields_round_trip(checks: Checks) -> None:
     NOT `inventory/.exports/*/…csv` — the owner's real cached exports, which this checkout
     does not carry and which the fence this task carries forbids reading from a live rig.
     The four committed fixtures are the portable, CI-safe stand-in the same fence permits:
-    ground truth, never modified, present in every checkout. `docs/map.py`'s `fixtures/`
-    entry says so.
+    ground truth, never modified, present in every checkout. The map line for `fixtures/`
+    says so.
     """
     checks.note("")
     checks.note("CATALOG NUMBER FIELDS — round-tripped, game-aware, over every committed "

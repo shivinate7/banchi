@@ -32,8 +32,8 @@ import { NO_FREE_FIELDS, stubMatchState, stubSlabs } from './routeFixtures'
  * scrolling` on 2026-09-05, as a bare pixel count that named neither the banner nor the
  * missing stub. A design floor whose verdict depends on a process outside the test is the
  * defect D43 exists about, one level up. `docs/debts/` carried this as its section 13 until
- * this file discharged it; the measurements are here and in `docs/map.py`'s entry now, which is
- * where a claim with a reader belongs.
+ * this file discharged it; the measurements are here and in the map line for this file now, which
+ * is where a claim with a reader belongs.
  *
  * AND NOTHING HERE MAY REACH THE PUBLIC INTERNET EITHER, WHICH IS THE SECOND SEAL AND ARRIVED
  * THREE WEEKS LATER (D124, 2026-09-08). `sealCapture` matches on the capture PORT, so it was

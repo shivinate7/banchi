@@ -5,9 +5,9 @@ Written for one case: you step away, forget where you were, come back and need t
 oriented without reading four files and running the harness.
 
 NOTHING HERE IS A FACT ABOUT THE PROJECT. Every value is read at run time from a source
-that something else already enforces — `docs/map.py` by the audit's `map data` row, the T1
-score by the test that writes it, the branch by git. If the map says step 6, this says
-step 6.
+that something else already enforces — `docs/gates/` by `make gates-selftest`, the T1
+score by the test that writes it, the branch by git. If the build order says step 6, this
+says step 6.
 There is no second place to update, which is the whole reason this file is worth having
 rather than a paragraph in a README that someone has to remember to edit.
 
@@ -55,8 +55,8 @@ LABEL = 15  # column where values start, so the left rail reads as a column
 
 
 # Every file this script reads OR RUNS, declared in one place so the audit's status-sources
-# check can verify it WITHOUT running it. Pure literals for the reason docs/map.py is: the
-# audit parses with `ast.literal_eval` rather than importing, because a read-only check must
+# check can verify it WITHOUT running it. Pure literals, because the audit parses with
+# `ast.literal_eval` rather than importing, because a read-only check must
 # not execute the code it is checking. A `Source` class here would be a Call node, unreadable
 # to it.
 #
@@ -68,7 +68,7 @@ LABEL = 15  # column where values start, so the left rail reads as a column
 # `kind` says what must be true of the target:
 #   literals  a .py whose module-level literal assignments include every name in `requires`
 #   defs      a .py whose module-level `def`s include every name in `requires`
-#   json      a path or glob; every match must carry every key in `requires`
+#   json      a path or glob; every match must carry every key in `requires` (a list: every item must)
 #   file/dir  presence only
 #
 # Resolve reads through `resolve()` below, so this list is not decoration — it is the only
@@ -76,12 +76,24 @@ LABEL = 15  # column where values start, so the left rail reads as a column
 
 SOURCES = (
     {
-        "path": "docs/map.py",
-        "kind": "literals",
-        "requires": ("SHIPPED", "OPEN", "GATES", "COMPONENTS", "TRACKS"),
-        "why": "what shipped and what is open, gate status, per-component governed_by, and the "
-               "two tracks. TRACKS was added to this tuple on 2026-08-31 (D80): it had no reader "
-               "anywhere and no check, and had been wrong in two ways for three weeks.",
+        "path": "scripts/gates_corpus.py",
+        "kind": "defs",
+        "requires": ("steps", "files"),
+        "why": "which build-order steps shipped and which are open, in the order docs/gates/ keeps "
+               "them. The step's own file gives its title and, through git, the date it last changed",
+    },
+    {
+        "path": "docs/tracks.json",
+        "kind": "json",
+        "requires": ("name", "owns", "decisions", "rules"),
+        "why": "the two tracks, a JSON list: `scripts/decision-context.py` routes an edit under a track's "
+               "`owns` prefix to its `decisions` file and `rules` file, and prints the track banner",
+    },
+    {
+        "path": "docs/gates/steps",
+        "kind": "dir",
+        "requires": (),
+        "why": "one file per build-order step: its number and title, and the decisions its text names",
     },
     {
         "path": "scripts/decision-context.py",
@@ -322,64 +334,130 @@ def cont(value: str) -> str:
 # ------------------------------------------------------------------------ sections
 
 
-def where_you_are(mapdata: Dict[str, object]) -> List[str]:
+def load_gates():
+    """`scripts/gates_corpus.py`, loaded by path: the fixture a self-test builds has no `scripts` package."""
+    found = resolve("scripts/gates_corpus.py")
+    if not found:
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location("gates_corpus", found[0])
+        module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        spec.loader.exec_module(module)  # type: ignore[union-attr]
+        return module
+    except Exception as exc:  # noqa: BLE001 - a broken reader must not take status down
+        miss("scripts/gates_corpus.py", f"could not be loaded: {exc}")
+        return None
+
+
+_STEP_LINE = re.compile(r"^(\d+)\.\s+(.*)$")
+
+
+def step_record(step_id: str) -> Optional[Dict[str, object]]:
+    """`{"n", "title", "text", "file"}` for one build-order step, read from its file in docs/gates/steps/.
+
+    The title is the opening span of the step's numbered line, which wraps onto the next lines in
+    some files: `~~Title~~`, `**Title**`, or the words before the first ` — `.
+    """
+    found = sorted((ROOT / "docs" / "gates" / "steps").glob(f"{step_id}-*.md"))
+    if not found:
+        miss(f"docs/gates/steps/{step_id}-*.md", "named by docs/gates/ORDER.json, and no such file")
+        return None
+    text = read(found[0])
+    block: List[str] = []
+    for line in text.splitlines():
+        if not block:
+            if _STEP_LINE.match(line):
+                block.append(line)
+        elif line.strip():
+            block.append(line.strip())
+        else:
+            break
+    head = _STEP_LINE.match(" ".join(block)) if block else None
+    if head is None:
+        miss(str(found[0].relative_to(ROOT)), "has no numbered line to take a title from")
+        return None
+    rest = head.group(2)
+    for mark in ("~~", "**"):
+        if rest.startswith(mark):
+            end = rest.find(mark, len(mark))
+            title = rest[len(mark):end if end > 0 else None]
+            break
+    else:
+        title = rest.split(" — ")[0]
+    title = " ".join(title.replace("**", "").replace("~~", "").split())
+    return {"n": int(head.group(1)), "title": title, "text": text, "file": found[0]}
+
+
+def steps_by_list() -> Tuple[List[Dict[str, object]], List[Dict[str, object]]]:
+    """(shipped, open) build-order steps. Shipped is in the order the work landed, open is unranked."""
+    gates = load_gates()
+    if gates is None:
+        return [], []
+    try:
+        lists = [[step_record(i) for i in gates.steps(name)] for name in ("shipped", "open")]
+    except Exception as exc:  # noqa: BLE001 - a broken manifest must say so, not print less
+        miss("docs/gates/ORDER.json", f"steps could not be read: {exc}")
+        return [], []
+    return tuple([r for r in rows if r] for rows in lists)  # type: ignore[return-value]
+
+
+def last_changed(step: Dict[str, object]) -> str:
+    """The date the step's file last changed in git, or `date unknown` with no git or no history for it."""
+    stamp = git("log", "-1", "--format=%as", "--", str(Path(str(step["file"])).relative_to(ROOT)))
+    return stamp or "date unknown"
+
+
+def where_you_are(shipped: List[Dict[str, object]], open_steps: List[Dict[str, object]]) -> List[str]:
     """What has landed and what has not — never "step N of M".
 
     THAT HEADLINE WAS THE LIE THIS FUNCTION EXISTED TO TELL. It read `Build step 9 of 15`
     for a week while steps 13, 14 and 15 were done, step 9 had been deferred by choice, and
     six days of pricing, order and code-card work had landed under no step at all. The
     number was correct and the sentence was false, because `N of M` is a claim about a
-    SEQUENCE and this was never one (D80). The map is two lists now and so is this.
+    SEQUENCE and this was never one (D80). The build order is two lists and so is this.
     """
-    shipped = mapdata.get("SHIPPED") or []
-    open_steps = mapdata.get("OPEN") or []
-    gates = mapdata.get("GATES") or []
     if not shipped and not open_steps:
-        return [field("Shipped", "MISSING: docs/map.py SHIPPED / OPEN")]
+        return [field("Shipped", "MISSING: docs/gates/ steps, shipped and open")]
 
     out: List[str] = []
-    latest = max((str(step.get("on") or "") for step in shipped), default="")
-    out.append(field("Shipped", f"{len(shipped)} steps, last on {latest or 'an unrecorded date'}"))
-    for step in [s for s in shipped if str(s.get("on") or "") == latest][:2]:
-        out.append(cont(f"{step.get('n')}. {step.get('title')}"))
+    if shipped:
+        out.append(field("Shipped", f"{len(shipped)} steps, last on {last_changed(shipped[-1])}"))
+        for step in shipped[-2:]:
+            out.append(cont(f"{step.get('n')}. {step.get('title')}"))
+    else:
+        out.append(field("Shipped", "0 steps"))
 
     out.append(field("Open", f"{len(open_steps)} — unranked, and deliberately so"))
     for step in open_steps:
         out.extend(cont(line) for line in wrap(f"{step.get('n')}. {step.get('title')}", LABEL + 2))
-
-    if gates:
-        passed = [g for g in gates if g.get("status") == "passed"]
-        out.append(field("Gates", "retired — {} passed: {}".format(
-            len(passed), ", ".join(f"{g.get('gate')} {g.get('on')}" for g in passed))))
-        out.append(cont("docs/GATES.md is the record of what was measured, not a"))
-        out.append(cont("schedule."))
     return out
 
 
-def do_this_next(mapdata: Dict[str, object], gists: Dict[str, Tuple[str, List[str]]]) -> List[str]:
+def do_this_next(open_steps: List[Dict[str, object]], gists: Dict[str, Tuple[str, List[str]]]) -> List[str]:
     """Every open step, with what governs it. NOT one step, and not ranked.
 
-    This used to read the single `next` the map was required to carry and present it as the
-    answer. Both halves were wrong: the map's one-`next` rule forced a step to hold the flag
+    This used to read the single `next` the build order was required to carry and present it as
+    the answer. Both halves were wrong: the one-`next` rule forced a step to hold the flag
     whether or not anyone was working on it, and printing one item under `DO THIS NEXT` made
     a scheduling claim `status.py` has no standing to make. It lists what is open; which one
     matters today is the owner's (D80).
     """
-    open_steps = mapdata.get("OPEN") or []
     if not open_steps:
-        return [field("Nothing open", "every step in docs/map.py has shipped.")]
+        return [field("Nothing open", "every step in docs/gates/ has shipped.")]
 
     out: List[str] = []
     for i, step in enumerate(open_steps):
         if i:
             out.append("")
         out.append(field(f"{step.get('n')}.", str(step.get("title"))))
-        governed = sorted(set(re.findall(r"\bD[1-9][0-9]{0,2}\b", str(step.get("note") or ""))),
-                          key=lambda d: int(d[1:]))
-        for name in governed[:3]:
+        named: List[str] = []
+        for name in re.findall(r"\bD[1-9][0-9]{0,2}\b", str(step.get("text") or "")):
+            if name not in named:
+                named.append(name)
+        for name in named[:3]:
             title, _ = gists.get(name, ("(no such entry in docs/decisions/)", []))
             out.extend(cont(line) for line in wrap(f"{name}  {title}", LABEL + 2))
-    out.append(field("Read first", "docs/GATES.md `What is open` · `make map`"))
+    out.append(field("Read first", "docs/gates/steps `What is open` · `make map`"))
     return out
 
 
@@ -571,26 +649,9 @@ def audit_line() -> List[str]:
     ]
 
 
-# A map `note` argues its case at length — that is what the field is for. Printing the
-# WHOLE of one under a heading called "Blind spots" put a 900-character paragraph about the
-# codes package into `make status`, most of it about what the track deliberately does not
-# share with the singles track, none of that a blind spot. Taking the sentences that
-# actually say `blind` keeps the field free to keep arguing and the status line short.
-_SENTENCE = re.compile(r"(?<=[.;])\s+")
-
-
-def blind_sentences(note: str) -> str:
-    hits = [part.strip() for part in _SENTENCE.split(note) if "blind" in part.lower()]
-    return " ".join(hits) if hits else note
-
-
-def blind_spots(mapdata: Dict[str, object]) -> List[str]:
-    """From structured fields, never from prose.
-
-    The T1 caveat is written into the score file by the test itself; the T6 caveat is the
-    `note` on the map's geometry entry, which the `map data` row audits. Rewording
-    docs/GATES.md cannot break either one.
-    """
+def blind_spots() -> List[str]:
+    """From a structured field, never from prose: the T1 caveat is written into the score file by the
+    test itself, so rewording docs/gates/ cannot break it."""
     notes: List[str] = []
     for path in resolve("harness/results/t1*.json"):
         try:
@@ -599,10 +660,6 @@ def blind_spots(mapdata: Dict[str, object]) -> List[str]:
             continue
         if note and note not in notes:
             notes.append(str(note))
-    for component in mapdata.get("COMPONENTS") or []:
-        note = str(component.get("note") or "")
-        if "blind" in note.lower() or "NOT that" in note:
-            notes.append(f"{component.get('path')} — {blind_sentences(note)}")
 
     if not notes:
         return []
@@ -1152,15 +1209,14 @@ def store() -> List[str]:
 
 
 def render() -> str:
-    found = resolve("docs/map.py")
-    mapdata = literals(found[0]) if found else {}
+    shipped, open_steps = steps_by_list()
     gists = load_gists()
 
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     header = "BANCHI — status"
     lines = [f"{header}{stamp:>{WIDTH - len(header)}}", "=" * WIDTH, "", "WHERE YOU ARE"]
-    lines += where_you_are(mapdata)
-    nxt = do_this_next(mapdata, gists)
+    lines += where_you_are(shipped, open_steps)
+    nxt = do_this_next(open_steps, gists)
     if nxt:
         # NOT "DO THIS NEXT". The heading made the same scheduling claim the single-`next`
         # field did, one layer up: whatever is printed under it reads as the instruction.
@@ -1169,9 +1225,9 @@ def render() -> str:
     lines += audit_line()
     lines.append(field("harness", "NOT RUN — status never runs it. Committed scores below."))
     lines += t1_blocks()
-    lines += blind_spots(mapdata)
-    lines.append(field("the map", "`make map` renders docs/map.py — a package, a path, a"))
-    lines.append(cont("decision id, or `--stale` for prose its file has outrun."))
+    lines += blind_spots()
+    lines.append(field("the map", "`make map` prints docs/map/ — a file, an area or a folder/,"))
+    lines.append(cont("or `--stale` for prose its file has outrun."))
     lines += ["", "REPO"] + repo() + hooks() + guards() + ports_and_store() + leftovers() + backup()
     lines += ["", "SERVING"] + serving() + slow_requests()
     lines += ["", "STORE"] + store()

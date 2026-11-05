@@ -383,9 +383,8 @@ export function useInOverlay(): boolean {
 
 /* ---- Dialog: the bare panel, for a caller that builds its own head -------------------------------- */
 
-/** PROMOTED FROM `InventoryOverlay.tsx` (round 4, docs/map.py's own note on `runsOverlay.ts`:
- *  "the behavior `InventoryOverlay` has, waiting to be promoted to a kit Dialog so the product
- *  has one of these rather than two"). Unlike `Sheet`/`Modal`, `Dialog` owns no title, no icon
+/** The kit's one bare dialog, so the product has one of these rather than two: it carries the
+ *  behaviour `InventoryOverlay.tsx` had. Unlike `Sheet`/`Modal`, `Dialog` owns no title, no icon
  *  and no Close of its own — every caller here already builds its own head (BoxOps' sheet
  *  title, Inventory's Move dialog, the lightbox's own single control) and mounting IS opening:
  *  a caller renders it only while its own `open` state is true, so there is no `open` prop and

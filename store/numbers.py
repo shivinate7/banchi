@@ -2,8 +2,8 @@
 stripped of a glued set code, and decomposed. No imports beyond the stdlib, on purpose (D63).
 
 WHY THIS IS A LEAF MODULE UNDER `store/` AND NOT LEFT IN `pipeline/join.py`. `store/` may
-not import `pipeline/` — D63's own argument (`docs/decisions/D063-…md`, and
-`docs/map.py`'s `pipeline/orders.py` entry: "store/ imports nothing from pipeline/, so
+not import `pipeline/` — D63's own argument (`docs/decisions/D063-…md`:
+"store/ imports nothing from pipeline/, so
 there is no cycle") — because the arrow runs the other way: `pipeline/orders.py`,
 `pipeline/readings.py` and `pipeline/selection.py` all import `store`, and a cycle through
 `store -> pipeline -> store` would be exactly the shape that rule exists to forbid.

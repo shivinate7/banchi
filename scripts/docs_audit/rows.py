@@ -39,8 +39,6 @@ from .env_map import (
     check_env_vocabulary,
     check_hatch_state,
     check_hook_roster,
-    check_map_data,
-    check_map_sections,
     check_subagent_override,
 )
 from .games import (
@@ -112,7 +110,7 @@ from .spelling import check_shell_substitution
 from .sleeps import check_fixed_sleeps
 from .capability_homes import check_capability_homes
 from .stability import check_font_stability, check_layout_transitions, check_scrollbar_gutter, check_state_layout
-from .status_reach import check_closed_vocabularies, check_paid_read_model, check_status_sources, check_tested_by_reach
+from .status_reach import check_closed_vocabularies, check_paid_read_model, check_status_sources
 from .strings import check_no_mechanism_on_screen, check_typed_interpunct, check_views_opsec
 
 # ------------------------------------------------------------------------------ main
@@ -209,10 +207,8 @@ ROWS: Tuple[AuditRow, ...] = (
     AuditRow("threshold agreement", 1, check_threshold_agreement, ()),
     AuditRow("dist path agreement", 1, check_dist_path_agreement, ()),
     AuditRow("import filename agreement", 1, check_import_filename_agreement, ()),
-    AuditRow("map data", 1, check_map_data, ("allowed",)),
     AuditRow("hook roster", 2, check_hook_roster, ()),
     AuditRow("claude hooks", 2, check_claude_hooks, ()),
-    AuditRow("map sections", 3, check_map_sections, ()),
     AuditRow("build order mirror", 2, check_build_order_mirror, ()),
     AuditRow("game vocabulary", 1, check_game_vocabulary, ()),
     AuditRow("game coverage", 3, check_game_coverage, ()),
@@ -226,7 +222,6 @@ ROWS: Tuple[AuditRow, ...] = (
     AuditRow("export request", 1, check_export_request, ()),
     AuditRow("transport promise", 1, check_transport_promise, ()),
     AuditRow("hint reasons", 1, check_hint_reasons, ()),
-    AuditRow("tested_by reach", 2, check_tested_by_reach, ()),
     AuditRow("status sources", 2, check_status_sources, ()),
     AuditRow("paid-read model", 1, check_paid_read_model, ()),
     AuditRow("design tokens", 1, check_design_tokens, ()),

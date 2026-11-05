@@ -3416,7 +3416,7 @@ class Inventory:
                           worse than a gap.
 
         GAPS ARE CORRECT AND ARE NEVER CLOSED. D10 argues the same thing about the card index
-        and `docs/map.py`'s culled step 12 is the same rule about a build-order id: a reused
+        and the culled step 12 of the build order is the same rule about a build-order id: a reused
         identifier resurrects every reference to the thing that used to wear it, and nothing
         can detect that, because a stale id still resolves.
         """

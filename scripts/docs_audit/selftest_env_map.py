@@ -36,6 +36,137 @@ from .screens import _ROSTER_RE, _storage_sites, check_storage_keys
 from .spelling import check_shell_substitution
 
 
+def audit_runs_without_map_py(ok) -> None:
+    """`make docs-audit` says nothing about the retired map module.
+
+    THE FIXTURE is every tracked file in this repo except that module, copied outside any git
+    repository, so the audit reads the worktree view, as `make docs-audit` does. The whole audit
+    runs, so a row that still reads the file is caught whatever it is named. A crashed audit prints
+    a traceback, and the first assert reads for one, so a crash cannot pass as silence. Costs one
+    full audit (about 20 s) and a copy of the tracked tree (about 20 MB). On the commit before the
+    retirement it was red: the hook roster row read the retired module with no existence check, and
+    the audit crashed.
+    """
+    import os
+    import shutil
+    import subprocess
+    import sys
+
+    from .selftest_paths_commands_2 import _run_folder
+
+    print("\ndocs-audit with the retired map module absent: the audit completes, and no finding names it")
+    with _run_folder() as run_dir:
+        tree = run_dir / "tree"
+        listed = subprocess.run(
+            ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, text=True, check=True,
+        ).stdout
+        for rel in filter(None, listed.split("\0")):
+            if rel == "docs/map.py":
+                continue
+            source = ROOT / rel
+            if not os.path.lexists(source):
+                continue
+            target = tree / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if source.is_symlink():
+                os.symlink(os.readlink(source), target)
+            else:
+                shutil.copy2(source, target)
+        audit = subprocess.run(
+            [sys.executable, "scripts/docs-audit.py"], cwd=tree, capture_output=True,
+            text=True, timeout=900,
+        )
+        out = audit.stdout + audit.stderr
+        ok("BANCHI docs audit" in out and "Traceback" not in out,
+           "the audit runs to its report with the retired map module absent, and prints no traceback", out[-400:])
+        named = [line for line in out.splitlines() if "docs/map.py" in line]
+        ok(not named, "no finding of the audit names docs/map.py", "\n".join(named[:8]))
+
+
+def hook_roster_sees_a_deleted_map_line(ok) -> None:
+    """The hook roster row turns red when a commit-path hook loses its map line.
+
+    THE FIXTURE is the real hook directory and the real map pages, copied. The control is the copy as
+    it stands, which must pass. The case deletes the one map line for a real hook, `pre-push`, from the
+    copy and asserts the row names that hook. Each assert names one cause.
+    """
+    import shutil
+
+    from . import env_map
+    from .core import Report
+    from .selftest_paths_commands_2 import _run_folder, _swapped
+
+    print("\nthe hook roster row turns red when a commit-path hook loses its map line")
+    with _run_folder() as run_dir:
+        fx = run_dir / "hook-roster"
+        shutil.copytree(ROOT / "scripts" / "githooks", fx / "scripts" / "githooks")
+        shutil.copytree(ROOT / "docs" / "map", fx / "docs" / "map")
+
+        def roster() -> list:
+            report = Report()
+            with _swapped(env_map, ROOT=fx):
+                env_map.check_hook_roster(report)
+            return report.checks[0].findings
+
+        as_copied = roster()
+        page = fx / "docs" / "map" / "scripts.md"
+        lines = page.read_text(encoding="utf-8").splitlines(keepends=True)
+        kept = [line for line in lines if not line.startswith("- `scripts/githooks/pre-push` — ")]
+        ok(len(lines) - len(kept) == 1,
+           "fixture: the copy holds exactly one map line for pre-push, which the case deletes",
+           f"{len(lines) - len(kept)} lines matched")
+        page.write_text("".join(kept), encoding="utf-8")
+        without = roster()
+    ok(not as_copied,
+       "control: the copy as it stands has a map line for every hook",
+       "\n".join(f"{f.where}: {f.message[:120]}" for f in as_copied[:4]))
+    ok(any("scripts/githooks/pre-push" in f.where for f in without),
+       "deleting the pre-push map line is a finding that names pre-push",
+       "\n".join(f.where for f in without[:6]))
+
+
+def build_order_mirror_sees_a_renumbered_step(ok) -> None:
+    """The build order mirror turns red when a step file's number stops matching its manifest id.
+
+    THE FIXTURE is the real gates corpus and the gates reader beside it, copied. The control is the
+    copy as it stands, which must pass. The case renumbers step 24's file (its leading `24.` becomes
+    `25.`) and asserts the row names step 24, which the manifest still lists. Each assert names one cause.
+    """
+    import shutil
+
+    from . import core
+    from .core import Report
+    from .env_map import check_build_order_mirror
+    from .selftest_paths_commands_2 import _run_folder, _swapped
+
+    print("\nthe build order mirror turns red when a step file is renumbered")
+    with _run_folder() as run_dir:
+        fx = run_dir / "build-order"
+        shutil.copytree(ROOT / "docs" / "gates", fx / "docs" / "gates")
+        (fx / "scripts").mkdir()
+        shutil.copy(ROOT / "scripts" / "gates_corpus.py", fx / "scripts" / "gates_corpus.py")
+
+        def mirror() -> list:
+            report = Report()
+            with _swapped(core, ROOT=fx):
+                check_build_order_mirror(report)
+            return report.checks[0].findings
+
+        as_copied = mirror()
+        step = next((fx / "docs" / "gates" / "steps").glob("step024-*.md"))
+        text = step.read_text(encoding="utf-8")
+        renumbered = text.replace("24. ", "25. ", 1)
+        ok(renumbered != text, "fixture: step 24's file opens with its number, which the case changes")
+        step.write_text(renumbered, encoding="utf-8")
+        after = mirror()
+    ok(not as_copied,
+       "control: the copy as it stands has the same step ids in the manifest and the corpus",
+       "\n".join(f"{f.where}: {f.message[:120]}" for f in as_copied[:4]))
+    ok(any("step 24" in f.message for f in after),
+       "renumbering step 24's file is a finding that names step 24",
+       "\n".join(f"{f.where}: {f.message[:120]}" for f in after[:6]))
+
+
 def run(ok) -> None:
     report = Report()
     check_identifier_spelling(report)
@@ -343,4 +474,8 @@ def run(ok) -> None:
     # Argparse's own exit for a bad flag is 2 — this script's advisory code, which the
     # pre-commit hook prints and allows. A caller that grew a stale flag would switch the
     # gate off and look routine doing it.
+    audit_runs_without_map_py(ok)
+    hook_roster_sees_a_deleted_map_line(ok)
+    build_order_mirror_sees_a_renumbered_step(ok)
+
     print("\ninvoking this script wrongly is not mistaken for an advisory")

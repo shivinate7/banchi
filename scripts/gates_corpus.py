@@ -88,7 +88,7 @@ def tests() -> List[str]:
 def steps(list_name: Optional[str] = None) -> List[str]:
     """Build-order step ids. `list_name` is `"shipped"`, `"open"`, or omitted for both,
     shipped first — never a single sorted union, because that would erase which list an id
-    is in, which is the fact `build order mirror` reconciles against `docs/map.py`."""
+    is in, which is the fact `build order mirror` reconciles against the corpus text."""
     both = _manifest().get("steps") or {"shipped": [], "open": []}
     if list_name is not None:
         return list(both.get(list_name) or [])

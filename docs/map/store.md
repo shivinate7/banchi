@@ -6,21 +6,40 @@ The master store: inventory, cache, standing queues, order ledger and the histor
 
 - `store/__init__.py` — Makes `store` a package.
 - `store/cache.py` — The `identifications` table — answers already paid for.
+  - Decisions: `D88`, `D2`, `D21`, `D317`
 - `store/clock.py` — The one UTC-second stamp every receipt writes, and the one way to read it back.
+  - Decisions: `D88`
 - `store/dailyprices.py` — `daily_prices` (one row per product, printing and source update day, never deleted) and `daily_price_updates` (one row per source stamp: the groups saved and whether every group was, which is what lets a pass skip).
+  - Decisions: `D88`, `D219`, `D325`
 - `store/db.py` — The SQLite file: the schema (one payload column per row with a few indexed columns derived beside it), `SqliteSource` behind every `Rows`, the per-session flush, the events table that is the history, and the one-time lossless import of a legacy JSON store into it — under the lock, files moved to legacy-json/ with a receipt.
+  - Decisions: `D145`, `D172`, `D189`, `D192`, `D140`, `D213`, `D219`, `D243`, `D273`, `D174`, `D294`, `D320`, `D299`, `D326`, `D89`, `D63`, `D20`, `D26`, `D58`, `D86`, `D88`, `D134`, `D166`
 - `store/files.py` — Where the store lives, the lock, and the atomic replace the files still beside the database use (prices.json, codes.jsonl).
+  - Decisions: `D15`, `D86`, `D166`, `D189`, `D13`, `D43`
 - `store/master.py` — The cards, boxes and listings tables — cards, positions, SKUs, listing states, `open_section`, which puts one divider in front of the next card at the index only the store can read (D10), and D89's `record_photo_reclaimed`.
+  - Decisions: `D88`, `D63`, `D55`, `D67`, `D26`, `D10`, `D83`, `D89`, `D7`, `D58`, `D115`, `D173`, `D28`, `D258`, `D3`, `D21`, `D23`, `D167`, `D36`, `D213`, `D172`, `D183`, `D294`, `D145`, `D20`, `D264`, `D299`, `D34`, `D87`, `D100`, `D273`, `D259`, `D132`, `D300`, `D8`, `D11`, `D22`, `D24`, `D56`, `D59`, `D118`, `D164`, `D192`, `D253`
 - `store/numbers.py` — A card's number, composed (`join_key`), screen-drawn (`display_number`) and stripped of a glued set code (`strip_set_code`) — a LEAF module with no imports beyond the stdlib (D63): `store/` may not import `pipeline/`, so these three pure functions moved out of `pipeline/join.py` to where both `store/master.py` and `pipeline/join.py` (which imports them back and re-exports under the same names) can reach them.
+  - Decisions: `D55`, `D67`, `D234`, `D63`, `D36`, `D252`, `D259`
 - `store/orders.py` — The `orders` and `fulfilment` tables — one record per {source}:{order_number}, upserted.
+  - Decisions: `D113`, `D63`, `D063`, `D193`, `D88`, `D326`, `D7`, `D10`, `D13`, `D16`, `D20`, `D21`, `D24`, `D26`, `D29`, `D36`, `D138`, `D69`
 - `store/photos.py` — Where a card's photograph lives, and the ONLY module permitted to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure function of the card's own name.
+  - Decisions: `D172`, `D83`, `D3`, `D23`, `D26`, `D43`, `D89`, `D183`
 - `store/postings.py` — `Postings`, an accumulator like `Inventory.events` and not a `Rows` table: `.record()` appends a posted `TCG Marketplace Price` to an in-memory list, flushed by `Store.write()` with `db.append_postings` into `price_postings` — one `INSERT` per row, never an `UPDATE` or a `DELETE`.
+  - Decisions: `D243`, `D88`, `D212`, `D219`, `D189`, `D86`, `D247`
 - `store/pricearchive.py` — `price_history` (one row per (sku, range, start), never `width_days` — `semiannual` and `annual` are both seven-day buckets, so a width-only key would collide two different observations, exactly the D278 collision this table exists to prevent) and `price_history_sources` beside it (one row per range last swept — requested, answered, refused).
+  - Decisions: `D219`, `D278`, `D88`, `D189`
 - `store/queues.py` — The standing queues — the `queues` table, one mapping per queue name — and the cross-queue release a re-routed position needs.
+  - Decisions: `D37`, `D26`, `D22`, `D4`, `D9`, `D28`, `D88`
 - `store/readings.py` — The `readings` table (sku -> the newest market reading, one row per SKU) and `readings_sources` beside it (one row per file `collect` read, and how many SKUs it offered BEFORE arbitration — not recoverable from `readings` alone once two sources have collided on a SKU).
+  - Decisions: `D88`, `D189`, `D7`, `D86`, `D87`
 - `store/rows.py` — `Rows`: a keyed mapping of records that is a dict to every caller and, bound to a `Source`, loads one row, one indexed column's matches, or column values with no object built at all.
+  - Decisions: `D192`, `D88`
 - `store/sendclaims.py` — The `send_claims` table — D174's claim shape over a send to TCGplayer.
+  - Decisions: `D192`, `D174`, `D88`, `D273`
 - `store/session.py` — Lock-free read, or locked read-modify-write, over one SQLite transaction — `Snapshot` is the API and every field of it loads only the rows a caller names.
+  - Decisions: `D174`, `D88`, `D273`, `D189`, `D219`, `D243`, `D320`, `D134`, `D145`, `D13`, `D138`, `D63`, `D191`
 - `store/skus.py` — `skus` — one row per TCGplayer Id this repo has ever read out of a cached export: the six fact cells verbatim (`product_line`, `set_name`, `product_name`, `number`, `rarity`, `condition`), `grade`/`printing` split off `condition` at write time by `split_condition` (five recognized grades.
+  - Decisions: `D137`, `D88`, `D166`, `D189`, `D219`
 - `store/slabs.py` — The My Slabs tables and their writes: `slabs` (one row per cert and grader, the grader in Card Ladder's name), `slab_snapshots` (one row per slab per day, a second write that day replaces it) and `slab_sales` (keyed by Card Ladder's sale id, never deleted, shared by every slab that read it).
+  - Decisions: `D63`, `D320`, `D88`
 - `store/submissions.py` — The `submissions` table — one row per press, holding the position keys that press is about to pay to read.
+  - Decisions: `D88`, `D192`, `D174`, `D7`, `D18`, `D36`, `D180`

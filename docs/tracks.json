@@ -1,0 +1,18 @@
+[
+  {
+    "name": "singles",
+    "owns": "",
+    "decisions": "docs/decisions/",
+    "rules": "CLAUDE.md",
+    "status": "current",
+    "note": "the default track: every path this map covers except the codes ones below."
+  },
+  {
+    "name": "codes",
+    "owns": "codes/",
+    "decisions": "docs/specs/code-cards.md",
+    "rules": "code-card-fork/CLAUDE.md",
+    "status": "shakedown",
+    "note": "C1-C11. The decode path, the ledger and the product claim are BUILT, and D70 gave the track a screen of its own at #/codes, so 'shakedown' means unproven, not unbuilt: docs/specs/code-cards.md section 8 records that NO REAL CODE CARD HAS EVER BEEN THROUGH THIS PIPELINE, and every measurement in the track is synthetic. The channel decision is RECORDED and NOT executed, because six venue families were researched and every one came back marginal. That is what the track waits on. It does not wait on a gate: the gating system is retired."
+  }
+]

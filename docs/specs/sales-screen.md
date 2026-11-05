@@ -275,4 +275,4 @@ Each is red before the build and green after. Server checks run on a synthetic s
 `pipeline/stockmix.py` (new), `server/capture_server.py` (the route), `app/src/mixPivot.ts` (new),
 `app/src/MixView.tsx` (new, drawn inside Sales' own `<Page>`), `app/src/Revenue.tsx` (the view
 switch), `app/src/kit/data.tsx` (`FilterFacet.countOnly`), `app/src/server.ts`, `app/src/types.ts`,
-`harness/tests/t7/read_budget.py`, `scripts/views.txt` and `docs/map.py`.
+`harness/tests/t7/read_budget.py`, `scripts/views.txt` and `docs/map/`.

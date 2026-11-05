@@ -83,7 +83,7 @@ _NOT_A_GATE_MARKER = "NOT A GATE:"
 def _checks_registry() -> Optional[Tuple[List[dict], dict]]:
     """(CHECKS, NEEDS) out of scripts/checks.py, by literal_eval and never by import.
 
-    Same access `docs/map.py` and `scripts/status.py`'s SOURCES get, for the same reason: a
+    Same access `scripts/status.py`'s SOURCES gets, for the same reason: a
     read-only check must not execute the code it is checking.
     """
     if not exists(CHECKS_REGISTRY):

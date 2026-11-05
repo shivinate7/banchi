@@ -16,11 +16,9 @@ from .core import (
     Report,
     _strip_ts_comments,
     entry_parser,
-    module_globals,
     rel,
 )
 from .dispatch import UNDISPATCHED, check_dispatch
-from .env_map import _consumer_block, _map_sections
 from .hygiene import ROSTER_MARK, ROUTE_HASH, _balanced, expected_rosters
 from . import registry_scopes
 from .registry_scopes import workflow_shards, workflow_step_problems, INVOKERS, UNIT_COMMAND, check_audit_invocation, check_check_registry, fleet_scripts
@@ -357,32 +355,6 @@ def run(ok) -> None:
     # route/screen count against ROUTES, and the count it watched is now deleted from
     # prose rather than kept in step. Its helpers (`_bridge_literals`, `_census_pattern`,
     # `_route_personas`, `_census_text`) go with it.
-
-    # THE CONSUMER BLOCK IS A TWO-COLUMN LAYOUT AND A SEPARATOR-BASED READER GOT IT WRONG
-    # TWICE, in opposite directions: a wrapped description ended the block after one entry,
-    # and the longest path in it is separated from its description by a SINGLE space, so a
-    # `\s{2,}` split dropped that row too. Both misreads made a correct docstring fail.
-    print("\nthe map's consumer list is read by column, not by separator")
-    _saved = module_globals()["MAP"]
-    try:
-        sample = ROOT / "docs" / "map.py"
-        module_globals()["MAP"] = sample
-        word, rows = _consumer_block()
-        ok(word == "four", "the declared count word is read", str(word))
-        ok(len(rows) == 4, "all four rows are found, wrapped descriptions and all", str(rows))
-        ok(
-            "scripts/decision-context.py" in rows,
-            "including the row whose path leaves a single space before its description",
-            str(rows),
-        )
-        ok(
-            "you, or an agent" in rows,
-            "and the one entry that is a phrase with spaces in it, not a path",
-            str(rows),
-        )
-        ok("TRACKS" in _map_sections(), "TRACKS is a section this check can see", str(_map_sections()))
-    finally:
-        module_globals()["MAP"] = _saved
 
     # THE REQUIRED CHECK'S WIRING (the `all jobs passed` row). The reader is
     # `registry_scopes.all_jobs_passed_findings`, a pure function over checks.yml's text, the other

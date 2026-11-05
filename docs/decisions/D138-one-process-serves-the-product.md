@@ -43,7 +43,7 @@ Plan: docs/specs/one-process.md#0-what-this-is (python)
 
 ### The plan: build order step 22
 
-**The full plan is `docs/specs/one-process.md`.** It was written after three more questions: the cold start, a failed build, and the verbs. It also names the one thing this entry missed. A port is part of the origin, so the camera grant and every `localStorage` key (D27) reset once at `:8000`. The plan is recorded in `docs/map.py`'s `OPEN` and in `docs/GATES.md`'s open list, under one id. In order, each step is one PR:
+**The full plan is `docs/specs/one-process.md`.** It was written after three more questions: the cold start, a failed build, and the verbs. It also names the one thing this entry missed. A port is part of the origin, so the camera grant and every `localStorage` key (D27) reset once at `:8000`. The plan is recorded in `docs/gates/`'s open list, under one id. In order, each step is one PR:
 
 1. **The static serve.** The capture server serves `app/dist/` for non-route paths, with the `index.html` fallback. If `dist/` is absent, it refuses to serve the app and says so. The API stays up. T7 covers the route, the fallback, and the absence.
 2. **The supervisor's second job.** Drop the app child. Watch `app/src`, `app/public`, `app/index.html` and the Vite config. When stale, build it, log the build, and serve the old bundle until it lands. Relax `make dev`'s refusal. `make up` prints one link, on the capture port.

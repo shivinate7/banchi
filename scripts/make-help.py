@@ -13,7 +13,7 @@ no comment above it prints a note asking for one, rather than nothing — a sile
 how the old three-copy drift went unnoticed for as long as it did.
 
 Stdlib only, reads the Makefile as text and imports nothing project-side — the same rule
-scripts/status.py, scripts/map-view.py and scripts/docs-audit.py follow: a tool that
+scripts/status.py and scripts/docs-audit.py follow (scripts/map-tool.py loads only scripts/map-check.py, to find the shared skill): a tool that
 describes the build must not run it.
 """
 

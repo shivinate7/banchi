@@ -10,11 +10,11 @@
 
    **The roster is not restated here.** `make docs-audit` names every check, and marks each blocking or advisory. That output is the register. A restated count cost more machinery to keep honest than any other check, all of it guarding a fact nothing downstream consumed. So the claim was deleted. D18 records the general rule.
 
-   **A check is named, never numbered.** D17 sets this rule for the map's checks, now the `map data` row and `make map-check`, and it now covers all checks. Positions move. The report's labels are the names.
+   **A check is named, never numbered.** D17 sets this rule for the map's checks, now `make map-check`, and it now covers all checks. Positions move. The report's labels are the names.
 
    **A decision id names one entry.** The old single decisions file carried three entries numbered `D50` at once: the feedback states, the Cmd-arrow nav and the photo URL. Three sessions had each taken the next free number against the same base. Every row stayed green. The cause was the reader's shape. `decision_headings` returned a set, so three headings collapsed to one. The published count was of distinct ids and read 51 over a file holding 53. The citation scan passed when a heading existed, not when exactly one did. A reader that collapses its input cannot report what it collapsed. So the list is now the primitive, and the set is derived from it.
 
-   **A duplicate id blocks.** `governed_by` in `docs/map.py`, D17's decision-context hook and every `(D50)` in a comment resolve an id to an entry. With three candidates, they resolve to whichever is found first. The citation is then wrong in a way nothing can see. It points at a real heading, just not the intended one. Two headings with one id is provably wrong, however the file got that way. That is this entry's own test for mechanical.
+   **A duplicate id blocks.** A decisions line in `docs/map/`, D17's decision-context hook and every `(D50)` in a comment resolve an id to an entry. With three candidates, they resolve to whichever is found first. The citation is then wrong in a way nothing can see. It points at a real heading, just not the intended one. Two headings with one id is provably wrong, however the file got that way. That is this entry's own test for mechanical.
 
    **The three were renumbered by position in the file, not by who landed first.** The file stays ascending, and no entry's 200-line block moved. The first keeps D50. The others became D51, D183 and D138. The most-cited entry was left untouched, which kept the change reviewable.
 
@@ -49,7 +49,7 @@ Concurrent sessions check worktrees out under `.claude/worktrees/<name>/`. Each 
 
 The script opens, compares, prints, and sets an exit code. It parses with `ast` rather than importing, so it does not run project code. Its only writes are inside `--self-test`, into a temporary directory it creates and destroys.
 
-**`--self-test` runs in `make check`, never in the git hook.** It is the one mode of this script that writes. D18 forbids a writing thing on the path that decides whether a commit proceeds. `make check` is run by a person on demand, so it is not that path. Until it was added to `make check`, nothing ran it at all. It had gone red unnoticed. A stale fixture in `tested_by reach` had stopped being false while every commit stayed green. The debts record carries the account. The residual gap: `make check` is not automatic either, so a red self-test surfaces only when somebody asks.
+**`--self-test` runs in `make check`, never in the git hook.** It is the one mode of this script that writes. D18 forbids a writing thing on the path that decides whether a commit proceeds. `make check` is run by a person on demand, so it is not that path. Until it was added to `make check`, nothing ran it at all. It had gone red unnoticed. A stale fixture in a docs-audit case had stopped being false while every commit stayed green. The debts record carries the account. The residual gap: `make check` is not automatic either, so a red self-test surfaces only when somebody asks.
 
 Adding a `--fix` flag is a change to this entry, not a configuration knob. The failure this entry exists to prevent is this:
 

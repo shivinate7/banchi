@@ -10,7 +10,7 @@ card is located at all (D24).
 
 PURE LITERALS, IMPORTING NOTHING FROM THIS REPO. `scripts/docs-audit.py` reads the
 registry with `ast.literal_eval` rather than importing it, exactly as it reads
-`docs/map.py`, because an audit must not run project code. Two consequences that a later
+`scripts/status.py`'s `SOURCES`, because an audit must not run project code. Two consequences that a later
 session will otherwise undo by accident:
 
   - No name from this module may appear *inside* a registry literal. `"normal"` is written
@@ -259,8 +259,8 @@ DEFAULT_GAME = "pokemon"
 #
 # THE RULE JUST COLLECTED ITS FIRST PIECE OF EVIDENCE, AND IT VINDICATED THE WIDENING.
 # `finish_by_rarity["Rare"]` carried `normal` against SV09, which stocks no plain Near Mint
-# `Rare` row — authored beyond the evidence on purpose, and cited in D22, D23 and
-# `docs/map.py` as THE example of a deliberate superset. The wider Pokemon export now
+# `Rare` row — authored beyond the evidence on purpose, and cited in D22 and
+# D23 as THE example of a deliberate superset. The wider Pokemon export now
 # stocks 60 of them (SM Cosmic Eclipse 38, SWSH Crown Zenith 22). Narrowing that entry to
 # SV09's observations would have made two whole eras of plain `Rare` unclaimable. The live
 # example of an unproved pair has moved to `one_piece`, where `SR` and `TR` appear

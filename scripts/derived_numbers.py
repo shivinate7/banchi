@@ -37,19 +37,18 @@ new function somebody would have to sit down and write, with no live artifact to
 
 DELIBERATELY LEFT OUT, AND WHY (read before adding either back):
 
-  - CLAUDE.md's token estimates for `docs/map.py` and `docs/decisions/` ("roughly N tokens,
-    bytes÷4") stay hand-written prose, never a marker. A tokenizer is not stdlib, and
+  - CLAUDE.md's token estimate for `docs/decisions/` ("roughly N tokens, bytes÷4") stays
+    hand-written prose, never a marker. A tokenizer is not stdlib, and
     byte-to-token is a MEASURED ratio this repo has been burned by inventing before (see
     MEMORY.md's `big-output-never-enters-context`).
-    The BYTE counts and line/file counts those estimates are built from ARE derived —
-    `docs_map_byte_count`, `docs_map_line_count`, `docs_decisions_byte_count`,
-    `docs_decisions_file_count` below — because a byte or a file is exact and rots exactly
+    The BYTE counts and file counts that estimate is built from ARE derived —
+    `docs_decisions_byte_count`, `docs_decisions_file_count` below — because a byte or a file is exact and rots exactly
     the way `app_src_file_count` already proved it does; only the tokens-per-byte multiplier
     stays a stated, sourced approximation in the prose beside the derived byte count.
-  - "218 references live in this tree" (build-order step ids, `n` in docs/map.py). Measured
+  - "218 references live in this tree" (build-order step ids). Measured
     three candidate definitions while building this registry — a bare `step \\d+` scan across
     tracked markdown alone (241), the same scan restricted to numbers that are actually valid
-    `n` ids in docs/map.py (391, across the whole tracked tree) — and none of them lands
+    build-order step ids (391, across the whole tracked tree) — and none of them lands
     anywhere near 218, because "step" is ordinary English: a per-item build playbook
     could number its OWN 27 unrelated steps, and motion-trigger prose
     uses "step" as a capture stage. There is no citation registry in this tree that marks a
@@ -184,26 +183,6 @@ def _two_significant_figures(value: int) -> int:
         return value
     step = 10 ** magnitude
     return int(round(value / step) * step)
-
-
-def docs_map_byte_count(root: Path) -> int:
-    """`docs/map.py`'s own size in bytes. Backs the sentence that reading the whole file
-    costs real context — the byte count is exact and moves every time the file does; the
-    token estimate paired with it in prose is not derived here (see this module's own
-    "DELIBERATELY LEFT OUT" note) because bytes-to-tokens is a measured ratio, not a fact
-    a file's size alone can give."""
-    path = root / "docs" / "map.py"
-    if not path.is_file():
-        raise FileNotFoundError(str(path))
-    return _two_significant_figures(path.stat().st_size)
-
-
-def docs_map_line_count(root: Path) -> int:
-    """`docs/map.py`'s own line count, the same file `docs_map_byte_count` measures."""
-    path = root / "docs" / "map.py"
-    if not path.is_file():
-        raise FileNotFoundError(str(path))
-    return path.read_text(encoding="utf-8", errors="ignore").count("\n")
 
 
 def docs_decisions_byte_count(root: Path) -> int:
