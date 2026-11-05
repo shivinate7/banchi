@@ -49,7 +49,7 @@ Concurrent sessions check worktrees out under `.claude/worktrees/<name>/`. Each 
 
 The script opens, compares, prints, and sets an exit code. It parses with `ast` rather than importing, so it does not run project code. Its only writes are inside `--self-test`, into a temporary directory it creates and destroys.
 
-**`--self-test` runs in `make check`, never in the git hook.** It is the one mode of this script that writes. D18 forbids a writing thing on the path that decides whether a commit proceeds. `make check` is run by a person on demand, so it is not that path. Until it was added to `make check`, nothing ran it at all. It had gone red unnoticed. A stale fixture in `tested_by reach` had stopped being false while every commit stayed green. The debts record carries the account. The residual gap: `make check` is not automatic either, so a red self-test surfaces only when somebody asks.
+**`--self-test` runs in `make check`, never in the git hook.** It is the one mode of this script that writes. D18 forbids a writing thing on the path that decides whether a commit proceeds. `make check` is run by a person on demand, so it is not that path. Until it was added to `make check`, nothing ran it at all. It had gone red unnoticed. A stale fixture in a docs-audit case had stopped being false while every commit stayed green. The debts record carries the account. The residual gap: `make check` is not automatic either, so a red self-test surfaces only when somebody asks.
 
 Adding a `--fix` flag is a change to this entry, not a configuration knob. The failure this entry exists to prevent is this:
 
