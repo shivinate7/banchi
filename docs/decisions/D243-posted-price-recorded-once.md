@@ -18,7 +18,7 @@ serves a single run's `emit`. `pipeline/merge.py:import_rows` serves a merged se
 `store/postings.py`'s `Postings.record()` is called once per SKU
 at the exact point each caller already decides a row reached a file. That point is
 `cli/cmd_emit.py`'s existing `pushed` gate for both emit paths, and `reprice apply`'s
-`--write` gate for the third. It is never earlier, and never for a price only proposed. `_master_take_off` calls no `Postings.record()`, so its price is recorded nowhere.
+`--write` gate for the third. It is never earlier, and never for a price only proposed. `_master_take_off` records its row once its file and receipt are on disk, before the push.
 
 **The table is `price_postings`, one row per SKU per press, and it is never an upsert.**
 `store/pricearchive.py` (D219) and `store/readings.py` (D189) are the same shape one
@@ -42,7 +42,8 @@ One press writes one cell for the whole SKU, so a posting is one row per SKU per
 press wrote to disk. A proposal an operator edited and discarded posts nothing. A run
 refused before a byte was written posts nothing. `store/postings.py`'s `.record()` is simply
 never called for either case. `source` names which press wrote the row: `emit`,
-`emit-merged`, or `reprice`. `run` names the run or the markdown folder that decided it.
+`emit-merged`, `emit-price`, `suggested`, `reprice`, or `take-off`. A take-off keeps the live
+price, so its `replaced` is that same price. `run` names the run or the markdown folder that decided it.
 `replaced` carries the price a posting is known to have superseded. It is filled in only
 where the caller already has that value in hand. `reprice apply` always does — the
 worklist's own `was`. That is the case the owner asked about by name: a SKU priced a second,

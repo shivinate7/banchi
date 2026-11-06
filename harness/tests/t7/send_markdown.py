@@ -2308,6 +2308,10 @@ def check_master_take_off_mutants(checks: Checks) -> None:
             "THE OUTSTANDING SET IS READ ONCE PER LIST",
         ),
         (
+            "posting: the take-off records no price", "            writable.postings.record(\n",
+            "            (lambda **_: None)(\n", check_master_take_off, "THE TAKE-OFF IS A POSTING",
+        ),
+        (
             "already sent: the take-off says the copies are back on the list",
             "so nothing was sent; {_back(record)}.", "so nothing was sent; the copies are back on the list.",
             check_master_take_off, "THE ALREADY-SENT TAKE-OFF SAYS THE RETIREMENT STANDS",

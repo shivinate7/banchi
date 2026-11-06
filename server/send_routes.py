@@ -3305,10 +3305,9 @@ def _master_take_off(box: int, index: int, card) -> dict:
     _RUNNING["stamp"] = stamp
     directory = sends_dir() / stamp
     try:
-        tcgcsv.write_csv(
-            directory / TAKE_OFF_FILE, export.header,
-            [tcgcsv.set_writable(row, add_to_quantity=-size, marketplace_price=price)],
-        )
+        written = tcgcsv.set_writable(row, add_to_quantity=-size, marketplace_price=price)
+        written_price = written[tcgcsv.PRICE_COLUMN]
+        tcgcsv.write_csv(directory / TAKE_OFF_FILE, export.header, [written])
         record = {
             "stamp": stamp,
             "kind": KIND_SEND,
@@ -3340,6 +3339,13 @@ def _master_take_off(box: int, index: int, card) -> dict:
             "unknown": None,
         }
         _write(directory, record)
+        # THE PRICE THIS FILE CARRIES IS A POSTING (D243), recorded once the file and receipt are
+        # on disk and before the push, the gate `emit` keeps for a send. A failed store write
+        # removes the file, so no file goes out without its posting.
+        with Store().write() as writable:
+            writable.postings.record(
+                sku=sku, price=written_price, source=postings.TAKE_OFF, run=stamp, replaced=written_price
+            )
     except Exception:
         shutil.rmtree(directory, ignore_errors=True)
         raise
