@@ -815,6 +815,8 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: steps.gate.outputs.record == 'true'
         with:
+          # overwrite: v4 refuses a same-name upload, so "Re-run all jobs" on a green run would turn this job, and the rollup, red.
+          overwrite: true
           name: design-check-pass-${{ steps.tree.outputs.tree }}
           path: design-check-pass.txt
           retention-days: 30

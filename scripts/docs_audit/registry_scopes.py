@@ -1158,11 +1158,32 @@ def _recorder_findings(where: str, passed: str, job: Optional[str]) -> List[Tupl
     ]
     if job:
         conditions.insert(1, f"needs.{job}.outputs.run != 'false'")
+    # The job-level `if:` is the draft guard and nothing else: the recorder is a needed job, so a
+    # skip there reads as a failed need and turns the rollup red.
+    job_if = re.search(r"^    if:\s*(.+?)\s*$", body, re.M)
+    if job_if is None or " ".join(job_if.group(1).split()) != _DRAFT_GUARD:
+        out.append((where, (
+            f"`design-check-passed` has no job-level `if:` that is exactly the draft guard `{_DRAFT_GUARD}`.\n"
+            "  A needed job decides in its steps, and a skipped need fails the rollup.")))
+    # RECORD is the six conditions joined by top-level `&&`, matched as whole atoms: a substring
+    # test would pass `... || true` or a seventh atom, which change what earns a record.
+    record = re.search(r"^\s*RECORD:\s*\$\{\{\s*(.+?)\s*\}\}\s*$", gate, re.M)
+    atoms = [a.strip() for a in record.group(1).split("&&")] if record else []
     for cond in conditions:
-        if cond not in gate:
+        if cond not in atoms:
             out.append((where, (
-                f"`design-check-passed`'s gate step does not read `{cond}`, so a tree no browser fully\n"
-                "  saw (a skipped, partial or push run) could earn a pass record.")))
+                f"`design-check-passed`'s gate step does not read `{cond}` as a whole `&&` atom, so a tree no\n"
+                "  browser fully saw (a skipped, partial or push run) could earn a pass record.")))
+    if sorted(atoms) != sorted(conditions):
+        out.append((where, (
+            "`design-check-passed`'s gate `RECORD` is not exactly the six conditions joined by `&&`: an extra\n"
+            "  atom or an `||` changes which trees earn a pass record.")))
+    # The gate's output line is the env-derived value, never a literal.
+    out_lines = [ln.strip() for ln in gate.split("\n") if re.search(r"record=.*\$\w+_OUTPUT", ln)]
+    if out_lines != ['echo "record=${RECORD}" >> "$' + 'GITHUB_OUTPUT"']:
+        out.append((where, (
+            "`design-check-passed`'s gate does not write exactly the line `record=${RECORD}` to its step output,\n"
+            "  so the answer is not the one computed from the six conditions (a literal records or refuses every tree).")))
     for step in steps:
         if step is gate:
             continue
