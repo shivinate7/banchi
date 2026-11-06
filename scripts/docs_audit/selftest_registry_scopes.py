@@ -374,8 +374,9 @@ def run(ok) -> None:
     OTHER = "2" * 40
     DEMO = ".github/workflows/demo.yml"
     CHECK_PATH = rel(registry_scopes.CHECK_WORKFLOW)
+    # The pin of EXCLUDED: the jobs the rollup does not need. The pass recorder is needed, so it is
+    # not on this list (D136).
     WANTED = {
-        "design-check-passed": "a recorder: it skips on purpose unless the browser matrix really ran",
         "nightly-alarm": "a reporter: it skips unless a nightly run failed, and a skip is its normal answer",
         "ci-done": "the last job: it reads every other job's result and comments on a red pull request run; it needs the rollup, so the rollup cannot need it",
     }
@@ -427,7 +428,7 @@ jobs:
       - run: make design-check
   design-check-passed:
     needs: [design-check]
-    if: ${{ github.event_name != 'push' }}
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     steps:
       - run: echo recorded
@@ -438,7 +439,7 @@ jobs:
     steps:
       - run: echo alarm
   all-jobs-passed:
-    needs: [ci-check, ci-static, already-passed, records, design-check]
+    needs: [ci-check, ci-static, already-passed, records, design-check, design-check-passed]
     if: ${{ always() && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -465,10 +466,16 @@ jobs:
             return None
         return wiring_fn({CHECK_PATH: check_text, DEMO: DEMO_TEXT}, stamp, excluded)
 
-    def red(label, old, new, needle):
+    def module_findings(check_text):
+        """The rollup read with the module's OWN EXCLUDED, not the test's pin (WANTED above)."""
+        if wiring_fn is None:
+            return None
+        return wiring_fn({CHECK_PATH: check_text, DEMO: DEMO_TEXT}, GREEN_STAMP)
+
+    def red(label, old, new, needle, read=findings_for):
         """One mutation of the fixture. Its finding must name `needle`, and the mutation must apply."""
         mutated = FIXTURE.replace(fill(old), fill(new), 1)
-        got = findings_for(mutated)
+        got = read(mutated)
         applied = mutated != FIXTURE
         ok(
             applied and got is not None and any(needle in message for _, message in got),
@@ -490,8 +497,10 @@ jobs:
         NOT_BUILT if names is None else str(names),
     )
     ok(
-        registry_scopes.__dict__.get("EXCLUDED") is not None and set(registry_scopes.EXCLUDED) == set(WANTED),
-        "EXCLUDED names exactly design-check-passed, nightly-alarm and ci-done, each with a reason",
+        registry_scopes.__dict__.get("EXCLUDED") is not None
+        and set(registry_scopes.EXCLUDED) == set(WANTED)
+        and all(str(reason).strip() for reason in registry_scopes.EXCLUDED.values()),
+        "EXCLUDED names exactly nightly-alarm and ci-done, each with a reason",
         NOT_BUILT if not hasattr(registry_scopes, "EXCLUDED") else str(sorted(registry_scopes.EXCLUDED)),
     )
 
@@ -548,21 +557,47 @@ jobs:
     )
     red(
         "a needed job missing from needs is a finding that names the job",
-        "needs: [ci-check, ci-static, already-passed, records, design-check]",
-        "needs: [ci-check, ci-static, already-passed, design-check]",
+        "needs: [ci-check, ci-static, already-passed, records, design-check, design-check-passed]",
+        "needs: [ci-check, ci-static, already-passed, design-check, design-check-passed]",
         "does not need `records`",
     )
     red(
         "design-check, now needed, missing from needs is a finding that names it",
-        "needs: [ci-check, ci-static, already-passed, records, design-check]",
-        "needs: [ci-check, ci-static, already-passed, records]",
+        "needs: [ci-check, ci-static, already-passed, records, design-check, design-check-passed]",
+        "needs: [ci-check, ci-static, already-passed, records, design-check-passed]",
         "does not need `design-check`",
     )
     red(
         "an excluded job named in needs is a finding (ci-done would be a cycle)",
-        "needs: [ci-check, ci-static, already-passed, records, design-check]",
-        "needs: [ci-check, ci-static, already-passed, records, design-check, ci-done]",
+        "needs: [ci-check, ci-static, already-passed, records, design-check, design-check-passed]",
+        "needs: [ci-check, ci-static, already-passed, records, design-check, design-check-passed, ci-done]",
         "needs `ci-done`, which is excluded",
+    )
+    # THE RECORDER IS A NEEDED JOB (D136). Off the rollup's needs and not in EXCLUDED, a recorder
+    # that skips would fail nothing, so the rollup must name it. The rollup is read with the
+    # module's own EXCLUDED, the one this check pins.
+    red(
+        "a recorder off the rollup's needs, and not in EXCLUDED, is a finding that names it",
+        "needs: [ci-check, ci-static, already-passed, records, design-check, design-check-passed]",
+        "needs: [ci-check, ci-static, already-passed, records, design-check]",
+        "does not need `design-check-passed`",
+        read=module_findings,
+    )
+    # THE GOOD SHAPE, READ WITH THE MODULE'S OWN EXCLUDED: the recorder is needed, has the draft
+    # guard as its only job-level `if:`, and is not excused by EXCLUDED.
+    got = module_findings(FIXTURE)
+    ok(
+        got == [],
+        "the good shape reads clean against the module's own EXCLUDED, with the recorder needed",
+        NOT_BUILT if got is None else str(got),
+    )
+    # A CONTROL: a needed job whose job-level `if:` reads the record answers is a finding, so a
+    # recorder that keeps its long `if:` while needed cannot slip through.
+    red(
+        "control: a needed recorder whose job-level if reads the record answers is a finding",
+        "  design-check-passed:\n    needs: [design-check]\n    if: ${{ !github.event.pull_request.draft }}",
+        "  design-check-passed:\n    needs: [design-check]\n    if: ${{ !github.event.pull_request.draft && github.event_name != 'push' }}",
+        "`design-check-passed` has the job-level `if:",
     )
     got = findings_for(FIXTURE, excluded={k: v for k, v in WANTED.items() if k != "ci-done"})
     ok(
