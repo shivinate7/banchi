@@ -12,6 +12,7 @@ Capture server: POST /capture, /status, GET /photo/<box>/<position>, GET and PUT
   - Tested by: `harness/tests/t8_codes.py`
 - `server/match.py` — The one forgiving matcher (FLT-`06`/`04`, UX-`173`), ported from `app/src/kit/match.ts` — NFKC/NFKD accent folding, canonical collector-number comparison (zero padding and a hyphen standing for the slash), SKU-prefix and box-name matching, stdlib only (`unicodedata` stands in for the `regex` package's `\p{L}`/`\p{N}` classes, which `requirements.txt`'s own "Deliberately absent" section is why nothing new was added).
   - Decisions: `D271`, `D166`, `D213`
+  - Tested by: `scripts/match-selftest.py`
 - `server/order_transport.py` — The order transport (D69): this account's own orders off order-management-api.tcgplayer.com, cookie-authenticated with the same TCGPLAYER_STORE_COOKIE the export uses — one .tcgplayer.com session, two hosts.
   - Decisions: `D91`, `D65`, `D34`, `D138`, `D63`, `D69`, `D193`
   - Tested by: `harness/tests/t7/drift_homes_batch2.py`, `harness/tests/t7/orders.py`, `harness/tests/t7/shipping.py`
