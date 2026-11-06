@@ -37,6 +37,7 @@ CSV, variant ladder, pricing, join, routing, run decisions, per-game taxonomy.
   - Decisions: `D189`, `D219`
 - `pipeline/namefold.py` — The one name fold: apostrophe and dash look-alikes to ASCII, then accents off.
   - Decisions: `D35`
+  - Tested by: `harness/tests/t1_id_eval.py`
 - `pipeline/net.py` — The one retry home: `net.open` and `net.request` carry every network call.
   - Decisions: `D102`, `D319`
   - Tested by: `harness/tests/t7/labels.py`
@@ -78,6 +79,7 @@ CSV, variant ladder, pricing, join, routing, run decisions, per-game taxonomy.
   - Tested by: `harness/tests/t7/send_markdown.py`
 - `pipeline/setnames.py` — Does this hint name this set — the one ladder the export fetch and the join both read.
   - Decisions: `D213`, `D2`, `D3`, `D22`, `D65`
+  - Tested by: `harness/tests/t7/drift_homes.py`
 - `pipeline/shipping.py` — The TCGplayer Export Shipping reader, and the router that puts one order in one of THREE lanes: a tcgtracking envelope (<$`50`, all cards), a Pirate Ship parcel (contains a non-card, OR >=$`50` because TCGplayer mandates tracking above $`49.99`), or UNJUDGED.
   - Decisions: `D9`, `D19`, `D24`, `D86`, `D61`
   - Tested by: `harness/tests/t7/shipping.py`
