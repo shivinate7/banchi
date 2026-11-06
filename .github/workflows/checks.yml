@@ -356,11 +356,11 @@ jobs:
   # job-level `if:` of each needed job. `if: always()` because a job that `needs` a red job is
   # otherwise skipped, and a skipped required check reads as green; the draft guard keeps a draft
   # at zero runner starts.
-  # NOT needed, on purpose (the row's EXCLUDED list holds each reason): `design-check-passed` (a
-  # recorder that skips on purpose), `nightly-alarm` (a reporter that skips unless something
-  # failed) and `ci-done` (the last job; it reads the rollup's needs and reports a red run).
+  # NOT needed, on purpose (the row's EXCLUDED list holds each reason): `nightly-alarm` (a reporter
+  # that skips unless something failed) and `ci-done` (the last job; it reads the rollup's needs and
+  # reports a red run). The pass recorder `design-check-passed` IS needed: it decides in its gate step.
   all-jobs-passed:
-    needs: [ci-check, ci-static, revert-guard, records, checks, zizmor, mutation-report, already-passed, browser-scope, design-check]
+    needs: [ci-check, ci-static, revert-guard, records, checks, zizmor, mutation-report, already-passed, browser-scope, design-check, design-check-passed]
     if: ${{ always() && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -773,20 +773,38 @@ jobs:
   # A full run (the ordinary case: most branches touch a shared surface or an unmapped file)
   # still writes it exactly as before this landed.
   # THE MATRIX MUST HAVE REALLY RUN. `design-check` now ends green when its gate skipped every
-  # step, so its result alone proves nothing: this job also reads the three gate answers, and
-  # records only when none of them said skip.
+  # step, so its result alone proves nothing. THIS JOB IS NEEDED BY THE ROLLUP (D136), so it runs on
+  # every non-draft event and decides inside, never by a job-level `if:`: its first step, `gate`,
+  # computes `record` from the six conditions below (the ones the job-level `if:` read before it
+  # moved here), and the checkout, the tree-naming and the upload each read that answer. A skip is
+  # a green job that wrote nothing, and the step summary says so. The conditions pass through
+  # `env:`, never into the script text (zizmor refuses an expression inside `run:`).
   design-check-passed:
     needs: [design-check, browser-scope, already-passed, ci-static]
-    if: ${{ !github.event.pull_request.draft && github.event_name != 'push' && needs.design-check.result == 'success' && needs.browser-scope.outputs.run != 'false' && needs.already-passed.outputs.skip != 'true' && needs.ci-static.result == 'success' && needs.browser-scope.outputs.partial != 'true' }}
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Does the record gate pass
+        id: gate
+        env:
+          RECORD: ${{ github.event_name != 'push' && needs.design-check.result == 'success' && needs.browser-scope.outputs.run != 'false' && needs.already-passed.outputs.skip != 'true' && needs.ci-static.result == 'success' && needs.browser-scope.outputs.partial != 'true' }}
+        run: |
+          echo "record=${RECORD}" >> "$GITHUB_OUTPUT"
+          if [ "${RECORD}" = "true" ]; then
+            echo "Pass record: written for this tree." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Pass record: skipped (a push, or the browser matrix did not fully run on this tree)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        if: steps.gate.outputs.record == 'true'
         with:
           persist-credentials: false
 
       - name: Name the tree
         id: tree
+        if: steps.gate.outputs.record == 'true'
         run: |
           tree="$(git rev-parse 'HEAD^{tree}')"
           echo "tree=${tree}" >> "$GITHUB_OUTPUT"
@@ -795,6 +813,7 @@ jobs:
             > design-check-pass.txt
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: steps.gate.outputs.record == 'true'
         with:
           name: design-check-pass-${{ steps.tree.outputs.tree }}
           path: design-check-pass.txt

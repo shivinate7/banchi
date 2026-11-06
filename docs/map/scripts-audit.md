@@ -40,7 +40,7 @@ The checks behind `make docs-audit`, one module for each row group, with each ro
 - `scripts/docs_audit/selftest_capability_homes.py` — Self-test cases for the capability homes row, called by `selftest.self_test`.
   - Decisions: `D173`
 - `scripts/docs_audit/selftest_code_invariants_1.py` — Self-test cases for the code invariants rows, part `1`, called by `selftest.self_test`.
-  - Decisions: `D141`
+  - Decisions: `D141`, `D136`
 - `scripts/docs_audit/selftest_code_invariants_2.py` — Self-test cases for the code invariants rows, part `2`, called by `selftest.self_test`.
   - Decisions: `D63`, `D134`, `D210`
 - `scripts/docs_audit/selftest_code_invariants_3.py` — Self-test cases for the code invariants rows, part `3`, called by `selftest.self_test`.
@@ -57,6 +57,7 @@ The checks behind `make docs-audit`, one module for each row group, with each ro
 - `scripts/docs_audit/selftest_records.py` — Self-test cases for the records rows, called by `selftest.self_test`.
   - Decisions: `D140`, `D101`, `D24`, `D16`, `D9`, `D70`, `D92`
 - `scripts/docs_audit/selftest_registry_scopes.py` — Self-test cases for the registry scopes rows, called by `selftest.self_test`.
+  - Decisions: `D136`
 - `scripts/docs_audit/selftest_sleeps.py` — Self-test cases for the fixed sleeps row, called by `selftest.self_test`.
   - Decisions: `D280`
 - `scripts/docs_audit/selftest_spelling.py` — Self-test cases for the spelling rows, called by `selftest.self_test`.
