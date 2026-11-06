@@ -1,4 +1,4 @@
-## DEBT-hold-take-off-no-posting — a hold take-off writes a price with no posting
+## DEBT121 — a hold take-off writes a price with no posting
 
 **What.** A hold take-off row writes the live price into a send's file, and `price_postings` (D243, every posted price is recorded once) gets no row for it.
 
