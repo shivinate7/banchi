@@ -1935,6 +1935,10 @@ def check_master_take_off(checks: Checks) -> None:
         portal["refuse"] = {"uploadexportcsv"}
         failed = press(3)
         checks.ok("refused" in failed, "TCGplayer turns the take-off away, and the press fails")
+        checks.equal(
+            len(_take_off_postings()), 1,
+            "A FAILED PUSH KEEPS ITS POSTING: the file was written, so the gate is behind it (D243)",
+        )
         card = Store().read().inventory.cards[master.position_key(3, 3)]
         checks.equal(
             (card.state, card.retire_reason, _listing_counts()),
@@ -2310,6 +2314,28 @@ def check_master_take_off_mutants(checks: Checks) -> None:
         (
             "posting: the take-off records no price", "            writable.postings.record(\n",
             "            (lambda **_: None)(\n", check_master_take_off, "THE TAKE-OFF IS A POSTING",
+        ),
+        (
+            "posting: recorded after the push, not at the file",
+            "        with Store().write() as writable:\n"
+            "            writable.postings.record(\n"
+            "                sku=sku, price=written_price, source=postings.TAKE_OFF, run=stamp, replaced=written_price\n"
+            "            )\n"
+            "    except Exception:\n"
+            "        shutil.rmtree(directory, ignore_errors=True)\n"
+            "        raise\n"
+            "    try:\n"
+            "        answer = _push_and_publish(directory, record, \"\")\n",
+            "    except Exception:\n"
+            "        shutil.rmtree(directory, ignore_errors=True)\n"
+            "        raise\n"
+            "    try:\n"
+            "        answer = _push_and_publish(directory, record, \"\")\n"
+            "        with Store().write() as writable:\n"
+            "            writable.postings.record(\n"
+            "                sku=sku, price=written_price, source=postings.TAKE_OFF, run=stamp, replaced=written_price\n"
+            "            )\n",
+            check_master_take_off, "A FAILED PUSH KEEPS ITS POSTING",
         ),
         (
             "already sent: the take-off says the copies are back on the list",

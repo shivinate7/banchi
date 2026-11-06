@@ -18,7 +18,9 @@ serves a single run's `emit`. `pipeline/merge.py:import_rows` serves a merged se
 `store/postings.py`'s `Postings.record()` is called once per SKU
 at the exact point each caller already decides a row reached a file. That point is
 `cli/cmd_emit.py`'s existing `pushed` gate for both emit paths, and `reprice apply`'s
-`--write` gate for the third. It is never earlier, and never for a price only proposed. `_master_take_off` records its row once its file and receipt are on disk, before the push.
+`--write` gate for the third. A take-off's gate is its file and receipt on disk, before the
+push, so a push that fails still leaves its posting, as an emit's does. It is never earlier, and
+never for a price only proposed.
 
 **The table is `price_postings`, one row per SKU per press, and it is never an upsert.**
 `store/pricearchive.py` (D219) and `store/readings.py` (D189) are the same shape one
