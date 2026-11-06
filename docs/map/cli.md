@@ -37,6 +37,7 @@ Argument parsing and sequencing for the four commands.
   - Tested by: `harness/tests/t7/undo_queues.py`
 - `cli/cmd_readings.py` — `banchi readings adopt` runs `pipeline/readings.py:collect` and folds the result into the `readings` table with `Readings.replace()` — a full clear-then-reinsert, on `--write`.
   - Decisions: `D189`, `D86`
+  - Tested by: `scripts/readings-selftest.py`
 - `cli/cmd_reconcile.py` — Diff intent against TCGplayer's Export From Staged; --phantoms lists live copies beyond what is really on hand.
   - Decisions: `D273`, `D8`, `D11`, `D87`, `D115`, `D59`, `D100`, `D54`, `D9`, `D7`, `D86`
   - Tested by: `harness/tests/t7/cli_identify.py`, `harness/tests/t7/emit_pricing.py`
