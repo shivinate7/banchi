@@ -1849,6 +1849,12 @@ def check_master_take_off(checks: Checks) -> None:
             "and the press answers that the take-off is on its way, with its size",
         )
         checks.equal(_listing_counts(), start, "THE STORE CHANGED NOTHING AT WRITE TIME")
+        sent_price = next((row.get("MyPrice") for row in portal["rows"]), None)
+        checks.equal(
+            [(entry["price"], entry["replaced"], entry["run"]) for entry in _take_off_postings()],
+            [(sent_price, sent_price, taken.get("stamp"))],
+            "THE TAKE-OFF IS A POSTING: one row, the live price its file kept, run named by its receipt (D243)",
+        )
         portal["rows"].clear()
         again = press(3)
         checks.ok(
@@ -1895,6 +1901,7 @@ def check_master_take_off(checks: Checks) -> None:
             not portal["rows"] and _posts(portal) == posts and len(send_routes._receipts()) == receipts,
             "and nothing is pushed, published or recorded",
         )
+        checks.equal(_take_off_postings(), [], "and no take-off posting: no file was written")
 
     # ------------------------------------------------ only a master_set pull has the press
     with _case(checks, "refusals"), send_portal() as portal, synced_home():
@@ -1918,6 +1925,7 @@ def check_master_take_off(checks: Checks) -> None:
             not portal["rows"] and _posts(portal) == posts,
             "nothing reaches TCGplayer",
         )
+        checks.equal(_take_off_postings(), [], "and a refused press posts nothing")
 
     # ------------------------------------------------ a failed push leaves the retirement standing
     with _case(checks, "failed push"), send_portal() as portal, synced_home():
@@ -1927,6 +1935,10 @@ def check_master_take_off(checks: Checks) -> None:
         portal["refuse"] = {"uploadexportcsv"}
         failed = press(3)
         checks.ok("refused" in failed, "TCGplayer turns the take-off away, and the press fails")
+        checks.equal(
+            len(_take_off_postings()), 1,
+            "A FAILED PUSH KEEPS ITS POSTING: the file was written, so the gate is behind it (D243)",
+        )
         card = Store().read().inventory.cards[master.position_key(3, 3)]
         checks.equal(
             (card.state, card.retire_reason, _listing_counts()),
@@ -1953,6 +1965,7 @@ def check_master_take_off(checks: Checks) -> None:
             checks.equal(state(3).get("state"), "no_session", "WITH NO SELLER SESSION the card reads so")
             checks.equal(press(3).get("refused"), "take_off_no_session", "and the press is refused by name")
             checks.equal(len(portal["calls"]), calls, "without a call to TCGplayer")
+            checks.equal(_take_off_postings(), [], "and without a posting")
         finally:
             if cookie is not None:
                 os.environ["TCGPLAYER_STORE_COOKIE"] = cookie
@@ -2299,6 +2312,32 @@ def check_master_take_off_mutants(checks: Checks) -> None:
             "THE OUTSTANDING SET IS READ ONCE PER LIST",
         ),
         (
+            "posting: the take-off records no price", "            writable.postings.record(\n",
+            "            (lambda **_: None)(\n", check_master_take_off, "THE TAKE-OFF IS A POSTING",
+        ),
+        (
+            "posting: recorded after the push, not at the file",
+            "        with Store().write() as writable:\n"
+            "            writable.postings.record(\n"
+            "                sku=sku, price=written_price, source=postings.TAKE_OFF, run=stamp, replaced=written_price\n"
+            "            )\n"
+            "    except Exception:\n"
+            "        shutil.rmtree(directory, ignore_errors=True)\n"
+            "        raise\n"
+            "    try:\n"
+            "        answer = _push_and_publish(directory, record, \"\")\n",
+            "    except Exception:\n"
+            "        shutil.rmtree(directory, ignore_errors=True)\n"
+            "        raise\n"
+            "    try:\n"
+            "        answer = _push_and_publish(directory, record, \"\")\n"
+            "        with Store().write() as writable:\n"
+            "            writable.postings.record(\n"
+            "                sku=sku, price=written_price, source=postings.TAKE_OFF, run=stamp, replaced=written_price\n"
+            "            )\n",
+            check_master_take_off, "A FAILED PUSH KEEPS ITS POSTING",
+        ),
+        (
             "already sent: the take-off says the copies are back on the list",
             "so nothing was sent; {_back(record)}.", "so nothing was sent; the copies are back on the list.",
             check_master_take_off, "THE ALREADY-SENT TAKE-OFF SAYS THE RETIREMENT STANDS",
@@ -2625,6 +2664,15 @@ def _listing_counts() -> tuple:
     """The store's `(pushed, live)` for the Articuno listing, or `(0, 0)` with none."""
     listing = Store().read().inventory.listings.get(ARTICUNO_SKU)
     return (0, 0) if listing is None else (listing.pushed, listing.live)
+
+
+def _take_off_postings() -> list:
+    """The `take-off` rows the postings ledger holds for the Articuno, oldest first (D243)."""
+    conn = db.connect(files.inventory_dir())
+    try:
+        return [entry for entry in db.postings_for_sku(conn, ARTICUNO_SKU) if entry["source"] == "take-off"]
+    finally:
+        conn.close()
 
 
 def _portal_rows(portal) -> dict:

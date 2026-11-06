@@ -25,7 +25,7 @@ Capture server: POST /capture, /status, GET /photo/<box>/<position>, GET and PUT
 - `server/refusal.py` — `BadRequest`, the refusal every route module can raise, and `require_box`, the one parser for a box number in a request body.
   - Decisions: `D20`
 - `server/send_routes.py` — THE ONE PRESS that sends listings to TCGplayer and makes them live, and the checks around it.
-  - Decisions: `D273`, `D100`, `D269`, `D7`, `D59`, `D26`, `D33`, `D54`, `D86`, `D87`, `D99`, `D104`, `D105`, `D174`
+  - Decisions: `D273`, `D100`, `D269`, `D7`, `D59`, `D26`, `D33`, `D54`, `D86`, `D87`, `D99`, `D104`, `D105`, `D174`, `D243`
   - Tested by: `harness/tests/t7/cli_identify.py`, `harness/tests/t7/drift_homes_batch2.py`, `harness/tests/t7/emit_pricing.py`, `harness/tests/t7/one_list_wire.py`, `harness/tests/t7/price_fresh.py`, `harness/tests/t7/send_markdown.py`
 - `server/shipping_routes.py` — The shipping seam (D69's second route): POST /shipping/batches reads TCGplayer's Orders -> Export Shipping CSV into D61's three lanes and renders a Pirate Ship import file for the parcel lane, GET .../file?name= hands those bytes to the browser, and DELETE .../<batch> drops the batch now rather than in half an hour.
   - Decisions: `D326`, `D58`, `D33`, `D61`, `D63`, `D69`, `D88`
