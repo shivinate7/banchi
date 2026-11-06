@@ -153,24 +153,32 @@ def run(ok) -> None:
     _gate_if = "if: steps.gate.outputs.record == 'true'"
     _tree_name = "design-check-pass-${{ steps.tree.outputs.tree }}"
 
+    _record_needs = ("design-check", "browser-scope", "already-passed", "ci-static")
+
     def _recorder(conditions=_record_conditions, upload_if=_gate_if, upload_name=_tree_name,
-                  gate_comment="", before_upload="", tree_body_extra=""):
+                  gate_comment="", before_upload="", tree_body_extra="",
+                  needs=_record_needs, job_if="${{ !github.event.pull_request.draft }}",
+                  pre_gate="", gate_id="gate",
+                  output_line='echo "record=${RECORD}" >> "$GITHUB_OUTPUT"', record_expr=None):
         """A record job of the good shape, with one thing changed per argument."""
         gated = f"        {upload_if}\n" if upload_if else ""
+        job_gate = f"    if: {job_if}\n" if job_if is not None else ""
+        record = " && ".join(conditions) if record_expr is None else record_expr
         return (
             "  design-check-passed:\n"
-            "    needs: [design-check, browser-scope, already-passed, ci-static]\n"
-            "    if: ${{ !github.event.pull_request.draft }}\n"
-            "    runs-on: ubuntu-latest\n"
+            f"    needs: [{', '.join(needs)}]\n"
+            + job_gate
+            + "    runs-on: ubuntu-latest\n"
             "    timeout-minutes: 5\n"
             "    steps:\n"
-            "      - name: Does the record gate pass\n"
-            "        id: gate\n"
+            + pre_gate
+            + "      - name: Does the record gate pass\n"
+            f"        id: {gate_id}\n"
             "        env:\n"
             + gate_comment
-            + "          RECORD: ${{ " + " && ".join(conditions) + " }}\n"
+            + "          RECORD: ${{ " + record + " }}\n"
             "        run: |\n"
-            "          echo \"record=${RECORD}\" >> \"$GITHUB_OUTPUT\"\n"
+            f"          {output_line}\n"
             "\n"
             "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4\n"
             "        if: steps.gate.outputs.record == 'true'\n"
@@ -271,6 +279,35 @@ def run(ok) -> None:
         "a condition that appears only in a comment inside the gate is not read by the gate",
         str(_found),
     )
+
+    # THE MUTANTS A READER CAN PASS (D136): a literal in the output line, an `||` or a seventh atom
+    # in RECORD, a gate that is not first or has no id, a need the job drops, and a job-level `if:`
+    # that is not the draft guard. Each expects a finding that names its own defect.
+    for _label, _text, _needle in (
+        ("a gate whose output line is hardcoded to `record=true` is a finding that names the output line",
+         _recorder(output_line='echo "record=true" >> "$GITHUB_OUTPUT"'), "record=${RECORD}"),
+        ("`|| true` appended to RECORD is a finding that names the exact six-condition expression",
+         _recorder(record_expr=" && ".join(_record_conditions) + " || true"), "exactly"),
+        ("a seventh && atom in RECORD is a finding that names the exact six-condition expression",
+         _recorder(record_expr=" && ".join(_record_conditions + ("github.actor != 'x'",))), "exactly"),
+        ("a gate that is not the first step is a finding that names the first step",
+         _recorder(pre_gate="      - run: echo hi\n"), "first step"),
+        ("a gate step without `id: gate` is a finding that names it",
+         _recorder(gate_id="decide"), "id: gate"),
+        ("a job-level if that is not the draft guard is a finding that names the draft guard",
+         _recorder(job_if="${{ !github.event.pull_request.draft && github.event_name != 'push' }}"), "draft guard"),
+        ("a job with no job-level if is a finding that names the draft guard",
+         _recorder(job_if=None), "draft guard"),
+    ):
+        _found = _extra(_text)
+        ok(any(_needle in m for _, m in _found), _label, str(_found))
+    for _job in _record_needs:
+        _found = _extra(_recorder(needs=tuple(j for j in _record_needs if j != _job)))
+        ok(
+            any(f"does not `need` `{_job}`" in m for _, m in _found),
+            f"a record job that does not need `{_job}` is a finding that names it",
+            str(_found),
+        )
 
     _module = _sibling("browser-scope.py")
     ok(_module is not None, "scripts/browser-scope.py imports")
