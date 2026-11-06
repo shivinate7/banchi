@@ -124,27 +124,191 @@ def run(ok) -> None:
     )
     ok(any("do not read the gate" in m and "name: Install" in m for _, m in browser_gate_findings(_ungated)),
        "a later step that does not read steps.gate.outputs.run is refused, and named")
-    _passed_unanswered = _in_job(
-        "design-check-passed",
-        "needs.already-passed.outputs.skip != 'true' && ",
-        "",
-        "design-check-passed without the already-passed answer",
-    )
-    ok(any("does not read `needs.already-passed.outputs.skip != 'true'`" in m
-           for _, m in browser_gate_findings(_passed_unanswered)),
-       "a pass record without the already-passed answer is refused by name")
-    # The real shape: the head's gate reads clean, and each text the four mutations change is in it.
+    # The real shape: the head's gate reads clean, and each text the three mutations above change is in it.
     _anchors = (
         "RUN: ${{ needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false'",
         "if: ${{ always() && !github.event.pull_request.draft }}",
         "if: steps.gate.outputs.run == 'true'\n        run: npm ci --prefix app",
-        "needs.already-passed.outputs.skip != 'true' && needs.ci-static.result == 'success'",
     )
     ok(
         all(anchor in _workflow for anchor in _anchors) and not _gate,
-        "the branch's real gate reads clean, and every text the four mutations change is in it",
+        "the branch's real gate reads clean, and every text the three mutations change is in it",
         "\n".join(m for _, m in _gate),
     )
+    # THE PASS RECORDER, READ OFF ITS OWN STEPS (D136, D141). The record job is a needed job: its
+    # only job-level `if:` is the draft guard, and its gate step computes `record` from the six
+    # conditions below. Every later step that writes a pass record
+    # reads that answer. The cases SPLICE a record job of that shape into the LIVE workflow, so the
+    # rest of the file is what the reader sees in production. A finding is judged against the good
+    # shape, so a case fails for its own named cause and not for text the two shapes share.
+    print("\nthe pass recorder reads its own gate, and each way it could record a tree no browser saw is a finding")
+    _record_conditions = (
+        "needs.design-check.result == 'success'",
+        "needs.browser-scope.outputs.run != 'false'",
+        "needs.already-passed.outputs.skip != 'true'",
+        "needs.ci-static.result == 'success'",
+        "needs.browser-scope.outputs.partial != 'true'",
+        "github.event_name != 'push'",
+    )
+    _gate_if = "if: steps.gate.outputs.record == 'true'"
+    _tree_name = "design-check-pass-${{ steps.tree.outputs.tree }}"
+
+    _record_needs = ("design-check", "browser-scope", "already-passed", "ci-static")
+
+    def _recorder(conditions=_record_conditions, upload_if=_gate_if, upload_name=_tree_name,
+                  gate_comment="", before_upload="", tree_body_extra="",
+                  needs=_record_needs, job_if="${{ !github.event.pull_request.draft }}",
+                  pre_gate="", gate_id="gate",
+                  output_line='echo "record=${RECORD}" >> "$GITHUB_OUTPUT"', record_expr=None):
+        """A record job of the good shape, with one thing changed per argument."""
+        gated = f"        {upload_if}\n" if upload_if else ""
+        job_gate = f"    if: {job_if}\n" if job_if is not None else ""
+        record = " && ".join(conditions) if record_expr is None else record_expr
+        return (
+            "  design-check-passed:\n"
+            f"    needs: [{', '.join(needs)}]\n"
+            + job_gate
+            + "    runs-on: ubuntu-latest\n"
+            "    timeout-minutes: 5\n"
+            "    steps:\n"
+            + pre_gate
+            + "      - name: Does the record gate pass\n"
+            f"        id: {gate_id}\n"
+            "        env:\n"
+            + gate_comment
+            + "          RECORD: ${{ " + record + " }}\n"
+            "        run: |\n"
+            f"          {output_line}\n"
+            "\n"
+            "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4\n"
+            "        if: steps.gate.outputs.record == 'true'\n"
+            "        with:\n"
+            "          persist-credentials: false\n"
+            "\n"
+            "      - name: Name the tree\n"
+            "        id: tree\n"
+            "        if: steps.gate.outputs.record == 'true'\n"
+            "        run: |\n"
+            "          tree=\"$(git rev-parse 'HEAD^{tree}')\"\n"
+            "          echo \"tree=${tree}\" >> \"$GITHUB_OUTPUT\"\n"
+            "          printf 'tree %s\\n' \"${tree}\" > design-check-pass.txt\n"
+            + tree_body_extra
+            + "\n"
+            + before_upload
+            + "      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4\n"
+            + gated
+            + "        with:\n"
+            + f"          name: {upload_name}\n"
+            "          path: design-check-pass.txt\n"
+            "          retention-days: 30\n"
+        )
+
+    _live_recorder = _yaml_job_block(_workflow, "design-check-passed") or ""
+    ok(bool(_live_recorder), "the live workflow has a design-check-passed job to splice a record job into")
+
+    def _spliced(recorder):
+        """The live workflow with its record job replaced by `recorder`."""
+        return _workflow.replace(_live_recorder, recorder, 1)
+
+    def _extra(recorder):
+        """The findings a record job raises that the good shape does not."""
+        good = browser_gate_findings(_spliced(_recorder()))
+        return [f for f in browser_gate_findings(_spliced(recorder)) if f not in good]
+
+    _good = browser_gate_findings(_spliced(_recorder()))
+    ok(
+        _good == [],
+        "the good shape reads clean: a draft-guard job `if:`, a gate step, and every later step gated on the record answer",
+        "\n".join(m for _, m in _good),
+    )
+    _hazards = _recorder(
+        before_upload="      # don't gate the upload on a guess\n",
+        tree_body_extra="          echo \"# not a comment\"\n",
+    )
+    _got = browser_gate_findings(_spliced(_hazards))
+    ok(
+        _got == [],
+        "the good shape with a lone quote in a comment and a `#` inside a quoted run line still reads clean",
+        "\n".join(m for _, m in _got),
+    )
+
+    # The upload step is the write. Ungated, it writes a pass record for any tree, a skipped matrix
+    # included, so the reader must name it. Each hazard is one way a scanner could read past a gate
+    # that is not there: a comment quoting it, a lone quote, a quoted value holding it, a block
+    # scalar line reading as a key, and a gate on the wrong condition.
+    _found = _extra(_recorder(upload_if=None))
+    ok(
+        any("upload" in m for _, m in _found),
+        "an upload step with no gate `if:` is a finding that names the upload",
+        str(_found),
+    )
+    for _label, _text in (
+        ("a comment quoting the gate's `if:`, above an ungated upload, is not the gate",
+         _recorder(upload_if=None, before_upload="      # if: steps.gate.outputs.record == 'true'\n")),
+        ("a lone quote in a comment does not hide an ungated upload",
+         _recorder(upload_if=None, before_upload="      # don't gate this on a guess\n")),
+        ("a quoted value holding the gate's `if:` text is not the upload's gate",
+         _recorder(upload_if=None,
+                   upload_name="\"design-check-pass-${{ steps.tree.outputs.tree }} # if: steps.gate.outputs.record == 'true'\"")),
+        ("a block-scalar line that reads `if:` is not the upload's gate",
+         _recorder(upload_if=None, tree_body_extra="          if: steps.gate.outputs.record == 'true'\n")),
+        ("an upload gated on a condition other than the record answer is a finding that names the upload",
+         _recorder(upload_if="if: github.event_name != 'push'")),
+    ):
+        _found = _extra(_text)
+        ok(any("upload" in m for _, m in _found), _label, str(_found))
+
+    # A gate that drops any one of the six reads the record answer on fewer conditions than the
+    # pass record needs, so a tree no browser saw can earn one (the docs-only and partial trees
+    # among them). One case per condition, and the empty gate, and a condition held in a comment.
+    for _dropped in _record_conditions:
+        _found = _extra(_recorder(conditions=tuple(c for c in _record_conditions if c != _dropped)))
+        ok(any(_dropped in m for _, m in _found), f"a gate that drops `{_dropped}` is a finding that names it", str(_found))
+    _found = _extra(_recorder(conditions=("true",)))
+    ok(
+        any(c in m for c in _record_conditions for _, m in _found),
+        "a gate that reads none of the six conditions is a finding that names one",
+        str(_found),
+    )
+    _found = _extra(_recorder(
+        conditions=_record_conditions[1:],
+        gate_comment=f"          # {_record_conditions[0]}\n",
+    ))
+    ok(
+        any(_record_conditions[0] in m for _, m in _found),
+        "a condition that appears only in a comment inside the gate is not read by the gate",
+        str(_found),
+    )
+
+    # THE MUTANTS A READER CAN PASS (D136): a literal in the output line, an `||` or a seventh atom
+    # in RECORD, a gate that is not first or has no id, a need the job drops, and a job-level `if:`
+    # that is not the draft guard. Each expects a finding that names its own defect.
+    for _label, _text, _needle in (
+        ("a gate whose output line is hardcoded to `record=true` is a finding that names the output line",
+         _recorder(output_line='echo "record=true" >> "$GITHUB_OUTPUT"'), "record=${RECORD}"),
+        ("`|| true` appended to RECORD is a finding that names the exact six-condition expression",
+         _recorder(record_expr=" && ".join(_record_conditions) + " || true"), "exactly"),
+        ("a seventh && atom in RECORD is a finding that names the exact six-condition expression",
+         _recorder(record_expr=" && ".join(_record_conditions + ("github.actor != 'x'",))), "exactly"),
+        ("a gate that is not the first step is a finding that names the first step",
+         _recorder(pre_gate="      - run: echo hi\n"), "first step"),
+        ("a gate step without `id: gate` is a finding that names it",
+         _recorder(gate_id="decide"), "id: gate"),
+        ("a job-level if that is not the draft guard is a finding that names the draft guard",
+         _recorder(job_if="${{ !github.event.pull_request.draft && github.event_name != 'push' }}"), "draft guard"),
+        ("a job with no job-level if is a finding that names the draft guard",
+         _recorder(job_if=None), "draft guard"),
+    ):
+        _found = _extra(_text)
+        ok(any(_needle in m for _, m in _found), _label, str(_found))
+    for _job in _record_needs:
+        _found = _extra(_recorder(needs=tuple(j for j in _record_needs if j != _job)))
+        ok(
+            any(f"does not `need` `{_job}`" in m for _, m in _found),
+            f"a record job that does not need `{_job}` is a finding that names it",
+            str(_found),
+        )
+
     _module = _sibling("browser-scope.py")
     ok(_module is not None, "scripts/browser-scope.py imports")
     if _module is not None:

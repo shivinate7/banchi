@@ -1124,6 +1124,81 @@ def _yaml_job_block(text: str, name: str) -> Optional[str]:
     return "\n".join(out) if out else None
 
 
+#: What the pass recorder's own gate step must read: the six conditions a tree needs before a
+#: browser-tested record may be written for it. `{job}` is the classifier's job.
+_RECORD_GATE_ANSWER = "steps.gate.outputs.record == 'true'"
+
+
+def _recorder_findings(where: str, passed: str, job: Optional[str]) -> List[Tuple[str, str]]:
+    """The pass recorder read off its own steps: a gate first, every later step gated on it."""
+    out: List[Tuple[str, str]] = []
+    # Comment lines never count: a comment that quotes the gate is not the gate.
+    body = "\n".join(ln for ln in passed.split("\n") if not ln.lstrip().startswith("#"))
+    needs = re.search(r"^\s*needs:\s*(.+)$", body, re.M)
+    wanted_jobs = ["design-check", "already-passed", "ci-static"] + ([job] if job else [])
+    missing_needs = [n for n in wanted_jobs if needs is None or not re.search(rf"[\[\s,]{re.escape(n)}[\],\s]", needs.group(1))]
+    if missing_needs:
+        out.append((where, (
+            f"`design-check-passed` does not `need` `{missing_needs[0]}`, so the gate would read an\n"
+            "  empty answer from it and could never say the matrix ran.")))
+    steps = re.split(r"^      - ", body.split("\n    steps:\n", 1)[-1], flags=re.M)[1:]
+    gate = next((s for s in steps if re.search(r"^\s*id:\s*gate\s*$", s, re.M)), None)
+    if gate is None:
+        return out + [(where, (
+            "`design-check-passed` has no step with `id: gate`, so nothing decides once whether this\n"
+            "  tree earns a pass record and the steps below each decide for themselves."))]
+    if steps[0] is not gate:
+        out.append((where, "`design-check-passed`'s gate is not its first step, so a step before it runs unconditionally."))
+    conditions = [
+        "needs.design-check.result == 'success'",
+        "needs.already-passed.outputs.skip != 'true'",
+        "needs.ci-static.result == 'success'",
+        "needs.browser-scope.outputs.partial != 'true'",
+        "github.event_name != 'push'",
+    ]
+    if job:
+        conditions.insert(1, f"needs.{job}.outputs.run != 'false'")
+    # The job-level `if:` is the draft guard and nothing else: the recorder is a needed job, so a
+    # skip there reads as a failed need and turns the rollup red.
+    job_if = re.search(r"^    if:\s*(.+?)\s*$", body, re.M)
+    if job_if is None or " ".join(job_if.group(1).split()) != _DRAFT_GUARD:
+        out.append((where, (
+            f"`design-check-passed` has no job-level `if:` that is exactly the draft guard `{_DRAFT_GUARD}`.\n"
+            "  A needed job decides in its steps, and a skipped need fails the rollup.")))
+    # RECORD is the six conditions joined by top-level `&&`, matched as whole atoms: a substring
+    # test would pass `... || true` or a seventh atom, which change what earns a record.
+    record = re.search(r"^\s*RECORD:\s*\$\{\{\s*(.+?)\s*\}\}\s*$", gate, re.M)
+    atoms = [a.strip() for a in record.group(1).split("&&")] if record else []
+    for cond in conditions:
+        if cond not in atoms:
+            out.append((where, (
+                f"`design-check-passed`'s gate step does not read `{cond}` as a whole `&&` atom, so a tree no\n"
+                "  browser fully saw (a skipped, partial or push run) could earn a pass record.")))
+    if sorted(atoms) != sorted(conditions):
+        out.append((where, (
+            "`design-check-passed`'s gate `RECORD` is not exactly the six conditions joined by `&&`: an extra\n"
+            "  atom or an `||` changes which trees earn a pass record.")))
+    # The gate's output line is the env-derived value, never a literal.
+    out_lines = [ln.strip() for ln in gate.split("\n") if re.search(r"record=.*\$\w+_OUTPUT", ln)]
+    if out_lines != ['echo "record=${RECORD}" >> "$' + 'GITHUB_OUTPUT"']:
+        out.append((where, (
+            "`design-check-passed`'s gate does not write exactly the line `record=${RECORD}` to its step output,\n"
+            "  so the answer is not the one computed from the six conditions (a literal records or refuses every tree).")))
+    for step in steps:
+        if step is gate:
+            continue
+        label = step.split("\n", 1)[0].strip() or "a step"
+        # A step-level `if:` sits at the step's own key indent (8 spaces), never inside a block
+        # scalar or a `with:` map, which are indented deeper.
+        own = re.search(r"^ {8}if:\s*(.+?)\s*$", step, re.M)
+        if own is None or own.group(1) != _RECORD_GATE_ANSWER:
+            kind = "upload step" if "upload-artifact" in step else "step"
+            out.append((where, (
+                f"`design-check-passed` {kind} `{label}` is not gated on `{_RECORD_GATE_ANSWER}`.\n"
+                "  On a tree the gate refused it would still run, and the upload step would write a pass record.")))
+    return out
+
+
 def browser_gate_findings(text: str) -> List[Tuple[str, str]]:
     """The workflow's wiring, as (where, message) pairs. Pure, so `--self-test` can mutate it."""
     where = rel(CHECK_WORKFLOW)
@@ -1203,16 +1278,10 @@ def browser_gate_findings(text: str) -> List[Tuple[str, str]]:
             out.append((where, (
                 "`design-check-passed` runs on a skipped matrix, so a tree no browser saw\n"
                 "  would earn D136's pass record and skip the matrix on main too.")))
-        # `design-check` ends green when its gate skipped every step, so its result alone is not
-        # proof the matrix ran. The record reads the same three answers the gate read.
-        if job is not None and cond is not None:
-            wanted = ("needs.design-check.result == 'success'", f"needs.{job}.outputs.run != 'false'",
-                      "needs.already-passed.outputs.skip != 'true'", "needs.ci-static.result == 'success'")
-            missing = [w for w in wanted if w not in cond.group(1)]
-            if missing:
-                out.append((where, (
-                    f"`design-check-passed`'s `if:` does not read `{missing[0]}`, so a matrix its\n"
-                    "  gate skipped would earn a pass record (the skipped matrix reads green).")))
+        # The recorder is a NEEDED job, so it decides in its steps. `design-check` ends green when
+        # its gate skipped every step, so its result alone is not proof the matrix ran: the gate step
+        # reads the six conditions, and every later step reads the gate's `record` answer.
+        out.extend(_recorder_findings(where, passed, job))
     return out
 
 
@@ -1388,7 +1457,6 @@ _ALWAYS_DRAFT_GUARD = "${{ always() && !github.event.pull_request.draft }}"
 #: Jobs the rollup does not need, each with its reason. A job missing here AND from the rollup's
 #: `needs` is a finding, so a new job cannot quietly sit outside the required check.
 EXCLUDED = {
-    "design-check-passed": "a recorder: it skips on purpose unless the browser matrix really ran",
     "nightly-alarm": "a reporter: it skips unless a nightly run failed, and a skip is its normal answer",
     "ci-done": "the last job: it reads every other job's result and comments on a red pull request run; it needs the rollup, so the rollup cannot need it",
 }
