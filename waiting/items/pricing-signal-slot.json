@@ -1,0 +1,47 @@
+{
+  "added": "2026-11-03T00:37:00Z",
+  "context": "Goal: a pricing list that shows only reasons that exist.\nProblem (goal): you asked whether the slot can be filled. Only one source on main can fill it, and it describes the market rather than play.\nBased on (measured): pricing lane check, 2026-11-02 18:36 CST. Main has no meta or deck data. The daily TCGCSV read (D325, a daily read builds market history) holds 5 days of Riftbound prices that nothing reads yet. It can back a set-wide line such as \"Unleashed singles are down 9% in 5 days across all sellers\": Riftbound live rows only, no new download, 2 database reads per page.\nBased on (read): the price research found momentum does not predict singles prices, so the line must describe, never forecast.\nBased on (ruling): your item 40 keeps the Riftbound card sort private, out of the repo. Using it here would change that ruling.\nMockup at 1440: https://github.com/shivinate7/banchi/blob/72a24bbc8/docs/design/pricing-suggest/list-1440-light.png (the Dusknoir row is the sample slot).",
+  "group": "pricing-list-mockup",
+  "home": "docs/specs/pricing-suggest.md",
+  "id": "pricing-signal-slot",
+  "kind": "decision",
+  "n": 118,
+  "options": [
+    {
+      "gain": "The slot shows something real now, at no download cost.",
+      "how": "A small lane reads the daily TCGCSV table and writes one describing line per set on Riftbound rows.",
+      "key": "market-line",
+      "label": "Fill it with a set-wide market line",
+      "lose": "Riftbound only, and it says how the market moved, not why."
+    },
+    {
+      "gain": "Nothing weak on screen; the slot waits for a real play signal.",
+      "how": "The builder draws no row until a play signal exists.",
+      "key": "keep",
+      "label": "Keep the slot empty for now",
+      "lose": "The slot shows nothing today."
+    },
+    {
+      "gain": "A real play signal for every Riftbound card.",
+      "how": "The sort's groups (staple, meta-dependent and so on) enter the repo and feed the slot.",
+      "key": "sort",
+      "label": "Fill it from the Riftbound card sort",
+      "lose": "Changes your item 40 ruling: the sort would no longer be private."
+    },
+    {
+      "gain": "The design holds only what ships.",
+      "how": "Remove it from the design; add it back with the first signal.",
+      "key": "drop",
+      "label": "Drop the slot",
+      "lose": "A redesign pass when a signal arrives."
+    }
+  ],
+  "owner": "banchi-coordinator",
+  "pick": "market-line",
+  "rank": 6,
+  "ref": "pricing-suggest spec section 4b (outside signal: a slot, not a trigger); list mockup notes, point 5",
+  "short": "Outside-signal slot",
+  "status": "open",
+  "title": "What should fill the outside-signal slot on the pricing list?",
+  "why": "You asked to fill it, and this is the one source on main: cheap, honest about what it says, and easy to remove."
+}

@@ -1,6 +1,6 @@
 {
   "added": "2026-10-28T04:55:00Z",
-  "context": "The sweep found no earlier pick of replacement words. The glossary draft and term-audit spec lean the other way ('Box everywhere', 'Run price table'), so whatever you pick here overrides them. Options are as before.",
+  "context": "Goal: plain words for 'box' and 'run' on every screen.\nProblem (goal): these are the words you will read every day; only you can pick them.\nBased on (read): the sweep found no earlier pick of replacement words.\nThe sweep found no earlier pick of replacement words. The glossary draft and term-audit spec lean the other way ('Box everywhere', 'Run price table'), so whatever you pick here overrides them. Options are as before.",
   "home": "a new decision record for the retired words",
   "id": "cull-runs-boxes-words",
   "kind": "decision",
@@ -23,7 +23,7 @@
   ],
   "owner": "banchi-coordinator",
   "pick": "drawer-selection",
-  "rank": 2,
+  "rank": 3,
   "ref": "Item 94; D56 and D153 (drawer); D180 (selection); D273 (send)",
   "status": "open",
   "title": "Which words replace 'box' and 'run'?",

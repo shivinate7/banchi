@@ -1,6 +1,7 @@
 {
   "added": "2026-10-27T16:50:00Z",
-  "context": "Drift helps one decision: should this live price change now? A count over your 832 live listings with a market price:\n- 7 are more than 10% under market. Together they lose $0.46.\n- 444 are more than 10% over market, $3,124 in all.\n- 11 cards are each $5 or more over market, and hold $2,845.\nSo drift never costs money by selling too cheap. It costs sales by pricing over what buyers pay, and it sits in 11 cards. The count cannot tell which of those you hold high on purpose.",
+  "context": "Goal: know when a live price should change, without noise.\nProblem (money): drift costs sales on cards priced over market; how loud the alert is decides what you act on.\nBased on (measured): the count over your 832 live listings below.\nDrift helps one decision: should this live price change now? A count over your 832 live listings with a market price:\n- 7 are more than 10% under market. Together they lose $0.46.\n- 444 are more than 10% over market, $3,124 in all.\n- 11 cards are each $5 or more over market, and hold $2,845.\nSo drift never costs money by selling too cheap. It costs sales by pricing over what buyers pay, and it sits in 11 cards. The count cannot tell which of those you hold high on purpose.\nThis also answers whether the price-movers block goes: options 1 and 2 remove it, and its read becomes the market-moved rows (list mockup notes, point 10).",
+  "group": "pricing-list-mockup",
   "home": "docs/specs/pricing-suggest.md section 9",
   "id": "pricing-drift-loudness",
   "kind": "decision",
@@ -30,7 +31,7 @@
   ],
   "owner": "banchi-coordinator",
   "pick": "cut",
-  "rank": 4,
+  "rank": 7,
   "ref": "pricing-suggest spec section 9",
   "status": "open",
   "title": "What should drift alerts do?",
