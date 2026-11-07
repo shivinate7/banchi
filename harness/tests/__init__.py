@@ -20,12 +20,18 @@ and only to mean "this test is a stub" — it is split across a concatenation he
 this file, which is not a test, does not count as one.
 """
 
-from typing import List, NamedTuple, Optional
+import re
+from typing import List, NamedTuple, Optional, Tuple
+
+SKIP_NAME = re.compile(r"[a-z0-9-]+")
 
 
 class Result(NamedTuple):
     passed: bool
     detail: str = ""
+    # (kebab name, reason) for each case skipped on this run. run.py prints each as one
+    # unindented `<name>: SKIPPED — <reason>` line, the one shape scripts/ci-skip-count.sh counts.
+    skips: Tuple[Tuple[str, str], ...] = ()
 
 
 class NotImplementedYet(Exception):
@@ -42,10 +48,18 @@ class Checks:
     def __init__(self) -> None:
         self.lines: List[str] = []
         self.failures = 0
+        self.skips: List[Tuple[str, str]] = []
 
     def note(self, text: str) -> None:
         for line in str(text).splitlines():
             self.lines.append(f"       {line}")
+
+    def skip(self, name: str, reason: str) -> None:
+        """Records a case this run does not build. It is a marker, not an assertion: no `ok` or FAIL
+        line, and no change to the pass count. `name` is the kebab name CI's reader counts by."""
+        if not SKIP_NAME.fullmatch(name):
+            raise ValueError(f"a skip name is kebab-case, [a-z0-9-]+: {name!r}")
+        self.skips.append((name, " ".join(reason.split())))
 
     def ok(self, condition: bool, label: str, detail: str = "") -> bool:
         passed = bool(condition)
@@ -88,4 +102,4 @@ class Checks:
         # A test that asserted nothing proved nothing: zero checks is a failure.
         if not total:
             body.append("  FAIL no checks ran")
-        return Result(self.failures == 0 and total > 0, "\n".join(body))
+        return Result(self.failures == 0 and total > 0, "\n".join(body), tuple(self.skips))

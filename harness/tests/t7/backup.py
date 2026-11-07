@@ -617,7 +617,7 @@ def check_backup_run_folder_deletes_read_only_trees_and_follows_no_link(checks: 
         str(RUN_FOLDER),
     )
     if os.geteuid() == 0:
-        checks.note("skipped: root deletes a 0500 folder without help, so the read-only case is not built")
+        checks.skip("t7-backup-read-only-tree-as-root", "root deletes a 0500 folder without help, so the read-only case is not built")
         return
     outside = RUN_FOLDER / "outside"  # not under the siblings root; only a followed link could reach it
     (outside / "inner").mkdir(parents=True)
@@ -835,7 +835,7 @@ def check_backup_failure_is_recorded_and_harmless(checks: Checks) -> None:
         except OSError:
             writable = False
         if writable:
-            checks.note("skipped: this user can write into a 0500 folder (running as root), so the case is not built")
+            checks.skip("t7-backup-unwritable-destination-as-root", "this user can write into a 0500 folder (running as root), so the case is not built")
         else:
             ran = run_job(case)
             failed = expect_failed(checks, "an unwritable destination: exit non-zero and a failed line", ran, case)
@@ -1349,7 +1349,7 @@ def check_backup_an_unreadable_photo_folder_fails_the_night(checks: Checks) -> N
     folder.chmod(0)
     try:
         if os.access(folder, os.R_OK):  # running as root: a mode does not bite and there is no stand-in for a folder
-            checks.ok(True, "SKIPPED, running as root: a folder with mode 0 is still readable")
+            checks.skip("t7-backup-unreadable-folder-as-root", "running as root, a folder with mode 0 is still readable")
             return
         ran = run_job(case)
     finally:

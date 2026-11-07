@@ -4655,7 +4655,7 @@ def check_send_matrix(checks: Checks) -> None:
     try:
         home = _m_home(worklists)
     except _ToolchainMissing:
-        checks.note("unknown: app/node_modules missing, run make worktree-setup")
+        checks.skip("t7-send-matrix-no-node-modules", "app/node_modules missing, run make worktree-setup")
         return
     except (RuntimeError, OSError, subprocess.CalledProcessError) as exc:
         checks.ok(False, "Home can be read for every matrix case", str(exc))
