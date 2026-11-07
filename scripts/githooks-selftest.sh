@@ -405,6 +405,82 @@ rl_bad="$(printf '%s' "$rl_payload" | BANCHI_REFUSAL_LOG="$tmp/no/such/dir/log" 
 if [ $rl_bad_status -eq 2 ] && [ "$rl_bad" = "$rl_out" ]; then ok "an unwritable log path changes neither the verdict nor the output"
 else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
 
+echo "  -- make hooks arms the config --"
+# `make hooks` must leave core.hooksPath pointing at the armed copy, and the proof is what git
+# reads back. The recipe's cleanup unsets core.hooksPath in every worktree. With
+# extensions.worktreeConfig off, `config --worktree` is `--local`, so on a single-worktree clone
+# (a fresh clone) that cleanup deletes the line the recipe wrote just before. The verify at the
+# end checks the files only, so the recipe printed "hooks armed" over an empty config.
+# Each fixture is a small repo built here from the tracked Makefile and hook files. Never a
+# clone of this repo: that is thousands of files.
+arm_repo() {   # arm_repo <dir>: a committed repo holding the tracked Makefile and hook files
+  mkdir -p "$1/scripts" || return 1
+  cp "$REPO_ROOT/Makefile" "$1/" || return 1
+  cp -r "$REPO_ROOT/scripts/githooks" "$1/scripts/" || return 1
+  git init -q -b main "$1" || return 1
+  git -C "$1" config user.email selftest@example.com
+  git -C "$1" config user.name  selftest
+  git -C "$1" config commit.gpgsign false
+  git -C "$1" add Makefile scripts/githooks && git -C "$1" commit -qm "hooks under test"
+}
+
+# Cases a and c share one fixture and one make run: the fresh-clone shape, one worktree with
+# worktreeConfig off. The shape is asserted before the run, so a wrong fixture fails by name.
+arm_off="$tmp/arm-off"
+if arm_repo "$arm_off"; then
+  arm_shape="$(git -C "$arm_off" worktree list --porcelain | grep -c '^worktree ')"
+  if [ "$arm_shape" = 1 ] && [ -z "$(git -C "$arm_off" config --get extensions.worktreeConfig)" ]; then
+    arm_out="$(make -C "$arm_off" hooks 2>&1)"; arm_status=$?
+    arm_want="$(cd "$arm_off" && pwd -P)/.git/hooks-armed"
+    arm_got="$(git -C "$arm_off" config --get core.hooksPath)"
+    if [ "$arm_got" = "$arm_want" ]; then
+      ok "make hooks, one worktree and worktreeConfig off: core.hooksPath reads back as the armed copy"
+    else
+      bad "make hooks, one worktree and worktreeConfig off: core.hooksPath reads '$arm_got', want '$arm_want'"
+      printf '%s\n' "$arm_out" | sed 's/^/         /'
+    fi
+    case "$arm_out" in
+      *"hooks armed"*)
+        if [ "$arm_got" = "$arm_want" ]; then ok "'hooks armed' is printed only over a config that reads back"
+        else bad "'hooks armed' is printed over a config that reads '$arm_got'"; fi ;;
+      *)
+        if [ "$arm_status" -ne 0 ]; then ok "no 'hooks armed' and a non-zero exit: the failure is loud"
+        else bad "make hooks exited 0 without printing 'hooks armed'"; fi ;;
+    esac
+  else
+    bad "fixture (one worktree, worktreeConfig off): the repo is not the shape this case needs"
+  fi
+else
+  bad "fixture (one worktree, worktreeConfig off): could not build the repo"
+fi
+
+# Case b: worktreeConfig on, and a linked worktree whose own config.worktree holds a stale
+# core.hooksPath. The recipe must clear that stale line and leave the linked worktree reading the
+# common armed copy. This guards the per-worktree cleanup, which already works.
+arm_on="$tmp/arm-on"
+arm_linked="$tmp/arm-on-linked"
+if arm_repo "$arm_on" \
+  && git -C "$arm_on" config core.repositoryformatversion 1 \
+  && git -C "$arm_on" config extensions.worktreeConfig true \
+  && git -C "$arm_on" worktree add -q "$arm_linked" -b arm-linked \
+  && git -C "$arm_linked" config --worktree core.hooksPath "$tmp/stale-hooks"; then
+  if [ "$(git -C "$arm_linked" config --worktree --get core.hooksPath)" = "$tmp/stale-hooks" ]; then
+    arm_on_want="$(cd "$arm_on" && pwd -P)/.git/hooks-armed"
+    on_out="$(make -C "$arm_on" hooks 2>&1)"; on_status=$?
+    on_got="$(git -C "$arm_linked" config --get core.hooksPath)"
+    if [ "$on_got" = "$arm_on_want" ]; then
+      ok "worktreeConfig on, stale linked config: the linked worktree reads the common armed copy"
+    else
+      bad "worktreeConfig on, stale linked config: the linked worktree reads '$on_got', want '$arm_on_want' (exit $on_status)"
+      printf '%s\n' "$on_out" | sed 's/^/         /'
+    fi
+  else
+    bad "fixture (worktreeConfig on): the stale value did not land in the linked worktree's config"
+  fi
+else
+  bad "fixture (worktreeConfig on): could not build the linked worktree"
+fi
+
 echo
 if [ "$fail" -eq 0 ]; then
   echo "githooks self-test: $pass passed"
