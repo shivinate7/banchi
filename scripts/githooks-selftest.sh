@@ -407,10 +407,12 @@ else bad "an unwritable log path changed the verdict (exit $rl_bad_status)"; fi
 
 echo "  -- make hooks arms the config --"
 # `make hooks` must leave core.hooksPath pointing at the armed copy, and the proof is what git
-# reads back. The recipe's cleanup unsets core.hooksPath in every worktree. With
-# extensions.worktreeConfig off, `config --worktree` is `--local`, so on a single-worktree clone
-# (a fresh clone) that cleanup deletes the line the recipe wrote just before. The verify at the
-# end checks the files only, so the recipe printed "hooks armed" over an empty config.
+# reads back. The recipe clears core.hooksPath from each worktree's config only when
+# extensions.worktreeConfig is true: with it off, `config --worktree` is `--local`, so that clear
+# would delete the line the recipe wrote just before (the fresh-clone case, case a). After the
+# common write, the verify reads core.hooksPath back in every registered worktree and refuses,
+# with no "hooks armed" line, when one reads another path. A registered worktree whose directory
+# is gone is skipped, not read (case B).
 # Each fixture is a small repo built here from the tracked Makefile and hook files. Never a
 # clone of this repo: that is thousands of files.
 arm_repo() {   # arm_repo <dir>: a committed repo holding the tracked Makefile and hook files
@@ -479,6 +481,65 @@ if arm_repo "$arm_on" \
   fi
 else
   bad "fixture (worktreeConfig on): could not build the linked worktree"
+fi
+
+# Case A: worktreeConfig on, and a linked worktree whose config.worktree includes a file that sets
+# a stale core.hooksPath. `--unset-all` does not remove an included value, so the stale path
+# survives the cleanup. The recipe must refuse: a non-zero exit and no "hooks armed" line.
+arm_inc="$tmp/arm-inc"
+arm_inc_linked="$tmp/arm-inc-linked"
+arm_inc_file="$tmp/arm-inc-stale.cfg"
+if arm_repo "$arm_inc" \
+  && git -C "$arm_inc" config core.repositoryformatversion 1 \
+  && git -C "$arm_inc" config extensions.worktreeConfig true \
+  && git -C "$arm_inc" worktree add -q "$arm_inc_linked" -b arm-inc-linked \
+  && printf '[core]\n\thooksPath = %s\n' "$tmp/stale-hooks" > "$arm_inc_file" \
+  && git -C "$arm_inc_linked" config --worktree include.path "$arm_inc_file"; then
+  if [ "$(git -C "$arm_inc_linked" config --get core.hooksPath)" = "$tmp/stale-hooks" ]; then
+    inc_out="$(make -C "$arm_inc" hooks 2>&1)"; inc_status=$?
+    if [ "$inc_status" -ne 0 ]; then
+      ok "make hooks refuses an included stale core.hooksPath: non-zero exit"
+    else
+      bad "make hooks exited 0 over an included stale core.hooksPath"
+      printf '%s\n' "$inc_out" | sed 's/^/         /'
+    fi
+    case "$inc_out" in
+      *"hooks armed"*) bad "make hooks printed 'hooks armed' over an included stale core.hooksPath" ;;
+      *) ok "make hooks prints no 'hooks armed' over an included stale core.hooksPath" ;;
+    esac
+  else
+    bad "fixture (included stale value): the linked worktree does not read the stale path"
+  fi
+else
+  bad "fixture (included stale value): could not build the linked worktree"
+fi
+
+# Case B: a linked worktree that is still registered after its directory was deleted (no prune).
+# That is not a disagreement with the armed copy: the recipe must still arm, exit 0, and leave the
+# main tree reading the armed copy.
+arm_gone="$tmp/arm-gone"
+arm_gone_linked="$tmp/arm-gone-linked"
+if arm_repo "$arm_gone" \
+  && git -C "$arm_gone" config core.repositoryformatversion 1 \
+  && git -C "$arm_gone" config extensions.worktreeConfig true \
+  && git -C "$arm_gone" worktree add -q "$arm_gone_linked" -b arm-gone-linked; then
+  rm -rf "$arm_gone_linked"
+  arm_gone_want="$(cd "$arm_gone" && pwd -P)/.git/hooks-armed"
+  gone_out="$(make -C "$arm_gone" hooks 2>&1)"; gone_status=$?
+  gone_got="$(git -C "$arm_gone" config --get core.hooksPath)"
+  if [ "$gone_status" -eq 0 ]; then
+    ok "make hooks arms with a registered worktree whose directory is gone: exit 0"
+  else
+    bad "make hooks exited $gone_status with a registered worktree whose directory is gone"
+    printf '%s\n' "$gone_out" | sed 's/^/         /'
+  fi
+  if [ "$gone_got" = "$arm_gone_want" ]; then
+    ok "the main tree reads the armed copy beside a registered worktree whose directory is gone"
+  else
+    bad "the main tree reads '$gone_got', want '$arm_gone_want', with a deleted worktree registered"
+  fi
+else
+  bad "fixture (deleted linked worktree): could not build the linked worktree"
 fi
 
 echo
