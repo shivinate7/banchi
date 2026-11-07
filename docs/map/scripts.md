@@ -93,7 +93,7 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
 - `scripts/fixed-sleep-allow.json` — The browser specs allowed to keep a fixed sleep, each with its count and reason.
 - `scripts/gates_corpus.py` — The gates corpus, read as one text — decisions_corpus.py's twin.
   - Decisions: `D16`, `D18`, `D80`, `D160`
-- `scripts/githooks-selftest.sh` — Builds an origin and a clone in a temp directory, points core.hooksPath at the real hook files, and runs the gestures against them: nineteen cases over what is refused, what stays open, the legitimate pull, the escape hatch and a fresh clone, plus a section that runs `make hooks` in a tiny repo and reads the armed config back.
+- `scripts/githooks-selftest.sh` — Builds an origin and a clone in a temp directory, points core.hooksPath at the real hook files, and runs the gestures against them. Its cases cover what is refused, what stays open, the legitimate pull, the escape hatch and a fresh clone. One section runs `make hooks` in a tiny repo and reads the armed config back.
   - Decisions: `D18`, `D42`, `D303`, `D312`
 - `scripts/githooks/post-checkout` — Provisions a worktree that `git worktree add` just made, by calling `scripts/worktree-guard.sh`; it runs only when the previous HEAD is all zeros, and fails open.
   - Decisions: `D18`
