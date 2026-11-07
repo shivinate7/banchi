@@ -153,8 +153,58 @@ def check_a_root_run_of_the_backup_read_only_case_is_one_gated_skip(checks: Chec
                          "and that skip adds no ok line: the one ok is the run-folder check")
 
 
+def check_a_root_run_of_the_backup_unwritable_destination_is_one_gated_skip(checks: Checks) -> None:
+    """As root, a 0500 destination is still writable, so the unwritable-destination case is skipped. The probe that
+    decides it is answered the way root answers it, for `photos/probe` only, so the branch runs as any user. The
+    check must reach the probe before a skip is claimed, and the skip must reach the output as one gated marker."""
+    probed = []
+    real_write_bytes = Path.write_bytes
+
+    def root_writes_the_probe(self, data):
+        if self.name == "probe":
+            probed.append(self)
+            return len(data)
+        return real_write_bytes(self, data)
+
+    with run_folder() as folder:
+        with mock.patch.object(Path, "write_bytes", root_writes_the_probe):
+            out = _harness_output(backup.check_backup_failure_is_recorded_and_harmless)
+        if checks.ok(bool(probed), "the backup check, run as root, reaches its writable probe",
+                     "the probe was never written, so the check never took the writable branch"):
+            checks.equal(_gated_count(out, folder), 1,
+                         "running as root, its unwritable-destination case is one gated skip")
+
+
+def check_a_root_run_of_the_backup_unreadable_folder_is_one_gated_skip(checks: Checks) -> None:
+    """As root, a mode-0 `photos/dd` folder is still readable, so the unreadable-folder case is skipped. The access
+    check that decides it is answered the way root answers it, for directories only, so the branch runs as any
+    user. The check must reach that access before a skip is claimed. The skip must reach the output as one gated
+    marker, and no ok line may carry it: a skipped case adds no pass."""
+    asked = []
+    real_access = os.access
+
+    def root_reads_directories(path, mode, *args, **kwargs):
+        if Path(path).is_dir():
+            asked.append(Path(path))
+            return True
+        return real_access(path, mode, *args, **kwargs)
+
+    with run_folder() as folder:
+        with mock.patch("os.access", root_reads_directories):
+            out = _harness_output(backup.check_backup_an_unreadable_photo_folder_fails_the_night)
+        if checks.ok(any(p.name == "dd" and p.parent.name == "photos" for p in asked),
+                     "the backup check, run as root, reaches its readable-folder branch for photos/dd",
+                     f"os.access was asked about {[str(p) for p in asked]}"):
+            checks.equal(_gated_count(out, folder), 1,
+                         "running as root, its unreadable-folder case is one gated skip")
+            checks.ok(not re.search(r"^\s+ok\s.*SKIPPED", out, re.M),
+                      "and no ok line carries the skip: a skipped case adds no pass")
+
+
 CHECKS = (
     check_a_skipped_case_is_one_gated_skip_to_the_ci_counter,
     check_a_skipped_case_adds_no_ok_line_and_no_pass,
     check_a_root_run_of_the_backup_read_only_case_is_one_gated_skip,
+    check_a_root_run_of_the_backup_unwritable_destination_is_one_gated_skip,
+    check_a_root_run_of_the_backup_unreadable_folder_is_one_gated_skip,
 )
