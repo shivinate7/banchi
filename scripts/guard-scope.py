@@ -865,6 +865,24 @@ def selftest() -> int:
           verdict("reap-selftest", ["pipeline/livecheck.py"]), False)
     check("githooks-selftest runs on a hook this reader never sees as a literal path",
           verdict("githooks-selftest", ["scripts/githooks/pre-push"]), True)
+
+    def recipe_edit_verdict(target: str, edited: str) -> bool:
+        """One Makefile edit inside the `edited` recipe, as `target`'s gate sees it."""
+        def makefile(edit: str) -> str:
+            return "".join(f"{name}:\n\t@echo {name}{' edited' if name == edit else ''}\n\n"
+                           for name in ("hooks", "githooks-selftest", "guard-scope-selftest"))
+        sides = {"base": makefile(""), "head": makefile(edited)}
+        entry = next(e for e in ROSTER if e["target"] == target)
+        return browser.classify_paths(
+            ["Makefile"], lambda side, path: sides[side], scope=scope_for(entry),
+            subject="x", noun="y").run
+
+    check("githooks-selftest runs on an edit inside the `hooks` recipe it proves",
+          recipe_edit_verdict("githooks-selftest", "hooks"), True)
+    check("githooks-selftest runs on an edit inside its own recipe",
+          recipe_edit_verdict("githooks-selftest", "githooks-selftest"), True)
+    check("githooks-selftest skips on an edit inside guard-scope-selftest's recipe",
+          recipe_edit_verdict("githooks-selftest", "guard-scope-selftest"), False)
     check("an empty diff runs every target",
           verdict("submission-selftest", []), True)
     check("every target runs on the test file itself",
