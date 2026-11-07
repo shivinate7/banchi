@@ -223,7 +223,7 @@ worktree-provision-selftest:
 # AND IT CLEARS THE PER-WORKTREE OVERRIDE, BECAUSE THIS REPO HAS `extensions.worktreeConfig`
 # ON AND SOMETHING WRITES ONE PER WORKTREE. D42 asserted that core.hooksPath "lives in the
 # common .git dir, so ONE value governs every worktree of this clone". That is false here.
-# Measured 2026-08-29, after the install below reported success: all four
+# Measured after an install that reported success: all four
 # .claude/worktrees/*/config.worktree carried their own `core.hooksPath` — alongside a
 # `core.longpaths`, so whatever creates those worktrees writes it — and a per-worktree value
 # BEATS the common one. `git config --get core.hooksPath` in a worktree still answered the
@@ -236,6 +236,16 @@ worktree-provision-selftest:
 # worktree will be handed the override again by whatever creates it, so this is a repair and
 # not a fix — `make status` is what reports the state, and it now reads NOT ARMED whenever
 # the effective path is not the install.
+#
+# The unset runs only when `extensions.worktreeConfig` is true, and before the common write.
+# With the extension off, `git config --worktree` acts like `--local` when the clone has one
+# worktree, so the unset would delete the value `git config core.hooksPath` just wrote and
+# leave the hooks off while the recipe printed "armed". With more worktrees git refuses it
+# (exit 128), so the unset would do nothing there. The `if` guard stays: it makes the
+# one-worktree case safe, and it keeps a refused call from running at all. The verify reads
+# `core.hooksPath` back in every worktree: a file check cannot see a config that points
+# elsewhere. A registered worktree whose directory is gone is skipped, with a note to
+# `git worktree prune`; there is no config to read in it.
 #
 # The chmod is not padding. git skips a non-executable hook WITHOUT A WORD, so a correct
 # hooksPath over a non-executable file is the same silent failure by another route. Neither
@@ -256,16 +266,24 @@ hooks:
 	    [ -n "$$f" ] || continue; \
 	    install -m 755 "$$f" "$$dest/$$(basename "$$f")"; \
 	  done; \
+	  if [ "$$(git config --bool --get extensions.worktreeConfig 2>/dev/null)" = true ]; then \
+	    git worktree list --porcelain | sed -n 's|^worktree ||p' | while IFS= read -r w; do \
+	      [ -n "$$w" ] || continue; \
+	      git -C "$$w" config --worktree --unset-all core.hooksPath 2>/dev/null || true; \
+	    done; \
+	  fi; \
 	  git config core.hooksPath "$$dest"; \
-	  git worktree list --porcelain | sed -n 's|^worktree ||p' | while IFS= read -r w; do \
-	    [ -n "$$w" ] || continue; \
-	    git -C "$$w" config --worktree --unset-all core.hooksPath 2>/dev/null || true; \
-	  done; \
 	  echo "$$tracked" | while IFS= read -r f; do \
 	    [ -n "$$f" ] || continue; \
 	    n="$$(basename "$$f")"; \
 	    [ -x "$$dest/$$n" ] || { echo "install failed: $$n is not executable"; exit 1; }; \
 	    cmp -s "$$f" "$$dest/$$n" || { echo "install failed: $$n differs from its source"; exit 1; }; \
+	  done; \
+	  git worktree list --porcelain | sed -n 's|^worktree ||p' | while IFS= read -r w; do \
+	    [ -n "$$w" ] || continue; \
+	    [ -d "$$w" ] || { echo "  skipped $$w: registered but its directory is gone — \`git worktree prune\` removes it"; continue; }; \
+	    got="$$(git -C "$$w" config --get core.hooksPath 2>/dev/null || true)"; \
+	    [ "$$got" = "$$dest" ] || { echo "install failed: core.hooksPath in $$w is '$$got', not $$dest"; exit 1; }; \
 	  done; \
 	  printf '%s\n' "$$src" > "$$dest/.installed-from"; \
 	  echo "hooks armed: core.hooksPath = $$dest"; \
