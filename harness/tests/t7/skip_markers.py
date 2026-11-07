@@ -36,6 +36,10 @@ from harness.tests.t7 import backup
 
 CI_SKIP_COUNT = Path(__file__).resolve().parents[3] / "scripts" / "ci-skip-count.sh"
 OK_LINE = re.compile(r"^\s+ok\s", re.MULTILINE)
+# The ok lines each backup check makes before its skipped case, measured as root at the head this group was
+# last changed on. A skip beside an `ok` line in those checks changes the count, and that is the failure.
+UNWRITABLE_OK_LINES = 4
+UNREADABLE_OK_LINES = 1
 
 
 def _harness_output(body) -> str:
@@ -173,6 +177,8 @@ def check_a_root_run_of_the_backup_unwritable_destination_is_one_gated_skip(chec
                      "the probe was never written, so the check never took the writable branch"):
             checks.equal(_gated_count(out, folder), 1,
                          "running as root, its unwritable-destination case is one gated skip")
+            checks.equal(len(OK_LINE.findall(out)), UNWRITABLE_OK_LINES,
+                         "and the skipped case adds no ok line of its own")
 
 
 def check_a_root_run_of_the_backup_unreadable_folder_is_one_gated_skip(checks: Checks) -> None:
@@ -199,6 +205,25 @@ def check_a_root_run_of_the_backup_unreadable_folder_is_one_gated_skip(checks: C
                          "running as root, its unreadable-folder case is one gated skip")
             checks.ok(not re.search(r"^\s+ok\s.*SKIPPED", out, re.M),
                       "and no ok line carries the skip: a skipped case adds no pass")
+            checks.equal(len(OK_LINE.findall(out)), UNREADABLE_OK_LINES,
+                         "and the skipped case adds no ok line of its own")
+
+
+def check_skip_refuses_a_name_that_is_not_kebab_case(checks: Checks) -> None:
+    """`Checks.skip` takes the kebab name CI's counter matches, `[a-z0-9-]+`, and raises ValueError on any other
+    name. A name that got through would print a marker the counter does not match, and the skip would count as
+    nothing. Each bad name is refused: an underscore, an uppercase letter, a space, an empty name. A good name is
+    the control, and it is accepted."""
+    inner = Checks()
+    for name in ("t7_x", "T7-x", "x y", ""):
+        checks.raises(ValueError, lambda n=name: inner.skip(n, "a reason"),
+                      f"a skip named {name!r} is refused with ValueError")
+    try:
+        inner.skip("t7-good-name", "a reason")
+    except ValueError as exc:
+        checks.ok(False, "control: a kebab-case skip name is accepted", str(exc))
+    else:
+        checks.ok(True, "control: a kebab-case skip name is accepted")
 
 
 CHECKS = (
@@ -207,4 +232,5 @@ CHECKS = (
     check_a_root_run_of_the_backup_read_only_case_is_one_gated_skip,
     check_a_root_run_of_the_backup_unwritable_destination_is_one_gated_skip,
     check_a_root_run_of_the_backup_unreadable_folder_is_one_gated_skip,
+    check_skip_refuses_a_name_that_is_not_kebab_case,
 )
