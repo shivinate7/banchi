@@ -111,6 +111,9 @@ def main(part=None):
         print(f"      pass: {module.PASS_CRITERIA}")
         for line in str(result.detail).splitlines():
             print(f"      {line}")
+        # Unindented, so scripts/ci-skip-count.sh counts it: an indented note counts as nothing.
+        for name, reason in getattr(result, "skips", ()):
+            print(f"{name}: SKIPPED — {reason}")
 
     failed = [m.NAME for m, r in results if not r.passed]
 
