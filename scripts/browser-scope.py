@@ -381,18 +381,26 @@ def classify_paths(paths: Sequence[str], read_side: SideReader,
             continue
         before = read_side("base", path)
         after = read_side("head", path)
-        recipe_before = recipe_text(before, target) if before is not None else None
-        recipe_after = recipe_text(after, target) if after is not None else None
-        if recipe_before is None or recipe_after is None:
+        # `recipe:a,b` is one suite that runs through two recipes: a change in either counts.
+        names = target.split(",")
+        outcome = None
+        for name in names:
+            recipe_before = recipe_text(before, name) if before is not None else None
+            recipe_after = recipe_text(after, name) if after is not None else None
+            if recipe_before is None or recipe_after is None:
+                outcome = (f"the `{name}` recipe could not be read on "
+                           f"{'the base' if recipe_before is None else 'the head'}; "
+                           f"an unreadable recipe counts as a changed one")
+            elif recipe_before != recipe_after:
+                outcome = f"the `{name}` recipe changed"
+            if outcome:
+                break
+        if outcome:
             run = True
-            lines.append(f"  RUN   {path}  (the `{target}` recipe could not be read on "
-                         f"{'the base' if recipe_before is None else 'the head'}; "
-                         f"an unreadable recipe counts as a changed one)")
-        elif recipe_before != recipe_after:
-            run = True
-            lines.append(f"  RUN   {path}  (the `{target}` recipe changed)")
+            lines.append(f"  RUN   {path}  ({outcome})")
         else:
-            lines.append(f"  skip  {path}  (changed outside the `{target}` recipe)")
+            lines.append(f"  skip  {path}  (changed outside the "
+                         f"`{'`, `'.join(names)}` recipe{'s' if len(names) > 1 else ''})")
     lines.append(
         f"the change reaches {subject} — {noun} RUNS" if run
         else f"nothing here reaches {subject} — {noun} is SKIPPED")

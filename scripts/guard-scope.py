@@ -88,7 +88,9 @@ ROSTER = (
     {"target": "sync-selftest", "test": "scripts/sync-selftest.py"},
     {"target": "audit-self-test", "test": "scripts/docs-audit.py", "package": "scripts/docs_audit"},
     {"target": "janitor-selftest", "test": "scripts/janitor-selftest.sh"},
-    {"target": "githooks-selftest", "test": "scripts/githooks-selftest.sh"},
+    # `recipes`: Makefile recipes besides the target's own that the test runs. The githooks
+    # self-test installs through `make hooks`, so an edit to that recipe must run it.
+    {"target": "githooks-selftest", "test": "scripts/githooks-selftest.sh", "recipes": ("hooks",)},
     {"target": "silent-write-selftest", "test": "scripts/silent-write-selftest.sh"},
     {"target": "verdict-selftest", "test": "scripts/verdict-selftest.py"},
     {"target": "revert-selftest", "test": "scripts/revert-audit.py"},
@@ -598,7 +600,7 @@ def scope_for(entry: dict) -> Tuple[dict, ...]:
     })
     scope.append({
         "path": "Makefile",
-        "within": f"recipe:{entry['target']}",
+        "within": "recipe:" + ",".join((entry["target"], *entry.get("recipes", ()))),
         "beyond_carry": "the recipe that invokes it, narrowed to that recipe and the "
                         "variables it expands.",
         "why": "the recipe that runs it.",
