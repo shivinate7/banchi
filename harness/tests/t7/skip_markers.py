@@ -32,7 +32,7 @@ from unittest import mock
 
 from harness.tests import Checks
 from harness.tests.home import run_folder
-from harness.tests.t7 import backup
+from harness.tests.t7 import backup, emit_pricing
 
 CI_SKIP_COUNT = Path(__file__).resolve().parents[3] / "scripts" / "ci-skip-count.sh"
 OK_LINE = re.compile(r"^\s+ok\s", re.MULTILINE)
@@ -226,6 +226,30 @@ def check_skip_refuses_a_name_that_is_not_kebab_case(checks: Checks) -> None:
         checks.ok(True, "control: a kebab-case skip name is accepted")
 
 
+def check_a_send_matrix_without_node_modules_is_one_gated_skip(checks: Checks) -> None:
+    """With `app/node_modules` absent, the send matrix cannot read Home: `_m_home` raises `_ToolchainMissing`, and
+    the check must say so as one gated skip, never as an ok line or a note. The matrix's own loop runs every store
+    shape before that read, seconds of work that say nothing about this branch, so the loop is given an empty
+    matrix and the branch is reached with nothing else run. The stub is the scope: it must be called before a
+    skip is claimed."""
+    reached = []
+
+    def no_toolchain(worklists):
+        reached.append(dict(worklists))
+        raise emit_pricing._ToolchainMissing()
+
+    with run_folder() as folder:
+        with mock.patch.object(emit_pricing, "_m_cases", lambda: {}), \
+                mock.patch.object(emit_pricing, "_m_home", no_toolchain):
+            out = _harness_output(emit_pricing.check_send_matrix)
+        if checks.ok(len(reached) == 1, "the send matrix, with no node modules, reaches its Home read",
+                     f"_m_home was called {len(reached)} times"):
+            checks.equal(_gated_count(out, folder), 1,
+                         "and that branch is one gated skip")
+            checks.equal(len(OK_LINE.findall(out)), 0,
+                         "and that branch adds no ok line")
+
+
 CHECKS = (
     check_a_skipped_case_is_one_gated_skip_to_the_ci_counter,
     check_a_skipped_case_adds_no_ok_line_and_no_pass,
@@ -233,4 +257,5 @@ CHECKS = (
     check_a_root_run_of_the_backup_unwritable_destination_is_one_gated_skip,
     check_a_root_run_of_the_backup_unreadable_folder_is_one_gated_skip,
     check_skip_refuses_a_name_that_is_not_kebab_case,
+    check_a_send_matrix_without_node_modules_is_one_gated_skip,
 )
