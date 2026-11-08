@@ -1,0 +1,20 @@
+{
+  "added": "2026-10-28T02:59:00Z",
+  "context": "The key check stopped before any call. Banchi's settings file (.env in the main checkout) holds your TCGTracking key but no shipper number, and TCGTracking needs both on every call. Only you can see the number: it is in your TCGTracking dashboard. No call was made, and the key was never printed.",
+  "home": "D-tcgtracking-pipe (TCGTracking pipe decision)",
+  "id": "tcgtracking-shipper-number",
+  "kind": "task",
+  "links": [],
+  "minutes": 2,
+  "n": 105,
+  "owner": "tcgtracking",
+  "ref": "Item 104 (one read-only key check by an agent)",
+  "status": "closed",
+  "steps": [
+    "Open your TCGTracking dashboard and copy your shipper number.",
+    "Open .env in the main Banchi checkout (/Users/shivinate/Developer/banchi/.env).",
+    "Add a line: TCG_TRACKING_SHIPPER=<your number>",
+    "Save, then press Done here. The agent then runs the one read-only lookup."
+  ],
+  "title": "Add your TCGTracking shipper number to Banchi's settings file"
+}

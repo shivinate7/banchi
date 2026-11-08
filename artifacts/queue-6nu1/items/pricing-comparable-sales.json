@@ -1,0 +1,37 @@
+{
+  "added": "2026-10-27T14:24:00Z",
+  "context": "The price source gives per-period figures only: copies sold, and the lowest and highest sale price. It never gives single sales.",
+  "home": "docs/specs/pricing-suggest.md section 9",
+  "id": "pricing-comparable-sales",
+  "kind": "decision",
+  "n": 31,
+  "options": [
+    {
+      "gain": "Real sales evidence from data already stored.",
+      "how": "A suggestion reads like: 14 sold in 30 days, $3.10 to $4.25 (sample numbers).",
+      "key": "range",
+      "label": "Show the sold range",
+      "lose": "No single-sale prices."
+    },
+    {
+      "gain": "Exact comparable sales.",
+      "how": "A research lane hunts for a source of single sales.",
+      "key": "research",
+      "label": "Look for single sales",
+      "lose": "Likely scraping or a paid service, and no build until a source is found."
+    },
+    {
+      "gain": "Nothing to build.",
+      "how": "No sales evidence on the row.",
+      "key": "skip",
+      "label": "Market price only",
+      "lose": "You price without sales evidence."
+    }
+  ],
+  "owner": "pricing-tools",
+  "pick": "range",
+  "ref": "pricing-suggest spec section 9",
+  "status": "closed",
+  "title": "How should comparable sales show?",
+  "why": "The data is already stored."
+}

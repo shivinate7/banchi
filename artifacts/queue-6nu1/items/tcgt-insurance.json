@@ -1,0 +1,30 @@
+{
+  "added": "2026-10-28T03:04:00Z",
+  "context": "Envelope orders are under $50.",
+  "home": "D-tcgtracking-pipe",
+  "id": "tcgt-insurance",
+  "kind": "decision",
+  "n": 110,
+  "options": [
+    {
+      "gain": "No surprise charge.",
+      "how": "Insurance is never sent.",
+      "key": "never",
+      "label": "Never",
+      "lose": "No cover for a lost envelope."
+    },
+    {
+      "gain": "Cover when you want it.",
+      "how": "The preview has an insurance switch on each order, off by default.",
+      "key": "toggle",
+      "label": "A switch per order",
+      "lose": "One more control on the preview."
+    }
+  ],
+  "owner": "tcgtracking",
+  "pick": "never",
+  "ref": "TCGTracking pipe plan",
+  "status": "closed",
+  "title": "Should labels ever buy insurance?",
+  "why": "Envelopes are under $50, and TCGplayer's own cover applies once you pass 1,000 orders."
+}

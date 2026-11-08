@@ -1,0 +1,30 @@
+{
+  "added": "2026-10-27T16:40:00Z",
+  "context": "Your ruling: drop one concern from the repo's prose. A records lane removed those sentences from the docs. This item asked whether the related code guards go too.",
+  "home": "the records lane removing the concern",
+  "id": "access-risk-code-scope",
+  "kind": "decision",
+  "n": 72,
+  "options": [
+    {
+      "gain": "Nothing that works today changes. No test changes.",
+      "how": "Remove the sentences. Leave the code as it is, with comments reworded to say what it does.",
+      "key": "prose-only",
+      "label": "Docs only, keep the code",
+      "lose": "The code keeps its guards as behaviour."
+    },
+    {
+      "gain": "Nothing of it is left.",
+      "how": "A builder lane removes the code guards and their tests.",
+      "key": "code-too",
+      "label": "Remove the code guards too",
+      "lose": "Faster calls may get your Card Ladder login throttled. Tests change."
+    }
+  ],
+  "owner": "orchestrator",
+  "pick": "prose-only",
+  "ref": "D216 and D320 (the price-history and Card Ladder reads)",
+  "status": "closed",
+  "title": "Prose only, or the code guards too?",
+  "why": "The pacing keeps your paid login working. That is a product outcome."
+}

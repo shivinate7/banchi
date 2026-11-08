@@ -1,0 +1,44 @@
+{
+  "added": "2026-10-27T16:45:00Z",
+  "context": "Your ruling on item 51 could not run. The first test file was refused: the site's owner removed the past-days archive over server costs, with no workaround. The lane stopped there. Nothing was downloaded or installed.\nTCGCSV's current prices are still open.",
+  "home": "PR 964, README 'The data' table",
+  "id": "price-ta-archive-withdrawn",
+  "kind": "decision",
+  "n": 52,
+  "options": [
+    {
+      "gain": "Real sales with volume, one year back, for whole sets, free.",
+      "how": "A builder lane adds every Riftbound card to the price-history sweep, which today covers only cards you held or sold.",
+      "key": "sweep",
+      "label": "Widen the price sweep to every Riftbound card",
+      "lose": "One year only. The source slows it after about 800 requests, so it fills over days. A code change."
+    },
+    {
+      "gain": "A whole-market history, free, growing from today.",
+      "how": "A daily job reads Riftbound's 14 groups (about 30 small requests) into a local table.",
+      "key": "daily",
+      "label": "Read TCGCSV's current prices each day",
+      "lose": "No past data. Months before it supports a backtest. No sales."
+    },
+    {
+      "gain": "A year of sales now, and listing history growing from today.",
+      "how": "Two lanes.",
+      "key": "both",
+      "label": "Both, the sweep first",
+      "lose": "Two lanes of work."
+    },
+    {
+      "gain": "No cost.",
+      "how": "No more work.",
+      "key": "stop",
+      "label": "Stop the backtest here",
+      "lose": "Findings stay limited to your own cards."
+    }
+  ],
+  "owner": "price-ta",
+  "pick": "both",
+  "ref": "PR 964 (price-pattern research), D222 (the archive sweep paces itself)",
+  "status": "closed",
+  "title": "TCGCSV's past-price archive is gone. Where should backtest history come from?",
+  "why": "The sweep is the only large free past history left, and the daily read is the only route to whole-market listing data."
+}

@@ -1,0 +1,30 @@
+{
+  "added": "2026-10-28T03:04:00Z",
+  "context": "A label cannot be voided once bought.",
+  "home": "D-tcgtracking-pipe",
+  "id": "tcgt-canceled",
+  "kind": "decision",
+  "n": 111,
+  "options": [
+    {
+      "gain": "No fee lost on a canceled order.",
+      "how": "The preview checks each order's status on TCGplayer before you confirm.",
+      "key": "recheck",
+      "label": "Re-check live",
+      "lose": "Your TCGplayer login must be fresh."
+    },
+    {
+      "gain": "Works without a fresh login.",
+      "how": "The preview trusts the uploaded file.",
+      "key": "none",
+      "label": "No re-check",
+      "lose": "A canceled order can still get a paid label."
+    }
+  ],
+  "owner": "tcgtracking",
+  "pick": "recheck",
+  "ref": "TCGTracking pipe plan",
+  "status": "closed",
+  "title": "Should the preview re-check for canceled orders?",
+  "why": "A bought label cannot be undone, so the check prevents lost money."
+}

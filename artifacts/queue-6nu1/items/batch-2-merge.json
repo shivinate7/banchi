@@ -1,0 +1,37 @@
+{
+  "added": "2026-10-27T18:36:00Z",
+  "context": "PR 971 adds up to 600 Riftbound catalog cards a night to the price-history sweep, after your own cards, stalest first. It passed 3 review rounds and CI is green on its own (13 checks). The nightly sweep runs longer, by at most 2,400 requests.\nThe next batch is ready: PR 969 (reviewed, type check clean), PR 973 and PR 974 (decision records, docs audit passes), PR 975 (backup guard, review round 2 says merge). They go in one integration PR with one CI run.",
+  "home": "make merge",
+  "id": "batch-2-merge",
+  "kind": "decision",
+  "n": 93,
+  "options": [
+    {
+      "gain": "Whole-set sold history starts tonight; five PRs land.",
+      "how": "Merge 971 now; build one integration PR with 969, 973, 974, 975 and merge it if CI passes.",
+      "key": "both",
+      "label": "Merge 971, then batch the four on green",
+      "lose": "None beyond the longer nightly sweep."
+    },
+    {
+      "gain": "The sweep starts tonight.",
+      "how": "Merge 971; the other four wait.",
+      "key": "971-only",
+      "label": "Only 971",
+      "lose": "Four PRs stay open."
+    },
+    {
+      "gain": "You look first.",
+      "how": "Nothing merges.",
+      "key": "hold",
+      "label": "Hold all",
+      "lose": "The PRs drift from main."
+    }
+  ],
+  "owner": "orchestrator",
+  "pick": "both",
+  "ref": "PR 971 (Riftbound sweep), PR 969 (DEBT61 typed table specs), PR 973 (backup decision), PR 974 (holdings watch decision), PR 975 (backup guard)",
+  "status": "closed",
+  "title": "Merge PR 971 now, and batch the next four on green?",
+  "why": "Each passed its review and checks; one run for the four is cheapest."
+}
