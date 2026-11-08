@@ -1040,8 +1040,8 @@ def check_markdown_push(checks: Checks) -> None:
 
 # The sign-in redirect names the portal's own logon page, the shape `server/tcg_export.py` documents
 # (`pipeline_fetch.py` stubs it the same way). `portal_http.classify` reads a Location that carries
-# `portal_http.LOGON_MARKER` as a logon, so a sign-out stays a logon and the Location stays on the
-# loopback portal.
+# `portal_http.LOGON_MARKER` as a logon, so an expired session is classified as a sign-in, and the
+# relative Location keeps the redirect on the loopback portal.
 SIGN_IN_REDIRECT = "/admin/account/logon?ReturnUrl=%2fAdmin%2fPricing"
 
 

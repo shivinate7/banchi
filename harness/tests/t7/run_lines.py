@@ -10,8 +10,8 @@ spawned child refuses at once instead.
 
 BOTH CASES USE `run(order=...)`, the seam `t7_store_and_seams.run` already has, so one case costs
 two probe checks instead of the whole run. The spawn case runs its own script in a subprocess. It
-uses a single probe as its order rather than the full T7 on purpose: on the current code a full
-run inside a child would reach live hosts and start children of its own, which a fixture may not
+uses a single probe as its order rather than the full T7 on purpose: if the refusal ever broke, a
+full run inside a child would reach live hosts and start children of its own, which a fixture may not
 do. One probe still shows the defect, because the probe runs in the child.
 """
 

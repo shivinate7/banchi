@@ -10,7 +10,7 @@ check and host on stderr, a child inherits a route that goes nowhere, loopback, 
 portal in T7 uses, still answers, and a refused block leaves urllib's opener as it found it.
 
 THE PROBE HOST IS A DOCUMENTATION ADDRESS, NOT A LIVE HOST. 192.0.2.0/24 is reserved for
-examples, so no service answers there. Probing a live host on the current code would reach it,
+examples, so no service answers there. A live host would be reached if the refusal ever broke,
 and a test fixture never reaches a paid or live service. An IP literal also keeps the refusal
 independent of name lookup.
 """
@@ -84,7 +84,7 @@ def check_run_refuses_live_network_in_process(checks: Checks) -> None:
     `pipeline.net.request` is the one door product calls go out by, so a refusal at the socket
     level covers it. The line is `T7 network refused: <check> -> <host>`: it is what a reader of a
     stalled run needs, to see which check reached out. "Refused" is the raise plus that line
-    together, because a connect failure on the current code also raises.
+    together, because a plain connect failure also raises.
     """
     checks.note("")
     checks.note("T7 NETWORK — a live call is refused in process, and its line names the check and host")

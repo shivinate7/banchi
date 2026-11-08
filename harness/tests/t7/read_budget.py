@@ -746,8 +746,8 @@ def check_server_read_budget(checks: Checks) -> None:
     def mirror_has_no_such_product(self, row):
         """The answer a live read of a SKU the mirror does not list gives, so the mirror is not asked.
 
-        Before the run refused the network, that live read answered `history_unresolved` (409), which is
-        what BUDGET holds. Unstubbed, the refused read answers 502 and this check reads it as a failure."""
+        That answer is `history_unresolved` (409), which is what BUDGET holds. T7 refuses the network,
+        so an unstubbed read would answer 502 and this check would read it as a failure."""
         raise pricehistory.NotResolvable("The price mirror lists no product for this SKU.")
 
     with mock.patch.object(pricehistory.Market, "reading_for_row", mirror_has_no_such_product):
