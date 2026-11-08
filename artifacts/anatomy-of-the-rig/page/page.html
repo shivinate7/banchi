@@ -1,0 +1,840 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>Anatomy of the Rig</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=Atkinson+Hyperlegible:wght@400;700&family=Martian+Mono:wght@400;500;600&display=swap">
+
+<style>
+  /* PKMNSCAN's own locked tokens (docs/DESIGN.md, locked 2026-08-12). Not re-chosen here.
+     Light only, deliberately: that file rules out a dark theme and a switcher, so this page
+     paints its ground explicitly and carries no prefers-color-scheme block. */
+  :root {
+    --bg: #FCFCFD;
+    --surface: #FFFFFF;
+    --ink: #08090A;
+    --muted: #4E5157;
+    --line: #E6E7EA;
+    --accent: #1E40AF;
+    --hover: #F4F5F7;
+    --pressed: #17348F;
+    --on-accent: #FFFFFF;
+
+    /* Cabinet Grotesk is Fontshare-hosted and this host admits only Google Fonts,
+       so the display role falls to Archivo. Named so the substitution is visible. */
+    --display: 'Archivo', 'Cabinet Grotesk', system-ui, sans-serif;
+    --body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+    --util: 'Martian Mono', ui-monospace, monospace;
+
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+    --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+    --r: 4px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1040px; margin: 0 auto; padding: var(--s6) var(--s4) var(--s8); }
+
+  h1, h2, h3 { font-family: var(--display); font-weight: 700; text-wrap: balance; margin: 0; }
+  h1 { font-size: 40px; line-height: 1.08; letter-spacing: -0.02em; }
+  h2 { font-size: 26px; line-height: 1.15; letter-spacing: -0.01em; }
+  h3 { font-size: 17px; line-height: 1.3; }
+  p { margin: 0; max-width: 68ch; }
+
+  .eyebrow {
+    font-family: var(--util); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+  }
+  .lede { color: var(--muted); font-size: 17px; }
+
+  .masthead {
+    display: flex; flex-direction: column; gap: var(--s3);
+    padding-bottom: var(--s5); border-bottom: 1px solid var(--line);
+  }
+  .masthead-meta {
+    display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4);
+    font-family: var(--util); font-size: 11px; color: var(--muted);
+  }
+
+  section { margin-top: var(--s8); }
+  .sec-head { display: flex; flex-direction: column; gap: var(--s2); margin-bottom: var(--s5); }
+
+  /* ---- the objection / answer ledger ---- */
+  .ledger { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+  .lrow { display: grid; grid-template-columns: 1fr 1.35fr; gap: 0; border-bottom: 1px solid var(--line); }
+  .lrow:last-child { border-bottom: 0; }
+  .lrow > div { padding: var(--s4); }
+  .lrow .why { background: var(--bg); border-right: 1px solid var(--line); }
+  .lrow .fix { background: var(--surface); }
+  .lrow h3 { margin-bottom: var(--s1); }
+  .lrow p { font-size: 15px; }
+  .lrow .tagline {
+    font-family: var(--util); font-size: 9px; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+    margin-bottom: var(--s2);
+  }
+  .lrow .fix .tagline { color: var(--accent); }
+  @media (max-width: 800px) { .lrow { grid-template-columns: 1fr; } .lrow .why { border-right: 0; } }
+
+  /* ---- tables ---- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  caption { text-align: left; padding: var(--s3) var(--s4); color: var(--muted); font-size: 13px; border-bottom: 1px solid var(--line); }
+  th, td { text-align: left; padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th {
+    font-family: var(--util); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: var(--hover); }
+  td.d { font-family: var(--util); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* ---- screens ---- */
+  .screens { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s5); }
+  .screens.one { grid-template-columns: 1fr; }
+  @media (max-width: 800px) { .screens { grid-template-columns: 1fr; } }
+
+  figure { margin: 0; display: flex; flex-direction: column; gap: var(--s2); }
+  figcaption { font-family: var(--util); font-size: 11px; color: var(--muted); line-height: 1.5; }
+  figcaption b { color: var(--ink); font-weight: 600; }
+
+  .screen {
+    position: relative; aspect-ratio: 1440 / 900;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--r); overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .screen.tall { aspect-ratio: 1440 / 980; }
+
+  .hashbar {
+    flex: 0 0 auto; height: 3.4%;
+    border-bottom: 1px solid var(--line); background: var(--bg);
+    display: flex; align-items: center; gap: 4px; padding: 0 5px;
+    font-family: var(--util); font-size: 7px; color: var(--muted);
+  }
+  .hashbar b { color: var(--ink); font-weight: 600; }
+
+  .body { flex: 1 1 auto; display: flex; min-height: 0; }
+  .col { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+  /* rail */
+  .rail { border-right: 1px solid var(--line); padding: 3px; gap: 0; }
+  .rail.mini { padding: 3px 2px; align-items: center; }
+  .railcap {
+    font-family: var(--util); font-size: 7px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); padding: 2px;
+  }
+  .railrow {
+    display: flex; align-items: center; gap: 3px; padding: 2px 3px;
+    font-family: var(--util); font-size: 7px; color: var(--muted);
+    border-bottom: 1px solid var(--line); width: 100%;
+  }
+  .railrow.on { background: var(--hover); color: var(--ink); font-weight: 600; }
+  .railrow .c { margin-left: auto; }
+  .railmini {
+    display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 4px;
+    font-family: var(--util); font-size: 7px; color: var(--muted);
+  }
+  .railmini span { display: flex; align-items: center; gap: 2px; }
+  .railmini .on { color: var(--ink); font-weight: 600; }
+
+  .bead { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
+  .bead.hollow { background: transparent; border: 1px solid var(--muted); }
+  .bead.half {
+    background: linear-gradient(90deg, var(--accent) 50%, transparent 50%);
+    border: 1px solid var(--accent);
+  }
+
+  /* stage */
+  .stage { flex: 1 1 auto; padding: 4px; gap: 4px; }
+  .photo {
+    background: var(--hover); border: 1px solid var(--line); border-radius: 2px;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    font-family: var(--util); font-size: 8px; color: var(--muted); padding: 4px;
+  }
+  .splitline { width: 1px; background: var(--line); flex: 0 0 auto; }
+
+  /* The capture stage's real shape, corrected twice: two coequal panels captioned Live /
+     Last capture ("neither being the small one", CaptureScreen.css), drawn PORTRAIT
+     because the rig's camera is side-mounted. First error was one dominant photo plus a
+     caption strip; second was drawing the pair 16:9 when .capture-frame-portrait is 9/16. */
+  .pairstage { flex: 1 1 auto; display: flex; justify-content: center; align-items: flex-start;
+               gap: 2.9%; min-height: 0; overflow: hidden; }
+  .panel { display: flex; flex-direction: column; gap: 3px; min-height: 0; min-width: 0; }
+  .panelcap {
+    font-family: var(--util); font-size: 7px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  /* Sized by aspect-ratio alone, not flex-grow -- both panels share one column
+     width, so both photos compute the identical height. The Live panel is
+     simply shorter overall (no metadata below it), which is true of the real
+     screen too; the photos themselves must not differ. */
+  /* THE RIG SHOOTS PORTRAIT. .capture-frame-portrait is aspect-ratio 9/16 for a
+     side-mounted camera (rotation 90/270, D13), and .capture-stage-portrait sizes the pair
+     by HEIGHT then centres it: grid-template-columns: repeat(2, --portrait-h * 9/16) with
+     justify-content: center. At 1440x900 that is 421 x 748 each with 96px of centring
+     slack -- height binds, not width. */
+  .panel { flex: 0 0 36%; }
+  .panel .photo { flex: 0 0 auto; width: 100%; height: auto; aspect-ratio: 9/16; }
+  .panel .capsaid { min-height: 0; overflow: hidden; }
+  .capsaid { display: flex; flex-direction: column; gap: 1px; }
+  .capsaid .poslabel { font-family: var(--util); font-size: 8px; font-weight: 600; color: var(--ink); line-height: 1.2; }
+  .capsaid .metarow {
+    display: flex; flex-wrap: nowrap; gap: 3px; line-height: 1.2;
+    font-family: var(--util); font-size: 6px; color: var(--muted); overflow: hidden;
+  }
+  .capsaid .metarow .flag {
+    border: 1px solid var(--line); border-radius: 2px; padding: 0 3px; color: var(--ink);
+  }
+  .notefield {
+    display: flex; align-items: center; gap: 3px;
+    border: 1px solid var(--line); border-radius: 2px; padding: 0 3px;
+    font-family: var(--util); font-size: 6px; line-height: 1.5; color: var(--muted); background: var(--bg);
+  }
+  .notefield .go { margin-left: auto; color: var(--ink); }
+
+
+  /* dock */
+  .dock { border-left: 1px solid var(--line); padding: 3px; }
+  .dockcap {
+    font-family: var(--util); font-size: 7px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); padding: 2px;
+    display: flex; align-items: center;
+  }
+  .dockcap .k {
+    margin-left: auto; border: 1px solid var(--line); border-radius: 2px;
+    padding: 0 2px; color: var(--ink);
+  }
+  .keyrow {
+    display: flex; align-items: center; gap: 3px;
+    font-family: var(--util); font-size: 7px; color: var(--muted);
+    border-bottom: 1px solid var(--line); padding: 2px 0;
+  }
+  .keyrow .k { border: 1px solid var(--line); border-radius: 2px; padding: 0 2px; color: var(--ink); font-weight: 600; }
+  .keyrow .v { margin-left: auto; color: var(--ink); }
+  .keyrow.sel { background: var(--hover); }
+  .keyrow.dis { opacity: 0.4; }
+
+  .drawer {
+    border: 1px solid var(--accent); border-radius: 2px; background: var(--surface);
+    padding: 3px; margin-top: 3px; display: flex; flex-direction: column; gap: 2px;
+  }
+  .drawer .dh {
+    font-family: var(--util); font-size: 7px; font-weight: 600; color: var(--ink);
+    display: flex; align-items: center;
+  }
+  .drawer .dh .x { margin-left: auto; color: var(--muted); }
+
+  .block {
+    border: 1px solid var(--line); border-radius: 2px; background: var(--bg);
+    font-family: var(--util); font-size: 8px; color: var(--muted);
+    padding: 3px 4px; display: flex; flex-direction: column; gap: 2px;
+    min-height: 0; overflow: hidden;
+  }
+  .block.solid { background: var(--surface); }
+  .block.fill { flex: 1 1 auto; }
+  .block .t { color: var(--ink); font-weight: 600; }
+
+  .rows { display: flex; flex-direction: column; gap: 2px; }
+  .row { height: 5px; background: var(--line); border-radius: 1px; }
+  .row.wide { background: var(--hover); border: 1px solid var(--line); height: 7px; }
+  .row.on { background: var(--accent); }
+
+  /* the run ticker */
+  .ticker {
+    flex: 0 0 auto; border-top: 1px solid var(--accent); background: var(--surface);
+    padding: 3px 5px; display: flex; align-items: center; gap: 5px;
+    font-family: var(--util); font-size: 7px; color: var(--muted);
+  }
+  .ticker .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+  .ticker b { color: var(--ink); font-weight: 600; }
+  .ticker .grow { margin-left: auto; border: 1px solid var(--line); border-radius: 2px; padding: 0 2px; color: var(--ink); }
+
+  /* zone budget bars */
+  .budget { display: flex; flex-direction: column; gap: var(--s3); }
+  .bband { display: flex; flex-direction: column; gap: 3px; }
+  .bband .lab { font-family: var(--util); font-size: 11px; color: var(--muted); display: flex; }
+  .bband .lab b { color: var(--ink); font-weight: 600; }
+  .bband .lab .r { margin-left: auto; }
+  .bar { display: flex; height: 26px; border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
+  .bar > span {
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--util); font-size: 9px; color: var(--muted);
+    border-right: 1px solid var(--line); white-space: nowrap; overflow: hidden;
+  }
+  .bar > span:last-child { border-right: 0; }
+  .bar .z-rail { background: var(--hover); }
+  .bar .z-stage { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .bar .z-dock { background: var(--hover); }
+
+  .list { display: flex; flex-direction: column; gap: var(--s3); }
+  .item { display: flex; flex-direction: column; gap: 2px; }
+  .item .h {
+    font-family: var(--util); font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .item p { font-size: 15px; }
+
+  .costs { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: var(--s4); }
+  .costs ul { margin: var(--s2) 0 0; padding-left: var(--s4); display: flex; flex-direction: column; gap: var(--s2); }
+  .costs li { font-size: 15px; }
+
+  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s5); }
+  @media (max-width: 800px) { .cols2 { grid-template-columns: 1fr; } }
+
+  .pull {
+    font-family: var(--display); font-size: 19px; font-weight: 600; line-height: 1.3;
+    padding-left: var(--s4); border-left: 2px solid var(--accent); max-width: 62ch;
+    margin: var(--s5) 0;
+  }
+
+  code {
+    font-family: var(--util); font-size: 0.86em; background: var(--hover);
+    border: 1px solid var(--line); border-radius: 2px; padding: 0 3px;
+  }
+  kbd {
+    font-family: var(--util); font-size: 0.8em; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 2px; padding: 0 4px; color: var(--ink);
+  }
+
+  footer {
+    margin-top: var(--s8); padding-top: var(--s5); border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: var(--s2);
+  }
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">PKMNSCAN &middot; proposal A, elaborated &middot; recorded, not built</p>
+    <h1>Anatomy of the Rig</h1>
+    <p class="lede">The objection is that one page for the whole app will grow cumbersome
+      rather than efficient. That is the correct worry and it has five specific causes. Below
+      is each cause, the mechanism that answers it, and what the screen looks like when it
+      does.</p>
+    <div class="masthead-meta">
+      <span>rail + stage + dock</span>
+      <span>addressed, collapsible, splittable</span>
+      <span>no modals</span>
+      <span>1440 &times; 900 unless stated</span>
+    </div>
+  </header>
+
+  <!-- ============ THE OBJECTION ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Why single-surface apps go bad</p>
+      <h2>Five causes, five mechanisms</h2>
+      <p class="lede">None of these is a matter of taste. Each is a thing a page gives you for
+        free that a single surface has to earn back deliberately &mdash; and a Rig that skips
+        any one of them earns exactly the reputation you are worried about.</p>
+    </div>
+
+    <div class="ledger">
+      <div class="lrow">
+        <div class="why">
+          <p class="tagline">Cause 1</p>
+          <h3>Nothing has a name any more</h3>
+          <p>You cannot bookmark it, link to it, or press browser-back. Every move becomes an
+            unnamed mode change, and the app forgets where you were the moment you leave.
+            This is the single biggest reason one-surface apps feel worse than pages.</p>
+        </div>
+        <div class="fix">
+          <p class="tagline">Mechanism &mdash; keep the router</p>
+          <p><b>The stage is addressed, not moded.</b> <code>#/2/17</code>,
+            <code>#/box/2</code>, <code>#/answer</code>, <code>#/run/2026-08-24-box2</code>.
+            Back, forward, bookmarks, reload and two tabs side by side all keep working,
+            because they are the browser's and were never ours to break. The hash router in
+            <code>App.tsx</code> already does this &mdash; the Rig changes what a route
+            <em>paints</em>, not whether routes exist.</p>
+        </div>
+      </div>
+
+      <div class="lrow">
+        <div class="why">
+          <p class="tagline">Cause 2</p>
+          <h3>Everything secondary becomes a modal</h3>
+          <p>With no room for another screen, the fifteenth operation arrives as an overlay on
+            top of the one surface. Then two overlays. The app becomes a stack of things
+            covering the thing you were looking at &mdash; which is how "efficient" turns into
+            "cumbersome" in practice.</p>
+        </div>
+        <div class="fix">
+          <p class="tagline">Mechanism &mdash; drawers, never overlays</p>
+          <p><b>Deep operations open in the dock and push, they do not cover.</b> Box ops,
+            claim corrections, the retire reasons, <code>decisions.json</code>: each is a dock
+            drawer that takes vertical room from the rows beneath it. The stage is never
+            occluded, so the photograph you are judging against stays visible while you
+            operate. The one exception stays an exception: a genuinely destructive action may
+            still gate, per <code>docs/DESIGN.md</code>.</p>
+        </div>
+      </div>
+
+      <div class="lrow">
+        <div class="why">
+          <p class="tagline">Cause 3</p>
+          <h3>Fixed zones are wrong for most tasks</h3>
+          <p>A 280px box rail is right when choosing a box and pure waste while answering a
+            queue. Fixed widths are optimal for the average task and suboptimal for every
+            actual one &mdash; and 620px of committed chrome is the exact complaint the
+            measurements made about today's app.</p>
+        </div>
+        <div class="fix">
+          <p class="tagline">Mechanism &mdash; three states per zone</p>
+          <p><b>Rail and dock each collapse: full, mini, gone.</b> <kbd>[</kbd> and
+            <kbd>]</kbd> cycle them; the state is per-subject, so answering remembers a mini
+            rail while browsing remembers a full one. At its narrowest the frame commits 56px
+            and the stage takes 1384 of 1440. The zone budget below is the arithmetic.</p>
+        </div>
+      </div>
+
+      <div class="lrow">
+        <div class="why">
+          <p class="tagline">Cause 4</p>
+          <h3>You can only ever look at one thing</h3>
+          <p>Real questions in this product are comparisons. Is this Thievul the one already
+            in box 1? Did that run's console move while I kept shooting? A page can open a
+            second tab; a single surface that forgot to allow two panes cannot.</p>
+        </div>
+        <div class="fix">
+          <p class="tagline">Mechanism &mdash; the stage splits</p>
+          <p><b><kbd>\</kbd> splits the stage into two independently addressed panes</b>, and
+            because each pane is addressed, the split itself is in the hash. Two cards, or a
+            card and its run. Closing the split is the same key. A live run additionally never
+            needs a pane at all &mdash; see cause 5.</p>
+        </div>
+      </div>
+
+      <div class="lrow">
+        <div class="why">
+          <p class="tagline">Cause 5</p>
+          <h3>Background work forces you to go and look</h3>
+          <p>A run takes minutes to hours and outlives the request that started it. If checking
+            it means navigating away from what you are doing, you will either not check it or
+            lose your place. That trip, repeated, is most of the friction in today's app: three
+            visits to a fold per box.</p>
+        </div>
+        <div class="fix">
+          <p class="tagline">Mechanism &mdash; a ticker, not a destination</p>
+          <p><b>A live run paints one line across the bottom of the stage, from any
+            subject.</b> Phase, elapsed, count, and a key to expand it into the stage if you
+            want the console. Nothing to navigate to; nothing to remember to come back from.
+            <code>cli/runs.py</code> already makes a run an immutable input read from disk, so
+            this needs no state held between requests.</p>
+        </div>
+      </div>
+    </div>
+
+    <p class="pull">The Rig is not one page. It is one frame with three addressed zones, each
+      of which can get out of the way.</p>
+  </section>
+
+  <!-- ============ THE ZONE BUDGET ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Cause 3, as arithmetic</p>
+      <h2>What the frame actually costs</h2>
+      <p class="lede">Every bar is 1440px wide. The accent band is the stage &mdash; the part
+        that shows the card.</p>
+    </div>
+
+    <div class="budget">
+      <div class="bband">
+        <p class="lab"><b>Browsing</b> &mdash; rail full, dock full<span class="r">stage 820px &middot; 57%</span></p>
+        <div class="bar">
+          <span class="z-rail" style="width: 19.4%">rail 280</span>
+          <span class="z-stage" style="width: 57%">stage 820</span>
+          <span class="z-dock" style="width: 23.6%">dock 340</span>
+        </div>
+      </div>
+      <div class="bband">
+        <p class="lab"><b>Answering</b> &mdash; rail mini, dock full<span class="r">stage 1044px &middot; 72%</span></p>
+        <div class="bar">
+          <span class="z-rail" style="width: 3.9%">56</span>
+          <span class="z-stage" style="width: 72.5%">stage 1044</span>
+          <span class="z-dock" style="width: 23.6%">dock 340</span>
+        </div>
+      </div>
+      <div class="bband">
+        <p class="lab"><b>Shooting</b> &mdash; rail gone, dock full<span class="r">stage 1100px &middot; 76%</span></p>
+        <div class="bar">
+          <span class="z-stage" style="width: 76.4%">stage 1100</span>
+          <span class="z-dock" style="width: 23.6%">dock 340</span>
+        </div>
+      </div>
+      <div class="bband">
+        <p class="lab"><b>Judging one photograph</b> &mdash; both mini<span class="r">stage 1328px &middot; 92%</span></p>
+        <div class="bar">
+          <span class="z-rail" style="width: 3.9%">56</span>
+          <span class="z-stage" style="width: 92.2%">stage 1328</span>
+          <span class="z-dock" style="width: 3.9%">56</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tablewrap" style="margin-top: var(--s5)">
+      <table>
+        <caption>The same frame at three viewports. Collapse is what makes the narrow case work.</caption>
+        <thead>
+          <tr><th>Viewport</th><th>Default zones</th><th>Stage</th><th>Stage share</th><th>Note</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="d">1440</td><td class="d">280 + 340</td><td class="d">820</td><td class="d">57%</td><td>both zones full by default</td></tr>
+          <tr><td class="d">1280</td><td class="d">280 + 340</td><td class="d">660</td><td class="d">52%</td><td>full still fits</td></tr>
+          <tr><td class="d">1100</td><td class="d">56 + 340</td><td class="d">704</td><td class="d">64%</td><td>rail auto-minis below 1200</td></tr>
+          <tr><td class="d">900</td><td class="d">56 + 0</td><td class="d">844</td><td class="d">94%</td><td>dock becomes a drawer over the stage</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="lede" style="margin-top: var(--s4)">The 900px row is the one honest concession in
+      this design: below roughly 1000px there is not room for three zones, and the dock stops
+      being a zone. That is a laptop-lid case rather than the rig's case &mdash; the rig runs a
+      desktop browser on a Mac, per D13 &mdash; but it is where the frame stops being free.</p>
+  </section>
+
+  <!-- ============ THE MODES ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">The same frame, six subjects</p>
+      <h2>What it looks like</h2>
+      <p class="lede">Every screen below has the identical skeleton: a hash line, a rail, a
+        stage, a dock. Nothing moves between them except which zone is collapsed and what the
+        dock is holding. That is the whole efficiency claim &mdash; the eye learns three
+        positions once and never re-learns them.</p>
+    </div>
+
+    <div class="screens">
+
+      <!-- 1. ANSWER -->
+      <figure>
+        <div class="screen">
+          <div class="hashbar"><span>#</span><b>/answer</b><span>&middot; 47 waiting</span></div>
+          <div class="body">
+            <div class="col rail mini" style="flex: 0 0 3.9%">
+              <div class="railmini">
+                <span class="on">B1</span><span>B2</span><span>B95</span>
+                <span style="margin-top:5px">47</span>
+              </div>
+            </div>
+            <div class="col stage">
+              <div class="photo" style="flex: 1 1 auto;">the photograph, 1044 &times; 780<br>the largest it can be</div>
+            </div>
+            <div class="col dock" style="flex: 0 0 23.6%">
+              <div class="dockcap">Candidates <span class="k">]</span></div>
+              <div class="keyrow"><span class="k">1</span><span>Thievul</span><span class="v">$0.12</span></div>
+              <div class="keyrow sel"><span class="k">2</span><span>Thievul RH</span><span class="v">$0.40</span></div>
+              <div class="keyrow"><span class="k">3</span><span>Thievul holo</span><span class="v">$1.10</span></div>
+              <div class="dockcap" style="margin-top:5px">This card</div>
+              <div class="keyrow"><span>Reason</span><span class="v">detection</span></div>
+              <div class="keyrow"><span>Claim</span><span class="v">normal</span></div>
+              <div class="keyrow"><span>At</span><span class="v">B2 S1 C7</span></div>
+              <div class="dockcap" style="margin-top:5px">Also</div>
+              <div class="keyrow"><span class="k">S</span><span>Skip</span></div>
+              <div class="keyrow"><span class="k">U</span><span>Undo</span></div>
+              <div class="keyrow"><span class="k">G</span><span>Group of 16</span></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Answering.</b> Rail minied to 56px, so the photograph gets 1044px
+          against today's 244. The worklist is the rail's count; the queue never scrolls
+          under the finger.</figcaption>
+      </figure>
+
+      <!-- 2. SHOOT -->
+      <figure>
+        <div class="screen">
+          <div class="hashbar"><span>#</span><b>/box/96</b><span>&middot; shooting &middot; motion armed</span></div>
+          <div class="body">
+            <div class="pairstage">
+              <div class="panel">
+                <p class="panelcap">Live</p>
+                <div class="photo">camera feed<br>9:16 portrait</div>
+              </div>
+              <div class="panel">
+                <p class="panelcap">Last capture</p>
+                <div class="photo">the STORED photo &mdash; not a<br>local preview &mdash; same size<br>as Live, on purpose</div>
+                <div class="capsaid">
+                  <p class="poslabel">Box 96 &middot; Section 2 &middot; Card 41</p>
+                  <p class="metarow">
+                    <span>pokemon</span><span>ME01</span><span>normal</span>
+                    <span class="flag">new box</span>
+                  </p>
+                  <div class="notefield"><span>note&hellip;</span><span class="go">save &crarr;</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="col dock" style="flex: 0 0 23.6%">
+              <div class="dockcap">Claims <span class="k">]</span></div>
+              <div class="keyrow"><span class="k">B</span><span>Box</span><span class="v">96</span></div>
+              <div class="keyrow"><span class="k">S</span><span>Set hint</span><span class="v">ME01</span></div>
+              <div class="keyrow"><span class="k">R</span><span>Rarity</span><span class="v">Common</span></div>
+              <div class="keyrow"><span class="k">F</span><span>Finish</span><span class="v">normal</span></div>
+              <div class="keyrow"><span class="k">G</span><span>Game</span><span class="v">Pokemon</span></div>
+              <div class="dockcap" style="margin-top:5px">Session</div>
+              <div class="keyrow"><span class="k">T</span><span>Trigger</span><span class="v">motion</span></div>
+              <div class="keyrow"><span class="k">V</span><span>Camera</span><span class="v">Cam Link</span></div>
+              <div class="keyrow"><span class="k">O</span><span>Rotation</span><span class="v">90&deg;</span></div>
+              <div class="dockcap" style="margin-top:5px">Cadence</div>
+              <div class="keyrow"><span>Period</span><span class="v">623 ms</span></div>
+              <div class="keyrow"><span>Declined</span><span class="v">0</span></div>
+              <div class="keyrow"><span class="k">U</span><span>Undo</span></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Shooting &mdash; portrait, which is what the rig actually is.</b>
+          Two 9/16 frames sized by HEIGHT and centred, per <code>.capture-stage-portrait</code>
+          &mdash; 421 &times; 748 each at 1440&times;900, with 96px of centring slack. The
+          camera is side-mounted (D13) so a portrait card fills the field; the Cam Link still
+          sends a landscape frame and the rotation is applied at encode time. The note stays
+          on the photo it describes, not in the dock.</figcaption>
+      </figure>
+
+      <!-- 3. BROWSE -->
+      <figure>
+        <div class="screen">
+          <div class="hashbar"><span>#</span><b>/box/2</b><span>&middot; 544 cards &middot; 22 sections</span></div>
+          <div class="body">
+            <div class="col rail" style="flex: 0 0 19.4%">
+              <div class="railcap">Boxes</div>
+              <div class="railrow"><span class="bead"></span><span>Box 1</span><span class="c">53</span></div>
+              <div class="railrow on"><span class="bead half"></span><span>Box 2</span><span class="c">544</span></div>
+              <div class="railrow"><span class="bead hollow"></span><span>Box 95</span><span class="c">85</span></div>
+              <div class="railrow"><span class="bead hollow"></span><span>Box 96</span><span class="c">41</span></div>
+              <div class="railcap" style="margin-top:5px">Waiting</div>
+              <div class="railrow"><span>Review</span><span class="c">47</span></div>
+              <div class="railrow"><span>Runs live</span><span class="c">1</span></div>
+              <div class="railcap" style="margin-top:5px">Find</div>
+              <div class="railrow"><span class="k">/</span><span>thievul</span></div>
+            </div>
+            <div class="col stage" style="flex: 1 1 auto; flex-direction: row;">
+              <div class="col" style="flex: 0 0 38%; gap: 2px;">
+                <div class="block" style="flex:0 0 auto"><span class="t">Section 1 &middot; #1&ndash;25</span></div>
+                <div class="rows" style="gap:2px">
+                  <div class="row wide"></div><div class="row on"></div><div class="row wide"></div>
+                  <div class="row wide"></div><div class="row wide"></div><div class="row wide"></div>
+                  <div class="row wide"></div><div class="row wide"></div>
+                </div>
+                <div class="block" style="flex:0 0 auto; margin-top:3px"><span class="t">Section 2 &middot; #26&ndash;50</span></div>
+                <div class="rows" style="gap:2px">
+                  <div class="row wide"></div><div class="row wide"></div><div class="row wide"></div>
+                </div>
+              </div>
+              <div class="splitline"></div>
+              <div class="col" style="flex: 1 1 auto; padding-left: 4px; gap: 3px;">
+                <div class="photo" style="flex: 1 1 auto;">the selected card, big</div>
+              </div>
+            </div>
+            <div class="col dock" style="flex: 0 0 23.6%">
+              <div class="dockcap">Card 17 <span class="k">]</span></div>
+              <div class="keyrow"><span>Card</span><span class="v">Thievul</span></div>
+              <div class="keyrow"><span>Number</span><span class="v">090/132</span></div>
+              <div class="keyrow"><span>State</span><span class="v">identified</span></div>
+              <div class="keyrow"><span>Finish</span><span class="v">normal</span></div>
+              <div class="keyrow"><span>SKU</span><span class="v">8937370</span></div>
+              <div class="dockcap" style="margin-top:5px">Where &middot; 4 copies</div>
+              <div class="keyrow"><span>B2 S1 C17</span><span class="v">live</span></div>
+              <div class="keyrow"><span>B1 S1 C1</span><span class="v">live</span></div>
+              <div class="dockcap" style="margin-top:5px">Do</div>
+              <div class="keyrow"><span class="k">M</span><span>Mark sold</span></div>
+              <div class="keyrow"><span class="k">E</span><span>Re-shoot</span></div>
+              <div class="keyrow"><span class="k">X</span><span>Retire</span></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Browsing.</b> D31's spine survives intact &mdash; box, section, card,
+          with the copies map drawn for whatever the walk points at. The re-shoot control D26
+          requires is on the dock, beside the photograph.</figcaption>
+      </figure>
+
+      <!-- 4. DRAWER -->
+      <figure>
+        <div class="screen">
+          <div class="hashbar"><span>#</span><b>/box/2</b><span>&middot; layout</span></div>
+          <div class="body">
+            <div class="col rail mini" style="flex: 0 0 3.9%">
+              <div class="railmini"><span>B1</span><span class="on">B2</span><span>B95</span></div>
+            </div>
+            <div class="col stage" style="flex: 1 1 auto">
+              <div class="photo" style="flex: 1 1 auto;">the stage is NOT covered &mdash;<br>the card stays visible</div>
+            </div>
+            <div class="col dock" style="flex: 0 0 30%">
+              <div class="dockcap">Box 2 <span class="k">]</span></div>
+              <div class="keyrow"><span>Fill</span><span class="v">544 so far</span></div>
+              <div class="keyrow"><span>Sections</span><span class="v">22</span></div>
+              <div class="drawer">
+                <div class="dh">Dividers <span class="x">esc</span></div>
+                <div class="keyrow"><span>S1</span><span class="v">#1&ndash;25</span></div>
+                <div class="keyrow"><span>S2</span><span class="v">#26&ndash;50</span></div>
+                <div class="keyrow sel"><span>S3</span><span class="v">#51&ndash;75</span></div>
+                <div class="keyrow"><span class="k">N</span><span>New divider</span></div>
+                <div class="keyrow"><span>relabels 494</span></div>
+              </div>
+              <div class="keyrow dis" style="margin-top:3px"><span class="k">L</span><span>Seal box</span></div>
+              <div class="keyrow dis"><span class="k">D</span><span>Delete box</span></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>A drawer, not a modal.</b> The divider editor pushes the rows below it
+          down and widens the dock to 30%. Nothing is covered, nothing is dismissed, and
+          <kbd>esc</kbd> puts it back.</figcaption>
+      </figure>
+
+      <!-- 5. SPLIT -->
+      <figure>
+        <div class="screen">
+          <div class="hashbar"><span>#</span><b>/2/17</b><span>|</span><b>/1/1</b><span>&middot; split</span></div>
+          <div class="body">
+            <div class="col rail mini" style="flex: 0 0 3.9%">
+              <div class="railmini"><span class="on">B1</span><span class="on">B2</span><span>B95</span></div>
+            </div>
+            <div class="col stage" style="flex: 1 1 auto; flex-direction: row; gap: 0;">
+              <div class="col" style="flex: 1 1 50%; gap: 2px;">
+                <div class="block" style="flex:0 0 auto"><span class="t">B2 S1 C17</span></div>
+                <div class="photo" style="flex: 1 1 auto;">Thievul</div>
+              </div>
+              <div class="splitline"></div>
+              <div class="col" style="flex: 1 1 50%; gap: 2px; padding-left: 4px;">
+                <div class="block" style="flex:0 0 auto"><span class="t">B1 S1 C1</span></div>
+                <div class="photo" style="flex: 1 1 auto;">Thievul</div>
+              </div>
+            </div>
+            <div class="col dock" style="flex: 0 0 23.6%">
+              <div class="dockcap">Compare <span class="k">\</span></div>
+              <div class="keyrow"><span>Both</span><span class="v">090/132</span></div>
+              <div class="keyrow"><span>Left</span><span class="v">normal</span></div>
+              <div class="keyrow"><span>Right</span><span class="v">normal</span></div>
+              <div class="keyrow"><span>Same SKU</span><span class="v">yes</span></div>
+              <div class="dockcap" style="margin-top:5px">Do</div>
+              <div class="keyrow"><span class="k">M</span><span>Sell left</span></div>
+              <div class="keyrow"><span class="k">\</span><span>Close split</span></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Two cards at once</b> &mdash; the thing a page cannot do without a
+          second tab. Both panes are in the hash, so the comparison is a link you can
+          keep.</figcaption>
+      </figure>
+
+      <!-- 6. RUN TICKER -->
+      <figure>
+        <div class="screen">
+          <div class="hashbar"><span>#</span><b>/box/96</b><span>&middot; shooting</span></div>
+          <div class="body">
+            <div class="col stage" style="flex: 1 1 auto">
+              <div class="photo" style="flex: 1 1 auto;">still shooting box 96 &mdash;<br>the run is elsewhere and you did not leave</div>
+            </div>
+            <div class="col dock" style="flex: 0 0 23.6%">
+              <div class="dockcap">Claims <span class="k">]</span></div>
+              <div class="keyrow"><span class="k">B</span><span>Box</span><span class="v">96</span></div>
+              <div class="keyrow"><span class="k">F</span><span>Finish</span><span class="v">normal</span></div>
+              <div class="keyrow"><span class="k">T</span><span>Trigger</span><span class="v">motion</span></div>
+              <div class="dockcap" style="margin-top:5px">Run &middot; box 2</div>
+              <div class="keyrow"><span>Phase</span><span class="v">identify</span></div>
+              <div class="keyrow"><span>Done</span><span class="v">312/544</span></div>
+              <div class="keyrow"><span>Spent</span><span class="v">$0.41</span></div>
+            </div>
+          </div>
+          <div class="ticker">
+            <span class="dot"></span>
+            <span><b>box 2</b> &middot; identify &middot; 312 of 544 &middot; 6m elapsed &middot; $0.41 of $0.71</span>
+            <span class="grow">R to open</span>
+          </div>
+        </div>
+        <figcaption><b>The ticker.</b> A run that outlives its request reports from the bottom
+          of whatever you are doing. Three visits to a fold per box becomes zero.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ============ THE LOOP ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">The claim, end to end</p>
+      <h2>One box, shot to CSVs, without leaving</h2>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <caption>The loop that costs three route changes and three folds today.</caption>
+        <thead>
+          <tr><th>Step</th><th>Today</th><th>The Rig</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Shoot the box</td><td class="d">#/ &middot; set claims &middot; arm</td><td class="d">rail: pick box &middot; dock: claims &middot; arm</td></tr>
+          <tr><td>See what it will cost</td><td class="d">go to #/inventory, open Runs fold</td><td class="d">bead says <em>shot</em>; dock offers preflight</td></tr>
+          <tr><td>Spend</td><td class="d">two-step confirm in the fold</td><td class="d">two-step confirm in the dock</td></tr>
+          <tr><td>Wait</td><td class="d">stay on the fold, or lose your place</td><td class="d">ticker &mdash; keep shooting the next box</td></tr>
+          <tr><td>Answer the queue</td><td class="d">go to #/review, 4.5 vp of scroll per card</td><td class="d">rail count &rarr; stage; no scroll</td></tr>
+          <tr><td>Price the sub-threshold</td><td class="d">back to the fold, edit a textarea</td><td class="d">dock drawer on the run</td></tr>
+          <tr><td>Get the CSVs</td><td class="d">back to the fold a third time</td><td class="d">ticker says <em>emitted</em>; dock has the files</td></tr>
+          <tr><td>Reconcile after import</td><td class="d">back to the fold a fourth time</td><td class="d">dock, same place the files were</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ HONEST COSTS ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Where it still loses</p>
+      <h2>What the mechanisms do not fix</h2>
+      <p class="lede">Four of the five causes are answered by design. These are the ones that
+        remain real, and they are the grounds on which to reject this.</p>
+    </div>
+    <div class="cols2">
+      <div class="costs">
+        <h3>The frame is a commitment</h3>
+        <ul>
+          <li><b>Three zones is a bet that every task decomposes into subject, content and
+            controls.</b> Five of the six modes above do. A sixth that does not &mdash; a wide
+            data table, a big console &mdash; has to borrow the whole stage and looks cramped
+            doing it.</li>
+          <li><b>Collapse states are invisible until learned.</b> <kbd>[</kbd> and <kbd>]</kbd>
+            are discoverable only from the dock caption. That is one more thing to know than a
+            page has, and it is the cost of answering cause 3.</li>
+          <li><b>Below ~1000px the dock stops being a zone.</b> Named in the budget table
+            rather than designed away.</li>
+        </ul>
+      </div>
+      <div class="costs">
+        <h3>The build is large and mostly not new behaviour</h3>
+        <ul>
+          <li><b>One component tree, and every Playwright selector outside the Fulfilment spec
+            gets rewritten.</b> The screens' logic survives &mdash; this is a re-hosting of
+            <code>BoxBrowse</code>, <code>ReviewQueue</code>, <code>CaptureScreen</code> and
+            <code>RunPanel</code> into zones, not a re-implementation &mdash; but the tests do
+            not know that.</li>
+          <li><b><code>docs/DESIGN.md</code>'s page-chrome section becomes inapplicable.</b>
+            There are no pages, so its 16px padding, 20px title and 150px rule need re-arguing
+            as frame chrome. That is a decision entry, not an edit.</li>
+          <li><b>The Fulfiller is untouched and must stay so.</b> <code>#/fulfillment</code>
+            keeps its own route at its own floors, exactly as D5 and D31 require.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Tokens, spacing and faces are PKMNSCAN's own, locked 2026-08-12 &mdash; not re-chosen
+      here. Archivo stands in for Cabinet Grotesk, which is Fontshare-hosted and cannot load
+      on this host.</p>
+    <p>Wireframes are drawn to the real 1440&times;900 aspect. Zone widths are the proposal's;
+      the "today" figures they are compared against were measured in a browser on 2026-08-24
+      against the live store.</p>
+    <p>Written up in <code>docs/specs/ui-redesign-options.md</code> &sect;1. Still RECORDED,
+      not built.</p>
+  </footer>
+
+</div>
+
+</body></html>
