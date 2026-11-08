@@ -3,10 +3,10 @@
 Part of `harness/tests/t7_store_and_seams.py` (one verdict). `CHECKS` is this group's checks in
 the order `CHECK_ORDER` runs them.
 
-WHY. A cloud run of T7 printed nothing for about twelve minutes, so a session's stall watcher
-read it as hung. The run now writes one flushed stderr line as each check ends. And a script that
-calls `run` at top level, with no `__main__` guard, re-ran all of T7 inside every spawned child it
-started, so it never finished. A spawned child now refuses at once instead.
+WHY. A stall watcher reads a run that prints nothing as hung, so the run writes one flushed stderr
+line as each check ends. And a script that calls `run` at top level, with no `__main__` guard,
+would re-run all of T7 inside every spawned child it starts, and the run would never end. So a
+spawned child refuses at once instead.
 
 BOTH CASES USE `run(order=...)`, the seam `t7_store_and_seams.run` already has, so one case costs
 two probe checks instead of the whole run. The spawn case runs its own script in a subprocess. It
@@ -19,13 +19,16 @@ from __future__ import annotations
 
 import io
 import re
+import socket
 import subprocess
 import sys
 from contextlib import redirect_stderr
 
+from harness import t7_run_support
 from harness.tests import Checks
 from harness.tests.home import run_folder
 from harness.tests.t7.common import REPO_ROOT
+from harness.tests.t7.network_refusal import PROBE_HOST, PROBE_TIMEOUT_S, REFUSAL_LINE
 
 # `<number>/<total> <seconds>s <check name>`: one line per check, as the check ends.
 PROGRESS_LINE = re.compile(r"^T7 (\d+)/(\d+) \d+\.\d+s (\S+)$", re.MULTILINE)
@@ -84,7 +87,8 @@ def check_run_prints_one_flushed_line_per_check(checks: Checks) -> None:
 
     The second probe reads what the first flush released. A line written but not flushed is not
     yet on the reader's screen, and the stall this exists to end is exactly a run that holds its
-    output back.
+    output back. A refusal after the nested run names this check, so the nested run leaves no
+    other check's name behind.
     """
     from harness.tests import t7_store_and_seams  # lazy: that module imports this one
 
@@ -101,6 +105,9 @@ def check_run_prints_one_flushed_line_per_check(checks: Checks) -> None:
 
     with redirect_stderr(stream):
         t7_store_and_seams.run(order=lambda todo: [probe_first, probe_second])
+    # The nested run named each probe as the current check. Name this check again, so a refusal
+    # after the nested run names this check and not the last probe.
+    t7_run_support.name_check(check_run_prints_one_flushed_line_per_check.__name__)
 
     text = stream.getvalue()
     checks.equal(
@@ -118,6 +125,23 @@ def check_run_prints_one_flushed_line_per_check(checks: Checks) -> None:
         SKIP_SHAPED_LINE.search(text) is None,
         "no progress line is shaped like a skip line",
         text[-300:],
+    )
+    # The socket door, not `net.request`: net pauses and retries a refused connect, and only the
+    # refusal's line matters here.
+    later = io.StringIO()
+    with redirect_stderr(later):
+        try:
+            socket.create_connection((PROBE_HOST, 80), timeout=PROBE_TIMEOUT_S)
+        except OSError:
+            pass
+    named = [
+        match.group(1) for match in REFUSAL_LINE.finditer(later.getvalue())
+        if match.group(2) == PROBE_HOST
+    ]
+    checks.equal(
+        named,
+        [check_run_prints_one_flushed_line_per_check.__name__],
+        "a refusal after the nested run names this check, not the last probe",
     )
 
 

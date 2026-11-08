@@ -1038,10 +1038,10 @@ def check_markdown_push(checks: Checks) -> None:
     )
 
 
-# The sign-in redirect names the portal's own logon page, the shape the live portal answers
-# (`server/tcg_export.py`'s docs; `pipeline_fetch.py` stubs it the same way). A Location on another
-# host is not a logon by `portal_http.LOGON_MARKER`, so the client follows it: the case then reached
-# store.tcgplayer.com and passed only while that host answered.
+# The sign-in redirect names the portal's own logon page, the shape `server/tcg_export.py` documents
+# (`pipeline_fetch.py` stubs it the same way). `portal_http.classify` reads a Location that carries
+# `portal_http.LOGON_MARKER` as a logon, so a sign-out stays a logon and the Location stays on the
+# loopback portal.
 SIGN_IN_REDIRECT = "/admin/account/logon?ReturnUrl=%2fAdmin%2fPricing"
 
 

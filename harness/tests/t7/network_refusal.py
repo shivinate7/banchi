@@ -3,12 +3,11 @@
 Part of `harness/tests/t7_store_and_seams.py` (one verdict). `CHECKS` is this group's checks in
 the order `CHECK_ORDER` runs them.
 
-WHY. T7 reached the live TCGplayer and tcgcsv hosts from about a dozen checks, 12 to 23 real
-connections a run, so a cloud run sat silent for minutes on answers no case needed. The fix
-refuses non-loopback network for the length of T7's run, in process and in the child processes
-T7 starts. These cases pin the three halves of that: a refused call names its check and host on
-stderr, a child inherits a route that goes nowhere, and loopback, which every fake portal in T7
-uses, still answers.
+WHY. No T7 case needs a real answer from a live host, and a live call adds its wait to the run
+while it prints nothing. So non-loopback network is refused for the length of T7's run, in process
+and in the child processes T7 starts. These cases pin each half of that: a refused call names its
+check and host on stderr, a child inherits a route that goes nowhere, loopback, which every fake
+portal in T7 uses, still answers, and a refused block leaves urllib's opener as it found it.
 
 THE PROBE HOST IS A DOCUMENTATION ADDRESS, NOT A LIVE HOST. 192.0.2.0/24 is reserved for
 examples, so no service answers there. Probing a live host on the current code would reach it,
@@ -20,12 +19,15 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import re
 import subprocess
 import sys
+import urllib.request
 from contextlib import redirect_stderr
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from harness import t7_run_support
 from harness.tests import Checks
 from harness.tests.t7.common import _spawn_server
 from pipeline import net
@@ -172,8 +174,67 @@ def check_run_child_process_routes_through_refused_proxy(checks: Checks) -> None
     )
 
 
+def _answer_or_error(url: str):
+    """The body `url` answers with, or the exception's name and text, so a failure is an assert."""
+    try:
+        with urllib.request.urlopen(url, timeout=PROBE_TIMEOUT_S) as response:
+            return response.read()
+    except Exception as exc:  # noqa: BLE001 - the failure is the answer the assert reports
+        return f"{type(exc).__name__}: {exc}"
+
+
+def check_run_refused_block_restores_urllib_opener(checks: Checks) -> None:
+    """Loopback still answers after a refused block, and the block leaves urllib's opener alone.
+
+    urllib builds one process-wide opener on its first call, and that opener keeps the proxy route
+    it was built with. When a refused block makes the first call, the opener is built inside the
+    block, so it keeps the parked route after the block puts the environment back, and a loopback
+    call after the block goes to the dead port. The proxy variables are cleared for the whole case,
+    so the result does not depend on the proxy the machine running it has.
+    """
+    checks.note("")
+    checks.note("T7 NETWORK — a refused block leaves urllib's opener as it found it")
+    names = t7_run_support.PROXY_VARIABLES + t7_run_support.BYPASS_VARIABLES
+    held = {}
+    for name in names:
+        if name in os.environ:
+            held[name] = os.environ.pop(name)
+    saved_opener = urllib.request._opener
+    urllib.request._opener = None
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), _Pong)
+    _spawn_server(httpd)
+    url = f"http://127.0.0.1:{httpd.server_address[1]}/ping"
+    try:
+        before = urllib.request._opener
+        clean = not any(name in os.environ for name in names)
+        checks.ok(
+            before is None and clean,
+            "the case starts with no urllib opener built and no proxy variable set",
+            f"opener: {before!r}, proxy variables set: {[n for n in names if n in os.environ]}",
+        )
+        with t7_run_support.refused_network():
+            inside = _answer_or_error(url)
+        after = urllib.request._opener
+        outside = _answer_or_error(url)
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        urllib.request._opener = saved_opener
+        for name in names:
+            os.environ.pop(name, None)
+        os.environ.update(held)
+    checks.equal(inside, b"pong", "a loopback call inside a refused block still answers")
+    checks.ok(
+        after is before,
+        "the refused block leaves urllib's opener as it found it",
+        f"urllib's opener after the block: {after!r}",
+    )
+    checks.equal(outside, b"pong", "a loopback call after the refused block still answers")
+
+
 CHECKS = (
     check_run_refuses_live_network_in_process,
     check_run_loopback_still_answers,
     check_run_child_process_routes_through_refused_proxy,
+    check_run_refused_block_restores_urllib_opener,
 )
