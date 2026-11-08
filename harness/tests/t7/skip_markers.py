@@ -22,9 +22,11 @@ internals.
 from __future__ import annotations
 
 import contextlib
+import errno
 import io
 import os
 import re
+import socket
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -32,10 +34,16 @@ from unittest import mock
 
 from harness.tests import Checks
 from harness.tests.home import run_folder
-from harness.tests.t7 import backup, emit_pricing
+from harness.tests.t7 import backup, emit_pricing, server_hardening, store_core
 
 CI_SKIP_COUNT = Path(__file__).resolve().parents[3] / "scripts" / "ci-skip-count.sh"
 OK_LINE = re.compile(r"^\s+ok\s", re.MULTILINE)
+# The assertion lines `Checks` prints, at the indent a check's detail carries. The indent is spaces or tabs only: `\s`
+# would also take a blank line, and then the fixture's own column-0 `FAIL  FIXTURE` headline would count as a check.
+OK_CHECK = re.compile(r"^[ \t]+ok ", re.MULTILINE)
+FAIL_CHECK = re.compile(r"^[ \t]+FAIL ", re.MULTILINE)
+# `socket.socket` as it is before any case patches it. The stand-ins below answer every other family with it.
+REAL_SOCKET = socket.socket
 # The ok lines each backup check makes before its skipped case, measured as root at the head this group was
 # last changed on. A skip beside an `ok` line in those checks changes the count, and that is the failure.
 UNWRITABLE_OK_LINES = 4
@@ -250,6 +258,148 @@ def check_a_send_matrix_without_node_modules_is_one_gated_skip(checks: Checks) -
                          "and that branch adds no ok line")
 
 
+def _check_lines(out: str) -> int:
+    """How many assertions the run printed, passed or failed. A note starts with neither `ok` nor `FAIL`, so it is not
+    counted."""
+    return len(OK_CHECK.findall(out)) + len(FAIL_CHECK.findall(out))
+
+
+def _refuse_af_inet6(errnum: int, asked: list):
+    """A `socket.socket` that answers every AF_INET6 request with `errnum` and makes every other family as the real
+    one does. Each AF_INET6 request is appended to `asked`, so a case can show the check reached its probe."""
+
+    def socket_for(family=-1, *args, **kwargs):
+        if family == socket.AF_INET6:
+            asked.append(family)
+            raise OSError(errnum, os.strerror(errnum))
+        return REAL_SOCKET(family, *args, **kwargs)
+
+    return socket_for
+
+
+def _answer_first_af_inet6(asked: list):
+    """A `socket.socket` that answers the first AF_INET6 request with a socket of this kernel's own family, so a probe
+    succeeds. Every later AF_INET6 request is the real one, which this kernel may refuse for real."""
+    answered = []
+
+    def socket_for(family=-1, *args, **kwargs):
+        if family == socket.AF_INET6:
+            asked.append(family)
+            if not answered:
+                answered.append(family)
+                return REAL_SOCKET(socket.AF_INET, socket.SOCK_STREAM)
+        return REAL_SOCKET(family, *args, **kwargs)
+
+    return socket_for
+
+
+def check_a_root_run_of_the_read_only_door_is_one_gated_skip(checks: Checks) -> None:
+    """Run as root (`os.geteuid` reads 0), the read-only door's no-side-file case is one gated skip, and the four
+    assertions a root run still makes pass and print no FAIL. Root writes into a 0555 folder, so that one case
+    cannot be built. The root branch is asserted first, so the skip is never claimed for a run that did not take it."""
+    with run_folder() as folder:
+        with mock.patch("os.geteuid", return_value=0) as geteuid:
+            out = _harness_output(store_core.check_open_read_only)
+        if checks.ok(geteuid.called, "the read-only door check, run as euid 0, reaches its root branch",
+                     "os.geteuid was never read, so the check never took the root branch"):
+            checks.equal(_gated_count(out, folder), 1,
+                         "running as root, its no-side-file case is one gated skip")
+            checks.equal(len(FAIL_CHECK.findall(out)), 0, "and the run prints no FAIL line")
+            checks.equal(len(OK_CHECK.findall(out)), 4,
+                         "and the four assertions that pass as root still run and pass")
+
+
+def check_a_non_root_run_of_the_read_only_door_is_no_skip(checks: Checks) -> None:
+    """Run as a non-root user (`os.geteuid` reads 1000), the read-only door's no-side-file case is not skipped, and all
+    five assertions are made. The count of assertions is the proof the check ran, and it is pinned, not the pass count.
+    This box is root, and root writes into the 0555 folder whatever the mode, so this forced run may print that one
+    line as FAIL here."""
+    with run_folder() as folder:
+        with mock.patch("os.geteuid", return_value=1000):
+            out = _harness_output(store_core.check_open_read_only)
+        checks.equal(_gated_count(out, folder), 0,
+                     "running as non-root, no case of the read-only door is skipped")
+        checks.equal(_check_lines(out), 5, "and all five of its assertions are made")
+
+
+def check_a_root_run_of_the_read_only_race_is_one_gated_skip(checks: Checks) -> None:
+    """Run as root, the read-only race is one gated skip and makes no assertion. The race needs the plain `mode=ro`
+    open to refuse a 0555 folder, and root can write into one, so the immutable fallback it races is never reached.
+    The root branch is asserted first, so the skip is never claimed for a run that did not take it."""
+    with run_folder() as folder:
+        with mock.patch("os.geteuid", return_value=0) as geteuid:
+            out = _harness_output(store_core.check_open_read_only_race)
+        if checks.ok(geteuid.called, "the read-only race, run as euid 0, reaches its root branch",
+                     "os.geteuid was never read, so the case never took the root branch"):
+            checks.equal(_gated_count(out, folder), 1,
+                         "running as root, the read-only race is one gated skip")
+            checks.equal(_check_lines(out), 0,
+                         "and it makes no assertion of its own: a skipped case adds no pass and no FAIL")
+
+
+def check_a_non_root_run_of_the_read_only_race_is_no_skip(checks: Checks) -> None:
+    """Run as a non-root user, the read-only race is not skipped and its three assertions are made. The count is pinned,
+    not the pass count, for the same reason as the read-only door's non-root case."""
+    with run_folder() as folder:
+        with mock.patch("os.geteuid", return_value=1000):
+            out = _harness_output(store_core.check_open_read_only_race)
+        checks.equal(_gated_count(out, folder), 0,
+                     "running as non-root, the read-only race is not skipped")
+        checks.equal(_check_lines(out), 3, "and its three assertions are made")
+
+
+def check_a_no_ipv6_run_of_the_dual_stack_bind_is_one_gated_skip(checks: Checks) -> None:
+    """The probe decides, not `socket.has_ipv6`. This case reads `has_ipv6` as True and still has the AF_INET6 probe
+    refused with errno 97 (EAFNOSUPPORT), which is what a kernel with IPv6 switched off answers. That is one gated skip,
+    and the check makes no assertion of its own."""
+    asked: list = []
+    with run_folder() as folder:
+        with mock.patch.object(socket, "has_ipv6", True), \
+                mock.patch("socket.socket", _refuse_af_inet6(errno.EAFNOSUPPORT, asked)):
+            out = _harness_output(server_hardening.check_dual_stack_bind)
+        if checks.ok(bool(asked), "the dual-stack check reaches its AF_INET6 probe",
+                     "no AF_INET6 socket was asked for, so the check never reached the probe"):
+            checks.equal(_gated_count(out, folder), 1,
+                         "with no IPv6 (errno 97), the dual-stack bind is one gated skip")
+            checks.equal(_check_lines(out), 0, "and it makes no assertion of its own")
+            checks.equal(len(FAIL_CHECK.findall(out)), 0, "and prints no FAIL line")
+
+
+def check_an_ipv6_run_of_the_dual_stack_bind_is_no_skip(checks: Checks) -> None:
+    """A kernel that reads `has_ipv6` False but whose AF_INET6 probe succeeds is not skipped: the probe decides. This
+    box has no IPv6, so the bind after the probe is the real one, refused here as it really is, and the check prints
+    its own FAILs. The count of assertions is pinned, not the pass count: four on a kernel with IPv6, where all four
+    pass."""
+    asked: list = []
+    with run_folder() as folder:
+        with mock.patch.object(socket, "has_ipv6", False), \
+                mock.patch("socket.socket", _answer_first_af_inet6(asked)):
+            out = _harness_output(server_hardening.check_dual_stack_bind)
+        if checks.ok(bool(asked), "the dual-stack check reaches its AF_INET6 probe",
+                     "no AF_INET6 socket was asked for, so the check never reached the probe"):
+            checks.equal(_gated_count(out, folder), 0,
+                         "with the probe answered, the dual-stack bind is not skipped")
+            checks.equal(_check_lines(out), 4, "and all four of its assertions are made")
+
+
+def check_a_dual_stack_probe_failing_for_another_reason_is_not_skipped(checks: Checks) -> None:
+    """Any probe error other than EAFNOSUPPORT is a failure, never a skip. EMFILE (too many open files) stands for
+    the other reasons: the check prints one FAIL that names the probe, and no ok line beside it."""
+    asked: list = []
+    with run_folder() as folder:
+        with mock.patch.object(socket, "has_ipv6", True), \
+                mock.patch("socket.socket", _refuse_af_inet6(errno.EMFILE, asked)):
+            out = _harness_output(server_hardening.check_dual_stack_bind)
+        if checks.ok(bool(asked), "the dual-stack check reaches its AF_INET6 probe",
+                     "no AF_INET6 socket was asked for, so the check never reached the probe"):
+            checks.equal(_gated_count(out, folder), 0,
+                         "a probe that fails with EMFILE is not a skip")
+            checks.equal(len(FAIL_CHECK.findall(out)), 1, "and it is one FAIL line")
+            checks.equal(len(OK_CHECK.findall(out)), 0, "and no assertion passes beside it")
+            checks.ok(re.search(r"^[ \t]+FAIL .*AF_INET6 probe", out, re.MULTILINE) is not None,
+                      "and that FAIL names the probe")
+
+
 CHECKS = (
     check_a_skipped_case_is_one_gated_skip_to_the_ci_counter,
     check_a_skipped_case_adds_no_ok_line_and_no_pass,
@@ -258,4 +408,11 @@ CHECKS = (
     check_a_root_run_of_the_backup_unreadable_folder_is_one_gated_skip,
     check_skip_refuses_a_name_that_is_not_kebab_case,
     check_a_send_matrix_without_node_modules_is_one_gated_skip,
+    check_a_root_run_of_the_read_only_door_is_one_gated_skip,
+    check_a_non_root_run_of_the_read_only_door_is_no_skip,
+    check_a_root_run_of_the_read_only_race_is_one_gated_skip,
+    check_a_non_root_run_of_the_read_only_race_is_no_skip,
+    check_a_no_ipv6_run_of_the_dual_stack_bind_is_one_gated_skip,
+    check_an_ipv6_run_of_the_dual_stack_bind_is_no_skip,
+    check_a_dual_stack_probe_failing_for_another_reason_is_not_skipped,
 )
