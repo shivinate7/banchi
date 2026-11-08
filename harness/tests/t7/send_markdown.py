@@ -33,6 +33,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from unittest import mock
+from harness import t7_run_support
 from harness.tests import Checks
 from cli import cmd_reprice, resolve, runs
 from pipeline import corpus, reprice, sendguard, tcgcsv
@@ -2350,7 +2351,8 @@ def check_master_take_off_mutants(checks: Checks) -> None:
             check_master_take_off, "THE ALREADY-SENT TAKE-OFF SAYS THE RETIREMENT STANDS",
         ),
     )
-    for name, anchor, replacement, target, label in mutants:
+    for number, (name, anchor, replacement, target, label) in enumerate(mutants, start=1):
+        began = time.perf_counter()
         sub = Checks()
         module, function = send_routes, "_master_take_off"
         if "record.get" in anchor:
@@ -2371,6 +2373,9 @@ def check_master_take_off_mutants(checks: Checks) -> None:
             caught,
             f"MUTANT {name}: {target.__name__} goes red on {label!r}",
             "" if caught else "survived, or failed on something else: " + " | ".join(fails)[:900],
+        )
+        t7_run_support.progress(
+            f"T7 mutant {number}/{len(mutants)} {time.perf_counter() - began:.2f}s {name}"
         )
 
 

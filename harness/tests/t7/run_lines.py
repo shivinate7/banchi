@@ -125,7 +125,9 @@ def check_run_refuses_inside_a_spawned_child(checks: Checks) -> None:
     """A spawned child that reaches `run` refuses at once: it runs no check and says so in one line.
 
     The script calls `run` at top level, as the bad script did. The main process runs its one
-    probe. The spawned child must not, and must print exactly one line naming T7 before it exits.
+    probe. The spawned child must not, and must print exactly one refusal line before it exits.
+    The refusal is counted by its words, `refused: T7`: the main process's own progress line also
+    starts with "T7", and a child that printed nothing must fail this case.
     """
     checks.note("")
     checks.note("T7 SPAWN — a spawned child that reaches run refuses at once, and runs no check")
@@ -156,10 +158,11 @@ def check_run_refuses_inside_a_spawned_child(checks: Checks) -> None:
         [pid for pid in probe_pids if pid != main_pid], [],
         "a spawned child ran a check instead of refusing",
     )
-    t7_lines = [line for line in output.splitlines() if line.startswith("T7")]
+    # The parent's own `T7 1/1 ...` progress line starts with "T7" too, so count the refusal's words.
+    refusals = [line for line in output.splitlines() if "refused: T7" in line]
     checks.equal(
-        len(t7_lines), 1,
-        "the spawned child printed exactly one line naming T7",
+        len(refusals), 1,
+        "the spawned child printed exactly one refusal line",
     )
     checks.ok(
         "PARENT DONE alive=False" in output,

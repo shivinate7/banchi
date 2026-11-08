@@ -169,12 +169,14 @@ says the same thing about 7b that a green T6 says about geometry: it is self-con
 
 from __future__ import annotations
 
+import multiprocessing
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from harness import t7_run_support  # noqa: E402
 from harness.tests import Checks, Result  # noqa: E402
 from harness.tests.t7 import (  # noqa: E402
     emit_pricing,
@@ -307,16 +309,32 @@ def run(order=None) -> Result:
     """
     from harness.tests import t7_box_map  # its fixtures come from this file (D264)
 
+    # A spawned child refuses at once and runs no check: a script that calls `run` at top level would
+    # otherwise run all of T7 again inside every child it starts.
+    if t7_run_support.in_spawned_child():
+        line = (
+            "refused: T7 runs in the main process only, and this is "
+            f"{multiprocessing.current_process().name}"
+        )
+        t7_run_support.progress(line)
+        return Result(False, line)
+
     checks = Checks()
     todo = list(CHECK_ORDER) + list(t7_box_map.CHECKS)
     if order is not None:
         todo = list(order(todo))
     timings = []
-    for check in todo:
-        began = time.perf_counter()
-        with hermetic():
-            check(checks)
-        timings.append((time.perf_counter() - began, check.__name__))
+    with t7_run_support.refused_network():
+        for number, check in enumerate(todo, start=1):
+            t7_run_support.name_check(check.__name__)
+            began = time.perf_counter()
+            try:
+                with hermetic():
+                    check(checks)
+            finally:
+                took = time.perf_counter() - began
+                timings.append((took, check.__name__))
+                t7_run_support.progress(f"T7 {number}/{len(todo)} {took:.2f}s {check.__name__}")
     slowest = sorted(timings, reverse=True)[:15]
     checks.note("")
     checks.note(

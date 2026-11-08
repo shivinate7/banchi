@@ -581,14 +581,16 @@ def check_refresh_route(checks: Checks) -> None:
                 time.sleep(0.2)
         finally:
             w.stub["gate"].set()
-            undo()
-            # let a forced run finish before the store goes away
-            deadline = time.time() + 60
-            while time.time() < deadline:
-                state, body, _ = request(w.port, "GET", "/pipeline/prices/refresh")
-                if state != 200 or json.loads(body or b"{}").get("state") not in ("running", "starting"):
-                    break
-                time.sleep(0.1)
+            try:
+                # let a forced run finish before the store goes away, and before its history is put back
+                deadline = time.time() + 60
+                while time.time() < deadline:
+                    state, body, _ = request(w.port, "GET", "/pipeline/prices/refresh")
+                    if state != 200 or json.loads(body or b"{}").get("state") not in ("running", "starting"):
+                        break
+                    time.sleep(0.1)
+            finally:
+                undo()
 
 
 def check_visit_asks_no_market_host(checks: Checks) -> None:
