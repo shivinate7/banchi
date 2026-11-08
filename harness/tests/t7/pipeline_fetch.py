@@ -2621,7 +2621,7 @@ _WRITE = {"method": "POST", "data": b"x=1", "idempotent": False}
 
 def _write_broken_after_the_headers_is_one_request(net, drop):
     with _socket_wire(("body", drop), _raw(200, b"done")) as wire:
-        got, caught = attempt(lambda: net.open("http://w-body.example.test/x", **_WRITE))
+        got, caught = attempt(lambda: net.open("http://localhost/w-body", **_WRITE))
     return (
         isinstance(caught, net.NetError) and not isinstance(caught, net.Offline)
         and len(wire.requests) == 1 and not wire.pauses,
@@ -2631,7 +2631,7 @@ def _write_broken_after_the_headers_is_one_request(net, drop):
 
 def _write_that_never_connected_is_still_retried(net, refusal):
     with _socket_wire(refusal, _raw(200, b"done")) as wire:
-        got, caught = attempt(lambda: net.open("http://w-connect.example.test/x", **_WRITE))
+        got, caught = attempt(lambda: net.open("http://localhost/w-connect", **_WRITE))
     return (
         caught is None and got[0] == 200 and got[2] == b"done"
         and wire.connects == 2 and len(wire.requests) == 1,
@@ -2639,7 +2639,9 @@ def _write_that_never_connected_is_still_retried(net, refusal):
     )
 
 
-_FROM, _TO = "r-from.example.test", "r-to.example.test"
+# Two loopback names, so the redirect crosses to another host without the run's network refusal, which
+# would stop a non-loopback name in urllib before the scripted wire.
+_FROM, _TO = "localhost", "127.0.0.1"
 
 
 def _redirects_to_another_host(sent: bytes) -> bytes:
@@ -2916,16 +2918,18 @@ _WRITES_THAT_DROP = (
 
 def _a_write_that_drops_is_net_dropped(net, step, host):
     with _socket_wire(step(), _raw(200, b"done")) as wire:
-        got, caught = attempt(lambda: net.open(f"http://{host}.example.test/x", **_WRITE))
+        got, caught = attempt(lambda: net.open(f"http://127.0.0.1/{host}", **_WRITE))
     return (
         isinstance(caught, net.Dropped) and wire.connects == 1 and not wire.pauses,
         f"{caught or got!r} after {wire.connects} connects, pauses {wire.pauses}",
     )
 
 
+# THE SCRIPTED HOSTS IN THIS SECTION ARE LOOPBACK. The wire answers every connect, so no host is reached,
+# but the run's network refusal would stop a non-loopback name in urllib before the wire saw it.
 def _portal_send_reports_a_dropped_write_as_dropped(net, step, host):
     with _socket_wire(step(), _raw(200, b"done")) as wire:
-        got, caught = attempt(lambda: _portal_send(f"http://{host}.example.test/x", data=b"x=1", idempotent=False))
+        got, caught = attempt(lambda: _portal_send(f"http://127.0.0.1/{host}", data=b"x=1", idempotent=False))
     detail = f"{caught or got!r} after {wire.connects} connects, pauses {wire.pauses}"
     if isinstance(caught, _Unreached):
         detail += ": a write that may have been sent was reported as never reached"
@@ -2937,7 +2941,7 @@ def _reset_after_send(sent):
 
 
 def _tcg_write(step):
-    url = "http://portal.example.test/admin/pricing/stagedupload"
+    url = "http://127.0.0.1/admin/pricing/stagedupload"
     with _socket_wire(step, _raw(200, b"done")) as wire:
         got, caught = attempt(lambda: tcg_export._open(url, cookie="session=fixture", data=b"x=1", idempotent=False))
     return got, caught, wire
@@ -2960,7 +2964,7 @@ def _tcg_export_reports_a_dropped_write_like_any_other_drop(net, step):
 def _a_write_that_never_connected_is_still_unreachable(net):
     refusal = ConnectionRefusedError(errno.ECONNREFUSED, "simulated: connection refused")
     with _socket_wire(refusal) as wire:
-        got, caught = attempt(lambda: _portal_send("http://w-refused.example.test/x", data=b"x=1", idempotent=False))
+        got, caught = attempt(lambda: _portal_send("http://127.0.0.1/w-refused", data=b"x=1", idempotent=False))
     return (
         isinstance(caught, _Unreached) and hasattr(caught.args[0], "reason") and wire.connects == 3,
         f"{caught or got!r} after {wire.connects} connects",
@@ -2972,7 +2976,7 @@ def _a_read_that_stalls_is_still_dropped(net):
         raise TimeoutError("simulated: read timed out")
 
     with _socket_wire(stall) as wire:
-        got, caught = attempt(lambda: _portal_send("http://r-stall.example.test/x"))
+        got, caught = attempt(lambda: _portal_send("http://127.0.0.1/r-stall"))
     return isinstance(caught, _Dropped) and wire.connects == 3, f"{caught or got!r} after {wire.connects} connects"
 
 

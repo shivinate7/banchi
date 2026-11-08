@@ -740,8 +740,19 @@ def check_server_read_budget(checks: Checks) -> None:
     for route in sorted(k for k in set(BUDGET) | set(EXEMPT) if k.startswith("POST ")):
         if route not in POST_READS and route not in EXEMPT:
             problems.append(f"stale row {route!r}: no POST_READS entry")
-    small, found, statuses = measure(checks, SIZES[0])
-    big, _, _ = measure(checks, SIZES[1])
+    from pipeline import pricehistory
+    from unittest import mock
+
+    def mirror_has_no_such_product(self, row):
+        """The answer a live read of a SKU the mirror does not list gives, so the mirror is not asked.
+
+        That answer is `history_unresolved` (409), which is what BUDGET holds. T7 refuses the network,
+        so an unstubbed read would answer 502 and this check would read it as a failure."""
+        raise pricehistory.NotResolvable("The price mirror lists no product for this SKU.")
+
+    with mock.patch.object(pricehistory.Market, "reading_for_row", mirror_has_no_such_product):
+        small, found, statuses = measure(checks, SIZES[0])
+        big, _, _ = measure(checks, SIZES[1])
     for route, status in statuses.items():
         if status >= 500:
             problems.append(f"{route} failed with a server error ({status})")
