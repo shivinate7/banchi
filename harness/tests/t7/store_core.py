@@ -649,10 +649,18 @@ def check_open_read_only(checks: Checks) -> None:
                 f"sqlite_errorname={errorname!r} message={errormessage!r}",
             )
             cold.close()
-            checks.ok(
-                not any(Path(f"{target}{side}").exists() for side in ("-wal", "-shm")),
-                "and opening it cold created no side file",
-            )
+            if os.geteuid() == 0:
+                # Root writes a side file into a 0555 folder, so this one assertion cannot hold as root.
+                # The other four assertions of this check run as root.
+                checks.skip(
+                    "t7-read-only-door-as-root",
+                    "root writes a side file into a 0555 folder, so the no-side-file case is not built",
+                )
+            else:
+                checks.ok(
+                    not any(Path(f"{target}{side}").exists() for side in ("-wal", "-shm")),
+                    "and opening it cold created no side file",
+                )
 
 
 def check_open_read_only_race(checks: Checks) -> None:
@@ -676,6 +684,14 @@ def check_open_read_only_race(checks: Checks) -> None:
     """
     checks.note("")
     checks.note("READ-ONLY DOOR RACE — a commit lands between the check and the open")
+    if os.geteuid() == 0:
+        # Root writes into a 0555 folder, so the plain `mode=ro` open never refuses and the immutable
+        # fallback this race lands in is never reached. Every assertion here depends on that refusal.
+        checks.skip(
+            "t7-read-only-door-race-as-root",
+            "root writes into a 0555 folder, so the plain open never refuses and the immutable fallback this case races is never reached",
+        )
+        return
     with isolated_home():
         directory = files.inventory_dir()
         directory.mkdir(parents=True, exist_ok=True)

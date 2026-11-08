@@ -41,7 +41,9 @@ OK_LINE = re.compile(r"^\s+ok\s", re.MULTILINE)
 # The assertion lines `Checks` prints, at the indent a check's detail carries. The indent is spaces or tabs only: `\s`
 # would also take a blank line, and then the fixture's own column-0 `FAIL  FIXTURE` headline would count as a check.
 OK_CHECK = re.compile(r"^[ \t]+ok ", re.MULTILINE)
-FAIL_CHECK = re.compile(r"^[ \t]+FAIL ", re.MULTILINE)
+# `FAIL no checks ran` is what `Checks.result` prints for a fixture that asserted nothing, which a skipped case is.
+# It is the harness's marker, not an assertion, so it is not counted.
+FAIL_CHECK = re.compile(r"^[ \t]+FAIL (?!no checks ran)", re.MULTILINE)
 # `socket.socket` as it is before any case patches it. The stand-ins below answer every other family with it.
 REAL_SOCKET = socket.socket
 # The ok lines each backup check makes before its skipped case, measured as root at the head this group was
