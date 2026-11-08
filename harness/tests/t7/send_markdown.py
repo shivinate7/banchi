@@ -1037,6 +1037,13 @@ def check_markdown_push(checks: Checks) -> None:
     )
 
 
+# The sign-in redirect names the portal's own logon page, the shape the live portal answers
+# (`server/tcg_export.py`'s docs; `pipeline_fetch.py` stubs it the same way). A Location on another
+# host is not a logon by `portal_http.LOGON_MARKER`, so the client follows it: the case then reached
+# store.tcgplayer.com and passed only while that host answered.
+SIGN_IN_REDIRECT = "/admin/account/logon?ReturnUrl=%2fAdmin%2fPricing"
+
+
 @contextmanager
 def send_portal():
     """A loopback TCGplayer: the live export GET and the five pricing POSTs, and a record of
@@ -1128,7 +1135,7 @@ def send_portal():
             self._wait("GET")
             if state["signed_out"]:
                 self.send_response(302)
-                self.send_header("Location", "https://store.tcgplayer.com/oauth/login")
+                self.send_header("Location", SIGN_IN_REDIRECT)
                 self.send_header("Content-Length", "0")
                 self.end_headers()
                 return
@@ -1145,7 +1152,7 @@ def send_portal():
             if name == "downloadexportcsv":
                 if state["signed_out"]:
                     self.send_response(302)
-                    self.send_header("Location", "https://store.tcgplayer.com/oauth/login")
+                    self.send_header("Location", SIGN_IN_REDIRECT)
                     self.send_header("Content-Length", "0")
                     self.end_headers()
                     return

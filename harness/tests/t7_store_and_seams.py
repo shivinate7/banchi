@@ -218,6 +218,8 @@ from harness.tests.t7 import (  # noqa: E402
     labels,
     labels_guards,
     skip_markers,
+    network_refusal,
+    run_lines,
 )
 # `t7_box_map.py` imports these names from this module, so they stay reachable here (D264).
 from cli import resolve  # noqa: E402, F401
@@ -291,6 +293,8 @@ CHECK_ORDER = (
     *labels.CHECKS,
     *labels_guards.CHECKS,
     *skip_markers.CHECKS,
+    *network_refusal.CHECKS,
+    *run_lines.CHECKS,
 )
 
 
