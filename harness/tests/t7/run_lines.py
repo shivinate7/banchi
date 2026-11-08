@@ -22,7 +22,7 @@ import re
 import socket
 import subprocess
 import sys
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, suppress
 
 from harness import t7_run_support
 from harness.tests import Checks
@@ -129,11 +129,8 @@ def check_run_prints_one_flushed_line_per_check(checks: Checks) -> None:
     # The socket door, not `net.request`: net pauses and retries a refused connect, and only the
     # refusal's line matters here.
     later = io.StringIO()
-    with redirect_stderr(later):
-        try:
-            socket.create_connection((PROBE_HOST, 80), timeout=PROBE_TIMEOUT_S)
-        except OSError:
-            pass
+    with redirect_stderr(later), suppress(OSError):
+        socket.create_connection((PROBE_HOST, 80), timeout=PROBE_TIMEOUT_S)
     named = [
         match.group(1) for match in REFUSAL_LINE.finditer(later.getvalue())
         if match.group(2) == PROBE_HOST
