@@ -21,7 +21,7 @@ import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
-from typing import List
+from typing import List, Optional
 from harness.tests import Checks
 from server import capture_server, ports
 from store import photos
@@ -1015,6 +1015,16 @@ def check_app_serve(checks: Checks) -> None:
     capture_server.APP_DIST = original
 
 
+def _ipv6_probe() -> Optional[OSError]:
+    """The error an AF_INET6 socket raises on this kernel, or None when it makes one. Probed, never read off
+    `socket.has_ipv6`: a kernel can have IPv6 built in and still refuse the family (errno 97 on this box)."""
+    try:
+        socket.socket(socket.AF_INET6).close()
+    except OSError as exc:
+        return exc
+    return None
+
+
 def check_dual_stack_bind(checks: Checks) -> None:
     """The 2026-09-23 incident, proved and closed (D43).
 
@@ -1034,6 +1044,21 @@ def check_dual_stack_bind(checks: Checks) -> None:
     """
     checks.note("")
     checks.note("dual-stack bind — the port split behind the 2026-09-23 incident (D43)")
+
+    probe = _ipv6_probe()
+    if probe is not None:
+        if probe.errno == errno.EAFNOSUPPORT:
+            checks.skip(
+                "t7-dual-stack-no-ipv6",
+                "this kernel has no IPv6 (an AF_INET6 socket is EAFNOSUPPORT), so the dual-stack bind is not built",
+            )
+            return
+        checks.ok(
+            False,
+            "the AF_INET6 probe fails with an errno other than EAFNOSUPPORT, so the dual-stack bind is not skipped",
+            str(probe),
+        )
+        return
 
     httpd, host = capture_server._capture_server("::", 0)
     try:
