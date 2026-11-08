@@ -20,5 +20,10 @@
   },
   "rolled-out": true,
   "waiting-page": "https://claude.ai/artifact/DCs2UMoFfYKWR4rxKLqv9N",
-  "visibility": "public"
+  "visibility": "public",
+  "artifacts": [
+    {"id": "banchi-answer-desk", "url": "https://claude.ai/artifact/4Y1AU7esAtpAs8q183b3HT", "role": "reference", "account": "outlook", "collections": []},
+    {"id": "banchi-cockpit", "url": "https://claude.ai/artifact/DCs2UMoFfYKWR4rxKLqv9N", "role": "reference", "account": "outlook", "collections": ["answers", "asks", "groups", "items", "meta", "receipts"]},
+    {"id": "riftbound-card-sort", "url": "https://claude.ai/artifact/1orNpfgim8fQDsYHYjPMnK", "role": "reference", "account": "outlook", "collections": []}
+  ]
 }
