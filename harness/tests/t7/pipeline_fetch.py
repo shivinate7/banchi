@@ -2621,7 +2621,7 @@ _WRITE = {"method": "POST", "data": b"x=1", "idempotent": False}
 
 def _write_broken_after_the_headers_is_one_request(net, drop):
     with _socket_wire(("body", drop), _raw(200, b"done")) as wire:
-        got, caught = attempt(lambda: net.open("http://w-body.example.test/x", **_WRITE))
+        got, caught = attempt(lambda: net.open("http://localhost/w-body", **_WRITE))
     return (
         isinstance(caught, net.NetError) and not isinstance(caught, net.Offline)
         and len(wire.requests) == 1 and not wire.pauses,
@@ -2631,7 +2631,7 @@ def _write_broken_after_the_headers_is_one_request(net, drop):
 
 def _write_that_never_connected_is_still_retried(net, refusal):
     with _socket_wire(refusal, _raw(200, b"done")) as wire:
-        got, caught = attempt(lambda: net.open("http://w-connect.example.test/x", **_WRITE))
+        got, caught = attempt(lambda: net.open("http://localhost/w-connect", **_WRITE))
     return (
         caught is None and got[0] == 200 and got[2] == b"done"
         and wire.connects == 2 and len(wire.requests) == 1,
@@ -2639,7 +2639,9 @@ def _write_that_never_connected_is_still_retried(net, refusal):
     )
 
 
-_FROM, _TO = "r-from.example.test", "r-to.example.test"
+# Two loopback names, so the redirect crosses to another host without the run's network refusal, which
+# would stop a non-loopback name in urllib before the scripted wire.
+_FROM, _TO = "localhost", "127.0.0.1"
 
 
 def _redirects_to_another_host(sent: bytes) -> bytes:
