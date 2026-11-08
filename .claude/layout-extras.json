@@ -36,7 +36,10 @@
     {"id": "anatomy-of-the-rig", "url": "https://claude.ai/artifact/Uddo3QsVC8MQRFo2X69PAy", "role": "reference", "account": "gmail", "collections": []},
     {"id": "rig-line-slab", "url": "https://claude.ai/artifact/11Yij73m412jnE2VZL7anC", "role": "reference", "account": "gmail", "collections": []},
     {"id": "four-screens-fixed", "url": "https://claude.ai/artifact/XBRcxEFLU8dSCMkzrv3Vjf", "role": "reference", "account": "gmail", "collections": []},
-    {"id": "queue-6nu1", "url": "https://claude.ai/artifact/6NU1FeyGMvhyrQr7ga3tQe", "role": "reference", "account": "gmail", "collections": []},
-    {"id": "live-book-realignment", "url": "https://claude.ai/artifact/9Usmw8ijAg5rgXy2brkgpf", "role": "reference", "account": "gmail", "collections": []}
+    {"id": "queue-6nu1", "url": "https://claude.ai/artifact/6NU1FeyGMvhyrQr7ga3tQe", "role": "reference", "account": "gmail", "collections": ["answers", "asks", "groups", "items", "meta", "receipts"]},
+    {"id": "live-book-realignment", "url": "https://claude.ai/artifact/9Usmw8ijAg5rgXy2brkgpf", "role": "reference", "account": "gmail", "collections": []},
+    {"id": "seams-review", "url": "https://claude.ai/artifact/6uBUd6DuLqyaSiSCK6TuCQ", "role": "reference", "account": "gmail", "collections": []},
+    {"id": "design-portfolio", "url": "https://claude.ai/artifact/JJTJirz1BzGkGzcYLcwMu7", "role": "reference", "account": "gmail", "collections": []},
+    {"id": "before-after-390", "url": "https://claude.ai/artifact/8r6KsV384oFZCHNAEQApCd", "role": "reference", "account": "gmail", "collections": []}
   ]
 }
