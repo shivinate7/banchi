@@ -15,6 +15,7 @@ import multiprocessing
 import os
 import socket
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from contextlib import contextmanager
@@ -99,8 +100,8 @@ def refused_network() -> Iterator[None]:
     In process, five doors are wrapped: urllib's `do_open` (it sees the real URL even when a proxy
     is set), `http.client`'s connect (a tunnelled request's real host), `socket.create_connection`
     (the host name before lookup) and the socket's own connect and connect_ex. Each prints one
-    line naming the check and the host, then raises `ConnectionRefusedError`, which product code
-    reads as an offline host. Child processes inherit proxy variables that go nowhere.
+    line naming the check and the host, then raises `ConnectionRefusedError` (urllib's door wraps it
+    in `URLError`, as urllib does), which product code reads as an offline host. Child processes inherit proxy variables that go nowhere.
     """
     real_do_open = urllib.request.AbstractHTTPHandler.do_open
     real_http_connect = http.client.HTTPConnection.connect
@@ -109,7 +110,11 @@ def refused_network() -> Iterator[None]:
     real_connect_ex = socket.socket.connect_ex
 
     def do_open(self, http_class, req, **kw):
-        _refuse_unless_local(urllib.parse.urlsplit(req.full_url).hostname)
+        try:
+            _refuse_unless_local(urllib.parse.urlsplit(req.full_url).hostname)
+        except ConnectionRefusedError as exc:
+            # urllib's own shape for a refused connect; `pipeline.net` tells a never-sent write by it.
+            raise urllib.error.URLError(exc) from exc
         return real_do_open(self, http_class, req, **kw)
 
     def http_connect(self):
