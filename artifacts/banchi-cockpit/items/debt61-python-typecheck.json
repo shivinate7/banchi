@@ -1,0 +1,30 @@
+{
+  "added": "2026-10-27T09:25:00-05:00",
+  "context": "No mypy or pyright is configured. Ruff is adopted (D82). Cheap first step: mypy --strict on store/orders.py or codes/qr.py. Not measured: how many errors it would find.",
+  "home": "docs/debts/061-advances-carryover.md (item 8)",
+  "id": "debt61-python-typecheck",
+  "kind": "decision",
+  "n": 4,
+  "options": [
+    {
+      "gain": "A real signal on type errors for little work.",
+      "how": "One module, one CI step.",
+      "key": "try-one",
+      "label": "Try mypy --strict on store/orders.py",
+      "lose": "One more tool to keep green."
+    },
+    {
+      "gain": "No new tool.",
+      "how": "Keep item 8 open.",
+      "key": "leave",
+      "label": "Leave it",
+      "lose": "No type checking in Python."
+    }
+  ],
+  "owner": "debt61",
+  "pick": "try-one",
+  "ref": "DEBT61 item 8, Python type checker",
+  "status": "closed",
+  "title": "Try a Python type checker on one module?",
+  "why": "Cheapest way to measure the value before committing."
+}

@@ -1,0 +1,72 @@
+{
+  "added": "2026-10-27T16:50:00Z",
+  "context": "You asked to see the mockups to decide. They are now drawn on this card: page through them with the arrows. Option 4, the floating card, covers only the right side of the rows under it at tablet width, never a name. No product code is built until you pick.",
+  "designs": [
+    {
+      "label": "Keep the card's sheet (desktop)",
+      "slug": "h30-sheet"
+    },
+    {
+      "label": "The row expands (desktop)",
+      "slug": "h30-inline"
+    },
+    {
+      "label": "Side panel (desktop)",
+      "slug": "h30-panel"
+    },
+    {
+      "label": "Floating card (desktop)",
+      "slug": "h30-float"
+    },
+    {
+      "label": "Floating card (tablet)",
+      "slug": "h30-float-820"
+    }
+  ],
+  "home": "docs/specs/pricing-suggest.md section 9",
+  "id": "pricing-history-where",
+  "kind": "decision",
+  "links": [
+    {
+      "label": "Price history: four options",
+      "url": "https://claude.ai/artifact/Q4sdkANufjQ546n8y8rgLN"
+    }
+  ],
+  "n": 30,
+  "options": [
+    {
+      "gain": "Room for a full chart.",
+      "how": "History opens in a panel beside the list.",
+      "key": "panel",
+      "label": "Side panel",
+      "lose": "The list narrows."
+    },
+    {
+      "gain": "Nothing new to learn.",
+      "how": "History stays in the card's own sheet.",
+      "key": "sheet",
+      "label": "Keep the card's sheet",
+      "lose": "Covers the list."
+    },
+    {
+      "gain": "History sits with its row.",
+      "how": "The row grows to show history.",
+      "key": "inline",
+      "label": "The row expands",
+      "lose": "Rows below move."
+    },
+    {
+      "gain": "The list never moves or gets covered whole, and it behaves the same at both widths.",
+      "how": "A small card floats over the row; nothing dims or moves.",
+      "key": "float",
+      "label": "Floating card over the row",
+      "lose": "Less room for the chart."
+    }
+  ],
+  "owner": "pricing-tools",
+  "pick": "float",
+  "ref": "pricing-suggest spec section 9, pricing by suggestion",
+  "status": "closed",
+  "title": "Where should a card's price history show while you price?",
+  "why": "The only option where the list never moves or gets covered whole."
+}

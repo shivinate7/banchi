@@ -1,0 +1,37 @@
+{
+  "added": "2026-10-27T14:40:00Z",
+  "context": "Built and on screen: Card Ladder (slab values, through your paid login), TCGplayer's own sold-price history, TCGCSV raw prices, and the TCGplayer export.\nIdea only: PriceCharting. The slabs spec promises PSA 10 and Japanese/Chinese prices from it, but no code exists, so those fields stay blank.\nGated: eBay. DEBT72 says no eBay work without a decision entry.",
+  "home": "a new decision entry, or the anchor section of the pricing-suggest spec",
+  "id": "price-source-next",
+  "kind": "decision",
+  "n": 70,
+  "options": [
+    {
+      "gain": "Free and already in use. Removes the bias toward only cards you stocked, which the price study needs.",
+      "how": "Download it once, check Riftbound coverage, and backfill price history.",
+      "key": "tcgcsv",
+      "label": "TCGCSV daily archive",
+      "lose": "No sold prices from other markets."
+    },
+    {
+      "gain": "Completes slab values.",
+      "how": "Decide API or scraping, then wire the slabs spec's promise.",
+      "key": "pricecharting",
+      "label": "PriceCharting for slabs and Japanese cards",
+      "lose": "Paid or terms risk, both unchecked."
+    },
+    {
+      "gain": "No new risk.",
+      "how": "Strike the PriceCharting promise from the slabs spec.",
+      "key": "close",
+      "label": "Nothing new",
+      "lose": "PSA 10 and Japanese/Chinese values stay blank."
+    }
+  ],
+  "owner": "price-sources",
+  "pick": "tcgcsv",
+  "ref": "price-sources survey; my-slabs spec 4.6; DEBT72, eBay work needs a decision first",
+  "status": "closed",
+  "title": "Which outside price source comes next?",
+  "why": "Free, already in use, and fills a measured gap."
+}

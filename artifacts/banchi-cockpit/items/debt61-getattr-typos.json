@@ -1,0 +1,30 @@
+{
+  "added": "2026-10-27T09:25:00-05:00",
+  "context": "store/master.py and server/capture_server.py read and write card fields by string with getattr and setattr. A typo is a silent no-op or a runtime AttributeError that nothing catches first. Not measured: how often it has bitten.",
+  "home": "docs/debts/061-advances-carryover.md (item 5)",
+  "id": "debt61-getattr-typos",
+  "kind": "decision",
+  "n": 1,
+  "options": [
+    {
+      "gain": "A typo fails loudly at once.",
+      "how": "Name the fields in one list and check each string against it.",
+      "key": "build",
+      "label": "Build, small",
+      "lose": "A little churn in two files."
+    },
+    {
+      "gain": "No change to the store code.",
+      "how": "Keep item 5 open as it is.",
+      "key": "leave",
+      "label": "Leave it",
+      "lose": "A typo stays silent until it bites."
+    }
+  ],
+  "owner": "debt61",
+  "pick": "build",
+  "ref": "DEBT61 item 5, string-keyed field access on cards",
+  "status": "closed",
+  "title": "Build a guard against typos in card field names?",
+  "why": "Small fix on the store, and the failure is silent."
+}

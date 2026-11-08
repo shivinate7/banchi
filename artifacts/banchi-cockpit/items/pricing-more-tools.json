@@ -1,0 +1,37 @@
+{
+  "added": "2026-10-27T14:24:00Z",
+  "context": "Four candidates: (1) a slot for an outside reason, such as the Riftbound meta, (2) net after fees, (3) select many rows and apply one change, (4) a watch list with a price alert. Pick a set below, or name your own mix in the note.",
+  "home": "docs/specs/pricing-suggest.md section 9",
+  "id": "pricing-more-tools",
+  "kind": "decision",
+  "n": 33,
+  "options": [
+    {
+      "gain": "Room for the Riftbound work later, at no cost now.",
+      "how": "Rows get room for a reason such as 'meta-dependent'.",
+      "key": "signal",
+      "label": "Outside-reason slot only",
+      "lose": "No other new tools."
+    },
+    {
+      "gain": "Real margin on every row.",
+      "how": "Each row also shows what you keep after TCGplayer fees.",
+      "key": "signal-fees",
+      "label": "Reason slot plus net after fees",
+      "lose": "Needs your real fee rate."
+    },
+    {
+      "gain": "Fast edits and spike alerts.",
+      "how": "Also bulk edit and a watch list.",
+      "key": "all",
+      "label": "All four",
+      "lose": "A second way to set prices, and the watch list overlaps today's hold watch."
+    }
+  ],
+  "owner": "pricing-tools",
+  "pick": "signal",
+  "ref": "pricing-suggest spec section 9",
+  "status": "closed",
+  "title": "Which extra pricing tools should be built?",
+  "why": "The rest add surface with no measured need."
+}

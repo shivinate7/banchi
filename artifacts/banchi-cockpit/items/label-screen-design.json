@@ -1,0 +1,55 @@
+{
+  "added": "2026-11-03T00:35:00Z",
+  "context": "Goal: a shipping label screen you are happy to use every day.\nProblem (goal): the label screen build starts only once you approve how it looks.\nBased on (read): branch design/tcgt-labels at df8bae374 holds the Shipping mockup in 12 states and the Orders mockup in 9, each at 1440 and 820 in both themes. Asked in chat at 13:40 CST, with no answer yet.\nThe five pictures above are the new parts of Shipping at 1440, light. Use Prev and Next to page through them, or Open full size to enlarge. The first four show the Make Labels panel, and the fifth shows the new no-file note.\nThe no-file note reads: \"Banchi keeps each envelope order's address, so it can make the label. The file is forgotten after 30 minutes. No buyer info shows here.\"\nYour notes so far:\n2026-11-02 20:38 CST, \"I don't see anything in the photo\": the pictures were cut off. They were replaced with links.\n2026-11-03 14:43 CST, \"bring those links into this question\": the pictures are now on this card.\n2026-11-03 14:48 CST, \"none of these\": you want the cards in each order shown, on hover or some other way, and the screen does not look good enough yet. That asks for changes. banchi-coordinator sends it to the designer for another round, and this item is rewritten with the new mockups.\nAll 21 states, if you want them: https://github.com/shivinate7/banchi/tree/design/tcgt-labels/docs/design",
+  "designs": [
+    {
+      "label": "Make Labels, before you press",
+      "slug": "labels-preview"
+    },
+    {
+      "label": "Making the labels",
+      "slug": "labels-progress"
+    },
+    {
+      "label": "Stopped part way",
+      "slug": "labels-stopped"
+    },
+    {
+      "label": "Labels made",
+      "slug": "labels-receipt"
+    },
+    {
+      "label": "No file yet, with the new note",
+      "slug": "labels-nofile"
+    }
+  ],
+  "holds": "The label screen build waits on this approval.",
+  "home": "docs/specs/order-pipeline.md (Screens paragraph)",
+  "id": "label-screen-design",
+  "kind": "decision",
+  "n": 120,
+  "options": [
+    {
+      "gain": "The screen build starts now.",
+      "how": "The screen build starts on these mockups.",
+      "key": "approve",
+      "label": "Approve as drawn",
+      "lose": "Nothing."
+    },
+    {
+      "gain": "It matches what you want.",
+      "how": "Say in a note what to change, and the designer redraws it.",
+      "key": "changes",
+      "label": "Ask for changes",
+      "lose": "Another design round before the build."
+    }
+  ],
+  "owner": "banchi-coordinator",
+  "pick": "approve",
+  "rank": 1,
+  "ref": "branch design/tcgt-labels at df8bae374 (shipping label mockups)",
+  "short": "Label screen design",
+  "status": "open",
+  "title": "Approve the shipping label screen design?",
+  "why": "The mockups cover every state at both widths and in both themes, and the build is waiting on them."
+}

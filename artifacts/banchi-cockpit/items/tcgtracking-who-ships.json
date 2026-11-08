@@ -1,0 +1,37 @@
+{
+  "added": "2026-10-27T19:40:00Z",
+  "context": "Banchi's spec bans writing tracking back to TCGplayer because 'TCGTracking owns mark-shipped'. If that is no longer true, the ban rests on nothing.\nQuick check: open one recent shipped order in the seller portal and see whether it carries a carrier and tracking number.",
+  "home": "docs/specs/order-pipeline.md",
+  "id": "tcgtracking-who-ships",
+  "kind": "decision",
+  "n": 100,
+  "options": [
+    {
+      "gain": "The spec's ban stays right.",
+      "how": "It marks orders shipped and enters tracking.",
+      "key": "tcgtracking",
+      "label": "TCGTracking's extension",
+      "lose": "Nothing changes."
+    },
+    {
+      "gain": "Banchi could send Pirate Ship tracking back to TCGplayer.",
+      "how": "Labels and tracking come from Pirate Ship.",
+      "key": "pirateship",
+      "label": "Pirate Ship",
+      "lose": "The ban needs rewriting."
+    },
+    {
+      "gain": "A clear job for Banchi to take over.",
+      "how": "You mark shipped and type tracking yourself.",
+      "key": "hand",
+      "label": "By hand",
+      "lose": "The ban needs rewriting."
+    }
+  ],
+  "owner": "tcgtracking",
+  "pick": "tcgtracking",
+  "ref": "order-pipeline spec T5 (no writing tracking back), D61 (shipping three lanes)",
+  "status": "closed",
+  "title": "Who marks your orders shipped and enters tracking today?",
+  "why": "The spec assumes it; your answer confirms or retires that premise."
+}

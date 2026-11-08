@@ -1,0 +1,33 @@
+{
+  "added": "2026-11-02T21:02:00Z",
+  "context": "Goal: a holdings value report that prices as much of your roster as it can.\nProblem (goal): the report shipped on main today (PR 1024) with the name join, which prices under half the roster; switching reopens a settled decision, so it needs your word.\nBased on (read): D324 says the join is set plus normalized product name, and its Reopen line says \"or a better join than names appears\".\nBased on (measured): the holdings lane (2026-11-02): joining by product id prices 839 of 893 roster lines; the name join prices 373.",
+  "group": "holdings-report",
+  "home": "D324 (the holdings report), on main via PR 1025",
+  "id": "holdings-join-product-id",
+  "kind": "decision",
+  "n": 119,
+  "options": [
+    {
+      "gain": "About 94% of lines priced instead of 42%.",
+      "how": "Reopen D324 and join the roster on product id.",
+      "key": "product-id",
+      "label": "Switch to the product id join",
+      "lose": "One more small lane."
+    },
+    {
+      "gain": "No change.",
+      "how": "D324 stands; the report keeps joining on set and name.",
+      "key": "name",
+      "label": "Keep the name join",
+      "lose": "Over half the roster stays unpriced."
+    }
+  ],
+  "owner": "banchi-coordinator",
+  "pick": "product-id",
+  "rank": 10,
+  "ref": "D324 (Banchi values the owner's investment holdings); PR 1024 (holdings value report)",
+  "short": "Holdings join by id",
+  "status": "closed",
+  "title": "Value your investment roster by product id instead of by name?",
+  "why": "It prices more than twice as many lines, and D324's own Reopen line expects this."
+}

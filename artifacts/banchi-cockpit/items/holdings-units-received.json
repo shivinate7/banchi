@@ -1,0 +1,40 @@
+{
+  "added": "2026-11-02T19:10:00Z",
+  "context": "Goal: a holdings value report that counts what you actually received.\nProblem (risk): the units received live in the mailaudit ledger outside this repo, which holds names; reading it widens what the lane sees.\nBased on (notes): the coordinator's notes on the holdings value report lane.\nThe report can still ship without it, labeled 'units received unknown'.",
+  "group": "holdings-report",
+  "home": "the value report lane's brief",
+  "id": "holdings-units-received",
+  "kind": "decision",
+  "n": 114,
+  "options": [
+    {
+      "gain": "No work for you.",
+      "how": "The lane reads the ledger outside the repo for units received.",
+      "key": "ledger",
+      "label": "Lane reads the mailaudit ledger",
+      "lose": "The lane reads a file with names in it, outside this repo."
+    },
+    {
+      "gain": "Exact counts, and no names reach the lane.",
+      "how": "You give product id and units received only, with no names.",
+      "key": "extract",
+      "label": "You give an extract",
+      "lose": "A few minutes of your time to make the extract."
+    },
+    {
+      "gain": "Ships now, no work.",
+      "how": "The report says units received unknown.",
+      "key": "unknown",
+      "label": "Ship it as unknown",
+      "lose": "The report cannot say how much of each buy you still hold."
+    }
+  ],
+  "owner": "banchi-coordinator",
+  "pick": "extract",
+  "rank": 9,
+  "ref": "item 21 (holdings sales export), mailaudit holdings value report",
+  "short": "Units received source",
+  "status": "open",
+  "title": "Where should the holdings report get units received?",
+  "why": "Exact counts without names leaving the ledger."
+}

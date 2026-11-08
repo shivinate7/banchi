@@ -1,0 +1,30 @@
+{
+  "added": "2026-10-28T03:04:00Z",
+  "context": "Three planners agree: labels are made on Shipping's envelope lane, behind a free preview and an explicit confirm, and take buyer addresses from the shipping file you already upload.\nToday D33 says exactly one route in Banchi can spend money. Labels would make a second.",
+  "home": "D33 and D-tcgtracking-pipe",
+  "id": "tcgt-money-rule",
+  "kind": "decision",
+  "n": 106,
+  "options": [
+    {
+      "gain": "Labels can ship from Banchi.",
+      "how": "Rewrite D33: two routes spend, each behind its own preview and confirm.",
+      "key": "two",
+      "label": "Two routes, each gated",
+      "lose": "One more place money leaves."
+    },
+    {
+      "gain": "Spending stays in one place.",
+      "how": "D33 stays as it is.",
+      "key": "one",
+      "label": "Keep one route",
+      "lose": "No labels in Banchi."
+    }
+  ],
+  "owner": "tcgtracking",
+  "pick": "two",
+  "ref": "D33 (the money gate); TCGTracking pipe plan",
+  "status": "closed",
+  "title": "May labels become a second place where Banchi spends money?",
+  "why": "Labels are the point of the pipe, and each spend still needs your preview and confirm."
+}

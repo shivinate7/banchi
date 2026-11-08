@@ -1,0 +1,20 @@
+{
+  "added": "2026-10-27T17:11:00Z",
+  "context": "The holdings value report must subtract what you already sold, or it overstates your holdings. The lane checked Downloads: the July order list there is Banchi's own sales, and the OrderWand sale rows are all Banchi's (892 of 892). Neither has your investment-buy sales.\nWithout the right file, the report can still ship, labeled 'units sold unknown'.\nWhy yours: only you know which TCGplayer account sold the investment buys; the lane checked Downloads and found only Banchi's own sales.",
+  "group": "holdings-report",
+  "home": "the value report lane's brief",
+  "id": "holdings-sales-export",
+  "kind": "task",
+  "minutes": 5,
+  "n": 21,
+  "owner": "banchi-coordinator",
+  "rank": 8,
+  "ref": "item 20 (holdings watch), mailaudit holdings value report",
+  "status": "open",
+  "steps": [
+    "Find or download the TCGplayer sales export that covers your investment-buy sales.",
+    "Put it in ~/Downloads, and say its file name in the note.",
+    "Or say 'ship it labeled' to run the report without it."
+  ],
+  "title": "Which TCGplayer sales export holds the sales of your investment buys?"
+}

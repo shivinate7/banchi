@@ -1,0 +1,37 @@
+{
+  "added": "2026-10-27T14:41:00Z",
+  "context": "You asked for the take-off to be automatic. That bends one ruling: D100 says a card that is live but no longer on hand is taken off only after your yes for that card, with no screen control.\nThe parts mostly exist: the hold take-off (a fresh live read, one take-off pending per card, checked after it lands). TCGplayer never goes below 0, so a doubled take-off does no harm.\nThis applies only to the master-set retire reason. Widening it to other reasons is a separate question.",
+  "home": "docs/specs/master-set.md section 5, PR 965",
+  "id": "master-set-takeoff-how",
+  "kind": "decision",
+  "n": 13,
+  "options": [
+    {
+      "gain": "No extra step, and the card cannot sell after you pull it.",
+      "how": "The pull reads TCGplayer. If more copies are live than on hand, it lowers the count at once and checks that the change landed.",
+      "key": "push-now",
+      "label": "Take it off at the pull",
+      "lose": "Banchi writes to TCGplayer by itself on each live pull, and needs your seller login to be valid. A failed write leaves the pull standing and says so."
+    },
+    {
+      "gain": "Every TCGplayer change still rides a send you started.",
+      "how": "The pull records the take-off as owed. The next send you start includes it.",
+      "key": "next-send",
+      "label": "Take it off on the next send",
+      "lose": "The listing stays up until then, so the pulled card can sell meanwhile."
+    },
+    {
+      "gain": "An explicit yes per card, closest to today's rule.",
+      "how": "The receipt offers 'Take it off TCGplayer'.",
+      "key": "receipt-press",
+      "label": "One press on the pull receipt",
+      "lose": "One press per live pull."
+    }
+  ],
+  "owner": "sets-pull",
+  "pick": "push-now",
+  "ref": "master-set spec section 5, PR 965; D100, never delete to lower a price",
+  "status": "closed",
+  "title": "When you pull a live card for your master set, how should TCGplayer's count come down?",
+  "why": "It is what you asked for, and it closes the window in which a pulled card can sell."
+}
