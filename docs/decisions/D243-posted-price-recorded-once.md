@@ -63,8 +63,13 @@ price is unrecoverable for all 914 of them. `pushed` carries no price, and nothi
 was ever applied. This store's real price history is gone before this table starts keeping
 it.
 
-**Not reachable from a screen, on purpose.** The owner's ruling is to record first, and
-build the view once there is something to look at. No route, no client function, and no UI
-reads this table. This is not a route left unfinished. It is a store-layer table with no
-route at all yet. It is named here so a future session builds the view, rather than
-re-discovering that the table exists.
+**Read by two screens; the view is not built.** The owner's ruling is to record first, and
+build the view once there is something to look at. That view is DEBT68 (the posted-price
+history has no screen). It is named here so a future session builds the view, rather than
+re-discovering that the table exists. Two readers exist, both through
+`store/db.postings_for_sku`. The product-history route (`server/pipeline_routes._asking_postings`)
+returns a SKU's postings as `asking_postings`. The history card on `#/pricing`
+(`app/src/HistoryFloat.tsx`) passes them to `ProductChart`, which draws an asking step line.
+The `#/product` page gets the same answer but does not draw them. The kept-clears notice on
+`#/pricing` (`server/pipeline_routes._clear_built_on`) reads postings to hide a clear that a
+later send has built on.

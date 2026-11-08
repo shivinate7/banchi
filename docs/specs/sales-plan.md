@@ -100,8 +100,10 @@ DEBT68. `price_postings` (D243) records every posted price, one row per SKU per 
 ruled to build B first, then A. Both wait for the gate. The gate is closed while one SKU holds a
 second posting, meaning `price_postings` rows exceed its distinct SKUs. One posting is a point and
 draws no history. Measured on the owner's store: 103 rows over 103 distinct SKUs, so the gate is
-closed. Both builds need one new read route over `store/postings.py`, one client function in
-`app/src/server.ts` and one wire type in `app/src/types.ts`. Neither writes.
+closed. The product-history route already carries a SKU's postings as `asking_postings`, and the
+history card on `#/pricing` draws them, so A needs no new route. B reads across SKUs, so it
+needs one new read route over `store/db.py`'s postings reads, one client function in `app/src/server.ts`
+and one wire type in `app/src/types.ts`. Neither writes.
 
 Both builds keep these rules. A posted price is a third kind of observation. It is never joined to
 the market line or the fills (D278). A price stays until the next press, so it is a held step. Money
