@@ -102,7 +102,7 @@ second posting, meaning `price_postings` rows exceed its distinct SKUs. One post
 draws no history. Measured on the owner's store: 103 rows over 103 distinct SKUs, so the gate is
 closed. The product-history route already carries a SKU's postings as `asking_postings`, and the
 history card on `#/pricing` draws them, so A needs no new route. B reads across SKUs, so it
-needs one new read route over `store/postings.py`, one client function in `app/src/server.ts`
+needs one new read route over `store/db.py`'s postings reads, one client function in `app/src/server.ts`
 and one wire type in `app/src/types.ts`. Neither writes.
 
 Both builds keep these rules. A posted price is a third kind of observation. It is never joined to

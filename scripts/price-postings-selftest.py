@@ -21,8 +21,8 @@ NO NETWORK. `emit` and `reprice apply` are `store/postings.py:Postings.record()`
 callers today, both real presses (`./banchi emit`, `./banchi reprice apply`) — the sentence
 that used to sit here ("no caller a screen reaches yet") described the table's READ side,
 never the write side this file proves, and had gone stale for the write side regardless.
-NOTHING READS `price_postings` BACK ONTO A SCREEN YET (DEBT68: shelved until
-there is a history to draw); that is a separate fact from whether a press writes it, and this file
+The read side is D243's to describe (the `#/pricing` history card draws postings; DEBT68's
+view is not built); that is a separate fact from whether a press writes it, and this file
 proves only the write.
 
 PATH GATED, THE TWENTIETH (D247, owner's word 2026-09-23, on the same ground as
