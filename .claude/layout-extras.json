@@ -40,6 +40,7 @@
     {"id": "live-book-realignment", "url": "https://claude.ai/artifact/9Usmw8ijAg5rgXy2brkgpf", "role": "reference", "account": "gmail", "collections": []},
     {"id": "seams-review", "url": "https://claude.ai/artifact/6uBUd6DuLqyaSiSCK6TuCQ", "role": "reference", "account": "gmail", "collections": []},
     {"id": "design-portfolio", "url": "https://claude.ai/artifact/JJTJirz1BzGkGzcYLcwMu7", "role": "reference", "account": "gmail", "collections": []},
-    {"id": "before-after-390", "url": "https://claude.ai/artifact/8r6KsV384oFZCHNAEQApCd", "role": "reference", "account": "gmail", "collections": []}
+    {"id": "before-after-390", "url": "https://claude.ai/artifact/8r6KsV384oFZCHNAEQApCd", "role": "reference", "account": "gmail", "collections": []},
+    {"id": "price-history-placement", "url": "https://claude.ai/artifact/Q4sdkANufjQ546n8y8rgLN", "role": "reference", "account": "gmail", "collections": []}
   ]
 }
