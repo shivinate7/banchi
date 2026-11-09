@@ -23,7 +23,7 @@
   "visibility": "public",
   "artifacts": [
     {"id": "banchi-answer-desk", "url": "https://claude.ai/artifact/4Y1AU7esAtpAs8q183b3HT", "role": "reference", "account": "outlook", "collections": []},
-    {"id": "banchi-cockpit", "url": "https://claude.ai/artifact/DCs2UMoFfYKWR4rxKLqv9N", "role": "reference", "account": "outlook", "collections": ["answers", "asks", "groups", "items", "meta", "receipts"]},
+    {"id": "banchi-cockpit", "url": "https://claude.ai/artifact/DCs2UMoFfYKWR4rxKLqv9N", "role": "waiting-page", "account": "outlook"},
     {"id": "riftbound-card-sort", "url": "https://claude.ai/artifact/1orNpfgim8fQDsYHYjPMnK", "role": "reference", "account": "outlook", "collections": []},
     {"id": "slabs-mockups", "url": "https://claude.ai/artifact/338o1cSFMdRVBguXiYPQab", "role": "reference", "account": "gmail", "collections": []},
     {"id": "text-box-hints", "url": "https://claude.ai/artifact/T1B4QRKoZFsC6Wsgyy8Jf1", "role": "reference", "account": "gmail", "collections": []},
