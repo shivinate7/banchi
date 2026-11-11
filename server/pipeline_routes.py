@@ -5523,14 +5523,20 @@ _NEWEST_LIVE: Dict[str, object] = {}
 
 def _newest_live_listing() -> Tuple[Optional[str], Dict[str, Tuple[Optional[str], int]]]:
     """`(name, SKU -> (the asking price, live copies))` off the newest live export on disk, or
-    `(None, {})` when none was ever fetched. Read once per file: the name is the cache key, and a
-    fetch writes a new name (round 7, R6-1)."""
+    `(None, {})` when none was ever fetched. Read once per file CONTENT: the key is the name with the
+    file's size and modified time. The name alone is not enough, because a fetch names its file to the
+    second (`do_live_export`) and a second fetch in the same second rewrites the same name."""
     directory = files.inventory_dir() / LIVE_DIR
     fetched = sorted(directory.glob(f"{LIVE_PREFIX}*.csv")) if directory.is_dir() else []
     if not fetched:
         return None, {}
     newest = fetched[-1]
-    if _NEWEST_LIVE.get("name") != str(newest):
+    try:
+        stat = newest.stat()
+    except OSError:
+        return None, {}
+    key = (str(newest), stat.st_size, stat.st_mtime_ns)
+    if _NEWEST_LIVE.get("key") != key:
         try:
             export = tcgcsv.read_export(newest)
             rows = export.rows
@@ -5568,7 +5574,7 @@ def _newest_live_listing() -> Tuple[Optional[str], Dict[str, Tuple[Optional[str]
                 copies,
             )
         _NEWEST_LIVE.clear()
-        _NEWEST_LIVE.update({"name": str(newest), "listing": listing, "cells": cells})
+        _NEWEST_LIVE.update({"key": key, "listing": listing, "cells": cells})
     return newest.name, dict(_NEWEST_LIVE["listing"])  # type: ignore[arg-type]
 
 
