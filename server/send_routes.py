@@ -93,13 +93,6 @@ from store import Store, files, master, postings, sendclaims  # noqa: E402
 from store import clock as store_clock  # noqa: E402
 from store.submissions import proc_start  # noqa: E402
 
-#: How far a kept suggestion's price may drift between the screen's draw and the press before the
-#: press leaves it out: the larger of this fraction of the drawn price and this many dollars. TCGplayer's
-#: market moves cents every few minutes (measured: 45 of 1409 rows in 16 minutes), so an exact match
-#: refused every large send. A suggestion inside it is sent at the FRESH price and named under `moved`.
-SUGGESTION_DRIFT_FRACTION = Decimal("0.05")
-SUGGESTION_DRIFT_DOLLARS = Decimal("0.05")
-
 #: Where every send's receipt lives. Named once, in `cli/cmd_reprice.py`, because the lag guard
 #: there reads it too and a second spelling would be a second directory.
 SENDS = cmd_reprice.SENDS
@@ -1442,18 +1435,13 @@ def _leave_out_held(payload: dict, directories: Sequence[Path], live_before: Dic
     return dict(payload, prices=[row for row in payload["prices"] if row["sku"] not in held]), held
 
 
-def _drift_allowed(named: Decimal, fresh: Decimal) -> bool:
-    """Whether a rebuilt price is close enough to the drawn one to be sent in its place."""
-    return abs(fresh - named) <= max(SUGGESTION_DRIFT_DOLLARS, abs(named) * SUGGESTION_DRIFT_FRACTION)
-
-
 def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> Tuple[dict, List[dict], List[dict]]:
     """`(payload, moved, left_out)`: the press the server stands behind, or a refusal.
 
     THE SERVER NEVER TRUSTS THE CLIENT'S PRICE. Every kept suggestion is rebuilt by the worklist's
     own code (`pipeline_routes._live_wire`) off the store and the live export just fetched. Then,
     in this order, before a receipt exists:
-      1. A rebuilt suggestion within `_drift_allowed` of the drawn price is sent at the REBUILT
+      1. A rebuilt suggestion within `sendguard.drift_allowed` of the drawn price is sent at the REBUILT
          price and named under `moved`. One that moved further, or that has no rebuilt suggestion
          at all, stays out of the press and is named under `left_out`; the rest still go. A press
          left with nothing else to send refuses `suggestion_changed`, naming them.
@@ -1489,7 +1477,7 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> T
     for sku, (price, _) in sorted(kept.items()):
         named = tcgcsv.format_price(price)
         now = rebuilt.get(sku)
-        if now is None or not _drift_allowed(Decimal(named), Decimal(tcgcsv.format_price(now))):
+        if now is None or not sendguard.drift_allowed(Decimal(named), Decimal(tcgcsv.format_price(now))):
             left_out.append({"sku": sku, "name": names.get(sku) or sku, "price": named, "now": now})
         elif tcgcsv.format_price(now) != named:
             sending[sku] = tcgcsv.format_price(now)
@@ -1577,25 +1565,33 @@ def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed:
     try:
         answer = _write_and_send(payload, directories, download, record, live_path, live_before)
         # WHAT THE PRESS DID TO THE KEPT SUGGESTIONS, by key, each absent when none: `held` (left out, live and
-        # held), `moved` (sent at the fresh price) and `left_out` (changed past `_drift_allowed`, or gone).
+        # held), `moved` (sent at the fresh price) and `left_out` (changed past `sendguard.drift_allowed`, or gone).
         notes = {key: value for key, value in (("held", held), ("moved", moved), ("left_out", left_out)) if value}
         return dict(answer, **notes)
     except Exception as caught:  # noqa: BLE001 — every failure after the receipt ends known
         _settle(directory, caught)
-        if held and isinstance(caught, PipelineRefusal) and caught.code == "nothing_to_send":
-            _name_held(caught, held, _names(live_path))
+        if (held or left_out) and isinstance(caught, PipelineRefusal) and caught.code == "nothing_to_send":
+            _name_held(caught, held, _names(live_path), left_out)
         raise
 
 
-def _name_held(refusal: PipelineRefusal, held: List[str], names: Dict[str, str]) -> None:
+def _name_held(refusal: PipelineRefusal, held: List[str], names: Dict[str, str], left_out: Sequence[dict] = ()) -> None:
     """A press left empty by held suggestions names the held cards, and carries them under the
-    same top-level `held` key the answer of a press that sent carries."""
-    one = len(held) == 1
-    refusal.args = (
-        f"{refusal.args[0]} {', '.join(names.get(sku) or sku for sku in held)} "
-        f"{'is' if one else 'are'} held, so {'its' if one else 'their'} suggested price stayed out of this send.",
-    )
-    refusal.data = dict(refusal.data or {}, held=held)
+    same top-level `held` key the answer of a press that sent carries. Suggestions left out for a
+    change past `sendguard.drift_allowed` are named the same way, under `left_out`."""
+    if held:
+        one = len(held) == 1
+        refusal.args = (
+            f"{refusal.args[0]} {', '.join(names.get(sku) or sku for sku in held)} "
+            f"{'is' if one else 'are'} held, so {'its' if one else 'their'} suggested price stayed out of this send.",
+        )
+        refusal.data = dict(refusal.data or {}, held=held)
+    if left_out:
+        refusal.args = (
+            f"{refusal.args[0]} {', '.join(row['name'] for row in left_out)} "
+            "changed since the list was drawn, so the suggested price stayed out of this send.",
+        )
+        refusal.data = dict(refusal.data or {}, left_out=list(left_out))
 
 
 def _write_and_send(

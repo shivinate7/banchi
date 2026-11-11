@@ -33,7 +33,7 @@ import { Button, Icon, IconButton, Money, Notice, Pill, Refusal, Retry } from '.
 import { atClockTime, clockTime, dayMonth } from './dates'
 import { describeFailure, dismissSendWarning, getOwedTakeOffs, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, sendSuggestions, takeBackSend } from './server'
 import type { Failure } from './server'
-import type { EmptySend, LiveMove, OwedTakeOff, PriceChange, RefusedPrice, SendSummary, SendTrim } from './types'
+import type { EmptySend, LiveMove, OwedTakeOff, PriceChange, RefusedPrice, SendAnswer, SendSummary, SendTrim } from './types'
 import { pressTakeOff, viewOf, type TakeOffOutcome, type TakeOffView } from './takeOff'
 import { emptySendTitle } from './standing'
 import { current as liveState, refresh as refreshLive, useLiveCheck } from './liveCheck'
@@ -372,6 +372,34 @@ function NotSent({ gone }: { readonly gone?: readonly string[] }) {
       className="send-not-sent"
       title={`Not sent: ${gone.join(', ')}. ${gone.length === 1 ? 'It is' : 'They are'} no longer in the store.`}
     />
+  )
+}
+
+/** KEPT SUGGESTIONS THE PRESS CHANGED, named: a price that moved a few cents since the list was drawn
+ *  (sent at the fresh one), and a suggestion left out because it changed further or is gone. */
+function SuggestionNotes({ answer }: { readonly answer: SendAnswer }) {
+  const moved = answer.moved ?? []
+  const left = answer.left_out ?? []
+  if (moved.length === 0 && left.length === 0) return null
+  return (
+    <>
+      {left.length === 0 ? null : (
+        <Notice tone="warn" compact className="send-suggestions-left" title={`${count(left.length, 'suggestion', 'suggestions')} left out: the price changed since the list was drawn.`}>
+          <ul className="send-names">
+            {left.slice(0, 6).map((row) => (
+              <li key={row.sku}>
+                <span className="send-name">{row.name || row.sku}</span>
+                <span className="send-figure">{row.now === null ? 'no suggestion now' : `now $${row.now}`}</span>
+              </li>
+            ))}
+            {left.length > 6 ? <li className="send-more">and {left.length - 6} more</li> : null}
+          </ul>
+        </Notice>
+      )}
+      {moved.length === 0 ? null : (
+        <Notice tone="info" compact className="send-suggestions-moved" title={`${count(moved.length, 'price', 'prices')} moved since drawn, sent at the new figure.`} />
+      )}
+    </>
   )
 }
 
@@ -860,6 +888,8 @@ export function SendCard({
   const [intent, setIntent] = useState<'send' | 'download'>('send')
   const [failure, setFailure] = useState<Failure | null>(null)
   const [sent, setSent] = useState<SendSummary | null>(null)
+  /* WHAT THE PRESS DID TO THE KEPT SUGGESTIONS (a price that moved, one left out), answered with this visit's own press. */
+  const [answered, setAnswered] = useState<SendAnswer | null>(null)
   const [downloadOpen, setDownloadOpen] = useState(false)
   /* ON A PHONE THE BAR IS ONE LINE (D277, Q4): the press, and a More press that opens the two
      quiet doors beneath it. Above a phone the doors are always drawn and More is not. */
@@ -912,6 +942,7 @@ export function SendCard({
             ? await sendSuggestions(prices)
             : await sendCopies(runs, { download, splitThreshold: download && split, quantities: quantities(), prices, moves })
         setSent(answer.send)
+        setAnswered(answer)
         setFailure(null)
         setConfirmed({ was: {}, moves: {} })
         onSent()
@@ -1262,6 +1293,7 @@ export function SendCard({
               right after this visit's own send; a later visit does not carry it in the bar. */}
           {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TrimList trimmed={standing.trimmed} /> : null}
           {sent !== null && sent.stamp === standing.stamp ? <NotSent gone={standing.gone} /> : null}
+          {answered !== null && sent !== null && sent.stamp === standing.stamp ? <SuggestionNotes answer={answered} /> : null}
           {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TookOff taken={standing.taken_off} download={false} /> : null}
           {sent !== null && sent.stamp === standing.stamp ? <PricesLeft send={standing} /> : null}
           {/* THE RECEIPT KEEPS IT, so a reload still says the prices were read again. */}

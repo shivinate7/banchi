@@ -342,6 +342,19 @@ def price_changes(
     return changes, left, refused
 
 
+#: How far a kept suggestion's price may drift between the screen's draw and the press before the
+#: press leaves it out: the larger of this fraction of the drawn price and this many dollars. TCGplayer's
+#: market moves cents every few minutes (measured: 45 of 1409 rows in 16 minutes), so an exact match
+#: refused every large send. A suggestion inside it is sent at the FRESH price and named under `moved`.
+SUGGESTION_DRIFT_FRACTION = Decimal("0.05")
+SUGGESTION_DRIFT_DOLLARS = Decimal("0.05")
+
+
+def drift_allowed(named: Decimal, fresh: Decimal) -> bool:
+    """Whether a rebuilt price is close enough to the drawn one to be sent in its place."""
+    return abs(fresh - named) <= max(SUGGESTION_DRIFT_DOLLARS, abs(named) * SUGGESTION_DRIFT_FRACTION)
+
+
 def suggestions_past_cap(
     named: Mapping[str, tuple],
     prices: Mapping[str, Optional[str]],
