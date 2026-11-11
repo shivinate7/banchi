@@ -520,6 +520,58 @@ def drop_clear(ident: str) -> None:
     _write_clears([row for row in read_clears() if row["id"] != ident])
 
 
+# ------------------------------------------------------------------ the kept ticks
+
+#: The ticks the owner pressed on `#/pricing`, kept beside `prices.json` so they survive a reload
+#: (the owner, 2026-11-10: "ticks should probably just save"). SKU -> `{"price", "on"}`: `price` is
+#: the suggested price the press was made against, `on` is the press, so an untick is kept too.
+#:
+#: A SIDE FILE AND NOT A KEY IN `prices.json`, for the reason the kept clears are one: a tick is a
+#: change to what the next send carries and no answer for a card. In the corpus it would move the
+#: file's revision on every press, and `PUT /pricing` would answer 409 to the screen's own autosave.
+#: Whether a kept tick still holds is `pipeline/worklist.py:with_ticks`'s call.
+TICKS_FILENAME = "pricing-ticks.json"
+
+
+def ticks_path() -> Path:
+    from store import files
+
+    return files.prices_path().with_name(TICKS_FILENAME)
+
+
+def read_ticks() -> Dict[str, dict]:
+    """Every kept tick, SKU -> `{"price", "on"}`. A file that will not parse is no ticks: a tick
+    lost is a tick pressed again, and nothing in `prices.json` is at risk."""
+    target = ticks_path()
+    if not target.is_file():
+        return {}
+    try:
+        data = json.loads(target.read_text("utf-8"))
+    except (OSError, ValueError):
+        return {}
+    rows = data.get("ticks") if isinstance(data, dict) else None
+    out: Dict[str, dict] = {}
+    for sku, row in (rows if isinstance(rows, dict) else {}).items():
+        if isinstance(row, dict) and isinstance(row.get("price"), str) and isinstance(row.get("on"), bool):
+            out[str(sku)] = {"price": row["price"], "on": row["on"]}
+    return out
+
+
+def change_ticks(keep: Dict[str, dict], drop: Iterable[str] = ()) -> None:
+    """Keep `keep` (SKU -> `{"price", "on"}`) over the ticks already kept, and forget `drop`.
+    The caller holds the store lock (`files.exclusive`). The file goes when no tick is left."""
+    from store import files
+
+    ticks = read_ticks()
+    for sku in drop:
+        ticks.pop(str(sku), None)
+    ticks.update({str(sku): {"price": row["price"], "on": row["on"]} for sku, row in keep.items()})
+    if not ticks:
+        ticks_path().unlink(missing_ok=True)
+        return
+    files.write_json(ticks_path(), {"ticks": ticks})
+
+
 # ------------------------------------------------------------------ provenance and the digest
 
 

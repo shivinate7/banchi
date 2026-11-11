@@ -30,9 +30,10 @@ This is a projection, not a decision.
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 
-from pipeline import pricing, suggest, tcgcsv
+from pipeline import pricing, sendguard, suggest, tcgcsv
 
 # The three buckets a row can land in, and the names the screen switches on. Re-exported
 # rather than restated by callers: `app/src/types.ts:PricingSku.bucket` is the same three.
@@ -169,6 +170,29 @@ def live_rows(listings: list, policy: dict, today: str) -> list:
         for group in LIVE_GROUPS
         for row in reviewed[group]
     ]
+
+
+def with_ticks(rows: list, ticks: dict) -> list:
+    """`live_rows` with the owner's kept ticks laid on: each row gains `ticked`.
+
+    `ticked` is `True` or `False` where a kept tick (`corpus.read_ticks`) still holds, and `None`
+    where the screen falls back on the group's own start. A kept tick holds while the row's
+    suggested price is within `sendguard.drift_allowed` of the price the tick was pressed against;
+    past it the suggestion is a different one and reads as not yet ticked. A row with no suggested
+    price (a Live or Rule row) holds none.
+    """
+    out = []
+    for row in rows:
+        kept = ticks.get(row["sku"])
+        ticked = None
+        if kept is not None and row.get("source") == suggest.SOURCE and row.get("price") is not None:
+            try:
+                if sendguard.drift_allowed(Decimal(kept["price"]), Decimal(row["price"])):
+                    ticked = kept["on"]
+            except InvalidOperation:
+                ticked = None
+        out.append({**row, "ticked": ticked})
+    return out
 
 
 def new_copy_groups(rows: list, policy: dict, today: str) -> dict:

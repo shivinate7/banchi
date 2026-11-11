@@ -1570,12 +1570,25 @@ def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed:
         # WHAT THE PRESS DID TO THE KEPT SUGGESTIONS, by key, each absent when none: `held` (left out, live and
         # held), `moved` (sent at the fresh price) and `left_out` (changed past `sendguard.drift_allowed`, or gone).
         notes = {key: value for key, value in (("held", held), ("moved", moved), ("left_out", left_out)) if value}
+        if not download and record.get("phase") == PHASE_DONE:
+            _forget_sent_ticks(record)
         return dict(answer, **notes)
     except Exception as caught:  # noqa: BLE001 — every failure after the receipt ends known
         _settle(directory, caught)
         if (held or left_out) and isinstance(caught, PipelineRefusal) and caught.code == "nothing_to_send":
             _name_held(caught, held, _names(live_path), left_out)
         raise
+
+
+def _forget_sent_ticks(record: dict) -> None:
+    """A SKU whose price row went out is sent, and its kept tick (`corpus.read_ticks`) goes. A tick
+    left behind could only tick a later suggestion that happens to sit within the drift of this one.
+    A failure to forget never fails a send that is already made: the tick is pressed again."""
+    sent = [str(sku) for sku in (record.get("prices") or {})]
+    if not sent:
+        return
+    with contextlib.suppress(OSError, ValueError, files.LockTimeout), files.exclusive(files.inventory_dir()):
+        corpus.change_ticks({}, sent)
 
 
 def _name_held(refusal: PipelineRefusal, held: List[str], names: Dict[str, str], left_out: Sequence[dict] = ()) -> None:

@@ -17422,6 +17422,12 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pricing_restore(self._body())
                 )
+            if path == "/pricing/ticks":
+                # THE OWNER'S TICKS ON SUGGESTIONS, KEPT (the owner, 2026-11-10). Free. A side file
+                # beside `prices.json`, so it moves no revision. See `corpus.TICKS_FILENAME`.
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pricing_ticks(self._body())
+                )
             match = _SUBMISSION_RELEASE_RE.match(path)
             if match:
                 # THE NAMED WAY OUT OF A STUCK CLAIM (D174). It spends

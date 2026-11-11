@@ -3601,7 +3601,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
         # A CORPUS THAT CANNOT BE READ IS SAID, NEVER REPLACED BY THE DEFAULT POLICY: the owner's
         # settings decide which listing is a suggestion, so defaults would draw a guess.
         try:
-            live, unreadable = _live_wire(None, corpus.Corpus.read(), images), {}
+            live, unreadable = worklist.with_ticks(_live_wire(None, corpus.Corpus.read(), images), corpus.read_ticks()), {}
         except (decisions.MalformedDecisions, ValueError):
             live, unreadable = [], {"error": "corpus_unreadable"}
         return {
@@ -4132,7 +4132,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
         # over a reallocated drawer are each a door to another screen rather than a row here.
         "unreachable": unreachable,
         # EVERY LIVE LISTING, with its asking price, last sale and suggestion (`_live_wire`).
-        "live": _live_wire(snapshot, book, images),
+        "live": worklist.with_ticks(_live_wire(snapshot, book, images), corpus.read_ticks()),
         # `remembered_sub_threshold` IS GONE, HERE AND FROM THE PER-RUN ROUTE (D86, amended
         # 2026-09-02). It walked up to five sibling run directories for the newest answer to a
         # question each run had to be asked separately, and offered it as a LABEL because D9
@@ -6862,6 +6862,50 @@ def do_pricing_restore(payload: dict) -> dict:
         "answers": len(book.answers),
         "revision": _corpus_revision(),
     }
+
+
+def do_pricing_ticks(payload: dict) -> dict:
+    """`POST /pricing/ticks` — keep the ticks the owner pressed on suggestions, and forget some.
+
+    `ticks` is `{sku: {price, on}}`: `price` is the suggested price the press was made against and
+    `on` is the press, so an untick is kept too. `drop` is a list of SKUs whose kept tick goes (the
+    price typed over a suggestion was cleared). Both are optional. The write is one step under the
+    store lock, beside `prices.json` and apart from it (`corpus.TICKS_FILENAME` says why), so it moves
+    no revision and the screen's autosave is never refused for a tick.
+
+    WHETHER A KEPT TICK STILL HOLDS IS NOT DECIDED HERE: `GET /pipeline/pricing` answers it per row
+    (`worklist.with_ticks`), so the browser holds no tolerance of its own.
+    """
+    raw = payload.get("ticks")
+    drop = payload.get("drop")
+    if raw is None:
+        raw = {}
+    if drop is None:
+        drop = []
+    if not isinstance(raw, dict) or not isinstance(drop, list) or len(raw) + len(drop) > MAX_CLEAR_SKUS:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "ticks_invalid",
+            f"Send {{\"ticks\": {{sku: {{price, on}}}}, \"drop\": [sku]}}, at most {MAX_CLEAR_SKUS} SKUs in all.",
+        )
+    keep: Dict[str, dict] = {}
+    for sku, row in raw.items():
+        try:
+            price = tcgcsv.parse_price(str(row.get("price") or "")) if isinstance(row, dict) else None
+        except (ArithmeticError, ValueError):
+            price = None
+        if not str(sku).isdigit() or price is None or price <= 0 or not isinstance(row.get("on"), bool):
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "ticks_invalid",
+                "Each tick needs a TCGplayer id, the suggested price above zero it was pressed against, and true or false for on.",
+            )
+        keep[str(sku)] = {"price": tcgcsv.format_price(price), "on": row["on"]}
+    if not all(isinstance(sku, str) and sku.isdigit() for sku in drop):
+        raise PipelineRefusal(HTTPStatus.BAD_REQUEST, "ticks_invalid", "The drop list holds TCGplayer ids.")
+    with files.exclusive(files.inventory_dir()):
+        corpus.change_ticks(keep, drop)
+    return {"ok": True, "kept": len(keep), "dropped": len(drop)}
 
 
 def _clear_holds(stored: dict, answers: dict) -> bool:
