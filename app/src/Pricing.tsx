@@ -1169,6 +1169,9 @@ export function Pricing() {
   const [listedTicks, setListedTicks] = useState<
     Readonly<Record<string, { on: boolean; price: string; group: KeptTick['group'] }>>
   >({})
+  /** SKUs whose kept tick was cleared this visit. The server dropped it, but the load-time read still
+   *  says `ticked`, so such a row draws its group's start until a new press (`pressTick`) replaces it. */
+  const [listedDropped, setListedDropped] = useState<ReadonlySet<string>>(new Set())
   /** How many tick presses are still on their way to the server. The send waits for them to land: the
    *  server exempts a past-limit suggestion only on a tick it kept (`settled` on the send card). */
   const [ticksPending, setTicksPending] = useState(0)
@@ -1180,9 +1183,11 @@ export function Pricing() {
       const pressed = listedTicks[sku]
       if (pressed !== undefined && pressed.group === one?.group && centsOf(pressed.price) === centsOf(one?.price ?? ''))
         return pressed.on
-      return one?.ticked ?? (one !== undefined && one.group === 'suggested')
+      const start = one !== undefined && one.group === 'suggested'
+      if (listedDropped.has(sku)) return start
+      return one?.ticked ?? start
     },
-    [listed, listedTicks],
+    [listed, listedTicks, listedDropped],
   )
   const listedTypedNow = useRef(listedTyped)
   useEffect(() => {
@@ -1195,12 +1200,18 @@ export function Pricing() {
       const group = one?.group
       if (price === null || price === undefined || group === undefined || group === 'at_rule') return
       setListedTicks((held) => ({ ...held, [sku]: { on, price, group } }))
+      setListedDropped((held) => {
+        if (!held.has(sku)) return held
+        const next = new Set(held)
+        next.delete(sku)
+        return next
+      })
       setTicksPending((n) => n + 1)
       keepTicks({ [sku]: { price, on, group } })
         .catch((err: unknown) => {
           const trouble = describeFailure(err)
           if (trouble.code === 'demo_read_only') return
-          toast({ kind: 'refusal', tone: failureTone(trouble), title: 'That tick was not kept', body: trouble.message })
+          toast({ kind: 'refusal', tone: failureTone(trouble), title: 'Tick not kept', body: trouble.message })
         })
         .finally(() => setTicksPending((n) => n - 1))
     },
@@ -1986,11 +1997,12 @@ export function Pricing() {
             delete next[sku.sku]
             return next
           })
+          setListedDropped((held) => new Set(held).add(sku.sku))
           /* A tick the server still holds would come back on this row, so a failure is said, like a press that failed. */
           keepTicks({}, [sku.sku]).catch((err: unknown) => {
             const trouble = describeFailure(err)
             if (trouble.code === 'demo_read_only') return
-            toast({ kind: 'refusal', tone: failureTone(trouble), title: 'That tick was not cleared', body: trouble.message })
+            toast({ kind: 'refusal', tone: failureTone(trouble), title: 'Tick not cleared', body: trouble.message })
           })
         }
       } else {

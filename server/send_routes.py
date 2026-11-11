@@ -1602,7 +1602,7 @@ def _forget_sent_ticks(record: dict) -> None:
             return
         with files.exclusive(files.inventory_dir()):
             corpus.change_ticks({}, gone)
-    except (OSError, ValueError, files.LockTimeout) as exc:
+    except Exception as exc:  # noqa: BLE001 — the send is already made, so no failure here may fail it
         files.log_cause("forgetting the sent ticks", exc)
 
 
