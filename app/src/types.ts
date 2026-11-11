@@ -2902,8 +2902,9 @@ export type LiveListing = {
   ticked?: boolean | null
 }
 
-/** What `POST /pricing/ticks` keeps, per SKU: the suggested price the press was made against, and the press. */
-export type KeptTick = { price: string; on: boolean }
+/** What `POST /pricing/ticks` keeps, per SKU: the suggested price the press was made against, the press, and
+ *  the group the row sat in when it was pressed (a tick holds only while the row is still in that group). */
+export type KeptTick = { price: string; on: boolean; group: Exclude<LiveGroup, 'at_rule'> }
 
 /** WHICH DRAWER THIS RUN'S CARDS TURNED OUT TO BE IN — derived from the cards, never from the
  *  path, and `null` on the run where they are in more than one.

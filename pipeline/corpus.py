@@ -524,7 +524,8 @@ def drop_clear(ident: str) -> None:
 
 #: The ticks the owner pressed on `#/pricing`, kept beside `prices.json` so they survive a reload
 #: (the owner asked that ticks save, so he never re-ticks). SKU -> `{"price", "on"}`: `price` is
-#: the suggested price the press was made against, `on` is the press, so an untick is kept too.
+#: the suggested price the press was made against, `on` is the press, so an untick is kept too, and
+#: `group` is the group the row sat in when it was pressed (`needs_you` or `suggested`).
 #:
 #: A SIDE FILE AND NOT A KEY IN `prices.json`, for the reason the kept clears are one: a tick is a
 #: change to what the next send carries and no answer for a card. In the corpus it would move the
@@ -540,8 +541,9 @@ def ticks_path() -> Path:
 
 
 def read_ticks() -> Dict[str, dict]:
-    """Every kept tick, SKU -> `{"price", "on"}`. A file that will not parse is no ticks: a tick
-    lost is a tick pressed again, and nothing in `prices.json` is at risk."""
+    """Every kept tick, SKU -> `{"price", "on", "group"}`. A file that will not parse is no ticks: a tick
+    lost is a tick pressed again, and nothing in `prices.json` is at risk. A tick with no group
+    (one kept before the group was stored) is not read: it could hold in no group."""
     target = ticks_path()
     if not target.is_file():
         return {}
@@ -552,20 +554,20 @@ def read_ticks() -> Dict[str, dict]:
     rows = data.get("ticks") if isinstance(data, dict) else None
     out: Dict[str, dict] = {}
     for sku, row in (rows if isinstance(rows, dict) else {}).items():
-        if isinstance(row, dict) and isinstance(row.get("price"), str) and isinstance(row.get("on"), bool):
-            out[str(sku)] = {"price": row["price"], "on": row["on"]}
+        if isinstance(row, dict) and isinstance(row.get("price"), str) and isinstance(row.get("on"), bool) and isinstance(row.get("group"), str):
+            out[str(sku)] = {"price": row["price"], "on": row["on"], "group": row["group"]}
     return out
 
 
 def change_ticks(keep: Dict[str, dict], drop: Iterable[str] = ()) -> None:
-    """Keep `keep` (SKU -> `{"price", "on"}`) over the ticks already kept, and forget `drop`.
+    """Keep `keep` (SKU -> `{"price", "on", "group"}`) over the ticks already kept, and forget `drop`.
     The caller holds the store lock (`files.exclusive`). The file goes when no tick is left."""
     from store import files
 
     ticks = read_ticks()
     for sku in drop:
         ticks.pop(str(sku), None)
-    ticks.update({str(sku): {"price": row["price"], "on": row["on"]} for sku, row in keep.items()})
+    ticks.update({str(sku): {"price": row["price"], "on": row["on"], "group": row["group"]} for sku, row in keep.items()})
     if not ticks:
         ticks_path().unlink(missing_ok=True)
         return

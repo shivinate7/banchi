@@ -140,6 +140,9 @@ def sku_row(match, game: str, bucket: str, listing: Optional[dict]) -> dict:
 #: The groups of the one list, top to bottom (`docs/specs/pricing-suggest.md`, section 3).
 LIVE_GROUPS = ("needs_you", "suggested", "at_rule")
 
+#: The groups a tick can be pressed in: every group but `at_rule`, whose rows hold no suggestion.
+TICKABLE_GROUPS = tuple(group for group in LIVE_GROUPS if group != "at_rule")
+
 
 def live_rows(listings: list, policy: dict, today: str) -> list:
     """The `live` rows of the pricing worklist: every live listing with its suggestion.
@@ -176,16 +179,22 @@ def with_ticks(rows: list, ticks: dict) -> list:
     """`live_rows` with the owner's kept ticks laid on: each row gains `ticked`.
 
     `ticked` is `True` or `False` where a kept tick (`corpus.read_ticks`) still holds, and `None`
-    where the screen falls back on the group's own start. A kept tick holds while the row's
-    suggested price is within `sendguard.drift_allowed` of the price the tick was pressed against;
-    past it the suggestion is a different one and reads as not yet ticked. A row with no suggested
-    price (a Live or Rule row) holds none.
+    where the screen falls back on the group's own start. A kept tick holds while the row is still in
+    the group it was pressed in AND its suggested price is within `sendguard.drift_allowed` of the
+    price the tick was pressed against. A row that moved group (Suggested to Needs you) is a different
+    question for the owner, and past the drift the suggestion is a different one: both read as not yet
+    ticked. A row with no suggested price (a Live or Rule row), or none at all, holds none.
     """
     out = []
     for row in rows:
         kept = ticks.get(row["sku"])
         ticked = None
-        if kept is not None and row.get("source") == suggest.SOURCE and row.get("price") is not None:
+        if (
+            kept is not None
+            and kept.get("group") == row.get("group")
+            and row.get("source") == suggest.SOURCE
+            and row.get("price") is not None
+        ):
             try:
                 if sendguard.drift_allowed(Decimal(kept["price"]), Decimal(row["price"])):
                     ticked = kept["on"]

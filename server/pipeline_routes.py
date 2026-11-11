@@ -6867,8 +6867,9 @@ def do_pricing_restore(payload: dict) -> dict:
 def do_pricing_ticks(payload: dict) -> dict:
     """`POST /pricing/ticks` — keep the ticks the owner pressed on suggestions, and forget some.
 
-    `ticks` is `{sku: {price, on}}`: `price` is the suggested price the press was made against and
-    `on` is the press, so an untick is kept too. `drop` is a list of SKUs whose kept tick goes (the
+    `ticks` is `{sku: {price, on, group}}`: `price` is the suggested price the press was made against,
+    `on` is the press, so an untick is kept too, and `group` is the group the row sat in when it was
+    pressed (`needs_you` or `suggested`): a tick holds only while the row is still in that group. `drop` is a list of SKUs whose kept tick goes (the
     price typed over a suggestion was cleared). Both are optional. The write is one step under the
     store lock, beside `prices.json` and apart from it (`corpus.TICKS_FILENAME` says why), so it moves
     no revision and the screen's autosave is never refused for a tick.
@@ -6886,7 +6887,7 @@ def do_pricing_ticks(payload: dict) -> dict:
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
             "ticks_invalid",
-            f"Send {{\"ticks\": {{sku: {{price, on}}}}, \"drop\": [sku]}}, at most {MAX_CLEAR_SKUS} SKUs in all.",
+            f"Send {{\"ticks\": {{sku: {{price, on, group}}}}, \"drop\": [sku]}}, at most {MAX_CLEAR_SKUS} SKUs in all.",
         )
     keep: Dict[str, dict] = {}
     for sku, row in raw.items():
@@ -6894,13 +6895,20 @@ def do_pricing_ticks(payload: dict) -> dict:
             price = tcgcsv.parse_price(str(row.get("price") or "")) if isinstance(row, dict) else None
         except (ArithmeticError, ValueError):
             price = None
-        if not str(sku).isdigit() or price is None or price <= 0 or not isinstance(row.get("on"), bool):
+        if (
+            not str(sku).isdigit()
+            or price is None
+            or price <= 0
+            or not isinstance(row.get("on"), bool)
+            or row.get("group") not in worklist.TICKABLE_GROUPS
+        ):
             raise PipelineRefusal(
                 HTTPStatus.BAD_REQUEST,
                 "ticks_invalid",
-                "Each tick needs a TCGplayer id, the suggested price above zero it was pressed against, and true or false for on.",
+                "Each tick needs a TCGplayer id, the suggested price above zero it was pressed against, true or false "
+                "for on, and the group the row sat in when it was pressed.",
             )
-        keep[str(sku)] = {"price": tcgcsv.format_price(price), "on": row["on"]}
+        keep[str(sku)] = {"price": tcgcsv.format_price(price), "on": row["on"], "group": row["group"]}
     if not all(isinstance(sku, str) and sku.isdigit() for sku in drop):
         raise PipelineRefusal(HTTPStatus.BAD_REQUEST, "ticks_invalid", "The drop list holds TCGplayer ids.")
     with files.exclusive(files.inventory_dir()):

@@ -62,6 +62,7 @@ import type {
   Unreachable,
   LiveListing,
   LiveMove,
+  KeptTick,
   PriceChange,
   PricingSku,
   SavedTrendsPayload,
@@ -1161,17 +1162,24 @@ export function Pricing() {
   /** The ticks pressed on a new copy, by SKU, this visit. Absent is unticked. */
   const [ticks, setTicks] = useState<Readonly<Record<string, boolean>>>({})
   /** THE TICKS PRESSED ON A LIVE LISTING'S SUGGESTION THIS VISIT, each with the suggested price it was
-   *  pressed against. The server keeps every one (`keepTicks`) and answers which still hold on each row
-   *  (`LiveListing.ticked`, within the send's own drift), so this only bridges the press and the next
-   *  read: it stands while the row's suggestion is the same figure. */
-  const [listedTicks, setListedTicks] = useState<Readonly<Record<string, { on: boolean; price: string }>>>({})
+   *  pressed against and the group the row sat in. The server keeps every one (`keepTicks`) and answers
+   *  which still hold on each row (`LiveListing.ticked`, in the same group and within the send's own
+   *  drift), so this only bridges the press and the next read: it stands while the row's suggestion is
+   *  the same figure and the row is in the same group. */
+  const [listedTicks, setListedTicks] = useState<
+    Readonly<Record<string, { on: boolean; price: string; group: KeptTick['group'] }>>
+  >({})
+  /** How many tick presses are still on their way to the server. The send waits for them to land: the
+   *  server exempts a past-limit suggestion only on a tick it kept (`settled` on the send card). */
+  const [ticksPending, setTicksPending] = useState(0)
   /** A live listing's suggestion is ticked by the owner's press, else by the server's kept tick, else by
    *  its group's own start: ticked in Suggested changes, unticked in Needs you. */
   const tickedOf = useCallback(
     (sku: string): boolean => {
       const one = listed.get(sku)
       const pressed = listedTicks[sku]
-      if (pressed !== undefined && centsOf(pressed.price) === centsOf(one?.price ?? '')) return pressed.on
+      if (pressed !== undefined && pressed.group === one?.group && centsOf(pressed.price) === centsOf(one?.price ?? ''))
+        return pressed.on
       return one?.ticked ?? (one !== undefined && one.group === 'suggested')
     },
     [listed, listedTicks],
@@ -1182,14 +1190,19 @@ export function Pricing() {
   }, [listedTyped])
   const pressTick = useCallback(
     (sku: string, on: boolean) => {
-      const price = listed.get(sku)?.price
-      if (price === null || price === undefined) return
-      setListedTicks((held) => ({ ...held, [sku]: { on, price } }))
-      keepTicks({ [sku]: { price, on } }).catch((err: unknown) => {
-        const trouble = describeFailure(err)
-        if (trouble.code === 'demo_read_only') return
-        toast({ kind: 'refusal', tone: failureTone(trouble), title: 'That tick was not kept', body: trouble.message })
-      })
+      const one = listed.get(sku)
+      const price = one?.price
+      const group = one?.group
+      if (price === null || price === undefined || group === undefined || group === 'at_rule') return
+      setListedTicks((held) => ({ ...held, [sku]: { on, price, group } }))
+      setTicksPending((n) => n + 1)
+      keepTicks({ [sku]: { price, on, group } })
+        .catch((err: unknown) => {
+          const trouble = describeFailure(err)
+          if (trouble.code === 'demo_read_only') return
+          toast({ kind: 'refusal', tone: failureTone(trouble), title: 'That tick was not kept', body: trouble.message })
+        })
+        .finally(() => setTicksPending((n) => n - 1))
     },
     [listed],
   )
@@ -1973,7 +1986,12 @@ export function Pricing() {
             delete next[sku.sku]
             return next
           })
-          keepTicks({}, [sku.sku]).catch(() => undefined) // a tick left behind is pressed again; it blocks nothing
+          /* A tick the server still holds would come back on this row, so a failure is said, like a press that failed. */
+          keepTicks({}, [sku.sku]).catch((err: unknown) => {
+            const trouble = describeFailure(err)
+            if (trouble.code === 'demo_read_only') return
+            toast({ kind: 'refusal', tone: failureTone(trouble), title: 'That tick was not cleared', body: trouble.message })
+          })
         }
       } else {
         write(sku.sku, sku.bucket, text === '' ? undefined : text)
@@ -3120,7 +3138,7 @@ export function Pricing() {
             units={figures?.units}
             listed={listedChanges}
             liveMoves={liveMoves}
-            settled={!dirty && !saving}
+            settled={!dirty && !saving && ticksPending === 0}
             saveFailed={saveFailed}
             quantities={quantitiesAsked}
             owed={owedTakeOffs}

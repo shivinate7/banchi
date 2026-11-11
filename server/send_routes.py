@@ -84,7 +84,7 @@ from typing import Any, Callable, Dict, Iterator, List, NamedTuple, NoReturn, Op
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from cli import cmd_emit, cmd_reprice, resolve, runs  # noqa: E402
-from pipeline import corpus, decisions, merge, reprice, sendguard, suggest, tcgcsv  # noqa: E402
+from pipeline import corpus, decisions, merge, reprice, sendguard, suggest, tcgcsv, worklist  # noqa: E402
 from server import pipeline_routes  # noqa: E402
 from server import tcg_export  # noqa: E402
 from server import tcg_import  # noqa: E402
@@ -1448,7 +1448,8 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> T
       2. A named price (the rebuilt one for a kept suggestion) that moves the live price past the
          owner's `policy.limit` (the one `pipeline/suggest.py` sorts by) refuses `suggestion_past_cap`,
          naming each card. It is measured on the price in the FRESH live read, never on the `was` the
-         screen drew. A row the send marks `ticked` (spec: a bigger move needs a tick) is not refused.
+         screen drew. A row the send marks `ticked` AND whose tick the server kept and still holds
+         (`worklist.with_ticks`: same group, within the drift) is not refused (spec: a bigger move needs a tick).
     """
     checked = {row["sku"]: (row["price"], row["was"]) for row in _checked_prices(payload)}
     if not checked:
@@ -1467,9 +1468,11 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> T
             "live_check_failed",
             f"Banchi could not check these suggestions because {files.plain_cause(exc)}, so nothing was {step}. Try again.",
         ) from None
-    rebuilt = {
-        row["sku"]: row["price"] for row in pipeline_routes._live_wire(drawn, book) if row["source"] == suggest.SOURCE
-    }
+    # The rebuilt rows carry the kept ticks as the screen reads them (`worklist.with_ticks`): `ticked` is True
+    # only where a tick the owner pressed still holds in this group and within the drift.
+    wired = worklist.with_ticks(pipeline_routes._live_wire(drawn, book), corpus.read_ticks())
+    rebuilt = {row["sku"]: row["price"] for row in wired if row["source"] == suggest.SOURCE}
+    kept_ticks = {row["sku"] for row in wired if row["source"] == suggest.SOURCE and row["ticked"] is True}
     names = {tcgcsv.sku_cell(row): row.get(tcgcsv.NAME_COLUMN) for row in fresh.rows}
     moved: List[dict] = []
     left_out: List[dict] = []
@@ -1500,7 +1503,9 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> T
             prices=[dict(row, price=sending[row["sku"]]) if row["sku"] in sending else row for row in payload["prices"]],
         )
     checked = {row["sku"]: (row["price"], row["was"]) for row in _checked_prices(payload)}
-    ticked = {row["sku"] for row in payload["prices"] if row.get("ticked") is True}
+    # A past-cap suggestion goes on the owner's tick, and the tick is the SERVER'S: the client's `ticked` flag
+    # only names the row, and a flag with no kept tick that still holds behind it exempts nothing.
+    ticked = {row["sku"] for row in payload["prices"] if row.get("ticked") is True} & kept_ticks
     over = sendguard.suggestions_past_cap({s: v for s, v in checked.items() if s not in ticked}, prices, limit, names)
     if over:
         parts = [
@@ -1581,14 +1586,24 @@ def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed:
 
 
 def _forget_sent_ticks(record: dict) -> None:
-    """A SKU whose price row went out is sent, and its kept tick (`corpus.read_ticks`) goes. A tick
-    left behind could only tick a later suggestion that happens to sit within the drift of this one.
-    A failure to forget never fails a send that is already made: the tick is pressed again."""
-    sent = [str(sku) for sku in (record.get("prices") or {})]
-    if not sent:
-        return
-    with contextlib.suppress(OSError, ValueError, files.LockTimeout), files.exclusive(files.inventory_dir()):
-        corpus.change_ticks({}, sent)
+    """A SKU whose price row went out is sent, and its kept tick (`corpus.read_ticks`) goes. So does
+    a kept tick whose SKU has no suggestion now: it reads as no tick on the screen (`worklist.with_ticks`),
+    and left on disk it would tick the suggestion that comes back. A tick left behind could only tick a
+    later suggestion that happens to sit within the drift of this one. A failure to forget never fails a
+    send that is already made (the tick is pressed again), and it is logged."""
+    gone = [str(sku) for sku in (record.get("prices") or {})]
+    try:
+        # An empty read (a store that would not open answers no rows) is no evidence that a suggestion vanished.
+        live = pipeline_routes._live_wire(None, corpus.Corpus.read())
+        if live:
+            suggested = {row["sku"] for row in live if row["source"] == suggest.SOURCE}
+            gone += [sku for sku in corpus.read_ticks() if sku not in suggested]
+        if not gone:
+            return
+        with files.exclusive(files.inventory_dir()):
+            corpus.change_ticks({}, gone)
+    except (OSError, ValueError, files.LockTimeout) as exc:
+        files.log_cause("forgetting the sent ticks", exc)
 
 
 def _name_held(refusal: PipelineRefusal, held: List[str], names: Dict[str, str], left_out: Sequence[dict] = ()) -> None:
