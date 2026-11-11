@@ -381,10 +381,12 @@ function SuggestionNotes({ answer }: { readonly answer: SendAnswer }) {
   const moved = answer.moved ?? []
   const left = answer.left_out ?? []
   if (moved.length === 0 && left.length === 0) return null
+  // "THE PRICE" ONLY WHEN EVERY ONE STILL HAS A SUGGESTION; one that is gone (`now` null) changed as a whole.
+  const what = left.every((row) => row.now !== null) ? 'the price' : 'the suggestion'
   return (
     <>
       {left.length === 0 ? null : (
-        <Notice tone="warn" compact className="send-suggestions-left" title={`${count(left.length, 'suggestion', 'suggestions')} left out: the price changed since the list was drawn.`}>
+        <Notice tone="warn" compact className="send-suggestions-left" title={`${count(left.length, 'suggestion', 'suggestions')} left out: ${what} changed since the list was drawn.`}>
           <ul className="send-names">
             {left.slice(0, 6).map((row) => (
               <li key={row.sku}>
@@ -397,7 +399,7 @@ function SuggestionNotes({ answer }: { readonly answer: SendAnswer }) {
         </Notice>
       )}
       {moved.length === 0 ? null : (
-        <Notice tone="info" compact className="send-suggestions-moved" title={`${count(moved.length, 'price', 'prices')} moved since drawn, sent at the new figure.`} />
+        <Notice tone="info" compact className="send-suggestions-moved" title={`${count(moved.length, 'price', 'prices')} moved since the list was drawn, sent at the new figure.`} />
       )}
     </>
   )

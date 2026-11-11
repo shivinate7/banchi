@@ -967,7 +967,8 @@ def _zero_rows_single(resolved, priced, changes, args, say):
             if sku in wanted and sku in priced[game]:
                 rows["sub" if sku in below else "listed"].append(_price_row(match, priced[game][sku]))
         by_game[game] = rows
-    for row in _suggested_rows(changes):
+    headers = {game_join.game: game_join.catalog.header for game_join in resolved.joins.values()}
+    for row in _suggested_rows(changes, headers):
         # A GAME NO RUN OF THIS SEND FILES gets a bucket of its own, written with `_orphan_join`'s header.
         by_game.setdefault(row.game, {"listed": [], "sub": []})["listed"] += merge.import_rows([row])
     return by_game, changes
@@ -980,7 +981,7 @@ def _orphan_join(resolved):
     return next(iter(resolved.joins.values()))
 
 
-def _suggested_rows(changes) -> list:
+def _suggested_rows(changes, headers) -> list:
     """The kept suggestions' price-only rows, shaped as `_Take` is, filed under the game of the
     live row's Product Line.
 
@@ -998,6 +999,13 @@ def _suggested_rows(changes) -> list:
             raise PriceRefused(
                 f"{change.name or change.sku} ({change.sku}) is in a Product Line Banchi does not file "
                 f"({change.row.get('Product Line') or 'blank'}), so its suggested price has no file to ride in"
+            )
+        target = headers.get(game) or next(iter(headers.values()), None)
+        if target is not None and set(change.row) != set(target):
+            odd = sorted(set(change.row) ^ set(target))
+            raise PriceRefused(
+                f"{change.name or change.sku} ({change.sku}) is on TCGplayer with different columns than the "
+                f"export its {game} file is written with ({', '.join(odd)}), so its suggested price has no file to ride in"
             )
         out.append(_Take(change.sku, change.name, game, change.price, 0, change.row))
     return out
@@ -2396,7 +2404,10 @@ def _run_merged(args, say) -> int:
     )
     changed = {change.sku for change in changes}
     try:
-        suggested_rows = _suggested_rows(changes)
+        suggested_rows = _suggested_rows(
+            changes,
+            {game: game_join.catalog.header for one in resolved_by_run.values() for game, game_join in one.joins.items()},
+        )
     except PriceRefused as refusal:
         say(f"REFUSING to write: {refusal}. Nothing was written.")
         return 1

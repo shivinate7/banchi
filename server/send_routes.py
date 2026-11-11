@@ -1530,6 +1530,9 @@ def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed:
     live_before = _live_quantities(live_path, step)
     payload, moved, left_out = _refuse_past_cap(payload, live_path, step, drawn)
     payload, held = _leave_out_held(payload, directories, live_before)
+    # A HELD SKU'S SUGGESTION IS NOT IN THE FILE, so it is named under `held` alone (`left_out` rows
+    # already left the payload before `_leave_out_held` read it).
+    moved = [row for row in moved if row["sku"] not in held]
     # NO PRICE WAIT (removed in round 4). A mark-down's `reprice apply --write` writes its new
     # price into the price file, so a listing row carries the new price, never the old one.
 
