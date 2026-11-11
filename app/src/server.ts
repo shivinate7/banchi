@@ -78,6 +78,7 @@ import type {
   PricingClearable,
   PricingClearResult,
   PricingRestoreResult,
+  KeptTick,
   PricingWorklist,
   RunSelection,
   MatchState,
@@ -3309,6 +3310,22 @@ export async function restoreLastClear(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(revision === undefined ? { last_clear: true } : { last_clear: true, revision }),
   })) as PricingRestoreResult
+}
+
+/**
+ * Keep the ticks the owner pressed on suggestions, and forget the ticks of `drop`. The server holds
+ * them beside the price file, so they survive a reload; the worklist's `live` rows answer which still
+ * hold (`LiveListing.ticked`), and no tolerance is worked out here. No revision: this is not the corpus.
+ */
+export async function keepTicks(
+  ticks: Readonly<Record<string, KeptTick>>,
+  drop: readonly string[] = [],
+): Promise<void> {
+  await request('/pricing/ticks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ticks, drop }),
+  })
 }
 
 /**

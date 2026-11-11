@@ -539,7 +539,9 @@ def check_send_past_cap_needs_a_tick(checks: Checks) -> None:
     past-cap suggestion only when the send marks THAT row `"ticked": true`; the field is a boolean on the row. Three presses,
     each its own case, on the world `check_send_refuses_suggestion_past_cap` builds:
 
-      Ticked     `ticked: true`. The 2.06 goes to TCGplayer as a price-only row, posted "suggested", replacing 3.00.
+      Ticked     `ticked: true`, with the owner's tick kept in Needs you at 2.06 (the server's kept tick is what exempts
+                 the row; the flag alone is refused, see `pricing_ticks.check_send_ticked_flag_needs_a_kept_tick`).
+                 The 2.06 goes to TCGplayer as a price-only row, posted "suggested", replacing 3.00.
       Not ticked `ticked: false`, or no `ticked` at all, or a truthy value that is not a boolean: refused
                  `suggestion_past_cap`. No row reaches TCGplayer and no posting is written.
       One tick   two past-cap rows, one ticked: the tick frees its own row alone. The refusal names the other row only.
@@ -550,6 +552,7 @@ def check_send_past_cap_needs_a_tick(checks: Checks) -> None:
         _seed_sync()
         with _case(checks, "send: ticked past-cap suggestion"):
             _past_cap_world(checks, portal)
+            pipeline_routes.do_pricing_ticks({"ticks": {DUNSPARCE_SKU: {"price": "2.06", "on": True, "group": "needs_you"}}})
             outcome = _outcome(lambda: send_routes.do_send({"runs": [], "confirm": True, "prices": [_past_cap_row(ticked=True)]}))
             checks.equal(
                 outcome[0] if outcome[0] == "refused" else "answered",
@@ -596,6 +599,7 @@ def check_send_past_cap_needs_a_tick(checks: Checks) -> None:
             )
             _set_listing(DUNSPARCE_REVERSE_SKU, first_seen_live=_noon(_day(60)))
             _market_reading(DUNSPARCE_REVERSE_SKU, "2.60", "2.90")
+            pipeline_routes.do_pricing_ticks({"ticks": {DUNSPARCE_SKU: {"price": "2.06", "on": True, "group": "needs_you"}}})
             try:
                 send_routes.do_send({
                     "runs": [],

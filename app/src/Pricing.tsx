@@ -30,6 +30,7 @@ import {
   sendMarkdown,
   getPricingCorpus,
   getPricingWorklist,
+  keepTicks,
   restoreLastClear,
   restoreClear,
   type KeptClear,
@@ -61,6 +62,7 @@ import type {
   Unreachable,
   LiveListing,
   LiveMove,
+  KeptTick,
   PriceChange,
   PricingSku,
   SavedTrendsPayload,
@@ -1157,18 +1159,70 @@ export function Pricing() {
    *  is ever stored for one. */
   const isListed = useCallback((sku: string) => listed.has(sku), [listed])
   const [listedTyped, setListedTyped] = useState<Readonly<Record<string, string>>>({})
-  /** Which suggestions are ticked, where the owner has pressed one. Absent is the group's own start:
-   *  ticked in Suggested changes, unticked in Needs you. A live listing's tick is keyed to the suggested
-   *  price it was given for (`tickKey`), so a new figure (a refresh) starts unticked again. A new copy's
-   *  tick is keyed by its SKU alone. */
+  /** The ticks pressed on a new copy, by SKU, this visit. Absent is unticked. */
   const [ticks, setTicks] = useState<Readonly<Record<string, boolean>>>({})
-  const tickKey = useCallback((sku: string): string => `${sku}@${centsOf(listed.get(sku)?.price ?? '') ?? ''}`, [listed])
+  /** THE TICKS PRESSED ON A LIVE LISTING'S SUGGESTION THIS VISIT, each with the suggested price it was
+   *  pressed against and the group the row sat in. The server keeps every one (`keepTicks`) and answers
+   *  which still hold on each row (`LiveListing.ticked`, in the same group and within the send's own
+   *  drift), so this only bridges the press and the next read: it stands while the row's suggestion is
+   *  the same figure and the row is in the same group. */
+  const [listedTicks, setListedTicks] = useState<
+    Readonly<Record<string, { on: boolean; price: string; group: KeptTick['group'] }>>
+  >({})
+  /** SKUs whose kept tick was cleared this visit. The server dropped it, but the load-time read still
+   *  says `ticked`, so such a row draws its group's start until a new press (`pressTick`) replaces it. */
+  const [listedDropped, setListedDropped] = useState<ReadonlySet<string>>(new Set())
+  /** How many tick presses are still on their way to the server. The send waits for them to land: the
+   *  server exempts a past-limit suggestion only on a tick it kept (`settled` on the send card). */
+  const [ticksPending, setTicksPending] = useState(0)
+  /** A live listing's suggestion is ticked by the owner's press, else by the server's kept tick, else by
+   *  its group's own start: ticked in Suggested changes, unticked in Needs you. */
   const tickedOf = useCallback(
     (sku: string): boolean => {
       const one = listed.get(sku)
-      return ticks[tickKey(sku)] ?? (one !== undefined && one.group === 'suggested')
+      const pressed = listedTicks[sku]
+      if (pressed !== undefined && pressed.group === one?.group && centsOf(pressed.price) === centsOf(one?.price ?? ''))
+        return pressed.on
+      const start = one !== undefined && one.group === 'suggested'
+      if (listedDropped.has(sku)) return start
+      return one?.ticked ?? start
     },
-    [listed, ticks, tickKey],
+    [listed, listedTicks, listedDropped],
+  )
+  const listedTypedNow = useRef(listedTyped)
+  useEffect(() => {
+    listedTypedNow.current = listedTyped
+  }, [listedTyped])
+  const pressTick = useCallback(
+    (sku: string, on: boolean) => {
+      const one = listed.get(sku)
+      const price = one?.price
+      const group = one?.group
+      if (price === null || price === undefined || group === undefined || group === 'at_rule') return
+      setListedTicks((held) => ({ ...held, [sku]: { on, price, group } }))
+      setListedDropped((held) => {
+        if (!held.has(sku)) return held
+        const next = new Set(held)
+        next.delete(sku)
+        return next
+      })
+      setTicksPending((n) => n + 1)
+      keepTicks({ [sku]: { price, on, group } })
+        .catch((err: unknown) => {
+          const trouble = describeFailure(err)
+          if (trouble.code === 'demo_read_only') return
+          // THE SERVER NEVER KEPT IT: the row goes back to what the server holds, else it stays ticked and the send is refused.
+          setListedTicks((held) => {
+            const pressed = held[sku]
+            if (pressed === undefined || pressed.on !== on || pressed.price !== price || pressed.group !== group) return held
+            const { [sku]: _gone, ...rest } = held
+            return rest
+          })
+          toast({ ...refusalToast(err, `Tick not kept for ${one?.name || sku}`) })
+        })
+        .finally(() => setTicksPending((n) => n - 1))
+    },
+    [listed],
   )
   const doc = useMemo(() => corpusAsDoc(book, run), [book, run])
 
@@ -1284,6 +1338,7 @@ export function Pricing() {
        with the send, and the list reads again, so a sent suggestion stops reading as one. */
     setListedTyped({})
     setTicks({})
+    setListedTicks({})
     reload()
   }, [clearAsked, reload])
 
@@ -1942,6 +1997,21 @@ export function Pricing() {
           else next[sku.sku] = text
           return next
         })
+        /* CLEARING THE PRICE TYPED OVER A SUGGESTION TAKES THE KEPT TICK WITH IT: the row goes back to its group's start. */
+        if (text === '' && listedTypedNow.current[sku.sku] !== undefined) {
+          setListedTicks((held) => {
+            const next = { ...held }
+            delete next[sku.sku]
+            return next
+          })
+          setListedDropped((held) => new Set(held).add(sku.sku))
+          /* A tick the server still holds would come back on this row, so a failure is said, like a press that failed. */
+          keepTicks({}, [sku.sku]).catch((err: unknown) => {
+            const trouble = describeFailure(err)
+            if (trouble.code === 'demo_read_only') return
+            toast({ ...refusalToast(err, `Tick not cleared for ${sku.name}`) })
+          })
+        }
       } else {
         write(sku.sku, sku.bucket, text === '' ? undefined : text)
       }
@@ -3087,7 +3157,7 @@ export function Pricing() {
             units={figures?.units}
             listed={listedChanges}
             liveMoves={liveMoves}
-            settled={!dirty && !saving}
+            settled={!dirty && !saving && ticksPending === 0}
             saveFailed={saveFailed}
             quantities={quantitiesAsked}
             owed={owedTakeOffs}
@@ -3424,7 +3494,7 @@ export function Pricing() {
                       return {
                         reason: one.reason,
                         tone: one.group === 'needs_you' ? ('warn' as const) : ('quiet' as const),
-                        tick: ticking ? { on: tickedOf(sku.sku), onChange: (on: boolean) => setTicks((held) => ({ ...held, [tickKey(sku.sku)]: on })) } : null,
+                        tick: ticking ? { on: tickedOf(sku.sku), onChange: (on: boolean) => pressTick(sku.sku, on) } : null,
                       }
                     })()}
                     asking={readView ? (askingOf.get(sku.sku) ?? null) : listed.get(sku.sku) === undefined ? undefined : (listed.get(sku.sku)?.asking ?? null)}

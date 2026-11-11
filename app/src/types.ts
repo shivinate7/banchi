@@ -2896,7 +2896,15 @@ export type LiveListing = {
   price: string | null
   source: 'Rule' | 'Live' | 'Suggested'
   reason: string
+  /** The tick the owner pressed on this suggestion, kept by the server: `true` or `false` while the kept tick
+   *  still holds against today's suggested price, `null` (or absent, on a bundle that predates it) when none
+   *  does and the group's own start applies. */
+  ticked?: boolean | null
 }
+
+/** What `POST /pricing/ticks` keeps, per SKU: the suggested price the press was made against, the press, and
+ *  the group the row sat in when it was pressed (a tick holds only while the row is still in that group). */
+export type KeptTick = { price: string; on: boolean; group: Exclude<LiveGroup, 'at_rule'> }
 
 /** WHICH DRAWER THIS RUN'S CARDS TURNED OUT TO BE IN — derived from the cards, never from the
  *  path, and `null` on the run where they are in more than one.
@@ -4893,7 +4901,7 @@ export type SendAnswer = {
   /** The SKUs of kept suggestions left out because the card is live and held (its take-off is a
    *  row of its own). Absent when none. */
   held?: string[]
-  /** Kept suggestions whose price moved a few cents since the list was drawn: sent at the fresh
+  /** Kept suggestions whose price moved a few cents since you loaded this list: sent at the fresh
    *  price (`price`), not the drawn one (`was`). Absent when none. */
   moved?: Array<{ sku: string; name: string; was: string; price: string }>
   /** Kept suggestions left out because the card's suggestion changed past the drift allowed or is
