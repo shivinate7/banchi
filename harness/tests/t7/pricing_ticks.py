@@ -20,10 +20,12 @@ reads it only to say what a send or a drop left behind, never to build a state.
 
 from __future__ import annotations
 
+import io
 import json
 import sys
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr
 from pathlib import Path
+from unittest import mock
 
 if __name__ == "__main__":
     # Run by path from a checkout: the repo root goes first, so `harness` and `server` import from it.
@@ -419,6 +421,24 @@ def check_send_forgets_what_it_priced(checks: Checks) -> None:
                          "a send that goes out forgets the ticks of the SKUs it priced, and no tick is left")
 
 
+def check_send_answers_when_forgetting_a_tick_raises(checks: Checks) -> None:
+    """A send that goes out is answered even when forgetting its ticks raises an error the forget does not
+    name (a RuntimeError, not a file or lock error). The error is logged by name, and no send fails for it."""
+    checks.note("")
+    checks.note("SEND, FORGET RAISES — an unexpected error in forgetting a tick never fails a send that went out")
+    with run_folder() as run, isolated_home(run), send_portal() as portal, _served() as port:
+        _seed_sync()
+        with _case(checks, "send: forgetting the ticks raises"):
+            _send_world(checks, portal, port)
+            log = io.StringIO()
+            with mock.patch.object(send_routes.corpus, "change_ticks", side_effect=RuntimeError("the tick store broke")), redirect_stderr(log):
+                sent = _outcome(lambda: send_routes.do_send({"runs": [], "confirm": True, "prices": SENT_PRICES}), any_error=True)
+            checks.equal(sent[0], "answered",
+                         "a send that goes out is answered, though forgetting its ticks raised RuntimeError")
+            checks.ok("forgetting the sent ticks: RuntimeError: the tick store broke" in log.getvalue(),
+                      "the forget's failure is logged to the server log, named by its exception")
+
+
 def _flip_dunsparce_to_needs_you() -> None:
     """Dunsparce's live price moves to 3.40 and its market to 2.52: the suggestion is 2.52, 26% from the live
     price, past the 25% cap, so the row sits in Needs you. The export takes a newer stamp, since the worklist
@@ -533,6 +553,7 @@ CHECKS = (
     check_reload_reads_each_group_its_tick,
     check_send_keeps_ticks_when_refused_or_downloaded,
     check_send_forgets_what_it_priced,
+    check_send_answers_when_forgetting_a_tick_raises,
 )
 
 
