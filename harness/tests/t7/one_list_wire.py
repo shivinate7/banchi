@@ -30,7 +30,8 @@ THE WIRE THIS GROUP PINS (the one-list-wire lane's brief names the behaviour, no
     "suggested". A row without it posts as "emit-price", as before.
   - The server rebuilds every named suggestion with the worklist's own code. A rebuilt suggestion
     past the cap refuses `suggestion_past_cap`, unless the send marks that row `"ticked": true` (a boolean on the
-    row; a bigger move shows apart and needs a tick). A named price the server rebuilds within
+    row; a bigger move shows apart and needs a tick). The cap is measured on the price the press sends,
+    after a drift re-price. A named price the server rebuilds within
     `sendguard.drift_allowed` is sent at the rebuilt price and named under `moved`. One it does not
     rebuild that close, or that has no rebuilt suggestion, is left out and named under `left_out`;
     a press left with nothing else to send refuses `suggestion_changed`.
@@ -772,6 +773,37 @@ def check_download_split_other_game(checks: Checks) -> None:
                                  "and that file holds Dunsparce once: Add to Quantity 0, at 2.06")
 
 
+def check_send_past_cap_on_sent_price(checks: Checks) -> None:
+    """The cap is measured on the price the press SENDS, after a drift re-price. Dunsparce is live at
+    10.00 and drawn at 7.60; the server's fresh suggestion is 7.45. The drift (0.15) is inside
+    `sendguard.drift_allowed`, so the press would send 7.45. The drawn 7.60 is 24% from 10.00, inside
+    the 25% cap; the sent 7.45 is 25.5%, past it. The press is refused `suggestion_past_cap`, naming the
+    7.45, and no row is written.
+    """
+    checks.note("")
+    checks.note("SEND, PAST THE CAP AFTER DRIFT — the cap is measured on the price the press sends")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: drawn inside the cap, the sent price past it"):
+            _one_copy_live(checks, portal, prices={DUNSPARCE_SKU: "10.00"})
+            _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
+            _market_reading(DUNSPARCE_SKU, "7.45", "7.90")
+            try:
+                send_routes.do_send({
+                    "runs": [],
+                    "confirm": True,
+                    "prices": [{"sku": DUNSPARCE_SKU, "price": "7.60", "was": "10.00", "source": "suggested"}],
+                })
+                outcome = ("answered", [])
+            except pipeline_routes.PipelineRefusal as caught:
+                outcome = (caught.code, [row["price"] for row in (caught.data or {}).get("refused") or []])
+            checks.equal(outcome[0], "suggestion_past_cap", "the press is refused suggestion_past_cap")
+            checks.equal(outcome[1], ["7.45"],
+                         "and the refusal measures the 7.45 the press would send, not the drawn 7.60")
+            checks.equal(_rows(portal), {}, "and TCGplayer receives no row")
+            checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
+
+
 def check_send_empty_runs_without_prices_refused(checks: Checks) -> None:
     """Guard against an overbroad build: an empty `runs` with NO prices named is still refused
     `runs_required`. Only named prices may stand in for runs. Green today; it must stay green.
@@ -1374,6 +1406,7 @@ CHECKS = (
     check_send_suggestion_drift,
     check_send_suggestion_other_game,
     check_download_split_other_game,
+    check_send_past_cap_on_sent_price,
     check_send_empty_runs_without_prices_refused,
     check_product_history_asking_postings,
     check_send_refuses_repeated_sku_price,
