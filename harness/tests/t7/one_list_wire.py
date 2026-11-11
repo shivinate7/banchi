@@ -11,7 +11,8 @@ kept suggestion rides a send as a price-only row, posted as "suggested", even wi
 in a game no run of the send files; the server rebuilds each kept suggestion, sends one that drifted
 a little at its rebuilt price, leaves out one that moved further (a press left with nothing refuses
 `suggestion_changed`), and refuses a past-cap one unless the send marks that row ticked; the product
-history lists the SKU's asking-price postings, oldest first.
+history lists the SKU's asking-price postings, oldest first; the newest live export is read again when a
+fetch rewrites its file under the same name.
 Governs: D100, D107 (reopened for suggestions), D227, D243, D273
 
 THE WIRE THIS GROUP PINS (the one-list-wire lane's brief names the behaviour, not the names):
@@ -1496,6 +1497,45 @@ def check_send_typed_price_with_no_new_copy(checks: Checks) -> None:
         checks.equal((rows, postings), ({}, [("22.03", None, "emit")]), "and nothing reaches TCGplayer or the postings")
 
 
+def check_live_listing_rewritten_under_one_name(checks: Checks) -> None:
+    """`_newest_live_listing` reads the newest live export again when a fetch rewrites its file under the same name.
+
+    `do_live_export` names its file to the second, so a second fetch in the same second rewrites a name the
+    read already holds. The read keys its cache on the file's content, so the read after the rewrite lists the
+    rewritten rows. A file removed between reads reads as no listing.
+    """
+    checks.note("")
+    checks.note("LIVE LISTING, REWRITTEN UNDER ITS NAME — the read follows the file's content, not its name")
+    stamp = "20260301-000000"
+    with run_folder() as run, isolated_home(run):
+        folder = files.inventory_dir() / pipeline_routes.LIVE_DIR
+        glob = f"{pipeline_routes.LIVE_PREFIX}*.csv"
+        path = folder / f"{pipeline_routes.LIVE_PREFIX}{stamp}.csv"
+        first_body = _live_export_priced({ARTICUNO_SKU: 1}, {ARTICUNO_SKU: "2.50"})
+        _write_live(stamp, first_body)
+        _, first = pipeline_routes._newest_live_listing()
+        checks.equal(first.get(ARTICUNO_SKU), ("2.50", 1), "precondition: the first read lists Articuno at 2.50 with one copy")
+
+        rewritten_body = _live_export_priced({ARTICUNO_SKU: 4}, {ARTICUNO_SKU: "12.75"})
+        checks.ok(len(rewritten_body) != len(first_body), "precondition: the rewrite is a different size on disk")
+        _write_live(stamp, rewritten_body)
+        checks.equal(sorted(folder.glob(glob)), [path], "scope: the folder holds one export, under the same name")
+        checks.equal(path.read_bytes(), rewritten_body, "scope: that export holds the rewritten bytes")
+        _, second = pipeline_routes._newest_live_listing()
+        checks.equal(
+            second.get(ARTICUNO_SKU), ("12.75", 4),
+            "a rewrite under the same name is read again: Articuno at 12.75 with four copies, not the first read's rows",
+        )
+
+        for old in folder.glob(glob):
+            old.unlink()
+        checks.equal(sorted(folder.glob(glob)), [], "scope: no export is on disk once the file is removed")
+        checks.equal(
+            pipeline_routes._newest_live_listing(), (None, {}),
+            "an export removed between reads reads as no listing",
+        )
+
+
 CHECKS = (
     check_worklist_carries_live_listings,
     check_worklist_without_runs_reads_newest_export,
@@ -1527,6 +1567,7 @@ CHECKS = (
     check_markdown_table_carries_group,
     check_live_no_market_needs_you,
     check_send_typed_price_with_no_new_copy,
+    check_live_listing_rewritten_under_one_name,
 )
 
 
