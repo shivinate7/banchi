@@ -7802,6 +7802,80 @@ test('one list: a tick does not carry over to a new suggested price from Refresh
   })
 })
 
+/* KEPT TICKS. A press on a suggestion is kept on the server beside the price file (`POST /pricing/ticks`), so a reload reads it back. The screen posts
+ * the press at the figure it was pressed against, posts a drop when a typed price over a suggestion is cleared, and draws what the server says on each
+ * row (`ticked`), falling back on the group's own start only when the server says nothing. */
+const ticksPosts = (wire: Wire[]) => wire.filter((row) => row.method === 'POST' && row.path === '/pricing/ticks')
+const ticksBody = (wire: Wire[], at: number) => ticksPosts(wire)[at]?.body as { ticks: Record<string, { price: string; on: boolean }>; drop: string[] }
+
+test('one list: kept ticks: a press posts its figure and its on, and an untick posts on false', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, { live: ONE_LIST_LIVE })
+  const iono = listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' })
+  await expect(iono, 'precondition: the Needs You row starts unticked').not.toBeChecked()
+  await iono.check()
+  await expect.poll(() => ticksPosts(wire).length, { message: 'a press on a suggestion posts one kept tick' }).toBe(1)
+  expect(ticksBody(wire, 0), 'the press names its SKU at the suggested figure it was made against, and on is true').toEqual({
+    ticks: { '9000001': { price: '12.41', on: true } },
+    drop: [],
+  })
+
+  const gardevoir = listGroup(page, 'Suggested Changes').getByRole('checkbox', { name: /^Send the new price for Gardevoir/ })
+  await expect(gardevoir, 'precondition: the Suggested row starts ticked').toBeChecked()
+  await gardevoir.uncheck()
+  await expect.poll(() => ticksPosts(wire).length, { message: 'an untick on a suggestion posts a second kept tick' }).toBe(2)
+  expect(ticksBody(wire, 1), 'the untick is kept too, with on false at the figure it was pressed against').toEqual({
+    ticks: { '9000002': { price: '4.01', on: false } },
+    drop: [],
+  })
+})
+
+test('one list: kept ticks: clearing a typed price over a suggestion posts a drop for its SKU', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, { live: ONE_LIST_LIVE })
+  await expect(listGroup(page, 'Suggested Changes').getByText('Market up 18% since listed.'), 'precondition: the suggestion is drawn').toBeVisible()
+  /* THE OWNER'S OWN KEYS: a typed price commits on Enter, and a cleared one commits the same way. `fill` sets the value without the
+     keystrokes the field counts as typing, so it would never commit. The first digit of a second typing clears the held price, as typed. */
+  const field = page.getByRole('textbox', { name: /^Price for Gardevoir/ })
+  await field.focus()
+  await page.keyboard.type('3.50')
+  await page.keyboard.press('Enter')
+  await field.focus()
+  await page.keyboard.type('1')
+  await page.keyboard.press('Backspace')
+  await expect(field, 'the field is cleared').toHaveValue('')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => ticksPosts(wire).length, { message: 'clearing a typed price over a suggestion posts one drop' }).toBe(1)
+  expect(ticksBody(wire, 0), 'the drop names the SKU, and no tick is kept with it').toEqual({ ticks: {}, drop: ['9000002'] })
+})
+
+test('one list: kept ticks: a suggestion the server reads unticked draws unticked, though its group starts ticked', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { live: ONE_LIST_LIVE.map((one) => (one.sku === '9000002' ? { ...one, ticked: false } : one)) })
+  const suggested = listGroup(page, 'Suggested Changes')
+  await expect(suggested.getByText('Market up 18% since listed.'), 'precondition: the suggestion is drawn').toBeVisible()
+  await expect(
+    suggested.getByRole('checkbox', { name: /^Send the new price for Gardevoir/ }),
+    'the kept untick holds: the row reads unticked, where its group would start it ticked',
+  ).not.toBeChecked()
+})
+
+test('one list: kept ticks: a Needs You suggestion the server reads ticked draws ticked, and its send carries ticked true', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, { live: ONE_LIST_LIVE.map((one) => (one.sku === '9000001' ? { ...one, ticked: true } : one)) })
+  const iono = listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' })
+  await expect(iono, 'the kept tick holds: the Needs You row reads ticked, where its group would start it unticked').toBeChecked()
+  await expect(oneListSend(page)).toBeEnabled()
+  await oneListSend(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  expect((sentBody(wire, 0).prices ?? []).find((one) => one.sku === '9000001'), 'the ticked row rides the send at its figure, marked ticked true').toMatchObject({
+    price: '12.41',
+    was: '8.80',
+    source: 'suggested',
+    ticked: true,
+  })
+})
+
 /* THE TICK IS IN A COLUMN OF ITS OWN, headed Send, left of the item (list.html: the first track of the row and of its caption). Drawn after the name, a tick is
  * pushed to a line of its own by a name that fills its column, and even a short name grows by the tick's own height, so a ticked row stands taller than an
  * unticked one. The fixture is four suggestions that differ in one thing: two long names, a short one, and a short one that carries no tick (source Live), whose
