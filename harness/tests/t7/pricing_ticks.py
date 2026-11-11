@@ -47,6 +47,8 @@ from harness.tests.t7.one_list_wire import (  # noqa: E402
     _noon,
     _one_copy_live,
     _outcome,
+    _past_cap_row,
+    _past_cap_world,
     _seed_send_suggestions,
     _set_listing,
     _write_live,
@@ -60,6 +62,10 @@ NAME = "T7 pricing ticks"
 TICKS_FILE = "pricing-ticks.json"
 PRICING_PATH = "/pipeline/pricing"
 TICKS_PATH = "/pricing/ticks"
+
+# The group a press names: the group the row sat in when it was pressed. A tick holds only in that group.
+SUGGESTED = "suggested"
+NEEDS_YOU = "needs_you"
 
 
 @contextmanager
@@ -187,16 +193,16 @@ def check_ticks_are_kept_and_read_back(checks: Checks) -> None:
         with _case(checks, "ticks: round trip"):
             checks.equal(_wire_price(port, DUNSPARCE_SKU), "2.20",
                          "control: the suggestion the press is made against is 2.20")
-            status, _ = _press(port, {DUNSPARCE_SKU: {"price": "2.20", "on": True}})
+            status, _ = _press(port, {DUNSPARCE_SKU: {"price": "2.20", "on": True, "group": SUGGESTED}})
             checks.equal(status, 200, "POST /pricing/ticks keeps a tick: it answers 200")
-            checks.equal(_kept_on_disk(), {DUNSPARCE_SKU: {"price": "2.20", "on": True}},
+            checks.equal(_kept_on_disk(), {DUNSPARCE_SKU: {"price": "2.20", "on": True, "group": SUGGESTED}},
                          "the kept tick is written to inventory/pricing-ticks.json as its price and on")
             checks.equal(_ticked(port, DUNSPARCE_SKU), True,
                          "a reload reads the kept tick back: the Suggested row is ticked")
         with _case(checks, "ticks: untick kept"):
-            status, _ = _press(port, {DUNSPARCE_SKU: {"price": "2.20", "on": False}})
+            status, _ = _press(port, {DUNSPARCE_SKU: {"price": "2.20", "on": False, "group": SUGGESTED}})
             checks.equal(status, 200, "POST /pricing/ticks keeps an untick: it answers 200")
-            checks.equal(_kept_on_disk(), {DUNSPARCE_SKU: {"price": "2.20", "on": False}},
+            checks.equal(_kept_on_disk(), {DUNSPARCE_SKU: {"price": "2.20", "on": False, "group": SUGGESTED}},
                          "the untick is kept as on false, not dropped as no tick")
             checks.equal(_ticked(port, DUNSPARCE_SKU), False,
                          "a reload reads the untick back: the row reads unticked, and it holds")
@@ -210,14 +216,14 @@ def check_ticks_drop_removes_and_empty_file_goes(checks: Checks) -> None:
         _world(checks, with_run=False)
         with _case(checks, "ticks: drop"):
             status, _ = _press(port, {
-                DUNSPARCE_SKU: {"price": "2.20", "on": True},
-                DUNSPARCE_REVERSE_SKU: {"price": "2.06", "on": True},
+                DUNSPARCE_SKU: {"price": "2.20", "on": True, "group": SUGGESTED},
+                DUNSPARCE_REVERSE_SKU: {"price": "2.06", "on": True, "group": NEEDS_YOU},
             })
             checks.equal(status, 200, "precondition: two ticks are kept, so the press answers 200")
             checks.ok(_ticks_file().is_file(), "precondition: the kept ticks are a file on disk before any drop")
             status, _ = _press(port, drop=[DUNSPARCE_REVERSE_SKU])
             checks.equal(status, 200, "a drop answers 200")
-            checks.equal(_kept_on_disk(), {DUNSPARCE_SKU: {"price": "2.20", "on": True}},
+            checks.equal(_kept_on_disk(), {DUNSPARCE_SKU: {"price": "2.20", "on": True, "group": SUGGESTED}},
                          "the drop forgets its SKU and keeps the other tick on disk")
             checks.equal(_ticked(port, DUNSPARCE_REVERSE_SKU), None,
                          "the dropped SKU reads None on a reload: no kept tick holds")
@@ -239,7 +245,7 @@ def check_ticks_corrupt_file_reads_as_none(checks: Checks) -> None:
             _ticks_file().write_text("{not json", "utf-8")
             checks.equal(_ticked(port, DUNSPARCE_SKU), None,
                          "a tick file that will not parse reads as no ticks: the Suggested row reads None")
-            status, _ = _press(port, {DUNSPARCE_SKU: {"price": "2.20", "on": True}})
+            status, _ = _press(port, {DUNSPARCE_SKU: {"price": "2.20", "on": True, "group": SUGGESTED}})
             checks.equal(status, 200, "a press over a corrupt file is kept: it answers 200")
             checks.equal(_ticked(port, DUNSPARCE_SKU), True,
                          "and the press reads back ticked, the corrupt file replaced by a good one")
@@ -251,12 +257,14 @@ def check_ticks_refuse_a_bad_press(checks: Checks) -> None:
     checks.note("")
     checks.note("TICKS, REFUSED — a bad press is refused by name, and nothing is written")
     bad = (
-        ("a SKU that is not numeric", {"ticks": {"ABC": {"price": "2.20", "on": True}}, "drop": []}),
-        ("a price of zero", {"ticks": {DUNSPARCE_SKU: {"price": "0", "on": True}}, "drop": []}),
-        ("a price that is junk", {"ticks": {DUNSPARCE_SKU: {"price": "junk", "on": True}}, "drop": []}),
-        ("an empty price", {"ticks": {DUNSPARCE_SKU: {"price": "", "on": True}}, "drop": []}),
-        ("an on that is a word", {"ticks": {DUNSPARCE_SKU: {"price": "2.20", "on": "yes"}}, "drop": []}),
-        ("an on that is a number", {"ticks": {DUNSPARCE_SKU: {"price": "2.20", "on": 1}}, "drop": []}),
+        ("a SKU that is not numeric", {"ticks": {"ABC": {"price": "2.20", "on": True, "group": SUGGESTED}}, "drop": []}),
+        ("a price of zero", {"ticks": {DUNSPARCE_SKU: {"price": "0", "on": True, "group": SUGGESTED}}, "drop": []}),
+        ("a price that is junk", {"ticks": {DUNSPARCE_SKU: {"price": "junk", "on": True, "group": SUGGESTED}}, "drop": []}),
+        ("an empty price", {"ticks": {DUNSPARCE_SKU: {"price": "", "on": True, "group": SUGGESTED}}, "drop": []}),
+        ("an on that is a word", {"ticks": {DUNSPARCE_SKU: {"price": "2.20", "on": "yes", "group": SUGGESTED}}, "drop": []}),
+        ("an on that is a number", {"ticks": {DUNSPARCE_SKU: {"price": "2.20", "on": 1, "group": SUGGESTED}}, "drop": []}),
+        ("no group", {"ticks": {DUNSPARCE_SKU: {"price": "2.20", "on": True}}, "drop": []}),
+        ("a group that is at_rule, which holds no suggestion", {"ticks": {DUNSPARCE_SKU: {"price": "2.20", "on": True, "group": "at_rule"}}, "drop": []}),
         ("a drop that names a SKU that is not numeric", {"ticks": {}, "drop": ["ABC"]}),
         ("ticks that are a list, not a map", {"ticks": [], "drop": []}),
     )
@@ -265,13 +273,13 @@ def check_ticks_refuse_a_bad_press(checks: Checks) -> None:
         with _case(checks, "ticks: refusals"):
             checks.equal(_wire_price(port, DUNSPARCE_SKU), "2.20",
                          "control: the suggestion the press names is 2.20")
-            status, _ = _press(port, {DUNSPARCE_SKU: {"price": "2.20", "on": True}})
+            status, _ = _press(port, {DUNSPARCE_SKU: {"price": "2.20", "on": True, "group": SUGGESTED}})
             checks.equal(status, 200, "precondition: a good tick is kept first, so there is a kept tick to protect")
             for label, payload in bad:
                 status, answer = _post(port, payload)
                 checks.equal((status, _refusal(answer)), (400, "ticks_invalid"),
                              f"a press with {label} is refused 400 ticks_invalid")
-            checks.equal(_kept_on_disk(), {DUNSPARCE_SKU: {"price": "2.20", "on": True}},
+            checks.equal(_kept_on_disk(), {DUNSPARCE_SKU: {"price": "2.20", "on": True, "group": SUGGESTED}},
                          "and a refused press leaves the kept tick on disk exactly as it was")
 
 
@@ -283,11 +291,11 @@ def check_ticks_empty_press_and_drop_cap(checks: Checks) -> None:
     with run_folder() as run, isolated_home(run), _served() as port:
         _world(checks, with_run=False)
         with _case(checks, "ticks: empty press"):
-            status, _ = _press(port, {DUNSPARCE_SKU: {"price": "2.20", "on": True}})
+            status, _ = _press(port, {DUNSPARCE_SKU: {"price": "2.20", "on": True, "group": SUGGESTED}})
             checks.equal(status, 200, "precondition: a tick is kept first, so there is one to leave alone")
             status, _ = _post(port, {})
             checks.equal(status, 200, "an empty press, with no ticks and no drop, answers 200")
-            checks.equal(_kept_on_disk(), {DUNSPARCE_SKU: {"price": "2.20", "on": True}},
+            checks.equal(_kept_on_disk(), {DUNSPARCE_SKU: {"price": "2.20", "on": True, "group": SUGGESTED}},
                          "and leaves the kept tick on disk as it was")
         with _case(checks, "ticks: drop cap"):
             at_cap = [str(number) for number in range(1, pipeline_routes.MAX_CLEAR_SKUS + 1)]
@@ -310,16 +318,18 @@ def check_worklist_holds_a_tick_by_drift_and_kind(checks: Checks) -> None:
             with _case(checks, f"worklist holds: {where}"):
                 checks.equal(_wire_row(port, DUNSPARCE_SKU).get("source"), "Suggested",
                              f"control ({where}): Dunsparce's row is a Suggested row")
-                _press(port, {DUNSPARCE_SKU: {"price": "2.16", "on": True}})
+                _press(port, {DUNSPARCE_SKU: {"price": "2.16", "on": True, "group": SUGGESTED}})
                 checks.equal(_ticked(port, DUNSPARCE_SKU), True,
                              f"a tick 4c off the 2.20 suggestion holds ({where})")
-                _press(port, {DUNSPARCE_SKU: {"price": "2.00", "on": True}})
+                _press(port, {DUNSPARCE_SKU: {"price": "2.00", "on": True, "group": SUGGESTED}})
                 checks.equal(_ticked(port, DUNSPARCE_SKU), None,
                              f"a tick 20c off the 2.20 suggestion does not hold, and reads None ({where})")
-                _press(port, {DUNSPARCE_SKU: {"price": "2.20", "on": False}})
+                _press(port, {DUNSPARCE_SKU: {"price": "2.20", "on": False, "group": SUGGESTED}})
                 checks.equal(_ticked(port, DUNSPARCE_SKU), False,
                              f"an untick at the 2.20 suggestion holds, and reads False ({where})")
-                _press(port, {ARTICUNO_SKU: {"price": "25.00", "on": True}})
+                # A Live row is at_rule, which the route refuses as a group. The press names the group it would
+                # hold in, so the store keeps a tick the reader must still refuse to show on a Live row.
+                _press(port, {ARTICUNO_SKU: {"price": "25.00", "on": True, "group": SUGGESTED}})
                 checks.equal(_wire_row(port, ARTICUNO_SKU).get("source"), "Live",
                              f"control ({where}): Articuno's row is a Live row")
                 checks.equal(_ticked(port, ARTICUNO_SKU), None,
@@ -338,13 +348,13 @@ def check_reload_reads_each_group_its_tick(checks: Checks) -> None:
                          "control: the reverse, past the cap, is in Needs you")
             checks.equal(_wire_row(port, DUNSPARCE_SKU).get("group"), "suggested",
                          "control: Dunsparce's suggestion is in Suggested")
-            status, _ = _press(port, {DUNSPARCE_REVERSE_SKU: {"price": "2.06", "on": True}})
+            status, _ = _press(port, {DUNSPARCE_REVERSE_SKU: {"price": "2.06", "on": True, "group": NEEDS_YOU}})
             checks.equal(status, 200, "a tick on the Needs you suggestion is kept: 200")
             checks.equal(_ticked(port, DUNSPARCE_REVERSE_SKU), True,
                          "a reload reads the Needs you tick as True, and the row stays in Needs you")
             checks.equal(_wire_row(port, DUNSPARCE_REVERSE_SKU).get("group"), "needs_you",
                          "and a ticked row is still in Needs you, not moved to Suggested")
-            status, _ = _press(port, {DUNSPARCE_SKU: {"price": "2.20", "on": False}})
+            status, _ = _press(port, {DUNSPARCE_SKU: {"price": "2.20", "on": False, "group": SUGGESTED}})
             checks.equal(status, 200, "an untick on the Suggested row is kept: 200")
             checks.equal(_ticked(port, DUNSPARCE_SKU), False,
                          "a reload reads the Suggested untick as False, and it stays unticked")
@@ -354,7 +364,7 @@ SENT_PRICES = [
     {"sku": DUNSPARCE_SKU, "price": "2.06", "was": "2.50", "source": "suggested"},
     {"sku": ARTICUNO_SKU, "price": "24.00", "was": "22.03", "source": "suggested"},
 ]
-BOTH_TICKS = {DUNSPARCE_SKU: {"price": "2.06", "on": True}, ARTICUNO_SKU: {"price": "24.00", "on": True}}
+BOTH_TICKS = {DUNSPARCE_SKU: {"price": "2.06", "on": True, "group": SUGGESTED}, ARTICUNO_SKU: {"price": "24.00", "on": True, "group": SUGGESTED}}
 
 
 def _send_world(checks: Checks, portal, port) -> None:
@@ -364,8 +374,8 @@ def _send_world(checks: Checks, portal, port) -> None:
     _seed_send_suggestions()
     _only_live_export({DUNSPARCE_SKU: 1, ARTICUNO_SKU: 1}, {DUNSPARCE_SKU: "2.50", ARTICUNO_SKU: "22.03"})
     status, _ = _press(port, {
-        DUNSPARCE_SKU: {"price": "2.06", "on": True},
-        ARTICUNO_SKU: {"price": "24.00", "on": True},
+        DUNSPARCE_SKU: {"price": "2.06", "on": True, "group": SUGGESTED},
+        ARTICUNO_SKU: {"price": "24.00", "on": True, "group": SUGGESTED},
     })
     checks.equal(status, 200, "precondition: both suggestions are ticked, so the press answers 200")
     checks.equal((_ticked(port, DUNSPARCE_SKU), _ticked(port, ARTICUNO_SKU)), (True, True),
@@ -409,7 +419,111 @@ def check_send_forgets_what_it_priced(checks: Checks) -> None:
                          "a send that goes out forgets the ticks of the SKUs it priced, and no tick is left")
 
 
+def _flip_dunsparce_to_needs_you() -> None:
+    """Dunsparce's live price moves to 3.40 and its market to 2.52: the suggestion is 2.52, 26% from the live
+    price, past the 25% cap, so the row sits in Needs you. The export takes a newer stamp, since the worklist
+    caches its read by file name."""
+    _write_live(
+        "20260202-000000",
+        _live_export_priced(
+            {DUNSPARCE_SKU: 1, DUNSPARCE_REVERSE_SKU: 1, ARTICUNO_SKU: 1},
+            {DUNSPARCE_SKU: "3.40", DUNSPARCE_REVERSE_SKU: "3.00", ARTICUNO_SKU: "25.00"},
+        ),
+    )
+    _market_reading(DUNSPARCE_SKU, "2.52", "2.40")
+    # 2.52 is 26% under the 3.40 asking price: past the cap, so the suggestion moves to Needs you.
+
+
+def check_group_flip_does_not_carry_a_tick(checks: Checks) -> None:
+    """A tick pressed on a Suggested row is kept for that group. When the row moves into Needs you at a price
+    within the drift of the press, the tick does not carry: it reads None, not True."""
+    checks.note("")
+    checks.note("WORKLIST, GROUP FLIP — a tick pressed in Suggested does not carry into Needs you")
+    with run_folder() as run, isolated_home(run), _served() as port:
+        _world(checks, with_run=False)
+        # Asking 3.00 puts the 2.48 suggestion inside the cap and past the unsold premium (asking above market by 10%),
+        # so the row is Suggested. The export is rewritten before any read, so the worklist sees this price.
+        _write_live(
+            "20260201-000000",
+            _live_export_priced(
+                {DUNSPARCE_SKU: 1, DUNSPARCE_REVERSE_SKU: 1, ARTICUNO_SKU: 1},
+                {DUNSPARCE_SKU: "3.00", DUNSPARCE_REVERSE_SKU: "3.00", ARTICUNO_SKU: "25.00"},
+            ),
+        )
+        _market_reading(DUNSPARCE_SKU, "2.48", "2.40")
+        with _case(checks, "worklist: group flip"):
+            checks.equal((_wire_row(port, DUNSPARCE_SKU).get("group"), _wire_price(port, DUNSPARCE_SKU)),
+                         (SUGGESTED, "2.48"),
+                         "control: Dunsparce's suggestion is 2.48 in Suggested before the press")
+            status, _ = _press(port, {DUNSPARCE_SKU: {"price": "2.48", "on": True, "group": SUGGESTED}})
+            checks.equal(status, 200, "precondition: the tick on the 2.48 suggestion is kept in Suggested: 200")
+            checks.equal(_ticked(port, DUNSPARCE_SKU), True,
+                         "precondition: the tick reads ticked while the row is still in Suggested")
+            _flip_dunsparce_to_needs_you()
+            checks.equal((_wire_row(port, DUNSPARCE_SKU).get("group"), _wire_price(port, DUNSPARCE_SKU)),
+                         (NEEDS_YOU, "2.52"),
+                         "control: after the flip the row is in Needs you at 2.52")
+            checks.equal(_ticked(port, DUNSPARCE_SKU), None,
+                         "a tick pressed in Suggested reads None in Needs you, not True, though 2.48 and 2.52 are within the drift")
+
+
+def check_send_ticked_flag_needs_a_kept_tick(checks: Checks) -> None:
+    """A send's `ticked: true` on a Needs you past-cap row exempts it only where the server keeps a tick for
+    that row. The client's flag alone is refused `suggestion_past_cap`; with the owner's tick kept in Needs you
+    at the drawn figure, the same send goes."""
+    checks.note("")
+    checks.note("SEND, PAST THE CAP — a client's ticked:true goes only with the tick the server keeps")
+    with run_folder() as run, isolated_home(run), send_portal() as portal, _served() as port:
+        _seed_sync()
+        with _case(checks, "send: ticked true with no kept tick"):
+            _past_cap_world(checks, portal)
+            _only_live_export({DUNSPARCE_SKU: 1, ARTICUNO_SKU: 1}, {DUNSPARCE_SKU: "3.00", ARTICUNO_SKU: "22.03"})
+            checks.equal(_wire_row(port, DUNSPARCE_SKU).get("group"), NEEDS_YOU,
+                         "control: Dunsparce, past the cap at 3.00, is in Needs you")
+            outcome = _outcome(lambda: send_routes.do_send({"runs": [], "confirm": True, "prices": [_past_cap_row(ticked=True)]}))
+            checks.equal(outcome, ("refused", "suggestion_past_cap"),
+                         "a ticked:true past-cap row with no kept tick is refused suggestion_past_cap")
+    with run_folder() as run, isolated_home(run), send_portal() as portal, _served() as port:
+        _seed_sync()
+        with _case(checks, "send: ticked true with the kept tick in Needs you"):
+            _past_cap_world(checks, portal)
+            _only_live_export({DUNSPARCE_SKU: 1, ARTICUNO_SKU: 1}, {DUNSPARCE_SKU: "3.00", ARTICUNO_SKU: "22.03"})
+            checks.equal(_wire_row(port, DUNSPARCE_SKU).get("group"), NEEDS_YOU,
+                         "control: Dunsparce, past the cap at 3.00, is in Needs you")
+            status, _ = _press(port, {DUNSPARCE_SKU: {"price": "2.06", "on": True, "group": NEEDS_YOU}})
+            checks.equal(status, 200, "precondition: the tick is pressed in Needs you at the drawn 2.06: 200")
+            checks.equal(_ticked(port, DUNSPARCE_SKU), True,
+                         "precondition: the kept tick reads ticked in Needs you")
+            outcome = _outcome(lambda: send_routes.do_send({"runs": [], "confirm": True, "prices": [_past_cap_row(ticked=True)]}))
+            checks.equal(outcome[0], "answered",
+                         "with the server's tick kept, the ticked past-cap row is answered, not refused")
+
+
+def check_send_drops_a_tick_whose_suggestion_is_gone(checks: Checks) -> None:
+    """A kept tick whose SKU has no suggestion reads None, and the send that goes out drops it with the rest.
+    Articuno keeps a tick at 24.00, then its market falls to its asking price (22.03), so its row is Live and
+    holds no suggestion. Dunsparce alone is sent."""
+    checks.note("")
+    checks.note("SEND, VANISHED SUGGESTION — a tick whose SKU lost its suggestion reads None, and the send drops it")
+    with run_folder() as run, isolated_home(run), send_portal() as portal, _served() as port:
+        _seed_sync()
+        with _case(checks, "send: tick whose suggestion is gone"):
+            _send_world(checks, portal, port)
+            _market_reading(ARTICUNO_SKU, "22.03", "22.50")
+            checks.equal(_wire_row(port, ARTICUNO_SKU).get("source"), "Live",
+                         "control: Articuno's row is Live once its market is its asking price")
+            checks.equal(_ticked(port, ARTICUNO_SKU), None,
+                         "a kept tick whose SKU has no suggestion reads None")
+            sent = _outcome(lambda: send_routes.do_send({"runs": [], "confirm": True, "prices": [SENT_PRICES[0]]}))
+            checks.equal(sent[0], "answered", "control: the send of Dunsparce's suggestion alone is answered")
+            checks.equal(_kept_on_disk(), {},
+                         "the send drops Articuno's tick, whose suggestion is gone, and no tick is left on disk")
+
+
 CHECKS = (
+    check_group_flip_does_not_carry_a_tick,
+    check_send_ticked_flag_needs_a_kept_tick,
+    check_send_drops_a_tick_whose_suggestion_is_gone,
     check_ticks_are_kept_and_read_back,
     check_ticks_drop_removes_and_empty_file_goes,
     check_ticks_corrupt_file_reads_as_none,
