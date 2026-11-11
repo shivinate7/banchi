@@ -4901,7 +4901,7 @@ export type SendAnswer = {
   /** The SKUs of kept suggestions left out because the card is live and held (its take-off is a
    *  row of its own). Absent when none. */
   held?: string[]
-  /** Kept suggestions whose price moved a few cents since the list was drawn: sent at the fresh
+  /** Kept suggestions whose price moved a few cents since you loaded this list: sent at the fresh
    *  price (`price`), not the drawn one (`was`). Absent when none. */
   moved?: Array<{ sku: string; name: string; was: string; price: string }>
   /** Kept suggestions left out because the card's suggestion changed past the drift allowed or is

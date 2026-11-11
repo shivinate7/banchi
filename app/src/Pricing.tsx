@@ -1211,6 +1211,13 @@ export function Pricing() {
         .catch((err: unknown) => {
           const trouble = describeFailure(err)
           if (trouble.code === 'demo_read_only') return
+          // THE SERVER NEVER KEPT IT: the row goes back to what the server holds, else it stays ticked and the send is refused.
+          setListedTicks((held) => {
+            const pressed = held[sku]
+            if (pressed === undefined || pressed.on !== on || pressed.price !== price || pressed.group !== group) return held
+            const { [sku]: _gone, ...rest } = held
+            return rest
+          })
           toast({ kind: 'refusal', tone: failureTone(trouble), title: 'Tick not kept', body: trouble.message })
         })
         .finally(() => setTicksPending((n) => n - 1))

@@ -239,3 +239,22 @@
 .send-owed .send-names .bn-btn { flex: none; }
 /* The open list floats over the worklist (`.send-moves`), so the bar keeps its height. */
 .send-owed.send-moves .send-names { left: auto; width: min(36rem, 100%); }
+
+/* ONE LINE FOR EVERY KEPT SUGGESTION THE PRESS CHANGED (`SuggestionNotes`). With a fold it is `.send-moves`, so the open
+   list floats over the worklist and the bar keeps its height (D313). The groups are rows of that one list: a heading row
+   draws like `.send-more` and carries the kit's Count. */
+.send-suggestions .send-names .send-more { display: flex; align-items: center; gap: var(--bn-2); padding-top: var(--bn-2); font-weight: 600; }
+.send-suggestions .send-names .send-more:first-child { padding-top: 0; }
+/* The fold's press is a thumb's 40px at every pointer. The line's own padding gives back the 6px the press adds, so the line
+   stands as high as the receipt above it. */
+.send-suggestions .bn-notice-action .bn-btn { --btn-h: max(40px, var(--bn-control-h)); }
+.send-suggestions.bn-notice-compact:has(.bn-notice-action) { padding-block: var(--bn-1-5); }
+.send-suggestions.send-moves .send-names { left: auto; width: min(32rem, 100%); }
+/* The price reads in its own right-hand column, so thirty rows scan down one edge. */
+.send-suggestions .send-figure { text-align: end; }
+/* Where the kit moves a compact notice's press to a second row (narrow or coarse), this line keeps it beside the sentence: a
+   wrapped sentence is two text lines, not a text line and a press row. */
+@media (max-width: 1023px), (hover: none) and (pointer: coarse) {
+  .send-suggestions.bn-notice-compact .bn-notice-text { grid-column: 2; }
+  .send-suggestions.bn-notice-compact .bn-notice-action { grid-column: 3; grid-row: 1; }
+}

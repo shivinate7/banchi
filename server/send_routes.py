@@ -1492,7 +1492,7 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> T
             raise PipelineRefusal(
                 HTTPStatus.CONFLICT,
                 "suggestion_changed",
-                f"Banchi's suggestion changed for {', '.join(row['name'] for row in left_out)} since the list was drawn. "
+                f"Banchi's suggestion changed for {', '.join(row['name'] for row in left_out)} since you loaded this list. "
                 f"Nothing was {step}. Reload the list and keep the suggestions again.",
                 data={"changed": sorted(out)},
             )
@@ -1620,7 +1620,7 @@ def _name_held(refusal: PipelineRefusal, held: List[str], names: Dict[str, str],
     if left_out:
         refusal.args = (
             f"{refusal.args[0]} {', '.join(row['name'] for row in left_out)} "
-            "changed since the list was drawn, so the suggested price stayed out of this send.",
+            "changed since you loaded this list, so the suggested price stayed out of this send.",
         )
         refusal.data = dict(refusal.data or {}, left_out=list(left_out))
 

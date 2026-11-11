@@ -29,7 +29,7 @@
 import { count } from './kit/dataRules'
 import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Button, Icon, IconButton, Money, Notice, Pill, Refusal, Retry } from './kit'
+import { Button, Count, Icon, IconButton, Money, Notice, Pill, Refusal, Retry } from './kit'
 import { atClockTime, clockTime, dayMonth } from './dates'
 import { describeFailure, dismissSendWarning, getOwedTakeOffs, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, sendSuggestions, takeBackSend } from './server'
 import type { Failure } from './server'
@@ -375,33 +375,106 @@ function NotSent({ gone }: { readonly gone?: readonly string[] }) {
   )
 }
 
-/** KEPT SUGGESTIONS THE PRESS CHANGED, named: a price that moved a few cents since the list was drawn
- *  (sent at the fresh one), and a suggestion left out because it changed further or is gone. */
+/** KEPT SUGGESTIONS THE PRESS CHANGED, on one compact line: a price that moved a few cents since the person loaded the list
+ *  (sent at the fresh one), and a suggestion left out because it changed further or is gone. The sentence counts and the fold
+ *  names (`MovesList`'s fold: `.send-moves`, `.send-toggle`, `ul.send-names`), left out first because it asks the person to
+ *  look. One card is named in the sentence, with no fold. "Check it in your list" holds for both kinds of left-out row: a
+ *  Needs-you row is unticked, a Suggested row is ticked again by default at its new price. */
 function SuggestionNotes({ answer }: { readonly answer: SendAnswer }) {
+  const [open, setOpen] = useState(false)
+  const listId = useId()
   const moved = answer.moved ?? []
   const left = answer.left_out ?? []
-  if (moved.length === 0 && left.length === 0) return null
-  // "THE PRICE" ONLY WHEN EVERY ONE STILL HAS A SUGGESTION; one that is gone (`now` null) changed as a whole.
-  const what = left.every((row) => row.now !== null) ? 'the price' : 'the suggestion'
+  const total = moved.length + left.length
+  if (total === 0) return null
+  const tone = left.length > 0 ? 'warn' : 'info'
+  const since = 'since you loaded this list'
+  if (total === 1) {
+    const one = moved[0]
+    const out = left[0]
+    return (
+      <Notice
+        tone={tone}
+        compact
+        className="send-suggestions"
+        title={
+          one !== undefined ? (
+            <>
+              <span data-typed>{one.name || one.sku}</span> went at <Money value={Number(one.price)} />, not <Money value={Number(one.was)} />. Its price moved {since}.
+            </>
+          ) : out !== undefined && out.now !== null ? (
+            <>
+              <span data-typed>{out.name || out.sku}</span> was left out. Its price went from <Money value={Number(out.price)} /> to <Money value={Number(out.now)} /> {since}. Check it in your list and send again.
+            </>
+          ) : (
+            <>
+              <span data-typed>{out?.name || out?.sku}</span> was left out. It has no suggested price now.
+            </>
+          )
+        }
+      />
+    )
+  }
+  const said = [
+    moved.length === 0 ? null : `${count(moved.length, 'card')} went at a new price`,
+    left.length === 0 ? null : moved.length === 0 ? `${count(left.length, 'card was', 'cards were')} left out` : `${left.length} ${left.length === 1 ? 'was' : 'were'} left out`,
+  ].filter((part) => part !== null)
+  const cards = count(total, 'Card')
   return (
-    <>
-      {left.length === 0 ? null : (
-        <Notice tone="warn" compact className="send-suggestions-left" title={`${count(left.length, 'suggestion', 'suggestions')} left out: ${what} changed since the list was drawn.`}>
-          <ul className="send-names">
-            {left.slice(0, 6).map((row) => (
-              <li key={row.sku}>
-                <span className="send-name">{row.name || row.sku}</span>
-                <span className="send-figure">{row.now === null ? 'no suggestion now' : `now $${row.now}`}</span>
-              </li>
-            ))}
-            {left.length > 6 ? <li className="send-more">and {left.length - 6} more</li> : null}
-          </ul>
-        </Notice>
-      )}
-      {moved.length === 0 ? null : (
-        <Notice tone="info" compact className="send-suggestions-moved" title={`${count(moved.length, 'price', 'prices')} moved since the list was drawn, sent at the new figure.`} />
-      )}
-    </>
+    <Notice
+      tone={tone}
+      compact
+      className="send-suggestions send-moves"
+      title={`${said.join(' and ')}. Their prices changed ${since}.`}
+      action={
+        <Button variant="quiet" icon={open ? 'chevronUp' : 'chevronDown'} onClick={() => setOpen((on) => !on)} aria-expanded={open} aria-controls={listId} words="word-only-control">
+          {/* THE LABEL HOLDS THE WIDER OF ITS TWO STATES, as the moves list's does. */}
+          <span className="send-toggle">
+            <span aria-hidden={open ? undefined : 'true'} data-hidden={open ? undefined : 'true'}>{`Hide ${cards}`}</span>
+            <span aria-hidden={open ? 'true' : undefined} data-hidden={open ? 'true' : undefined}>{`Show ${cards}`}</span>
+          </span>
+        </Button>
+      }
+    >
+      <ul className="send-names" id={listId} hidden={!open}>
+        {left.length === 0 ? null : (
+          <li className="send-more">
+            Left out, check them in your list <Count value={left.length} />
+          </li>
+        )}
+        {left.map((row) => (
+          <li key={`out-${row.sku}`}>
+            <span className="send-name">{row.name || row.sku}</span>
+            <span className="send-figure">
+              <Money value={Number(row.price)} />
+              {row.now === null ? (
+                ', no suggested price now'
+              ) : (
+                <>
+                  {' to '}
+                  <Money value={Number(row.now)} />
+                </>
+              )}
+            </span>
+          </li>
+        ))}
+        {moved.length === 0 ? null : (
+          <li className="send-more">
+            Went at the new price <Count value={moved.length} />
+          </li>
+        )}
+        {moved.map((row) => (
+          <li key={`moved-${row.sku}`}>
+            <span className="send-name">{row.name || row.sku}</span>
+            <span className="send-figure">
+              <Money value={Number(row.was)} />
+              {' to '}
+              <Money value={Number(row.price)} />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Notice>
   )
 }
 
