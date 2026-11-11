@@ -7806,7 +7806,8 @@ test('one list: a tick does not carry over to a new suggested price from Refresh
  * the press at the figure it was pressed against, posts a drop when a typed price over a suggestion is cleared, and draws what the server says on each
  * row (`ticked`), falling back on the group's own start only when the server says nothing. */
 const ticksPosts = (wire: Wire[]) => wire.filter((row) => row.method === 'POST' && row.path === '/pricing/ticks')
-const ticksBody = (wire: Wire[], at: number) => ticksPosts(wire)[at]?.body as { ticks: Record<string, { price: string; on: boolean }>; drop: string[] }
+const ticksBody = (wire: Wire[], at: number) =>
+  ticksPosts(wire)[at]?.body as { ticks: Record<string, { price: string; on: boolean; group: string }>; drop: string[] }
 
 test('one list: kept ticks: a press posts its figure and its on, and an untick posts on false', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
@@ -7816,7 +7817,7 @@ test('one list: kept ticks: a press posts its figure and its on, and an untick p
   await iono.check()
   await expect.poll(() => ticksPosts(wire).length, { message: 'a press on a suggestion posts one kept tick' }).toBe(1)
   expect(ticksBody(wire, 0), 'the press names its SKU at the suggested figure it was made against, and on is true').toEqual({
-    ticks: { '9000001': { price: '12.41', on: true } },
+    ticks: { '9000001': { price: '12.41', on: true, group: 'needs_you' } },
     drop: [],
   })
 
@@ -7825,7 +7826,7 @@ test('one list: kept ticks: a press posts its figure and its on, and an untick p
   await gardevoir.uncheck()
   await expect.poll(() => ticksPosts(wire).length, { message: 'an untick on a suggestion posts a second kept tick' }).toBe(2)
   expect(ticksBody(wire, 1), 'the untick is kept too, with on false at the figure it was pressed against').toEqual({
-    ticks: { '9000002': { price: '4.01', on: false } },
+    ticks: { '9000002': { price: '4.01', on: false, group: 'suggested' } },
     drop: [],
   })
 })
