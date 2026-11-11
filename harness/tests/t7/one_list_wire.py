@@ -804,6 +804,108 @@ def check_send_past_cap_on_sent_price(checks: Checks) -> None:
             checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
 
 
+def _live_columns(run, portal, columns) -> None:
+    """Rewrite the live export the portal serves with these columns: a column the file header lacks is
+    dropped from each row, a column it does not have is added empty. The real CSV reader and writer, in
+    the case's own run folder."""
+    path = run / "live.csv"
+    path.write_bytes(portal["live"])
+    source = tcgcsv.read_export(path)
+    rows = [{column: row.get(column, "") for column in columns} for row in source.rows]
+    tcgcsv.write_csv(path, columns, rows)
+    portal["live"] = path.read_bytes()
+
+
+def check_send_held_drift_names_held(checks: Checks) -> None:
+    """A kept suggestion that drifted within tolerance on a SKU that is live and held is named under
+    `held`, never `moved`: its suggested price is not in the file. A second, non-held SKU drifted in the
+    same press still goes at its fresh price and is named under `moved`.
+    """
+    checks.note("")
+    checks.note("SEND, HELD AND DRIFTED — a held suggestion is named under `held`, not `moved`")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: a held drifted suggestion beside a drifted one"):
+            run_dir = _one_copy_live(checks, portal)
+            _seed_send_suggestions()
+            _typed(DUNSPARCE_SKU, {"withheld": "keeping"})
+            try:
+                outcome = ("answered", send_routes.do_send({
+                    "runs": [run_dir.name],
+                    "confirm": True,
+                    "prices": [
+                        {"sku": DUNSPARCE_SKU, "price": "2.08", "was": "2.50", "source": "suggested"},
+                        {"sku": ARTICUNO_SKU, "price": "23.98", "was": "22.03", "source": "suggested"},
+                    ],
+                }))
+            except pipeline_routes.PipelineRefusal as caught:
+                outcome = ("refused", f"{caught.code}: {caught}")
+            checks.ok(outcome[0] == "answered", "the press is answered, not refused", f"refused: {outcome[1]}")
+            if outcome[0] == "answered":
+                answer = outcome[1]
+                checks.ok(str(DUNSPARCE_SKU) in json.dumps(answer.get("held"), sort_keys=True),
+                          "the answer names Dunsparce under its top-level `held` key", repr(answer.get("held")))
+                checks.equal([m["sku"] for m in answer.get("moved") or []], [ARTICUNO_SKU],
+                             "`moved` names only Articuno, the non-held drift")
+                checks.equal(_rows(portal).get(ARTICUNO_SKU), ("0", "24.00"),
+                             "and Articuno goes at its fresh 24.00")
+
+
+def check_emit_suggestion_columns_differ(checks: Checks) -> None:
+    """A kept suggestion's live row must carry the columns of the file it is written with
+    (`cmd_emit._suggested_rows`). The row is in Riftbound, a game no run of the send files, so it is
+    written with the sent game's header: a live export with Photo URL dropped and Extra Note added
+    refuses the press, naming Dunsparce and both columns; nothing is written. The same columns in another
+    order files the row. Single run only: a press naming one run takes the single-run emit path.
+    """
+    checks.note("")
+    checks.note("EMIT, COLUMNS — a kept suggestion's live row must carry the file's columns")
+    odd = [column for column in tcgcsv.CANONICAL_HEADER if column != "Photo URL"] + ["Extra Note"]
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "emit: live columns differ from the file header"):
+            run_dir = _one_copy_live(checks, portal)
+            _seed_send_suggestions()
+            _live_product_line(run, portal, DUNSPARCE_SKU, RIFTBOUND_PRODUCT_LINE)
+            _live_columns(run, portal, odd)
+            try:
+                outcome = ("answered", send_routes.do_send({
+                    "runs": [run_dir.name],
+                    "confirm": True,
+                    "prices": [{"sku": DUNSPARCE_SKU, "price": "2.06", "was": "2.50", "source": "suggested"}],
+                }))
+            except pipeline_routes.PipelineRefusal as caught:
+                outcome = ("refused", f"{caught.code}: {caught}")
+            checks.ok(outcome[0] == "refused", "the press is refused, not filed", f"answered: {outcome[1]!r:.200}")
+            if outcome[0] == "refused":
+                checks.ok(f"Dunsparce ({DUNSPARCE_SKU})" in outcome[1], "the refusal names Dunsparce by SKU",
+                          outcome[1])
+                checks.ok("Extra Note" in outcome[1] and "Photo URL" in outcome[1],
+                          "the refusal names both columns that differ", outcome[1])
+            checks.equal(_rows(portal), {}, "and TCGplayer receives no row")
+            checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "emit: the same columns in another order files the row"):
+            run_dir = _one_copy_live(checks, portal)
+            _seed_send_suggestions()
+            _live_product_line(run, portal, DUNSPARCE_SKU, RIFTBOUND_PRODUCT_LINE)
+            _live_columns(run, portal, list(reversed(tcgcsv.CANONICAL_HEADER)))
+            try:
+                outcome = ("answered", send_routes.do_send({
+                    "runs": [run_dir.name],
+                    "confirm": True,
+                    "prices": [{"sku": DUNSPARCE_SKU, "price": "2.06", "was": "2.50", "source": "suggested"}],
+                }))
+            except pipeline_routes.PipelineRefusal as caught:
+                outcome = ("refused", f"{caught.code}: {caught}")
+            checks.ok(outcome[0] == "answered", "the reordered columns are answered, not refused",
+                      f"refused: {outcome[1]}")
+            if outcome[0] == "answered":
+                checks.equal(_rows(portal).get(DUNSPARCE_SKU), ("0", "2.06"),
+                             "and the row files at 2.06, Add to Quantity 0")
+
+
 def check_send_empty_runs_without_prices_refused(checks: Checks) -> None:
     """Guard against an overbroad build: an empty `runs` with NO prices named is still refused
     `runs_required`. Only named prices may stand in for runs. Green today; it must stay green.
@@ -1407,6 +1509,8 @@ CHECKS = (
     check_send_suggestion_other_game,
     check_download_split_other_game,
     check_send_past_cap_on_sent_price,
+    check_send_held_drift_names_held,
+    check_emit_suggestion_columns_differ,
     check_send_empty_runs_without_prices_refused,
     check_product_history_asking_postings,
     check_send_refuses_repeated_sku_price,
