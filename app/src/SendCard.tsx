@@ -444,7 +444,7 @@ function SuggestionNotes({ answer }: { readonly answer: SendAnswer }) {
         )}
         {left.map((row) => (
           <li key={`out-${row.sku}`}>
-            <span className="send-name">{row.name || row.sku}</span>
+            <span className="send-name" data-typed>{row.name || row.sku}</span>
             <span className="send-figure">
               <Money value={Number(row.price)} />
               {row.now === null ? (
@@ -465,7 +465,7 @@ function SuggestionNotes({ answer }: { readonly answer: SendAnswer }) {
         )}
         {moved.map((row) => (
           <li key={`moved-${row.sku}`}>
-            <span className="send-name">{row.name || row.sku}</span>
+            <span className="send-name" data-typed>{row.name || row.sku}</span>
             <span className="send-figure">
               <Money value={Number(row.was)} />
               {' to '}

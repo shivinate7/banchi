@@ -1218,7 +1218,7 @@ export function Pricing() {
             const { [sku]: _gone, ...rest } = held
             return rest
           })
-          toast({ kind: 'refusal', tone: failureTone(trouble), title: 'Tick not kept', body: trouble.message })
+          toast({ ...refusalToast(err, `Tick not kept for ${one?.name || sku}`) })
         })
         .finally(() => setTicksPending((n) => n - 1))
     },
@@ -2009,7 +2009,7 @@ export function Pricing() {
           keepTicks({}, [sku.sku]).catch((err: unknown) => {
             const trouble = describeFailure(err)
             if (trouble.code === 'demo_read_only') return
-            toast({ kind: 'refusal', tone: failureTone(trouble), title: 'Tick not cleared', body: trouble.message })
+            toast({ ...refusalToast(err, `Tick not cleared for ${sku.name}`) })
           })
         }
       } else {

@@ -25,11 +25,11 @@ prints the measured push on "Prices as of" for each state.
    Thirty-five rows scroll inside it.
 3. **One card: no fold.** The sentence names the card and both prices. Moved: "Gardevoir ex went
    at $4.03, not $4.01. Its price moved since you loaded this list." Left out: "Iono was left
-   out. Its price went from $11.00 to $13.10 since you loaded this list. Tick it again to send
-   it." Gone: "Roaring Moon ex was left out. It has no suggested price now."
+   out. Its price went from $11.00 to $13.10 since you loaded this list. Check it in your list
+   and send again." Gone: "Roaring Moon ex was left out. It has no suggested price now."
 4. **The list is one `ul.send-names`, in two groups.** Left out comes first, because it asks for
    a tick. A heading row in the `.send-more` style carries the kit's `Count`: "Left out,
-   unticked in your list" and "Went at the new price". Each row reads "name, $old to $new". A
+   check them in your list" and "Went at the new price". Each row reads "name, $old to $new". A
    gone row reads "$5.45, no suggested price now". The price is right-aligned, so thirty rows
    scan down one edge.
 5. **Every dollar is the kit's `Money`** (`.bn-money`, D221, money stays mono), in the sentence
@@ -39,9 +39,10 @@ prints the measured push on "Prices as of" for each state.
    used: the press rebuilds after that time, so a sentence tied to it could be false.
 7. **"Left out", not "not sent".** "Left out" is this card's word (`PricesLeft`). `NotSent`
    says "Not sent" for a card gone from the store. One phrase keeps one meaning.
-8. **"Unticked in your list".** The spec says a kept tick holds only within the drift, so a
-   left-out row reads unticked in its group. The heading says where to act. A gone row has no
-   suggestion to tick, and the heading still holds: the row is in the list, unticked.
+8. **"Check them in your list".** The spec says a kept tick holds only within the drift. A
+   Needs-you row comes back unticked and a Suggested row comes back ticked at its new price, so
+   the heading names where to look and not a tick state. A gone row has no suggestion to tick,
+   and the heading still holds: the row is in the list.
 9. **The fold's press is 40px at every pointer.** The brief asks for 40px targets. Today's
    `MovesList` press is 34px at a fine pointer. The line takes back that 6px from its own padding
    (`--bn-1-5`), so it stands as high as the receipt above it. Loss: two local rules on

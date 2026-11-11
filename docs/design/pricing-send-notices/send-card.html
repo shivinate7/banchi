@@ -4737,7 +4737,7 @@ function sentence(moved, left) {
     const r = left[0]
     return r.now === null
       ? `<span data-typed>${r.name}</span> was left out. It has no suggested price now.`
-      : `<span data-typed>${r.name}</span> was left out. Its price went from ${money(r.price)} to ${money(r.now)} ${SINCE}. Tick it again to send it.`
+      : `<span data-typed>${r.name}</span> was left out. Its price went from ${money(r.price)} to ${money(r.now)} ${SINCE}. Check it in your list and send again.`
   }
   const parts = []
   if (m) parts.push(`${count(m, 'card', 'cards')} went at a new price`)
@@ -4747,7 +4747,7 @@ function sentence(moved, left) {
 function rows(moved, left) {
   const out = []
   if (left.length) {
-    out.push(`<li class="send-more">Left out, unticked in your list ${badge(left.length)}</li>`)
+    out.push(`<li class="send-more">Left out, check them in your list ${badge(left.length)}</li>`)
     for (const r of left) out.push(`<li><span class="send-name" data-typed>${r.name}</span><span class="send-figure">${r.now === null ? `${money(r.price)}, no suggested price now` : `${money(r.price)} to ${money(r.now)}`}</span></li>`)
   }
   if (moved.length) {
