@@ -7,9 +7,12 @@ the order `CHECK_ORDER` runs them.
 
 Protects: Every live listing reaches the pricing worklist with its asking price, its last sale
 and its suggestion; the market on the day a listing went live comes from the price archive; a
-kept suggestion rides a send as a price-only row, posted as "suggested", even with no run named;
-the server rebuilds each kept suggestion and refuses a past-cap one unless the send marks that row
-ticked, or one whose price it does not confirm; the product history lists the SKU's asking-price postings, oldest first.
+kept suggestion rides a send as a price-only row, posted as "suggested", even with no run named or
+in a game no run of the send files; the server rebuilds each kept suggestion, sends one that drifted
+a little at its rebuilt price, leaves out one that moved further (a press left with nothing refuses
+`suggestion_changed`), and refuses a past-cap one unless the send marks that row ticked; the product
+history lists the SKU's asking-price postings, oldest first; the newest live export is read again when a
+fetch rewrites its file under the same name.
 Governs: D100, D107 (reopened for suggestions), D227, D243, D273
 
 THE WIRE THIS GROUP PINS (the one-list-wire lane's brief names the behaviour, not the names):
@@ -28,8 +31,11 @@ THE WIRE THIS GROUP PINS (the one-list-wire lane's brief names the behaviour, no
     "suggested". A row without it posts as "emit-price", as before.
   - The server rebuilds every named suggestion with the worklist's own code. A rebuilt suggestion
     past the cap refuses `suggestion_past_cap`, unless the send marks that row `"ticked": true` (a boolean on the
-    row; a bigger move shows apart and needs a tick). A named price the server does not rebuild to
-    the same price refuses `suggestion_changed`.
+    row; a bigger move shows apart and needs a tick). The cap is measured on the price the press sends,
+    after a drift re-price. A named price the server rebuilds within
+    `sendguard.drift_allowed` is sent at the rebuilt price and named under `moved`. One it does not
+    rebuild that close, or that has no rebuilt suggestion, is left out and named under `left_out`;
+    a press left with nothing else to send refuses `suggestion_changed`.
   - `do_product_history(sku)["asking_postings"]`: every posting for the SKU, oldest first.
   - A `prices` list names each SKU once. A repeated SKU refuses `prices_invalid` at the route
     (`send_routes._named_prices`) and raises `cmd_emit.PriceRefused` for the emit file, before
@@ -48,6 +54,8 @@ THE WIRE THIS GROUP PINS (the one-list-wire lane's brief names the behaviour, no
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import time
 from datetime import datetime, timedelta, timezone
@@ -67,7 +75,7 @@ from harness.tests.t7.common import (
 from harness.tests.t7.price_history import _network_recorder
 from harness.tests.t7.read_budget import TABLE_STAMP, _write_survey
 from harness.tests.t7.send_markdown import _case, _live_export_priced, _seed_sync, send_portal
-from cli import cmd_emit
+from cli import cmd_emit, runs
 from pipeline import corpus, pricing, readings, tcgcsv, worklist
 from server import pipeline_routes, send_routes
 from store import clock, db, files, master
@@ -172,12 +180,18 @@ def _pinned(row: Optional[dict]) -> Optional[dict]:
     return {key: row.get(key, "<absent>") for key in keys}
 
 
-def _outcome(fn):
-    """`("answered", result)` or `("refused", code)`: a refusal names its code and never raises."""
+def _outcome(fn, *, any_error: bool = False):
+    """`("answered", result)` or `("refused", code)`: a refusal names its code and never raises.
+    `any_error` also names the refusal's text, and an error the route does not wrap by its class and
+    text, so the case reads the refusal's cause and never a crash."""
     try:
         return "answered", fn()
     except pipeline_routes.PipelineRefusal as caught:
-        return "refused", caught.code
+        return "refused", f"{caught.code}: {caught}" if any_error else caught.code
+    except Exception as caught:
+        if not any_error:
+            raise
+        return "refused", f"{type(caught).__name__}: {caught}"
 
 
 def _rows(portal) -> dict:
@@ -610,10 +624,11 @@ def check_send_suggestion_changed(checks: Checks) -> None:
                  names 4.00. The server rebuilds nothing to confirm, so the named price is refused
                  suggestion_changed, not suggestion_past_cap.
 
-    Each refusal reaches no row at TCGplayer and writes no posting.
+    Each refusal reaches no row at TCGplayer and writes no posting. Both are presses left with nothing
+    else to send; a drift inside `sendguard.drift_allowed` is sent, not refused (`check_send_suggestion_drift`).
     """
     checks.note("")
-    checks.note("SEND, CHANGED — a named suggestion the server does not rebuild to the same price is refused")
+    checks.note("SEND, CHANGED — a named suggestion the server does not rebuild, with nothing else to send, is refused")
     with run_folder() as run, isolated_home(run), send_portal() as portal:
         _seed_sync()
         with _case(checks, "send: named price differs from the server's suggestion"):
@@ -643,6 +658,253 @@ def check_send_suggestion_changed(checks: Checks) -> None:
                          "not suggestion_past_cap")
             checks.equal(_rows(portal), {}, "and TCGplayer receives no row")
             checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
+
+
+RIFTBOUND_PRODUCT_LINE = "Riftbound League of Legends Trading Card Game"
+
+
+def _live_product_line(run, portal, sku: str, product_line: str) -> None:
+    """Rewrite one live row's `Product Line` cell in the export the portal serves, so that row is in a
+    game no run of the send files. The real CSV reader and writer, in the case's own run folder."""
+    path = run / "live.csv"
+    path.write_bytes(portal["live"])
+    source = tcgcsv.read_export(path)
+    rows = [{**row, "Product Line": product_line} if tcgcsv.sku_cell(row) == sku else row for row in source.rows]
+    tcgcsv.write_csv(path, source.header, rows)
+    portal["live"] = path.read_bytes()
+
+
+def check_send_suggestion_drift(checks: Checks) -> None:
+    """A kept suggestion's price may drift between the draw and the press by the larger of 5% of the
+    drawn price and 5 cents (`sendguard.drift_allowed`). Inside that, the press sends the FRESH price
+    and names the row under `moved`. Past it, the row is left out and named under `left_out`, and the
+    rest of the press still goes.
+    """
+    checks.note("")
+    checks.note("SEND, DRIFT — cents of drift go at the fresh price; a bigger change leaves only that SKU out")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: Dunsparce drawn at 2.08, rebuilt 2.06"):
+            _one_copy_live(checks, portal)
+            _seed_send_suggestions()
+            outcome = _outcome(lambda: send_routes.do_send({
+                "runs": [],
+                "confirm": True,
+                "prices": [{"sku": DUNSPARCE_SKU, "price": "2.08", "was": "2.50", "source": "suggested"}],
+            }))
+            checks.ok(outcome[0] == "answered", "two cents of drift is answered", f"refused: {outcome[1]}")
+            if outcome[0] == "answered":
+                checks.equal(_rows(portal), {DUNSPARCE_SKU: ("0", "2.06")}, "the row goes at the fresh 2.06")
+                checks.equal([(m["sku"], m["was"], m["price"]) for m in outcome[1].get("moved") or []],
+                             [(DUNSPARCE_SKU, "2.08", "2.06")], "named under `moved`")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: one suggestion changed past the drift, one holds"):
+            _one_copy_live(checks, portal)
+            _seed_send_suggestions()
+            outcome = _outcome(lambda: send_routes.do_send({
+                "runs": [],
+                "confirm": True,
+                "prices": [
+                    {"sku": DUNSPARCE_SKU, "price": "2.06", "was": "2.50", "source": "suggested"},
+                    {"sku": ARTICUNO_SKU, "price": "26.00", "was": "22.03", "source": "suggested"},
+                ],
+            }))
+            checks.ok(outcome[0] == "answered", "the press is answered, with Dunsparce still in it",
+                      f"refused: {outcome[1]}")
+            if outcome[0] == "answered":
+                checks.equal(_rows(portal), {DUNSPARCE_SKU: ("0", "2.06")}, "only Dunsparce goes")
+                checks.equal([m["sku"] for m in outcome[1].get("left_out") or []], [ARTICUNO_SKU],
+                             "Articuno is named under `left_out`")
+                checks.equal([p["source"] for p in _postings(ARTICUNO_SKU)], ["emit"],
+                             "no suggested posting for Articuno")
+
+
+def check_send_suggestion_other_game(checks: Checks) -> None:
+    """A kept suggestion whose live row is in a game no run of the send files still rides the send as
+    a price-only row, filed under its own game (`cmd_emit._suggested_rows`). The press is answered; it
+    is not refused "not in a game this send files"."""
+    checks.note("")
+    checks.note("SEND, OTHER GAME — a kept suggestion in a game the run does not file still goes")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send with a run: the suggestion's live row is a Riftbound row"):
+            run_dir = _one_copy_live(checks, portal)
+            _seed_send_suggestions()
+            _live_product_line(run, portal, DUNSPARCE_SKU, RIFTBOUND_PRODUCT_LINE)
+            outcome = _outcome(lambda: send_routes.do_send({
+                "runs": [run_dir.name],
+                "confirm": True,
+                "prices": [{"sku": DUNSPARCE_SKU, "price": "2.06", "was": "2.50", "source": "suggested"}],
+            }), any_error=True)
+            checks.ok(outcome[0] == "answered", "the send is answered, not refused", f"refused: {outcome[1]}")
+            if outcome[0] == "answered":
+                checks.equal(_rows(portal).get(DUNSPARCE_SKU), ("0", "2.06"), "goes as a price-only row")
+
+
+def check_download_split_other_game(checks: Checks) -> None:
+    """A download with `split_threshold` files a kept suggestion in a game no run of the send files
+    under that game's own listed file (`runs.import_listed_name`). Dunsparce is in it once, at Add to
+    Quantity 0 and price 2.06."""
+    checks.note("")
+    checks.note("DOWNLOAD, SPLIT, OTHER GAME — a download files a kept suggestion in its own game's listed file")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "download --split-threshold: Riftbound suggestion"):
+            run_dir = _one_copy_live(checks, portal)
+            _seed_send_suggestions()
+            _live_product_line(run, portal, DUNSPARCE_SKU, RIFTBOUND_PRODUCT_LINE)
+            outcome = _outcome(lambda: send_routes.do_send({
+                "runs": [run_dir.name],
+                "download": True,
+                "split_threshold": True,
+                "prices": [{"sku": DUNSPARCE_SKU, "price": "2.06", "was": "2.50", "source": "suggested"}],
+            }), any_error=True)
+            checks.ok(outcome[0] == "answered", "the download is answered, not refused", f"refused: {outcome[1]}")
+            if outcome[0] == "answered":
+                send = outcome[1]["send"]
+                listed = runs.import_listed_name("riftbound")
+                checks.ok(listed in send["files"], "the download writes the Riftbound listed file",
+                          f"files written: {send['files']!r}")
+                if listed in send["files"]:
+                    body = send_routes.do_send_file(send["stamp"], listed).decode("utf-8")
+                    held = [(row["Add to Quantity"], row["TCG Marketplace Price"])
+                            for row in csv.DictReader(io.StringIO(body)) if tcgcsv.sku_cell(row) == DUNSPARCE_SKU]
+                    checks.equal(held, [("0", "2.06")],
+                                 "and that file holds Dunsparce once: Add to Quantity 0, at 2.06")
+
+
+def check_send_past_cap_on_sent_price(checks: Checks) -> None:
+    """The cap is measured on the price the press SENDS, after a drift re-price. Dunsparce is live at
+    10.00 and drawn at 7.60; the server's fresh suggestion is 7.45. The drift (0.15) is inside
+    `sendguard.drift_allowed`, so the press would send 7.45. The drawn 7.60 is 24% from 10.00, inside
+    the 25% cap; the sent 7.45 is 25.5%, past it. The press is refused `suggestion_past_cap`, naming the
+    7.45, and no row is written.
+    """
+    checks.note("")
+    checks.note("SEND, PAST THE CAP AFTER DRIFT — the cap is measured on the price the press sends")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: drawn inside the cap, the sent price past it"):
+            _one_copy_live(checks, portal, prices={DUNSPARCE_SKU: "10.00"})
+            _set_listing(DUNSPARCE_SKU, first_seen_live=_noon(_day(60)))
+            _market_reading(DUNSPARCE_SKU, "7.45", "7.90")
+            try:
+                send_routes.do_send({
+                    "runs": [],
+                    "confirm": True,
+                    "prices": [{"sku": DUNSPARCE_SKU, "price": "7.60", "was": "10.00", "source": "suggested"}],
+                })
+                outcome = ("answered", [])
+            except pipeline_routes.PipelineRefusal as caught:
+                outcome = (caught.code, [row["price"] for row in (caught.data or {}).get("refused") or []])
+            checks.equal(outcome[0], "suggestion_past_cap", "the press is refused suggestion_past_cap")
+            checks.equal(outcome[1], ["7.45"],
+                         "and the refusal measures the 7.45 the press would send, not the drawn 7.60")
+            checks.equal(_rows(portal), {}, "and TCGplayer receives no row")
+            checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
+
+
+def _live_columns(run, portal, columns) -> None:
+    """Rewrite the live export the portal serves with these columns: a column the file header lacks is
+    dropped from each row, a column it does not have is added empty. The real CSV reader and writer, in
+    the case's own run folder."""
+    path = run / "live.csv"
+    path.write_bytes(portal["live"])
+    source = tcgcsv.read_export(path)
+    rows = [{column: row.get(column, "") for column in columns} for row in source.rows]
+    tcgcsv.write_csv(path, columns, rows)
+    portal["live"] = path.read_bytes()
+
+
+def check_send_held_drift_names_held(checks: Checks) -> None:
+    """A kept suggestion that drifted within tolerance on a SKU that is live and held is named under
+    `held`, never `moved`: its suggested price is not in the file. A second, non-held SKU drifted in the
+    same press still goes at its fresh price and is named under `moved`.
+    """
+    checks.note("")
+    checks.note("SEND, HELD AND DRIFTED — a held suggestion is named under `held`, not `moved`")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: a held drifted suggestion beside a drifted one"):
+            run_dir = _one_copy_live(checks, portal)
+            _seed_send_suggestions()
+            _typed(DUNSPARCE_SKU, {"withheld": "keeping"})
+            try:
+                outcome = ("answered", send_routes.do_send({
+                    "runs": [run_dir.name],
+                    "confirm": True,
+                    "prices": [
+                        {"sku": DUNSPARCE_SKU, "price": "2.08", "was": "2.50", "source": "suggested"},
+                        {"sku": ARTICUNO_SKU, "price": "23.98", "was": "22.03", "source": "suggested"},
+                    ],
+                }))
+            except pipeline_routes.PipelineRefusal as caught:
+                outcome = ("refused", f"{caught.code}: {caught}")
+            checks.ok(outcome[0] == "answered", "the press is answered, not refused", f"refused: {outcome[1]}")
+            if outcome[0] == "answered":
+                answer = outcome[1]
+                checks.ok(str(DUNSPARCE_SKU) in json.dumps(answer.get("held"), sort_keys=True),
+                          "the answer names Dunsparce under its top-level `held` key", repr(answer.get("held")))
+                checks.equal([m["sku"] for m in answer.get("moved") or []], [ARTICUNO_SKU],
+                             "`moved` names only Articuno, the non-held drift")
+                checks.equal(_rows(portal).get(ARTICUNO_SKU), ("0", "24.00"),
+                             "and Articuno goes at its fresh 24.00")
+
+
+def check_emit_suggestion_columns_differ(checks: Checks) -> None:
+    """A kept suggestion's live row must carry the columns of the file it is written with
+    (`cmd_emit._suggested_rows`). The row is in Riftbound, a game no run of the send files, so it is
+    written with the sent game's header: a live export with Photo URL dropped and Extra Note added
+    refuses the press, naming Dunsparce and both columns; nothing is written. The same columns in another
+    order files the row. Single run only: a press naming one run takes the single-run emit path.
+    """
+    checks.note("")
+    checks.note("EMIT, COLUMNS — a kept suggestion's live row must carry the file's columns")
+    odd = [column for column in tcgcsv.CANONICAL_HEADER if column != "Photo URL"] + ["Extra Note"]
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "emit: live columns differ from the file header"):
+            run_dir = _one_copy_live(checks, portal)
+            _seed_send_suggestions()
+            _live_product_line(run, portal, DUNSPARCE_SKU, RIFTBOUND_PRODUCT_LINE)
+            _live_columns(run, portal, odd)
+            try:
+                outcome = ("answered", send_routes.do_send({
+                    "runs": [run_dir.name],
+                    "confirm": True,
+                    "prices": [{"sku": DUNSPARCE_SKU, "price": "2.06", "was": "2.50", "source": "suggested"}],
+                }))
+            except pipeline_routes.PipelineRefusal as caught:
+                outcome = ("refused", f"{caught.code}: {caught}")
+            checks.ok(outcome[0] == "refused", "the press is refused, not filed", f"answered: {outcome[1]!r:.200}")
+            if outcome[0] == "refused":
+                checks.ok(f"Dunsparce ({DUNSPARCE_SKU})" in outcome[1], "the refusal names Dunsparce by SKU",
+                          outcome[1])
+                checks.ok("Extra Note" in outcome[1] and "Photo URL" in outcome[1],
+                          "the refusal names both columns that differ", outcome[1])
+            checks.equal(_rows(portal), {}, "and TCGplayer receives no row")
+            checks.equal(_postings(DUNSPARCE_SKU), [], "and no posting is written")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "emit: the same columns in another order files the row"):
+            run_dir = _one_copy_live(checks, portal)
+            _seed_send_suggestions()
+            _live_product_line(run, portal, DUNSPARCE_SKU, RIFTBOUND_PRODUCT_LINE)
+            _live_columns(run, portal, list(reversed(tcgcsv.CANONICAL_HEADER)))
+            try:
+                outcome = ("answered", send_routes.do_send({
+                    "runs": [run_dir.name],
+                    "confirm": True,
+                    "prices": [{"sku": DUNSPARCE_SKU, "price": "2.06", "was": "2.50", "source": "suggested"}],
+                }))
+            except pipeline_routes.PipelineRefusal as caught:
+                outcome = ("refused", f"{caught.code}: {caught}")
+            checks.ok(outcome[0] == "answered", "the reordered columns are answered, not refused",
+                      f"refused: {outcome[1]}")
+            if outcome[0] == "answered":
+                checks.equal(_rows(portal).get(DUNSPARCE_SKU), ("0", "2.06"),
+                             "and the row files at 2.06, Add to Quantity 0")
 
 
 def check_send_empty_runs_without_prices_refused(checks: Checks) -> None:
@@ -1235,6 +1497,45 @@ def check_send_typed_price_with_no_new_copy(checks: Checks) -> None:
         checks.equal((rows, postings), ({}, [("22.03", None, "emit")]), "and nothing reaches TCGplayer or the postings")
 
 
+def check_live_listing_rewritten_under_one_name(checks: Checks) -> None:
+    """`_newest_live_listing` reads the newest live export again when a fetch rewrites its file under the same name.
+
+    `do_live_export` names its file to the second, so a second fetch in the same second rewrites a name the
+    read already holds. The read keys its cache on the file's content, so the read after the rewrite lists the
+    rewritten rows. A file removed between reads reads as no listing.
+    """
+    checks.note("")
+    checks.note("LIVE LISTING, REWRITTEN UNDER ITS NAME — the read follows the file's content, not its name")
+    stamp = "20260301-000000"
+    with run_folder() as run, isolated_home(run):
+        folder = files.inventory_dir() / pipeline_routes.LIVE_DIR
+        glob = f"{pipeline_routes.LIVE_PREFIX}*.csv"
+        path = folder / f"{pipeline_routes.LIVE_PREFIX}{stamp}.csv"
+        first_body = _live_export_priced({ARTICUNO_SKU: 1}, {ARTICUNO_SKU: "2.50"})
+        _write_live(stamp, first_body)
+        _, first = pipeline_routes._newest_live_listing()
+        checks.equal(first.get(ARTICUNO_SKU), ("2.50", 1), "precondition: the first read lists Articuno at 2.50 with one copy")
+
+        rewritten_body = _live_export_priced({ARTICUNO_SKU: 4}, {ARTICUNO_SKU: "12.75"})
+        checks.ok(len(rewritten_body) != len(first_body), "precondition: the rewrite is a different size on disk")
+        _write_live(stamp, rewritten_body)
+        checks.equal(sorted(folder.glob(glob)), [path], "scope: the folder holds one export, under the same name")
+        checks.equal(path.read_bytes(), rewritten_body, "scope: that export holds the rewritten bytes")
+        _, second = pipeline_routes._newest_live_listing()
+        checks.equal(
+            second.get(ARTICUNO_SKU), ("12.75", 4),
+            "a rewrite under the same name is read again: Articuno at 12.75 with four copies, not the first read's rows",
+        )
+
+        for old in folder.glob(glob):
+            old.unlink()
+        checks.equal(sorted(folder.glob(glob)), [], "scope: no export is on disk once the file is removed")
+        checks.equal(
+            pipeline_routes._newest_live_listing(), (None, {}),
+            "an export removed between reads reads as no listing",
+        )
+
+
 CHECKS = (
     check_worklist_carries_live_listings,
     check_worklist_without_runs_reads_newest_export,
@@ -1244,6 +1545,12 @@ CHECKS = (
     check_send_refuses_suggestion_past_cap,
     check_send_past_cap_needs_a_tick,
     check_send_suggestion_changed,
+    check_send_suggestion_drift,
+    check_send_suggestion_other_game,
+    check_download_split_other_game,
+    check_send_past_cap_on_sent_price,
+    check_send_held_drift_names_held,
+    check_emit_suggestion_columns_differ,
     check_send_empty_runs_without_prices_refused,
     check_product_history_asking_postings,
     check_send_refuses_repeated_sku_price,
@@ -1260,4 +1567,17 @@ CHECKS = (
     check_markdown_table_carries_group,
     check_live_no_market_needs_you,
     check_send_typed_price_with_no_new_copy,
+    check_live_listing_rewritten_under_one_name,
 )
+
+
+if __name__ == "__main__":
+    # `PYTHONPATH=<repo root> python3 harness/tests/t7/one_list_wire.py`: this group's checks alone, under
+    # the one runner's rules (`hermetic`, refused network). The exit code is the verdict.
+    import sys
+
+    from harness.tests import t7_store_and_seams
+
+    result = t7_store_and_seams.run(order=lambda _: list(CHECKS))
+    print(result.detail)
+    sys.exit(0 if result.passed else 1)

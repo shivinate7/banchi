@@ -39,6 +39,12 @@ was typed. Old live listings drift from market and nothing says so. The owner ca
   is the orchestrator's pick, reversible, not an owner ruling.
 - **Send** is one press. It sends new copies, kept suggestions and typed prices together.
   D273 (one press sends listings live) still holds.
+- **A kept suggestion drifts a few cents between the draw and the press** (TCGplayer's market moved 45 of
+  1409 rows in 16 minutes). The press rebuilds each one. Within the larger of 5% or $0.05 of the drawn price
+  (`sendguard.SUGGESTION_DRIFT_FRACTION`, `SUGGESTION_DRIFT_DOLLARS`) it goes at the fresh price and the answer
+  names it under `moved`. A suggestion that changed further, or is gone, stays out and the answer names it under
+  `left_out`; the rest still go. A press left with nothing else refuses `suggestion_changed`. A kept suggestion
+  in a game no run of the send files goes as a price-only row of its own game.
 - A suggestion may raise a price, up to the cap. The owner reopened D107 (a typed price goes
   either direction, and only the rule never proposes a raise) for it: section 5, step 4.
   D100 (never delete to lower a price) stands.
