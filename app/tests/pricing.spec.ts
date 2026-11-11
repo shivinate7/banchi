@@ -7877,6 +7877,53 @@ test('one list: kept ticks: a Needs You suggestion the server reads ticked draws
   })
 })
 
+/* A CLEARED TICK DRAWS ITS GROUP'S START. The server's read still says ticked on a Needs You row the owner types over and then clears: the drop the
+ * clear posts is the later word, so the row draws its group's start (unticked here) and the send does not carry it ticked. */
+test('one list: kept ticks: clearing a typed price over a Needs You row the server reads ticked draws unticked, and its send carries no ticked true', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, { live: ONE_LIST_LIVE.map((one) => (one.sku === '9000001' ? { ...one, ticked: true } : one)) })
+  await expect(listGroup(page, 'Needs You'), 'precondition: the Needs You group is drawn').toHaveCount(1)
+  const iono = listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' })
+  await expect(iono, 'precondition: the kept tick holds: the Needs You row reads ticked').toBeChecked()
+  /* THE OWNER'S OWN KEYS, as the Suggested clear case above: a typed price commits on Enter, and a cleared one commits the same way. */
+  const field = page.getByRole('textbox', { name: /^Price for Iono/ })
+  await field.focus()
+  await page.keyboard.type('3.50')
+  await page.keyboard.press('Enter')
+  await field.focus()
+  await page.keyboard.type('1')
+  await page.keyboard.press('Backspace')
+  await expect(field, 'the field is cleared').toHaveValue('')
+  await page.keyboard.press('Enter')
+  await expect(listGroup(page, 'Needs You'), 'the Needs You group is still drawn after the clear').toHaveCount(1)
+  await expect(iono, 'the cleared tick draws its group start: the Needs You row reads unticked').not.toBeChecked()
+  await expect(oneListSend(page)).toBeEnabled()
+  await oneListSend(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  const ionoSent = (sentBody(wire, 0).prices ?? []).find((one) => one.sku === '9000001')
+  expect(ionoSent?.ticked, 'the cleared row carries no ticked true in the send').not.toBe(true)
+})
+
+test('one list: kept ticks: clearing a typed price over a Suggested row the server reads unticked draws it ticked, its group start', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, { live: ONE_LIST_LIVE.map((one) => (one.sku === '9000002' ? { ...one, ticked: false } : one)) })
+  await expect(listGroup(page, 'Suggested Changes'), 'precondition: the Suggested group is drawn').toHaveCount(1)
+  const gardevoir = listGroup(page, 'Suggested Changes').getByRole('checkbox', { name: /^Send the new price for Gardevoir/ })
+  await expect(gardevoir, 'precondition: the kept untick holds: the Suggested row reads unticked').not.toBeChecked()
+  /* THE OWNER'S OWN KEYS, as the clear case above: a typed price commits on Enter, and a cleared one commits the same way. */
+  const field = page.getByRole('textbox', { name: /^Price for Gardevoir/ })
+  await field.focus()
+  await page.keyboard.type('3.50')
+  await page.keyboard.press('Enter')
+  await field.focus()
+  await page.keyboard.type('1')
+  await page.keyboard.press('Backspace')
+  await expect(field, 'the field is cleared').toHaveValue('')
+  await page.keyboard.press('Enter')
+  await expect(listGroup(page, 'Suggested Changes'), 'the Suggested group is still drawn after the clear').toHaveCount(1)
+  await expect(gardevoir, 'the cleared tick draws its group start: the Suggested row reads ticked').toBeChecked()
+})
+
 /* THE TICK IS IN A COLUMN OF ITS OWN, headed Send, left of the item (list.html: the first track of the row and of its caption). Drawn after the name, a tick is
  * pushed to a line of its own by a name that fills its column, and even a short name grows by the tick's own height, so a ticked row stands taller than an
  * unticked one. The fixture is four suggestions that differ in one thing: two long names, a short one, and a short one that carries no tick (source Live), whose
