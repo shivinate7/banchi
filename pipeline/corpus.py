@@ -523,7 +523,7 @@ def drop_clear(ident: str) -> None:
 # ------------------------------------------------------------------ the kept ticks
 
 #: The ticks the owner pressed on `#/pricing`, kept beside `prices.json` so they survive a reload
-#: (the owner, 2026-11-10: "ticks should probably just save"). SKU -> `{"price", "on"}`: `price` is
+#: (the owner asked that ticks save, so he never re-ticks). SKU -> `{"price", "on"}`: `price` is
 #: the suggested price the press was made against, `on` is the press, so an untick is kept too.
 #:
 #: A SIDE FILE AND NOT A KEY IN `prices.json`, for the reason the kept clears are one: a tick is a

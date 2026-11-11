@@ -17423,7 +17423,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK, pipeline_routes.do_pricing_restore(self._body())
                 )
             if path == "/pricing/ticks":
-                # THE OWNER'S TICKS ON SUGGESTIONS, KEPT (the owner, 2026-11-10). Free. A side file
+                # THE OWNER'S TICKS ON SUGGESTIONS, KEPT. Free. A side file
                 # beside `prices.json`, so it moves no revision. See `corpus.TICKS_FILENAME`.
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pricing_ticks(self._body())
