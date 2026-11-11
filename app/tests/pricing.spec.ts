@@ -52,6 +52,9 @@ const RUN = '2026-08-30-box7-01'
 
 type Wire = { method: string; path: string; body: unknown }
 
+/** One stubbed answer: `status` 200 keeps it; anything else is a refusal with its `code` and `message`. */
+type TickAnswer = { status: number; code?: string; message?: string }
+
 /** `GET /pipeline/sends` for a store that has sent nothing. */
 const SENDS_NONE = { sends: [], unconfirmed: { copies: 0, stamps: [] }, due: false, check_at: null, now: '2026-09-24T12:00:00+00:00' }
 
@@ -334,6 +337,9 @@ async function open(
     takeOffsOwed?: OwedRow[]
     /** Answers `POST /inventory/<box>/<index>/take-off`, one entry's press. Default: TCGplayer takes that entry's copies. */
     takeOff?: (box: number, index: number) => { status: number; body: unknown }
+    /** Answers `POST /pricing/ticks`, one tick's press. Default: the server keeps it. A refusal names its code and message,
+     *  and may wait on a promise, so a case can look at the row before the server answers. */
+    ticks?: (body: Record<string, unknown>) => TickAnswer | Promise<TickAnswer>
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -581,12 +587,17 @@ async function open(
   await page.route(/\/pricing\/ticks$/, async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>
     wire.push({ method: 'POST', path: '/pricing/ticks', body })
+    const answer: TickAnswer = (await options.ticks?.(body)) ?? { status: 200 }
     const ticks = (body.ticks ?? {}) as Record<string, unknown>
     const drop = (body.drop ?? []) as unknown[]
     await route.fulfill({
-      status: 200,
+      status: answer.status,
       contentType: 'application/json',
-      body: JSON.stringify({ ok: true, kept: Object.keys(ticks).length, dropped: drop.length }),
+      body: JSON.stringify(
+        answer.status === 200
+          ? { ok: true, kept: Object.keys(ticks).length, dropped: drop.length }
+          : { error: { code: answer.code ?? 'refused', message: answer.message ?? 'The server said no.' } },
+      ),
     })
   })
   await page.route(/\/pricing\/restore$/, async (route) => {
@@ -7741,6 +7752,153 @@ test('one list: a new copy with no group on the wire files under Needs You and d
   await oneListSend(page).click()
   await expect.poll(() => sendPosts(wire).length).toBe(1)
   expect(sentBody(wire).quantities?.['plain'] ?? 0, 'none of its copies ride the press').toBe(0)
+})
+
+/* ------------------------------------------------------------------------------------------------
+ * KEPT SUGGESTIONS THE PRESS CHANGED, ON ONE LINE (docs/design/pricing-send-notices/send-card.html;
+ * `SendCard`'s `SuggestionNotes`). Each case presses the one list's own Send against a stubbed
+ * answer that names the moved and left-out cards, so the notice is drawn from the server's words
+ * alone. The line is found by its class prefix: the old two-notice markup carries that prefix too,
+ * so "one line" fails there as a count, with the named cause, and never as a missing element.
+ * ---------------------------------------------------------------------------------------------- */
+type MovedRow = { sku: string; name: string; was: string; price: string }
+type LeftRow = { sku: string; name: string; price: string; now: string | null }
+const SUGGESTION_LINE = '[class*="send-suggestions"]'
+
+/** Presses Send on the one list with `answer` as the server's reply, at `width`. Returns the wire so a case can read what was sent. */
+async function pressSuggestionAnswer(page: Page, answer: { moved: MovedRow[]; left_out: LeftRow[] }, width = 1440): Promise<Wire[]> {
+  await setViewport(page, { width, height: 900 })
+  const wire = await open(page, {
+    live: ONE_LIST_LIVE,
+    send: () => ({ status: 200, body: { send: sendSummary(), console: '', ...answer } }),
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [sendSummary()] } : SENDS_NONE),
+  })
+  await oneListSend(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  return wire
+}
+
+/** Four cards, two each way; one left-out card has no suggested price now. The counts and the fold name read from this. */
+const MANY_SUGGESTIONS = {
+  moved: [
+    { sku: '9000002', name: 'Gardevoir ex', was: '4.01', price: '4.03' },
+    { sku: '9000005', name: 'Pecharunt ex', was: '2.85', price: '2.90' },
+  ],
+  left_out: [
+    { sku: '9000001', name: 'Iono', price: '11.00', now: '13.10' },
+    { sku: '9000004', name: 'Roaring Moon ex', price: '5.45', now: null },
+  ],
+}
+
+test('send suggestions: one moved card is one blue line that names both prices, with no fold', async ({ page }) => {
+  await pressSuggestionAnswer(page, { moved: [{ sku: '9000002', name: 'Gardevoir ex', was: '4.01', price: '4.03' }], left_out: [] })
+  const line = page.locator(SUGGESTION_LINE)
+  await expect(line, 'one line for the kept suggestion the press changed').toHaveCount(1)
+  await expect(line.locator('.bn-notice-title'), 'the sentence names the card and both prices').toHaveText(
+    'Gardevoir ex went at $4.03, not $4.01. Its price moved since you loaded this list.',
+  )
+  await expect(line, 'every card went, so the line is blue, not amber').not.toHaveClass(/bn-notice-(warn|danger|ok)/)
+  await expect(line.getByRole('button'), 'one card draws no fold').toHaveCount(0)
+})
+
+test('send suggestions: one left-out card names both prices and asks for a send again, in amber', async ({ page }) => {
+  await pressSuggestionAnswer(page, { moved: [], left_out: [{ sku: '9000001', name: 'Iono', price: '11.00', now: '13.10' }] })
+  const line = page.locator(SUGGESTION_LINE)
+  await expect(line, 'one line for the kept suggestion the press changed').toHaveCount(1)
+  await expect(line.locator('.bn-notice-title'), 'the sentence names the card, both prices and the next step').toHaveText(
+    'Iono was left out. Its price went from $11.00 to $13.10 since you loaded this list. Check it in your list and send again.',
+  )
+  await expect(line, 'a card left out makes the line amber').toHaveClass(/bn-notice-warn/)
+})
+
+test('send suggestions: a card with no suggested price now is left out in one sentence', async ({ page }) => {
+  await pressSuggestionAnswer(page, { moved: [], left_out: [{ sku: '9000004', name: 'Roaring Moon ex', price: '5.45', now: null }] })
+  const line = page.locator(SUGGESTION_LINE)
+  await expect(line, 'one line for the kept suggestion the press changed').toHaveCount(1)
+  await expect(line.locator('.bn-notice-title'), 'the sentence says the card has no suggested price').toHaveText(
+    'Roaring Moon ex was left out. It has no suggested price now.',
+  )
+})
+
+test('send suggestions: many cards are one sentence that counts each kind, in amber', async ({ page }) => {
+  await pressSuggestionAnswer(page, MANY_SUGGESTIONS)
+  const line = page.locator(SUGGESTION_LINE)
+  await expect(line, 'one line for all the kept suggestions the press changed').toHaveCount(1)
+  await expect(line.locator('.bn-notice-title'), 'the sentence counts each kind and says why').toHaveText(
+    '2 cards went at a new price and 2 were left out. Their prices changed since you loaded this list.',
+  )
+  await expect(line, 'a card left out makes the line amber').toHaveClass(/bn-notice-warn/)
+})
+
+for (const width of [1440, 820]) {
+  test(`send suggestions: the fold press names all four cards and is 40px or more tall (${width})`, async ({ page }) => {
+    await pressSuggestionAnswer(page, MANY_SUGGESTIONS, width)
+    const fold = page.locator(SUGGESTION_LINE).getByRole('button', { name: 'Show 4 Cards' })
+    await expect(fold, 'the fold names all four cards').toBeVisible()
+    const box = await fold.boundingBox()
+    expect(box, 'the fold press is drawn').not.toBeNull()
+    expect(box!.height, 'a thumb press is 40px or more').toBeGreaterThanOrEqual(40)
+  })
+}
+
+test('send suggestions: the list leads with the left-out group under its heading, then the moved group', async ({ page }) => {
+  await pressSuggestionAnswer(page, MANY_SUGGESTIONS)
+  const items = page.locator('ul.send-names > li')
+  await expect(items, 'two headings and their four rows').toHaveCount(6)
+  const rows = await items.allInnerTexts()
+  expect(rows[0], 'the left-out heading counts its two cards').toMatch(/^Left out, check them in your list\s*2$/)
+  expect(rows[1], 'the first left-out row').toMatch(/^Iono/)
+  expect(rows[2], 'the second left-out row').toMatch(/^Roaring Moon ex/)
+  expect(rows[3], 'the moved heading counts its two cards').toMatch(/^Went at the new price\s*2$/)
+  expect(rows[4], 'the first moved row').toMatch(/^Gardevoir ex/)
+  expect(rows[5], 'the second moved row').toMatch(/^Pecharunt ex/)
+})
+
+test('send suggestions: every dollar figure in the list is drawn in the Money element', async ({ page }) => {
+  await pressSuggestionAnswer(page, MANY_SUGGESTIONS)
+  const list = page.locator('ul.send-names')
+  await expect(list, 'the one list of cards is drawn').toHaveCount(1)
+  // Two prices for Iono, one for Roaring Moon ex (no suggested price now), two for each moved card.
+  await expect(list.locator('.bn-money'), 'each price is a Money element').toHaveCount(7)
+  const bare = await list.evaluate((el) => {
+    const leaks: string[] = []
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const text = node.textContent ?? ''
+      if (/\$\d/.test(text) && node.parentElement?.closest('.bn-money') == null) leaks.push(text)
+    }
+    return leaks
+  })
+  expect(bare, 'no dollar figure is drawn outside .bn-money').toEqual([])
+})
+
+test('send suggestions: an answer that moved and left out nothing draws no line', async ({ page }) => {
+  await pressSuggestionAnswer(page, { moved: [], left_out: [] })
+  await expect(page.locator('.send-standing'), 'the receipt of the press is drawn').toBeVisible()
+  await expect(page.locator(SUGGESTION_LINE), 'no line when no suggestion changed').toHaveCount(0)
+})
+
+test('send suggestions: a tick the server does not keep is unticked again, with Tick not kept', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  let refuse!: () => void
+  const held = new Promise<void>((resolve) => {
+    refuse = resolve
+  })
+  const wire = await open(page, {
+    live: ONE_LIST_LIVE,
+    ticks: async () => {
+      await held
+      return { status: 409, code: 'refused', message: 'Banchi did not keep that tick.' }
+    },
+  })
+  const iono = listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' })
+  await iono.check()
+  await expect.poll(() => wire.some((call) => call.method === 'POST' && call.path === '/pricing/ticks')).toBe(true)
+  await expect(iono, 'the tick shows at once, before the server answers').toBeChecked()
+  refuse()
+  /* A PREFIX, not the whole title: the open list names the card in the toast ("Tick not kept for <card>"). */
+  await expect(page.getByText(/^Tick not kept/), 'the refusal is named').toBeVisible()
+  await expect(iono, 'the server kept no tick, so the row is unticked again').not.toBeChecked()
 })
 
 /* A PAST-CAP SUGGESTION KEEPS ITS TICK. Iono's move is past the owner's limit, so it sits under Needs You unticked and is not in the body at all. Once the
