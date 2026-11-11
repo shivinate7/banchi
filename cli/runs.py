@@ -56,10 +56,10 @@ IMPORT_SUBTHRESHOLD = "import-subthreshold.csv"
 # all — which `CLAUDE.md`'s route-is-not-a-feature rule would then make a second job.
 #
 # `--split-games` PUTS THE PER-GAME NAMES BACK, and that flag exists because one question here
-# is genuinely unanswered: `import_listed_name` below has said since it was written that nobody
-# has established whether Import to Staged accepts a file spanning two `Product Line`s, and
-# `fixtures/staged-import-accepted.csv` proves it for one line only. The owner asked for one
-# file and said they would test it. This is the one-flag way back if the portal refuses.
+# was open: whether TCGplayer accepts a file spanning two `Product Line`s. A send's upload of one
+# `import.csv` holding Pokemon and Riftbound price-only rows was accepted whole (765 of 765,
+# measured on the owner's store). Rows that add copies across two lines are still unmeasured,
+# and `fixtures/staged-import-accepted.csv` proves one line only. This is the one-flag way back.
 IMPORT_MERGED = "import.csv"
 
 
@@ -71,9 +71,9 @@ def import_merged_name(game: Optional[str] = None) -> str:
 def import_listed_name(game: str) -> str:
     """The listed import file for one game. One import file per game, never mixed.
 
-    Nobody has established that TCGplayer's Import to Staged accepts a file spanning two
-    `Product Line`s, and `fixtures/staged-import-accepted.csv` proves it for one line only
-    — so each game gets its own file, which is correct under either answer. The default
+    A file spanning two `Product Line`s is proven only for price-only rows (see
+    `IMPORT_MERGED`), and `fixtures/staged-import-accepted.csv` proves one line only — so
+    each game gets its own file, which is correct under either answer. The default
     game keeps the un-suffixed name every earlier run wrote: its files stay byte-identical
     and stay found by anything that already knows the name.
     """
