@@ -575,6 +575,20 @@ async function open(
       ),
     })
   })
+  /* THE OWNER'S KEPT TICKS: one POST per press on a suggestion (`ticks` names it), and a drop when a typed
+     price over a suggestion is cleared. Answered as the server does, so the screen's own read is what the
+     case asserts; the wire records each body for the case to name. */
+  await page.route(/\/pricing\/ticks$/, async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>
+    wire.push({ method: 'POST', path: '/pricing/ticks', body })
+    const ticks = (body.ticks ?? {}) as Record<string, unknown>
+    const drop = (body.drop ?? []) as unknown[]
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, kept: Object.keys(ticks).length, dropped: drop.length }),
+    })
+  })
   await page.route(/\/pricing\/restore$/, async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>
     wire.push({ method: 'POST', path: '/pricing/restore', body })
