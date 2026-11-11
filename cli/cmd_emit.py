@@ -967,25 +967,37 @@ def _zero_rows_single(resolved, priced, changes, args, say):
             if sku in wanted and sku in priced[game]:
                 rows["sub" if sku in below else "listed"].append(_price_row(match, priced[game][sku]))
         by_game[game] = rows
-    for row in _suggested_rows(changes, set(by_game)):
-        by_game[row.game]["listed"] += merge.import_rows([row])
+    for row in _suggested_rows(changes):
+        # A GAME NO RUN OF THIS SEND FILES gets a bucket of its own, written with `_orphan_join`'s header.
+        by_game.setdefault(row.game, {"listed": [], "sub": []})["listed"] += merge.import_rows([row])
     return by_game, changes
 
 
-def _suggested_rows(changes, sent_games) -> list:
+def _orphan_join(resolved):
+    """The join whose header and catalog write a price-only file for a game no run of the send
+    holds. TCGplayer's import header is one for every game (`tcgcsv.CANONICAL_HEADER`), and
+    `_merged_targets` still compares headers, so any sent game's join will do."""
+    return next(iter(resolved.joins.values()))
+
+
+def _suggested_rows(changes) -> list:
     """The kept suggestions' price-only rows, shaped as `_Take` is, filed under the game of the
-    live row's Product Line. A game none of this send's runs files under has no header to write
-    under, so it refuses the press by name (`PriceRefused`) and never drops the row.
+    live row's Product Line.
+
+    A GAME NO RUN OF THIS SEND FILES STILL GETS ITS ROWS: the row is the live export's own and
+    the import header is shared, so the callers file it under its own game (`_orphan_join`).
+    A Product Line that is no game Banchi files has no name to file under, so it refuses by
+    name (`PriceRefused`) and never drops the row.
     """
     out = []
     for change in changes:
         if change.row is None:
             continue
         game = games.game_for_product_line(change.row.get("Product Line"))
-        if game not in sent_games:
+        if game is None:
             raise PriceRefused(
-                f"{change.name or change.sku} ({change.sku}) is not in a game this send files, so its "
-                "suggested price has no file to ride in"
+                f"{change.name or change.sku} ({change.sku}) is in a Product Line Banchi does not file "
+                f"({change.row.get('Product Line') or 'blank'}), so its suggested price has no file to ride in"
             )
         out.append(_Take(change.sku, change.name, game, change.price, 0, change.row))
     return out
@@ -1286,6 +1298,10 @@ def _write_merged(resolved, priced, choice, run_dir, args, say, zero=None):
         if args.listed_only and sub:
             say(f"{'sub-threshold':<16} {len(sub)} SKU(s) left for a later emit "
                 "— --listed-only")
+    # A GAME NO RUN HOLDS, price-only rows from the kept suggestions (`_suggested_rows`).
+    for game, extra in (zero or {}).items():
+        if game not in rows_by_game:
+            rows_by_game[game] = (_orphan_join(resolved), list(extra["listed"]) + list(extra["sub"]))
 
     targets = _merged_targets(
         rows_by_game, run_dir, args.split_games, out=lambda name: _out(run_dir, name, args)
@@ -1754,6 +1770,19 @@ def run(args, say) -> int:
                     say,
                     "sub-threshold",
                     extra=zero[game]["sub"],
+                )
+            # A GAME NO RUN HOLDS: its kept suggestions' price-only rows get a listed file of their own.
+            for game in [g for g in zero if g not in {j.game for j in resolved.joins.values()}]:
+                if multi:
+                    say(f"[{game}]")
+                listed_skus += _write(
+                    _orphan_join(resolved),
+                    _out(run_dir, runs.import_listed_name(game), args),
+                    set(),
+                    choice,
+                    say,
+                    "listed",
+                    extra=zero[game]["listed"],
                 )
         else:
             listed_skus, sub_skus = _write_merged(
@@ -2367,9 +2396,7 @@ def _run_merged(args, say) -> int:
     )
     changed = {change.sku for change in changes}
     try:
-        suggested_rows = _suggested_rows(
-            changes, {game for resolved in resolved_by_run.values() for game in resolved.joins}
-        )
+        suggested_rows = _suggested_rows(changes)
     except PriceRefused as refusal:
         say(f"REFUSING to write: {refusal}. Nothing was written.")
         return 1
@@ -2471,6 +2498,9 @@ def _run_merged(args, say) -> int:
     for name in resolved_by_run:
         for game, game_join in resolved_by_run[name].joins.items():
             catalogs[game] = game_join.catalog
+    # A GAME NO RUN HOLDS (a kept suggestion's, `_suggested_rows`) is written with a sent game's header.
+    for game in merge.games_in(rows):
+        catalogs.setdefault(game, next(iter(catalogs.values())))
 
     say("")
     written = []
