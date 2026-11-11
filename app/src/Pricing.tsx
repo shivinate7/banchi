@@ -30,6 +30,7 @@ import {
   sendMarkdown,
   getPricingCorpus,
   getPricingWorklist,
+  keepTicks,
   restoreLastClear,
   restoreClear,
   type KeptClear,
@@ -1157,18 +1158,40 @@ export function Pricing() {
    *  is ever stored for one. */
   const isListed = useCallback((sku: string) => listed.has(sku), [listed])
   const [listedTyped, setListedTyped] = useState<Readonly<Record<string, string>>>({})
-  /** Which suggestions are ticked, where the owner has pressed one. Absent is the group's own start:
-   *  ticked in Suggested changes, unticked in Needs you. A live listing's tick is keyed to the suggested
-   *  price it was given for (`tickKey`), so a new figure (a refresh) starts unticked again. A new copy's
-   *  tick is keyed by its SKU alone. */
+  /** The ticks pressed on a new copy, by SKU, this visit. Absent is unticked. */
   const [ticks, setTicks] = useState<Readonly<Record<string, boolean>>>({})
-  const tickKey = useCallback((sku: string): string => `${sku}@${centsOf(listed.get(sku)?.price ?? '') ?? ''}`, [listed])
+  /** THE TICKS PRESSED ON A LIVE LISTING'S SUGGESTION THIS VISIT, each with the suggested price it was
+   *  pressed against. The server keeps every one (`keepTicks`) and answers which still hold on each row
+   *  (`LiveListing.ticked`, within the send's own drift), so this only bridges the press and the next
+   *  read: it stands while the row's suggestion is the same figure. */
+  const [listedTicks, setListedTicks] = useState<Readonly<Record<string, { on: boolean; price: string }>>>({})
+  /** A live listing's suggestion is ticked by the owner's press, else by the server's kept tick, else by
+   *  its group's own start: ticked in Suggested changes, unticked in Needs you. */
   const tickedOf = useCallback(
     (sku: string): boolean => {
       const one = listed.get(sku)
-      return ticks[tickKey(sku)] ?? (one !== undefined && one.group === 'suggested')
+      const pressed = listedTicks[sku]
+      if (pressed !== undefined && centsOf(pressed.price) === centsOf(one?.price ?? '')) return pressed.on
+      return one?.ticked ?? (one !== undefined && one.group === 'suggested')
     },
-    [listed, ticks, tickKey],
+    [listed, listedTicks],
+  )
+  const listedTypedNow = useRef(listedTyped)
+  useEffect(() => {
+    listedTypedNow.current = listedTyped
+  }, [listedTyped])
+  const pressTick = useCallback(
+    (sku: string, on: boolean) => {
+      const price = listed.get(sku)?.price
+      if (price === null || price === undefined) return
+      setListedTicks((held) => ({ ...held, [sku]: { on, price } }))
+      keepTicks({ [sku]: { price, on } }).catch((err: unknown) => {
+        const trouble = describeFailure(err)
+        if (trouble.code === 'demo_read_only') return
+        toast({ kind: 'refusal', tone: failureTone(trouble), title: 'That tick was not kept', body: trouble.message })
+      })
+    },
+    [listed],
   )
   const doc = useMemo(() => corpusAsDoc(book, run), [book, run])
 
@@ -1284,6 +1307,7 @@ export function Pricing() {
        with the send, and the list reads again, so a sent suggestion stops reading as one. */
     setListedTyped({})
     setTicks({})
+    setListedTicks({})
     reload()
   }, [clearAsked, reload])
 
@@ -1942,6 +1966,15 @@ export function Pricing() {
           else next[sku.sku] = text
           return next
         })
+        /* CLEARING THE PRICE TYPED OVER A SUGGESTION TAKES THE KEPT TICK WITH IT: the row goes back to its group's start. */
+        if (text === '' && listedTypedNow.current[sku.sku] !== undefined) {
+          setListedTicks((held) => {
+            const next = { ...held }
+            delete next[sku.sku]
+            return next
+          })
+          keepTicks({}, [sku.sku]).catch(() => undefined) // a tick left behind is pressed again; it blocks nothing
+        }
       } else {
         write(sku.sku, sku.bucket, text === '' ? undefined : text)
       }
@@ -3424,7 +3457,7 @@ export function Pricing() {
                       return {
                         reason: one.reason,
                         tone: one.group === 'needs_you' ? ('warn' as const) : ('quiet' as const),
-                        tick: ticking ? { on: tickedOf(sku.sku), onChange: (on: boolean) => setTicks((held) => ({ ...held, [tickKey(sku.sku)]: on })) } : null,
+                        tick: ticking ? { on: tickedOf(sku.sku), onChange: (on: boolean) => pressTick(sku.sku, on) } : null,
                       }
                     })()}
                     asking={readView ? (askingOf.get(sku.sku) ?? null) : listed.get(sku.sku) === undefined ? undefined : (listed.get(sku.sku)?.asking ?? null)}

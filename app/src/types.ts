@@ -2896,7 +2896,14 @@ export type LiveListing = {
   price: string | null
   source: 'Rule' | 'Live' | 'Suggested'
   reason: string
+  /** The tick the owner pressed on this suggestion, kept by the server: `true` or `false` while the kept tick
+   *  still holds against today's suggested price, `null` (or absent, on a bundle that predates it) when none
+   *  does and the group's own start applies. */
+  ticked?: boolean | null
 }
+
+/** What `POST /pricing/ticks` keeps, per SKU: the suggested price the press was made against, and the press. */
+export type KeptTick = { price: string; on: boolean }
 
 /** WHICH DRAWER THIS RUN'S CARDS TURNED OUT TO BE IN — derived from the cards, never from the
  *  path, and `null` on the run where they are in more than one.
