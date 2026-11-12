@@ -25,9 +25,12 @@ from server import capture_server, order_transport, shipping_routes
 from store.session import Store
 from harness.tests.t7.common import (
     REPO_ROOT,
+    QuietHandler,
+    _spawn_server,
     answers,
     capture_payload,
     isolated_home,
+    request,
 )
 
 
@@ -447,10 +450,10 @@ def check_shipping_routes(checks: Checks) -> None:
 
     FOUR ABSENCES, AND EACH ONE IS A REAL COST IF IT STOPS BEING TRUE:
 
-      no PII on the list wire   the union of every row's keys is asserted as a set, and the
-                                fixture's own first buyer name and street are asserted absent
-                                from the whole serialized answer. A later field is then
-                                argued for here rather than slipped in.
+      no street on the list     the union of every row's keys is asserted as a set. The ship-to
+      wire                      name is present in the serialized answer and the street beside
+                                it is absent. A later field is then argued for here rather
+                                than slipped in.
       the abstention is not in  none of the 39 unjudged order ids appears in the rendered
       the file                  import. Being swept into the parcel lane to be safe is a
                                 postage charge the operator did not choose.
@@ -471,7 +474,8 @@ def check_shipping_routes(checks: Checks) -> None:
     THE TRANSPORT HALF RUNS WITH NO SOCKET AT ALL (T3, D69). `server/order_transport.py`'s
     authenticated success path has never run and this section does not pretend otherwise: what
     is asserted is the part that is decidable without a live session — that the projection
-    drops `buyerName` and `shippingAddress` where it parses them, that the body that goes out
+    keeps `buyerName` and `shippingAddress.recipientName` and drops the rest of
+    `shippingAddress` where it parses them, that the body that goes out
     is a plain JSON document and NOT D65's `model=` form-encoded shape (the first thing a
     reader will try to "fix" it into), that a missing seller key and an expired session are
     two codes and not one (403 on that host is the REQUEST, measured — folding it into "sign
@@ -554,19 +558,26 @@ def check_shipping_routes(checks: Checks) -> None:
         checks.equal(
             keys,
             {"order", "lane", "reason", "certain", "value", "weight_per_item_oz",
-             "item_count", "stamp"},
-            "NO PII ON THE LIST WIRE. The union of every row's key set is exactly these "
-            "eight — an ABSOLUTE set, so a name, a city or a postcode added to the row later "
-            "is argued for HERE rather than slipped in behind a lookup that still passes",
+             "item_count", "stamp", "ship_to"},
+            "THE LIST WIRE CARRIES ONE NAME AND NO STREET. The union of every row's key set is "
+            "exactly these nine — an ABSOLUTE set, so an address field added to the row later "
+            "is argued for HERE rather than slipped in behind a lookup that still passes. "
+            "`ship_to` is the name on the envelope (D193)",
         )
-        cells = list(csv.reader(io.StringIO(fixture)))[1]
+        table = list(csv.reader(io.StringIO(fixture)))
+        cell = dict(zip(table[0], table[1]))
         serialized = json.dumps(answer)
         checks.ok(
-            cells[1] not in serialized and cells[3] not in serialized,
-            "and the fixture's own first buyer name and first street address appear NOWHERE "
-            "in the serialized answer. Asserted against the file's real cells rather than "
-            "against a literal, so the case cannot go stale against a re-exported fixture",
-            f"name {cells[1]!r} / street {cells[3]!r}",
+            f"{cell['FirstName']} {cell['LastName']}" in serialized,
+            "the ship-to name of the fixture's first row is on the list wire — FirstName and "
+            "LastName joined the way `Shipment.ship_to` joins them. Read from the file's header, "
+            "so a re-exported fixture cannot move the column under this case",
+            f"name {cell['FirstName']} {cell['LastName']}",
+        )
+        checks.ok(
+            cell["Address1"] not in serialized,
+            "and the street of that row (`Address1`) appears NOWHERE in the serialized answer",
+            f"street {cell['Address1']!r}",
         )
 
         blob, kind = shipping_routes.do_shipping_file(answer["batch"], "pirateship-import.csv")
@@ -787,7 +798,14 @@ def check_shipping_routes(checks: Checks) -> None:
                 "createdAt": "2026-05-30",
                 "status": "Processing",
                 "buyerName": "Buyer001 Placeholder",
-                "shippingAddress": {"line1": "101 Example St", "city": "Springfield"},
+                "shippingAddress": {
+                    "recipientName": "Recipient Placeholder",
+                    "addressOne": "101 Example St",
+                    "city": "Springfield",
+                    "territory": "WV",
+                    "country": "US",
+                    "postalCode": "17919-0013",
+                },
                 "sellerName": "banchi",
                 "paymentType": "Visa",
                 "transaction": {"total": "88.80"},
@@ -803,16 +821,25 @@ def check_shipping_routes(checks: Checks) -> None:
         )
         checks.equal(
             sorted(projected),
-            ["buyer", "orderDate", "orderNumber", "products", "status"],
-            "THE PROJECTION IS AN ALLOWLIST AND ITS KEY SET IS THE SECURITY BOUNDARY — five "
-            "keys now, asserted whole. `buyer` joined it on the owner's ruling "
-            "(D193); a denylist would return a field TCGplayer adds "
-            "later and nothing would fail",
+            ["buyer", "orderDate", "orderNumber", "products", "ship_to", "status"],
+            "THE PROJECTION IS AN ALLOWLIST AND ITS KEY SET IS THE SECURITY BOUNDARY — six "
+            "keys, asserted whole. `buyer` and `ship_to` are the two names about a person "
+            "(D193); a denylist would return a field TCGplayer adds later and nothing would fail",
         )
         checks.equal(
             projected["buyer"],
             "Buyer001 Placeholder",
-            "the display name is the one fact about a person that survives the projection",
+            "the display name is one of the two facts about a person that survive the projection",
+        )
+        checks.equal(
+            projected.get("ship_to"),
+            "Recipient Placeholder",
+            "the name on the parcel is `shippingAddress.recipientName`, and only that string",
+        )
+        checks.ok(
+            not {"addressOne", "city", "territory", "country", "postalCode"} & set(projected),
+            "and none of the street, city, territory, country or postcode is a key of the "
+            "projection. The name is the only thing `shippingAddress` gives up",
         )
         serialized = json.dumps(projected)
         checks.equal(
@@ -1296,8 +1323,121 @@ def check_shipping_stamps(checks: Checks) -> None:
         )
 
 
+def check_shipping_read_saves_ship_to(checks: Checks) -> None:
+    """The Export Shipping read writes ONE thing: the ship-to name, onto the held orders it names (D193).
+
+    Driven through the live route, because the writer is wired in `capture_server`'s
+    `CaptureHandler`, and a case that called `do_shipping_batches` directly would test the
+    function without the wire. Three rows, taken from the committed export's own header: one
+    order the ledger holds under one number; one number the ledger holds TWICE, under two
+    sources; one number the ledger has never held. The name is written onto the first only.
+    The second is ambiguous, so it is counted unknown, and the third is unknown and never
+    created.
+
+    ITS OWN `isolated_home`, because this case writes. `check_shipping_routes` asserts a read
+    that writes nothing and leaves the home byte-identical, and that case must stay true.
+    """
+    checks.note("")
+    checks.note("EXPORT SHIPPING READ — the ship-to name is saved, and only onto held orders (D193)")
+    table = list(csv.reader(io.StringIO(SHIPPING_EXPORT.read_text("utf-8"))))
+    header = table[0]
+    known = dict(zip(header, table[1]))
+    ambiguous = dict(zip(header, table[2]))
+    never_held = dict(zip(header, table[3]))
+    never_held["Order #"] = "NOT-HELD-ORDER-0001"
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=header, lineterminator="\r\n")
+    writer.writeheader()
+    writer.writerows([known, ambiguous, never_held])
+    export = buffer.getvalue()
+    ship_to = f"{known['FirstName']} {known['LastName']}"
+
+    def held(number: str, source: str) -> dict:
+        return {
+            "source": source,
+            "number": number,
+            "placed_at": "2026-05-30T10:00:00.000+00:00",
+            "status": "Processing",
+            "lines": [{"sku": "9191486", "quantity": 1}],
+        }
+
+    with isolated_home():
+        ingested = answers(
+            checks,
+            lambda: capture_server.do_order_ingest({"orders": [
+                held(known["Order #"], "TCGplayer"),
+                held(ambiguous["Order #"], "TCGplayer"),
+                held(ambiguous["Order #"], "Other marketplace"),
+            ]}),
+            "the ledger takes the three held orders the export is read against",
+        )
+        if ingested is None:
+            return
+        held_by_number: dict = {}
+        for row in capture_server.do_orders()["orders"]:
+            held_by_number.setdefault(row["number"], []).append(row)
+        checks.equal(
+            len(held_by_number.get(ambiguous["Order #"], [])),
+            2,
+            "SCOPE FIRST: the ledger holds TWO records under the ambiguous number, one per source",
+        )
+
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        try:
+            payload = {"name": "orders-shipping.csv", "content": export}
+            status, raw, _ = request(port, "POST", "/shipping/batches", payload=payload)
+            first = json.loads(raw) if status == 200 else {}
+            checks.equal(status, 200, "POST /shipping/batches takes the three-row export")
+            checks.equal(
+                first.get("ship_to_saved"),
+                {"named": 1, "unchanged": 0, "unknown": 2},
+                "THE READ SAVES THE NAME ON ONE ORDER AND COUNTS THE OTHER TWO UNKNOWN. The "
+                "ambiguous number is not matched, because no one can say which sale it is, and "
+                "the never-held number is not created",
+            )
+            status, raw, _ = request(port, "POST", "/shipping/batches", payload=payload)
+            second = json.loads(raw) if status == 200 else {}
+            checks.equal(
+                second.get("ship_to_saved"),
+                {"named": 0, "unchanged": 1, "unknown": 2},
+                "A SECOND READ OF THE SAME FILE REPORTS UNCHANGED, and the held order already "
+                "carries the name, so the second read writes nothing new",
+            )
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+        listed = capture_server.do_orders()["orders"]
+        by_number: dict = {}
+        for row in listed:
+            by_number.setdefault(row["number"], []).append(row)
+        checks.equal(
+            [row.get("ship_to") for row in by_number.get(known["Order #"], [])],
+            [ship_to],
+            "the held order carries the name on its parcel, read back the way GET /orders shows it",
+        )
+        checks.equal(
+            [row.get("ship_to") for row in by_number.get(ambiguous["Order #"], [])],
+            [None, None],
+            "and neither record under the ambiguous number takes the name",
+        )
+        checks.ok(
+            "NOT-HELD-ORDER-0001" not in by_number,
+            "and the never-held number is NOT CREATED. A name and a number alone mint no order",
+        )
+        checks.ok(
+            known["Address1"] not in json.dumps(listed),
+            "and the street of the held order appears nowhere in the orders the ledger returns",
+            f"street {known['Address1']!r}",
+        )
+
+
 CHECKS = (
     check_shipping_lane,
     check_shipping_routes,
     check_shipping_stamps,
+    check_shipping_read_saves_ship_to,
 )
