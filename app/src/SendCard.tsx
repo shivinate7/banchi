@@ -29,11 +29,11 @@
 import { count } from './kit/dataRules'
 import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Button, Icon, IconButton, Money, Notice, Pill, Refusal, Retry } from './kit'
+import { Button, Count, Icon, IconButton, Money, Notice, Pill, Refusal, Retry } from './kit'
 import { atClockTime, clockTime, dayMonth } from './dates'
 import { describeFailure, dismissSendWarning, getOwedTakeOffs, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, sendSuggestions, takeBackSend } from './server'
 import type { Failure } from './server'
-import type { EmptySend, LiveMove, OwedTakeOff, PriceChange, RefusedPrice, SendSummary, SendTrim } from './types'
+import type { EmptySend, LiveMove, OwedTakeOff, PriceChange, RefusedPrice, SendAnswer, SendSummary, SendTrim } from './types'
 import { pressTakeOff, viewOf, type TakeOffOutcome, type TakeOffView } from './takeOff'
 import { emptySendTitle } from './standing'
 import { current as liveState, refresh as refreshLive, useLiveCheck } from './liveCheck'
@@ -372,6 +372,109 @@ function NotSent({ gone }: { readonly gone?: readonly string[] }) {
       className="send-not-sent"
       title={`Not sent: ${gone.join(', ')}. ${gone.length === 1 ? 'It is' : 'They are'} no longer in the store.`}
     />
+  )
+}
+
+/** KEPT SUGGESTIONS THE PRESS CHANGED, on one compact line: a price that moved a few cents since the person loaded the list
+ *  (sent at the fresh one), and a suggestion left out because it changed further or is gone. The sentence counts and the fold
+ *  names (`MovesList`'s fold: `.send-moves`, `.send-toggle`, `ul.send-names`), left out first because it asks the person to
+ *  look. One card is named in the sentence, with no fold. "Check it in your list" holds for both kinds of left-out row: a
+ *  Needs-you row is unticked, a Suggested row is ticked again by default at its new price. */
+function SuggestionNotes({ answer }: { readonly answer: SendAnswer }) {
+  const [open, setOpen] = useState(false)
+  const listId = useId()
+  const moved = answer.moved ?? []
+  const left = answer.left_out ?? []
+  const total = moved.length + left.length
+  if (total === 0) return null
+  const tone = left.length > 0 ? 'warn' : 'info'
+  const since = 'since you loaded this list'
+  if (total === 1) {
+    const one = moved[0]
+    const out = left[0]
+    return (
+      <Notice
+        tone={tone}
+        compact
+        className="send-suggestions"
+        title={
+          one !== undefined ? (
+            <>
+              <span data-typed>{one.name || one.sku}</span> went at <Money value={Number(one.price)} />, not <Money value={Number(one.was)} />. Its price moved {since}.
+            </>
+          ) : out !== undefined && out.now !== null ? (
+            <>
+              <span data-typed>{out.name || out.sku}</span> was left out. Its price went from <Money value={Number(out.price)} /> to <Money value={Number(out.now)} /> {since}. Check it in your list and send again.
+            </>
+          ) : (
+            <>
+              <span data-typed>{out?.name || out?.sku}</span> was left out. It has no suggested price now.
+            </>
+          )
+        }
+      />
+    )
+  }
+  const said = [
+    moved.length === 0 ? null : `${count(moved.length, 'card')} went at a new price`,
+    left.length === 0 ? null : moved.length === 0 ? `${count(left.length, 'card was', 'cards were')} left out` : `${left.length} ${left.length === 1 ? 'was' : 'were'} left out`,
+  ].filter((part) => part !== null)
+  const cards = count(total, 'Card')
+  return (
+    <Notice
+      tone={tone}
+      compact
+      className="send-suggestions send-moves"
+      title={`${said.join(' and ')}. Their prices changed ${since}.`}
+      action={
+        <Button variant="quiet" icon={open ? 'chevronUp' : 'chevronDown'} onClick={() => setOpen((on) => !on)} aria-expanded={open} aria-controls={listId} words="word-only-control">
+          {/* THE LABEL HOLDS THE WIDER OF ITS TWO STATES, as the moves list's does. */}
+          <span className="send-toggle">
+            <span aria-hidden={open ? undefined : 'true'} data-hidden={open ? undefined : 'true'}>{`Hide ${cards}`}</span>
+            <span aria-hidden={open ? 'true' : undefined} data-hidden={open ? 'true' : undefined}>{`Show ${cards}`}</span>
+          </span>
+        </Button>
+      }
+    >
+      <ul className="send-names" id={listId} hidden={!open}>
+        {left.length === 0 ? null : (
+          <li className="send-more">
+            Left out, check them in your list <Count value={left.length} />
+          </li>
+        )}
+        {left.map((row) => (
+          <li key={`out-${row.sku}`}>
+            <span className="send-name" data-typed>{row.name || row.sku}</span>
+            <span className="send-figure">
+              <Money value={Number(row.price)} />
+              {row.now === null ? (
+                ', no suggested price now'
+              ) : (
+                <>
+                  {' to '}
+                  <Money value={Number(row.now)} />
+                </>
+              )}
+            </span>
+          </li>
+        ))}
+        {moved.length === 0 ? null : (
+          <li className="send-more">
+            Went at the new price <Count value={moved.length} />
+          </li>
+        )}
+        {moved.map((row) => (
+          <li key={`moved-${row.sku}`}>
+            <span className="send-name" data-typed>{row.name || row.sku}</span>
+            <span className="send-figure">
+              <Money value={Number(row.was)} />
+              {' to '}
+              <Money value={Number(row.price)} />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Notice>
   )
 }
 
@@ -860,6 +963,8 @@ export function SendCard({
   const [intent, setIntent] = useState<'send' | 'download'>('send')
   const [failure, setFailure] = useState<Failure | null>(null)
   const [sent, setSent] = useState<SendSummary | null>(null)
+  /* WHAT THE PRESS DID TO THE KEPT SUGGESTIONS (a price that moved, one left out), answered with this visit's own press. */
+  const [answered, setAnswered] = useState<SendAnswer | null>(null)
   const [downloadOpen, setDownloadOpen] = useState(false)
   /* ON A PHONE THE BAR IS ONE LINE (D277, Q4): the press, and a More press that opens the two
      quiet doors beneath it. Above a phone the doors are always drawn and More is not. */
@@ -912,6 +1017,7 @@ export function SendCard({
             ? await sendSuggestions(prices)
             : await sendCopies(runs, { download, splitThreshold: download && split, quantities: quantities(), prices, moves })
         setSent(answer.send)
+        setAnswered(answer)
         setFailure(null)
         setConfirmed({ was: {}, moves: {} })
         onSent()
@@ -1262,6 +1368,7 @@ export function SendCard({
               right after this visit's own send; a later visit does not carry it in the bar. */}
           {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TrimList trimmed={standing.trimmed} /> : null}
           {sent !== null && sent.stamp === standing.stamp ? <NotSent gone={standing.gone} /> : null}
+          {answered !== null && sent !== null && sent.stamp === standing.stamp ? <SuggestionNotes answer={answered} /> : null}
           {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TookOff taken={standing.taken_off} download={false} /> : null}
           {sent !== null && sent.stamp === standing.stamp ? <PricesLeft send={standing} /> : null}
           {/* THE RECEIPT KEEPS IT, so a reload still says the prices were read again. */}
