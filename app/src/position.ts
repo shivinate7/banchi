@@ -104,7 +104,13 @@ export function spansOf(place: Place, sections?: readonly SectionDetail[]): Span
       spans.push({
         start,
         end,
-        current: holds(start, end) || (left !== null && detail.section === left),
+        /* THE CHIP IS THE HEADING'S SECTION, NOT WHERE `slot` FALLS IN THESE BOUNDS. The heading and
+           the ruler read `place.section`; `sections_detail` is a second read of the same box, and
+           a card that moved across a divider since that read (a sale closes the slots up behind
+           it) stands in one section by the first and the next by the other. A bar that picked its
+           chip by `holds` then showed Section 11 under a heading of Section 12. A place with no
+           section (never located) falls back to the bounds. */
+        current: place.section !== null && place.section !== undefined ? detail.section === place.section : holds(start, end),
         section: detail.section,
       })
     }

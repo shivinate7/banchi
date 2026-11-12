@@ -15,6 +15,7 @@ shipped - in transit
 shipped - delivered
 ```
 
+- **A shipped order with fewer copies recorded than ordered stays under Done, and is never added to "to pick".** The screen's counts (`figuresOf`) count open orders only (owner ruling, 2026-11-11 20:33 CST).
 - **The module imports nothing from `pipeline/`,** so `OrderLine` is declared twice, as `QueueEntry` is. `kind` is carried verbatim, because `pipeline/orders.py` owns `LINE_KINDS`. `parse` filters on `__annotations__` at all three levels, since a field written but not declared is silently dropped on reload.
 - **No address, no email, no payment.** A buyer's display name is allowed, because a hand walking drawers per person needs one.
 - **It does no i/o and holds no lock.** The fetch belongs to the caller, above the lock, because `files.exclusive` polls for up to 30 seconds while the feeder captures every 623 ms. T7 asserts it as an import check.
