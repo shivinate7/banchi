@@ -99,10 +99,11 @@ hour as before. The name has no undo press: a newer read replaces it.
 from the buyer; a buyer with one order shows it in the panel head. The buyer list still groups by the buyer's
 name, since grouping by person is the buyer's job. Search matches the ship-to name too.
 
-**Not yet filled by the live feed.** The order detail's `shippingAddress` holds the recipient, but its key
-names inside have never been read live, and `order_transport.project_order` does not guess them. Until one
-owner-run read names the key, only the Export Shipping read and a payload that already says `ship_to` fill it.
-The public demo clears `ship_to` (D295's mirror).
+**The live feed fills it from the order detail.** `order_transport.project_order` keeps
+`shippingAddress.recipientName` as `ship_to` (measured on a live detail, key names only) and drops the rest of
+that object. The search summary is not read for it, so a known order that is skipped as already detailed gets
+its ship-to from the Export Shipping read. The Fulfiller's packing screen leads with the ship-to name and shows
+the buyer after it when they differ. The public demo clears `ship_to` (D295's mirror).
 
 ### What would reopen this
 

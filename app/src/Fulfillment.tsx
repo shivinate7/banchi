@@ -28,6 +28,7 @@ import {
   walkPlan,
 } from './server'
 import { PullConfirm } from './PullConfirm'
+import { shipToOf } from './orderBuyers'
 import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
@@ -132,6 +133,9 @@ type OrderRef = {
    *  Never the raw order id alone on screen: `orderLabel` below pairs whichever of these
    *  two he sees with the other, secondary. */
   buyer: string | null
+  /** The name on the parcel (D193), `null` when the ledger has none. `orderLabel` leads with it when it
+   *  differs from the buyer. */
+  ship_to: string | null
   sku: string
   capture_id: string
 }
@@ -346,9 +350,18 @@ function asSellable(group: SearchGroup, copy: SearchCopy): Sellable {
  *  has one (D193), the id always present but never alone — paired as `secondary` rather than
  *  standing for the order by itself. A nameless order reads "No name", the same fallback
  *  `orderBuyers.ts:groupBuyers` uses on the owner's own screen, so the two views agree. */
-function orderLabel(buyer: string | null, number: string): { primary: string; secondary: string } {
+function orderLabel(
+  buyer: string | null,
+  shipTo: string | null,
+  number: string,
+): { primary: string; secondary: string; boughtBy: string | null } {
+  /* PACKING READS THE NAME ON THE PARCEL (D193). When the order ships to someone other than the buyer,
+     that name leads and the buyer follows as `boughtBy`; the same `shipToOf` rule the owner's screens use,
+     so one person is one name. */
+  const other = shipToOf({ buyer, ship_to: shipTo })
   const trimmed = buyer?.trim() ?? ''
-  return { primary: trimmed === '' ? 'No name' : trimmed, secondary: `#${number}` }
+  const primary = other ?? (trimmed === '' ? 'No name' : trimmed)
+  return { primary, secondary: `#${number}`, boughtBy: other !== null && trimmed !== '' ? trimmed : null }
 }
 
 function aimAt(card: Sellable, order: OrderRef): PullTarget {
@@ -751,6 +764,7 @@ export function Fulfillment() {
             source: row.source,
             number: ref.number,
             buyer: ref.buyer,
+            ship_to: row.ship_to ?? null,
             sku: item.sku,
             capture_id: copy.capture_id,
           },
@@ -1209,10 +1223,15 @@ export function Fulfillment() {
             {forOrder === null ? null : (
               <p className="fulfillment-say ff-card-eyebrow">
                 <span className="ff-card-order">
-                  For <b>{orderLabel(forOrder.buyer, forOrder.number).primary}</b>{' '}
+                  For <b>{orderLabel(forOrder.buyer, forOrder.ship_to, forOrder.number).primary}</b>{' '}
                   <span className="ff-card-order-id">
-                    {orderLabel(forOrder.buyer, forOrder.number).secondary}
+                    {orderLabel(forOrder.buyer, forOrder.ship_to, forOrder.number).secondary}
                   </span>
+                  {orderLabel(forOrder.buyer, forOrder.ship_to, forOrder.number).boughtBy === null ? null : (
+                    <span className="ff-card-order-id">
+                      {' '}bought by {orderLabel(forOrder.buyer, forOrder.ship_to, forOrder.number).boughtBy}
+                    </span>
+                  )}
                 </span>
               </p>
             )}

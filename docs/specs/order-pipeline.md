@@ -246,8 +246,8 @@ listing count, so a replay is a no-op. D63 makes that true by construction, beca
 `store/orders.py` holds no `Inventory` and imports nothing that can reach one.
 
 **The projection is `{source, number, placed_at, status, buyer, ship_to, lines}`** (D193). `buyer` and
-`ship_to` are names; `ship_to` is first and last as TCGplayer gives it, and the live feed does not fill it yet
-(its key inside `shippingAddress` is unread). Address, email, payment and the transaction breakdown are excluded at an
+`ship_to` are names; `ship_to` is first and last as TCGplayer gives it, read from the detail's
+`shippingAddress.recipientName` and never the street. Address, email, payment and the transaction breakdown are excluded at an
 allowlist (`project_summary`, `project_order`). `POST /orders/names` writes names for orders
 that the ledger already knows, from search summaries alone. `fetch_open_orders` already parses
 `buyerName` off every summary, so a names-only pass costs zero detail calls, and `/orders/fetch`
