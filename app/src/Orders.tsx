@@ -4170,9 +4170,9 @@ function buyerDoneSay(group: BuyerGroup): string {
   const sold = group.orders.reduce((sum, one) => sum + one.recorded, 0)
   if (sold > 0) return `All ${sold} sold.`
   if (group.orders.length > 0 && group.orders.every((one) => /^cancell?ed$/i.test((one.status ?? '').trim()))) {
-    return group.orders.length === 1 ? 'This order was canceled.' : 'These orders were canceled.'
+    return group.orders.length === 1 ? 'Order canceled.' : 'Orders canceled.'
   }
-  return 'No orders are open, and nothing was sold.'
+  return 'Nothing sold.'
 }
 
 /** A buyer's three figures, each over ONE set (UX-168, UX-235). `owed` is what the open orders
