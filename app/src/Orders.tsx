@@ -3850,7 +3850,7 @@ function PullStage({
       {buyerDone ? (
         <div className="orders-walk-done">
           <p>
-            <Icon name="check" size={16} /> {buyerDoneSay(shownGroup)}
+            <Icon name="check" size={16} /> All {shownGroup.orders.reduce((sum, one) => sum + one.recorded, 0)} sold.
           </p>
           <a className="bn-btn bn-btn-primary" href="#/shipping">
             <Icon name="truck" size={16} />
@@ -4162,18 +4162,6 @@ function ManagePanel({
 
 /* ================================================================== a buyer, in the list */
 
-
-/** What a buyer with no open orders reads in the walk. "All N sold." only where N is above zero:
- *  a buyer whose orders were all canceled sold nothing, and "All 0 sold." says the opposite of why
- *  the walk is empty. `status` is the feed's own word, matched on both spellings of canceled. */
-function buyerDoneSay(group: BuyerGroup): string {
-  const sold = group.orders.reduce((sum, one) => sum + one.recorded, 0)
-  if (sold > 0) return `All ${sold} sold.`
-  if (group.orders.length > 0 && group.orders.every((one) => /^cancell?ed$/i.test((one.status ?? '').trim()))) {
-    return group.orders.length === 1 ? 'This order was canceled.' : 'These orders were canceled.'
-  }
-  return 'No orders are open, and nothing was sold.'
-}
 
 /** A buyer's three figures, each over ONE set (UX-168, UX-235). `owed` is what the open orders
  *  still want. `short` is the copies that cannot be pulled: per line, what it owes less what is
