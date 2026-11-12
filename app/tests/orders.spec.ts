@@ -4736,6 +4736,22 @@ test('a buyer with nothing canceled and nothing sold reads "Nothing Sold", never
   await expect(done).not.toContainText('All 0 Sold')
 })
 
+test('a buyer whose one order shipped in transit and sold nothing reads "Shipped", never "Nothing Sold"', async ({ page }) => {
+  /* The feed's own word for a shipped order is terminal (`TERMINAL_STATUSES`), so the order is done
+     and nothing is recorded against it. The done line states the marketplace's fact, not a sale count. */
+  const shipped = order({ buyer: 'Grace Hopper', status: 'Shipped - in transit', open: false, terminal: true, recorded: 0 })
+  await open(page, {
+    orders: payloadOf([order(), shipped], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]),
+  })
+  await pickFacet(page, 'Show', /^Open/)
+  await pickFacet(page, 'Show', /^Done/)
+  await page.locator('.orders-index-row', { hasText: 'Grace Hopper' }).click()
+
+  const done = page.locator('.orders-walk-done')
+  await expect(done).toContainText('Shipped')
+  await expect(done).not.toContainText('Nothing Sold')
+})
+
 test('a buyer whose copies all sold reads "All N Sold", with N the copies sold', async ({ page }) => {
   const sold = order({ buyer: 'Grace Hopper', open: false, terminal: true, recorded: 2, wanted: 2 })
   await open(page, {
