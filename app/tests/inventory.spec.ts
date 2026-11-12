@@ -7086,6 +7086,23 @@ test('the card names the run that read it, and the model\'s own hedge', async ({
   )
 })
 
+test('the header draws the catalogue rarity once, and the claim is read in the Claims facts', async ({ page }) => {
+  /* A card whose operator claim lists two rarities while its catalogue record names one. The header
+     states the catalogue's fact once (D23, owner ruling "Catalogue rarity"), and the claim is not
+     drawn in the header at all: it is read in the Claims facts beneath it. */
+  const cards: Cards = {
+    '2/1': card({
+      index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3,
+      finish: null, rarity: ['Common', 'Uncommon'], catalogRarity: 'Uncommon',
+    }),
+  }
+  await open(page, BOXES, { cards, search: (query) => searchAnswer(query, cards) })
+  await expandAll(page)
+
+  await expect(page.locator('.browse-hero-sub .bn-pill').filter({ hasText: /^(Common|Uncommon|Rare)$/ })).toHaveText(['Uncommon'])
+  await expect(page.locator('.browse-fact', { hasText: 'Rarity' }).locator('dd')).toHaveText('Common, Uncommon')
+})
+
 test('the card carries what its run said the market was, and how old that reading is', async ({
   page,
 }) => {
