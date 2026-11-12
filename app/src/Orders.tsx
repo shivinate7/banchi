@@ -4165,16 +4165,20 @@ function ManagePanel({
 
 /** What a buyer with no open orders reads in the walk. "All N Sold" only where N is above zero:
  *  a buyer whose orders were all canceled sold nothing, and "All 0 Sold" says the opposite of why
- *  the walk is empty. A buyer with no sale recorded whose orders were not all canceled (a shipped
- *  order with nothing recorded) did sell, so it reads "Shipped", never "Nothing Sold". `status` is
- *  the feed's own word, as `store/orders.py`'s `TERMINAL_STATUSES` spells canceled. */
+ *  the walk is empty. With nothing recorded, "Shipped" reads only when an order is terminal and
+ *  not canceled (the feed shipped it, nothing was recorded here); otherwise the orders were stood
+ *  down (`not_shipping`) and nothing shipped, so it reads "Not Shipping". `status` is the feed's
+ *  own word, as `store/orders.py`'s `is_canceled_status` spells canceled; `terminal` is
+ *  `is_terminal_status`. */
 function buyerDoneSay(group: BuyerGroup): string {
   const sold = group.orders.reduce((sum, one) => sum + one.recorded, 0)
   if (sold > 0) return `All ${sold} Sold`
-  if (group.orders.length > 0 && group.orders.every((one) => /^canceled$/i.test((one.status ?? '').trim()))) {
+  const canceled = (one: BuyerGroup['orders'][number]) => /^canceled$/i.test((one.status ?? '').trim())
+  if (group.orders.length > 0 && group.orders.every(canceled)) {
     return group.orders.length === 1 ? 'Order Canceled' : 'Orders Canceled'
   }
-  return 'Shipped'
+  if (group.orders.some((one) => one.terminal && !canceled(one))) return 'Shipped'
+  return 'Not Shipping'
 }
 
 /** A buyer's three figures, each over ONE set (UX-168, UX-235). `owed` is what the open orders

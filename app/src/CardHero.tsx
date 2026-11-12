@@ -606,7 +606,7 @@ export function CardHeroHead({
               {titleCase(finish, true)}
             </Pill>
           ))}
-          {/* THE CATALOGUE'S RARITY, NEVER THE SHUTTER CLAIM (owner ruling, "Catalogue rarity"; D23).
+          {/* THE CATALOG'S RARITY, NEVER THE SHUTTER CLAIM (owner ruling, "Catalog rarity"; D023).
               `rarity_claim` is the operator's evidence about the stack and may list several; the
               header states the fact about this card. The claim is shown in the Claims facts and edited in the Manage box. */}
           {typeof card.rarity === 'string' && card.rarity.trim() !== '' ? (
