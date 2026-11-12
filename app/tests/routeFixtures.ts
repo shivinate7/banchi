@@ -305,10 +305,21 @@ export function payloadOf(orders: OrderRow[], resolved: ResolvedOrder[]): Orders
   }
 }
 
+/** The parcel name (D193) per order number. A key left out leaves that order's `ship_to` unset,
+ *  which is what every case that does not ask for one gets; `null` says the feed named none. */
+export type ShipToByOrder = Partial<Record<string, string | null>>
+
+/** The `ship_to` field an order or a shipping row takes from `ShipToByOrder`, or nothing at all when
+ *  the map does not name that order, so an unnamed one carries no `ship_to` key on the wire. */
+function shipToOver(map: ShipToByOrder, number: string): { ship_to?: string | null } {
+  return number in map ? { ship_to: map[number] } : {}
+}
+
 /** A few open orders with different buyers, statuses and reasons, so `#/orders` draws a real
  *  list rather than "0 orders". Three orders: one fully resolved, one short on hand, one with
- *  no buyer name (D20's optional field, one register up). */
-export function severalOrders(): OrdersPayload {
+ *  no buyer name (D20's optional field, one register up). `ship_to` names the parcel name of any
+ *  of them, by order number, for a case that wants the Ship To line drawn. */
+export function severalOrders(ship_to: ShipToByOrder = {}): OrdersPayload {
   const shortLine = line({
     order: 'B31A0C7D-0001A2-00311',
     order_key: 'TCGplayer:B31A0C7D-0001A2-00311',
@@ -350,10 +361,11 @@ export function severalOrders(): OrdersPayload {
     picks: [pick({ box: 9, index: 1, capture_id: 'cap-c', card_name: 'Thievul', card_number: '090' })],
   })
 
-  const resolvedOrder = order()
+  const resolvedOrder = order(shipToOver(ship_to, 'A2FFC195-0000F4-006AC'))
   const shortOrder = order({
     key: 'TCGplayer:B31A0C7D-0001A2-00311',
     number: 'B31A0C7D-0001A2-00311',
+    ...shipToOver(ship_to, 'B31A0C7D-0001A2-00311'),
     buyer: 'Grace Hopper',
     status: 'Awaiting shipment',
     wanted: 3,
@@ -379,6 +391,7 @@ export function severalOrders(): OrdersPayload {
   const noBuyerOrder = order({
     key: 'TCGplayer:C99E4410-0002B8-004F0',
     number: 'C99E4410-0002B8-004F0',
+    ...shipToOver(ship_to, 'C99E4410-0002B8-004F0'),
     buyer: null,
     status: 'Ready to ship',
     lines: [noBuyerLine.line],
@@ -462,12 +475,12 @@ export function severalOrdersWalkPlan(): WalkPlan {
 /** Stub `GET /orders` with several real orders, so `#/orders` draws its populated list — and
  *  `POST /orders/walk-plan`, which the sole selected buyer's walk now fetches on landing
  *  (§13: selecting a buyer starts it at once, no separate press). */
-export async function seedPopulatedOrders(page: Page): Promise<void> {
+export async function seedPopulatedOrders(page: Page, ship_to: ShipToByOrder = {}): Promise<void> {
   await page.route(/\/orders$/, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(severalOrders()),
+      body: JSON.stringify(severalOrders(ship_to)),
     }),
   )
   await page.route(/\/orders\/walk-plan$/, (route) =>
@@ -547,7 +560,7 @@ export function batchOf(rows: ShippingRow[], over: Partial<ShippingBatch> = {}):
 
 /** Rows in all three lanes — envelope, parcel, unjudged — with a certain, an inferred and an
  *  abstained reason among them, so `#/shipping`'s populated state draws every lane it can. */
-export function threeLaneBatch(): ShippingBatch {
+export function threeLaneBatch(ship_to: ShipToByOrder = {}): ShippingBatch {
   return batchOf([
     shippingRow({
       order: 'A2FFC195-0000F4-006AC',
@@ -557,6 +570,7 @@ export function threeLaneBatch(): ShippingBatch {
       value: '4.20',
       weight_per_item_oz: '0.1800',
       item_count: 3,
+      ...shipToOver(ship_to, 'A2FFC195-0000F4-006AC'),
     }),
     shippingRow({
       order: 'B31A0C7D-0001A2-00311',
@@ -566,6 +580,7 @@ export function threeLaneBatch(): ShippingBatch {
       value: '12.40',
       weight_per_item_oz: '2.5000',
       item_count: 1,
+      ...shipToOver(ship_to, 'B31A0C7D-0001A2-00311'),
     }),
     shippingRow({
       order: 'C99E4410-0002B8-004F0',
@@ -575,6 +590,7 @@ export function threeLaneBatch(): ShippingBatch {
       value: '18.00',
       weight_per_item_oz: null,
       item_count: 2,
+      ...shipToOver(ship_to, 'C99E4410-0002B8-004F0'),
     }),
   ])
 }
@@ -587,12 +603,12 @@ export const SHIPPING_EXPORT_CSV = 'Order #,FirstName\nA2FFC195-0000F4-006AC,Ada
  *  populate the screen — `#/shipping` fetches nothing on mount (`shipping.spec.ts`'s own
  *  header), so the caller must still hand the screen a file through the drop zone, the way
  *  `readExport` does, before counting words. */
-export async function seedPopulatedShipping(page: Page): Promise<void> {
+export async function seedPopulatedShipping(page: Page, ship_to: ShipToByOrder = {}): Promise<void> {
   await page.route(/\/shipping\/batches$/, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(threeLaneBatch()),
+      body: JSON.stringify(threeLaneBatch(ship_to)),
     }),
   )
 }
