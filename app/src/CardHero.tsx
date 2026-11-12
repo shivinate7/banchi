@@ -606,11 +606,14 @@ export function CardHeroHead({
               {titleCase(finish, true)}
             </Pill>
           ))}
-          {claimList(card.rarity_claim).map((rarity) => (
-            <Pill key={`r-${rarity}`} outline title={rarity}>
-              {rarity}
+          {/* THE CATALOGUE'S RARITY, NEVER THE SHUTTER CLAIM (owner ruling, "Catalogue rarity"; D23).
+              `rarity_claim` is the operator's evidence about the stack and may list several; the
+              header states the fact about this card. The claim is read and edited in the Manage box. */}
+          {typeof card.rarity === 'string' && card.rarity.trim() !== '' ? (
+            <Pill key="rarity" outline title={card.rarity}>
+              {card.rarity}
             </Pill>
-          ))}
+          ) : null}
           {/* THE CARD'S STATE ONLY WHEN IT IS THE EXCEPTION (UX-221) — `BoxBrowse.tsx`'s own
               rule, moved with the rest of the head. The dead copy of this component always
               drew the pill; that was the divergence this move fixes. */}

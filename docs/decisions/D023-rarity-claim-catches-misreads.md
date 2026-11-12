@@ -8,3 +8,5 @@
 4. **Rank.** `pipeline/join.py:rank_by_claims` orders candidate rows best first by how many capture claims each agrees with (rarity, `metadata_finish`, set hint). It is presentation only: it adds no row, picks none, and leaves a card with no favored row tied. `join_batch` widens `found.rows` by name when the number's own rows never satisfy a present rarity claim. `do_review_catalog`'s free-text search calls the same function, so a claim scores once. Rung 0 is exempt by construction, since a human-answered card resolves to one row.
 
 A typed rarity is evidence, not fact: two agreeing signals release it, and disagreement is a review reason.
+
+**The card header states the catalogue's rarity, never the claim.** The header's one rarity pill on `#/inventory` and the pick view reads `InventoryCard.rarity`, the catalogue's own word. The claim is the operator's evidence about the stack and may list several rarities, so it is read and edited in the Manage box only (owner ruling, 2026-11-11 20:33 CST, "Catalogue rarity").
