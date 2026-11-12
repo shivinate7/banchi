@@ -279,13 +279,13 @@
   font-size: var(--bn-fs-xs);
   color: var(--bn-ink-3);
 }
-.shipping-quality-legend .bn-icon:first-child { color: var(--bn-ok); }
+/* The first icon is the check; the Ship To key may lead the legend, so first-of-type, not first-child. */
+.shipping-quality-legend .bn-icon:first-of-type { color: var(--bn-ok); }
+/* C. The label is said once, here, keyed to the bold name; each row's `ShipTo` keeps it for a screen reader only. */
+.shipping-legend-shipto { display: inline-flex; align-items: baseline; gap: var(--bn-1); margin-right: var(--bn-3); }
+.shipping-legend-shipto b { font-weight: 600; color: var(--bn-ink); }
 .shipping-says { font-size: var(--bn-fs-md); color: var(--bn-ink-2); line-height: 1.4; }
-/* The name on the envelope, the first thing a hand packing the order reads; the buyer, when it is someone else,
-   follows muted so the two are never mistaken for one name. */
-.shipping-ship-to { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--bn-0-5) var(--bn-2); font-size: var(--bn-fs-md); color: var(--bn-ink-2); overflow-wrap: anywhere; }
-.shipping-ship-to b { font-weight: 600; color: var(--bn-ink); }
-.shipping-bought-by { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.shipping-row .bn-shipto-name { font-size: var(--bn-fs-md); }
 .shipping-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1-5); }
 .shipping-figures { display: inline-flex; flex-wrap: wrap; gap: var(--bn-1-5); }
 .shipping-figure {

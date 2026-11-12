@@ -23,6 +23,7 @@ import {
   SettingsGroup,
   SettingsOp,
   SettingsTrouble,
+  ShipTo,
   SkeletonText,
   Stat,
   useFacetParams,
@@ -4328,6 +4329,7 @@ function OrderPanel({
       <div className="orders-panel-top">
         <div className="orders-panel-text">
           <h2 className="orders-panel-name"><LabelText text={buyerLabel(group)} /></h2>
+          {shipTo === null ? null : <ShipTo name={<LabelText text={shipTo} />} />}
           <p className="orders-panel-order">
             {single === null ? (
               `${group.orders.length} orders`
@@ -4337,11 +4339,6 @@ function OrderPanel({
               </>
             )}
           </p>
-          {shipTo === null ? null : (
-            <p className="orders-panel-shipto">
-              Ship to <b><LabelText text={shipTo} /></b>
-            </p>
-          )}
         </div>
         <IconButton icon="settings" label="Manage" name="Manage This Buyer's Orders" className="orders-manage" aria-haspopup="dialog" onClick={onManage} />
       </div>
@@ -4415,13 +4412,10 @@ function OrderDetail({
           it a second time (row 111) — this now just names the marketplace, as the null-status
           case already did. */}
       <span className="orders-feed-word">{sourceName(order.source)}</span>
-      {shipTo === null ? null : (
-        <span className="orders-ship-to">
-          Ship to <LabelText text={shipTo} />
-        </span>
-      )}
     </span>
   )
+  /* The sheet's title is the buyer, so no "Bought By" here. */
+  const shipLine = shipTo === null ? null : <ShipTo name={<LabelText text={shipTo} />} />
 
   /* A DONE ORDER IS NOT ALWAYS A CLOSED BOOK (fix for the owner's report: a shipped order can
      still owe copies). `ownsAWalkableBody` is the discriminator — `terminal` plus what is
@@ -4478,6 +4472,7 @@ function OrderDetail({
   if (variant === 'inline') {
     return (
       <>
+        {shipLine}
         <div className="orders-order-metarow">
           {meta}
           <Pill tone={pill.tone} icon={pill.icon}>
@@ -4494,17 +4489,18 @@ function OrderDetail({
       <header className="orders-order-head">
         <div className="orders-order-id">
           <h2 className="orders-order-number">{order.number}</h2>
+          {shipLine}
           {meta}
         </div>
         <div className="orders-order-side">
+          <Pill tone={pill.tone} icon={pill.icon}>
+            {pill.label}
+          </Pill>
           {lane === null ? null : (
             <Pill tone={LANE_TONE[lane]} icon={LANE_ICON[lane]} outline>
               {ORDER_LANE_LABEL[lane]}
             </Pill>
           )}
-          <Pill tone={pill.tone} icon={pill.icon}>
-            {pill.label}
-          </Pill>
         </div>
       </header>
 

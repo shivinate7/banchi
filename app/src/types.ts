@@ -3850,7 +3850,7 @@ export type OrderRow = {
   buyer: string | null
   /** The name on the parcel, first and last as TCGplayer gave it (`D193`), never the street. `null`
    *  until an Export Shipping read or a feed that carries it has named this order. It is often the
-   *  buyer's own name; `shipToOf` in `orderView.ts` says when to draw it. */
+   *  buyer's own name; `shipToOf` in `orderBuyers.ts` says when to draw it. */
   ship_to?: string | null
   wanted: number
   recorded: number

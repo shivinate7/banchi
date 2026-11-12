@@ -2,7 +2,7 @@ import { byteSize, count } from './kit/dataRules'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react'
 
 import { readUpload } from './csvUpload'
-import { Button, EmptyFrame, EmptyState, Icon, IconButton, Money, Notice, OrderLink, type IconName } from './kit'
+import { Button, EmptyFrame, EmptyState, Icon, IconButton, Money, Notice, OrderLink, ShipTo, type IconName } from './kit'
 import { toast } from './kit/toast'
 import { SHIP_LANES, setHub, useHub } from './OrdersHubStore'
 import { describeFailure, fillShippingStamps, forgetShippingExport, readShippingExport, shippingFileUrl, failureTone } from './server'
@@ -573,6 +573,13 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
       {/* THE WORD, SAID ONCE (TXT-03), rather than on up to 292 cards. The icon on each row
           still carries it, in its tooltip and its accessible name. */}
       <p className="shipping-quality-legend">
+        {/* "Ship To" is said once here and keyed to the bold name; each row keeps the words for a
+            screen reader only (`ShipTo` with `bare`). Drawn only when a row carries a name. */}
+        {!batch.rows.some((row) => row.ship_to != null) ? null : (
+          <span className="shipping-legend-shipto">
+            <b>Ship To</b> in Bold
+          </span>
+        )}
         {/* F5 verbiage cut (rows 118/119): "Certain"/"Inferred", not the reviewer's own
             "Exact"/"Estimated", to match the exact words `qualityOf` already gives each row's
             own icon as its accessible name a few lines below — a legend that named its icons
@@ -647,12 +654,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                             </span>
                           )}
                         </div>
-                        {row.ship_to == null ? null : (
-                          <p className="shipping-ship-to">
-                            Ship to <b>{row.ship_to}</b>
-                            {boughtBy === null ? null : <span className="shipping-bought-by">bought by {boughtBy}</span>}
-                          </p>
-                        )}
+                        {row.ship_to == null ? null : <ShipTo bare name={row.ship_to} by={boughtBy} />}
                         {sentence === null ? null : <p className="shipping-says">{sentence}</p>}
                         {row.value === null && figures.length === 0 ? null : (
                           <div className="shipping-row-meta">

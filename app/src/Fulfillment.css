@@ -657,6 +657,12 @@
   margin-bottom: var(--bn-1);
 }
 .ff-card-order b { color: var(--bn-ink); }
+/* D. The Fulfiller's size of the kit's `ShipTo`: his 20px floor and his 7:1, so ink-2 is the faintest
+   word. The order number keeps `.ff-card-order-id` (mono: it is a machine string) on the second
+   line; the buyer's name never takes that class. */
+.fulfillment .bn-shipto.ff-shipto { font-size: var(--ff-fs-base); line-height: 1.35; gap: var(--bn-1); color: var(--bn-ink-2); margin-bottom: var(--bn-1); }
+.fulfillment .ff-shipto .bn-shipto-name { font-weight: 700; }
+.fulfillment .ff-shipto .bn-shipto-by { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--bn-3); color: var(--bn-ink-2); }
 
 .ff-photo-wrap { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
 .ff-photo-btn {
