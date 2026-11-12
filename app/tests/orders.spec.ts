@@ -4722,19 +4722,21 @@ test('a buyer whose two orders were both canceled reads "Orders Canceled", never
   await expect(done).not.toContainText('All 0 Sold')
 })
 
-test('a buyer with nothing canceled and nothing sold reads "Shipped", never "Nothing Sold" or "All 0 Sold"', async ({ page }) => {
-  const unsold = order({ buyer: 'Grace Hopper', status: 'Shipped', open: false, terminal: true, recorded: 0 })
+test('a buyer whose one order was stood down as not shipping reads "Not Shipping", never "Shipped"', async ({ page }) => {
+  /* A stand-down writes the line's `closed_reason`, not the feed's status: the feed still says
+     Ready to ship, and `open` and `terminal` stay false. The done line must read the operator's close. */
+  const stood = order({ buyer: 'Grace Hopper', number: OTHER_ORDER, key: `TCGplayer:${OTHER_ORDER}`, open: false, terminal: false, recorded: 0 })
+  stood.progress = [{ ...stood.progress[0]!, closed_at: '2026-09-01T10:00:00+00:00', closed_reason: 'not_shipping' }]
   await open(page, {
-    orders: payloadOf([order(), unsold], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]),
+    orders: payloadOf([order(), stood], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]),
   })
   await pickFacet(page, 'Show', /^Open/)
   await pickFacet(page, 'Show', /^Done/)
   await page.locator('.orders-index-row', { hasText: 'Grace Hopper' }).click()
 
   const done = page.locator('.orders-walk-done')
-  await expect(done).toContainText('Shipped')
-  await expect(done).not.toContainText('Nothing Sold')
-  await expect(done).not.toContainText('All 0 Sold')
+  await expect(done).toContainText('Not Shipping')
+  await expect(done).not.toContainText('Shipped')
 })
 
 test('a buyer whose one order shipped in transit and sold nothing reads "Shipped", never "Nothing Sold"', async ({ page }) => {
