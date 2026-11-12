@@ -3850,7 +3850,7 @@ function PullStage({
       {buyerDone ? (
         <div className="orders-walk-done">
           <p>
-            <Icon name="check" size={16} /> All {shownGroup.orders.reduce((sum, one) => sum + one.recorded, 0)} sold.
+            <Icon name="check" size={16} /> {buyerDoneSay(shownGroup)}
           </p>
           <a className="bn-btn bn-btn-primary" href="#/shipping">
             <Icon name="truck" size={16} />
@@ -4162,6 +4162,24 @@ function ManagePanel({
 
 /* ================================================================== a buyer, in the list */
 
+
+/** What a buyer with no open orders reads in the walk. "All N Sold" only where N is above zero:
+ *  a buyer whose orders were all canceled sold nothing, and "All 0 Sold" says the opposite of why
+ *  the walk is empty. With nothing recorded, "Shipped" reads only when an order is terminal and
+ *  not canceled (the feed shipped it, nothing was recorded here); otherwise the orders were stood
+ *  down (`not_shipping`) and nothing shipped, so it reads "Not Shipping". `status` is the feed's
+ *  own word, as `store/orders.py`'s `is_canceled_status` spells canceled; `terminal` is
+ *  `is_terminal_status`. */
+function buyerDoneSay(group: BuyerGroup): string {
+  const sold = group.orders.reduce((sum, one) => sum + one.recorded, 0)
+  if (sold > 0) return `All ${sold} Sold`
+  const canceled = (one: BuyerGroup['orders'][number]) => /^canceled$/i.test((one.status ?? '').trim())
+  if (group.orders.length > 0 && group.orders.every(canceled)) {
+    return group.orders.length === 1 ? 'Order Canceled' : 'Orders Canceled'
+  }
+  if (group.orders.some((one) => one.terminal && !canceled(one))) return 'Shipped'
+  return 'Not Shipping'
+}
 
 /** A buyer's three figures, each over ONE set (UX-168, UX-235). `owed` is what the open orders
  *  still want. `short` is the copies that cannot be pulled: per line, what it owes less what is
