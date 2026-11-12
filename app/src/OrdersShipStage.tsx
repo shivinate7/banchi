@@ -492,8 +492,8 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
               {saved === null || saved.named + saved.unchanged === 0 ? null : (
                 <span>
                   {saved.named > 0
-                    ? `Ship-to name saved on ${count(saved.named, 'order')}`
-                    : 'Ship-to names already saved'}
+                    ? `Ship To saved on ${count(saved.named, 'order')}`
+                    : 'Ship To already saved'}
                 </span>
               )}
             </span>
@@ -589,8 +589,10 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
             "Exact"/"Estimated", to match the exact words `qualityOf` already gives each row's
             own icon as its accessible name a few lines below — a legend that named its icons
             differently from the icons themselves would be its own new defect. */}
-        <Icon name="check" size={11} /> Certain{' '}
-        <Icon name="circle" size={11} /> Inferred
+        <span className="shipping-legend-quality">
+          <Icon name="check" size={11} /> Certain{' '}
+          <Icon name="circle" size={11} /> Inferred
+        </span>
       </p>
 
       <div className="shipping-lanes" role="group" aria-label="The three lanes">

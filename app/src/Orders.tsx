@@ -4328,8 +4328,10 @@ function OrderPanel({
     <div className="orders-panel">
       <div className="orders-panel-top">
         <div className="orders-panel-text">
-          <h2 className="orders-panel-name"><LabelText text={buyerLabel(group)} /></h2>
-          {shipTo === null ? null : <ShipTo name={<LabelText text={shipTo} />} />}
+          <div className="orders-panel-who">
+            <h2 className="orders-panel-name"><LabelText text={buyerLabel(group)} /></h2>
+            {shipTo === null ? null : <ShipTo name={<LabelText text={shipTo} />} />}
+          </div>
           <p className="orders-panel-order">
             {single === null ? (
               `${group.orders.length} orders`

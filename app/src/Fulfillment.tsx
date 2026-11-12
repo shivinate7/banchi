@@ -1249,14 +1249,16 @@ export function Fulfillment() {
             {forOrder === null ? null : (
               <OrderEyebrow buyer={forOrder.buyer} shipTo={forOrder.ship_to} number={forOrder.number} />
             )}
-            <h2 className="fulfillment-name ff-card-name">{chosen.name}</h2>
-            {chosen.about === null ? null : (
-              <p className="fulfillment-say ff-card-about">
-                {chosen.about.map((part, at) => (
-                  <span key={at}>{part}</span>
-                ))}
-              </p>
-            )}
+            <div className="ff-card-title">
+              <h2 className="fulfillment-name ff-card-name">{chosen.name}</h2>
+              {chosen.about === null ? null : (
+                <p className="fulfillment-say ff-card-about">
+                  {chosen.about.map((part, at) => (
+                    <span key={at}>{part}</span>
+                  ))}
+                </p>
+              )}
+            </div>
           </header>
 
           <section className="ff-where" aria-label="Where to find it">

@@ -6577,9 +6577,16 @@ body.notags .mk-new-ring { outline: 0; }
 /* THE FULFILLER'S SIZE of the same line: his 20px floor and his 7:1, so ink-2 is the faintest
    word. The order number keeps `.ff-card-order-id` (mono: it is a machine string) on the second
    line; the buyer's name never takes that class. */
-.fulfillment .bn-shipto.ff-shipto { font-size: var(--ff-fs-base); line-height: 1.35; gap: var(--bn-1); color: var(--bn-ink-2); margin-bottom: var(--bn-1); }
+.fulfillment .bn-shipto.ff-shipto { font-size: var(--ff-fs-base); line-height: 1.35; gap: var(--bn-1); color: var(--bn-ink-2); }
 .fulfillment .ff-shipto .bn-shipto-name { font-weight: 700; }
 .fulfillment .ff-shipto .bn-shipto-by { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--bn-3); color: var(--bn-ink-2); }
+
+/* The order line sits one step further from the title than the title sits from its facts, so the
+   title and facts share `.ff-card-title` and the head's gap is the larger one. The eyebrow's own
+   bottom margin above is the repo's old spacing: zeroed here, the gap does that job. */
+.ff-card-head { gap: var(--bn-2); }
+.ff-card-title { display: flex; flex-direction: column; gap: var(--bn-1); min-width: 0; }
+.ff-card-eyebrow { margin-bottom: 0; }
 
 /* A. THE ORDER HEADER (`OrderDetail`, in the Manage sheet). A two-column grid, not a wrapping
    flex row: the id column shrinks and the status pill can never drop under it. The ship-to is
@@ -6592,12 +6599,14 @@ body.notags .mk-new-ring { outline: 0; }
 .orders-order-side { flex-direction: column; align-items: flex-end; gap: var(--bn-1-5); flex-wrap: nowrap; }
 
 /* B. THE BUYER PANEL (`OrderPanel`): the same line, under the buyer's name. */
-.orders-panel-text .bn-shipto { margin-top: var(--bn-0-5); }
+.orders-panel-who { display: flex; flex-direction: column; gap: var(--bn-1); min-width: 0; }
 
 /* C. THE SHIP STAGE: the label is said once, in the legend, and each row's line keeps it for a
    screen reader only (`.bn-sr` on the label span). */
 .shipping-row .bn-shipto-name { font-size: var(--bn-fs-md); }
-.shipping-legend-shipto { display: inline-flex; align-items: baseline; gap: var(--bn-1); margin-right: var(--bn-3); }
+.shipping-legend-shipto { display: inline-flex; align-items: baseline; gap: var(--bn-1); }
+.shipping-quality-legend { column-gap: calc(var(--bn-1-5) + var(--bn-3)); }
+.shipping-legend-quality { display: inline-flex; align-items: center; gap: var(--bn-1-5); flex-wrap: wrap; }
 .shipping-legend-shipto b { font-weight: 600; color: var(--bn-ink); }
 
 /* Option "Lane pill on the Ship To line" only. */
@@ -6664,8 +6673,10 @@ function orderPanel(d) {
   return `<div class="orders-panel">
     <div class="orders-panel-top">
       <div class="orders-panel-text">
-        <h2 class="orders-panel-name" data-typed>${esc(buyerHeading(d))}</h2>
-        ${ship === null ? '' : `<div class="mk-new-ring" id="shipto-panel">${shipLine({ name: ship })}</div>`}
+        <div class="orders-panel-who">
+          <h2 class="orders-panel-name" data-typed>${esc(buyerHeading(d))}</h2>
+          ${ship === null ? '' : `<div class="mk-new-ring" id="shipto-panel">${shipLine({ name: ship })}</div>`}
+        </div>
         <p class="orders-panel-order">${single ? `Order <span class="bn-mono orders-buyer-order-id">${ORDER}</span>` : '2 orders'}</p>
       </div>
       <button type="button" class="bn-icon-btn orders-manage" aria-label="Manage This Buyer's Orders">${icon('settings', 18)}</button>
@@ -6759,7 +6770,7 @@ function shipRow(r, { bare = true } = {}) {
 }
 const LANES = [['envelope', 'Envelope', 'Light', 'mail'], ['parcel', 'Parcel', 'Heavy', 'package'], ['unjudged', 'Needs a Look', 'Manual', 'alert']]
 function legend(bare) {
-  return `<p class="shipping-quality-legend"${bare ? ' id="shipto-ship-legend"' : ''}>${bare ? `<span class="shipping-legend-shipto mk-new-ring"><b>Ship To</b> in Bold</span>` : ''}${icon('check', 11)} Certain ${icon('circle', 11)} Inferred</p>`
+  return `<p class="shipping-quality-legend"${bare ? ' id="shipto-ship-legend"' : ''}>${bare ? `<span class="shipping-legend-shipto mk-new-ring"><b>Ship To</b> in Bold</span>` : ''}<span class="shipping-legend-quality">${icon('check', 11)} Certain ${icon('circle', 11)} Inferred</span></p>`
 }
 function lanesHtml(d, { bare = true, only = null } = {}) {
   const rows = shipRows(d)
@@ -6797,8 +6808,8 @@ function ffFrame(w, d, { only = false, id } = {}) {
       <div class="ff-photo-wrap"><div class="mk-photo">Photo, unchanged</div></div>
       <div class="ff-card-side">
         <header class="ff-card-head">${ffEyebrow(d, { id })}
-          <h2 class="fulfillment-name ff-card-name">Hop's Sandaconda</h2>
-          <p class="fulfillment-say ff-card-about"><span>Near Mint</span><span>087/159</span></p></header>
+          <div class="ff-card-title"><h2 class="fulfillment-name ff-card-name">Hop's Sandaconda</h2>
+          <p class="fulfillment-say ff-card-about"><span>Near Mint</span><span>087/159</span></p></div></header>
         ${only ? '' : `<section class="ff-where" aria-label="Where to find it">
           <p class="fulfillment-say ff-where-label">${icon('pin', 22)} Where to find it</p>
           <p class="fulfillment-place fulfillment-place-large ff-place"><span class="ff-place-elem">Box 3</span><span class="ff-place-elem">Section 2</span><span class="ff-place-elem">Card 1</span></p></section>
@@ -6806,8 +6817,8 @@ function ffFrame(w, d, { only = false, id } = {}) {
       </div></div>`
   /* An option shows the card's head alone, at the side column's 1440 width. */
   if (only) return `<div class="fulfillment ff"><header class="ff-card-head">${ffEyebrow(d, { id })}
-    <h2 class="fulfillment-name ff-card-name">Hop's Sandaconda</h2>
-    <p class="fulfillment-say ff-card-about"><span>Near Mint</span><span>087/159</span></p></header></div>`
+    <div class="ff-card-title"><h2 class="fulfillment-name ff-card-name">Hop's Sandaconda</h2>
+    <p class="fulfillment-say ff-card-about"><span>Near Mint</span><span>087/159</span></p></div></header></div>`
   return `<div class="mk-frame mk-bare" data-w="${w}"><div class="fulfillment ff"><div class="ff-column"${w === '1440' ? ' data-wide="true"' : ''}>${card}</div></div></div>`
 }
 
