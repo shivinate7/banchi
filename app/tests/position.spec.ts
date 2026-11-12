@@ -1,5 +1,5 @@
 // Protects: The chip a card's position bar marks is the section its heading names, even when the box's section list was read one slot out of step with the card's own place (a sale closed the slots up behind it).
-// Governs: D118 (the position bar follows the heading's section), `app/src/position.ts` `spansOf`
+// Governs: D155 (the section ruler leads the box: the box strip's chip and its caret sit on the chip the card is in), `app/src/position.ts` `spansOf`
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { place } from './routeFixtures'

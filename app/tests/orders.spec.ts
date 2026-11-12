@@ -4709,7 +4709,7 @@ test('a buyer whose one order was canceled reads "Order Canceled", never "All 0 
 
 test('a buyer whose two orders were both canceled reads "Orders Canceled", never "All 0 Sold"', async ({ page }) => {
   const first = order({ buyer: 'Grace Hopper', status: 'Canceled', open: false, terminal: true, recorded: 0 })
-  const second = order({ buyer: 'Grace Hopper', number: OTHER_ORDER, key: `TCGplayer:${OTHER_ORDER}`, status: 'Cancelled', open: false, terminal: true, recorded: 0 })
+  const second = order({ buyer: 'Grace Hopper', number: OTHER_ORDER, key: `TCGplayer:${OTHER_ORDER}`, status: 'Canceled', open: false, terminal: true, recorded: 0 })
   await open(page, {
     orders: payloadOf([order(), first, second], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]),
   })
