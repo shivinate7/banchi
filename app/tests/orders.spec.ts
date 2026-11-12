@@ -2,7 +2,7 @@
 // Governs: D91, D97, D113, D118, D132, D193, D203
 import { test, expect, type Locator, type Page, type Route } from '@playwright/test'
 import { sealEveryTest, stubStore } from './shell'
-import { line, order, payloadOf, pick, place } from './routeFixtures'
+import { line, order, payloadOf, pick, place, severalOrders } from './routeFixtures'
 import { afterPaint, settleMotion } from './motionSettled'
 
 /** A real, tiny image `route.fulfill` can hand back for a photo read — `inventory.spec.ts`'s
@@ -5867,4 +5867,63 @@ test('ux-wave1: a refused leave adds no history entry, and a refused Back keeps 
   await page.keyboard.press('Escape')
   await page.goBack()
   await expect(page, 'the next Back still reaches the screen before Orders').toHaveURL(/#\/$|#\/\?/)
+})
+
+/* ---------------------------------------------------------------- the parcel name (D193) */
+
+/* THE PARCEL NAME IS DRAWN AS "SHIP TO" WHERE ONE ORDER MAKES IT UNAMBIGUOUS: the buyer's panel
+   and the order's own header under Manage. It is drawn only when it is someone else's name, so a
+   buyer who ships to themselves reads as before. A buyer with two orders gets no panel line,
+   because one name would be a guess about which parcel. */
+
+test('the parcel name is drawn as Ship To on the buyer panel, and nothing on the panel says Bought By', async ({
+  page,
+}) => {
+  await open(page, { orders: severalOrders({ [ORDER_NUMBER]: 'Mina Park' }) })
+  await page.locator('.orders-index-row', { hasText: 'Ada Lovelace' }).click()
+
+  const panel = page.locator('.orders-panel')
+  await expect(panel.locator('.bn-shipto')).toContainText('Ship To')
+  await expect(panel.locator('.bn-shipto')).toContainText('Mina Park')
+  await expect(panel).not.toContainText('Bought By')
+})
+
+test('the order header under Manage draws the parcel name as Ship To beside the order number', async ({ page }) => {
+  await open(page, { orders: severalOrders({ [ORDER_NUMBER]: 'Mina Park' }) })
+  await page.locator('.orders-index-row', { hasText: 'Ada Lovelace' }).click()
+  await openManage(page, 'order')
+
+  const head = page.locator('.orders-order-head')
+  await expect(head.locator('.orders-order-number')).toHaveText(ORDER_NUMBER)
+  await expect(head.locator('.bn-shipto')).toContainText('Ship To')
+  await expect(head.locator('.bn-shipto')).toContainText('Mina Park')
+})
+
+test('a parcel name that goes to the buyer draws no Ship To line on the panel or the header', async ({ page }) => {
+  await open(page, { orders: severalOrders({ [ORDER_NUMBER]: 'Ada Lovelace' }) })
+  await page.locator('.orders-index-row', { hasText: 'Ada Lovelace' }).click()
+  await expect(page.locator('.orders-panel-name')).toContainText('Ada Lovelace')
+  await expect(page.locator('.orders-panel .bn-shipto')).toHaveCount(0)
+
+  await openManage(page, 'order')
+  await expect(page.locator('.orders-order-head .orders-order-number')).toHaveText(ORDER_NUMBER)
+  await expect(page.locator('.orders-order-head .bn-shipto')).toHaveCount(0)
+})
+
+test('a buyer with two orders draws no parcel name line on the panel, because one name would be a guess', async ({
+  page,
+}) => {
+  const second = order({ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Ada Lovelace', wanted: 1, recorded: 0, ship_to: 'Nora Second' })
+  await open(page, {
+    orders: payloadOf(
+      [order({ ship_to: 'Mina Park' }), second],
+      [
+        { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
+        { key: secondBuyerKey, number: SECOND_BUYER_ORDER, complete: false, outstanding: 1, lines: [line({ order: SECOND_BUYER_ORDER, order_key: secondBuyerKey })] },
+      ],
+    ),
+  })
+  await page.locator('.orders-index-row', { hasText: 'Ada Lovelace' }).click()
+  await expect(page.locator('.orders-panel-order')).toHaveText('2 orders')
+  await expect(page.locator('.orders-panel .bn-shipto')).toHaveCount(0)
 })

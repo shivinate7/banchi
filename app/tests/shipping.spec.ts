@@ -2,7 +2,7 @@
 // Governs: D16, D61, D63, D117, D196, D218
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
-import { batchOf, order as orderRow, payloadOf, shippingRow as row } from './routeFixtures'
+import { batchOf, order as orderRow, payloadOf, shippingRow as row, threeLaneBatch } from './routeFixtures'
 
 import type { OrderRow, ShippingBatch } from '../src/types'
 import { setViewport } from './phoneSwitch'
@@ -650,4 +650,35 @@ test('ux-w2 B15: the "Needs a look" frame has a solid border and no dashed edge'
     styles.border.includes('solid') || styles.outline === 'solid',
     `the frame draws a solid edge (reads ${JSON.stringify(styles)})`,
   ).toBe(true)
+})
+
+/* -------------------------------------------------------------------- the parcel name (D193) */
+
+/* THE SHIP STAGE DRAWS THE PARCEL NAME ON EACH ROW THAT CARRIES ONE, IN BOLD, AND SAYS "SHIP TO IN
+   BOLD" ONCE IN THE LEGEND ABOVE THE LANES. The legend appears only when a row has a name to key it
+   to, so a file with no names never explains a word it does not use. */
+
+test('a row with a parcel name draws Ship To with the name in bold, and the legend says so once', async ({ page }) => {
+  await open(page, { batch: threeLaneBatch({ [VALUE_ORDER]: 'Mina Park' }) })
+  await readExport(page)
+
+  const value = page.locator('.shipping-row').filter({ hasText: VALUE_ORDER })
+  await expect(value.locator('.bn-shipto')).toContainText('Ship To')
+  await expect(value.locator('.bn-shipto-name')).toHaveText('Mina Park')
+  await expect(value.locator('.bn-shipto-name')).toHaveCSS('font-weight', '600')
+  await expect(page.locator('.shipping-legend-shipto')).toHaveCount(1)
+  await expect(page.locator('.shipping-legend-shipto')).toHaveText('Ship To in Bold')
+
+  /* A row with no name keeps no Ship To line of its own. */
+  const weight = page.locator('.shipping-row').filter({ hasText: WEIGHT_ORDER })
+  await expect(weight.locator('.bn-shipto')).toHaveCount(0)
+})
+
+test('the Ship To in Bold legend is drawn only when a row carries a parcel name', async ({ page }) => {
+  await open(page, { batch: threeLaneBatch() })
+  await readExport(page)
+  await expect(page.locator('.shipping-row').filter({ hasText: VALUE_ORDER })).toBeVisible()
+
+  await expect(page.locator('.shipping-legend-shipto')).toHaveCount(0)
+  await expect(page.locator('.bn-shipto')).toHaveCount(0)
 })
