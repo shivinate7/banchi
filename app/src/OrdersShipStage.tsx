@@ -330,10 +330,15 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
   }
 
   /* THE LEDGER'S HALF, JOINED BY ORDER NUMBER AND VIEW-ONLY. The export says which envelope; the
-     ledger says how many copies have been pulled for it. Neither side is written by this. */
+     ledger says how many copies have been pulled for it. Neither side is written by this.
+     The export names no marketplace, so a number two sources both spell has no one order: it maps to
+     null and the row shows nothing from the ledger, as `Ledger.name_ship_tos_by_number` refuses it. */
   const ledger = useMemo(() => {
-    const out = new Map<string, OrderRow>()
-    for (const order of payload?.orders ?? []) out.set(order.number, order)
+    const out = new Map<string, OrderRow | null>()
+    for (const order of payload?.orders ?? []) {
+      const folded = order.number.trim().toLowerCase()
+      out.set(folded, out.has(folded) ? null : order)
+    }
     return out
   }, [payload])
 
@@ -411,8 +416,8 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
             ) : null}
           </label>
           <p className="shipping-empty-note">
-            The file is forgotten after 30 minutes. Only the name each order ships to is saved, on the order. The
-            street stays in the file you download.
+            The file is forgotten after 30 minutes. Reading it saves only the name each order ships to, on the
+            order. The street stays in the file you download.
           </p>
           <div className="shipping-lane-guide" aria-label="The three lanes">
             {SHIP_LANES.map((lane) => (
@@ -626,7 +631,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                     {rows.map((row, at) => {
                     const quality = qualityOf(row)
                     const figures = figuresOf(row)
-                    const known = ledger.get(row.order) ?? null
+                    const known = ledger.get(row.order.trim().toLowerCase()) ?? null
                     const sentence = reasonSentenceOf(row)
                     /* ONE NAME WHEN THE BUYER SHIPS TO THEMSELVES. The buyer is the ledger's, so a row
                        for an order Banchi has not read in has only the file's name. */

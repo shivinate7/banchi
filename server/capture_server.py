@@ -14948,15 +14948,14 @@ def do_order_fetch(payload: dict) -> dict:
     # `order_transport` free of any dependency on `store/orders.py`, which nothing else in
     # that module needs either.
     known_buyers = _known_buyers(ledger)
-    # A ship-to the wire does not carry never counts as a difference: the Export Shipping read
-    # can have written one the search summary has no word for, and re-listing it every press
-    # would be a steady state that is never quiet.
+    # Only the buyer is compared: the search summary carries no ship-to, so a ship-to the
+    # Export Shipping read wrote must never count as a difference, or it would be re-listed every
+    # press and the steady state would never be quiet.
     names = [
         entry
         for entry in result.names
         if (held := known_buyers.get(str(entry["orderNumber"]).strip().casefold())) is None
         or held[0] != entry["buyer"]
-        or (entry.get("ship_to") and held[1] != entry["ship_to"])
     ]
 
     return {
@@ -14989,7 +14988,6 @@ def do_order_fetch(payload: dict) -> dict:
                 "source": ORDER_FETCH_SOURCE,
                 "number": entry["orderNumber"],
                 "buyer": entry["buyer"],
-                **({"ship_to": entry["ship_to"]} if entry.get("ship_to") else {}),
             }
             for entry in names
         ],
