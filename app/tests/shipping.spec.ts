@@ -682,3 +682,95 @@ test('the Ship To in Bold legend is drawn only when a row carries a parcel name'
   await expect(page.locator('.shipping-legend-shipto')).toHaveCount(0)
   await expect(page.locator('.bn-shipto')).toHaveCount(0)
 })
+
+/* A ROW WHOSE PARCEL NAME IS SOMEONE ELSE'S ALSO SAYS WHOSE ORDER IT IS: "BOUGHT BY" AND THE BUYER,
+   READ FROM THE LEDGER. A ROW WHOSE PARCEL NAME IS THE BUYER'S SAYS THE NAME ONCE, AND NO BUYER
+   TWICE. A ROW WHOSE ORDER NUMBER THE LEDGER HOLDS TWICE SAYS NO BUYER AT ALL, because one name would
+   be a guess about which order. Each absence asserts the parcel line first, so it cannot pass on a
+   screen that draws no name. */
+
+const BUYER = 'Ada Lovelace'
+
+test('a row whose parcel name differs from its buyer draws Bought By the buyer, read from the ledger', async ({
+  page,
+}) => {
+  await open(page, {
+    batch: threeLaneBatch({ [VALUE_ORDER]: 'Mina Park' }),
+    orders: [orderRow({ key: `TCGplayer:${VALUE_ORDER}`, number: VALUE_ORDER, buyer: BUYER })],
+  })
+  await readExport(page)
+
+  const value = page.locator('.shipping-row').filter({ hasText: VALUE_ORDER })
+  await expect(value, 'the row is drawn').toBeVisible()
+  await expect(value.locator('.bn-shipto-by'), 'Bought By names the buyer the ledger holds').toContainText(
+    `Bought By ${BUYER}`,
+  )
+  await expect(value.locator('.bn-shipto-name'), 'the parcel name is drawn as Ship To').toHaveText('Mina Park')
+})
+
+test('a row whose parcel name is its buyer draws the name once, and no Bought By', async ({ page }) => {
+  await open(page, {
+    batch: threeLaneBatch({ [VALUE_ORDER]: BUYER }),
+    orders: [orderRow({ key: `TCGplayer:${VALUE_ORDER}`, number: VALUE_ORDER, buyer: BUYER })],
+  })
+  await readExport(page)
+
+  const value = page.locator('.shipping-row').filter({ hasText: VALUE_ORDER })
+  await expect(value, 'the row is drawn').toBeVisible()
+  await expect(value.locator('.bn-shipto-name'), 'the parcel name is drawn as Ship To').toHaveText(BUYER)
+  await expect(value, 'no Bought By, because the parcel goes to the buyer').not.toContainText('Bought By')
+})
+
+test('an order number the ledger holds twice draws the parcel name, and no Bought By', async ({ page }) => {
+  await open(page, {
+    batch: threeLaneBatch({ [VALUE_ORDER]: 'Mina Park' }),
+    orders: [
+      orderRow({ key: `TCGplayer:${VALUE_ORDER}`, number: VALUE_ORDER, buyer: BUYER }),
+      orderRow({ key: `Other:${VALUE_ORDER}`, source: 'Other', number: VALUE_ORDER, buyer: 'Grace Hopper' }),
+    ],
+  })
+  await readExport(page)
+
+  const value = page.locator('.shipping-row').filter({ hasText: VALUE_ORDER })
+  await expect(value, 'the row is drawn').toBeVisible()
+  await expect(value.locator('.bn-shipto-name'), 'the parcel name is drawn as Ship To').toHaveText('Mina Park')
+  await expect(value, 'no Bought By, because the ledger cannot say which buyer').not.toContainText('Bought By')
+})
+
+/* THE EMPTY STAGE SAYS WHAT A READ KEEPS, AND THE FILE CARD SAYS WHAT A READ SAVED. A read saves only
+   each order's parcel name, on the order; the street stays in the file the operator downloaded. */
+
+test('before a file is read, the empty stage says a read saves only the name each order ships to', async ({
+  page,
+}) => {
+  await open(page)
+
+  const note = page.locator('.shipping-empty-note')
+  await expect(note, 'the empty-stage note is drawn').toBeVisible()
+  await expect(note, 'it says a read saves only the name each order ships to').toContainText(
+    'Reading it saves only the name each order ships to',
+  )
+  await expect(note, 'it says the street stays in the downloaded file').toContainText(
+    'The street stays in the file you download',
+  )
+})
+
+test('a read that saves names says Ship To saved on the file card, with the count', async ({ page }) => {
+  await open(page, { batch: { ...threeLaneBatch(), ship_to_saved: { named: 2, unchanged: 0, unknown: 0 } } })
+  await readExport(page)
+
+  await expect(page.locator('.shipping-file-meta'), 'the file card names how many orders were saved').toContainText(
+    'Ship To saved on 2 orders',
+  )
+})
+
+test('a read whose names were saved before says Ship To already saved, and no count', async ({ page }) => {
+  await open(page, { batch: { ...threeLaneBatch(), ship_to_saved: { named: 0, unchanged: 2, unknown: 0 } } })
+  await readExport(page)
+
+  const meta = page.locator('.shipping-file-meta')
+  await expect(meta, 'the file card says the names were already saved').toContainText('Ship To already saved')
+  await expect(meta, 'the file card names no count for a read that saved nothing new').not.toContainText(
+    'Ship To saved on',
+  )
+})
