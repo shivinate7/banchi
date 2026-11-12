@@ -106,15 +106,8 @@ export function PositionBar({
      the bar is drawn INSIDE `.position-bar-here`, at `--pb-in`: how far across that chip the
      card's cell is. By construction, in every browser. */
   const own = spans.find((span) => span.current)
-  /* HOW FAR ACROSS THAT CHIP, from the same section-relative card the ruler marks (`depth.marker`), so
-     the bar cannot leave the chip when the chip's bounds and the place disagree. The box-wide
-     arithmetic is the fallback where there is no ruler. */
   const inChip =
-    own === undefined || place.slot === null
-      ? null
-      : depth?.marker != null
-        ? depth.marker / 100
-        : (place.slot - own.start + 0.5) / (own.end - own.start + 1)
+    own === undefined || place.slot === null ? null : (place.slot - own.start + 0.5) / (own.end - own.start + 1)
   const lastIn = useRef(0.5)
   if (inChip !== null) lastIn.current = inChip
   const inOwnChip = sectionDepth && own !== undefined

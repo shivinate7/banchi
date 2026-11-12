@@ -9,4 +9,4 @@
 
 A typed rarity is evidence, not fact: two agreeing signals release it, and disagreement is a review reason.
 
-**The card header states the catalogue's rarity, never the claim.** The header's one rarity pill on `#/inventory` and the pick view reads `InventoryCard.rarity`, the catalogue's own word. The claim is the operator's evidence about the stack and may list several rarities, so it is read and edited in the Manage box only (owner ruling, 2026-11-11 20:33 CST, "Catalogue rarity").
+**The card header states the catalog's rarity, never the claim.** The header's one rarity pill on `#/inventory` and the pick view reads `InventoryCard.rarity`, the catalog's own word. The claim is the operator's evidence about the stack and may list several rarities, so it is shown in the Claims facts and edited in the Manage box, and the header shows the catalog rarity only (owner ruling "Catalog rarity").
