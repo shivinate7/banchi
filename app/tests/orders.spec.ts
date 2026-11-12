@@ -4722,7 +4722,7 @@ test('a buyer whose two orders were both canceled reads "Orders Canceled", never
   await expect(done).not.toContainText('All 0 Sold')
 })
 
-test('a buyer with nothing canceled and nothing sold reads "Nothing Sold", never "All 0 Sold"', async ({ page }) => {
+test('a buyer with nothing canceled and nothing sold reads "Shipped", never "Nothing Sold" or "All 0 Sold"', async ({ page }) => {
   const unsold = order({ buyer: 'Grace Hopper', status: 'Shipped', open: false, terminal: true, recorded: 0 })
   await open(page, {
     orders: payloadOf([order(), unsold], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]),
@@ -4732,7 +4732,8 @@ test('a buyer with nothing canceled and nothing sold reads "Nothing Sold", never
   await page.locator('.orders-index-row', { hasText: 'Grace Hopper' }).click()
 
   const done = page.locator('.orders-walk-done')
-  await expect(done).toContainText('Nothing Sold')
+  await expect(done).toContainText('Shipped')
+  await expect(done).not.toContainText('Nothing Sold')
   await expect(done).not.toContainText('All 0 Sold')
 })
 
