@@ -65,9 +65,11 @@ export — which is why the weight ratio is the best signal available at all.
 supplies them (`OrderResolution.ships_in_an_envelope`), and the day the Bridge lands, the
 cut here is the thing to delete, not the thing to re-fit.
 
-BUYER PII PASSES THROUGH AND IS NOT PERSISTED. `Shipment` holds a real name and a real
+THE STREET PASSES THROUGH AND IS NOT PERSISTED. `Shipment` holds a real name and a real
 street address for as long as the caller holds it. Nothing here writes, caches, or reaches
-`store/` — this module imports the format and the lane rule and nothing else.
+`store/` — this module imports the format and the lane rule and nothing else. The NAME is
+kept by the caller: `Shipment.ship_to` is the one accessor for it, and the capture server
+writes it onto the order the export names (D193).
 """
 
 from __future__ import annotations
@@ -189,6 +191,20 @@ class Shipment:
     @property
     def order(self) -> str:
         return self.cells.get(ORDER_COLUMN, "").strip()
+
+    @property
+    def ship_to(self) -> str:
+        """The name on the envelope: `FirstName` and `LastName` joined by one space, as the cells give them.
+
+        THE NAME ONLY. The street, city and postcode in the same row are never read here, so a
+        caller that wants who the parcel goes to (the Ship stage row, the ledger's `ship_to`,
+        the label's `customer_name`) cannot also reach where. Empty when both cells are blank.
+        """
+        return " ".join(
+            part.strip()
+            for part in (self.cells.get("FirstName", ""), self.cells.get("LastName", ""))
+            if part.strip()
+        )
 
     def _decimal(self, column: str) -> Optional[Decimal]:
         raw = (self.cells.get(column) or "").strip()

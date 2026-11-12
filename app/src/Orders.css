@@ -320,6 +320,9 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-walk-sub { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .orders-buyer-order-id { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--bn-ink-2); }
 .orders-panel-order { display: flex; gap: var(--bn-1); min-width: 0; }
+/* B. The name on the parcel (`ShipTo`), directly under the buyer's name it qualifies: the two share
+   `.orders-panel-who`, one step looser than the rest of the column. */
+.orders-panel-who { display: flex; flex-direction: column; gap: var(--bn-1); min-width: 0; }
 .orders-panel-facts { display: flex; align-items: center; flex-wrap: wrap; gap: var(--bn-3) var(--bn-5); }
 .orders-panel-figures { display: flex; gap: var(--bn-5); }
 .orders-walk-note {
@@ -470,23 +473,24 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   transition: box-shadow var(--bn-t) var(--bn-ease);
 }
 
+/* A. THE ORDER HEADER: a two-column grid, not a wrapping flex row, so the id column shrinks and the
+   status pill can never drop under it. The ship-to is its own line under the number. */
 .orders-order-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--bn-3);
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: var(--bn-3);
 }
 .orders-order-id { display: flex; flex-direction: column; gap: var(--bn-1); min-width: 0; }
-/* The order is the panel's title — display type, above its lines — so the hierarchy reads
-   order › line › copy. */
+/* The order is the sheet's second title (its first is the buyer), so it takes the h3 size: a
+   TCGplayer number is 21 characters, and at the xl size it wrapped in a narrow column. */
 .orders-order-number {
   margin: 0;
   font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-xl);
+  font-size: var(--bn-fs-h3);
   font-weight: 800;
   letter-spacing: -0.01em;
-  line-height: 1.2;
+  line-height: var(--bn-pill-h);
   font-variant-numeric: tabular-nums;
   color: var(--bn-ink);
   overflow-wrap: anywhere;
@@ -494,7 +498,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-order-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--bn-0-5) var(--bn-2); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .orders-order-meta > * + *::before { content: '·'; margin-right: var(--bn-2); color: var(--bn-ink-4); }
 .orders-feed-word q { quotes: '“' '”'; font-style: italic; }
-.orders-order-side { display: flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; }
+.orders-order-side { display: flex; flex-direction: column; align-items: flex-end; gap: var(--bn-1-5); }
 
 .orders-order-progress {
   display: flex;

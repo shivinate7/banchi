@@ -28,11 +28,12 @@ import {
   walkPlan,
 } from './server'
 import { PullConfirm } from './PullConfirm'
+import { shipToOf } from './orderBuyers'
 import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { placePartsOf, placeWordsOf, sayPlace } from './position'
-import { DidYouMean, Icon, Logo, Modal, Page, useOverlayLayer, useUndoHotkey } from './kit'
+import { DidYouMean, Icon, Logo, Modal, Page, ShipTo, useOverlayLayer, useUndoHotkey } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { isEditableTarget } from './keys'
 import { useSearch } from './useSearch'
@@ -132,6 +133,9 @@ type OrderRef = {
    *  Never the raw order id alone on screen: `orderLabel` below pairs whichever of these
    *  two he sees with the other, secondary. */
   buyer: string | null
+  /** The name on the parcel (D193), `null` when the ledger has none. `orderLabel` leads with it when it
+   *  differs from the buyer. */
+  ship_to: string | null
   sku: string
   capture_id: string
 }
@@ -346,9 +350,44 @@ function asSellable(group: SearchGroup, copy: SearchCopy): Sellable {
  *  has one (D193), the id always present but never alone — paired as `secondary` rather than
  *  standing for the order by itself. A nameless order reads "No name", the same fallback
  *  `orderBuyers.ts:groupBuyers` uses on the owner's own screen, so the two views agree. */
-function orderLabel(buyer: string | null, number: string): { primary: string; secondary: string } {
+function orderLabel(
+  buyer: string | null,
+  shipTo: string | null,
+  number: string,
+): { shipTo: string | null; primary: string; secondary: string; boughtBy: string | null } {
+  /* PACKING READS THE NAME ON THE PARCEL (D193). `shipTo` is the raw name, so a buyer who ships to
+     themselves still reads "Ship To" with that one name; `shipToOf` (the rule the owner's screens use)
+     says only whether the buyer is someone else, which is when `boughtBy` is set. */
+  const other = shipToOf({ buyer, ship_to: shipTo })
+  const named = shipTo?.trim() ?? ''
   const trimmed = buyer?.trim() ?? ''
-  return { primary: trimmed === '' ? 'No name' : trimmed, secondary: `#${number}` }
+  return {
+    shipTo: named === '' ? null : named,
+    primary: trimmed === '' ? 'No name' : trimmed,
+    secondary: `#${number}`,
+    boughtBy: other !== null && trimmed !== '' ? trimmed : null,
+  }
+}
+
+/** The card's line for the order it is for. A known ship-to leads as "Ship To" (the Fulfiller's size of
+ *  the kit's `ShipTo`, the order number on its second line). With none known the buyer is not guessed
+ *  as a parcel name, so the line keeps "For <buyer> #<number>". */
+function OrderEyebrow({ buyer, shipTo, number }: { readonly buyer: string | null; readonly shipTo: string | null; readonly number: string }) {
+  const label = orderLabel(buyer, shipTo, number)
+  if (label.shipTo === null) {
+    return (
+      <p className="fulfillment-say ff-card-eyebrow">
+        <span className="ff-card-order">
+          For <b>{label.primary}</b> <span className="ff-card-order-id">{label.secondary}</span>
+        </span>
+      </p>
+    )
+  }
+  return (
+    <ShipTo className="ff-shipto" name={label.shipTo} by={label.boughtBy}>
+      <span className="ff-card-order-id">{label.secondary}</span>
+    </ShipTo>
+  )
 }
 
 function aimAt(card: Sellable, order: OrderRef): PullTarget {
@@ -751,6 +790,7 @@ export function Fulfillment() {
             source: row.source,
             number: ref.number,
             buyer: ref.buyer,
+            ship_to: row.ship_to ?? null,
             sku: item.sku,
             capture_id: copy.capture_id,
           },
@@ -1207,23 +1247,18 @@ export function Fulfillment() {
           <div className="ff-card-side">
           <header className="ff-card-head">
             {forOrder === null ? null : (
-              <p className="fulfillment-say ff-card-eyebrow">
-                <span className="ff-card-order">
-                  For <b>{orderLabel(forOrder.buyer, forOrder.number).primary}</b>{' '}
-                  <span className="ff-card-order-id">
-                    {orderLabel(forOrder.buyer, forOrder.number).secondary}
-                  </span>
-                </span>
-              </p>
+              <OrderEyebrow buyer={forOrder.buyer} shipTo={forOrder.ship_to} number={forOrder.number} />
             )}
-            <h2 className="fulfillment-name ff-card-name">{chosen.name}</h2>
-            {chosen.about === null ? null : (
-              <p className="fulfillment-say ff-card-about">
-                {chosen.about.map((part, at) => (
-                  <span key={at}>{part}</span>
-                ))}
-              </p>
-            )}
+            <div className="ff-card-title">
+              <h2 className="fulfillment-name ff-card-name">{chosen.name}</h2>
+              {chosen.about === null ? null : (
+                <p className="fulfillment-say ff-card-about">
+                  {chosen.about.map((part, at) => (
+                    <span key={at}>{part}</span>
+                  ))}
+                </p>
+              )}
+            </div>
           </header>
 
           <section className="ff-where" aria-label="Where to find it">

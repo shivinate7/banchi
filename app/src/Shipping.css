@@ -274,13 +274,20 @@
 .shipping-quality-legend {
   display: flex;
   align-items: center;
-  gap: var(--bn-1-5);
+  gap: var(--bn-1-5) calc(var(--bn-1-5) + var(--bn-3));
   flex-wrap: wrap;
   font-size: var(--bn-fs-xs);
   color: var(--bn-ink-3);
 }
-.shipping-quality-legend .bn-icon:first-child { color: var(--bn-ok); }
+/* The first icon is the check; the Ship To key may lead the legend, so first-of-type, not first-child. */
+.shipping-quality-legend .bn-icon:first-of-type { color: var(--bn-ok); }
+/* C. The label is said once, here, keyed to the bold name; each row's `ShipTo` keeps it for a screen reader only. */
+.shipping-legend-shipto { display: inline-flex; align-items: baseline; gap: var(--bn-1); }
+/* The icons and their words keep the tight gap; the legend's own gap is the wider one that sets the key apart. */
+.shipping-legend-quality { display: inline-flex; align-items: center; gap: var(--bn-1-5); flex-wrap: wrap; }
+.shipping-legend-shipto b { font-weight: 600; color: var(--bn-ink); }
 .shipping-says { font-size: var(--bn-fs-md); color: var(--bn-ink-2); line-height: 1.4; }
+.shipping-row .bn-shipto-name { font-size: var(--bn-fs-md); }
 .shipping-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1-5); }
 .shipping-figures { display: inline-flex; flex-wrap: wrap; gap: var(--bn-1-5); }
 .shipping-figure {

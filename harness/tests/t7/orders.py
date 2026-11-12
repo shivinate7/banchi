@@ -5153,6 +5153,156 @@ def check_order_reads_retry_through_the_one_home(checks: Checks) -> None:
     )
 
 
+def check_order_ship_to_name(checks: Checks) -> None:
+    """The name on the parcel, held on the order: ingest, carry-over, the names route, and the street refused (D193).
+
+    Two names leave the feed and both are kept: the buyer's, and the name the parcel goes to. The
+    street never does. `/orders/ingest` and `/orders/names` refuse `shippingAddress` by name, as
+    they did before this field existed. Each case drives the route the screen drives and reads the
+    order back the way `GET /orders` answers it, so a case cannot pass on a field the screen never
+    draws.
+
+    THE CASES THAT NAME `ship_to` ARE THE RED ONES. The absences beside them (a paste with no
+    ship-to still ingests, a street is refused by name, a name for an order the ledger never held
+    creates nothing) hold on the old code too; each is the control for the positive case beside it.
+    """
+    checks.note("")
+    checks.note("SHIP-TO NAME — ingest keeps it, the names route writes it, the street is refused (D193)")
+
+    def line(sku, quantity=1, **extra) -> dict:
+        row = {"sku": sku, "quantity": quantity}
+        row.update(extra)
+        return row
+
+    def paste(number, *lines, **extra) -> dict:
+        order = {
+            "source": "TCGplayer",
+            "number": number,
+            "placed_at": "2026-08-27T10:00:00.000+00:00",
+            "lines": list(lines),
+        }
+        order.update(extra)
+        return {"orders": [order]}
+
+    def read_back(number: str) -> list:
+        """Every held row under one number, read the way `GET /orders` answers it."""
+        return [row for row in capture_server.do_orders()["orders"] if row["number"] == number]
+
+    with isolated_home():
+        # CONTROL: a paste that names no ship-to still ingests, as it did before the field existed.
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest(paste("S-1", line("9191486", 1))),
+            "POST /orders/ingest takes an order that names no ship-to, as it did before the field",
+        )
+
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest(
+                paste("S-2", line("9191486", 1), ship_to="Recipient Placeholder")
+            ),
+            "POST /orders/ingest takes an order that names the ship-to",
+        )
+        checks.equal(
+            [row.get("ship_to") for row in read_back("S-2")],
+            ["Recipient Placeholder"],
+            "and the name is on the order, read back the way GET /orders shows it",
+        )
+
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest(
+                paste("S-3", line("9191486", 1), ship_to="Recipient Placeholder")
+            ),
+            "POST /orders/ingest takes the ship-to on a first paste of S-3",
+        )
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest(paste("S-3", line("9191486", 1))),
+            "and a re-paste of S-3 that says nothing about the parcel is accepted",
+        )
+        checks.equal(
+            [row.get("ship_to") for row in read_back("S-3")],
+            ["Recipient Placeholder"],
+            "INGEST KEEPS AN EXISTING SHIP-TO WHEN THE NEW RECORD OMITS IT. A paste that says "
+            "nothing about the parcel does not erase the name already held, the same carry the "
+            "buyer has",
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_order_ingest(
+                paste("S-4", line("9191486", 1),
+                      shippingAddress={"addressOne": "101 Example St", "city": "Springfield"})
+            ),
+            "field_not_settable",
+            "POST /orders/ingest still REFUSES shippingAddress BY NAME. The street is not a field "
+            "this route takes, ship-to or no ship-to",
+        )
+        checks.equal(read_back("S-4"), [], "and a refused paste holds nothing")
+
+        answers(
+            checks,
+            lambda: capture_server.do_order_names(
+                {"names": [{"source": "TCGplayer", "number": "S-1", "buyer": "Buyer Placeholder"}]}
+            ),
+            "POST /orders/names takes a buyer for a held order, as it did before the field",
+        )
+        checks.equal(
+            [row.get("buyer") for row in read_back("S-1")],
+            ["Buyer Placeholder"],
+            "and the buyer is on the order",
+        )
+
+        names_report = answers(
+            checks,
+            lambda: capture_server.do_order_names({"names": [{
+                "source": "TCGplayer", "number": "S-1", "buyer": "Buyer Placeholder",
+                "ship_to": "Recipient Placeholder",
+            }]}),
+            "POST /orders/names takes a ship-to beside the buyer",
+        )
+        checks.equal(
+            (names_report or {}).get("ship_to"),
+            {"named": 1, "unchanged": 0, "unknown": 0},
+            "the press reports the ship-to names it wrote, counted apart from the buyers",
+        )
+        checks.equal(
+            [(row.get("buyer"), row.get("ship_to")) for row in read_back("S-1")],
+            [("Buyer Placeholder", "Recipient Placeholder")],
+            "and the ship-to lands on the held order with the buyer untouched",
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_order_names({"names": [{
+                "source": "TCGplayer", "number": "S-1", "buyer": "Buyer Placeholder",
+                "shippingAddress": {"addressOne": "101 Example St"},
+            }]}),
+            "field_not_settable",
+            "POST /orders/names refuses shippingAddress BY NAME, as /orders/ingest does",
+        )
+
+        never_held = answers(
+            checks,
+            lambda: capture_server.do_order_names({"names": [{
+                "source": "TCGplayer", "number": "NOT-HELD-S", "buyer": "Nobody Placeholder",
+                "ship_to": "Nobody Else Placeholder",
+            }]}),
+            "POST /orders/names takes a ship-to for an order the ledger has never held",
+        )
+        checks.equal(
+            ((never_held or {}).get("ship_to") or {}).get("unknown"),
+            1,
+            "and COUNTS it unknown rather than raising, the same verdict a buyer gets",
+        )
+        checks.equal(
+            read_back("NOT-HELD-S"),
+            [],
+            "and creates nothing. A name and a number alone mint no order",
+        )
+
+
 CHECKS = (
     check_listing_commands,
     check_committed_copies_are_the_oldest,
@@ -5168,4 +5318,5 @@ CHECKS = (
     check_inventory_copies_route,
     check_order_fetch_route,
     check_order_reads_retry_through_the_one_home,
+    check_order_ship_to_name,
 )

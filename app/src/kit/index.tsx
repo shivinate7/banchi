@@ -512,6 +512,47 @@ export function Pill({
   )
 }
 
+/* ---- ShipTo ----------------------------------------------------------------------- */
+/** THE PARCEL LINE, DRAWN ONE WAY ON EVERY SCREEN (D193). "Ship To" and the name on the first
+ *  line; "Bought By" and the buyer on a second line only when `by` is set, which the caller does
+ *  only where the buyer is someone else and not already the heading. `bare` keeps the label for a
+ *  screen reader only, where a legend above the list says it once. `children` ride on the second
+ *  line (the Fulfiller's order number). Names are drawn as given, under `data-typed`. */
+export function ShipTo({
+  name,
+  by = null,
+  bare,
+  className,
+  id,
+  children,
+}: {
+  readonly name: ReactNode
+  readonly by?: ReactNode
+  readonly bare?: boolean
+  readonly className?: string
+  readonly id?: string
+  readonly children?: ReactNode
+}) {
+  return (
+    <div className={['bn-shipto', className].filter(Boolean).join(' ')} id={id}>
+      <p className="bn-shipto-to">
+        <span className={bare ? 'bn-sr' : 'bn-shipto-label'}>Ship To</span>{' '}
+        <span className="bn-shipto-name" data-typed>{name}</span>
+      </p>
+      {by === null && children == null ? null : (
+        <p className="bn-shipto-by">
+          {by === null ? null : (
+            <span>
+              Bought By <span data-typed>{by}</span>
+            </span>
+          )}
+          {children}
+        </p>
+      )}
+    </div>
+  )
+}
+
 /* ---- Slot ------------------------------------------------------------------------- */
 /** A PLACE THAT ALWAYS TAKES ITS ROOM (D313). Content that mounts later (a pill, a chip, a note, a
  *  receipt) goes inside a `Slot`; while `show` is false the slot draws nothing and still holds the

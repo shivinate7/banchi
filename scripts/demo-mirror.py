@@ -204,6 +204,11 @@ def build(home: Path, jobs: int) -> None:
 
     with Store().write() as snap:
         shipped = write_shipping_export(home, snap.ledger.orders.values())
+        # D193: the ship-to name is a second person's real name, which D295 never kept. The mirror
+        # clears it before the recording reads orders; `clear_ship_tos` clears it again after,
+        # because the recording's shipping read writes the file's names back onto the orders.
+        for record in snap.ledger.orders.values():
+            record.ship_to = None
         # D326: a label row holds a buyer's address and the label itself. The mirror keeps none.
         for key in list(snap.ledger.labels):
             del snap.ledger.labels[key]
@@ -263,6 +268,20 @@ def record(home: Path) -> None:
          "--home", str(home), "--offline"],
         check=True,
     )
+
+
+def clear_ship_tos() -> None:
+    """Blank every order's ship-to name in the mirror home (`BANCHI_HOME`), after `record`.
+
+    `record` POSTs the mirror's shipping export, and the server saves that file's names onto the
+    orders (D193). The bundle is already recorded, so this only keeps the home free of names for
+    `assert_scrubbed`. Clearing before `record` as well keeps the recorded orders clean.
+    """
+    from store import Store
+
+    with Store().write() as snap:
+        for record in snap.ledger.orders.values():
+            record.ship_to = None
 
 
 def drop_stale_positions(bundle: Path, home: Path) -> int:
@@ -327,8 +346,11 @@ def assert_scrubbed(bundle: Path, shipping: Path, home: Optional[Path] = None) -
         os.environ["BANCHI_HOME"] = str(home)
         from store import Store
 
-        if len(Store().read().ledger.labels):
+        ledger = Store().read().ledger
+        if len(ledger.labels):
             bad.append("label row")
+        if any(record.ship_to for record in ledger.orders.values()):
+            bad.append("ship-to name")
 
     def walk(value) -> None:
         if isinstance(value, dict):
@@ -463,6 +485,7 @@ def main() -> int:
     home = (REPO_ROOT / args.home).resolve()
     build(home, args.jobs)
     record(home)
+    clear_ship_tos()
     dropped = drop_stale_positions(APP_BUNDLE, home)
     if dropped:
         print("positions %d stale (box, index) pair(s) dropped, no longer any card there"

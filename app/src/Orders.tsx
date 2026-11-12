@@ -23,6 +23,7 @@ import {
   SettingsGroup,
   SettingsOp,
   SettingsTrouble,
+  ShipTo,
   SkeletonText,
   Stat,
   useFacetParams,
@@ -52,7 +53,7 @@ import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore
 import { PositionLabel } from './PositionLabel'
 import { RailFrame } from './RailFrame'
 import { sayPlace } from './position'
-import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, isSharedOrderNumber, lineReason, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
+import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, isSharedOrderNumber, lineReason, shipToOf, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
 import {
   applyTake,
   buyerLabel,
@@ -3167,7 +3168,7 @@ function PullStage({
   const passesFeed = (group: BuyerGroup) =>
     statuses.length === 0 || group.orders.some((order) => statuses.includes((order.status ?? '').trim()))
   const passesSearch = (group: BuyerGroup) =>
-    matchQuery(query, { text: [group.name, buyerLabel(group), ...group.orders.map((order) => order.number)] })
+    matchQuery(query, { text: [group.name, buyerLabel(group), ...group.orders.map((order) => order.number), ...group.orders.map(shipToOf)] })
   /* A buyer still owed a copy that is on hand. A finished or done buyer has nothing to pull and
      stays: the default hides open buyers only. */
   const groupPullable = (group: BuyerGroup) =>
@@ -4338,11 +4339,17 @@ function OrderPanel({
   const figures = figuresOf(group, answers)
   const pill = statusPill(status, group, answers)
   const single = group.orders.length === 1 ? group.orders[0]!.number : null
+  /* The name on the parcel, only where one order makes it unambiguous. A buyer with several orders
+     can ship to several people, so each order's own name is drawn on that order (`OrderDetail`). */
+  const shipTo = group.orders.length === 1 ? shipToOf(group.orders[0]!) : null
   return (
     <div className="orders-panel">
       <div className="orders-panel-top">
         <div className="orders-panel-text">
-          <h2 className="orders-panel-name"><LabelText text={buyerLabel(group)} /></h2>
+          <div className="orders-panel-who">
+            <h2 className="orders-panel-name"><LabelText text={buyerLabel(group)} /></h2>
+            {shipTo === null ? null : <ShipTo name={<LabelText text={shipTo} />} />}
+          </div>
           <p className="orders-panel-order">
             {single === null ? (
               `${group.orders.length} orders`
@@ -4410,6 +4417,7 @@ function OrderDetail({
   const status = statusOf(order, answer)
   const pill = STATUS_PILL[status]
   const placed = whenLabel(order.placed_at)
+  const shipTo = shipToOf(order)
 
   /* THE FEED'S WORD IS LABELLED AS THEIRS. `status` is TCGplayer's own string, verbatim; drawn
      bare beside our status pill it read as a second opinion from us. */
@@ -4426,6 +4434,8 @@ function OrderDetail({
       <span className="orders-feed-word">{sourceName(order.source)}</span>
     </span>
   )
+  /* The sheet's title is the buyer, so no "Bought By" here. */
+  const shipLine = shipTo === null ? null : <ShipTo name={<LabelText text={shipTo} />} />
 
   /* A DONE ORDER IS NOT ALWAYS A CLOSED BOOK (fix for the owner's report: a shipped order can
      still owe copies). `ownsAWalkableBody` is the discriminator — `terminal` plus what is
@@ -4482,6 +4492,7 @@ function OrderDetail({
   if (variant === 'inline') {
     return (
       <>
+        {shipLine}
         <div className="orders-order-metarow">
           {meta}
           <Pill tone={pill.tone} icon={pill.icon}>
@@ -4498,17 +4509,18 @@ function OrderDetail({
       <header className="orders-order-head">
         <div className="orders-order-id">
           <h2 className="orders-order-number">{order.number}</h2>
+          {shipLine}
           {meta}
         </div>
         <div className="orders-order-side">
+          <Pill tone={pill.tone} icon={pill.icon}>
+            {pill.label}
+          </Pill>
           {lane === null ? null : (
             <Pill tone={LANE_TONE[lane]} icon={LANE_ICON[lane]} outline>
               {ORDER_LANE_LABEL[lane]}
             </Pill>
           )}
-          <Pill tone={pill.tone} icon={pill.icon}>
-            {pill.label}
-          </Pill>
         </div>
       </header>
 

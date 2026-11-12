@@ -1,13 +1,14 @@
 /* THE PII BOUNDARY. THIS IS THE ONLY PLACE IN THE APP THAT CONSTRUCTS AN INGEST BODY, AND
- * ITS WHOLE JOB IS TO KEEP EVERYTHING ABOUT THE BUYER OUT OF IT EXCEPT THEIR NAME.
+ * ITS WHOLE JOB IS TO KEEP EVERYTHING ABOUT THE BUYER OUT OF IT EXCEPT THEIR NAMES.
  *
  * An order as a marketplace hands it over carries a person: a name, a shipping address, an
  * email, a phone number. This repo needs almost none of them — what it needs is a SKU and a
  * count, `pipeline/orders.py` says so in its own first line, and everything it computes is a
- * position, which is a fact about a drawer rather than about a customer — PLUS ONE MORE
- * THING AS OF `D193` (amending D69): the buyer's DISPLAY NAME, so the
- * owner can walk drawers by PERSON rather than by order number. Address, email, payment and
- * every other fact about the person stay excluded. The boundary moved by exactly one word;
+ * position, which is a fact about a drawer rather than about a customer — PLUS TWO MORE
+ * THINGS AS OF `D193` (amending D69): the buyer's DISPLAY NAME, so the
+ * owner can walk drawers by PERSON rather than by order number, and the SHIP-TO NAME, so a
+ * parcel is not packed under the wrong person. Address, email, payment and
+ * every other fact about the person stay excluded. The boundary moved by two words;
  * the mechanism that holds it did not. So the paste is still PROJECTED rather than
  * validated: a fixed list of keys is copied across and everything else is left behind, which
  * is the only shape that stays safe when the feed grows a field nobody here has read.
@@ -17,8 +18,10 @@
  * of a console shows `shippingAddress` in camelCase, and then it is silently wrong — the
  * body still posts, the server still answers, and the personal data is on the wire with
  * nothing reporting it. The projection below cannot fail that way: a key nobody named is a
- * key nobody sends. `buyer` is admitted BY NAME, the same way every other kept field is —
- * it is not an exception to the whitelist, it is one more entry in it.
+ * key nobody sends. `buyer` and `ship_to` are admitted BY NAME, the same way every other
+ * kept field is — they are not exceptions to the whitelist, they are two more entries in it.
+ * `ship_to` is read in this project's own spelling only: the street-bearing object a console
+ * shows under `shippingAddress` is not opened here, so it still lands in `dropped`.
  *
  * THE CONSOLE'S OWN SPELLING IS `buyerName`, camelCase, because that is the field name on
  * TCGplayer's own order-search JSON — and it folds into `order.buyer` rather than being kept
@@ -70,8 +73,8 @@ export type PasteReading =
 export const DEFAULT_ORDER_SOURCE = 'TCGplayer'
 
 /* THE ORDER-LEVEL WHITELIST. `source`, `number`, `placed_at` and `status` are what the
- * ledger is keyed and sorted by; `lines` is the work; `buyer` is the one fact about the
- * PERSON this whitelist admits (`D193`). Nothing else crosses.
+ * ledger is keyed and sorted by; `lines` is the work; `buyer` and `ship_to` are the two facts
+ * about a PERSON this whitelist admits (`D193`), both names. Nothing else crosses.
  * `placed_at` in particular is kept because `pipeline/orders.py:Order` sorts the one-pass
  * resolution by it and records that an order with no timestamp sorts LAST rather than first
  * — dropping it here would silently make every paste timestamp-less and hand stock to
@@ -87,6 +90,7 @@ const ORDER_KEEP: ReadonlySet<string> = new Set([
   'placed_at',
   'status',
   'buyer',
+  'ship_to',
   'lines',
 ])
 
@@ -233,6 +237,11 @@ function readOrder(entry: unknown, position: number, dropped: Set<string>): Orde
    * than being stringified, so a nested address hiding under either key never crosses. */
   const buyer = entry['buyer'] !== undefined ? optionalText(entry['buyer']) : optionalText(entry['buyerName'])
   if (buyer !== undefined) order.buyer = buyer
+  /* THE NAME ON THE PARCEL, same text-only gate as `buyer`: an object under `ship_to` becomes
+   * `undefined`, so an address nested there never crosses. Absent stays `undefined`, which
+   * `Ledger.ingest` reads as "keep the name already held". */
+  const shipTo = optionalText(entry['ship_to'])
+  if (shipTo !== undefined) order.ship_to = shipTo
 
   return { ok: true, order }
 }
