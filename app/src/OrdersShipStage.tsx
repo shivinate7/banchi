@@ -7,6 +7,7 @@ import { toast } from './kit/toast'
 import { SHIP_LANES, setHub, useHub } from './OrdersHubStore'
 import { describeFailure, fillShippingStamps, forgetShippingExport, readShippingExport, shippingFileUrl, failureTone } from './server'
 import type { Failure } from './server'
+import { shipToOf } from './orderBuyers'
 import type { OrderRow, OrdersPayload, ShippingLane, ShippingReason, ShippingRow } from './types'
 import './Shipping.css'
 
@@ -410,8 +411,8 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
             ) : null}
           </label>
           <p className="shipping-empty-note">
-            Nothing is saved, and the file is forgotten after 30 minutes. No buyer info shows here, only in the
-            file you download.
+            The file is forgotten after 30 minutes. Only the name each order ships to is saved, on the order. The
+            street stays in the file you download.
           </p>
           <div className="shipping-lane-guide" aria-label="The three lanes">
             {SHIP_LANES.map((lane) => (
@@ -462,6 +463,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
   /* ------------------------------------------------------------------------------ the lanes */
 
   const stamps = batch.stamps
+  const saved = batch.ship_to_saved ?? null
 
   return (
     <div className="shipping-stage">
@@ -482,6 +484,13 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                 {count(batch.shipments, 'order')}
               </span>
               <span>{keptOf(batch.expires_in)}</span>
+              {saved === null || saved.named + saved.unchanged === 0 ? null : (
+                <span>
+                  {saved.named > 0
+                    ? `Ship-to name saved on ${count(saved.named, 'order')}`
+                    : 'Ship-to names already saved'}
+                </span>
+              )}
             </span>
           </div>
           <div className="shipping-file-actions">
@@ -612,6 +621,12 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                     const figures = figuresOf(row)
                     const known = ledger.get(row.order) ?? null
                     const sentence = reasonSentenceOf(row)
+                    /* ONE NAME WHEN THE BUYER SHIPS TO THEMSELVES. The buyer is the ledger's, so a row
+                       for an order Banchi has not read in has only the file's name. */
+                    const boughtBy =
+                      row.ship_to != null && known !== null && shipToOf({ buyer: known.buyer, ship_to: row.ship_to }) !== null
+                        ? known.buyer
+                        : null
                     return (
                       <li
                         key={row.order}
@@ -632,6 +647,12 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                             </span>
                           )}
                         </div>
+                        {row.ship_to == null ? null : (
+                          <p className="shipping-ship-to">
+                            Ship to <b>{row.ship_to}</b>
+                            {boughtBy === null ? null : <span className="shipping-bought-by">bought by {boughtBy}</span>}
+                          </p>
+                        )}
                         {sentence === null ? null : <p className="shipping-says">{sentence}</p>}
                         {row.value === null && figures.length === 0 ? null : (
                           <div className="shipping-row-meta">

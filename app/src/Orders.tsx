@@ -52,7 +52,7 @@ import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore
 import { PositionLabel } from './PositionLabel'
 import { RailFrame } from './RailFrame'
 import { sayPlace } from './position'
-import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, isSharedOrderNumber, lineReason, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
+import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, isSharedOrderNumber, lineReason, shipToOf, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
 import {
   applyTake,
   buyerLabel,
@@ -3167,7 +3167,7 @@ function PullStage({
   const passesFeed = (group: BuyerGroup) =>
     statuses.length === 0 || group.orders.some((order) => statuses.includes((order.status ?? '').trim()))
   const passesSearch = (group: BuyerGroup) =>
-    matchQuery(query, { text: [group.name, buyerLabel(group), ...group.orders.map((order) => order.number)] })
+    matchQuery(query, { text: [group.name, buyerLabel(group), ...group.orders.map((order) => order.number), ...group.orders.map(shipToOf)] })
   /* A buyer still owed a copy that is on hand. A finished or done buyer has nothing to pull and
      stays: the default hides open buyers only. */
   const groupPullable = (group: BuyerGroup) =>
@@ -4320,6 +4320,9 @@ function OrderPanel({
   const figures = figuresOf(group, answers)
   const pill = statusPill(status, group, answers)
   const single = group.orders.length === 1 ? group.orders[0]!.number : null
+  /* The name on the parcel, only where one order makes it unambiguous. A buyer with several orders
+     can ship to several people, so each order's own name is drawn on that order (`OrderDetail`). */
+  const shipTo = group.orders.length === 1 ? shipToOf(group.orders[0]!) : null
   return (
     <div className="orders-panel">
       <div className="orders-panel-top">
@@ -4334,6 +4337,11 @@ function OrderPanel({
               </>
             )}
           </p>
+          {shipTo === null ? null : (
+            <p className="orders-panel-shipto">
+              Ship to <b><LabelText text={shipTo} /></b>
+            </p>
+          )}
         </div>
         <IconButton icon="settings" label="Manage" name="Manage This Buyer's Orders" className="orders-manage" aria-haspopup="dialog" onClick={onManage} />
       </div>
@@ -4392,6 +4400,7 @@ function OrderDetail({
   const status = statusOf(order, answer)
   const pill = STATUS_PILL[status]
   const placed = whenLabel(order.placed_at)
+  const shipTo = shipToOf(order)
 
   /* THE FEED'S WORD IS LABELLED AS THEIRS. `status` is TCGplayer's own string, verbatim; drawn
      bare beside our status pill it read as a second opinion from us. */
@@ -4406,6 +4415,11 @@ function OrderDetail({
           it a second time (row 111) — this now just names the marketplace, as the null-status
           case already did. */}
       <span className="orders-feed-word">{sourceName(order.source)}</span>
+      {shipTo === null ? null : (
+        <span className="orders-ship-to">
+          Ship to <LabelText text={shipTo} />
+        </span>
+      )}
     </span>
   )
 

@@ -204,6 +204,10 @@ def build(home: Path, jobs: int) -> None:
 
     with Store().write() as snap:
         shipped = write_shipping_export(home, snap.ledger.orders.values())
+        # D193: the ship-to name is a second person's real name, which D295 never kept. The mirror
+        # clears it; the buyer's name stays as ruled.
+        for record in snap.ledger.orders.values():
+            record.ship_to = None
         # D326: a label row holds a buyer's address and the label itself. The mirror keeps none.
         for key in list(snap.ledger.labels):
             del snap.ledger.labels[key]
@@ -327,8 +331,11 @@ def assert_scrubbed(bundle: Path, shipping: Path, home: Optional[Path] = None) -
         os.environ["BANCHI_HOME"] = str(home)
         from store import Store
 
-        if len(Store().read().ledger.labels):
+        ledger = Store().read().ledger
+        if len(ledger.labels):
             bad.append("label row")
+        if any(record.ship_to for record in ledger.orders.values()):
+            bad.append("ship-to name")
 
     def walk(value) -> None:
         if isinstance(value, dict):

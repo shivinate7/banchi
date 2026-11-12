@@ -3848,6 +3848,10 @@ export type OrderRow = {
    *  content, so it can be `null` where a paste never carried one and a later fetch has not
    *  named it either. */
   buyer: string | null
+  /** The name on the parcel, first and last as TCGplayer gave it (`D193`), never the street. `null`
+   *  until an Export Shipping read or a feed that carries it has named this order. It is often the
+   *  buyer's own name; `shipToOf` in `orderView.ts` says when to draw it. */
+  ship_to?: string | null
   wanted: number
   recorded: number
   open: boolean
@@ -4176,6 +4180,8 @@ export type OrderIngestOrder = {
    *  where the source said nothing at all (so `store/orders.py:Ledger.ingest` keeps whatever
    *  name it already had rather than erasing it); `null` where the feed explicitly said none. */
   buyer?: string | null
+  /** The name on the parcel, same rules as `buyer`: `undefined` keeps the name already held. */
+  ship_to?: string | null
   lines: OrderIngestLine[]
 }
 
@@ -4189,6 +4195,8 @@ export type OrderName = {
   source: string
   number: string
   buyer: string
+  /** The name on the parcel, when the summary carried one. Absent means leave the stored one. */
+  ship_to?: string
 }
 
 /** What `POST /orders/names` did — `store/orders.py:Ledger.name_buyer` run once per entry.
@@ -4334,6 +4342,9 @@ export type ShippingRow = {
   item_count: number | null
   /** The seam for the deferred pick-location route, and null until it exists. */
   stamp: string | null
+  /** The name on the envelope, from the file's first and last name cells (`D193`). The street,
+   *  city and postcode are not on this wire. `null` where both cells are blank. */
+  ship_to?: string | null
 }
 
 export type ShippingFile = { name: string; bytes: number }
@@ -4364,6 +4375,9 @@ export type ShippingBatch = {
   parcel_count: number
   file: ShippingFile
   stamps: ShippingStamps | null
+  /** What reading the file wrote onto the orders Banchi holds: how many took the ship-to name,
+   *  how many already had it, and how many rows named an order Banchi does not hold. */
+  ship_to_saved?: { named: number; unchanged: number; unknown: number } | null
 }
 
 export type ShippingForgotten = { batch: string; forgotten: boolean }

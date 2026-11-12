@@ -8,7 +8,8 @@ reviewer changing a handler wants to know they are inside that file rather than 
 It reads an export the operator uploaded, routes it into three lanes, hands back a Pirate Ship
 import CSV for the parcel lane, and buys TCGTracking labels for the envelope lane. Its
 network calls go through `server/tcgtracking.py`, which alone holds the TCGTracking key and
-host. Its store writes are the label rows in `store/orders.Ledger`'s `labels`.
+host. Its store writes are the label rows in `store/orders.Ledger`'s `labels`, and the ship-to
+name of each order a read export names, which the caller's writer puts on the order (D193).
 
 TWO COSTS, RECORDED RATHER THAN DISCOVERED:
 
@@ -182,8 +183,8 @@ class _Batch:
     THE SOURCE CSV IS NOT IN HERE, and its absence is the point: it is dropped the moment
     `shipping.parse` has read it, so the only buyer PII this process retains is the rendered
     `blob` and the `parcels` it was rendered from. `rows` — what the screen draws — carries
-    an order number, a lane, a reason and two numbers, and no name, street, city or postcode
-    at all.
+    an order number, a lane, a reason, two numbers and the ship-to name (D193), and no street,
+    city or postcode at all.
 
     `parcels` IS KEPT RATHER THAN RE-DERIVED because the stamps route named in the module
     docstring re-renders this same set with three columns filled. Re-parsing would mean
@@ -198,6 +199,10 @@ class _Batch:
     `envelope` IS THE ENVELOPE LANE'S SHIPMENTS, kept for the label routes (D326): a label is
     made from the export row's name and address, so they are held beside the parcels for the
     same TTL and dropped by the same Forget. The export text itself is still dropped.
+
+    `ship_to_saved` IS THE RECEIPT FOR THE ONE THING THIS READ WRITES (D193): how many orders
+    the ledger took a ship-to name for. The names themselves are not held here; they ride on
+    `rows` and went to the caller's writer in the same press. `None` when no writer was passed.
 
     `stamps` IS THE TALLY AND NOT THE STRINGS. What each parcel carries is on the parcel and
     what each row carries is in `rows`; this is the four counts the screen draws, and `None`
@@ -215,6 +220,7 @@ class _Batch:
     parcels: Tuple[pirateship.Parcel, ...] = field(default=())
     stamps: Optional[Dict[str, int]] = None
     envelope: Tuple[shipping.Shipment, ...] = field(default=())
+    ship_to_saved: Optional[Dict[str, int]] = None
 
 
 # A `ThreadingHTTPServer` serves each request on its own thread, so every read and write of
@@ -388,6 +394,10 @@ def _row(
         # `pipeline/shipping.py`'s abstention.
         "item_count": shipment.item_count,
         "stamp": _stamp_text(stamps),
+        # THE NAME ON THE ENVELOPE AND NOT WHERE IT GOES (D193). `Shipment.ship_to` reads the
+        # two name cells only, so no street, city or postcode can ride this key. `None` where
+        # both cells are blank, never `""`, so the screen asks one question.
+        "ship_to": shipment.ship_to or None,
     }
 
 
@@ -420,6 +430,9 @@ def _payload(key: str, batch: _Batch) -> Dict[str, Any]:
         # second says it was asked and had nothing to say. The screen draws two different
         # sentences off exactly this distinction.
         "stamps": dict(batch.stamps) if batch.stamps is not None else None,
+        # `{named, unchanged, unknown}`: what the read wrote onto the ledger's orders, or `None`
+        # where nothing was asked to write. Kept through the stamps press so it does not blink out.
+        "ship_to_saved": dict(batch.ship_to_saved) if batch.ship_to_saved is not None else None,
     }
 
 
@@ -437,12 +450,25 @@ _STAMPS_FIELDS: Tuple[str, ...] = ()
 StampSource = Callable[[Sequence[str]], Tuple[int, Dict[str, Tuple[str, ...]]]]
 
 
-def do_shipping_batches(payload: dict) -> dict:
+# `[(order number, ship-to name), ...]` in, `{named, unchanged, unknown}` out. The caller opens
+# the store; see `do_shipping_batches`.
+ShipToWriter = Callable[[Sequence[Tuple[str, str]]], Dict[str, int]]
+
+
+def do_shipping_batches(payload: dict, save_ship_to: Optional[ShipToWriter] = None) -> dict:
     """`POST /shipping/batches` — read one Export Shipping file and hold the answer.
 
     Free, re-runnable, and it spends nothing: no key is read, no socket is opened and no
     child is started. What it costs is memory holding buyer addresses, which is what
     `do_shipping_forget` is the way back from.
+
+    IT WRITES ONE THING WHEN ASKED TO, THE SHIP-TO NAME (D193), and nothing else leaves the
+    batch for disk. `save_ship_to` is the caller's writer, passed IN for the reason `locate` is
+    passed into `do_shipping_stamps`: what crosses the seam is order numbers one way and names
+    the other, and the street, city and postcode stay in this process. It is handed
+    `(order number, name)` for every row that has a name, and its tally is the batch's
+    `ship_to_saved`. Reading the same file twice writes nothing the second time. There is no
+    undo press: a name is the feed's word, and the next read of a newer file replaces it.
     """
     _only(payload, _BATCH_FIELDS)
 
@@ -522,6 +548,12 @@ def do_shipping_batches(payload: dict) -> dict:
             if routing.lane == shipping.LANE_ENVELOPE
         ),
     )
+    if save_ship_to is not None:
+        named = tuple(
+            (str(row["order"]), str(row["ship_to"])) for row in rows if row["order"] and row["ship_to"]
+        )
+        tally = save_ship_to(named) if named else {"named": 0, "unchanged": 0, "unknown": 0}
+        batch = replace(batch, ship_to_saved=dict(tally))
     key = _remember(batch)
 
     return _payload(key, batch)
@@ -796,9 +828,7 @@ def _label_body(shipment: shipping.Shipment, insured: bool) -> Dict[str, Any]:
     """The create body for one envelope-lane order, from its export row."""
     cells = shipment.cells
     body: Dict[str, Any] = {
-        "customer_name": " ".join(
-            part.strip() for part in (cells.get("FirstName", ""), cells.get("LastName", "")) if part.strip()
-        ),
+        "customer_name": shipment.ship_to,
         "address_line1": cells.get("Address1", "").strip(),
         "customer_city": cells.get("City", "").strip(),
         "customer_state": cells.get("State", "").strip(),

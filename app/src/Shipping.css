@@ -281,6 +281,11 @@
 }
 .shipping-quality-legend .bn-icon:first-child { color: var(--bn-ok); }
 .shipping-says { font-size: var(--bn-fs-md); color: var(--bn-ink-2); line-height: 1.4; }
+/* The name on the envelope, the first thing a hand packing the order reads; the buyer, when it is someone else,
+   follows muted so the two are never mistaken for one name. */
+.shipping-ship-to { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--bn-0-5) var(--bn-2); font-size: var(--bn-fs-md); color: var(--bn-ink-2); overflow-wrap: anywhere; }
+.shipping-ship-to b { font-weight: 600; color: var(--bn-ink); }
+.shipping-bought-by { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .shipping-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1-5); }
 .shipping-figures { display: inline-flex; flex-wrap: wrap; gap: var(--bn-1-5); }
 .shipping-figure {
