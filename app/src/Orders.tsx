@@ -4163,16 +4163,16 @@ function ManagePanel({
 /* ================================================================== a buyer, in the list */
 
 
-/** What a buyer with no open orders reads in the walk. "All N sold." only where N is above zero:
- *  a buyer whose orders were all canceled sold nothing, and "All 0 sold." says the opposite of why
+/** What a buyer with no open orders reads in the walk. "All N Sold" only where N is above zero:
+ *  a buyer whose orders were all canceled sold nothing, and "All 0 Sold" says the opposite of why
  *  the walk is empty. `status` is the feed's own word, matched on both spellings of canceled. */
 function buyerDoneSay(group: BuyerGroup): string {
   const sold = group.orders.reduce((sum, one) => sum + one.recorded, 0)
-  if (sold > 0) return `All ${sold} sold.`
+  if (sold > 0) return `All ${sold} Sold`
   if (group.orders.length > 0 && group.orders.every((one) => /^cancell?ed$/i.test((one.status ?? '').trim()))) {
-    return group.orders.length === 1 ? 'Order canceled.' : 'Orders canceled.'
+    return group.orders.length === 1 ? 'Order Canceled' : 'Orders Canceled'
   }
-  return 'Nothing sold.'
+  return 'Nothing Sold'
 }
 
 /** A buyer's three figures, each over ONE set (UX-168, UX-235). `owed` is what the open orders
