@@ -53,7 +53,7 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
 - `scripts/demo-hold.py` — The demo workflow's hold.
   - Decisions: `D295`
 - `scripts/demo-mirror-daily-photos-selftest.py` — `make demo-mirror-daily-photos-selftest`: the weekly mirror ships every photograph its bundle names.
-  - Decisions: `D172`, `D295`
+  - Decisions: `D172`, `D295`, `D193`
 - `scripts/demo-mirror-daily.py` — The weekly demo refresh on the owner's Mac (the owner can also run `make demo-mirror` by hand).
   - Decisions: `D42`, `D70`, `D295`
 - `scripts/demo-mirror.py` — Builds the published demo as a scrubbed mirror of the owner's real store (`D295`, the public demo is the scrubbed real store).

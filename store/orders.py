@@ -100,8 +100,7 @@ a number with no name on it cannot be walked that way, and the SHIP-TO NAME, bec
 person who bought is not always the person the envelope names and a pack that reads the buyer
 puts the wrong name on the parcel. The ship-to name is a first and last name as TCGplayer
 gives it, and never the street, city or postcode beside it. Excluding names was a choice this
-repo made on its own (D63/D69), never an owner ruling, and the owner's own rulings narrow rather
-than repeal it: address, email, payment and the transaction breakdown stay out, by the same
+repo made on its own (D63/D69); D193 narrows rather than repeals it: address, email, payment and the transaction breakdown stay out, by the same
 allowlist mechanism this file has always used — `server/order_transport.py:project_*`
 projects `buyerName` and the recipient's name through and drops everything else exactly as before, and
 `server/capture_server.py`'s three tuples still refuse `buyerName`'s siblings by name.

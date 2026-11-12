@@ -7088,7 +7088,7 @@ test('the card names the run that read it, and the model\'s own hedge', async ({
 
 test('the header draws the catalogue rarity once, and the claim is read in the Claims facts', async ({ page }) => {
   /* A card whose operator claim lists two rarities while its catalogue record names one. The header
-     states the catalogue's fact once (D23, owner ruling "Catalogue rarity"), and the claim is not
+     states the catalogue's fact once (D023), and the claim is not
      drawn in the header at all: it is read in the Claims facts beneath it. */
   const cards: Cards = {
     '2/1': card({
