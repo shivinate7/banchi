@@ -263,6 +263,7 @@ const RECORDED = {
     // already names. On their own line so a branch adding its own writes does not conflict
     // with this one over the same line — the failure mode the header records happening twice.
     'clearPricingAnswers', 'restorePricingAnswers',
+    'keepTicks',                              // Pricing's saved ticks: a press keeps or drops one
     // AND THE ONE-DIRECTION DRIFT THE HEADER ABOVE PREDICTED RAN FOR A THIRD TIME, LONGER AND
     // WIDER THAN EITHER EARLIER ONE: eighteen exports — five reads and thirteen writes —
     // accumulated with nothing removed, so `--self-test` reported `2 FAILED` with `missing:
