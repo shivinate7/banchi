@@ -4811,8 +4811,13 @@ export type SendSummary = {
     /** Cards with no copy live at the check: sold out, so there is no price to show. Settled. */
     gone?: { sku: string; name: string }[]
   } | null
-  /** Price changes the button named that the press left out, and why (round 6). */
-  prices_left: { sku: string; name: string; why: 'already' | 'not_live' | 'adds_copies' }[]
+  /** Price changes the button named that the press left out, and why (round 6). `live_moved` is a
+   *  price TCGplayer moved since the screen read it: the press went on without it, and the
+   *  card offers it again at the figure TCGplayer shows now (`price` is the one the button named). */
+  prices_left: (
+    | { sku: string; name: string; why: 'already' | 'not_live' | 'adds_copies' }
+    | { sku: string; name: string; why: 'live_moved'; price: string; live: string | null; shown: string | null }
+  )[]
   /** Live copies this send's listing rows moved to their price (the owner's ruling, round 7). */
   moves: { sku: string; name: string; copies: number; price: string; was: string | null }[]
   /** True when the upload may still wait in TCGplayer's Staged list, including a press that

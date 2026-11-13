@@ -1574,6 +1574,9 @@ def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed:
         answer = _write_and_send(payload, directories, download, record, live_path, live_before)
         # WHAT THE PRESS DID TO THE KEPT SUGGESTIONS, by key, each absent when none: `held` (left out, live and
         # held), `moved` (sent at the fresh price) and `left_out` (changed past `sendguard.drift_allowed`, or gone).
+        # A SKU `emit` left out (its price already shown, no copy live, moved at TCGplayer) went at no fresh price.
+        unsent = {str(note.get("sku")) for note in record.get("prices_left") or []}
+        moved = [row for row in moved if row["sku"] not in unsent]
         notes = {key: value for key, value in (("held", held), ("moved", moved), ("left_out", left_out)) if value}
         if not download and record.get("phase") == PHASE_DONE:
             _forget_sent_ticks(record)
@@ -1674,7 +1677,12 @@ def _write_and_send(
         # directory is its scratch and goes with it; no receipt is left for a press that sent
         # nothing.
         shutil.rmtree(directory, ignore_errors=True)
-        refused = _claim_refusal(console, step) or _price_refusal(console, step)
+        # A PRESS WHOSE ONLY PRICES MOVED AT TCGPLAYER COUNTED NOTHING: `emit` left those cards out
+        # (`live_moved`), so the refusal names them and carries them as data for the resend offer.
+        moved_live = [
+            note for note in said_prices.get("left") or [] if note.get("why") == sendguard.LEFT_LIVE_MOVED
+        ]
+        refused = _claim_refusal(console, step) or _price_refusal(console, step) or _price_refused(moved_live, step)
         if refused is not None:
             raise refused
         raise _empty_send_refusal(console, guard.get("trimmed") or [], step, code)

@@ -700,7 +700,9 @@ def _price_changes(args, guarded, candidates, going, floor, say, no_run=False):
     owner's ruling of round 7). ONLY A SKU THE SCREEN NAMED CAN BECOME
     A ROW (`pipeline/sendguard.py:price_changes`). The live figures come off the same export
     the double-send guard read, so the two halves of one press never disagree about what
-    TCGplayer holds. A refusal prints its JSON line first, so the route can name each card.
+    TCGplayer holds. A refusal prints its JSON line first, so the route can name each card. A
+    card whose live price is no longer the one the screen showed is not a refusal: it is LEFT OUT
+    (`live_moved`), the rest goes, and every empty exit names it (`_say_prices`).
     """
     if not getattr(args, "reprice_live", None):
         return [], [], []
@@ -727,7 +729,8 @@ def _price_changes(args, guarded, candidates, going, floor, say, no_run=False):
     for sku, row in suggested.items():
         candidates[sku] = (row.get(tcgcsv.NAME_COLUMN), named[sku][0])
     changes, left, refused = sendguard.price_changes(
-        named, candidates, guarded["live"], prices, floor, set(going), suggested, kept
+        named, candidates, guarded["live"], prices, floor, set(going), suggested, kept,
+        leave_live_moved=True,
     )
     moves, unnamed = sendguard.live_moves(going, told, guarded["live"], prices, floor)
     refused = list(refused) + list(unnamed)
@@ -1736,6 +1739,8 @@ def run(args, say) -> int:
                 resolved.matches[sku].name for sku, why in left_out if why == merge.LIVE_ALREADY
             ]
             capped = sum(1 for sku, _why in left_out if resolved.matches[sku].capped)
+            # A PRICE LEFT OUT BECAUSE TCGPLAYER MOVED IT IS NAMED EVEN WHEN NOTHING ELSE GOES.
+            _say_prices(changes, left, moves, args, say)
             return _say_empty(left_out, cut_back, len(no_price), live_names, capped, say)
         # A PRICED CARD `--listed-only` LEAVES UNDER THE CUT-OFF IS NAMED (R6-6).
         _say_under_cut(cut_back, say)
@@ -2430,6 +2435,8 @@ def _run_merged(args, say) -> int:
         else []
     )
     if not rows:
+        # A PRICE LEFT OUT BECAUSE TCGPLAYER MOVED IT IS NAMED EVEN WHEN NOTHING ELSE GOES.
+        _say_prices(changes, left, moves, args, say)
         # EVERY LEFT-OUT CARD IS NAMED BEFORE THE REFUSAL (R4 F3), a trim as a trim (R6-3), and
         # the refusal is worded as one run words it (R6-5, R6-9). A card with no price was
         # named above, so it is not named twice.

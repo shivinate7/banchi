@@ -233,8 +233,10 @@ def live_prices(rows: Iterable[Mapping[str, str]]) -> Dict[str, Optional[str]]:
 LEFT_ALREADY = "already"        # TCGplayer already shows this price
 LEFT_NOT_LIVE = "not_live"      # TCGplayer holds no copy now, so there is no price to change
 LEFT_ADDS_COPIES = "adds_copies"  # this press adds a copy, and that row carries the price
+#: `emit` leaves a moved live price out (the same word the mark-down door refuses with).
+LEFT_LIVE_MOVED = "live_moved"    # TCGplayer's price is not the one the screen showed
 #: Why a price the screen named REFUSES the whole press.
-REFUSED_LIVE_MOVED = "live_moved"      # TCGplayer's price is not the one the screen showed
+REFUSED_LIVE_MOVED = LEFT_LIVE_MOVED   # TCGplayer's price is not the one the screen showed
 REFUSED_NOT_SAVED = "not_saved"        # the saved price is not the one the button named
 REFUSED_BELOW_FLOOR = "below_floor"    # under the store's floor, the mark-down door's rule
 REFUSED_NOT_IN_SEND = "not_in_send"    # the button named a card this press does not price
@@ -271,6 +273,7 @@ def price_changes(
     adding: Iterable[str] = (),
     suggested: Optional[Mapping[str, Mapping[str, str]]] = None,
     kept: Optional[Iterable[str]] = None,
+    leave_live_moved: bool = False,
 ) -> tuple:
     """The price-only rows one send carries: `(changes, left, refused)`.
 
@@ -291,12 +294,14 @@ def price_changes(
         door's own `BELOW_FLOOR` rule;
       - TCGplayer holds no copy now: LEFT (`not_live`);
       - TCGplayer already shows that price: LEFT (`already`);
-      - TCGplayer's price is not the one the screen showed: REFUSED (`live_moved`). A price
-        the button did not name is never sent;
+      - TCGplayer's price is not the one the screen showed: REFUSED (`live_moved`), or LEFT
+        (`live_moved`, with `live` and `shown`) when `leave_live_moved` is set, the send's own
+        door. A price the button did not name is never sent;
       - otherwise, a row.
 
     A REFUSAL STOPS THE WHOLE PRESS, by name, before a file exists. A LEFT row is named and
-    the press goes on.
+    the press goes on. The mark-down door (`server/send_routes._markdown_judge`) keeps the
+    default and refuses a moved live price; `banchi emit` leaves that card out and sends the rest.
 
     `suggested` is SKU -> the live export's row, for the named prices that have no plan row (a
     kept suggestion, or a typed price sent with no run). Such a row is judged as a typed one is
@@ -333,7 +338,10 @@ def price_changes(
         elif now == plan:
             left.append(PriceNote(why=LEFT_ALREADY, **note))
         elif now != shown:
-            refused.append(PriceNote(why=REFUSED_LIVE_MOVED, **note))
+            if leave_live_moved:
+                left.append(PriceNote(why=LEFT_LIVE_MOVED, **note))
+            else:
+                refused.append(PriceNote(why=REFUSED_LIVE_MOVED, **note))
         else:
             extra = {"row": suggested[sku]} if sku in suggested else {}
             if sku in kept_skus:
