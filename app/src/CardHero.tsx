@@ -341,9 +341,9 @@ export type HeroFigures = {
   readonly listedAt: string | null
   readonly hidden: number
   readonly cap: number | null
-  /** True when `group.copies` holds on-hand copies only (the `#/orders` walk), so the first chip
-   *  reads "On Hand" and does not claim sold copies. Omitted, `group.copies` holds every copy,
-   *  sold ones included, and the chip reads "Captured" (Inventory). */
+  /** True when `group.copies` holds on-hand copies only (the `#/orders` walk). The lead figure
+   *  already reads "On Hand", so the "Captured" chip, which counts sold copies too, is not drawn.
+   *  Omitted, `group.copies` holds every copy and the chip reads "Captured" (Inventory). */
   readonly onHandOnly?: boolean
   /** Re-sort button beside Actions. `say` is null while the order is current, which draws nothing.
    *  Omitted on `#/orders`. */
@@ -405,7 +405,7 @@ export function inTopTenth({ price, cutoff }: { price: number | null; cutoff: nu
   return price !== null && cutoff !== null && price >= cutoff
 }
 
-/** Stored and Live, the two lead figures. A group with no SKU has no listing, so it draws no Live
+/** On Hand and Live, the two lead figures. A group with no SKU has no listing, so it draws no Live
  *  figure and no ceiling: the store has nothing to report and the band must not invent it (D119). */
 function HeroLead({ figures, market }: { readonly figures: HeroFigures; readonly market: number | null }) {
   const { group, listedAt, cap } = figures
@@ -425,7 +425,7 @@ function HeroLead({ figures, market }: { readonly figures: HeroFigures; readonly
     <div className="browse-hero-lead">
       <div className="browse-hero-fig">
         <span className="browse-hero-fig-label">
-          <span className="bn-label">Stored</span>
+          <span className="bn-label">On Hand</span>
         </span>
         <span className="browse-hero-fig-value">{group.on_hand}</span>
       </div>
@@ -492,8 +492,8 @@ function Ghost({ children, className, quiet = false }: { readonly children: Reac
  *  identity column's end, used to jump ~380px left under a press. This holds the column at its
  *  final size by drawing THE SAME ELEMENTS as `HeroLead`, with stand-in text the browser sets in
  *  the same face and hides (`.bn-ghost`): the figures' heights and widths come from the browser's
- *  own font, so the two states agree on any platform rather than by a tuned number. Stored, Live
- *  and Market for a card with a SKU, Stored alone for one without (D119, no SKU, no listing
+ *  own font, so the two states agree on any platform rather than by a tuned number. On Hand, Live
+ *  and Market for a card with a SKU, On Hand alone for one without (D119, no SKU, no listing
  *  figures). */
 function HeroLeadPending({ listing, empty = false, note = null }: { readonly listing: boolean; readonly empty?: boolean; readonly note?: ReactNode }) {
   const label = (text: string) => (
@@ -505,7 +505,7 @@ function HeroLeadPending({ listing, empty = false, note = null }: { readonly lis
     <div className="browse-hero-lead" aria-hidden={empty ? undefined : true} data-pending={empty ? undefined : 'true'} data-empty={empty ? 'true' : undefined}>
       {empty && note !== null ? <div className="browse-hero-empty">{note}</div> : null}
       <div className="browse-hero-fig" aria-hidden="true">
-        {label('Stored')}
+        {label('On Hand')}
         <span className="browse-hero-fig-value">
           <Ghost quiet={empty}>00</Ghost>
         </span>
@@ -644,11 +644,7 @@ export function CardHeroHead({
           ) : null
         ) : (
           <p className="browse-hero-side">
-            {figures.onHandOnly === true ? (
-              <FigureChip tip="You have this many copies of this card on hand. Sold copies are not counted.">
-                On Hand<b>{figures.group.copies.length}</b>
-              </FigureChip>
-            ) : (
+            {figures.onHandOnly === true ? null : (
               <FigureChip tip="You have captured this many copies of this card, sold ones included.">
                 Captured<b>{figures.group.copies.length}</b>
               </FigureChip>

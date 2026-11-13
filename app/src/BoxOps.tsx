@@ -598,7 +598,7 @@ export function BoxOps({
           <>
             <SettingsFigures title="Overview">
               <SettingsCensus label="Captured" value={record.cards} />
-              <SettingsCensus label="Stored" value={known(record.on_hand)} />
+              <SettingsCensus label="On Hand" value={known(record.on_hand)} />
               <SettingsCensus label="Sold" value={record.sold} />
               <SettingsCensus label="Retired" value={record.retired} />
               <SettingsCensus label="Moved" value={record.moved} />
