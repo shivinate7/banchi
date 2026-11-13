@@ -1221,6 +1221,12 @@ def pack_shards(specs: Sequence[str], shards: int, times: Dict[str, float]):
 #: under twice the mean shard load, and a cut file takes one whole shard per half.
 SPLIT_PARTS = 2
 
+#: A test declaration at a line start: `test(` and `test.skip(`, `.only(`, `.fail(`, `.fixme(`. A hook,
+#: a `describe` and a `test.use(` declare no test.
+_TEST_DECLARATION = re.compile(r"^\s*test(?:\.(?:skip|only|fail|fixme))?\(", re.MULTILINE)
+#: A loop or a `.map(` may declare tests in a body that a line count cannot see.
+_TEST_LOOP = re.compile(r"\bfor\s*\(|\.forEach\(|\.map\(")
+
 
 class Plan(NamedTuple):
     load: float
@@ -1229,17 +1235,43 @@ class Plan(NamedTuple):
     part: Optional[tuple]
 
 
+def can_cut(spec: str) -> bool:
+    """A spec has a second half only when it declares two tests, or a loop that may declare more.
+    One test cannot be cut: `--shard=2/2` of it runs nothing. A spec that cannot be read is not cut."""
+    try:
+        text = (ROOT / spec).read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return len(_TEST_DECLARATION.findall(text)) >= 2 or bool(_TEST_LOOP.search(text))
+
+
+def _slowest(plan_bins: Sequence[Sequence[object]]) -> float:
+    return max((float(b[0]) for b in plan_bins), default=0.0)
+
+
 def plan_shards(specs: Sequence[str], shards: int, times: Dict[str, float]) -> List[Plan]:
-    """What each shard runs. `pack_shards` cannot go below its heaviest file, so a file that
-    costs more than the mean shard load is cut into `SPLIT_PARTS` halves, each alone on a
-    shard (`--shard` cuts every file a run names, so a half shares its shard with nothing).
-    The rest are packed by `pack_shards` onto the shards left. A cut is made only when it
-    leaves at least one shard for the rest, heaviest file first."""
+    """What each shard runs. `pack_shards` cannot go below its heaviest file, so a file may be
+    cut into `SPLIT_PARTS` halves, each alone on a shard (`--shard` cuts every file a run names,
+    so a half shares its shard with nothing). The rest are packed by `pack_shards` onto the
+    shards left. A file is cut only when it declares more than one test (`can_cut`), costs more
+    than a shard's mean load of the WHOLE table (a narrowed list has a small mean of its own, and
+    would cut every file), leaves a shard for the rest, and lowers the slowest shard against
+    whole-file packing. Heaviest file first; the first cut that does not help ends the search."""
     cost = spec_cost(specs, times)
-    mean = sum(cost.values()) / shards
-    heavy = sorted((s for s in specs if cost[s] > mean), key=lambda s: (-cost[s], s))
-    while heavy and len(heavy) * SPLIT_PARTS > shards - 1:
-        heavy.pop()
+    threshold = (sum(times.values()) if times else sum(cost.values())) / shards
+    best = _slowest(pack_shards(specs, shards, times))
+    heavy: List[str] = []
+    for spec in sorted((s for s in specs if cost[s] > threshold and can_cut(s)),
+                       key=lambda s: (-cost[s], s)):
+        trial = heavy + [spec]
+        if len(trial) * SPLIT_PARTS > shards - 1:
+            break
+        rest = [s for s in specs if s not in trial]
+        load = max(max(cost[s] for s in trial) / SPLIT_PARTS,
+                   _slowest(pack_shards(rest, shards - len(trial) * SPLIT_PARTS, times)))
+        if load >= best:
+            break
+        heavy, best = trial, load
     plans = [Plan(cost[s] / SPLIT_PARTS, [s], (i, SPLIT_PARTS))
              for s in heavy for i in range(1, SPLIT_PARTS + 1)]
     rest = [s for s in specs if s not in heavy]
@@ -1255,13 +1287,25 @@ def load_spec_times() -> Dict[str, float]:
 def _refresh_total(seen: Dict[str, List[float]]) -> Dict[str, float]:
     """A spec runs on one shard per run, so it appears once per run's file set: the median of
     its occurrences is its median over the runs given (one run gives that run's value).
-    A file cut in halves (`plan_shards`) appears once per half. The number of runs is what
-    most specs' occurrences say; a spec listed a whole multiple of that many times is cut,
-    and its time is the sum of its halves, averaged over the runs."""
+    A file cut in halves (`plan_shards`) appears once per half, so a run that cut it adds
+    `SPLIT_PARTS - 1` occurrences. The number of runs is what most specs' occurrences say. A spec
+    with more occurrences than runs was cut in `(occurrences - runs) / (SPLIT_PARTS - 1)` runs
+    and whole in the others. Its halves are the smallest values (a half is about a whole over
+    `SPLIT_PARTS`); the halves add to one time per cut run, and the median of those and the
+    whole values is the file's time."""
     counts = [len(v) for v in seen.values()]
     runs = statistics.mode(counts) if counts else 1
-    return {k: (sum(v) / runs if len(v) > runs and len(v) % runs == 0 else statistics.median(v))
-            for k, v in seen.items()}
+    total: Dict[str, float] = {}
+    for name, values in seen.items():
+        extra = len(values) - runs
+        cut_runs = extra // (SPLIT_PARTS - 1)
+        if extra <= 0 or extra % (SPLIT_PARTS - 1) or cut_runs > runs:
+            total[name] = statistics.median(values)
+            continue
+        ordered = sorted(values)
+        halves, whole = ordered[:cut_runs * SPLIT_PARTS], ordered[cut_runs * SPLIT_PARTS:]
+        total[name] = statistics.median(whole + [sum(halves) / cut_runs] * cut_runs)
+    return total
 
 
 def shard_refresh(files: Sequence[str], write: bool) -> int:
@@ -1349,10 +1393,13 @@ def plan_selftest_cases(ok: Callable[[bool, str], None], specs: List[str],
        "two shards leave no room to cut: whole files only, none lost")
     ok(sorted(s for p in plan_shards(specs, 2, times) for s in p.specs) == specs,
        "two shards still hold every spec exactly once")
-    one = ["app/tests/only.spec.ts"]
-    ok([p.part for p in plan_shards(one, 4, {"only.spec.ts": 100.0})[:2]] == [(1, 2), (2, 2)]
-       and sum(len(p.specs) for p in plan_shards(one, 4, {"only.spec.ts": 100.0})) == 2,
-       "a narrowed run of one heavy file is cut across two shards and loses nothing")
+    one = ["app/tests/pricing.spec.ts"]
+    alone = plan_shards(one, 12, times)
+    ok([p.part for p in alone[:2]] == [(1, 2), (2, 2)] and sum(len(p.specs) for p in alone) == 2,
+       "a narrowed run of one heavy multi-test file is cut across two shards and loses nothing")
+    ghost = ["app/tests/only.spec.ts"]
+    ok(plan_shards(ghost, 4, {"only.spec.ts": 100.0}) == [Plan(100.0, ghost, None)] + [Plan(0.0, [], None)] * 3,
+       "a file the table does not hold, or that cannot be read, is never cut")
     # two runs: three whole specs listed once per run, and one cut file listed once per half per run
     two_runs = {"a": [10.0, 12.0], "b": [1.0, 3.0], "c": [7.0, 9.0], "cut": [500.0, 560.0, 520.0, 540.0]}
     total = _refresh_total(two_runs)
