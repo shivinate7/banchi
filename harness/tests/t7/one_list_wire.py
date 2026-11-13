@@ -728,7 +728,7 @@ def check_send_suggestion_drift_live_moved(checks: Checks) -> None:
     """A kept suggestion that drifted inside `sendguard.drift_allowed`, and whose live TCGplayer price
     moved since the screen drew it (`live_moved`), is LEFT OUT and named under `prices_left`. It is not
     listed under `moved`: `moved` says the card went at a fresh price, and it did not. The rest of the
-    press goes (owner's ruling, 2026-11-12).
+    press goes (D273).
     """
     checks.note("")
     checks.note("SEND, DRIFT AND LIVE MOVED — a drifted suggestion TCGplayer also moved is left out, not listed under moved")

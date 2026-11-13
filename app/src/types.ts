@@ -4825,7 +4825,7 @@ export type SendSummary = {
     /** Cards with no copy live at the check: sold out, so there is no price to show. Settled. */
     gone?: { sku: string; name: string }[]
   } | null
-  /** Price changes the button named that the press left out, and why (round 6). `live_moved` is a
+  /** Price changes the button named that the press left out, and why. `live_moved` is a
    *  price TCGplayer moved since the screen read it: the press went on without it, and the
    *  card offers it again at the figure TCGplayer shows now (`price` is the one the button named).
    *  A listing row (new copies) is left out the same way and holds `copies`: it needs the run to go again. */

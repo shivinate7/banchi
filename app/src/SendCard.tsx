@@ -1060,7 +1060,7 @@ export function SendCard({
     was: {},
     moves: {},
   })
-  /* A PRESS OF THE LEFT-OUT PRICES ALONE (the owner's ruling: a price TCGplayer moved is left out,
+  /* A PRESS OF THE LEFT-OUT PRICES ALONE (D273: a price TCGplayer moved is left out,
      the rest goes, and the owner may send it again at the live price). Null is the whole press. */
   const [only, setOnly] = useState<readonly PriceChange[] | null>(null)
 

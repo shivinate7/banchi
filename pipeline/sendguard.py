@@ -425,7 +425,7 @@ def live_moves(
     was), off the same newest live export the worklist carries). A move the button did not name,
     or named at another price, REFUSES the press with the live figure as data, so the screen can
     say "TCGplayer shows $X now" and send again. So does a move named at another count of live
-    copies (round 8, R7-3).
+    copies.
 
     A LISTING ROW OVERWRITES THE PRICE TCGPLAYER SHOWS, so it is judged as a price-only row is
     (`price_changes`, D273): when TCGplayer's price is not the `was` the

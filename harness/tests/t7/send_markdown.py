@@ -5641,7 +5641,7 @@ def check_send_review_r6(checks: Checks) -> None:
 
     THE ORCHESTRATOR'S RULING ON THE OWNER'S WORDS: only a price the SCREEN named rides a send.
     A corpus answer the owner did not type on the worklist never does. A named price whose live
-    figure moved since the screen drew it is left out and named (owner's ruling, 2026-11-12); one
+    figure moved since the screen drew it is left out and named (D273); one
     TCGplayer already shows is
     left out and named. A named price under the floor is refused, as the mark-down door does.
     """
@@ -5804,7 +5804,7 @@ def check_send_review_r6(checks: Checks) -> None:
             (status, [(n.get("sku"), n.get("why"), n.get("live")) for n in sent.get("prices_left") or []]),
             (200, [(ARTICUNO_SKU, "live_moved", "22.03")]),
             "P7: A NAMED PRICE WHOSE LIVE FIGURE MOVED SINCE THE SCREEN DREW IT IS LEFT OUT and "
-            "named with TCGplayer's figure, not refused (owner's ruling, 2026-11-12)",
+            "named with TCGplayer's figure, not refused (D273)",
         )
         checks.equal(
             (sorted(portal_rows(portal)), sent.get("prices")),
@@ -6003,7 +6003,7 @@ def _moved_answer(status: int, body: dict, sku: str) -> str:
 
 
 def check_send_live_moved_left_out(checks: Checks) -> None:
-    """THE OWNER'S RULING, 2026-11-12: a named price whose live TCGplayer price is no longer the
+    """D273: a named price whose live TCGplayer price is no longer the
     `was` Banchi sent (`live_moved`) is LEFT OUT, the rest of the press goes, and the card is named
     under `prices_left` with its live and shown figures. The press is not refused for it. The
     mark-down door still refuses such a price (`check_live_markdown_guards`).
@@ -6172,7 +6172,7 @@ def _two_live_articuno(portal, run_names) -> None:
 
 
 def check_send_live_moved_listing_left_out(checks: Checks) -> None:
-    """THE OWNER'S RULING, 2026-11-12, FOR LISTING ROWS: a new copy of a card already live writes
+    """D273, FOR LISTING ROWS: a new copy of a card already live writes
     Banchi's price over the one TCGplayer shows. When that live price is no longer the `was` the
     button named (`live_moved`), the card's LISTING ROW is left out with its copies, the rest of the
     press goes, and the card is named under `prices_left` with its live copies. A press whose only

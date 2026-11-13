@@ -1584,7 +1584,7 @@ function leftOutSkus() {
   return [sku({ sku: '8608859', name: 'Articuno' }), liveSku('8608459', 'Dunsparce')]
 }
 
-/* A PRICE LEFT OUT FOR A MOVED LIVE FIGURE, OFFERED BACK FROM ITS NOTE (the owner's ruling, 2026-11-12):
+/* A PRICE LEFT OUT FOR A MOVED LIVE FIGURE, OFFERED BACK FROM ITS NOTE (D273):
    the press that sent the rest answers 200 and names the price in `prices_left`. The card names it in one
    sentence and offers the price back on one button, and the resend posts that note alone: its price, the
    live price as `was`, its source and its kept tick. The rest of the press already went, so `runs` is []. */
@@ -1633,7 +1633,7 @@ test('a price left out for a moved live figure is offered back from its note, an
   await expect(page.locator('.send-resend')).toHaveCount(0)
 })
 
-/* THE LEFT-OUT COPY, ONE CARD (the owner's ruling, 2026-11-12): a price TCGplayer moved is named in one line,
+/* THE LEFT-OUT COPY, ONE CARD (D273): a price TCGplayer moved is named in one line,
    with TCGplayer's live price, after the press that sent the rest answers 200 with it in `prices_left`. */
 test('one left-out price names its card in one line with TCGplayer\'s live price', async ({ page }) => {
   await open(page, {
@@ -1664,7 +1664,7 @@ test('one left-out price names its card in one line with TCGplayer\'s live price
   await expect(notice.getByRole('button', { name: 'Send $30.00' }), 'and its button sends the price again').toHaveCount(1)
 })
 
-/* A LISTING ROW LEFT OUT (the owner's ruling, 2026-11-12, listing rows): a new copy of a card already live would
+/* A LISTING ROW LEFT OUT (D273, listing rows): a new copy of a card already live would
    write Banchi's price over the one TCGplayer shows, so the press leaves that card out with its live copies and
    sends the rest. The copies ride the run, so the card cannot go again alone: it names what changed and draws no
    resend button. */
@@ -1712,7 +1712,7 @@ test('a listing row left out for a moved live figure is named in one sentence wi
   expect(sendPosts(wire)[0]?.body).toMatchObject({ moves: [{ sku: '8608459', price: '30.00', was: '22.03' }] })
 })
 
-/* THE LEFT-OUT COPY, SEVERAL CARDS (the owner's ruling, 2026-11-12): two prices TCGplayer moved are counted, and
+/* THE LEFT-OUT COPY, SEVERAL CARDS (D273): two prices TCGplayer moved are counted, and
    each card is named in the same notice. Its button posts only those two rows, with `runs` []. */
 test('several left-out prices name the count and each card, and their button posts only those rows', async ({ page }) => {
   let presses = 0
