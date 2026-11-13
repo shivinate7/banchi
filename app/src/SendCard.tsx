@@ -590,7 +590,7 @@ function ResendPrices({
       }
     >
       {leftOut ? (
-        /* ONE CARD: the title names it and its live price, so no row repeats them. Several: "<name>  $old → $new" per card. */
+        /* ONE CARD: the title names it and its live price, so no row repeats them. Several: "<name>  $old to $new" per card. */
         one !== undefined ? null : (
           <ul className="send-names">
             {rows.map((row) => (
@@ -598,7 +598,7 @@ function ResendPrices({
                 <span className="send-name">{row.name || row.sku}</span>
                 <span className="send-figure">
                   {row.shown === null ? 'no price' : <Money value={Number(row.shown)} />}
-                  {' → '}
+                  {' to '}
                   {row.live === null ? 'no price' : <Money value={Number(row.live)} />}
                 </span>
               </li>
