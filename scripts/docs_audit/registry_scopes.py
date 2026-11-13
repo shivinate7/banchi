@@ -243,7 +243,7 @@ def workflow_shards(workflow: str) -> Set[str]:
     live = "\n".join(ln for ln in workflow.splitlines() if not ln.lstrip().startswith("#"))
     matrix = re.search(r"target:\s*\[([^\]]*)\]", live)
     listed = {t.strip() for t in matrix.group(1).split(",")} if matrix else set()
-    # a shard that runs as a job of its own (`ci-static`, so `design-check` can wait on it alone)
+    # a shard that runs as a job of its own (`ci-static`, beside the browser matrix)
     return listed | _scan_shard_steps(workflow)[0]
 
 
