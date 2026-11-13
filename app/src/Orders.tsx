@@ -2718,7 +2718,7 @@ function OrderPickPane({
   /* THE SAME BAND INVENTORY DRAWS (`CardHero.tsx:CardHeroHead`), fed from the walk's own group.
      `hidden` is 0 because the walk folds nothing (`preserveOrder`), and `cap` is null because a take
      carries no ceiling: a screen that cannot say the ceiling draws no meter. */
-  const figures: HeroFigures = { group: currentGroup, listedAt: currentGroup.live_as_of, hidden: 0, cap: null }
+  const figures: HeroFigures = { group: currentGroup, listedAt: currentGroup.live_as_of, hidden: 0, cap: null, onHandOnly: true }
   return (
     <>
       <CardPane
