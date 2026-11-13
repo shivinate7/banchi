@@ -5941,16 +5941,16 @@ def check_send_review_r7(checks: Checks) -> None:
         typed(ARTICUNO_SKU, "30.00")
         named = {"sku": ARTICUNO_SKU, "price": "30.00", "was": "25.99"}
         status, body = _send_over_wire(
-            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 1}, "confirm": True, "prices": [named]}
+            {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True, "prices": [named]}
         )
-        left = (body.get("send") or {}).get("prices_left") or []
+        error = body.get("error") or {}
+        notes = (error.get("data") or {}).get("refused") or []
         checks.equal(
-            (status, [(n["sku"], n["why"], n["live"], n["price"]) for n in left]),
-            (200, [(ARTICUNO_SKU, "live_moved", "22.03", "30.00")]),
-            "R6-1: A PRICE LEFT OUT FOR A MOVED LIVE FIGURE CARRIES {sku, live, price} AS DATA on the "
-            "wire, so the screen can say 'TCGplayer shows $22.03 now. Send $30.00?'",
+            (status, error.get("code"), [(n["sku"], n["why"], n["live"], n["price"]) for n in notes]),
+            (409, "price_refused", [(ARTICUNO_SKU, "live_moved", "22.03", "30.00")]),
+            "R6-1: THE REFUSAL CARRIES {sku, live, price} AS DATA on the wire, so the screen can "
+            "say 'TCGplayer shows $22.03 now. Send $30.00?'",
         )
-        portal["rows"].clear()
         sent = send_routes.do_send(
             {"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
              "prices": [dict(named, was="22.03")]}
@@ -5982,23 +5982,19 @@ def check_send_review_r7(checks: Checks) -> None:
         )
 
 
-#: The answers that name a named price whose live figure moved (`live_moved`), and say so.
-_MOVED_NAMED = ("named: price_refused", "named: prices_left")
+#: The answer to a press whose only named price moved (`live_moved`): a refusal that names the card.
+_MOVED_ONLY = "named: price_refused"
 
 
 def _moved_answer(status: int, body: dict, sku: str) -> str:
-    """How a press answered a named price whose live figure moved: one of `_MOVED_NAMED` when the
-    answer names `sku` as `live_moved`, else the answer's own code. A bare `nothing_to_send`
-    reads as `409 nothing_to_send`, which names no card."""
+    """How a press answered a named price whose live figure moved: `_MOVED_ONLY` when the refusal
+    names `sku` as `live_moved`, else the answer's own code. A bare `nothing_to_send` reads as
+    `409 nothing_to_send`, which names no card."""
     error = body.get("error") or {}
     if status == 409 and error.get("code") == "price_refused":
         refused = (error.get("data") or {}).get("refused") or []
         if any(note.get("sku") == sku and note.get("why") == "live_moved" for note in refused):
-            return "named: price_refused"
-    send = body.get("send") or {}
-    left = send.get("prices_left") or []
-    if status == 200 and any(note.get("sku") == sku and note.get("why") == "live_moved" for note in left):
-        return "named: prices_left"
+            return _MOVED_ONLY
     return f"{status} {error.get('code') or 'answered'}"
 
 
@@ -6008,9 +6004,8 @@ def check_send_live_moved_left_out(checks: Checks) -> None:
     under `prices_left` with its live and shown figures. The press is not refused for it. The
     mark-down door still refuses such a price (`check_live_markdown_guards`).
 
-    A press whose ONLY named price moved answers by name on each emit path: no run, one run, and
-    several runs (the merged path). It answers `price_refused` naming the card, or `prices_left`
-    naming it. Never a bare `nothing_to_send`.
+    A press whose ONLY named price moved answers `price_refused` naming the card on each emit path:
+    no run, one run, and several runs (the merged path). Never a bare `nothing_to_send`.
     """
     checks.note("")
     checks.note("SEND, LIVE MOVED — a named price TCGplayer moved is left out and named; the rest goes")
@@ -6050,6 +6045,52 @@ def check_send_live_moved_left_out(checks: Checks) -> None:
             "prices_left names the moved card with TCGplayer's live figure and the figure the screen showed",
         )
 
+    # ------------- a moved price beside a sent quantity: the moved one is left out, the quantity goes
+    with _case(checks, "left out: a moved price beside a sent quantity"), send_portal() as portal, synced_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send({"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True})
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
+        portal["rows"].clear()
+        _typed_answer(ARTICUNO_SKU, "30.00")
+        status, body = _send_over_wire({
+            "runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 1}, "confirm": True,
+            "prices": [{"sku": ARTICUNO_SKU, "price": "30.00", "was": "25.99"}],
+        })
+        send = body.get("send") or {}
+        checks.equal(
+            (status, [(n.get("sku"), n.get("why"), n.get("live"), n.get("price")) for n in send.get("prices_left") or []]),
+            (200, [(ARTICUNO_SKU, "live_moved", "22.03", "30.00")]),
+            "MIXED PRESS: THE MOVED PRICE IS LEFT OUT AND NAMED with {sku, live, price}, and the press "
+            "is answered, not refused",
+        )
+        checks.equal(
+            {sku: qty for sku, (qty, _) in _listed_prices(portal).items()},
+            {DUNSPARCE_SKU: "1"},
+            "and the sent quantity reaches TCGplayer: Dunsparce is listed, Articuno's price is not",
+        )
+
+    # ------------- a client's ticked on a typed price in a press with a run is not carried to its note
+    with _case(checks, "left out: a forged tick on a typed price beside a sent quantity"), send_portal() as portal, synced_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+        send_routes.do_send({"runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True})
+        portal["live"] = _live_export_priced({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
+        portal["rows"].clear()
+        _typed_answer(ARTICUNO_SKU, "30.00")
+        status, body = _send_over_wire({
+            "runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 1}, "confirm": True,
+            "prices": [{"sku": ARTICUNO_SKU, "price": "30.00", "was": "25.99", "ticked": True}],
+        })
+        send = body.get("send") or {}
+        note = next(iter(send.get("prices_left") or []), {})
+        checks.equal(
+            (status, note.get("sku"), note.get("why"), note.get("ticked", "<absent>")),
+            (200, ARTICUNO_SKU, "live_moved", "<absent>"),
+            "FORGED TICK: the press is answered, the moved typed price is named, and the note names no tick, "
+            "since the server holds none for a typed price",
+        )
+
     # ------------- only the named price moved, on the no-run path
     with _case(checks, "only price moved: no run"), send_portal() as portal, synced_home():
         portal["live"] = _live_export_priced({ARTICUNO_SKU: 3, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
@@ -6057,10 +6098,11 @@ def check_send_live_moved_left_out(checks: Checks) -> None:
             "runs": [], "confirm": True,
             "prices": [{"sku": ARTICUNO_SKU, "price": "22.50", "was": "21.00"}],
         })
+        answer = _moved_answer(status, body, ARTICUNO_SKU)
         checks.equal(
-            _moved_answer(status, body, ARTICUNO_SKU) in _MOVED_NAMED, True,
-            f"NO RUN, ONLY PRICE MOVED: the answer names the card, not a bare nothing_to_send "
-            f"(answered {_moved_answer(status, body, ARTICUNO_SKU)})",
+            answer, _MOVED_ONLY,
+            f"NO RUN, ONLY PRICE MOVED: the refusal names the card, not a bare nothing_to_send "
+            f"(answered {answer})",
         )
         checks.equal(_listed_prices(portal), {}, "and no row reaches TCGplayer")
 
@@ -6078,10 +6120,11 @@ def check_send_live_moved_left_out(checks: Checks) -> None:
             "runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0}, "confirm": True,
             "prices": [{"sku": ARTICUNO_SKU, "price": "22.50", "was": "21.00"}],
         })
+        answer = _moved_answer(status, body, ARTICUNO_SKU)
         checks.equal(
-            _moved_answer(status, body, ARTICUNO_SKU) in _MOVED_NAMED, True,
-            f"ONE RUN, ONLY PRICE MOVED: the answer names the card, not a bare nothing_to_send "
-            f"(answered {_moved_answer(status, body, ARTICUNO_SKU)})",
+            answer, _MOVED_ONLY,
+            f"ONE RUN, ONLY PRICE MOVED: the refusal names the card, not a bare nothing_to_send "
+            f"(answered {answer})",
         )
         checks.equal(_listed_prices(portal), {}, "and no row reaches TCGplayer")
 
@@ -6102,10 +6145,11 @@ def check_send_live_moved_left_out(checks: Checks) -> None:
             "quantities": {ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0}, "confirm": True,
             "prices": [{"sku": ARTICUNO_SKU, "price": "22.50", "was": "21.00"}],
         })
+        answer = _moved_answer(status, body, ARTICUNO_SKU)
         checks.equal(
-            _moved_answer(status, body, ARTICUNO_SKU) in _MOVED_NAMED, True,
-            f"SEVERAL RUNS, ONLY PRICE MOVED: the answer names the card, not a bare nothing_to_send "
-            f"(answered {_moved_answer(status, body, ARTICUNO_SKU)})",
+            answer, _MOVED_ONLY,
+            f"SEVERAL RUNS, ONLY PRICE MOVED: the refusal names the card, not a bare nothing_to_send "
+            f"(answered {answer})",
         )
         checks.equal(_listed_prices(portal), {}, "and no row reaches TCGplayer")
 
