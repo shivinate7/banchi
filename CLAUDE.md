@@ -155,8 +155,7 @@ whole repo:
 ## Map
 
 - Branch `roadmap` (origin only, never merged into main) holds the roadmap record in `roadmap/data/`, briefs in `briefs/`
-  and role hand-off notes in `handoffs/` (shared skill `project-ops`). Its `CLAUDE.md` holds the mechanics. Today `briefs/` and
-  `handoffs/` hold no file, and the branch holds no roster.
+  and role hand-off notes in `handoffs/` (shared skill `project-ops`). Its `CLAUDE.md` holds the mechanics.
 - `docs/map/` is the plain-English map of the code: one file per area, one line per code file, a trace page per
   screen. Read it before you answer how code works. `make map-check` holds it in sync with the code; the
   `plain-english-map` skill says how to change it. `map.config.json` holds its repository settings.
