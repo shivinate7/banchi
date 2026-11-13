@@ -341,6 +341,10 @@ export type HeroFigures = {
   readonly listedAt: string | null
   readonly hidden: number
   readonly cap: number | null
+  /** True when `group.copies` holds on-hand copies only (the `#/orders` walk), so the first chip
+   *  reads "On Hand" and does not claim sold copies. Omitted, `group.copies` holds every copy,
+   *  sold ones included, and the chip reads "Captured" (Inventory). */
+  readonly onHandOnly?: boolean
   /** Re-sort button beside Actions. `say` is null while the order is current, which draws nothing.
    *  Omitted on `#/orders`. */
   readonly rerank?: { readonly say: string | null; readonly onRerank: () => void }
@@ -640,9 +644,15 @@ export function CardHeroHead({
           ) : null
         ) : (
           <p className="browse-hero-side">
-            <FigureChip tip="You have captured this many copies of this card, sold ones included.">
-              Captured<b>{figures.group.copies.length}</b>
-            </FigureChip>
+            {figures.onHandOnly === true ? (
+              <FigureChip tip="You have this many copies of this card on hand. Sold copies are not counted.">
+                On Hand<b>{figures.group.copies.length}</b>
+              </FigureChip>
+            ) : (
+              <FigureChip tip="You have captured this many copies of this card, sold ones included.">
+                Captured<b>{figures.group.copies.length}</b>
+              </FigureChip>
+            )}
             <FigureChip tip="You have this many sold copies tucked out of the list below.">
               Hidden<b>{figures.hidden}</b>
             </FigureChip>
