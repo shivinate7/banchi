@@ -335,7 +335,7 @@ sealEveryTest()
 
 /* ux-w2 B16 (order-walk-plan.md section 14). Asserts each figure chip beside the card names carries a
    text box that explains it. The box opens on hover and on keyboard focus, so a chip is reachable without a pointer.
-   The walk's On Hand is the lead figure now, not a band chip (owner's ruling, 2026-11-13), so only the band's chips are checked here. */
+   The walk's On Hand is the lead figure now, not a band chip (.claude/rules/app.md, One count, one name), so only the band's chips are checked here. */
 test('ux-w2 B16: each Hidden and Sent chip opens a text box on hover and on keyboard focus', async ({ page }) => {
   await open(page)
   const side = page.locator('.browse-hero-side').first()

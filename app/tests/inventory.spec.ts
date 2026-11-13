@@ -5277,7 +5277,7 @@ test('S3 — with Hide sold on, a search count excludes what the fold already hi
 test('the card header counts sold copies in Captured, reads On Hand over the copies left, and draws no Stored', async ({ page }) => {
   /* Three copies of one SKU, one of them sold. Inventory's Captured is the record count and takes in
      the sold copy (CardHeroHead's own tip says so); the Orders walk's On Hand does not (its own case).
-     The count left on hand is one name, On Hand, in the lead figure beside Live and Market (owner's ruling, 2026-11-13). */
+     The count left on hand is one name, On Hand, in the lead figure beside Live and Market (.claude/rules/app.md, One count, one name). */
   const cards: Cards = {
     ...CARDS,
     '2/1': card({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, cid: 'thievul-cid' }),

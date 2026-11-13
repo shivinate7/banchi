@@ -3636,7 +3636,7 @@ function onHandFigureOf(card: Locator): Locator {
   return card.locator('.browse-hero-lead .browse-hero-fig').filter({ hasText: 'On Hand' })
 }
 
-/* THE WALK'S ON HAND IS ONE FIGURE, UNDER ONE NAME (owner's ruling, 2026-11-13). The plan carries only
+/* THE WALK'S ON HAND IS ONE FIGURE, UNDER ONE NAME (.claude/rules/app.md, One count, one name). The plan carries only
    the copies still in the box, so a sold copy is never in a take. The lead figure says "On Hand"; the
    band's chip that repeated it is gone. Inventory's "Captured" for the same card counts the sold copy
    too (its own case). */
