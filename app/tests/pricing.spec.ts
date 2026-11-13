@@ -1585,9 +1585,9 @@ function leftOutSkus() {
 }
 
 /* A PRICE LEFT OUT FOR A MOVED LIVE FIGURE, OFFERED BACK FROM ITS NOTE (the owner's ruling, 2026-11-12):
-   the press that sent the rest answers 200 and names the price in `prices_left`. The card offers it back
-   in the words of a refused one, and the resend posts that note alone: its price, the live price as
-   `was`, its source and its kept tick. The rest of the press already went, so `runs` is []. */
+   the press that sent the rest answers 200 and names the price in `prices_left`. The card names it in one
+   sentence and offers the price back on one button, and the resend posts that note alone: its price, the
+   live price as `was`, its source and its kept tick. The rest of the press already went, so `runs` is []. */
 test('a price left out for a moved live figure is offered back from its note, and the resend posts that note alone', async ({ page }) => {
   let presses = 0
   const wire = await open(page, {
@@ -1619,7 +1619,10 @@ test('a price left out for a moved live figure is offered back from its note, an
   await expect.poll(() => sendPosts(wire).length).toBe(1)
   await expect(page.locator('.send-resend'), 'the left-out price draws its offer').toHaveCount(1)
   const offer = page.locator('.send-resend')
-  await expect(offer).toContainText('TCGplayer shows $22.03 now. Send $30.00?')
+  await expect(offer.locator('.bn-notice-title'), 'the title names the card and its live price, in one sentence').toHaveText(
+    'Dunsparce was left out. TCGplayer shows $22.03 now.',
+  )
+  await expect(offer.locator('ul.send-names'), 'one card draws no row: the title already names it').toHaveCount(0)
   await offer.getByRole('button', { name: 'Send $30.00' }).click()
   await expect.poll(() => sendPosts(wire).length).toBe(2)
   expect(sendPosts(wire)[1]?.body).toMatchObject({
@@ -1652,14 +1655,20 @@ test('one left-out price names its card in one line with TCGplayer\'s live price
   await dunsparce.fill('30.00')
   await dunsparce.press('Tab')
   await page.getByRole('button', { name: 'Send 1 SKU and 1 price change' }).click()
-  await expect(page.getByText('Dunsparce was left out. TCGplayer shows $22.03 now.')).toBeVisible()
+  const notice = page.locator('.send-resend')
+  await expect(notice, 'the one left-out price draws its notice').toHaveCount(1)
+  await expect(notice.locator('.bn-notice-title'), 'the title names the card and its live price, once').toHaveText(
+    'Dunsparce was left out. TCGplayer shows $22.03 now.',
+  )
+  await expect(notice.locator('ul.send-names'), 'one card draws no row, so its name shows once').toHaveCount(0)
+  await expect(notice.getByRole('button', { name: 'Send $30.00' }), 'and its button sends the price again').toHaveCount(1)
 })
 
 /* A LISTING ROW LEFT OUT (the owner's ruling, 2026-11-12, listing rows): a new copy of a card already live would
    write Banchi's price over the one TCGplayer shows, so the press leaves that card out with its live copies and
    sends the rest. The copies ride the run, so the card cannot go again alone: it names what changed and draws no
    resend button. */
-test('a listing row left out for a moved live figure is named, says what changed, and draws no resend button', async ({ page }) => {
+test('a listing row left out for a moved live figure is named in one sentence with its next step, and draws no resend button', async ({ page }) => {
   const wire = await open(page, {
     skus: [
       sku({ sku: '8608859', name: 'Articuno' }),
@@ -1694,10 +1703,10 @@ test('a listing row left out for a moved live figure is named, says what changed
   await expect.poll(() => sendPosts(wire).length).toBe(1)
   const notice = page.locator('.send-resend')
   await expect(notice, 'the left-out listing row draws its note').toHaveCount(1)
-  await expect(notice).toContainText('Dunsparce was left out. TCGplayer shows $22.03 now.')
-  await expect(notice, 'and says what changed, not a question nothing answers').toContainText(
-    'TCGplayer shows $22.03 now, not the $9.99 this list showed.',
+  await expect(notice.locator('.bn-notice-title'), 'the title names the card, its live price and the next step, in one sentence').toHaveText(
+    'Dunsparce was left out. TCGplayer shows $22.03 now. Check it in your list and send again.',
   )
+  await expect(notice.locator('ul.send-names'), 'the one card draws no row: the title already names it').toHaveCount(0)
   await expect(notice.getByRole('button'), 'a listing row cannot go again alone, so it draws no resend button').toHaveCount(0)
   /* THE PRESS NAMES THE LIVE FIGURE THE ROW DREW, so the server can refuse the move if TCGplayer has moved since. */
   expect(sendPosts(wire)[0]?.body).toMatchObject({ moves: [{ sku: '8608459', price: '30.00', was: '22.03' }] })
@@ -1742,10 +1751,16 @@ test('several left-out prices name the count and each card, and their button pos
   await expect.poll(() => sendPosts(wire).length).toBe(1)
   const notice = page.locator('.send-resend, .send-prices-left, .send-suggestions').filter({ hasText: copy })
   await expect(notice, 'the count of left-out cards is named once, in one notice').toHaveCount(1)
-  await expect(notice, 'each left-out card is named in that notice').toContainText('Dunsparce')
-  await expect(notice).toContainText('Articuno')
-  await expect(notice).toContainText('Pikachu')
-  await notice.getByRole('button').first().click()
+  await expect(notice.locator('.bn-notice-title'), 'the title counts the left-out cards, once').toHaveText(copy)
+  const rows = notice.locator('ul.send-names > li')
+  await expect(rows, 'each left-out card draws one row').toHaveCount(3)
+  await expect(rows.nth(0).locator('.send-name'), 'the first row names Dunsparce').toHaveText('Dunsparce')
+  await expect(rows.nth(0).locator('.send-figure'), 'and reads its old price to its live price').toHaveText('$9.99 to $22.03')
+  await expect(rows.nth(1).locator('.send-name'), 'the second row names Articuno').toHaveText('Articuno')
+  await expect(rows.nth(1).locator('.send-figure'), 'and reads its old price to its live price').toHaveText('$21.00 to $19.50')
+  await expect(rows.nth(2).locator('.send-name'), 'the third row names Pikachu').toHaveText('Pikachu')
+  await expect(rows.nth(2).locator('.send-figure'), 'and reads its old price to its live price').toHaveText('$10.00 to $8.50')
+  await notice.getByRole('button', { name: 'Send these prices' }).click()
   await expect.poll(() => sendPosts(wire).length).toBe(2)
   const resend = sendPosts(wire)[1]?.body as { runs: unknown[]; prices: { sku: string }[] }
   expect(resend.runs, 'the press names no run').toEqual([])
