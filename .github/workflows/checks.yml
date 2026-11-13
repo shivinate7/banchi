@@ -240,7 +240,8 @@ jobs:
           scripts/ci-skip-count.sh "$TARGET" "$log"
           exit "$rc"
 
-  # The static targets run alone so `design-check` can wait for them and not for the slowest shard.
+  # The static targets run alone, as a job of their own that runs beside the browser matrix. `design-check` does not wait for it: a red
+  # static job turns the rollup red, and the matrix has already started by then. `design-check-passed` still needs it (see there).
   ci-static:
     name: ci-check (ci-check-static)
     if: ${{ !github.event.pull_request.draft }}
@@ -615,12 +616,12 @@ jobs:
   # `fail-fast: false` because a red shard is a claim about its own cases and the others are
   # still worth their verdict.
   design-check:
-    needs: [already-passed, browser-scope, ci-static]
+    needs: [already-passed, browser-scope]
     # THE JOB RUNS ON EVERY NON-DRAFT EVENT AND DECIDES INSIDE, because `all-jobs-passed` fails on
     # a skipped need (claude-settings decision same-check-kinds). `always()` replaces the implicit
     # `success()`, so a gate job that FAILED releases the matrix instead of skipping it: a broken
     # lookup or a broken classifier is not a reason to test less (the browser-scope entry in
-    # docs/decisions/). THREE GATES, EACH SKIPPING ONLY ON ITS OWN EXPLICIT ANSWER, computed once
+    # docs/decisions/). TWO GATES, EACH SKIPPING ONLY ON ITS OWN EXPLICIT ANSWER, computed once
     # by the `gate` step; every later step carries it. The same answer shrinks the matrix to one
     # shard when it is "skip", so a skip starts one runner and not twelve. The matrix below spells
     # the gate out again, because a step's output cannot reach it.
@@ -640,15 +641,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: ${{ fromJSON(needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' && needs.ci-static.result == 'success' && '[1,2,3,4,5,6,7,8,9,10,11,12]' || '[1]') }}
+        shard: ${{ fromJSON(needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' && '[1,2,3,4,5,6,7,8,9,10,11,12]' || '[1]') }}
     steps:
       # The first step. Fail-open: only an explicit answer skips (`already-passed` says `true`,
-      # `browser-scope` says `false`, or `ci-static` did not succeed). An empty output, a failed
-      # gate job and a missing job all RUN the matrix.
+      # or `browser-scope` says `false`). An empty output, a failed gate job and a missing job all
+      # RUN the matrix.
       - name: Does the browser matrix run?
         id: gate
         env:
-          RUN: ${{ needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' && needs.ci-static.result == 'success' }}
+          RUN: ${{ needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false' }}
         run: |
           echo "browser matrix runs: ${RUN}"
           echo "run=${RUN}" >> "$GITHUB_OUTPUT"
