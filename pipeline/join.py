@@ -2195,6 +2195,10 @@ class SkuMatch:
     # is a different sentence from a different cause. Set only in `cli/cmd_emit.py:_apply_guard`,
     # and only where the guard is the reason `asked` reads 0.
     guard_trimmed: bool = False
+    # WHETHER `emit` LEFT THIS CARD'S LISTING ROW OUT because TCGplayer's price moved since the screen
+    # showed it (`cli/cmd_emit._leave_out_moved`). It lowers `asked` to 0, so `nothing_to_add` needs this
+    # to say why; the owner typed no zero.
+    live_moved: bool = False
 
     @property
     def condition(self) -> str:
@@ -2390,6 +2394,8 @@ class SkuMatch:
         # zero typed for this card is why nothing goes, and it is not a hold, so the way
         # back is the field and not the corpus.
         if self.asked == 0:
+            if self.live_moved:
+                return "TCGplayer's price moved since this list loaded"
             # D7's GUARD-ZERO WORDING: a zero here can be the OPERATOR'S, or it can be the live
             # guard's own room closing to nothing (`cli/cmd_emit.py:_apply_guard`) — two
             # different causes that `asked` cannot carry apart on its own. `guard_trimmed`

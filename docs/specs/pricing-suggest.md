@@ -38,7 +38,10 @@ was typed. Old live listings drift from market and nothing says so. The owner ca
   marks a live listing with no reason to change: its price is the one set when it was listed. "Live"
   is the orchestrator's pick, reversible, not an owner ruling.
 - **Send** is one press. It sends new copies, kept suggestions and typed prices together.
-  D273 (one press sends listings live) still holds.
+  D273 (one press sends listings live) still holds. A named price whose live price TCGplayer moved since
+  the screen drew it stays out of the file and is named (`live_moved`), and the rest goes. The card then
+  offers those prices alone at the live price ("TCGplayer shows $X now. Send $Y?"). A press with nothing
+  else to send refuses `price_refused` and offers the same.
 - **A kept suggestion drifts a few cents between the draw and the press** (TCGplayer's market moved 45 of
   1409 rows in 16 minutes). The press rebuilds each one. Within the larger of 5% or $0.05 of the drawn price
   (`sendguard.SUGGESTION_DRIFT_FRACTION`, `SUGGESTION_DRIFT_DOLLARS`) it goes at the fresh price and the answer

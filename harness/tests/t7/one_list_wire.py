@@ -724,6 +724,99 @@ def check_send_suggestion_drift(checks: Checks) -> None:
                              "no suggested posting for Articuno")
 
 
+def check_send_suggestion_drift_live_moved(checks: Checks) -> None:
+    """A kept suggestion that drifted inside `sendguard.drift_allowed`, and whose live TCGplayer price
+    moved since the screen drew it (`live_moved`), is LEFT OUT and named under `prices_left`. It is not
+    listed under `moved`: `moved` says the card went at a fresh price, and it did not. The rest of the
+    press goes (D273).
+    """
+    checks.note("")
+    checks.note("SEND, DRIFT AND LIVE MOVED — a drifted suggestion TCGplayer also moved is left out, not listed under moved")
+    with run_folder() as run, isolated_home(run), send_portal() as portal:
+        _seed_sync()
+        with _case(checks, "send: Dunsparce drifted and its live price moved; Articuno holds"):
+            _one_copy_live(checks, portal, prices={DUNSPARCE_SKU: "2.30"})
+            _seed_send_suggestions()
+            outcome = _outcome(lambda: send_routes.do_send({
+                "runs": [],
+                "confirm": True,
+                "prices": [
+                    {"sku": DUNSPARCE_SKU, "price": "2.08", "was": "2.50", "source": "suggested"},
+                    {"sku": ARTICUNO_SKU, "price": "24.00", "was": "22.03", "source": "suggested"},
+                ],
+            }))
+            checks.ok(outcome[0] == "answered", "the press is answered, with Articuno still in it",
+                      f"refused: {outcome[1]}")
+            if outcome[0] == "answered":
+                checks.equal([m["sku"] for m in outcome[1].get("moved") or []], [],
+                             "Dunsparce is not listed under `moved`")
+                checks.equal(
+                    [(n["sku"], n["why"], n["live"], n["shown"]) for n in (outcome[1].get("send") or {}).get("prices_left") or []],
+                    [(DUNSPARCE_SKU, "live_moved", "2.30", "2.50")],
+                    "and it is named under `prices_left`, with TCGplayer's figure and the one the screen drew",
+                )
+                checks.equal(_rows(portal), {ARTICUNO_SKU: ("0", "24.00")}, "only Articuno goes")
+
+
+def _held_tick(sku: str, price: str) -> None:
+    """The owner's kept tick on a suggestion `sku` at `price`, pressed in the Suggested group, the group a
+    suggestion row sits in (`pipeline/worklist.py:with_ticks` holds a tick only in its own group)."""
+    with files.exclusive(files.inventory_dir()):
+        corpus.change_ticks({sku: {"price": price, "on": True, "group": "suggested"}})
+
+
+def check_send_live_moved_note_source_and_tick(checks: Checks) -> None:
+    """A kept suggestion that TCGplayer's live price moved is left out and named under `prices_left`
+    with `source: suggested`, so its resend keeps the cap check. The note carries `ticked: True` only
+    where the server holds the owner's tick (`send_routes._write_and_send`). A resend from that note,
+    after TCGplayer moved again past the cap, is refused `suggestion_past_cap` when no tick holds.
+    """
+    checks.note("")
+    checks.note("SEND, LIVE MOVED NOTE — a left-out suggestion names its source and the tick the server holds")
+    for label, held in (("no tick held", False), ("tick held", True)):
+        with run_folder() as run, isolated_home(run), send_portal() as portal:
+            _seed_sync()
+            with _case(checks, f"send: Dunsparce left out, {label}"):
+                _one_copy_live(checks, portal, prices={DUNSPARCE_SKU: "2.30"})
+                _seed_send_suggestions()
+                if held:
+                    _held_tick(DUNSPARCE_SKU, "2.06")
+                outcome = _outcome(lambda: send_routes.do_send({
+                    "runs": [],
+                    "confirm": True,
+                    "prices": [
+                        {"sku": DUNSPARCE_SKU, "price": "2.06", "was": "2.50", "source": "suggested", "ticked": True},
+                        {"sku": ARTICUNO_SKU, "price": "24.00", "was": "22.03", "source": "suggested"},
+                    ],
+                }))
+                checks.ok(outcome[0] == "answered", "the press is answered, with Articuno still in it",
+                          f"refused: {outcome[1]}")
+                if outcome[0] != "answered":
+                    continue
+                note = next(iter((outcome[1].get("send") or {}).get("prices_left") or []), {})
+                checks.equal(
+                    (note.get("sku"), note.get("why"), note.get("source"), note.get("ticked", "<absent>")),
+                    (DUNSPARCE_SKU, "live_moved", "suggested", True if held else "<absent>"),
+                    "the note names the card as live_moved, as a suggestion, and ticked only where the tick holds",
+                )
+                if held:
+                    continue
+                # TCGplayer moves again: the resend is the note's own price, against the newer live figure.
+                portal["live"] = _live_export_priced(
+                    {ARTICUNO_SKU: 1, DUNSPARCE_SKU: 1}, {ARTICUNO_SKU: "22.03", DUNSPARCE_SKU: "2.80"},
+                )
+                portal["rows"].clear()
+                resend = {
+                    "runs": [],
+                    "confirm": True,
+                    "prices": [{"sku": DUNSPARCE_SKU, "price": "2.06", "was": note.get("live"), "source": "suggested"}],
+                }
+                resent = _outcome(lambda payload=resend: send_routes.do_send(payload))
+                checks.equal(resent, ("refused", "suggestion_past_cap"),
+                             "a resend past the cap, with no tick held, is refused by the server")
+                checks.equal(_rows(portal), {}, "and TCGplayer receives no row")
+
+
 def check_send_suggestion_other_game(checks: Checks) -> None:
     """A kept suggestion whose live row is in a game no run of the send files still rides the send as
     a price-only row, filed under its own game (`cmd_emit._suggested_rows`). The press is answered; it
@@ -1550,6 +1643,8 @@ CHECKS = (
     check_send_past_cap_needs_a_tick,
     check_send_suggestion_changed,
     check_send_suggestion_drift,
+    check_send_suggestion_drift_live_moved,
+    check_send_live_moved_note_source_and_tick,
     check_send_suggestion_other_game,
     check_download_split_other_game,
     check_send_past_cap_on_sent_price,
@@ -1576,12 +1671,18 @@ CHECKS = (
 
 
 if __name__ == "__main__":
-    # `PYTHONPATH=<repo root> python3 harness/tests/t7/one_list_wire.py`: this group's checks alone, under
-    # the one runner's rules (`hermetic`, refused network). The exit code is the verdict.
+    # `PYTHONPATH=<repo root> python3 harness/tests/t7/one_list_wire.py [check ...]`: this group's checks, or
+    # only the named ones, under the one runner's rules (`hermetic`, refused network). The exit code is the
+    # verdict. A name this group does not hold is refused, never silently skipped.
     import sys
 
     from harness.tests import t7_store_and_seams
 
-    result = t7_store_and_seams.run(order=lambda _: list(CHECKS))
+    picked = set(sys.argv[1:])
+    unknown = sorted(picked - {check.__name__ for check in CHECKS})
+    if unknown:
+        print(f"not a check in this group: {', '.join(unknown)}")
+        sys.exit(2)
+    result = t7_store_and_seams.run(order=lambda _: [c for c in CHECKS if not picked or c.__name__ in picked])
     print(result.detail)
     sys.exit(0 if result.passed else 1)

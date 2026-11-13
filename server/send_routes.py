@@ -79,7 +79,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, NamedTuple, NoReturn, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterator, List, NamedTuple, NoReturn, Optional, Sequence, Set, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -1283,11 +1283,14 @@ def _named_prices(payload: dict) -> List[dict]:
 
 
 def _named_moves(payload: dict) -> List[dict]:
-    """The live copies the BUTTON said a listing row moves, validated: `[{sku, price}]`.
+    """The live copies the BUTTON said a listing row moves, validated: `[{sku, price, copies, was}]`.
 
     THE OWNER'S RULING, 2026-09-24 (round 7, R6-3): a new copy of a card already live carries
     Banchi's stored price, and the button names every live copy that moves and its new price.
-    The server refuses a press that would move live copies the button did not name.
+    The server refuses a press that would move live copies the button did not name. `was` is the
+    live price the screen showed for the card, as a named price's is (`_named_prices`); `emit`
+    leaves the card out when TCGplayer's price is no longer that one. Left out or blank, it
+    names no price shown.
     """
     named = payload.get("moves")
     if named is None:
@@ -1304,6 +1307,8 @@ def _named_moves(payload: dict) -> List[dict]:
         sku = str(row.get("sku") or "") if isinstance(row, dict) else ""
         try:
             price = tcgcsv.parse_price(str(row.get("price") or "")) if sku else None
+            was_text = row.get("was") if sku else None
+            was = None if was_text in (None, "") else tcgcsv.parse_price(str(was_text))
         except (ArithmeticError, ValueError):
             price = None
         copies = row.get("copies") if sku else None
@@ -1317,7 +1322,14 @@ def _named_moves(payload: dict) -> List[dict]:
                 "Each named move needs a TCGplayer id, a price above zero and a count of live "
                 "copies.",
             )
-        out.append({"sku": sku, "price": tcgcsv.format_price(price), "copies": int(copies)})
+        out.append(
+            {
+                "sku": sku,
+                "price": tcgcsv.format_price(price),
+                "copies": int(copies),
+                "was": None if was is None else tcgcsv.format_price(was),
+            }
+        )
     return out
 
 
@@ -1435,6 +1447,30 @@ def _leave_out_held(payload: dict, directories: Sequence[Path], live_before: Dic
     return dict(payload, prices=[row for row in payload["prices"] if row["sku"] not in held]), held
 
 
+def _keep_server_ticks(payload: dict, kept_ticks: Set[str]) -> dict:
+    """ONLY THE SERVER'S KEPT TICK SURVIVES in the payload: a `ticked` flag with no kept tick behind it is dropped,
+    so a left-out price is offered again with the tick the server holds and a forged flag reaches no note."""
+    return dict(
+        payload,
+        prices=[
+            row if row.get("ticked") is not True or row["sku"] in kept_ticks else {k: v for k, v in row.items() if k != "ticked"}
+            for row in payload["prices"]
+        ],
+    )
+
+
+def _held_ticks(drawn: Any) -> Set[str]:
+    """The SKUs whose tick the server kept and still holds (`worklist.with_ticks`). Empty when the store cannot
+    be read: no tick is then held, and the press goes on with none."""
+    try:
+        book = corpus.Corpus.read()
+        wired = worklist.with_ticks(pipeline_routes._live_wire(drawn, book), corpus.read_ticks())
+    except (OSError, ValueError) as exc:
+        files.log_cause('suggestion ticks', exc)
+        return set()
+    return {row["sku"] for row in wired if row["source"] == suggest.SOURCE and row["ticked"] is True}
+
+
 def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> Tuple[dict, List[dict], List[dict]]:
     """`(payload, moved, left_out)`: the press the server stands behind, or a refusal.
 
@@ -1453,7 +1489,9 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> T
     """
     checked = {row["sku"]: (row["price"], row["was"]) for row in _checked_prices(payload)}
     if not checked:
-        return payload, [], []
+        # Nothing is checked, but a note built from a row still reads its `ticked`: only a server-held tick survives.
+        held = _held_ticks(drawn) if any(r.get("ticked") is True for r in payload["prices"]) else set()
+        return _keep_server_ticks(payload, held), [], []
     suggested = {r["sku"] for r in payload["prices"] if r.get("source") == postings.SUGGESTED}
     kept = {sku: named for sku, named in checked.items() if sku in suggested}
     try:
@@ -1506,6 +1544,7 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> T
     # A past-cap suggestion goes on the owner's tick, and the tick is the SERVER'S: the client's `ticked` flag
     # only names the row, and a flag with no kept tick that still holds behind it exempts nothing.
     ticked = {row["sku"] for row in payload["prices"] if row.get("ticked") is True} & kept_ticks
+    payload = _keep_server_ticks(payload, kept_ticks)
     over = sendguard.suggestions_past_cap({s: v for s, v in checked.items() if s not in ticked}, prices, limit, names)
     if over:
         parts = [
@@ -1574,6 +1613,9 @@ def _send(payload: dict, directories: Sequence[Path], download: bool, refreshed:
         answer = _write_and_send(payload, directories, download, record, live_path, live_before)
         # WHAT THE PRESS DID TO THE KEPT SUGGESTIONS, by key, each absent when none: `held` (left out, live and
         # held), `moved` (sent at the fresh price) and `left_out` (changed past `sendguard.drift_allowed`, or gone).
+        # A SKU `emit` left out (its price already shown, no copy live, moved at TCGplayer) went at no fresh price.
+        unsent = {str(note.get("sku")) for note in record.get("prices_left") or []}
+        moved = [row for row in moved if row["sku"] not in unsent]
         notes = {key: value for key, value in (("held", held), ("moved", moved), ("left_out", left_out)) if value}
         if not download and record.get("phase") == PHASE_DONE:
             _forget_sent_ticks(record)
@@ -1665,6 +1707,12 @@ def _write_and_send(
     claim = Store().read().send_claims.get(stamp)
     written = sorted(directory.glob("import*.csv"))
     said_prices = _json_line(console, "send_prices") or {}
+    # A LEFT-OUT PRICE THAT MOVED AT TCGPLAYER IS OFFERED AGAIN with the source `emit` named and the tick the server kept.
+    ticks = {str(row["sku"]) for row in payload["prices"] if row.get("ticked") is True}
+    said_prices["left"] = [
+        dict(note, ticked=True) if note.get("why") == sendguard.LEFT_LIVE_MOVED and str(note.get("sku")) in ticks else note
+        for note in said_prices.get("left") or []
+    ]
     said_off = _json_line(console, "send_takeoff") or {}
     changes = list(said_prices.get("rows") or [])
 
@@ -1674,7 +1722,12 @@ def _write_and_send(
         # directory is its scratch and goes with it; no receipt is left for a press that sent
         # nothing.
         shutil.rmtree(directory, ignore_errors=True)
-        refused = _claim_refusal(console, step) or _price_refusal(console, step)
+        # A PRESS WHOSE ONLY PRICES MOVED AT TCGPLAYER COUNTED NOTHING: `emit` left those cards out
+        # (`live_moved`), so the refusal names them and carries them as data for the resend offer.
+        moved_live = [
+            note for note in said_prices.get("left") or [] if note.get("why") == sendguard.LEFT_LIVE_MOVED
+        ]
+        refused = _claim_refusal(console, step) or _price_refusal(console, step) or _price_refused(moved_live, step)
         if refused is not None:
             raise refused
         raise _empty_send_refusal(console, guard.get("trimmed") or [], step, code)

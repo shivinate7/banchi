@@ -5273,6 +5273,29 @@ test('S3 — with Hide sold on, a search count excludes what the fold already hi
   await expect(page.locator('.browse-filterbar .bn-filtercount-figure')).toHaveText('0 of 3 boxes')
 })
 
+test('the card header counts sold copies in Captured, and draws no On Hand chip', async ({ page }) => {
+  /* Three copies of one SKU, one of them sold. Inventory's Captured is the record count and takes in
+     the sold copy (CardHeroHead's own tip says so); the Orders walk's On Hand does not (its own case). */
+  const cards: Cards = {
+    ...CARDS,
+    '2/1': card({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, cid: 'thievul-cid' }),
+    '2/4': card({ index: 4, state: 'sold', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+  }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  await open(page, BOXES, store, () => PRICING, SALE, {
+    settle: '.browse-hero-side:not([data-pending])',
+    route: '/#/inventory?box=2&card=thievul-cid',
+  })
+
+  await expect(page.locator('.browse-hero-name'), 'the header is the Thievul card').toContainText('Thievul')
+  const side = page.locator('.browse-hero-side:not([data-pending])')
+  await expect(side, 'the card figures are drawn').toHaveCount(1)
+  const captured = side.locator(':scope > *').filter({ hasText: /^\s*Captured/i })
+  await expect(captured, 'the Inventory header draws one Captured chip').toHaveCount(1)
+  await expect(captured.locator('b'), 'Captured counts all three copies, the sold one included').toHaveText('3')
+  await expect(side.locator(':scope > *').filter({ hasText: /^\s*On Hand/i }), 'Inventory draws no On Hand chip').toHaveCount(0)
+})
+
 test('D271 — a search that finds nothing offers the near name, and pressing it runs that search', async ({ page }) => {
   const cards: Cards = {
     '2/1': card({ index: 1, state: 'identified', name: 'Renekton', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
