@@ -2718,7 +2718,10 @@ function OrderPickPane({
   /* THE SAME BAND INVENTORY DRAWS (`CardHero.tsx:CardHeroHead`), fed from the walk's own group.
      `hidden` is 0 because the walk folds nothing (`preserveOrder`), and `cap` is null because a take
      carries no ceiling: a screen that cannot say the ceiling draws no meter. */
-  const figures: HeroFigures = { group: currentGroup, listedAt: currentGroup.live_as_of, hidden: 0, cap: null, onHandOnly: true }
+  /* THE ON HAND CHIP COUNTS `group.copies`, SO A COPY SOLD THIS WALK LEAVES IT AT ONCE: `groupOf` keeps every take
+     copy (the rows still draw sold ones), and the focus re-read that would drop them has not run yet. */
+  const onHandGroup ={ ...currentGroup, copies: currentGroup.copies.filter((copy) => !walk.soldKeys.has(copy.key)) }
+  const figures: HeroFigures = { group: onHandGroup, listedAt: currentGroup.live_as_of, hidden: 0, cap: null, onHandOnly: true }
   return (
     <>
       <CardPane
