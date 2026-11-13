@@ -9,6 +9,9 @@ D14 (two tracks, one rig) still stands in structure. `codes/` is its own package
 carries the track list. `scripts/decision-context.py` prints a track banner. Repeal needs the
 owner's word.
 
+Shared rules live in claude-settings and this file cites them by id, never restates them. A settled decision
+here is an argument, not an authority (shared rule `outcomes-decision-is-argument`). Cite the entry.
+
 Banchi has no Codex setup (D135, no Codex setup). A rule that matters under one folder lives in
 `.claude/rules/<topic>.md` with a `paths:` list (see its README). `code-card-fork/CLAUDE.md` links here.
 The `fork claude link` row of `make docs-audit` checks the link.
@@ -68,7 +71,7 @@ whole repo:
   (D173, a rule that can be enforced is).
   The `rule enforcement` row of `make docs-audit` parses every rule here.
   `HARD_RULE_FLOOR` and `PROSE_ONLY_EXPECTED` pin its count.
-- **Each capability has one home.** `make map ARGS=<path>` and `scripts/decision-context.py` find the home.
+- **Each capability has one home** (shared rule `building-one-home-per-capability`). `make map ARGS=<path>` and `scripts/decision-context.py` find the home.
   The `capability homes` row of `make docs-audit` holds each named capability's home and refuses a call to its
   primitives outside it. **NOT MECHANIZED:** a machine cannot tell that two differently named functions do the same job.
 - **A route is not a feature. Nothing is built until a screen reaches it.** Done is the route, a client function in
@@ -85,8 +88,6 @@ whole repo:
 - **Find an existing primitive before you build.** `make map ARGS=<path>` and `scripts/decision-context.py` find an existing primitive.
   A stopgap's commit says so, and its cause goes in `docs/debts/`.
   **NOT MECHANIZED:** a machine cannot read whether the author knew the cause and chose the symptom.
-- **A settled decision is an argument, not an authority.** Cite the entry.
-  **NOT MECHANIZED:** a machine cannot tell a rotted premise from a live one without judging the outcome it protected.
 - **Check whether a task is yours before you hand it to the owner.** Grep the routes, `make help` and
   `docs/map/` first. **NOT MECHANIZED:** a machine cannot read a sentence to a person and decide whether
   this repo can already do it.
@@ -110,7 +111,7 @@ whole repo:
   A record that must quote a line writes it in words.
 - **A screen answers to the system.** `--bn-*` tokens only, checked at 1440 and 820, light and dark.
   `docs/DESIGN.md` is the record. The `design tokens` row of `make docs-audit` locks every name and hex both ways.
-- **Main moves by pull request. A session never commits to main or pushes it** (D42, main moves by pull request).
+- **Main moves by pull request. A session never commits to main or pushes it** (D42, main moves by pull request; shared rule `git-main-only-by-pr`).
   Parent decision `standing-merge-grant` says who merges: a batch runner, under the coordinator's grant. The coordinator never merges.
   A one-lane session the owner started may merge its own lone lane, only under that repo's merge grant or the owner's named act,
   under the same limits. A lane session a coordinator started never merges: it hands the batch runner each reviewed lane branch.
@@ -149,10 +150,13 @@ whole repo:
 - **State a fence by intent and name the exception.** Example: "Do not change which cards a walk holds. Rendering
   changes inside `WalkView` are in scope." **NOT MECHANIZED:** a machine cannot tell a fence around
   behavior from one around files.
-- **Show the screen before you say it looks right.** Render at 1440 and 820, both themes, and look at the images.
+- **Show the screen before you say it looks right** (shared rule `verification-screens-verdict`). Banchi's sizes: 1440 and 820, both themes.
 
 ## Map
 
+- Branch `roadmap` (origin only, never merged into main) holds the roadmap record in `roadmap/data/`, briefs in `briefs/`
+  and role hand-off notes in `handoffs/` (shared skill `project-ops`). Its `CLAUDE.md` holds the mechanics. Today `briefs/` and
+  `handoffs/` hold no file, and the branch holds no roster.
 - `docs/map/` is the plain-English map of the code: one file per area, one line per code file, a trace page per
   screen. Read it before you answer how code works. `make map-check` holds it in sync with the code; the
   `plain-english-map` skill says how to change it. `map.config.json` holds its repository settings.
