@@ -561,13 +561,15 @@ function ResendPrices({
     <Notice
       tone="warn"
       compact
-      className="send-failure send-resend"
+      className={leftOut ? 'send-failure send-resend send-left-out' : 'send-failure send-resend'}
       title={
         !leftOut ? (
           "TCGplayer's price is not the one this list showed."
         ) : one !== undefined ? (
           <>
             {one.name || one.sku} was left out. TCGplayer shows {one.live === null ? 'no price' : <Money value={Number(one.live)} />} now.
+            {/* A CARD THAT CANNOT GO AGAIN ALONE has no button, so the sentence carries the next step. */}
+            {onSend === undefined ? ' Check it in your list and send again.' : null}
           </>
         ) : (
           `${rows.length} cards were left out. TCGplayer's prices moved.`
@@ -587,6 +589,23 @@ function ResendPrices({
         )
       }
     >
+      {leftOut ? (
+        /* ONE CARD: the title names it and its live price, so no row repeats them. Several: "<name>  $old → $new" per card. */
+        one !== undefined ? null : (
+          <ul className="send-names">
+            {rows.map((row) => (
+              <li key={`${row.sku}-${row.why}`}>
+                <span className="send-name">{row.name || row.sku}</span>
+                <span className="send-figure">
+                  {row.shown === null ? 'no price' : <Money value={Number(row.shown)} />}
+                  {' → '}
+                  {row.live === null ? 'no price' : <Money value={Number(row.live)} />}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : (
       <ul className="send-names">
         {rows.map((row) => (
           <li key={`${row.sku}-${row.why}`}>
@@ -612,6 +631,7 @@ function ResendPrices({
           </li>
         ))}
       </ul>
+      )}
     </Notice>
   )
 }
