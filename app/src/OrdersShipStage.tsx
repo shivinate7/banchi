@@ -2,11 +2,12 @@ import { byteSize, count } from './kit/dataRules'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react'
 
 import { readUpload } from './csvUpload'
-import { Button, EmptyFrame, EmptyState, Icon, IconButton, Money, Notice, OrderLink, type IconName } from './kit'
+import { Button, EmptyFrame, EmptyState, Icon, IconButton, Money, Notice, OrderLink, ShipTo, type IconName } from './kit'
 import { toast } from './kit/toast'
 import { SHIP_LANES, setHub, useHub } from './OrdersHubStore'
 import { describeFailure, fillShippingStamps, forgetShippingExport, readShippingExport, shippingFileUrl, failureTone } from './server'
 import type { Failure } from './server'
+import { shipToOf } from './orderBuyers'
 import type { OrderRow, OrdersPayload, ShippingLane, ShippingReason, ShippingRow } from './types'
 import './Shipping.css'
 
@@ -329,10 +330,15 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
   }
 
   /* THE LEDGER'S HALF, JOINED BY ORDER NUMBER AND VIEW-ONLY. The export says which envelope; the
-     ledger says how many copies have been pulled for it. Neither side is written by this. */
+     ledger says how many copies have been pulled for it. Neither side is written by this.
+     The export names no marketplace, so a number two sources both spell has no one order: it maps to
+     null and the row shows nothing from the ledger, as `Ledger.name_ship_tos_by_number` refuses it. */
   const ledger = useMemo(() => {
-    const out = new Map<string, OrderRow>()
-    for (const order of payload?.orders ?? []) out.set(order.number, order)
+    const out = new Map<string, OrderRow | null>()
+    for (const order of payload?.orders ?? []) {
+      const folded = order.number.trim().toLowerCase()
+      out.set(folded, out.has(folded) ? null : order)
+    }
     return out
   }, [payload])
 
@@ -410,8 +416,8 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
             ) : null}
           </label>
           <p className="shipping-empty-note">
-            Nothing is saved, and the file is forgotten after 30 minutes. No buyer info shows here, only in the
-            file you download.
+            The file is forgotten after 30 minutes. Reading it saves only the name each order ships to, on the
+            order. The street stays in the file you download.
           </p>
           <div className="shipping-lane-guide" aria-label="The three lanes">
             {SHIP_LANES.map((lane) => (
@@ -462,6 +468,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
   /* ------------------------------------------------------------------------------ the lanes */
 
   const stamps = batch.stamps
+  const saved = batch.ship_to_saved ?? null
 
   return (
     <div className="shipping-stage">
@@ -482,6 +489,13 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                 {count(batch.shipments, 'order')}
               </span>
               <span>{keptOf(batch.expires_in)}</span>
+              {saved === null || saved.named + saved.unchanged === 0 ? null : (
+                <span>
+                  {saved.named > 0
+                    ? `Ship To saved on ${count(saved.named, 'order')}`
+                    : 'Ship To already saved'}
+                </span>
+              )}
             </span>
           </div>
           <div className="shipping-file-actions">
@@ -564,12 +578,21 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
       {/* THE WORD, SAID ONCE (TXT-03), rather than on up to 292 cards. The icon on each row
           still carries it, in its tooltip and its accessible name. */}
       <p className="shipping-quality-legend">
+        {/* "Ship To" is said once here and keyed to the bold name; each row keeps the words for a
+            screen reader only (`ShipTo` with `bare`). Drawn only when a row carries a name. */}
+        {!batch.rows.some((row) => row.ship_to != null) ? null : (
+          <span className="shipping-legend-shipto">
+            <b>Ship To</b> in Bold
+          </span>
+        )}
         {/* F5 verbiage cut (rows 118/119): "Certain"/"Inferred", not the reviewer's own
             "Exact"/"Estimated", to match the exact words `qualityOf` already gives each row's
             own icon as its accessible name a few lines below — a legend that named its icons
             differently from the icons themselves would be its own new defect. */}
-        <Icon name="check" size={11} /> Certain{' '}
-        <Icon name="circle" size={11} /> Inferred
+        <span className="shipping-legend-quality">
+          <Icon name="check" size={11} /> Certain{' '}
+          <Icon name="circle" size={11} /> Inferred
+        </span>
       </p>
 
       <div className="shipping-lanes" role="group" aria-label="The three lanes">
@@ -610,8 +633,14 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                     {rows.map((row, at) => {
                     const quality = qualityOf(row)
                     const figures = figuresOf(row)
-                    const known = ledger.get(row.order) ?? null
+                    const known = ledger.get(row.order.trim().toLowerCase()) ?? null
                     const sentence = reasonSentenceOf(row)
+                    /* ONE NAME WHEN THE BUYER SHIPS TO THEMSELVES. The buyer is the ledger's, so a row
+                       for an order Banchi has not read in has only the file's name. */
+                    const boughtBy =
+                      row.ship_to != null && known !== null && shipToOf({ buyer: known.buyer, ship_to: row.ship_to }) !== null
+                        ? known.buyer
+                        : null
                     return (
                       <li
                         key={row.order}
@@ -632,6 +661,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                             </span>
                           )}
                         </div>
+                        {row.ship_to == null ? null : <ShipTo bare name={row.ship_to} by={boughtBy} />}
                         {sentence === null ? null : <p className="shipping-says">{sentence}</p>}
                         {row.value === null && figures.length === 0 ? null : (
                           <div className="shipping-row-meta">

@@ -2,7 +2,7 @@
 // Governs: D91, D97, D113, D118, D132, D193, D203
 import { test, expect, type Locator, type Page, type Route } from '@playwright/test'
 import { sealEveryTest, stubStore } from './shell'
-import { line, order, payloadOf, pick, place } from './routeFixtures'
+import { line, order, payloadOf, pick, place, severalOrders } from './routeFixtures'
 import { afterPaint, settleMotion } from './motionSettled'
 
 /** A real, tiny image `route.fulfill` can hand back for a photo read — `inventory.spec.ts`'s
@@ -4664,10 +4664,106 @@ test('the last sale leaves the buyer on screen, says all sold, and points to Shi
   await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
 
   const done = page.locator('.orders-walk-done')
-  await expect(done).toContainText('All 1 sold.')
+  await expect(done).toContainText('All 1 Sold')
   await expect(done.getByRole('link', { name: 'Go to Shipping' })).toHaveAttribute('href', /shipping$/)
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Ada Lovelace')
+})
+
+/* A card's rarity pill in the pick header: the one catalogue word, never the operator's claim list. */
+const RARITY_PILL = /^(Common|Uncommon|Rare)$/
+
+test('the pick header draws the catalogue rarity once, before the copy has been read', async ({ page }) => {
+  /* No `inventoryCards` answer, so the header is `syntheticCard` built from the take alone. */
+  await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ rarity: 'Uncommon' })] })]),
+  })
+  await expect(page.locator(`${CURRENT_PICK} .browse-hero-sub .bn-pill`).filter({ hasText: RARITY_PILL })).toHaveText(['Uncommon'])
+})
+
+test('the pick header draws the catalogue rarity once, once the copy has been read', async ({ page }) => {
+  /* The read card carries a claim of two rarities. The header still states the one catalogue word. */
+  await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ rarity: 'Uncommon' })] })]),
+    /* No photograph: a photo address would be a read of the capture server, which this file seals. */
+    inventoryCards: { '3/21': inventoryCard({ photo: null, rarity: 'Uncommon', rarity_claim: ['Common', 'Uncommon'] }) },
+  })
+  await expect(page.locator(`${CURRENT_PICK} .browse-hero-sub .bn-pill`).filter({ hasText: RARITY_PILL })).toHaveText(['Uncommon'])
+})
+
+test('a buyer whose one order was canceled reads "Order Canceled", never "All 0 Sold"', async ({ page }) => {
+  const canceled = order({ buyer: 'Grace Hopper', status: 'Canceled', open: false, terminal: true, recorded: 0 })
+  await open(page, {
+    orders: payloadOf([order(), canceled], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]),
+  })
+  await pickFacet(page, 'Show', /^Open/)
+  await pickFacet(page, 'Show', /^Done/)
+  await page.locator('.orders-index-row', { hasText: 'Grace Hopper' }).click()
+
+  const done = page.locator('.orders-walk-done')
+  await expect(done).toContainText('Order Canceled')
+  await expect(done).not.toContainText('All 0 Sold')
+})
+
+test('a buyer whose two orders were both canceled reads "Orders Canceled", never "All 0 Sold"', async ({ page }) => {
+  const first = order({ buyer: 'Grace Hopper', status: 'Canceled', open: false, terminal: true, recorded: 0 })
+  const second = order({ buyer: 'Grace Hopper', number: OTHER_ORDER, key: `TCGplayer:${OTHER_ORDER}`, status: 'Canceled', open: false, terminal: true, recorded: 0 })
+  await open(page, {
+    orders: payloadOf([order(), first, second], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]),
+  })
+  await pickFacet(page, 'Show', /^Open/)
+  await pickFacet(page, 'Show', /^Done/)
+  await page.locator('.orders-index-row', { hasText: 'Grace Hopper' }).click()
+
+  const done = page.locator('.orders-walk-done')
+  await expect(done).toContainText('Orders Canceled')
+  await expect(done).not.toContainText('All 0 Sold')
+})
+
+test('a buyer whose one order was stood down as not shipping reads "Not Shipping", never "Shipped"', async ({ page }) => {
+  /* A stand-down writes the line's `closed_reason`, not the feed's status: the feed still says
+     Ready to ship, and `open` and `terminal` stay false. The done line must read the operator's close. */
+  const stood = order({ buyer: 'Grace Hopper', number: OTHER_ORDER, key: `TCGplayer:${OTHER_ORDER}`, open: false, terminal: false, recorded: 0 })
+  stood.progress = [{ ...stood.progress[0]!, closed_at: '2026-09-01T10:00:00+00:00', closed_reason: 'not_shipping' }]
+  await open(page, {
+    orders: payloadOf([order(), stood], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]),
+  })
+  await pickFacet(page, 'Show', /^Open/)
+  await pickFacet(page, 'Show', /^Done/)
+  await page.locator('.orders-index-row', { hasText: 'Grace Hopper' }).click()
+
+  const done = page.locator('.orders-walk-done')
+  await expect(done).toContainText('Not Shipping')
+  await expect(done).not.toContainText('Shipped')
+})
+
+test('a buyer whose one order shipped in transit and sold nothing reads "Shipped", never "Nothing Sold"', async ({ page }) => {
+  /* The feed's own word for a shipped order is terminal (`TERMINAL_STATUSES`), so the order is done
+     and nothing is recorded against it. The done line states the marketplace's fact, not a sale count. */
+  const shipped = order({ buyer: 'Grace Hopper', status: 'Shipped - in transit', open: false, terminal: true, recorded: 0 })
+  await open(page, {
+    orders: payloadOf([order(), shipped], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]),
+  })
+  await pickFacet(page, 'Show', /^Open/)
+  await pickFacet(page, 'Show', /^Done/)
+  await page.locator('.orders-index-row', { hasText: 'Grace Hopper' }).click()
+
+  const done = page.locator('.orders-walk-done')
+  await expect(done).toContainText('Shipped')
+  await expect(done).not.toContainText('Nothing Sold')
+})
+
+test('a buyer whose copies all sold reads "All N Sold", with N the copies sold', async ({ page }) => {
+  const sold = order({ buyer: 'Grace Hopper', open: false, terminal: true, recorded: 2, wanted: 2 })
+  await open(page, {
+    orders: payloadOf([order(), sold], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]),
+  })
+  await pickFacet(page, 'Show', /^Open/)
+  await pickFacet(page, 'Show', /^Done/)
+
+  await expect(page.locator('.orders-walk-done')).toContainText('All 2 Sold')
 })
 
 /* ------------------------------------------------------------ the stand-down's own guard (UX-165, review) */
@@ -4842,7 +4938,7 @@ test('finishing a buyer never asks for another buyer\'s walk, and draws no card 
   await page.locator('.orders-index-row', { hasText: 'Ada Lovelace' }).click()
   await expect(page.locator('.browse-card')).toContainText('Volcanion')
   await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).first().click()
-  await expect(page.locator('.orders-walk-done')).toContainText('All 1 sold.')
+  await expect(page.locator('.orders-walk-done')).toContainText('All 1 Sold')
 
   /* A window long enough for the stray plan to have been asked for and to have landed. */
   await page.waitForTimeout(600) // keep: asserts the stray plan is never asked for
@@ -5867,4 +5963,63 @@ test('ux-wave1: a refused leave adds no history entry, and a refused Back keeps 
   await page.keyboard.press('Escape')
   await page.goBack()
   await expect(page, 'the next Back still reaches the screen before Orders').toHaveURL(/#\/$|#\/\?/)
+})
+
+/* ---------------------------------------------------------------- the parcel name (D193) */
+
+/* THE PARCEL NAME IS DRAWN AS "SHIP TO" WHERE ONE ORDER MAKES IT UNAMBIGUOUS: the buyer's panel
+   and the order's own header under Manage. It is drawn only when it is someone else's name, so a
+   buyer who ships to themselves reads as before. A buyer with two orders gets no panel line,
+   because one name would be a guess about which parcel. */
+
+test('the parcel name is drawn as Ship To on the buyer panel, and nothing on the panel says Bought By', async ({
+  page,
+}) => {
+  await open(page, { orders: severalOrders({ [ORDER_NUMBER]: 'Mina Park' }) })
+  await page.locator('.orders-index-row', { hasText: 'Ada Lovelace' }).click()
+
+  const panel = page.locator('.orders-panel')
+  await expect(panel.locator('.bn-shipto')).toContainText('Ship To')
+  await expect(panel.locator('.bn-shipto')).toContainText('Mina Park')
+  await expect(panel).not.toContainText('Bought By')
+})
+
+test('the order header under Manage draws the parcel name as Ship To beside the order number', async ({ page }) => {
+  await open(page, { orders: severalOrders({ [ORDER_NUMBER]: 'Mina Park' }) })
+  await page.locator('.orders-index-row', { hasText: 'Ada Lovelace' }).click()
+  await openManage(page, 'order')
+
+  const head = page.locator('.orders-order-head')
+  await expect(head.locator('.orders-order-number')).toHaveText(ORDER_NUMBER)
+  await expect(head.locator('.bn-shipto')).toContainText('Ship To')
+  await expect(head.locator('.bn-shipto')).toContainText('Mina Park')
+})
+
+test('a parcel name that goes to the buyer draws no Ship To line on the panel or the header', async ({ page }) => {
+  await open(page, { orders: severalOrders({ [ORDER_NUMBER]: 'Ada Lovelace' }) })
+  await page.locator('.orders-index-row', { hasText: 'Ada Lovelace' }).click()
+  await expect(page.locator('.orders-panel-name')).toContainText('Ada Lovelace')
+  await expect(page.locator('.orders-panel .bn-shipto')).toHaveCount(0)
+
+  await openManage(page, 'order')
+  await expect(page.locator('.orders-order-head .orders-order-number')).toHaveText(ORDER_NUMBER)
+  await expect(page.locator('.orders-order-head .bn-shipto')).toHaveCount(0)
+})
+
+test('a buyer with two orders draws no parcel name line on the panel, because one name would be a guess', async ({
+  page,
+}) => {
+  const second = order({ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Ada Lovelace', wanted: 1, recorded: 0, ship_to: 'Nora Second' })
+  await open(page, {
+    orders: payloadOf(
+      [order({ ship_to: 'Mina Park' }), second],
+      [
+        { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
+        { key: secondBuyerKey, number: SECOND_BUYER_ORDER, complete: false, outstanding: 1, lines: [line({ order: SECOND_BUYER_ORDER, order_key: secondBuyerKey })] },
+      ],
+    ),
+  })
+  await page.locator('.orders-index-row', { hasText: 'Ada Lovelace' }).click()
+  await expect(page.locator('.orders-panel-order')).toHaveText('2 orders')
+  await expect(page.locator('.orders-panel .bn-shipto')).toHaveCount(0)
 })

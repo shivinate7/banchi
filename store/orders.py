@@ -93,14 +93,16 @@ vocabulary here would be two lists nothing reconciles, which is the drift D16 ex
 catch. `None` means the feed declared nothing and reads as the resolver's own default —
 D21's read-side backfill, applied at the read and never written.
 
-A NAME, AND NOTHING ELSE ABOUT A PERSON (D193). The ledger holds
+TWO NAMES, AND NOTHING ELSE ABOUT A PERSON (D193). The ledger holds
 what is needed to pick and pack — a SKU, a quantity, what the feed called the card — plus
-one more field: the buyer's DISPLAY NAME, because the owner walks drawers per *person* and
-a number with no name on it cannot be walked that way. This was an exclusion this repo drew
-on its own (D63/D69), never an owner ruling, and the owner's own ruling narrows rather than
-repeals it: address, email, payment and the transaction breakdown stay out, by the same
+two more fields: the buyer's DISPLAY NAME, because the owner walks drawers per *person* and
+a number with no name on it cannot be walked that way, and the SHIP-TO NAME, because the
+person who bought is not always the person the envelope names and a pack that reads the buyer
+puts the wrong name on the parcel. The ship-to name is a first and last name as TCGplayer
+gives it, and never the street, city or postcode beside it. Excluding names was a choice this
+repo made on its own (D63/D69); D193 narrows rather than repeals it: address, email, payment and the transaction breakdown stay out, by the same
 allowlist mechanism this file has always used — `server/order_transport.py:project_*`
-projects `buyerName` through and drops everything else exactly as before, and
+projects `buyerName` and the recipient's name through and drops everything else exactly as before, and
 `server/capture_server.py`'s three tuples still refuse `buyerName`'s siblings by name.
 `inventory/` is gitignored whole, which is a reason to keep bearer instruments out of a
 commit (`store/files.py`'s code ledger) and not a licence to accumulate somebody's postal
@@ -439,7 +441,7 @@ class OrderRecord:
     # answers the question this ledger actually owns — which orders still owe copies —
     # out of its own two halves rather than out of somebody else's noun.
     status: Optional[str] = None
-    # THE ONE FACT ABOUT A PERSON THIS LEDGER HOLDS (D193). A
+    # THE BUYER'S NAME, ONE OF THE TWO FACTS ABOUT A PERSON THIS LEDGER HOLDS (D193). A
     # display name, feed-owned exactly like `status` — it lives in `_content`, a change
     # stamps `changed_at`, and `ingest` replaces it wholesale on every sync. `None` means
     # the feed said nothing THIS TIME, which a paste routinely does; `Ledger.ingest` carries
@@ -454,6 +456,13 @@ class OrderRecord:
     # Stamped only where an ingest found the feed's content DIFFERENT — never on a sync
     # that learned nothing, which is what keeps an unchanged re-ingest byte-identical.
     changed_at: Optional[str] = None
+    # THE NAME THE PARCEL GOES TO (D193), which is not always the buyer's: a gift or a
+    # forwarded order has two people. Feed-owned content exactly like `buyer` — in `_content`,
+    # a change stamps `changed_at`, and `ingest` carries the incumbent's across when the
+    # incoming record says `None`. Last in the class so no caller that builds a record by
+    # position is shifted. It lives in the stored payload and in no column, so an older row
+    # reads back as `None` with no migration (`_parse_order` filters by `__annotations__`).
+    ship_to: Optional[str] = None
 
     @property
     def key(self) -> str:
@@ -485,6 +494,7 @@ class OrderRecord:
             self.placed_at,
             self.status,
             self.buyer,
+            self.ship_to,
             tuple(
                 (
                     line.sku,
@@ -800,15 +810,15 @@ class Ledger:
         byte, which is what makes pressing sync twice safe by construction rather than by a
         guard.
 
-        TWO FIELDS ARE CARRIED ACROSS FROM THE INCUMBENT, NOT ONE — this docstring and D63
+        THREE FIELDS ARE CARRIED ACROSS FROM THE INCUMBENT, NOT ONE — this docstring and D63
         both said exactly one until D193, and both were wrong the
         moment `buyer` existed to carry. `first_seen` is carried because losing a date is
-        cosmetic; `buyer` is carried under one narrower condition — only when the INCOMING
-        record says nothing at all (`record.buyer is None`) — because a hand-typed paste
-        routinely omits a name the fetch already wrote, and a paste that erased it would
-        undo the one thing the backfill exists to do. A fetch that DOES carry a name still
-        overwrites, same as `status` or any other feed-owned field: the feed is the
-        authority whenever it speaks.
+        cosmetic; `buyer` and `ship_to` are carried under one narrower condition — only when
+        the INCOMING record says nothing at all (`record.buyer is None`, `record.ship_to is
+        None`) — because a hand-typed paste routinely omits a name the fetch already wrote,
+        and a paste that erased it would undo the one thing the backfill exists to do. A
+        fetch that DOES carry a name still overwrites, same as `status` or any other
+        feed-owned field: the feed is the authority whenever it speaks.
 
         `changed_at` is stamped only where the content actually moved.
         """
@@ -820,6 +830,8 @@ class Ledger:
 
             if existing is not None and record.buyer is None:
                 record.buyer = existing.buyer
+            if existing is not None and record.ship_to is None:
+                record.ship_to = existing.ship_to
 
             if existing is None:
                 record.first_seen = record.first_seen or today()
@@ -865,6 +877,20 @@ class Ledger:
         same fact `ingest` would have written had the feed said it first — the two writers
         share one field and must agree about what moving it means.
         """
+        return self._name_field(source, number, "buyer", buyer)
+
+    def name_ship_to(self, source: str, number: str, ship_to: str) -> str:
+        """Attach the ship-to name to an order this ledger already holds. `name_buyer`'s twin.
+
+        Same three answers, same refusal to create an order, same `changed_at` stamp on a
+        change, and for the same reasons. The name is first and last as the feed gave it,
+        stripped and otherwise untouched: no recasing, because a recased name is a different
+        string from the one on the buyer's order, and nothing here may say which one is right.
+        """
+        return self._name_field(source, number, "ship_to", ship_to)
+
+    def _name_field(self, source: str, number: str, attribute: str, value: str) -> str:
+        """The one body behind `name_buyer` and `name_ship_to`: a person-name field on a held order."""
         try:
             key = order_key(source, number)
         except BadOrderKey:
@@ -872,12 +898,41 @@ class Ledger:
         record = self.orders.get(key)
         if record is None:
             return "unknown"
-        said = str(buyer).strip() or None
-        if record.buyer == said:
+        said = str(value).strip() or None
+        if getattr(record, attribute) == said:
             return "unchanged"
-        record.buyer = said
+        setattr(record, attribute, said)
         record.changed_at = now()
         return "named"
+
+    def name_ship_tos_by_number(self, names: Sequence[Tuple[str, str]]) -> NameReport:
+        """The ship-to name for orders an Export Shipping file names, which carries a number alone.
+
+        The export names no marketplace, so an order is matched by its number folded the way
+        `order_key` folds it, across every source. A number two records spell is NOT matched
+        and is counted `unknown`, because there is no way to tell which sale the row is and a
+        guess would put one person's name on another's order (`_order_stamps` makes the same
+        refusal for the same reason). An order the ledger does not hold is `unknown` too and
+        is never created.
+        """
+        by_number: Dict[str, Optional[OrderRecord]] = {}
+        for record in self.orders.values():
+            folded = str(record.number or "").strip().casefold()
+            by_number[folded] = None if folded in by_number else record
+        report = NameReport()
+        for number, ship_to in names:
+            record = by_number.get(str(number or "").strip().casefold())
+            if record is None:
+                report.unknown += 1
+                continue
+            outcome = self.name_ship_to(record.source, record.number, ship_to)
+            if outcome == "named":
+                report.named += 1
+            elif outcome == "unchanged":
+                report.unchanged += 1
+            else:
+                report.unknown += 1
+        return report
 
     def name_buyers(self, names: Sequence[Tuple[str, str, str]]) -> NameReport:
         """`name_buyer` over a list, mirroring `ingest`'s one-report-for-the-batch shape."""

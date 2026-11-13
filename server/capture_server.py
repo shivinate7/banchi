@@ -1074,18 +1074,19 @@ BOX_PUT_FIELDS = ("name", "sections", "section_names")
 #
 # THESE SIX TUPLES ARE THE PII BACKSTOP AND THAT IS WHY THEY ARE THIS NARROW (D63, D69,
 # amended by D193). An order feed carries a buyer's name AND a
-# shipping address, and this repo now keeps exactly one of the two: `buyer`, the display
+# shipping address, and this repo now keeps two NAMES and no address: `buyer`, the display
 # name, because the owner walks drawers per *person* and a screen naming only an order
-# number has no way to say "these are the same buyer". `server/order_transport.py` still
+# number has no way to say "these are the same buyer"; and `ship_to`, the name on the
+# parcel, because that person is not always the buyer. `server/order_transport.py` still
 # projects everything else away where it parses it, and a paste arriving from a screen has
 # had no such pass made over it. `_reject_unknown` is called FIRST at every level of the
 # ingest body — before a source is read, before an order is looked up — so an unprojected
 # paste REFUSES BY NAME rather than being stored with `shippingAddress` or `email` quietly
 # trimmed. A trim is silent; a refusal names the field and sends the caller back to project.
 # That difference is the whole argument for an allowlist over a filter, and it is unchanged
-# by `buyer` joining the list `_reject_unknown` allows.
+# by `buyer` and `ship_to` joining the list `_reject_unknown` allows.
 ORDER_INGEST_FIELDS = ("orders",)
-ORDER_INGEST_ORDER_FIELDS = ("source", "number", "placed_at", "status", "buyer", "lines")
+ORDER_INGEST_ORDER_FIELDS = ("source", "number", "placed_at", "status", "buyer", "ship_to", "lines")
 ORDER_INGEST_LINE_FIELDS = (
     "sku",
     "quantity",
@@ -1110,12 +1111,12 @@ ORDER_INGEST_LINE_FIELDS = (
 # the list you just showed me" is a client re-deriving a filter that is really "none".
 ORDER_FETCH_FIELDS = ("range", "preview", "statuses", "skip_known", "all_statuses")
 
-# What `POST /orders/names` accepts: a list of `{source, number, buyer}`, and nothing per
-# entry beyond it — `shippingAddress` or `email` slipped onto a names payload refuses by
+# What `POST /orders/names` accepts: a list of `{source, number, buyer}` with an optional
+# `ship_to`, and nothing per entry beyond them — `shippingAddress` or `email` slipped onto a names payload refuses by
 # name exactly as it would on `/orders/ingest`, because this route writes into the same
 # ledger record through the same field.
 ORDER_NAMES_FIELDS = ("names",)
-ORDER_NAME_FIELDS = ("source", "number", "buyer")
+ORDER_NAME_FIELDS = ("source", "number", "buyer", "ship_to")
 
 # THE CEILING ON ONE NAMES PRESS. `POST /orders/fetch`'s own `names` answer is capped by
 # `MAX_ORDERS`'s search-page walk, which returns at most a few hundred summaries per range,
@@ -13617,6 +13618,20 @@ def _engine_order(
     )
 
 
+def _save_ship_to(names: Sequence[Tuple[str, str]]) -> Dict[str, int]:
+    """The shipping read's writer: `(order number, ship-to name)` onto the orders the ledger holds.
+
+    `server/shipping_routes.py:do_shipping_batches` hands this the names off one Export
+    Shipping file (D193). It lives HERE for `_order_stamps`'s reason: that module must not
+    learn to open the store for this, and only a name and an order number cross. The match,
+    the refusal to create an order and the ambiguity rule are `Ledger.name_ship_tos_by_number`'s.
+    The write is one `Store().write()`, and it moves nothing when every name is already held.
+    """
+    with Store().write() as snapshot:
+        report = snapshot.ledger.name_ship_tos_by_number(list(names))
+    return {"named": report.named, "unchanged": report.unchanged, "unknown": report.unknown}
+
+
 def _order_stamps(numbers: Sequence[str]) -> Tuple[int, Dict[str, Tuple[str, ...]]]:
     """T2b's `locate`: order number -> the labels of the copies that still have to be picked.
 
@@ -13874,6 +13889,7 @@ def _order_row(
         "placed_at": record.placed_at,
         "status": record.status,
         "buyer": record.buyer,
+        "ship_to": record.ship_to,
         "first_seen": record.first_seen or None,
         "changed_at": record.changed_at,
         "wanted": record.wanted,
@@ -14634,11 +14650,13 @@ def _ingest_record(order_at: int, raw) -> order_store.OrderRecord:
     said = f"Order {order_at} carries a value this route cannot store verbatim."
     placed_at = _order_optional_text(raw, "placed_at", "order_invalid", said)
     status = _order_optional_text(raw, "status", "order_invalid", said)
-    # THE ONE FACT ABOUT A PERSON THIS ROUTE WILL STORE (D193). Read
-    # through the same optional-text helper as `status` — a display name is feed content,
-    # not an identifier this repo joins on — and `_reject_unknown` above has already refused
-    # `shippingAddress` and `email` by name, so their absence here is not an oversight.
+    # THE TWO FACTS ABOUT A PERSON THIS ROUTE WILL STORE (D193): the buyer's name and the
+    # name on the parcel. Read through the same optional-text helper as `status` — a display
+    # name is feed content, not an identifier this repo joins on — and `_reject_unknown`
+    # above has already refused `shippingAddress` and `email` by name, so their absence here
+    # is not an oversight.
     buyer = _order_optional_text(raw, "buyer", "order_invalid", said)
+    ship_to = _order_optional_text(raw, "ship_to", "order_invalid", said)
 
     lines = raw.get("lines")
     if not isinstance(lines, list) or not lines:
@@ -14665,6 +14683,7 @@ def _ingest_record(order_at: int, raw) -> order_store.OrderRecord:
         placed_at=placed_at,
         status=status,
         buyer=buyer,
+        ship_to=ship_to,
         lines=[_ingest_line(order_at, at, line) for at, line in enumerate(lines, start=1)],
     )
 
@@ -14753,8 +14772,8 @@ def _known_orders(ledger: order_store.Ledger) -> Dict[str, str]:
     return known
 
 
-def _known_buyers(ledger: order_store.Ledger) -> Dict[str, Optional[str]]:
-    """`{number: buyer}` for every TCGplayer order the ledger holds, `_known_orders`'s twin.
+def _known_buyers(ledger: order_store.Ledger) -> Dict[str, Tuple[Optional[str], Optional[str]]]:
+    """`{number: (buyer, ship_to)}` for every TCGplayer order the ledger holds, `_known_orders`'s twin.
 
     WHAT MAKES A NAMES BACKFILL ADDITIVE ONLY. `order_transport.fetch_open_orders` already
     narrows `FetchResult.names` to orders it did not bother re-detailing; this narrows it a
@@ -14765,11 +14784,11 @@ def _known_buyers(ledger: order_store.Ledger) -> Dict[str, Optional[str]]:
     nothing to be told about again, so the steady-state press — everything already named,
     nothing changed — answers `names: []` rather than repeating what a screen already shows.
     """
-    known: Dict[str, Optional[str]] = {}
+    known: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
     for record in ledger.orders.values():
         if str(record.source).strip().casefold() != ORDER_FETCH_SOURCE.casefold():
             continue
-        known[str(record.number).strip().casefold()] = record.buyer
+        known[str(record.number).strip().casefold()] = (record.buyer, record.ship_to)
     return known
 
 
@@ -14929,10 +14948,14 @@ def do_order_fetch(payload: dict) -> dict:
     # `order_transport` free of any dependency on `store/orders.py`, which nothing else in
     # that module needs either.
     known_buyers = _known_buyers(ledger)
+    # Only the buyer is compared: the search summary carries no ship-to, so a ship-to the
+    # Export Shipping read wrote must never count as a difference, or it would be re-listed every
+    # press and the steady state would never be quiet.
     names = [
         entry
         for entry in result.names
-        if known_buyers.get(str(entry["orderNumber"]).strip().casefold()) != entry["buyer"]
+        if (held := known_buyers.get(str(entry["orderNumber"]).strip().casefold())) is None
+        or held[0] != entry["buyer"]
     ]
 
     return {
@@ -14943,6 +14966,7 @@ def do_order_fetch(payload: dict) -> dict:
                 "placed_at": order["orderDate"],
                 "status": order["status"],
                 "buyer": order["buyer"],
+                **({"ship_to": order["ship_to"]} if order.get("ship_to") else {}),
                 "lines": [
                     {
                         "sku": line["skuId"],
@@ -14960,7 +14984,11 @@ def do_order_fetch(payload: dict) -> dict:
         "detailed": result.detailed,
         "remaining": result.remaining,
         "names": [
-            {"source": ORDER_FETCH_SOURCE, "number": entry["orderNumber"], "buyer": entry["buyer"]}
+            {
+                "source": ORDER_FETCH_SOURCE,
+                "number": entry["orderNumber"],
+                "buyer": entry["buyer"],
+            }
             for entry in names
         ],
     }
@@ -15012,6 +15040,7 @@ def do_order_names(payload: dict) -> dict:
         )
 
     entries: List[Tuple[str, str, str]] = []
+    ship_tos: List[Tuple[str, str, str]] = []
     for at, entry in enumerate(raw, start=1):
         where = f"name {at}"
         if not isinstance(entry, dict):
@@ -15042,9 +15071,23 @@ def do_order_names(payload: dict) -> dict:
             f"the display name the feed reported.",
         )
         entries.append((source, number, buyer))
+        said_ship_to = _order_optional_text(
+            entry, "ship_to", "name_invalid", f"{where.capitalize()} carries a `ship_to` that is not text."
+        )
+        if said_ship_to is not None:
+            ship_tos.append((source, number, said_ship_to))
 
     with Store().write() as snapshot:
         report = snapshot.ledger.name_buyers(entries)
+        ship_report = order_store.NameReport()
+        for source, number, ship_to in ship_tos:
+            outcome = snapshot.ledger.name_ship_to(source, number, ship_to)
+            if outcome == "named":
+                ship_report.named += 1
+            elif outcome == "unchanged":
+                ship_report.unchanged += 1
+            else:
+                ship_report.unknown += 1
 
     return {
         "named": report.named,
@@ -15052,6 +15095,12 @@ def do_order_names(payload: dict) -> dict:
         "unknown": report.unknown,
         "total": report.total,
         "summary": report.summary,
+        # The ship-to names the same press wrote (D193), counted apart so `named` keeps meaning buyers.
+        "ship_to": {
+            "named": ship_report.named,
+            "unchanged": ship_report.unchanged,
+            "unknown": ship_report.unknown,
+        },
     }
 
 
@@ -17530,7 +17579,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # back from.
             if path == "/shipping/batches":
                 return self._json(
-                    HTTPStatus.OK, shipping_routes.do_shipping_batches(self._body())
+                    HTTPStatus.OK,
+                    shipping_routes.do_shipping_batches(self._body(), _save_ship_to),
                 )
             # T2b — the Rubber Stamp fill. Free, re-runnable and idempotent: it re-asks the
             # ledger and re-renders the held import, spending nothing and writing nothing.

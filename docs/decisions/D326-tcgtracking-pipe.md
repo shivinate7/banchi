@@ -18,8 +18,11 @@ orders pulled from TCGplayer, and labels from TCGTracking while orders are fulfi
 - **Banchi keeps what the imports return** (item 107). If TCGTracking and TCGplayer may hold the
   owner's data, Banchi may too. Every field TCGTracking's answers and TCGplayer's order import return is
   kept, the buyer address and the label file included. This lifts D61's "buyer PII is not
-  stored" and D193's address and tracking exclusions. **The public demo still shows no buyer**:
-  the demo-mirror scrub (D295, the public demo is the scrubbed real store) drops every new field.
+  stored" and D193's address and tracking exclusions **for what the label rows hold**: the address lives in
+  the label rows' answers and PDFs and nowhere else. The order record keeps the ship-to NAME only (D193's
+  amendment) and no street, so a name on the order and an address on a label are two stores.
+  **The public demo still shows no buyer**: the demo-mirror scrub (D295, the public demo is the scrubbed real store)
+  drops every new field.
 - **The owner keeps marking orders shipped on TCGplayer** (item 108). Who writes tracking back
   is decided after the first live lookup shows whether the tracking number comes back whole.
 - **The preview shows the label count and "fee per your TCGTracking account"** (item 109). The

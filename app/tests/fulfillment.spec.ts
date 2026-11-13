@@ -4388,3 +4388,47 @@ test.describe('the pull-confirm component, every state the real view cannot show
     await expect(kitButtonFor(page, 'with-key').locator('kbd')).toHaveCount(1)
   })
 })
+
+/* ------------------------------------------------------------------ the parcel name (D193) */
+
+/* THE CARD SAYS WHO THE PARCEL GOES TO. Where a parcel name is known it leads as "Ship To", and the
+   buyer follows as "Bought By" only when it is someone else's name. With no parcel name the card
+   keeps "For <buyer>", and never guesses a parcel name from the buyer. */
+
+const SHIPPED_TO_OTHER = {
+  ...ONE_OPEN_ORDER,
+  orders: [{ ...ONE_OPEN_ORDER.orders[0]!, ship_to: 'Mina Park' }],
+}
+
+test('a card whose parcel name differs from the buyer says Ship To that name, and Bought By the buyer', async ({
+  page,
+}) => {
+  await openList(page, [], { orders: SHIPPED_TO_OTHER, plan: ONE_OPEN_ORDER_PLAN })
+  await openCard(page, 'Charizard ex')
+
+  await expect(view(page).locator('.ff-shipto')).toContainText('Ship To')
+  await expect(view(page).locator('.ff-shipto')).toContainText('Mina Park')
+  await expect(view(page).locator('.ff-shipto')).toContainText(`Bought By ${ORDER_BUYER}`)
+  await expect(view(page).locator('.ff-shipto .ff-card-order-id')).toContainText(ORDER_NUMBER)
+  await expect(view(page)).not.toContainText(`For ${ORDER_BUYER}`)
+})
+
+test('a card whose parcel name is the buyer draws Ship To once, and no Bought By', async ({ page }) => {
+  const shipsToBuyer = {
+    ...ONE_OPEN_ORDER,
+    orders: [{ ...ONE_OPEN_ORDER.orders[0]!, ship_to: ORDER_BUYER }],
+  }
+  await openList(page, [], { orders: shipsToBuyer, plan: ONE_OPEN_ORDER_PLAN })
+  await openCard(page, 'Charizard ex')
+
+  await expect(view(page).locator('.ff-shipto')).toContainText(`Ship To ${ORDER_BUYER}`)
+  await expect(view(page).locator('.ff-shipto')).not.toContainText('Bought By')
+})
+
+test('a card whose order names no parcel keeps For the buyer, with no Ship To line', async ({ page }) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+  await openCard(page, 'Charizard ex')
+
+  await expect(view(page)).toContainText(`For ${ORDER_BUYER}`)
+  await expect(view(page).locator('.ff-shipto')).toHaveCount(0)
+})

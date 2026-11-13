@@ -176,8 +176,9 @@ server that holds a buyer's name and street address.** Containing that at a FILE
 `server/tcg_export.py` does for the session cookie. An operator who asks "where does the PII
 go" reads one file. Folding the lane into the order screen would have put those routes in
 `server/capture_server.py` beside forty that hold none. The screen is typed so that it cannot
-draw a buyer: `ShippingRow` carries no name, no street, no city and no postcode. Those details
-cross the wire once, as the CSV download.
+draw an address: `ShippingRow` carries the ship-to name (D193) and no street, no city and no postcode.
+The street, city and postcode cross the wire once, as the CSV download. The read also writes the ship-to name
+onto the orders the ledger holds (`ship_to_saved` is its receipt).
 
 ### T2b — the rubber stamps. BUILT
 
@@ -244,8 +245,9 @@ can move the endpoint and cannot move the credential off this machine.
 listing count, so a replay is a no-op. D63 makes that true by construction, because
 `store/orders.py` holds no `Inventory` and imports nothing that can reach one.
 
-**The projection is `{source, number, placed_at, status, buyer, lines}`** (D193). `buyer` is a
-display name. Address, email, payment and the transaction breakdown are excluded at an
+**The projection is `{source, number, placed_at, status, buyer, ship_to, lines}`** (D193). `buyer` and
+`ship_to` are names; `ship_to` is first and last as TCGplayer gives it, read from the detail's
+`shippingAddress.recipientName` and never the street. Address, email, payment and the transaction breakdown are excluded at an
 allowlist (`project_summary`, `project_order`). `POST /orders/names` writes names for orders
 that the ledger already knows, from search summaries alone. `fetch_open_orders` already parses
 `buyerName` off every summary, so a names-only pass costs zero detail calls, and `/orders/fetch`

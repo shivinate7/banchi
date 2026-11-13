@@ -41,8 +41,9 @@ operator's hands; the refusal that fired is quoted in that entry.
 
 **`detail` IS STILL UNEXERCISED AGAINST THE LIVE HOST**, and that is the half that carries a
 buyer's name and address. `products[].skuId` has been read in the BROWSER and never through
-this module, so `project_order`'s drop of `buyerName`, `shippingAddress` and `paymentType` is
-proven against T7's fixtures and against nothing that came off the wire. The first filtered
+this module, so `project_order`'s drop of `shippingAddress`'s street and `paymentType` is
+proven against T7's fixtures and against nothing that came off the wire. (One live detail was
+read for its KEY NAMES only, which is where `shippingAddress.recipientName` comes from.) The first filtered
 fetch — the owner ticking a status and pressing — exercises it; until then this line stands.
 
 What was measured in the owner's own logged-in browser on 2026-08-30, before any of that:
@@ -105,10 +106,11 @@ numbers, then one detail GET per number.
 THE PROJECTION IS THE POINT
 --------------------------------------------------------------------------------------------
 
-The order detail carries `buyerName`, `shippingAddress` (recipient, street, city, postal
-code), `paymentType` and a full transaction breakdown. **Exactly one of those now leaves
-this module: `buyerName`, as `buyer`, a display name and nothing more**
-(D193). The rest is returned from NO function here — not from
+The order detail carries `buyerName`, `shippingAddress` (`recipientName`, `addressOne`, `city`,
+`territory`, `country`, `postalCode`), `paymentType` and a full transaction breakdown. **Exactly
+two names leave this module: `buyerName`, as `buyer`, and `shippingAddress.recipientName`, as
+`ship_to`, each a name and nothing more, and never the street** (D193). The search summary is
+not read for a recipient name, so only the detail fills `ship_to`. The rest is returned from NO function here — not from
 `detail`, not from `search`, not from `fetch_open_orders`. The projection happens the
 moment the response is parsed, so a buyer's ADDRESS exists in this process only as a local
 `dict` inside one call frame and reaches no caller, no route, no screen, no file.
@@ -401,9 +403,13 @@ def project_order(
         buyer         the buyer's DISPLAY NAME, and nothing else about who they are
                       (D193). The owner walks drawers per *person*,
                       and an order number carries no name a human can group by.
+        ship_to       the NAME ON THE PARCEL, `shippingAddress.recipientName` and nothing else
+                      in that object (D193). It is the only other thing about a person that
+                      leaves this function, and never the street, city, territory, country or
+                      postal code beside it.
         products      one entry per line: {skuId, quantity, name, unitPrice}.
 
-    Everything else is dropped where it was parsed: `shippingAddress`, `sellerName`,
+    Everything else is dropped where it was parsed: the rest of `shippingAddress`, `sellerName`,
     `paymentType`, `transaction`, `refunds`, `trackingNumbers`, `allowedActions` and any
     field TCGplayer adds after this was written. The last clause is why it is an allowlist —
     a denylist would return the new field and nothing would fail.
@@ -499,11 +505,18 @@ def project_order(
     # `buyerName`, one call earlier) fills in where the detail said nothing, the same
     # fallback `orderDate`/`orderStatus` use two lines up.
     buyer = str(detail.get("buyerName") or "").strip() or fallback.get("buyer")
+    # THE ONE KEY READ OUT OF `shippingAddress` (measured on a live detail: recipientName,
+    # addressOne, city, territory, country, postalCode). Only a string is taken; the object is
+    # never returned or stored, so the street exists here as a dict in this call frame only.
+    address = detail.get("shippingAddress")
+    recipient = address.get("recipientName") if isinstance(address, dict) else None
+    ship_to = recipient.strip() if isinstance(recipient, str) else ""
     return {
         "orderNumber": number,
         "orderDate": str(date) if date is not None else None,
         "status": str(status) if status is not None else None,
         "buyer": buyer or None,
+        "ship_to": ship_to or None,
         "products": lines,
     }
 

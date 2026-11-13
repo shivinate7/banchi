@@ -78,6 +78,8 @@ The Playwright specs and unit tests of the app, and the helpers they share.
   - Decisions: `D288`, `D50`, `D117`, `D118`
 - `app/tests/inventory-neighbor-side.spec.ts` — A card at a box's end names its one neighbor with its side (`D58`, `D260`): the first card reads `Next: X (first in the box)`, the last `Previous: X (last in the box)`, a middle card the two-name form.
   - Decisions: `D58`, `D260`
+- `app/tests/inventory-position.spec.ts` — The section ruler marks the section the card's place names, by section number, even when the section read is one slot behind.
+  - Decisions: `D155`
 - `app/tests/inventory-sets.spec.ts` — THE OWNER'S "BY SET" VIEW (D293), in a browser.
   - Decisions: `D172`, `D264`, `D285`, `D293`, `D301`, `D201`
 - `app/tests/inventory.spec.ts` — The owner's inventory screen in a browser: the unified box walk, the folding sections, mass-select, and the FOUR WRITES — box-wide claims, per-card claims, the mid-box delete and the whole-box delete — asserted at the request boundary against a stubbed server, so a control that draws but sends the wrong body fails here.
@@ -147,7 +149,7 @@ The Playwright specs and unit tests of the app, and the helpers they share.
 - `app/tests/routeExclusions.ts` — `EXCLUDED_FROM_SWEEP` (`#/fulfillment`, `#/gallery`), a REGEX rather than a quoted `'#/…'` string literal, read by `text-checks.spec.ts`.
   - Decisions: `D69`, `D70`, `D284`
 - `app/tests/routeFixtures.ts` — The fixture BUILDERS `run-panel.spec.ts`, `orders.spec.ts` and `shipping.spec.ts` already wrote — `runRow`, `place`/`pick`/`line`/`order`/`payloadOf`, `shippingRow`/`batchOf` — moved here so a fourth file could reuse the same proven shapes instead of a competing copy, plus two fresh ones (`codeEntry`/`codeLedgerOf`, `departedCard`) for `#/codes` and `#/graveyard`, which no existing spec seeded at all.
-  - Decisions: `D284`, `D20`, `D23`, `D77`, `D221`, `D83`, `D134`
+  - Decisions: `D284`, `D20`, `D23`, `D77`, `D221`, `D83`, `D134`, `D193`
 - `app/tests/routeSweep.ts` — `sweepEveryRoute`, the one sweep `text-checks.spec.ts` runs for all three text checks, and `make text-density` through it.
   - Decisions: `D284`
 - `app/tests/routes.ts` — One helper, `routesFromNav`, which harvests the owner's route roster off `.bn-side a.bn-nav-link` and names `#/gallery` beside it, joined by `#/product` for the identical reason (D227): off-nav, so undiscoverable, but still an owner screen D284's ratchet must reach.
@@ -163,7 +165,7 @@ The Playwright specs and unit tests of the app, and the helpers they share.
 - `app/tests/shipping-width.spec.ts` — The empty states of Shipping, Orders and Review fill the frame to --bn-empty-w, centered, at `1440`, `820` and `2000` (rail collapsed), both themes; Shipping's loaded lanes leave no band.
   - Decisions: `D197`, `D309`
 - `app/tests/shipping.spec.ts` — The shipping screen in a browser, and its strongest cases are ABSENCES: no buyer name, address, city or postcode appears anywhere on the rendered screen, the three lane counts including the zeros do, and the file link points at /shipping/batches/<batch>/file?name=.
-  - Decisions: `D16`, `D61`, `D63`, `D117`, `D196`, `D218`, `D284`, `D69`
+  - Decisions: `D16`, `D61`, `D63`, `D117`, `D196`, `D218`, `D284`, `D69`, `D193`
 - `app/tests/slabs.spec.ts` — The Slabs screen with the four slab routes stubbed: the `18` headers in the owner's order, a typed dash in each cell no route fills, the sort by Card Ladder value with a slab that never sold last, the Conf words, no cert and no settings key anywhere on screen, a refusal in words with no Retry for a rate limit (on add.
   - Decisions: `D320`, `D196`, `D218`, `D221`, `D275`, `D313`
 - `app/tests/stability-allow.json` — The shrinking list `stability.spec.ts` reads, case and route to reason. A screen on it is measured and not failed.
@@ -188,6 +190,10 @@ The Playwright specs and unit tests of the app, and the helpers they share.
   - Decisions: `D316`, `D19`
 - `app/tests/unit/formatter-homes.unit.ts` — The four formatter homes: the ago phrase (`dates.relativeDate`), the count word and byte size (`kit/dataRules`), the local day key (`dates.localDay`).
   - Decisions: `D5`, `D275`
+- `app/tests/unit/orders-ship-to-of.unit.ts` — `orderBuyers.shipToOf`: the ship-to name is drawn when it differs from the buyer or there is no buyer; a blank ship-to draws nothing.
+  - Decisions: `D193`
+- `app/tests/unit/orders-ship-to-paste.unit.ts` — `orderPaste.ts` keeps a pasted order's `ship_to` name and drops anything but a string.
+  - Decisions: `D193`, `D69`
 - `app/tests/unit/pricing-send-refusals.unit.ts` — Every refusal the Send press raises before TCGplayer is asked has its own sentence in SendCard, so none falls to the line that blames TCGplayer.
   - Decisions: `D196`
 - `app/tests/unit/slab-graders.unit.ts` — The grader list the Slabs screen offers (`src/slabGraders.ts`) equals `store/slabs.GRADERS`, in order, read by running Python.

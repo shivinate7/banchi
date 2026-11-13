@@ -683,6 +683,8 @@ def policy_rulings():
                `wire` with `demo-record.py`'s `wire_digest()` of this tree, exits 0 either way, appends
                `publish=true` or `publish=false` to the file `$GITHUB_OUTPUT` names, and prints a
                `::notice::` line naming both digests when it holds. A chunk with no `wire` holds.
+      scrub    `main()` run to its end over the tiny store, with the recording replaced by its one name-writing
+               step (the Export Shipping post). The mirror's final store holds no parcel name.
       cadence  `demo-mirror-daily.py`'s `agent()` installs a job that fires weekly:
                `StartCalendarInterval` is ONE dict with an int `Weekday` (0 to 7), `Hour` and `Minute`.
                Run against a fake HOME and a fake `launchctl` that is the only one on PATH.
@@ -737,6 +739,52 @@ def policy_rulings():
                 else:
                     os.environ[key] = value
 
+    # The parcel name of order 1 is a gift's recipient, not the buyer (D193): the mirror must clear it.
+    SHIP_TO = "Sam Okafor"
+
+    def seeded_snapshot(label):
+        """The tiny real store (five orders, order 1 with a parcel name) copied to a snapshot folder.
+
+        The parcel name goes on after the record is built, so a store shape without the field still
+        builds. Returns the run folder, the snapshot folder, and each order's parcel name as the real
+        store holds it (`None` where the store has no such field).
+        """
+        from store import Store
+        from store.orders import OrderLine, OrderRecord
+
+        base = fresh(label)
+        first = OrderRecord(source="tcg", number="1", placed_at="2026-01-01", status="Ready to Ship",
+                            buyer="Jordan Miller", lines=[OrderLine(sku="1", quantity=1)])
+        first.ship_to = SHIP_TO
+        with env(BANCHI_HOME=str(base / "real")), Store().write() as snap:
+            snap.ledger.ingest([
+                first,
+                OrderRecord(source="tcg", number="2", placed_at="2026-01-02", status="Ready to Ship",
+                            buyer="Priya", lines=[OrderLine(sku="2", quantity=1)]),
+                OrderRecord(source="tcg", number="3", placed_at="2026-01-03", status="Shipped",
+                            buyer=None, lines=[OrderLine(sku="3", quantity=1)]),
+                OrderRecord(source="tcg", number="4", placed_at="2026-01-04", status="Ready to Ship",
+                            buyer="Zoë Ångström", lines=[OrderLine(sku="4", quantity=1)]),
+                OrderRecord(source="tcg", number="5", placed_at="2026-01-05", status="Ready to Ship",
+                            buyer="Mary Jane Watson", lines=[OrderLine(sku="5", quantity=1)]),
+            ])
+        with env(BANCHI_HOME=str(base / "real")):
+            held = {r.number: getattr(r, "ship_to", None) for r in Store().read().ledger.orders.values()}
+        snapshot = base / "snapshot"
+        snapshot.mkdir()
+        shutil.copytree(base / "real" / "inventory", snapshot / "inventory")
+        (snapshot / "SOURCE").write_text(str(base / "no-source") + "\n")
+        return base, snapshot, held
+
+    @contextlib.contextmanager
+    def argv(*values):
+        old = sys.argv
+        sys.argv = list(values)
+        try:
+            yield
+        finally:
+            sys.argv = old
+
     # ---- names: `build()` over five orders, no photographs, read back once
     def build_once():
         if built:
@@ -746,26 +794,8 @@ def policy_rulings():
         try:
             demo_mirror = load("scripts/demo-mirror.py")
             from store import Store
-            from store.orders import OrderLine, OrderRecord
 
-            base = fresh("names")
-            with env(BANCHI_HOME=str(base / "real")), Store().write() as snap:
-                snap.ledger.ingest([
-                    OrderRecord(source="tcg", number="1", placed_at="2026-01-01", status="Ready to Ship",
-                                buyer="Jordan Miller", lines=[OrderLine(sku="1", quantity=1)]),
-                    OrderRecord(source="tcg", number="2", placed_at="2026-01-02", status="Ready to Ship",
-                                buyer="Priya", lines=[OrderLine(sku="2", quantity=1)]),
-                    OrderRecord(source="tcg", number="3", placed_at="2026-01-03", status="Shipped",
-                                buyer=None, lines=[OrderLine(sku="3", quantity=1)]),
-                    OrderRecord(source="tcg", number="4", placed_at="2026-01-04", status="Ready to Ship",
-                                buyer="Zoë Ångström", lines=[OrderLine(sku="4", quantity=1)]),
-                    OrderRecord(source="tcg", number="5", placed_at="2026-01-05", status="Ready to Ship",
-                                buyer="Mary Jane Watson", lines=[OrderLine(sku="5", quantity=1)]),
-                ])
-            snapshot = base / "snapshot"
-            snapshot.mkdir()
-            shutil.copytree(base / "real" / "inventory", snapshot / "inventory")
-            (snapshot / "SOURCE").write_text(str(base / "no-source") + "\n")
+            base, snapshot, _held = seeded_snapshot("names")
             demo_mirror.SNAPSHOT = snapshot
             home = base / "home"
             with env(BANCHI_HOME=str(home)):
@@ -818,6 +848,51 @@ def policy_rulings():
         bundle = fresh("chain") / "bundle.json"
         bundle.write_text(json.dumps({"responses": {"/orders": {"body": {"orders": [{"buyer": b} for b in buyers]}}}}))
         load("scripts/demo-mirror.py").assert_scrubbed(bundle, build_once()["home"] / "shipping-export.csv")
+
+    # ---- scrub: the mirror's final store, after `main()`'s whole sequence
+    def scrub_final_store_has_no_parcel_name():
+        """`main()` builds, records, clears the parcel names, then runs `assert_scrubbed` over the store.
+
+        The recording is replaced by the one step of it that writes names: the Export Shipping file
+        posted to the server, which saves each name onto its order (`demo-record.py` makes that post
+        over the mirror's home). The bundle, the photographs and the commit are not run: the recording
+        writes the repository's own bundle, and the commit is git's.
+        """
+        from store import Store
+        from server import capture_server, shipping_routes
+
+        demo_mirror = load("scripts/demo-mirror.py")
+        base, snapshot, held = seeded_snapshot("scrub")
+        need(held.get("1") == SHIP_TO, "the real store keeps no parcel name on order 1, so there is none to clear")
+        written = []
+
+        def record_writes_names_back(home):
+            export = (home / "shipping-export.csv").read_text(encoding="utf-8")
+            with env(BANCHI_HOME=str(home)):
+                written.append(shipping_routes.do_shipping_batches({"content": export}, capture_server._save_ship_to))
+
+        bundle = base / "bundle.json"
+        bundle.write_text('{"responses": {}}')
+        home = base / "home"
+        saved = {name: getattr(demo_mirror, name) for name in ("SNAPSHOT", "APP_BUNDLE", "record", "commit_output")}
+        demo_mirror.SNAPSHOT = snapshot
+        demo_mirror.APP_BUNDLE = bundle
+        demo_mirror.record = record_writes_names_back
+        demo_mirror.commit_output = lambda: None
+        try:
+            with argv("demo-mirror.py", "--home", str(home)), contextlib.redirect_stdout(io.StringIO()):
+                try:
+                    demo_mirror.main()
+                except AssertionError as exc:
+                    need(False, "the mirror refused its own final store: %s" % exc)
+        finally:
+            for name, value in saved.items():
+                setattr(demo_mirror, name, value)
+        named = ((written[0] if written else {}).get("ship_to_saved") or {}).get("named", 0)
+        need(named > 0, "the recording's write-back named no order, so the case tested nothing")
+        with env(BANCHI_HOME=str(home)):
+            left = sorted(r.number for r in Store().read().ledger.orders.values() if getattr(r, "ship_to", None))
+        need(not left, "the final mirror store still holds a parcel name on order(s) %s" % ", ".join(left))
 
     # ---- check: `assert_scrubbed`
     header = ["Order #", "FirstName", "LastName", "Address1", "Address2", "City", "State", "PostalCode", "Country"]
@@ -953,6 +1028,7 @@ def policy_rulings():
     policy("names: the shipping export carries the full name and every address field blank", names_shipping_export)
     policy("names: an accented name and a three-word name are kept whole", names_accented_and_long_names)
     policy("names: build() output passes assert_scrubbed", names_output_passes_the_check)
+    policy("scrub: the mirror's final store holds no parcel name after its recording", scrub_final_store_has_no_parcel_name)
     policy("check: assert_scrubbed accepts a full name", check_accepts_full_names)
     policy("check: assert_scrubbed refuses an address-shaped value and never echoes it", check_refuses_address)
     policy("hold: a matching digest publishes", hold_publishes_on_match)

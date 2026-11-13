@@ -569,6 +569,17 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   background: var(--bn-surface-2);
 }
 .bn-pill .bn-icon { width: 12px; height: 12px; }
+/* ---- ShipTo: the parcel line (`ShipTo`, kit/index.tsx; D193) ------------------------------------
+   "Ship To" and the name on the first line, "Bought By" and the buyer on a second line only when
+   the buyer is someone else. Two lines, never one joined line: a wrapped joined line led with a
+   separator, and "X bought by Y" on one line reads either way round. The UI face: a person's
+   name is never mono. The Fulfiller's size is `.ff-shipto` in Fulfillment.css. */
+.bn-shipto { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; margin: 0;
+  font-family: var(--bn-font-ui); font-size: var(--bn-fs-md); line-height: var(--bn-lh-snug); color: var(--bn-ink-3); }
+.bn-shipto > p { margin: 0; overflow-wrap: anywhere; }
+.bn-shipto-name { font-weight: 600; color: var(--bn-ink); }
+.bn-shipto-by { color: var(--bn-ink-3); }
+
 /* ---- Slot: the room for content that mounts later (D313) -------------------------------- */
 .bn-slot { display: block; min-width: 0; }
 span.bn-slot { display: inline-block; }

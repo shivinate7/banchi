@@ -79,6 +79,20 @@ export function foldName(name: string): string {
   return name.trim().replace(/\s+/g, ' ').normalize('NFKC').toLocaleLowerCase()
 }
 
+/** The name a parcel goes to, when it is not the buyer's: `null` for "nothing to add".
+ *
+ *  ONE NAME WHEN THEY ARE THE SAME PERSON. The buyer and the ship-to compare folded by
+ *  `foldName` (the buyer key's own rule), so a stray capital or a doubled space never makes
+ *  one person look like two. A blank `ship_to` is no word at all. An order whose buyer has no
+ *  name still draws its ship-to, because then it is the only name there is. The group key stays
+ *  the buyer's: grouping by person is the buyer's job (`D193`) and this changes nothing there. */
+export function shipToOf(order: Pick<OrderRow, 'buyer' | 'ship_to'>): string | null {
+  const shipTo = order.ship_to?.trim() ?? ''
+  if (shipTo === '') return null
+  const buyer = order.buyer?.trim() ?? ''
+  return buyer !== '' && foldName(buyer) === foldName(shipTo) ? null : shipTo
+}
+
 /** The group key an order belongs to. A blank or whitespace-only `buyer` is treated as no
  *  name at all, the same way `requiredText` in `orderPaste.ts` treats a blank string as
  *  absent — a feed that sent `"   "` said nothing, not something unpronounceable. */

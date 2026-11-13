@@ -23,6 +23,7 @@ import {
   SettingsGroup,
   SettingsOp,
   SettingsTrouble,
+  ShipTo,
   SkeletonText,
   Stat,
   useFacetParams,
@@ -52,7 +53,7 @@ import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore
 import { PositionLabel } from './PositionLabel'
 import { RailFrame } from './RailFrame'
 import { sayPlace } from './position'
-import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, isSharedOrderNumber, lineReason, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
+import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, isSharedOrderNumber, lineReason, shipToOf, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
 import {
   applyTake,
   buyerLabel,
@@ -3167,7 +3168,7 @@ function PullStage({
   const passesFeed = (group: BuyerGroup) =>
     statuses.length === 0 || group.orders.some((order) => statuses.includes((order.status ?? '').trim()))
   const passesSearch = (group: BuyerGroup) =>
-    matchQuery(query, { text: [group.name, buyerLabel(group), ...group.orders.map((order) => order.number)] })
+    matchQuery(query, { text: [group.name, buyerLabel(group), ...group.orders.map((order) => order.number), ...group.orders.map(shipToOf)] })
   /* A buyer still owed a copy that is on hand. A finished or done buyer has nothing to pull and
      stays: the default hides open buyers only. */
   const groupPullable = (group: BuyerGroup) =>
@@ -3850,7 +3851,7 @@ function PullStage({
       {buyerDone ? (
         <div className="orders-walk-done">
           <p>
-            <Icon name="check" size={16} /> All {shownGroup.orders.reduce((sum, one) => sum + one.recorded, 0)} sold.
+            <Icon name="check" size={16} /> {buyerDoneSay(shownGroup)}
           </p>
           <a className="bn-btn bn-btn-primary" href="#/shipping">
             <Icon name="truck" size={16} />
@@ -4163,6 +4164,24 @@ function ManagePanel({
 /* ================================================================== a buyer, in the list */
 
 
+/** What a buyer with no open orders reads in the walk. "All N Sold" only where N is above zero:
+ *  a buyer whose orders were all canceled sold nothing, and "All 0 Sold" says the opposite of why
+ *  the walk is empty. With nothing recorded, "Shipped" reads only when an order is terminal and
+ *  not canceled (the feed shipped it, nothing was recorded here); otherwise the orders were stood
+ *  down (`not_shipping`) and nothing shipped, so it reads "Not Shipping". `status` is the feed's
+ *  own word, as `store/orders.py`'s `is_canceled_status` spells canceled; `terminal` is
+ *  `is_terminal_status`. */
+function buyerDoneSay(group: BuyerGroup): string {
+  const sold = group.orders.reduce((sum, one) => sum + one.recorded, 0)
+  if (sold > 0) return `All ${sold} Sold`
+  const canceled = (one: BuyerGroup['orders'][number]) => /^canceled$/i.test((one.status ?? '').trim())
+  if (group.orders.length > 0 && group.orders.every(canceled)) {
+    return group.orders.length === 1 ? 'Order Canceled' : 'Orders Canceled'
+  }
+  if (group.orders.some((one) => one.terminal && !canceled(one))) return 'Shipped'
+  return 'Not Shipping'
+}
+
 /** A buyer's three figures, each over ONE set (UX-168, UX-235). `owed` is what the open orders
  *  still want. `short` is the copies that cannot be pulled: per line, what it owes less what is
  *  on hand (`outstanding`), so owed less short is the cards in the walk. `sold` counts every
@@ -4320,11 +4339,17 @@ function OrderPanel({
   const figures = figuresOf(group, answers)
   const pill = statusPill(status, group, answers)
   const single = group.orders.length === 1 ? group.orders[0]!.number : null
+  /* The name on the parcel, only where one order makes it unambiguous. A buyer with several orders
+     can ship to several people, so each order's own name is drawn on that order (`OrderDetail`). */
+  const shipTo = group.orders.length === 1 ? shipToOf(group.orders[0]!) : null
   return (
     <div className="orders-panel">
       <div className="orders-panel-top">
         <div className="orders-panel-text">
-          <h2 className="orders-panel-name"><LabelText text={buyerLabel(group)} /></h2>
+          <div className="orders-panel-who">
+            <h2 className="orders-panel-name"><LabelText text={buyerLabel(group)} /></h2>
+            {shipTo === null ? null : <ShipTo name={<LabelText text={shipTo} />} />}
+          </div>
           <p className="orders-panel-order">
             {single === null ? (
               `${group.orders.length} orders`
@@ -4392,6 +4417,7 @@ function OrderDetail({
   const status = statusOf(order, answer)
   const pill = STATUS_PILL[status]
   const placed = whenLabel(order.placed_at)
+  const shipTo = shipToOf(order)
 
   /* THE FEED'S WORD IS LABELLED AS THEIRS. `status` is TCGplayer's own string, verbatim; drawn
      bare beside our status pill it read as a second opinion from us. */
@@ -4408,6 +4434,8 @@ function OrderDetail({
       <span className="orders-feed-word">{sourceName(order.source)}</span>
     </span>
   )
+  /* The sheet's title is the buyer, so no "Bought By" here. */
+  const shipLine = shipTo === null ? null : <ShipTo name={<LabelText text={shipTo} />} />
 
   /* A DONE ORDER IS NOT ALWAYS A CLOSED BOOK (fix for the owner's report: a shipped order can
      still owe copies). `ownsAWalkableBody` is the discriminator — `terminal` plus what is
@@ -4464,6 +4492,7 @@ function OrderDetail({
   if (variant === 'inline') {
     return (
       <>
+        {shipLine}
         <div className="orders-order-metarow">
           {meta}
           <Pill tone={pill.tone} icon={pill.icon}>
@@ -4480,17 +4509,18 @@ function OrderDetail({
       <header className="orders-order-head">
         <div className="orders-order-id">
           <h2 className="orders-order-number">{order.number}</h2>
+          {shipLine}
           {meta}
         </div>
         <div className="orders-order-side">
+          <Pill tone={pill.tone} icon={pill.icon}>
+            {pill.label}
+          </Pill>
           {lane === null ? null : (
             <Pill tone={LANE_TONE[lane]} icon={LANE_ICON[lane]} outline>
               {ORDER_LANE_LABEL[lane]}
             </Pill>
           )}
-          <Pill tone={pill.tone} icon={pill.icon}>
-            {pill.label}
-          </Pill>
         </div>
       </header>
 
