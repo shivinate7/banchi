@@ -19,6 +19,7 @@ Each row has the slug, the first sentence of the record, and a link to it. A rec
 | `D323-backup-one-time-guarded` | The photo backup runs once, when the owner asks, and a bad copy never replaces a good one. | [`docs/decisions/D323-backup-one-time-guarded.md`](../docs/decisions/D323-backup-one-time-guarded.md) |
 | `D324-holdings-watch` | Banchi values the owner's investment holdings at its own prices, then flags lines of $100 or more a unit when a price signal fires. | [`docs/decisions/D324-holdings-watch.md`](../docs/decisions/D324-holdings-watch.md) |
 | `D327-waiting-page-export` | The page writer copies the waiting page's database to folder `waiting/` on the record branch, with the shared waiting-page tool. | [`docs/decisions/D327-waiting-page-export.md`](../docs/decisions/D327-waiting-page-export.md) |
+| `D328-heavy-spec-split-across-shards` | A browser spec that costs more than the mean shard load is cut in two by Playwright's own `--shard`, and each half gets a shard to itself. | [`docs/decisions/D328-heavy-spec-split-across-shards.md`](../docs/decisions/D328-heavy-spec-split-across-shards.md) |
 
 ## Build designs
 

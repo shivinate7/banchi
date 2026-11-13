@@ -1283,6 +1283,23 @@ CHECKS = (
         "governed_by": ("D141", "D18", "D173"),
     },
     {
+        "target": "browser-scope-shard-selftest",
+        "shard": "guards-1",
+        "runs": "python3 scripts/browser-scope-shard-selftest.py",
+        "asserts": "the browser shard plan (D136): a narrowed run is "
+                   "never slower, and starts no more runners, than whole-file packing; a spec "
+                   "that declares one test is never cut; the `shard` line ends in "
+                   "`--shard=I/N` for a half and only for a half; and `shard-refresh` gives a "
+                   "file listed whole in one run and as halves in another its whole-file time.",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "D16 — it is a self-test rather than a doc check, and it "
+                               "belongs beside the other selftests at the end of `check`.",
+        "gates": True,
+        "governed_by": ("D136", "D18", "D173"),
+    },
+    {
         "target": "serve-selftest",
         "shard": "guards-2",
         "runs": "python3 scripts/serve-selftest.py",

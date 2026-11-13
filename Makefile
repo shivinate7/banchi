@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: map-check map-check-selftest help status restart-now map explain harness harness-1 harness-2 harness-3 harness-part check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest rosterholdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest tests-for tests-for-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint pytypes typecheck unit venv launch-config worktree-setup worktree-provision-selftest worktree-create-selftest session-teardown-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent backup backup-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
+.PHONY: map-check map-check-selftest help status restart-now map explain harness harness-1 harness-2 harness-3 harness-part check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest rosterholdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix tests-page orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest tests-for tests-for-selftest audit-self-test verdict-selftest githooks-selftest merge revert-guard revert-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest browser-scope-shard-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent audit-history dev server screenshot design-check design-check-quiet long-sitting lint pytypes typecheck unit venv launch-config worktree-setup worktree-provision-selftest worktree-create-selftest session-teardown-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-agent price-refresh price-refresh-agent backup backup-agent demo-mirror-daily-selftest demo-mirror-daily-photos-selftest demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest demo-record-selftest demo-record-resume-selftest demo-record-walkplan-selftest pricehistory-cache-selftest pricehistory-offline-selftest repair-born-game-selftest stockimages-cache-selftest sku-name-contradictions-selftest pipeline-trends-archive-ids-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -1610,6 +1610,17 @@ browser-scope-selftest:
 		python3 scripts/browser-scope.py selftest; \
 	else \
 		echo "browser-scope-selftest: SKIPPED — this branch does not touch the browser-matrix classifier or its spec map. BANCHI_GUARD_SCOPE=all runs it anyway."; \
+	fi
+
+# The browser shard plan (`scripts/browser-scope.py`'s `plan_shards`, `shard`, `shard-refresh`) on a
+# narrowed run, on the CLI line and on the refreshed table (D136). Reads the
+# spec files and the times table; nothing here writes and no process is left running. COST: about 2 seconds.
+browser-scope-shard-selftest:
+	@python3 scripts/guard-scope.py classify --target browser-scope-shard-selftest --base origin/main; rc=$$?; \
+	if [ $$rc -ne $(SKIP_CODE) ]; then \
+		python3 scripts/browser-scope-shard-selftest.py; \
+	else \
+		echo "browser-scope-shard-selftest: SKIPPED — this branch does not touch the shard plan, the spec times or the specs it reads. BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # A JS media query's viewport width against what a stylesheet under app/src declares
