@@ -1655,6 +1655,54 @@ test('one left-out price names its card in one line with TCGplayer\'s live price
   await expect(page.getByText('Dunsparce was left out. TCGplayer shows $22.03 now.')).toBeVisible()
 })
 
+/* A LISTING ROW LEFT OUT (the owner's ruling, 2026-11-12, listing rows): a new copy of a card already live would
+   write Banchi's price over the one TCGplayer shows, so the press leaves that card out with its live copies and
+   sends the rest. The copies ride the run, so the card cannot go again alone: it names what changed and draws no
+   resend button. */
+test('a listing row left out for a moved live figure is named, says what changed, and draws no resend button', async ({ page }) => {
+  const wire = await open(page, {
+    skus: [
+      sku({ sku: '8608859', name: 'Articuno' }),
+      sku({
+        sku: '8608459',
+        name: 'Dunsparce',
+        add_to_quantity: 1,
+        copies: 1,
+        live_before: 2,
+        listing: { pushed: 2, staged: 0, live: 2 },
+        live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 2, price: '22.03' },
+      }),
+    ],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608459': '30.00' } },
+    send: () => ({
+      status: 200,
+      body: {
+        send: sendSummary({
+          copies: 3,
+          prices: 0,
+          prices_left: [
+            { sku: '8608459', name: 'Dunsparce', why: 'live_moved', price: '30.00', live: '22.03', shown: '9.99', copies: 2 },
+          ],
+        }),
+        console: '',
+      },
+    }),
+  })
+  const press = page.getByRole('button', { name: /^Send .*2 live copies move to \$30\.00$/i })
+  await expect(press).toBeVisible()
+  await press.click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  const notice = page.locator('.send-resend')
+  await expect(notice, 'the left-out listing row draws its note').toHaveCount(1)
+  await expect(notice).toContainText('Dunsparce was left out. TCGplayer shows $22.03 now.')
+  await expect(notice, 'and says what changed, not a question nothing answers').toContainText(
+    'TCGplayer shows $22.03 now, not the $9.99 this list showed.',
+  )
+  await expect(notice.getByRole('button'), 'a listing row cannot go again alone, so it draws no resend button').toHaveCount(0)
+  /* THE PRESS NAMES THE LIVE FIGURE THE ROW DREW, so the server can refuse the move if TCGplayer has moved since. */
+  expect(sendPosts(wire)[0]?.body).toMatchObject({ moves: [{ sku: '8608459', price: '30.00', was: '22.03' }] })
+})
+
 /* THE LEFT-OUT COPY, SEVERAL CARDS (the owner's ruling, 2026-11-12): two prices TCGplayer moved are counted, and
    each card is named in the same notice. Its button posts only those two rows, with `runs` []. */
 test('several left-out prices name the count and each card, and their button posts only those rows', async ({ page }) => {
