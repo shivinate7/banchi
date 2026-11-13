@@ -334,12 +334,13 @@ const CURRENT_PICK = '.orders-cardcol'
 sealEveryTest()
 
 /* ux-w2 B16 (order-walk-plan.md section 14). Asserts each figure chip beside the card names carries a
-   text box that explains it. The box opens on hover and on keyboard focus, so a chip is reachable without a pointer. */
-test('ux-w2 B16: each On Hand, Hidden and Sent chip opens a text box on hover and on keyboard focus', async ({ page }) => {
+   text box that explains it. The box opens on hover and on keyboard focus, so a chip is reachable without a pointer.
+   The walk's On Hand is the lead figure now, not a band chip (owner's ruling, 2026-11-13), so only the band's chips are checked here. */
+test('ux-w2 B16: each Hidden and Sent chip opens a text box on hover and on keyboard focus', async ({ page }) => {
   await open(page)
   const side = page.locator('.browse-hero-side').first()
   await expect(side, 'the card figures are drawn').toBeVisible()
-  for (const name of [/^\s*On Hand/i, /^\s*Hidden/i, /^\s*Sent/i]) {
+  for (const name of [/^\s*Hidden/i, /^\s*Sent/i]) {
     const chip = side.locator(':scope > *').filter({ hasText: name })
     await expect(chip, `a chip for ${name} is drawn`).toHaveCount(1)
     await chip.hover()
