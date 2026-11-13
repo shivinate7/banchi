@@ -46,6 +46,7 @@ The legacy aliases at the foot of tokens.css are dead. A new rule may not read o
   sentence and one action. No user-visible string names a decision, a path or a pipeline noun (D196, no user-visible string may name a decision).
   The `no mechanism on screen` row of `make docs-audit` enforces it.
 - **One count, one name.** The count of copies on hand is labeled "On Hand" everywhere (`on_hand` in code), never "Stored".
+  **NOT MECHANIZED:** a machine would have to see two labels draw the same count field under different names.
 - **No typed middle dot or bullet (U+00B7, U+2022) in a user-visible string** (D218, a typed dot is a defect).
   CSS draws the separator. The `typed interpunct` row of `make docs-audit` enforces it, with a shrinking list (D280, lists of offenders).
 - **Text shape is three checks, none a count** (D284, three checks replace one ceiling):

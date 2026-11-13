@@ -80,4 +80,4 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - `app/src/SendCard.tsx`'s left-out notice: several left-out listing cards (no resend button) get a title with no next step; only the one-card title says "Check it in your list and send again." A long left-out list grows the sticky Send bar about 20px a row.
 - `docs/specs/pricing-suggest.md`'s Send bullet and D273 quote "TCGplayer shows $X now. Send $Y?" for a left-out card, which now reads "<name> was left out. TCGplayer shows $X now." The quoted line still holds for a refused press.
 - `pipeline/sendguard.py`'s `live_moves(leave_live_moved=False)` refuse branch has no caller and no test.
-- `app/src/SendCard.tsx`'s `resend`: the refused `live_moved` listing-row resend (the moves branch) has no test.
+- `app/src/SendCard.tsx`'s `resend`: the refused `live_moved` listing-row resend (the moves branch) has no test. The fix check on PR #1093 (the send live-moved fix) found it unpinned. Only the price-only refused resend is pinned, by "r7: a moved live price is offered back…" in `app/tests/pricing.spec.ts`.
