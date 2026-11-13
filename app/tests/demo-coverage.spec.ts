@@ -379,7 +379,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     await drawn(page)
     await Promise.all(reads)
     expect(carried, 'opening Inventory fetched nothing that carries its cards').toBe(true)
-    await expect(page.locator('button', { hasText: /\d+ stored/ }).first()).toBeVisible()
+    await expect(page.locator('button', { hasText: /\d+ on hand/ }).first()).toBeVisible()
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
   })
 
@@ -431,7 +431,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     await page.locator('main').first().waitFor()
     await expect.poll(() => asked, { message: 'the first ask never reached index.json' }).toBeGreaterThanOrEqual(1)
     await page.locator('.bn-side').getByRole('link', { name: /^Inventory/ }).first().click()
-    await expect(page.locator('button', { hasText: /\d+ stored/ }).first()).toBeVisible({ timeout: DEMO_CHUNK_BUDGET_MS })
+    await expect(page.locator('button', { hasText: /\d+ on hand/ }).first()).toBeVisible({ timeout: DEMO_CHUNK_BUDGET_MS })
     expect(asked, 'index.json was never asked a second time').toBeGreaterThanOrEqual(2)
   })
 
@@ -462,9 +462,9 @@ test.describe('the published demo draws what reviewers grade', () => {
     // so the box and its starting count are read off the screen instead of hardcoded —
     // same behavior asserted (Mark sold decrements by one, Undo restores it), against
     // whichever box and count the mirror actually holds.
-    // COPY RENAMED (F5 verbiage cut, ff1b3f71 and after): a box row reads "N stored", the
+    // COPY: a box row reads "N on hand" (`.claude/rules/app.md`, One count, one name), the
     // Fulfiller's search placeholder is "Card name or number…", and Sales' shelf line is
-    // "N of M priced, K not yet". Same behaviour asserted, new words.
+    // "N of M priced, K not yet".
     await visit(page, 'Inventory')
     // The card pressed names its own box: its button reads "Mark sold: <box>, Section n, Card m".
     // The box's count is read from the cell's own meta element, never the joined button text.
@@ -475,13 +475,13 @@ test.describe('the published demo draws what reviewers grade', () => {
     const meta = page
       .locator('.browse-boxcell', { has: page.locator('.browse-boxcell-name', { hasText: new RegExp(`^${(placed![1] ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) }) })
       .locator('.browse-boxcell-meta')
-    await expect(meta).toHaveText(/^\d+ stored$/)
-    const startCount = Number(/^(\d+) stored$/.exec((await meta.textContent()) ?? '')?.[1])
+    await expect(meta).toHaveText(/^\d+ on hand$/)
+    const startCount = Number(/^(\d+) on hand$/.exec((await meta.textContent()) ?? '')?.[1])
     await sell.click()
-    await expect(meta).toHaveText(`${startCount - 1} stored`)
+    await expect(meta).toHaveText(`${startCount - 1} on hand`)
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
     await page.getByRole('button', { name: /^Undo/ }).first().click()
-    await expect(meta).toHaveText(`${startCount} stored`)
+    await expect(meta).toHaveText(`${startCount} on hand`)
     await expect(page.getByRole('button', { name: /^Mark Sold/ }).first()).toBeVisible()
   })
 

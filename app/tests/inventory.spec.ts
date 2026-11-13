@@ -3425,7 +3425,8 @@ test('the census greps to the store, and the identity line says what the box hol
      store's own, verbatim, which is the whole of the claim: `Captured` is the record count,
      `Fill` the allocator's high-water mark, and neither is the five the box holds. */
   await expect(censusValue(page, 'Captured')).toHaveText('7')
-  await expect(censusValue(page, 'Stored')).toHaveText('5')
+  await expect(censusValue(page, 'On Hand'), 'the Overview census names the on-hand count On Hand').toHaveText('5')
+  await expect(page.locator('.bn-set-census-cell', { hasText: 'Stored' }), 'the Overview census has no Stored cell').toHaveCount(0)
   await expect(censusValue(page, 'Sold')).toHaveText('1')
   await expect(censusValue(page, 'Retired')).toHaveText('1')
   await expect(censusValue(page, 'Fill')).toHaveText('7')
@@ -5273,9 +5274,10 @@ test('S3 — with Hide sold on, a search count excludes what the fold already hi
   await expect(page.locator('.browse-filterbar .bn-filtercount-figure')).toHaveText('0 of 3 boxes')
 })
 
-test('the card header counts sold copies in Captured, and draws no On Hand chip', async ({ page }) => {
+test('the card header counts sold copies in Captured, reads On Hand over the copies left, and draws no Stored', async ({ page }) => {
   /* Three copies of one SKU, one of them sold. Inventory's Captured is the record count and takes in
-     the sold copy (CardHeroHead's own tip says so); the Orders walk's On Hand does not (its own case). */
+     the sold copy (CardHeroHead's own tip says so); the Orders walk's On Hand does not (its own case).
+     The count left on hand is one name, On Hand, in the lead figure beside Live and Market (.claude/rules/app.md, One count, one name). */
   const cards: Cards = {
     ...CARDS,
     '2/1': card({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, cid: 'thievul-cid' }),
@@ -5294,6 +5296,12 @@ test('the card header counts sold copies in Captured, and draws no On Hand chip'
   await expect(captured, 'the Inventory header draws one Captured chip').toHaveCount(1)
   await expect(captured.locator('b'), 'Captured counts all three copies, the sold one included').toHaveText('3')
   await expect(side.locator(':scope > *').filter({ hasText: /^\s*On Hand/i }), 'Inventory draws no On Hand chip').toHaveCount(0)
+
+  const lead = page.locator('.browse-hero-lead:not([data-pending])')
+  const onHand = lead.locator('.browse-hero-fig').filter({ hasText: 'On Hand' })
+  await expect(onHand, 'the Inventory header draws one On Hand figure in its lead').toHaveCount(1)
+  await expect(onHand.locator('.browse-hero-fig-value'), 'On Hand counts the two copies on hand, not the sold one').toHaveText('2')
+  await expect(lead, 'the Inventory header draws no Stored figure').not.toContainText('Stored')
 })
 
 test('D271 — a search that finds nothing offers the near name, and pressing it runs that search', async ({ page }) => {
@@ -5707,6 +5715,13 @@ test('the value sort ranks boxes by their own dollar total, high to low by defau
   await expect(
     page.locator('.browse-boxcell', { hasText: 'ME01 spares' }).locator('.browse-boxcell-meta'),
   ).toContainText('$340')
+})
+
+test('the Inventory box row reads on hand, and never stored', async ({ page }) => {
+  await open(page, TWO_BOXES, STORE)
+  const meta = page.locator('.browse-boxcell', { hasText: 'ME01 commons' }).locator('.browse-boxcell-meta')
+  await expect(meta).toHaveText(/^\d+ on hand$/)
+  await expect(meta).not.toContainText('stored')
 })
 
 test('S4 — the move panel offers boxes most recent first, never by number', async ({ page }) => {

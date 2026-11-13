@@ -3631,15 +3631,16 @@ test('the card pane is the photograph, the pick and every copy with its place an
   await expect(pane.getByRole('button', { name: 'Retire' })).toHaveCount(0)
 })
 
-/** The walk card's On Hand figure chip, out of the card's figure band. */
-function onHandChipOf(side: Locator): Locator {
-  return side.locator(':scope > *').filter({ hasText: /^\s*On Hand/i })
+/** The walk card's On Hand figure: the lead figure beside Live and Market. The band draws no On Hand chip. */
+function onHandFigureOf(card: Locator): Locator {
+  return card.locator('.browse-hero-lead .browse-hero-fig').filter({ hasText: 'On Hand' })
 }
 
-/* THE WALK'S FIGURE CHIP COUNTS THE COPIES ON HAND. The plan carries only the copies still in the
-   box, so a sold copy is never in a take. The chip says "On Hand" and its tip says sold copies are
-   not counted; Inventory's "Captured" for the same card counts the sold copy too (its own case). */
-test('the walk card chip reads On Hand over the on-hand copies, and draws no Captured chip', async ({ page }) => {
+/* THE WALK'S ON HAND IS ONE FIGURE, UNDER ONE NAME (.claude/rules/app.md, One count, one name). The plan carries only
+   the copies still in the box, so a sold copy is never in a take. The lead figure says "On Hand"; the
+   band's chip that repeated it is gone. Inventory's "Captured" for the same card counts the sold copy
+   too (its own case). */
+test('the walk card header shows one On Hand figure over the on-hand copies, and no Stored or Captured', async ({ page }) => {
   await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
   const copies = [
     walkPlanCopy({ box: 3, index: 21, slot: 17, card: 17, capture_id: 'cap-a' }),
@@ -3650,19 +3651,19 @@ test('the walk card chip reads On Hand over the on-hand copies, and draws no Cap
     walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ wanted: 2, copies })] })]),
   })
 
-  const side = page.locator('.browse-card .browse-hero-side')
-  await expect(side, 'the walk draws one card figure band').toHaveCount(1)
-  const onHand = onHandChipOf(side)
-  await expect(onHand, 'the walk chip for the copies on hand reads On Hand').toHaveCount(1)
-  await expect(onHand.locator('b'), 'On Hand counts the two copies on hand').toHaveText('2')
-  await expect(onHand.locator('.browse-hero-chip-tip'), 'the On Hand tip says sold copies are not counted').toHaveText(/sold copies are not counted/i)
-  await expect(side.locator(':scope > *').filter({ hasText: /^\s*Captured/i }), 'the walk draws no Captured chip').toHaveCount(0)
+  const card = page.locator('.browse-card')
+  await expect(card.locator('.browse-hero-side'), 'the walk draws one card figure band').toHaveCount(1)
+  await expect(onHandFigureOf(card), 'the walk header draws exactly one On Hand figure').toHaveCount(1)
+  await expect(onHandFigureOf(card).locator('.browse-hero-fig-value'), 'On Hand counts the two copies on hand').toHaveText('2')
+  await expect(card.locator('.browse-hero-chip').filter({ hasText: 'On Hand' }), 'the band draws no On Hand chip beside the figure').toHaveCount(0)
+  await expect(card.locator('.browse-hero-lead'), 'the walk header draws no Stored figure').not.toContainText('Stored')
+  await expect(card.locator('.browse-hero-chip').filter({ hasText: 'Captured' }), 'the walk draws no Captured chip').toHaveCount(0)
 })
 
-/* A COPY THE WALK SELLS COMES OFF ITS CHIP AT ONCE. The walk re-reads its plan only when the window
-   regains focus, so the figure must net out the copies this walk has recorded itself, and not wait
-   for a read that may never come. No focus or visibility event is dispatched below. */
-test('a copy the walk sells drops off the On Hand chip at once, with no focus or visibility re-read', async ({ page }) => {
+/* A COPY THE WALK SELLS COMES OFF ITS ON HAND FIGURE AT ONCE. The walk re-reads its plan only when the
+   window regains focus, so the figure must net out the copies this walk has recorded itself, and not
+   wait for a read that may never come. No focus or visibility event is dispatched below. */
+test('a copy the walk sells drops off the On Hand figure at once, with no focus or visibility re-read', async ({ page }) => {
   await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
   const copies = [
     walkPlanCopy({ box: 3, index: 21, slot: 17, card: 17, capture_id: 'cap-a' }),
@@ -3674,8 +3675,8 @@ test('a copy the walk sells drops off the On Hand chip at once, with no focus or
     pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 1, places: [place()], sales: [] },
   })
 
-  const onHand = onHandChipOf(page.locator('.browse-card .browse-hero-side'))
-  await expect(onHand.locator('b'), 'the walk counts both copies on hand before any sale').toHaveText('2')
+  const onHand = onHandFigureOf(page.locator('.browse-card')).locator('.browse-hero-fig-value')
+  await expect(onHand, 'the walk counts both copies on hand before any sale').toHaveText('2')
 
   /* THE WALK'S OWN CONTROL: the first copy row's Mark Sold in the pick pane sells the copy at box 3, index 21. */
   await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).first().click()
@@ -3684,9 +3685,7 @@ test('a copy the walk sells drops off the On Hand chip at once, with no focus or
     targets: [{ box: 3, index: 21, capture_id: 'cap-a' }],
   })
 
-  await expect(onHand.locator('b'), 'the On Hand chip still counts the copy this walk just sold').toHaveText('1')
-  const stored = page.locator('.browse-card .browse-hero-fig').filter({ hasText: 'Stored' }).locator('.browse-hero-fig-value')
-  await expect(stored, 'the walk card Stored figure still counts the copy this walk just sold').toHaveText('1')
+  await expect(onHand, 'the On Hand figure still counts the copy this walk just sold').toHaveText('1')
 })
 
 /* THE WORDING FIX (owner's ruling, 2026-09-25): "of Y" must never count a copy the store does

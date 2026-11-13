@@ -18,18 +18,18 @@ The panel has two parts.
     No row holds rarity alone.
   - The side facts on line 3: `Captured 8`, `Hidden 3` and `Sent 7`. All three have the same size and weight.
 - Right column: the two lead figures. They have equal weight, and a hairline divides them.
-  - **Stored.** The copies in the boxes.
+  - **On Hand.** The copies in the boxes.
   - **Live.** The label line holds the state dot, the label and the read age ("2d ago", sentence case).
     The figure itself is plain ink. A recent reading is calm: the dot is `bn-dot-live`, 6px, with no pulse.
     Under the figure is the ceiling meter: one cell for each listing that the cap allows, filled up to the live count.
     The end of the meter says **Cap 5**, so the meter says what it measures, and the ceiling reads with Live.
 - **The right column never arrives late (owner's ruling).** While the copies search is pending, the column draws
-  at its final width with a pulsing bar under each label: Stored, Live and Market for a card with a SKU, Stored
+  at its final width with a pulsing bar under each label: On Hand, Live and Market for a card with a SKU, On Hand
   alone for one without. Actions rides the left column's end, so it keeps one x for the life of the card. A press
   that crossed the old jump went down on the button and came up elsewhere, and no click fired. The side-facts line holds a bar row and
   Live holds a meter bar, so nothing below the head moves on resolve. A search that gives up draws no bars. `app/tests/inventory.spec.ts` holds the x.
 - At pane 410 the band stacks. A hairline puts the two figures side by side under the identity lines.
-- Labels are one word each: Stored, Live, Captured, Hidden, Sent, Cap.
+- Labels are short: On Hand, Live, Captured, Hidden, Sent, Cap.
 
 ### Why
 
@@ -99,7 +99,7 @@ PNGs.
      pane width.
 2. Move the figures out of `CardLocations.tsx` `OwnerRows` `card-locations-stats` and `card-locations-counts`, into
    the band. Pass `group` and `listedAt` to the head from `Inventory.tsx`, which already holds both.
-   - Stored = `group.on_hand`.
+   - On Hand = `group.on_hand`.
    - Live = `forSale(group.listed.live, group.sold_here)`, with `ReadingAge` shortened to "2d ago".
      Keep "N when read / N sold here since" as the title text of the Live figure.
    - Captured = `group.copies.length`. Hidden = the `hidden` count from `OwnerRows`. Sent = `group.listed.pushed`.
@@ -146,7 +146,7 @@ The `#/orders` walk draws the same band, photograph and copy rows through the sa
 components. It draws no card details section.
 
 - **The panel is the current pick.** It is the head (name, meta line, `Pick N of M`, `For
-  <buyer>`), the band (Stored, Live, Market), the photograph and the copy rows. `Orders.OrderPickPane`
+  <buyer>`), the band (On Hand, Live, Market), the photograph and the copy rows. `Orders.OrderPickPane`
   passes `CardPane` a `detail` that holds the pick's on-hand copies, the walk's chosen copy first.
   Each row carries its address, neighbors, ruler and Mark sold (`OrdersWalkPane.RowAction`). The
   walk column beside it holds one line per pick: where it is, its name, `Pick N of M` and, with more

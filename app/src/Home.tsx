@@ -310,7 +310,7 @@ function StandingLine({ standing: say }: { readonly standing: Standing | null })
  *  so it wraps where the loaded one wraps. The ribbon holds `.home-ribbon`'s height. No pixel is
  *  written here. With `sum` it is the whole foot. Without, it is the history a foot that has its
  *  sum is still waiting on. */
-const HOLD_SUM = '0,000 photographed over 00 sittings since 00 Mmm - 0,000 stored in 00 boxes - 000 sold'
+const HOLD_SUM = '0,000 photographed over 00 sittings since 00 Mmm - 0,000 on hand in 00 boxes - 000 sold'
 const HOLD_LAST = '00 Mmm — 000 cards into Box 00 in 00 minutes. 000 an hour.'
 function HistoryFootFrame({ sum = false, ribbon = false, last = false }: { readonly sum?: boolean; readonly ribbon?: boolean; readonly last?: boolean }) {
   const line = (className: string, text: string) => (
@@ -381,7 +381,7 @@ function HistoryFoot({
         <i aria-hidden="true" />
         {/* `on_hand` is nullable BECAUSE a box could not be counted. A sum with a null in it is
             not a sum, so the clause degrades and the sentence does not. */}
-        <b>{onHand.toLocaleString()}</b> stored
+        <b>{onHand.toLocaleString()}</b> on hand
         {boxes === null ? null : <> in <b>{boxes}</b> {boxes === 1 ? 'box' : 'boxes'}</>}
         {sold === null ? null : sold === 0 ? null : (
           <>
@@ -859,11 +859,11 @@ export function Home() {
                         {name}
                       </span>
                       <span className="home-box-meta">
-                        <span>{held.toLocaleString()} stored</span>
+                        <span>{held.toLocaleString()} on hand</span>
                         <span>{box.sold} sold</span>
                       </span>
                     </span>
-                    <span className="home-box-bar" title={`${pct}% stored`}>
+                    <span className="home-box-bar" title={`${pct}% on hand`}>
                       <span style={{ width: `${pct}%` }} />
                     </span>
                   </a>

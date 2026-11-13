@@ -58,9 +58,9 @@ Point: 25 clashes confirmed. Worst: "Match" covers three steps, and the free rea
  Where: CaptureScreen.tsx "Pick the drawer in front of you."; Orders.tsx "Fewest drawers" then  "across N boxes"; cli/cmd_rescue.py (box 1's number was reused).
  Proposed: "Box" everywhere. "Box id" = `bid`, never shown. App.tsx "queue drawer" → "queue panel".
  Size: small. Strings and CLI help. `--box 3` vs `--bid 3` stay; the glossary says why.
-15. **Captured / on hand.** "Captured" is a card state and a lifetime count. One number is "on hand", "Stored" and "In stock".
- Where: mixPivot.ts "Cards captured"/"Sold of captured"; BoxOps.tsx "on hand" and  "Stored", same panel; PriceFacts.tsx "On Hand".
- Proposed: "Captured" = state pill only. Lifetime = "Photographed" (Home already says it). "On hand" = in boxes now (replaces Stored, In stock). Bare "stock" = never.
+15. **Captured / on hand.** "Captured" is a card state and a lifetime count. One number is "On Hand", "on hand" and "In stock".
+ Where: mixPivot.ts "Cards captured"/"Sold of captured"; BoxOps.tsx "On Hand" (Overview census) and "on hand" (`censusStats`, still lowercase); PriceFacts.tsx "On Hand".
+ Proposed: "Captured" = state pill only. Lifetime = "Photographed" (Home already says it). "On Hand" = in boxes now (replaces In stock). Bare "stock" = never.
  Size: small. Strings only.
 16. **Listed / live.** "Listed as" is the bound SKU. "Listed" is copies live. `--listed-only` is above the cut-off. "Live" has 4 more meanings.
  Where: CardHero.tsx "Listed as" and  "Listed"; cli/__main__.py `--listed-only`; types.ts RunSummary.live (a process is running) vs Listing.live (copies).
