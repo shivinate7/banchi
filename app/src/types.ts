@@ -4825,8 +4825,26 @@ export type SendSummary = {
     /** Cards with no copy live at the check: sold out, so there is no price to show. Settled. */
     gone?: { sku: string; name: string }[]
   } | null
-  /** Price changes the button named that the press left out, and why (round 6). */
-  prices_left: { sku: string; name: string; why: 'already' | 'not_live' | 'adds_copies' }[]
+  /** Price changes the button named that the press left out, and why (round 6). `live_moved` is a
+   *  price TCGplayer moved since the screen read it: the press went on without it, and the
+   *  card offers it again at the figure TCGplayer shows now (`price` is the one the button named).
+   *  A listing row (new copies) is left out the same way and holds `copies`: it needs the run to go again. */
+  prices_left: (
+    | { sku: string; name: string; why: 'already' | 'not_live' | 'adds_copies' }
+    | {
+        sku: string
+        name: string
+        why: 'live_moved'
+        price: string
+        live: string | null
+        shown: string | null
+        /** A kept suggestion, and the kept tick the server holds for it, so the resend keeps its cap check. */
+        source?: 'suggested'
+        ticked?: boolean
+        /** On a listing row (new copies of a card already live): the live copies it would have moved. A price-only row holds 0. */
+        copies?: number
+      }
+  )[]
   /** Live copies this send's listing rows moved to their price (the owner's ruling, round 7). */
   moves: { sku: string; name: string; copies: number; price: string; was: string | null }[]
   /** True when the upload may still wait in TCGplayer's Staged list, including a press that
@@ -4891,6 +4909,9 @@ export type RefusedPrice = {
   live: string | null
   shown: string | null
   copies: number
+  /** On a left-out `live_moved` price: what the resend must carry (`PriceChange`). */
+  source?: 'suggested'
+  ticked?: boolean
 }
 
 /** `GET /pipeline/sends`. `due` is the one bit the timer and the visit check both read. */

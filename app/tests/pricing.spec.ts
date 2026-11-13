@@ -1564,6 +1564,209 @@ test('r7: a moved live price is offered back, and one press sends it at the owne
   await expect(page.locator('.send-resend')).toHaveCount(0)
 })
 
+/* A LIVE CARD WHOSE TYPED PRICE CAN MOVE: two copies live at TCGplayer, and a price change names it. */
+function liveSku(code: string, name: string) {
+  return sku({
+    sku: code,
+    name,
+    at_cap: true,
+    add_to_quantity: 0,
+    live_before: 2,
+    nothing_to_add: 'Every copy in this run is already listed or has left the box.',
+    snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: '11.00' },
+    listing: { pushed: 2, staged: 0, live: 2 },
+    live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 2, price: '9.99' },
+  })
+}
+
+/* THE SKUS A LEFT-OUT PRESS READS: Articuno sent, and Dunsparce whose live price moved after the screen drew it. */
+function leftOutSkus() {
+  return [sku({ sku: '8608859', name: 'Articuno' }), liveSku('8608459', 'Dunsparce')]
+}
+
+/* A PRICE LEFT OUT FOR A MOVED LIVE FIGURE, OFFERED BACK FROM ITS NOTE (the owner's ruling, 2026-11-12):
+   the press that sent the rest answers 200 and names the price in `prices_left`. The card names it in one
+   sentence and offers the price back on one button, and the resend posts that note alone: its price, the
+   live price as `was`, its source and its kept tick. The rest of the press already went, so `runs` is []. */
+test('a price left out for a moved live figure is offered back from its note, and the resend posts that note alone', async ({ page }) => {
+  let presses = 0
+  const wire = await open(page, {
+    skus: leftOutSkus(),
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} },
+    send: () => {
+      presses += 1
+      return presses === 1
+        ? {
+            status: 200,
+            body: {
+              send: sendSummary({
+                copies: 1,
+                prices: 0,
+                prices_left: [
+                  { sku: '8608459', name: 'Dunsparce', why: 'live_moved', price: '30.00', live: '22.03', shown: '9.99', copies: 0, source: 'suggested', ticked: true },
+                ],
+              }),
+              console: '',
+            },
+          }
+        : { status: 200, body: { send: sendSummary({ copies: 0, prices: 1 }), console: '' } }
+    },
+  })
+  const dunsparce = page.getByLabel('Price for Dunsparce')
+  await dunsparce.fill('30.00')
+  await dunsparce.press('Tab')
+  await page.getByRole('button', { name: 'Send 1 SKU and 1 price change' }).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  await expect(page.locator('.send-resend'), 'the left-out price draws its offer').toHaveCount(1)
+  const offer = page.locator('.send-resend')
+  await expect(offer.locator('.bn-notice-title'), 'the title names the card and its live price, in one sentence').toHaveText(
+    'Dunsparce was left out. TCGplayer shows $22.03 now.',
+  )
+  await expect(offer.locator('ul.send-names'), 'one card draws no row: the title already names it').toHaveCount(0)
+  await offer.getByRole('button', { name: 'Send $30.00' }).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(2)
+  expect(sendPosts(wire)[1]?.body).toMatchObject({
+    runs: [],
+    confirm: true,
+    prices: [{ sku: '8608459', price: '30.00', was: '22.03', source: 'suggested', ticked: true }],
+  })
+  await expect(page.locator('.send-resend')).toHaveCount(0)
+})
+
+/* THE LEFT-OUT COPY, ONE CARD (the owner's ruling, 2026-11-12): a price TCGplayer moved is named in one line,
+   with TCGplayer's live price, after the press that sent the rest answers 200 with it in `prices_left`. */
+test('one left-out price names its card in one line with TCGplayer\'s live price', async ({ page }) => {
+  await open(page, {
+    skus: leftOutSkus(),
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} },
+    send: () => ({
+      status: 200,
+      body: {
+        send: sendSummary({
+          copies: 1,
+          prices: 0,
+          prices_left: [{ sku: '8608459', name: 'Dunsparce', why: 'live_moved', price: '30.00', live: '22.03', shown: '9.99', copies: 0 }],
+        }),
+        console: '',
+      },
+    }),
+  })
+  const dunsparce = page.getByLabel('Price for Dunsparce')
+  await dunsparce.fill('30.00')
+  await dunsparce.press('Tab')
+  await page.getByRole('button', { name: 'Send 1 SKU and 1 price change' }).click()
+  const notice = page.locator('.send-resend')
+  await expect(notice, 'the one left-out price draws its notice').toHaveCount(1)
+  await expect(notice.locator('.bn-notice-title'), 'the title names the card and its live price, once').toHaveText(
+    'Dunsparce was left out. TCGplayer shows $22.03 now.',
+  )
+  await expect(notice.locator('ul.send-names'), 'one card draws no row, so its name shows once').toHaveCount(0)
+  await expect(notice.getByRole('button', { name: 'Send $30.00' }), 'and its button sends the price again').toHaveCount(1)
+})
+
+/* A LISTING ROW LEFT OUT (the owner's ruling, 2026-11-12, listing rows): a new copy of a card already live would
+   write Banchi's price over the one TCGplayer shows, so the press leaves that card out with its live copies and
+   sends the rest. The copies ride the run, so the card cannot go again alone: it names what changed and draws no
+   resend button. */
+test('a listing row left out for a moved live figure is named in one sentence with its next step, and draws no resend button', async ({ page }) => {
+  const wire = await open(page, {
+    skus: [
+      sku({ sku: '8608859', name: 'Articuno' }),
+      sku({
+        sku: '8608459',
+        name: 'Dunsparce',
+        add_to_quantity: 1,
+        copies: 1,
+        live_before: 2,
+        listing: { pushed: 2, staged: 0, live: 2 },
+        live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 2, price: '22.03' },
+      }),
+    ],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608459': '30.00' } },
+    send: () => ({
+      status: 200,
+      body: {
+        send: sendSummary({
+          copies: 3,
+          prices: 0,
+          prices_left: [
+            { sku: '8608459', name: 'Dunsparce', why: 'live_moved', price: '30.00', live: '22.03', shown: '9.99', copies: 2 },
+          ],
+        }),
+        console: '',
+      },
+    }),
+  })
+  const press = page.getByRole('button', { name: /^Send .*2 live copies move to \$30\.00$/i })
+  await expect(press).toBeVisible()
+  await press.click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  const notice = page.locator('.send-resend')
+  await expect(notice, 'the left-out listing row draws its note').toHaveCount(1)
+  await expect(notice.locator('.bn-notice-title'), 'the title names the card, its live price and the next step, in one sentence').toHaveText(
+    'Dunsparce was left out. TCGplayer shows $22.03 now. Check it in your list and send again.',
+  )
+  await expect(notice.locator('ul.send-names'), 'the one card draws no row: the title already names it').toHaveCount(0)
+  await expect(notice.getByRole('button'), 'a listing row cannot go again alone, so it draws no resend button').toHaveCount(0)
+  /* THE PRESS NAMES THE LIVE FIGURE THE ROW DREW, so the server can refuse the move if TCGplayer has moved since. */
+  expect(sendPosts(wire)[0]?.body).toMatchObject({ moves: [{ sku: '8608459', price: '30.00', was: '22.03' }] })
+})
+
+/* THE LEFT-OUT COPY, SEVERAL CARDS (the owner's ruling, 2026-11-12): two prices TCGplayer moved are counted, and
+   each card is named in the same notice. Its button posts only those two rows, with `runs` []. */
+test('several left-out prices name the count and each card, and their button posts only those rows', async ({ page }) => {
+  let presses = 0
+  const copy = "3 cards were left out. TCGplayer's prices moved."
+  const wire = await open(page, {
+    skus: [liveSku('8608859', 'Articuno'), liveSku('8608459', 'Dunsparce'), liveSku('8608001', 'Pikachu')],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} },
+    send: () => {
+      presses += 1
+      return presses === 1
+        ? {
+            status: 200,
+            body: {
+              send: sendSummary({
+                copies: 1,
+                prices: 0,
+                prices_left: [
+                  { sku: '8608459', name: 'Dunsparce', why: 'live_moved', price: '30.00', live: '22.03', shown: '9.99', copies: 0 },
+                  { sku: '8608859', name: 'Articuno', why: 'live_moved', price: '24.00', live: '19.50', shown: '21.00', copies: 0 },
+                  { sku: '8608001', name: 'Pikachu', why: 'live_moved', price: '12.00', live: '8.50', shown: '10.00', copies: 0 },
+                ],
+              }),
+              console: '',
+            },
+          }
+        : { status: 200, body: { send: sendSummary({ copies: 0, prices: 3 }), console: '' } }
+    },
+  })
+  await page.getByLabel('Price for Dunsparce').fill('30.00')
+  await page.getByLabel('Price for Dunsparce').press('Tab')
+  await page.getByLabel('Price for Articuno').fill('24.00')
+  await page.getByLabel('Price for Articuno').press('Tab')
+  await page.getByLabel('Price for Pikachu').fill('12.00')
+  await page.getByLabel('Price for Pikachu').press('Tab')
+  await page.getByRole('button', { name: /^Send .*3 price changes?$/i }).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  const notice = page.locator('.send-resend, .send-prices-left, .send-suggestions').filter({ hasText: copy })
+  await expect(notice, 'the count of left-out cards is named once, in one notice').toHaveCount(1)
+  await expect(notice.locator('.bn-notice-title'), 'the title counts the left-out cards, once').toHaveText(copy)
+  const rows = notice.locator('ul.send-names > li')
+  await expect(rows, 'each left-out card draws one row').toHaveCount(3)
+  await expect(rows.nth(0).locator('.send-name'), 'the first row names Dunsparce').toHaveText('Dunsparce')
+  await expect(rows.nth(0).locator('.send-figure'), 'and reads its old price to its live price').toHaveText('$9.99 to $22.03')
+  await expect(rows.nth(1).locator('.send-name'), 'the second row names Articuno').toHaveText('Articuno')
+  await expect(rows.nth(1).locator('.send-figure'), 'and reads its old price to its live price').toHaveText('$21.00 to $19.50')
+  await expect(rows.nth(2).locator('.send-name'), 'the third row names Pikachu').toHaveText('Pikachu')
+  await expect(rows.nth(2).locator('.send-figure'), 'and reads its old price to its live price').toHaveText('$10.00 to $8.50')
+  await notice.getByRole('button', { name: 'Send these prices' }).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(2)
+  const resend = sendPosts(wire)[1]?.body as { runs: unknown[]; prices: { sku: string }[] }
+  expect(resend.runs, 'the press names no run').toEqual([])
+  expect(resend.prices.map((row) => row.sku).sort(), 'and posts only the three left-out rows').toEqual(['8608001', '8608459', '8608859'])
+})
+
 /* ROUND 7, R6-2: UNDO TAKES A PRICE OUT OF THE NAMED ONES. The answer it restores may be a Live
    tab preset or a mark-down never sent, so it was not typed this visit and does not ride. */
 test('r7: undo takes a typed price off the button', async ({ page }) => {

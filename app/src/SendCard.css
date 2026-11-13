@@ -178,6 +178,10 @@
 .send-resend .send-figure {
   color: inherit;
 }
+/* A LEFT-OUT ROW's two prices sit on the row's right edge, so a column of them scans down one edge. */
+.send-left-out .send-figure {
+  text-align: end;
+}
 
 /* THE PRESS NAMES THE LIVE COPIES IT MOVES (round 7), and on a phone that sentence is wider
    than the screen. It wraps inside the press rather than running past the card's edge. */

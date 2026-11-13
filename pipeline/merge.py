@@ -198,6 +198,7 @@ def _merged_match(sku: str, legs: Sequence[Leg]) -> join.SkuMatch:
         # ANY LEG'S GUARD TRIM CARRIES, the same way `_apply_guard` writes it onto every leg
         # sharing one SKU (`cli/cmd_emit.py:_apply_guard`'s own comment on the union).
         guard_trimmed=any(leg.match.guard_trimmed for leg in legs),
+        live_moved=any(leg.match.live_moved for leg in legs),
     )
 
 
