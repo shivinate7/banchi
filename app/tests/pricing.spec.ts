@@ -1564,6 +1564,64 @@ test('r7: a moved live price is offered back, and one press sends it at the owne
   await expect(page.locator('.send-resend')).toHaveCount(0)
 })
 
+/* A PRICE LEFT OUT FOR A MOVED LIVE FIGURE, OFFERED BACK FROM ITS NOTE (the owner's ruling, 2026-11-12):
+   the press that sent the rest answers 200 and names the price in `prices_left`. The card offers it back
+   in the words of a refused one, and the resend posts that note alone: its price, the live price as
+   `was`, its source and its kept tick. The rest of the press already went, so `runs` is []. */
+test('a price left out for a moved live figure is offered back from its note, and the resend posts that note alone', async ({ page }) => {
+  let presses = 0
+  const wire = await open(page, {
+    skus: [sku({ sku: '8608859', name: 'Articuno' }),
+      sku({
+        sku: '8608459',
+        name: 'Dunsparce',
+        at_cap: true,
+        add_to_quantity: 0,
+        live_before: 2,
+        nothing_to_add: 'Every copy in this run is already listed or has left the box.',
+        snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: '11.00' },
+        listing: { pushed: 2, staged: 0, live: 2 },
+        live_now: { export: 'live-tcgplayer-20260924-120000.csv', copies: 2, price: '9.99' },
+      }),
+    ],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} },
+    send: () => {
+      presses += 1
+      return presses === 1
+        ? {
+            status: 200,
+            body: {
+              send: sendSummary({
+                copies: 1,
+                prices: 0,
+                prices_left: [
+                  { sku: '8608459', name: 'Dunsparce', why: 'live_moved', price: '30.00', live: '22.03', shown: '9.99', copies: 0, source: 'suggested', ticked: true },
+                ],
+              }),
+              console: '',
+            },
+          }
+        : { status: 200, body: { send: sendSummary({ copies: 0, prices: 1 }), console: '' } }
+    },
+  })
+  const dunsparce = page.getByLabel('Price for Dunsparce')
+  await dunsparce.fill('30.00')
+  await dunsparce.press('Tab')
+  await page.getByRole('button', { name: 'Send 1 SKU and 1 price change' }).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  await expect(page.locator('.send-resend'), 'the left-out price draws its offer').toHaveCount(1)
+  const offer = page.locator('.send-resend')
+  await expect(offer).toContainText('TCGplayer shows $22.03 now. Send $30.00?')
+  await offer.getByRole('button', { name: 'Send $30.00' }).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(2)
+  expect(sendPosts(wire)[1]?.body).toMatchObject({
+    runs: [],
+    confirm: true,
+    prices: [{ sku: '8608459', price: '30.00', was: '22.03', source: 'suggested', ticked: true }],
+  })
+  await expect(page.locator('.send-resend')).toHaveCount(0)
+})
+
 /* ROUND 7, R6-2: UNDO TAKES A PRICE OUT OF THE NAMED ONES. The answer it restores may be a Live
    tab preset or a mark-down never sent, so it was not typed this visit and does not ride. */
 test('r7: undo takes a typed price off the button', async ({ page }) => {
