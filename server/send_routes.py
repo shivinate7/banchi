@@ -79,7 +79,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, NamedTuple, NoReturn, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterator, List, NamedTuple, NoReturn, Optional, Sequence, Set, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -1435,6 +1435,30 @@ def _leave_out_held(payload: dict, directories: Sequence[Path], live_before: Dic
     return dict(payload, prices=[row for row in payload["prices"] if row["sku"] not in held]), held
 
 
+def _keep_server_ticks(payload: dict, kept_ticks: Set[str]) -> dict:
+    """ONLY THE SERVER'S KEPT TICK SURVIVES in the payload: a `ticked` flag with no kept tick behind it is dropped,
+    so a left-out price is offered again with the tick the server holds and a forged flag reaches no note."""
+    return dict(
+        payload,
+        prices=[
+            row if row.get("ticked") is not True or row["sku"] in kept_ticks else {k: v for k, v in row.items() if k != "ticked"}
+            for row in payload["prices"]
+        ],
+    )
+
+
+def _held_ticks(drawn: Any) -> Set[str]:
+    """The SKUs whose tick the server kept and still holds (`worklist.with_ticks`). Empty when the store cannot
+    be read: no tick is then held, and the press goes on with none."""
+    try:
+        book = corpus.Corpus.read()
+        wired = worklist.with_ticks(pipeline_routes._live_wire(drawn, book), corpus.read_ticks())
+    except (OSError, ValueError) as exc:
+        files.log_cause('suggestion ticks', exc)
+        return set()
+    return {row["sku"] for row in wired if row["source"] == suggest.SOURCE and row["ticked"] is True}
+
+
 def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> Tuple[dict, List[dict], List[dict]]:
     """`(payload, moved, left_out)`: the press the server stands behind, or a refusal.
 
@@ -1453,7 +1477,9 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> T
     """
     checked = {row["sku"]: (row["price"], row["was"]) for row in _checked_prices(payload)}
     if not checked:
-        return payload, [], []
+        # Nothing is checked, but a note built from a row still reads its `ticked`: only a server-held tick survives.
+        held = _held_ticks(drawn) if any(r.get("ticked") is True for r in payload["prices"]) else set()
+        return _keep_server_ticks(payload, held), [], []
     suggested = {r["sku"] for r in payload["prices"] if r.get("source") == postings.SUGGESTED}
     kept = {sku: named for sku, named in checked.items() if sku in suggested}
     try:
@@ -1506,14 +1532,7 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> T
     # A past-cap suggestion goes on the owner's tick, and the tick is the SERVER'S: the client's `ticked` flag
     # only names the row, and a flag with no kept tick that still holds behind it exempts nothing.
     ticked = {row["sku"] for row in payload["prices"] if row.get("ticked") is True} & kept_ticks
-    # ONLY THE SERVER'S KEPT TICK SURVIVES in the payload, so a left-out price is offered again with the tick the server holds.
-    payload = dict(
-        payload,
-        prices=[
-            row if row.get("ticked") is not True or row["sku"] in ticked else {k: v for k, v in row.items() if k != "ticked"}
-            for row in payload["prices"]
-        ],
-    )
+    payload = _keep_server_ticks(payload, kept_ticks)
     over = sendguard.suggestions_past_cap({s: v for s, v in checked.items() if s not in ticked}, prices, limit, names)
     if over:
         parts = [

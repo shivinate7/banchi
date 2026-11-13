@@ -547,10 +547,13 @@ function ResendPrices({
   rows,
   busy,
   onSend,
+  leftOut,
 }: {
   readonly rows: readonly RefusedPrice[]
   readonly busy: boolean
   readonly onSend: () => void
+  /** The rows were left out of a press that sent the rest: the title says so and names the card. A refused press keeps its own title. */
+  readonly leftOut?: boolean
 }) {
   const one = rows.length === 1 ? rows[0] : undefined
   return (
@@ -558,7 +561,17 @@ function ResendPrices({
       tone="warn"
       compact
       className="send-failure send-resend"
-      title="TCGplayer's price is not the one this list showed."
+      title={
+        !leftOut ? (
+          "TCGplayer's price is not the one this list showed."
+        ) : one !== undefined ? (
+          <>
+            {one.name || one.sku} was left out. TCGplayer shows {one.live === null ? 'no price' : <Money value={Number(one.live)} />} now.
+          </>
+        ) : (
+          `${rows.length} cards were left out. TCGplayer's prices moved.`
+        )
+      }
       action={
         <Button size="sm" busy={busy} disabled={busy} onClick={onSend}>
           {one !== undefined && one.price !== null ? (
@@ -1440,7 +1453,7 @@ export function SendCard({
           {sent !== null && sent.stamp === standing.stamp && standing.kind === 'send' ? <TookOff taken={standing.taken_off} download={false} /> : null}
           {sent !== null && sent.stamp === standing.stamp ? <PricesLeft send={standing} /> : null}
           {sent !== null && sent.stamp === standing.stamp && offered.length === 0 && movedLeft(standing).length > 0 ? (
-            <ResendPrices rows={movedLeft(standing)} busy={busy} onSend={() => resendLeft(movedLeft(standing))} />
+            <ResendPrices leftOut rows={movedLeft(standing)} busy={busy} onSend={() => resendLeft(movedLeft(standing))} />
           ) : null}
           {/* THE RECEIPT KEEPS IT, so a reload still says the prices were read again. */}
           <PricesRefreshed send={standing} />
