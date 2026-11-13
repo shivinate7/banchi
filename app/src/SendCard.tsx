@@ -1151,8 +1151,9 @@ export function SendCard({
     setConfirmed((held) => {
       const next = { was: { ...held.was }, moves: { ...held.moves } }
       for (const row of rows) {
-        /* A LISTING ROW THAT MOVED AT TCGPLAYER (it holds live copies) is named again at the live price now shown. */
-        if (row.why === 'live_moved' && row.copies > 0 && row.price !== null) next.moves[row.sku] = { sku: row.sku, name: row.name, copies: row.copies, price: row.price, was: row.live }
+        /* A LISTING ROW THAT MOVED AT TCGPLAYER (the button named a move of its live copies) is named again at the live price now shown.
+           A typed price on a live card is told apart by the button's own moves, never by `copies`: a refusal carries the live count either way. */
+        if (row.why === 'live_moved' && row.price !== null && liveMoves.some((move) => move.sku === row.sku)) next.moves[row.sku] = { sku: row.sku, name: row.name, copies: row.copies, price: row.price, was: row.live }
         else if (row.why === 'live_moved') next.was[row.sku] = row.live
         /* A MOVE THE BUTTON DID NOT NAME, OR NAMED AT ANOTHER COUNT: named now at TCGplayer's own
            count of live copies (round 8, R7-3). */
