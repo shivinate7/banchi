@@ -6158,6 +6158,19 @@ def check_send_live_moved_left_out(checks: Checks) -> None:
         checks.equal(_listed_prices(portal), {}, "and no row reaches TCGplayer")
 
 
+def _two_live_articuno(portal, run_names) -> None:
+    """Two live copies of Articuno at 22.03, and the screen showed 25.99. The third copy is the
+    listing row: a new copy that would move both live copies to the typed 30.00. The setup press
+    sends `run_names`' copies, Articuno at 2 and Dunsparce at 0, so one run or several both work."""
+    portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
+    send_routes.do_send(
+        {"runs": list(run_names), "quantities": {ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0}, "confirm": True}
+    )
+    portal["live"] = _live_export_priced({ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
+    portal["rows"].clear()
+    _typed_answer(ARTICUNO_SKU, "30.00")
+
+
 def check_send_live_moved_listing_left_out(checks: Checks) -> None:
     """THE OWNER'S RULING, 2026-11-12, FOR LISTING ROWS: a new copy of a card already live writes
     Banchi's price over the one TCGplayer shows. When that live price is no longer the `was` the
@@ -6172,21 +6185,10 @@ def check_send_live_moved_listing_left_out(checks: Checks) -> None:
     cards = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
     cards.append((3, 4, "Dunsparce", "120", "normal"))
 
-    def two_live_articuno(portal, run_dir):
-        # Two live copies of Articuno at 22.03, and the screen showed 25.99. The third copy is the
-        # listing row: a new copy that would move both live copies to the typed 30.00.
-        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 0, DUNSPARCE_SKU: 0})
-        send_routes.do_send(
-            {"runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0}, "confirm": True}
-        )
-        portal["live"] = _live_export_priced({ARTICUNO_SKU: 2, DUNSPARCE_SKU: 0}, {ARTICUNO_SKU: "22.03"})
-        portal["rows"].clear()
-        _typed_answer(ARTICUNO_SKU, "30.00")
-
     # ------------- a moved listing row is left out with its copies; a new card's row beside it goes
     with _case(checks, "listing left out: beside a new card"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
-        two_live_articuno(portal, run_dir)
+        _two_live_articuno(portal, [run_dir.name])
         _typed_answer(DUNSPARCE_SKU, "12.00")
         status, body = _send_over_wire({
             "runs": [run_dir.name], "confirm": True,
@@ -6209,7 +6211,7 @@ def check_send_live_moved_listing_left_out(checks: Checks) -> None:
     # ------------- the only listing row moved: the press answers price_refused, carrying its copies
     with _case(checks, "listing left out: the only row"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
-        two_live_articuno(portal, run_dir)
+        _two_live_articuno(portal, [run_dir.name])
         status, body = _send_over_wire({
             "runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
             "moves": [{"sku": ARTICUNO_SKU, "price": "30.00", "copies": 2, "was": "25.99"}],
@@ -6226,7 +6228,7 @@ def check_send_live_moved_listing_left_out(checks: Checks) -> None:
     # ------------- a move that names no price the screen showed is left out, fail-safe
     with _case(checks, "listing left out: no was"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
-        two_live_articuno(portal, run_dir)
+        _two_live_articuno(portal, [run_dir.name])
         status, body = _send_over_wire({
             "runs": [run_dir.name], "quantities": {DUNSPARCE_SKU: 0}, "confirm": True,
             "moves": [{"sku": ARTICUNO_SKU, "price": "30.00", "copies": 2}],
@@ -6243,7 +6245,7 @@ def check_send_live_moved_listing_left_out(checks: Checks) -> None:
     # ------------- control: a card with no live copy has no price to overwrite, and its row goes
     with _case(checks, "listing: a new card goes alone"), send_portal() as portal, synced_home():
         run_dir, _ = seam_run(checks, cards)
-        two_live_articuno(portal, run_dir)
+        _two_live_articuno(portal, [run_dir.name])
         _typed_answer(DUNSPARCE_SKU, "12.00")
         status, body = _send_over_wire({
             "runs": [run_dir.name], "quantities": {ARTICUNO_SKU: 0}, "confirm": True,
@@ -6253,6 +6255,70 @@ def check_send_live_moved_listing_left_out(checks: Checks) -> None:
             (200, {DUNSPARCE_SKU: ("1", "12.00")}),
             "CONTROL, A NEW CARD WITH NO LIVE COPY: its listing row goes at its typed price",
         )
+
+
+def check_send_live_moved_listing_merged_runs(checks: Checks) -> None:
+    """A MOVED LISTING ROW IS LEFT OUT ON THE MERGED PATH TOO. The screen sends every run in one press,
+    so `_run_merged` must leave the moved copies out of its merged plan, not only a single run's. Two
+    runs: Articuno's live price moved after the screen drew it, so its copies stay out, its `pushed`
+    holds, and the receipt counts only what went; the other run's row goes. Control: the same two runs
+    with a `was` that matches, and both rows go.
+    """
+    checks.note("")
+    checks.note("SEND, LIVE MOVED, LISTING ROW, SEVERAL RUNS — the merged press leaves the moved copies out")
+
+    articuno = [(3, i, "Articuno", "161", None) for i in (1, 2, 3)]
+    dunsparce = [(4, 1, "Dunsparce", "120", "normal")]
+
+    def pushed(sku):
+        listing = Store().read().inventory.listings.get(sku)
+        return 0 if listing is None else listing.pushed
+
+    # ------------- a moved listing row across two runs: its copies stay out, the other run's row goes
+    with _case(checks, "merged listing left out: the other run's row goes"), send_portal() as portal, synced_home():
+        articuno_run, _ = seam_run(checks, articuno)
+        dunsparce_run, _ = seam_run(checks, dunsparce)
+        _two_live_articuno(portal, [articuno_run.name, dunsparce_run.name])
+        _typed_answer(DUNSPARCE_SKU, "12.00")
+        before = pushed(ARTICUNO_SKU)
+        checks.equal(before, 2, "fixture: the setup press pushed Articuno's two live copies")
+        status, body = _send_over_wire({
+            "runs": [articuno_run.name, dunsparce_run.name], "confirm": True,
+            "moves": [{"sku": ARTICUNO_SKU, "price": "30.00", "copies": 2, "was": "25.99"}],
+        })
+        send = body.get("send") or {}
+        checks.equal(status, 200, "MERGED, LISTING ROW MOVED: the press is answered, not refused")
+        checks.equal(
+            ARTICUNO_SKU in _listed_prices(portal), False,
+            "and no row for Articuno reaches TCGplayer: its new copy and its two live copies stay out",
+        )
+        checks.equal(
+            _listed_prices(portal).get(DUNSPARCE_SKU), ("1", "12.00"),
+            "and the other run's row goes at its typed price",
+        )
+        checks.equal(pushed(ARTICUNO_SKU), before, "and the moved card's pushed count is unchanged: no copy was marked sent")
+        checks.equal(send.get("copies"), 1, "THE RECEIPT COUNTS ONLY WHAT WENT: the other run's one copy")
+        checks.equal(
+            [(n.get("sku"), n.get("why"), n.get("copies")) for n in send.get("prices_left") or []],
+            [(ARTICUNO_SKU, "live_moved", 2)],
+            "prices_left names the moved card with its two live copies",
+        )
+
+    # ------------- control: the same two runs, and a `was` that matches the live price: both rows go
+    with _case(checks, "merged listing, control: a matching was sends both runs' rows"), send_portal() as portal, synced_home():
+        articuno_run, _ = seam_run(checks, articuno)
+        dunsparce_run, _ = seam_run(checks, dunsparce)
+        _two_live_articuno(portal, [articuno_run.name, dunsparce_run.name])
+        _typed_answer(DUNSPARCE_SKU, "12.00")
+        status, body = _send_over_wire({
+            "runs": [articuno_run.name, dunsparce_run.name], "confirm": True,
+            "moves": [{"sku": ARTICUNO_SKU, "price": "30.00", "copies": 2, "was": "22.03"}],
+        })
+        listed = _listed_prices(portal)
+        checks.equal(status, 200, "CONTROL, MERGED, A MATCHING WAS: the press is answered")
+        checks.equal(sorted(listed), sorted([ARTICUNO_SKU, DUNSPARCE_SKU]), "CONTROL: both runs' rows reach TCGplayer")
+        checks.equal(listed.get(ARTICUNO_SKU, (None, None))[1], "30.00", "and Articuno's row moves to its typed price")
+        checks.equal(listed.get(DUNSPARCE_SKU), ("1", "12.00"), "and the other run's row goes at its typed price")
 
 
 def _store_backed_run(checks: Checks, home: Path, cards, only=None, stamp=True) -> "runs.Run":
@@ -8758,6 +8824,7 @@ CHECKS = (
     check_send_review_r7,
     check_send_live_moved_left_out,
     check_send_live_moved_listing_left_out,
+    check_send_live_moved_listing_merged_runs,
     check_send_review_r8,
     check_live_markdown_guards,
     check_schema_eleven_then_twelve,
