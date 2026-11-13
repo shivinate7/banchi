@@ -3685,6 +3685,8 @@ test('a copy the walk sells drops off the On Hand chip at once, with no focus or
   })
 
   await expect(onHand.locator('b'), 'the On Hand chip still counts the copy this walk just sold').toHaveText('1')
+  const stored = page.locator('.browse-card .browse-hero-fig').filter({ hasText: 'Stored' }).locator('.browse-hero-fig-value')
+  await expect(stored, 'the walk card Stored figure still counts the copy this walk just sold').toHaveText('1')
 })
 
 /* THE WORDING FIX (owner's ruling, 2026-09-25): "of Y" must never count a copy the store does
