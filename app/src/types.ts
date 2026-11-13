@@ -4813,7 +4813,8 @@ export type SendSummary = {
   } | null
   /** Price changes the button named that the press left out, and why (round 6). `live_moved` is a
    *  price TCGplayer moved since the screen read it: the press went on without it, and the
-   *  card offers it again at the figure TCGplayer shows now (`price` is the one the button named). */
+   *  card offers it again at the figure TCGplayer shows now (`price` is the one the button named).
+   *  A listing row (new copies) is left out the same way and holds `copies`: it needs the run to go again. */
   prices_left: (
     | { sku: string; name: string; why: 'already' | 'not_live' | 'adds_copies' }
     | {
@@ -4826,6 +4827,8 @@ export type SendSummary = {
         /** A kept suggestion, and the kept tick the server holds for it, so the resend keeps its cap check. */
         source?: 'suggested'
         ticked?: boolean
+        /** On a listing row (new copies of a card already live): the live copies it would have moved. A price-only row holds 0. */
+        copies?: number
       }
   )[]
   /** Live copies this send's listing rows moved to their price (the owner's ruling, round 7). */

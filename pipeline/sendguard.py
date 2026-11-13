@@ -32,7 +32,7 @@ the store's cards and the matches, and prints what this returns.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
@@ -414,16 +414,25 @@ def live_moves(
     live: Mapping[str, int],
     prices: Mapping[str, Optional[str]],
     floor=None,
+    leave_live_moved: bool = False,
 ) -> tuple:
-    """`(moves, refused)`: the live copies this press's LISTING rows move, and any the button did
-    not name.
+    """`(moves, left, refused)`: the live copies this press's LISTING rows move, any listing
+    row LEFT OUT because TCGplayer's price moved, and any move the button did not name.
 
     `going` is SKU -> (name, the row's price) for every row that adds a copy. A row moves live
     copies when TCGplayer holds some and shows another price. The button names each move it
-    drew with its price and its count (`named`, SKU -> (price, copies)), off the same newest
-    live export the worklist carries. A move the button did not name, or named at another price,
-    REFUSES the press with the live figure as data, so the screen can say "TCGplayer shows $X
-    now" and send again. So does a move named at another count of live copies (round 8, R7-3).
+    drew with its price, its count and the live price it showed (`named`, SKU -> (price, copies,
+    was), off the same newest live export the worklist carries). A move the button did not name,
+    or named at another price, REFUSES the press with the live figure as data, so the screen can
+    say "TCGplayer shows $X now" and send again. So does a move named at another count of live
+    copies (round 8, R7-3).
+
+    A LISTING ROW OVERWRITES THE PRICE TCGPLAYER SHOWS, so it is judged as a price-only row is
+    (`price_changes`, D273): when TCGplayer's price is not the `was` the
+    screen showed, a hand edit would be lost. That card is LEFT OUT (`live_moved`, with `live`,
+    `shown` and the live `copies`) when `leave_live_moved` is set, the send's own door, and the
+    rest goes; otherwise REFUSED. A 2-tuple names no `was`, which reads as no price shown. A card
+    with no live copy has no price to overwrite and is not judged here.
 
     A MOVE UNDER THE STORE'S FLOOR (`floor`, `policy.threshold`) IS REFUSED `below_floor`, as
     data, and never offered back (round 8, R7-1): the rule S1 gave a price-only row.
@@ -432,6 +441,7 @@ def live_moves(
     Whether TCGplayer's real export can hold one is not known, and naming it is the safe side.
     """
     moves: List[LiveMove] = []
+    left: List[PriceNote] = []
     refused: List[PriceNote] = []
     for sku in sorted(going):
         name, price = going[sku]
@@ -445,7 +455,7 @@ def live_moves(
                 PriceNote(sku, str(name or ""), REFUSED_BELOW_FLOOR, price=price, live=now, copies=held)
             )
             continue
-        told_price, told_copies = named.get(sku, (None, None))
+        told_price, told_copies, *told_was = named.get(sku, (None, None))
         if told_price is None or tcgcsv.format_price(told_price) != price:
             refused.append(
                 PriceNote(sku, str(name or ""), REFUSED_MOVE_UNNAMED, price=price, live=now,
@@ -459,8 +469,17 @@ def live_moves(
                           shown=None if told_copies is None else str(int(told_copies)), copies=held)
             )
             continue
+        shown = told_was[0] if told_was else None
+        shown = None if shown in (None, "") else tcgcsv.format_price(shown)
+        if now != shown:
+            note = PriceNote(sku, str(name or ""), LEFT_LIVE_MOVED, price=price, live=now, shown=shown, copies=held)
+            if leave_live_moved:
+                left.append(note)
+            else:
+                refused.append(replace(note, why=REFUSED_LIVE_MOVED))
+            continue
         moves.append(LiveMove(sku=sku, name=str(name or ""), copies=held, price=price, was=now))
-    return moves, refused
+    return moves, left, refused
 
 
 def price_report(changes: Sequence[PriceChange], left=(), refused=(), moves=()) -> dict:

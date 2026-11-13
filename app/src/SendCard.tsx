@@ -551,7 +551,8 @@ function ResendPrices({
 }: {
   readonly rows: readonly RefusedPrice[]
   readonly busy: boolean
-  readonly onSend: () => void
+  /** Left out, the press sends these rows again. A listing row cannot go again alone (it needs its run), so it passes none: the card names it and draws no button. */
+  readonly onSend?: () => void
   /** The rows were left out of a press that sent the rest: the title says so and names the card. A refused press keeps its own title. */
   readonly leftOut?: boolean
 }) {
@@ -573,15 +574,17 @@ function ResendPrices({
         )
       }
       action={
-        <Button size="sm" busy={busy} disabled={busy} onClick={onSend}>
-          {one !== undefined && one.price !== null ? (
-            <>
-              Send <Money value={Number(one.price)} />
-            </>
-          ) : (
-            'Send these prices'
-          )}
-        </Button>
+        onSend === undefined ? undefined : (
+          <Button size="sm" busy={busy} disabled={busy} onClick={onSend}>
+            {one !== undefined && one.price !== null ? (
+              <>
+                Send <Money value={Number(one.price)} />
+              </>
+            ) : (
+              'Send these prices'
+            )}
+          </Button>
+        )
       }
     >
       <ul className="send-names">
@@ -591,9 +594,20 @@ function ResendPrices({
             <span className="send-figure">
               {row.why === 'live_moved' ? 'TCGplayer shows ' : `${count(row.copies, 'live copy', 'live copies')} at `}
               {row.live === null ? 'no price' : <Money value={Number(row.live)} />}
-              {row.why === 'live_moved' ? ' now. Send ' : ' move to '}
-              {row.price === null ? 'this price' : <Money value={Number(row.price)} />}
-              {row.why === 'live_moved' ? '?' : '.'}
+              {onSend === undefined ? (
+                /* NO RESEND TO OFFER: say what changed, not a question nothing answers. */
+                <>
+                  {' now, not the '}
+                  {row.shown === null ? 'no price' : <Money value={Number(row.shown)} />}
+                  {' this list showed.'}
+                </>
+              ) : (
+                <>
+                  {row.why === 'live_moved' ? ' now. Send ' : ' move to '}
+                  {row.price === null ? 'this price' : <Money value={Number(row.price)} />}
+                  {row.why === 'live_moved' ? '?' : '.'}
+                </>
+              )}
             </span>
           </li>
         ))}
@@ -680,9 +694,10 @@ function PricesLeft({ send }: { readonly send: SendSummary }) {
 
 /** The prices a press left out because TCGplayer's price moved after the screen read it, as the
  *  rows `ResendPrices` draws: "TCGplayer shows $X now. Send $Y?". */
-function movedLeft(send: SendSummary): RefusedPrice[] {
+function movedLeft(send: SendSummary, listing = false): RefusedPrice[] {
   return send.prices_left.flatMap((note) =>
-    note.why === 'live_moved'
+    /* A LISTING ROW (it adds copies, so `copies` is above 0) CANNOT GO AGAIN ALONE: its copies ride the run. */
+    note.why === 'live_moved' && ((note.copies ?? 0) > 0) === listing
       ? [
           {
             sku: note.sku,
@@ -691,7 +706,7 @@ function movedLeft(send: SendSummary): RefusedPrice[] {
             price: note.price,
             live: note.live,
             shown: note.shown,
-            copies: 0,
+            copies: note.copies ?? 0,
             ...(note.source === undefined ? {} : { source: note.source }),
             ...(note.ticked === undefined ? {} : { ticked: note.ticked }),
           },
@@ -1116,7 +1131,9 @@ export function SendCard({
     setConfirmed((held) => {
       const next = { was: { ...held.was }, moves: { ...held.moves } }
       for (const row of rows) {
-        if (row.why === 'live_moved') next.was[row.sku] = row.live
+        /* A LISTING ROW THAT MOVED AT TCGPLAYER (it holds live copies) is named again at the live price now shown. */
+        if (row.why === 'live_moved' && row.copies > 0 && row.price !== null) next.moves[row.sku] = { sku: row.sku, name: row.name, copies: row.copies, price: row.price, was: row.live }
+        else if (row.why === 'live_moved') next.was[row.sku] = row.live
         /* A MOVE THE BUTTON DID NOT NAME, OR NAMED AT ANOTHER COUNT: named now at TCGplayer's own
            count of live copies (round 8, R7-3). */
         else if (row.price !== null) next.moves[row.sku] = { sku: row.sku, name: row.name, copies: row.copies, price: row.price, was: row.live }
@@ -1454,6 +1471,9 @@ export function SendCard({
           {sent !== null && sent.stamp === standing.stamp ? <PricesLeft send={standing} /> : null}
           {sent !== null && sent.stamp === standing.stamp && offered.length === 0 && movedLeft(standing).length > 0 ? (
             <ResendPrices leftOut rows={movedLeft(standing)} busy={busy} onSend={() => resendLeft(movedLeft(standing))} />
+          ) : null}
+          {sent !== null && sent.stamp === standing.stamp && movedLeft(standing, true).length > 0 ? (
+            <ResendPrices leftOut rows={movedLeft(standing, true)} busy={busy} />
           ) : null}
           {/* THE RECEIPT KEEPS IT, so a reload still says the prices were read again. */}
           <PricesRefreshed send={standing} />

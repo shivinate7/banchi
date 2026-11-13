@@ -652,8 +652,9 @@ class PriceRefused(Exception):
 
 def _named_prices(path) -> tuple:
     """`(prices, moves, suggested)` off the `--reprice-live` file. `prices` is SKU -> (price, the
-    live price the screen showed); `moves` is SKU -> the price the button said live copies move
-    to; `suggested` is the set of SKUs whose price is a kept suggestion (`"source": "suggested"`).
+    live price the screen showed); `moves` is SKU -> (the price the button said live copies move
+    to, their count, the live price the screen showed); `suggested` is the set of SKUs whose
+    price is a kept suggestion (`"source": "suggested"`).
 
     THE SCREEN'S OWN LIST (round 6, B1 and B2): the SKUs the owner typed a price for on the
     worklist, the price the button counted, and the live price the screen drew beside it. Since
@@ -678,6 +679,7 @@ def _named_prices(path) -> tuple:
             str(row["sku"]): (
                 str(row["price"]),
                 None if row.get("copies") in (None, "") else int(row["copies"]),
+                None if row.get("was") in (None, "") else str(row["was"]),
             )
             for row in said.get("moves") or []
         }
@@ -689,7 +691,7 @@ def _named_prices(path) -> tuple:
         raise PriceRefused(f"the named prices could not be read: {exc}") from None
 
 
-def _price_changes(args, guarded, candidates, going, floor, say, no_run=False):
+def _price_changes(args, guarded, candidates, going, floor, say, no_run=False, left_out=None):
     """`(changes, left, moves)`: the price-only rows this press writes, the named prices it
     leaves out, and the live copies its listing rows move, or empties when it asked for none
     (`--reprice-live`).
@@ -703,6 +705,10 @@ def _price_changes(args, guarded, candidates, going, floor, say, no_run=False):
     TCGplayer holds. A refusal prints its JSON line first, so the route can name each card. A
     card whose live price is no longer the one the screen showed is not a refusal: it is LEFT OUT
     (`live_moved`), the rest goes, and every empty exit names it (`_say_prices`).
+
+    `left_out` is SKU -> the note for each LISTING row `_leave_out_moved` already took out of the
+    press (`going` no longer holds it). It is named with the rest, and a price the button named
+    for it is still left as `adds_copies`, as it was when the row went.
     """
     if not getattr(args, "reprice_live", None):
         return [], [], []
@@ -729,10 +735,13 @@ def _price_changes(args, guarded, candidates, going, floor, say, no_run=False):
     for sku, row in suggested.items():
         candidates[sku] = (row.get(tcgcsv.NAME_COLUMN), named[sku][0])
     changes, left, refused = sendguard.price_changes(
-        named, candidates, guarded["live"], prices, floor, set(going), suggested, kept,
+        named, candidates, guarded["live"], prices, floor, set(going) | set(left_out or ()), suggested, kept,
         leave_live_moved=True,
     )
-    moves, unnamed = sendguard.live_moves(going, told, guarded["live"], prices, floor)
+    moves, moved_listing, unnamed = sendguard.live_moves(
+        going, told, guarded["live"], prices, floor, leave_live_moved=True
+    )
+    left = list(left) + list(moved_listing) + list((left_out or {}).values())
     refused = list(refused) + list(unnamed)
     if refused:
         import json
@@ -743,6 +752,33 @@ def _price_changes(args, guarded, candidates, going, floor, say, no_run=False):
             + ", ".join(f"{note.sku} ({note.why})" for note in refused)
         )
     return changes, left, moves
+
+
+def _leave_out_moved(args, guarded, going, floor, matches_by_sku) -> dict:
+    """SKU -> the `live_moved` note for each LISTING row left out of this press, or `{}`.
+
+    A listing row writes Banchi's price over the one TCGplayer shows, so a card whose live price
+    is no longer the one the screen showed (a hand edit at TCGplayer) is left out and named, and
+    the rest goes. The rule is `sendguard.live_moves`; this only reads the press's inputs and
+    takes the card's copies out of the press the way the double-send guard does: `asked` goes
+    to 0 on every match that sends the SKU (`matches_by_sku`: SKU -> its matches), before any
+    row, claim or count reads it. Callers run it after the guard and before the guard is said.
+    """
+    if not getattr(args, "reprice_live", None) or guarded is None:
+        return {}
+    _named, told, _kept = _named_prices(args.reprice_live)
+    try:
+        prices = sendguard.live_prices(tcgcsv.read_export(Path(args.live_guard)).rows)
+    except (OSError, ValueError, tcgcsv.MalformedCsv) as exc:
+        raise PriceRefused(f"the live export's prices could not be read: {exc}") from None
+    _moves, left, _refused = sendguard.live_moves(
+        going, told, guarded["live"], prices, floor, leave_live_moved=True
+    )
+    for note in left:
+        for match in matches_by_sku.get(note.sku, ()):
+            match.asked = 0
+            match.live_moved = True
+    return {note.sku: note for note in left}
 
 
 def _say_prices(changes, left, moves, args, say) -> None:
@@ -1666,6 +1702,21 @@ def run(args, say) -> int:
         ]
         _say_no_price(no_price, say)
 
+        # A LISTING ROW WRITES OVER THE PRICE TCGPLAYER SHOWS: a card whose live price moved since the
+        # screen showed it is taken out of the press here, named, and the rest goes (`_leave_out_moved`).
+        moved_listing = _leave_out_moved(
+            args,
+            guarded,
+            {
+                sku: (resolved.matches[sku].name, price)
+                for by_game in priced.values()
+                for sku, price in by_game.items()
+                if resolved.matches[sku].add_to_quantity > 0
+            },
+            pricing.check_threshold(policy["threshold"]),
+            {sku: [match] for sku, match in resolved.matches.items()},
+        )
+
         # THE GUARD'S TRIMS ARE NAMED HERE, OVER THE PRICED CARDS ONLY (R8-2), as the merged
         # path names them over its plan. A card with no price or a withheld card has its own
         # reason: never "TCGplayer already holds every copy", and never in the trimmed list the
@@ -1699,6 +1750,7 @@ def run(args, say) -> int:
             },
             pricing.check_threshold(policy["threshold"]),
             say,
+            left_out=moved_listing,
         )
         zero, changes = _zero_rows_single(resolved, priced, changes, args, say)
         for take in takes.values():
@@ -2361,6 +2413,22 @@ def _run_merged(args, say) -> int:
         say("REFUSING to write. Nothing was written.")
         return 1
 
+    # A LISTING ROW WRITES OVER THE PRICE TCGPLAYER SHOWS: a card whose live price moved since the screen
+    # showed it leaves the press here, and the plan is made again so its rows, claims and counts agree.
+    try:
+        moved_listing = _leave_out_moved(
+            args,
+            guarded,
+            {row.sku: (row.match.name, row.price) for row in merged_plan.skus if row.match.add_to_quantity > 0},
+            pricing.check_threshold(book.policy_for()["threshold"]),
+            legs_by_sku,
+        )
+    except PriceRefused as refusal:
+        say(f"REFUSING to write: {refusal}. Nothing was written.")
+        return 1
+    if moved_listing:
+        merged_plan = merge.plan(resolved_by_run, choice, policies)
+
     # NAMED BEFORE THE EMPTY CHECK BELOW, so a send the guard trimmed to nothing still says
     # which cards TCGplayer already holds. `room` ignores `asked`, so this is the unguarded
     # figure over the merged union.
@@ -2400,6 +2468,7 @@ def _run_merged(args, say) -> int:
             },
             pricing.check_threshold(book.policy_for()["threshold"]),
             say,
+            left_out=moved_listing,
         )
     except PriceRefused as refusal:
         say(f"REFUSING to write: {refusal}. Nothing was written.")

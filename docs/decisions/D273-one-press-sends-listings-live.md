@@ -120,7 +120,14 @@ deleted to lower a price, and the quantity is not a variable.
   button did not name is never sent. A press left with nothing else to send refuses
   `price_refused` over those cards, and the card offers each at the live price ("TCGplayer
   shows $22.03 now. Send $30.00?"), as a press of those prices alone. The mark-down door keeps
-  refusing a moved price. TCGplayer already shows that price, or holds no copy: the row is left
+  refusing a moved price. A LISTING row (new copies of a card already live) is judged the same
+  way, because it too writes over the price TCGplayer shows: the button names the live price it
+  drew with each move (`was`), and when TCGplayer's price is not that one the card's whole
+  listing row is left out (`live_moved`, with its live `copies`), its copies stay unsent, and
+  the rest goes. A card with no live copy has no price to overwrite and goes as before. A
+  listing row left out is named on the Send card with no resend of its own, since its copies ride
+  the run; the person sends again from the refreshed list, or from the refused press's offer
+  when nothing else went. TCGplayer already shows that price, or holds no copy: the row is left
   out and named, and the press goes on. Qty 0 with a typed price on a live card is the owner's
   price-only edit, and the button counts it.
 - **What stays whole for the rows that add copies.** The live read first, the double-send guard,

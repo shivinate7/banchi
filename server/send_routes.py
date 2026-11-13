@@ -1283,11 +1283,14 @@ def _named_prices(payload: dict) -> List[dict]:
 
 
 def _named_moves(payload: dict) -> List[dict]:
-    """The live copies the BUTTON said a listing row moves, validated: `[{sku, price}]`.
+    """The live copies the BUTTON said a listing row moves, validated: `[{sku, price, copies, was}]`.
 
     THE OWNER'S RULING, 2026-09-24 (round 7, R6-3): a new copy of a card already live carries
     Banchi's stored price, and the button names every live copy that moves and its new price.
-    The server refuses a press that would move live copies the button did not name.
+    The server refuses a press that would move live copies the button did not name. `was` is the
+    live price the screen showed for the card, as a named price's is (`_named_prices`); `emit`
+    leaves the card out when TCGplayer's price is no longer that one. Left out or blank, it
+    names no price shown.
     """
     named = payload.get("moves")
     if named is None:
@@ -1304,6 +1307,8 @@ def _named_moves(payload: dict) -> List[dict]:
         sku = str(row.get("sku") or "") if isinstance(row, dict) else ""
         try:
             price = tcgcsv.parse_price(str(row.get("price") or "")) if sku else None
+            was_text = row.get("was") if sku else None
+            was = None if was_text in (None, "") else tcgcsv.parse_price(str(was_text))
         except (ArithmeticError, ValueError):
             price = None
         copies = row.get("copies") if sku else None
@@ -1317,7 +1322,14 @@ def _named_moves(payload: dict) -> List[dict]:
                 "Each named move needs a TCGplayer id, a price above zero and a count of live "
                 "copies.",
             )
-        out.append({"sku": sku, "price": tcgcsv.format_price(price), "copies": int(copies)})
+        out.append(
+            {
+                "sku": sku,
+                "price": tcgcsv.format_price(price),
+                "copies": int(copies),
+                "was": None if was is None else tcgcsv.format_price(was),
+            }
+        )
     return out
 
 
