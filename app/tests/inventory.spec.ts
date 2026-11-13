@@ -5717,6 +5717,13 @@ test('the value sort ranks boxes by their own dollar total, high to low by defau
   ).toContainText('$340')
 })
 
+test('the Inventory box row reads on hand, and never stored', async ({ page }) => {
+  await open(page, TWO_BOXES, STORE)
+  const meta = page.locator('.browse-boxcell', { hasText: 'ME01 commons' }).locator('.browse-boxcell-meta')
+  await expect(meta).toHaveText(/^\d+ on hand$/)
+  await expect(meta).not.toContainText('stored')
+})
+
 test('S4 — the move panel offers boxes most recent first, never by number', async ({ page }) => {
   /* S4: `MovePanel`'s own comment said "most recent first" while `others` was the server's
    * `GET /boxes` order — box number, since nothing sorted it. Box 9 is a lower recency than

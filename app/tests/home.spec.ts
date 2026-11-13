@@ -271,7 +271,9 @@ test('no dot is typed on the box list or the hero deck (D218)', async ({ page })
   await expect(page.locator('main.home')).toBeVisible()
 
   const meta = page.locator('.home-box-meta').first()
-  await expect(meta).toContainText('stored')
+  await expect(meta).toContainText('on hand')
+  await expect(meta).not.toContainText('stored')
+  await expect(page.locator('.home-box-bar').first()).toHaveAttribute('title', /^\d+% on hand$/)
   const typedDot = /[·•]/
   await expect(page.locator('.bn-view')).not.toContainText(typedDot)
 })

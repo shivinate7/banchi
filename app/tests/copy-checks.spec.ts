@@ -176,7 +176,7 @@ function scanCopy(): CopyScan {
       }
       if (!(node instanceof HTMLElement)) return
       // SPOKEN-ONLY TEXT AND DATA VALUES ARE NOT LABEL LINES: `.bn-sr` is read aloud and never drawn (a section title's count
-      // clause), and `data-value` marks a figure beside a label (a box cell's `797 stored`). Their text stays out of the lines.
+      // clause), and `data-value` marks a figure beside a label (a box cell's `797 on hand`). Their text stays out of the lines.
       // THE ROOT IS NEVER SKIPPED: a candidate that is itself screen-reader text (`<h2 class="bn-sr">`) is still graded.
       // A PRESS'S DETAIL LINE (`.bn-set-op-detail`, the caption under a press such as `Can be undone`) is prose under the press, not
       // a label line: the press's own label (`.bn-set-op-label`) is what is graded.
@@ -1054,7 +1054,7 @@ test.describe('clip: no fact is cut off at 1440 or 820', () => {
 })
 
 // SPOKEN-ONLY TEXT AND DATA VALUES ARE NOT LABELS. A section title's sr-only count clause is prose the screen reader hears
-// (`Head, 3 cards`), and a box cell's figure (`797 stored`) is a data value beside a label. A real label of the same shape still flags.
+// (`Head, 3 cards`), and a box cell's figure (`797 on hand`) is a data value beside a label. A real label of the same shape still flags.
 test.describe('reader: sr-only text and data values are not labels', () => {
   test('a screen-reader-only clause is spoken, not drawn, so it is not in the label', async ({ page }) => {
     await page.setContent('<main><button type="button"><div>Head<span class="bn-sr">, 3 cards</span></div></button></main>')
@@ -1072,17 +1072,17 @@ test.describe('reader: sr-only text and data values are not labels', () => {
   })
 
   test('a data value is a figure beside a label, not a label of its own', async ({ page }) => {
-    await page.setContent('<main><button type="button"><div>Box 1</div><div><span data-value="">797 stored</span></div></button></main>')
+    await page.setContent('<main><button type="button"><div>Box 1</div><div><span data-value="">797 on hand</span></div></button></main>')
     const scan = await page.evaluate(scanCopy)
     const one = scan.casing.find((c) => c.role === 'button')
     expect(one?.lines, 'the data value is not a label line').toEqual(['Box 1'])
   })
 
   test('a real label of the same shape still flags, so the rule is not a blanket pass', async ({ page }) => {
-    await page.setContent('<main><button type="button"><div>Box 1</div><div>797 stored</div></button></main>')
+    await page.setContent('<main><button type="button"><div>Box 1</div><div>797 on hand</div></button></main>')
     const scan = await page.evaluate(scanCopy)
     const one = scan.casing.find((c) => c.role === 'button')
-    expect(one?.lines, 'an unmarked second line is still a label line').toEqual(['Box 1', '797 stored'])
+    expect(one?.lines, 'an unmarked second line is still a label line').toEqual(['Box 1', '797 on hand'])
   })
 })
 
