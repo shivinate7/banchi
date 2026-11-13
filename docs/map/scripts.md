@@ -11,9 +11,9 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
 - `scripts/backup-daily.py` — The one-time copy to iCloud Drive on the owner's Mac, run by hand (first copy of DEBT67; the launchd agent is not installed): `photos/` and `captures/` as files, never overwritten and never deleted in the destination.
   - Decisions: `D26`, `D43`, `D88`, `D89`, `D172`
 - `scripts/browser-scope-shard-selftest.py` — `make browser-scope-shard-selftest` — proves the browser shard plan on a narrowed run (never slower, never more runners than whole-file packing). It proves that a one-test spec is never cut, and that the `shard` line ends in `--shard=I/N` for a half only. It proves that `shard-refresh` keeps a whole file's time across a run that cut it and one that did not.
-  - Decisions: `D136`, `D-heavy-spec-split-across-shards`
+  - Decisions: `D136`, `D328`
 - `scripts/browser-scope.py` — Does a change reach what a browser draws?
-  - Decisions: `D215`, `D141`, `D16`, `D18`, `D136`, `D196`, `D261`, `D275`, `D284`, `D305`, `D-heavy-spec-split-across-shards`
+  - Decisions: `D215`, `D141`, `D16`, `D18`, `D136`, `D196`, `D261`, `D275`, `D284`, `D305`, `D328`
 - `scripts/browser-spec-times.json` — The measured run time of each Playwright spec, which `scripts/browser-scope.py` reads to split the browser shards.
 - `scripts/build-lockup.mjs` — Generates the LOCKUP — app/src/kit/lockupGeometry.ts — by reading docs/specs/logo.md section `13`'s settled table and running docs/specs/logo/sheets/lockup-core.js in a real browser.
   - Decisions: `D18`, `D102`

@@ -1,4 +1,4 @@
-# D-heavy-spec-split-across-shards — A spec heavier than a shard's mean runs as two halves
+# D328 — A spec heavier than a shard's mean runs as two halves
 
 A browser spec that costs more than the mean shard load is cut in two by Playwright's own `--shard`, and each half gets a shard to itself.
 
