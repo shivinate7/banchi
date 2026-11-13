@@ -4816,7 +4816,17 @@ export type SendSummary = {
    *  card offers it again at the figure TCGplayer shows now (`price` is the one the button named). */
   prices_left: (
     | { sku: string; name: string; why: 'already' | 'not_live' | 'adds_copies' }
-    | { sku: string; name: string; why: 'live_moved'; price: string; live: string | null; shown: string | null }
+    | {
+        sku: string
+        name: string
+        why: 'live_moved'
+        price: string
+        live: string | null
+        shown: string | null
+        /** A kept suggestion, and the kept tick the server holds for it, so the resend keeps its cap check. */
+        source?: 'suggested'
+        ticked?: boolean
+      }
   )[]
   /** Live copies this send's listing rows moved to their price (the owner's ruling, round 7). */
   moves: { sku: string; name: string; copies: number; price: string; was: string | null }[]
@@ -4882,6 +4892,9 @@ export type RefusedPrice = {
   live: string | null
   shown: string | null
   copies: number
+  /** On a left-out `live_moved` price: what the resend must carry (`PriceChange`). */
+  source?: 'suggested'
+  ticked?: boolean
 }
 
 /** `GET /pipeline/sends`. `due` is the one bit the timer and the visit check both read. */

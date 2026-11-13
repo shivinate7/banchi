@@ -256,11 +256,14 @@ class PriceNote:
     live: Optional[str] = None
     shown: Optional[str] = None
     copies: int = 0
+    #: `postings.SUGGESTED` on a left-out kept suggestion, so a resend keeps its cap check.
+    source: Optional[str] = None
 
     def as_dict(self) -> dict:
         return {
             "sku": self.sku, "name": self.name, "why": self.why,
             "price": self.price, "live": self.live, "shown": self.shown, "copies": self.copies,
+            **({"source": self.source} if self.source else {}),
         }
 
 
@@ -339,7 +342,9 @@ def price_changes(
             left.append(PriceNote(why=LEFT_ALREADY, **note))
         elif now != shown:
             if leave_live_moved:
-                left.append(PriceNote(why=LEFT_LIVE_MOVED, **note))
+                left.append(PriceNote(
+                    why=LEFT_LIVE_MOVED, source=postings.SUGGESTED if sku in kept_skus else None, **note
+                ))
             else:
                 refused.append(PriceNote(why=REFUSED_LIVE_MOVED, **note))
         else:

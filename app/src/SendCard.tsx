@@ -670,7 +670,19 @@ function PricesLeft({ send }: { readonly send: SendSummary }) {
 function movedLeft(send: SendSummary): RefusedPrice[] {
   return send.prices_left.flatMap((note) =>
     note.why === 'live_moved'
-      ? [{ sku: note.sku, name: note.name, why: note.why, price: note.price, live: note.live, shown: note.shown, copies: 0 }]
+      ? [
+          {
+            sku: note.sku,
+            name: note.name,
+            why: note.why,
+            price: note.price,
+            live: note.live,
+            shown: note.shown,
+            copies: 0,
+            ...(note.source === undefined ? {} : { source: note.source }),
+            ...(note.ticked === undefined ? {} : { ticked: note.ticked }),
+          },
+        ]
       : [],
   )
 }
@@ -1102,20 +1114,19 @@ export function SendCard({
   }
   const offered = confirmable(failure)
   /* ONLY THE PRICES THE PRESS LEFT OUT, each at the live price the owner is shown, and no more: the
-     rest of the press already went. A price keeps the source the screen drew it with, when it still draws it. */
+     rest of the press already went. A price keeps the source and kept tick the left-out note carries. */
   const resendLeft = (rows: readonly RefusedPrice[]) =>
     press(
       'send',
       rows.flatMap((row) => {
         if (row.price === null) return []
-        const drawn = [...priceChanges, ...listed].find((change) => change.sku === row.sku)
         return [
           {
             sku: row.sku,
             price: row.price,
             was: row.live,
-            ...(drawn?.source === undefined ? {} : { source: drawn.source }),
-            ...(drawn?.ticked === undefined ? {} : { ticked: drawn.ticked }),
+            ...(row.source === undefined ? {} : { source: row.source }),
+            ...(row.ticked === undefined ? {} : { ticked: row.ticked }),
           },
         ]
       }),

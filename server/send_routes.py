@@ -1506,6 +1506,14 @@ def _refuse_past_cap(payload: dict, live_path: Path, step: str, drawn: Any) -> T
     # A past-cap suggestion goes on the owner's tick, and the tick is the SERVER'S: the client's `ticked` flag
     # only names the row, and a flag with no kept tick that still holds behind it exempts nothing.
     ticked = {row["sku"] for row in payload["prices"] if row.get("ticked") is True} & kept_ticks
+    # ONLY THE SERVER'S KEPT TICK SURVIVES in the payload, so a left-out price is offered again with the tick the server holds.
+    payload = dict(
+        payload,
+        prices=[
+            row if row.get("ticked") is not True or row["sku"] in ticked else {k: v for k, v in row.items() if k != "ticked"}
+            for row in payload["prices"]
+        ],
+    )
     over = sendguard.suggestions_past_cap({s: v for s, v in checked.items() if s not in ticked}, prices, limit, names)
     if over:
         parts = [
@@ -1668,6 +1676,12 @@ def _write_and_send(
     claim = Store().read().send_claims.get(stamp)
     written = sorted(directory.glob("import*.csv"))
     said_prices = _json_line(console, "send_prices") or {}
+    # A LEFT-OUT PRICE THAT MOVED AT TCGPLAYER IS OFFERED AGAIN with the source `emit` named and the tick the server kept.
+    ticks = {str(row["sku"]) for row in payload["prices"] if row.get("ticked") is True}
+    said_prices["left"] = [
+        dict(note, ticked=True) if note.get("why") == sendguard.LEFT_LIVE_MOVED and str(note.get("sku")) in ticks else note
+        for note in said_prices.get("left") or []
+    ]
     said_off = _json_line(console, "send_takeoff") or {}
     changes = list(said_prices.get("rows") or [])
 
