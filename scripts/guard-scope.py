@@ -109,6 +109,7 @@ ROSTER = (
      "test": "scripts/sku-number-contradictions-selftest.py"},
     {"target": "match-selftest", "test": "scripts/match-selftest.py"},
     {"target": "browser-scope-selftest", "test": "scripts/browser-scope.py"},
+    {"target": "browser-scope-shard-selftest", "test": "scripts/browser-scope-shard-selftest.py"},
     {"target": "port-slots-selftest", "test": "scripts/port-slots.py"},
     {"target": "tests-for-selftest", "test": "scripts/tests-for-selftest.py"},
     {"target": "worktree-create-selftest", "test": "scripts/worktree-create-selftest.sh"},
@@ -486,6 +487,11 @@ EXTRA_SUBJECTS = {
         ("app/src/Home.tsx", "the selftest asserts the specs it reaches."),
         ("app/tests/**", "the specs and their helpers are read for route hashes and sweeps."),
     ),
+    "browser-scope-shard-selftest": (
+        ("scripts/browser-scope.py", "the test loads it from beside itself and calls its shard plan."),
+        ("scripts/browser-spec-times.json", "the plan reads the times table."),
+        ("app/tests/**", "the specs are read for their test declarations and loops."),
+    ),
     "port-slots-selftest": (
         ("scripts/ports-machine-selftest.py", "the recipe runs this second test beside it."),
         ("scripts/suite-lock.py", "that second test loads it to check the lock's default dir."),
@@ -678,7 +684,10 @@ def selftest() -> int:
         check(f"{entry['target']}: test file exists", test_path.exists(), True)
         subjects = subjects_for(entry)
         if entry["target"] not in SELF_SUBJECT_TARGETS:
-            check(f"{entry['target']}: at least one subject is derived", len(subjects) > 0, True)
+            # A test that loads its guard from beside itself (`Path(__file__).parent / "x.py"`) names it
+            # in no chain the deriver reads, so its subjects are `EXTRA_SUBJECTS` and nothing derived.
+            check(f"{entry['target']}: at least one subject is derived or declared",
+                  len(subjects) > 0 or bool(EXTRA_SUBJECTS.get(entry["target"])), True)
         for subject in subjects:
             real = subject.endswith("/**") or (ROOT / subject).is_file()
             check(f"{entry['target']}: subject `{subject}` exists", real, True)
