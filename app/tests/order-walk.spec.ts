@@ -335,11 +335,11 @@ sealEveryTest()
 
 /* ux-w2 B16 (order-walk-plan.md section 14). Asserts each figure chip beside the card names carries a
    text box that explains it. The box opens on hover and on keyboard focus, so a chip is reachable without a pointer. */
-test('ux-w2 B16: each Captured, Hidden and Sent chip opens a text box on hover and on keyboard focus', async ({ page }) => {
+test('ux-w2 B16: each On Hand, Hidden and Sent chip opens a text box on hover and on keyboard focus', async ({ page }) => {
   await open(page)
   const side = page.locator('.browse-hero-side').first()
   await expect(side, 'the card figures are drawn').toBeVisible()
-  for (const name of [/^\s*Captured/i, /^\s*Hidden/i, /^\s*Sent/i]) {
+  for (const name of [/^\s*On Hand/i, /^\s*Hidden/i, /^\s*Sent/i]) {
     const chip = side.locator(':scope > *').filter({ hasText: name })
     await expect(chip, `a chip for ${name} is drawn`).toHaveCount(1)
     await chip.hover()
