@@ -1435,8 +1435,8 @@ def check_browser_scope(report: Report) -> None:
 # (claude-settings decision same-check-kinds). The action fails a needed job that failed, was
 # cancelled or was SKIPPED, so the only way to make it lie is to wire it wrong: leave a job out of
 # `needs`, give a needed job a job-level `if:` that skips it, drop `always()` so a red need skips
-# the rollup itself, or pin the action to a different commit than every other claude-settings
-# action. Each of those reads green on the day it lands and wrong on the day it matters.
+# the rollup itself, or call the action at a ref other than `stable`, the ref of every other
+# claude-settings action. Each of those reads green on the day it lands and wrong on the day it matters.
 #
 # The reader is `all_jobs_passed_findings`, pure over the workflow texts and the stamp, so the
 # self-test mutates one defect at a time. It reads a workflow the way the rest of this file does,
@@ -1446,7 +1446,11 @@ def check_browser_scope(report: Report) -> None:
 ROLLUP_JOB = "all-jobs-passed"
 ROLLUP_ACTION = "shivinate7/claude-settings/actions/all-jobs-passed"
 _CLAUDE_SETTINGS_USES_RE = re.compile(r"^shivinate7/claude-settings/actions/([\w-]+)@(\S+)$")
-_FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+#: The one ref every claude-settings action is called at (owner ruling, child CI uses `@stable`).
+#: `stable` is a branch of claude-settings that moves only to a main commit whose checks ran their
+#: suites and passed. A sha or any other ref is a second version of the gate.
+CLAUDE_SETTINGS_REF = "stable"
 STAMP_FILE = ROOT / ".github" / "stamp.json"
 
 #: The one job-level `if:` a needed job may carry besides none at all: the draft guard, with or
@@ -1691,19 +1695,19 @@ def _rollup_findings(where: str, text: str, files: Dict[str, str],
             f"  `{_ALWAYS_DRAFT_GUARD}`: `always()` so a red need cannot skip it, the draft guard\n"
             "  so a draft starts no runner.")))
 
-    # Its one step: the shared action, at a full commit sha, handed `toJSON(needs)`.
+    # Its one step: the shared action, at `stable`, handed `toJSON(needs)`.
     uses, step = _rollup_step(rollup)
-    pin: Optional[str] = None
     if uses is None:
         out.append((where, (
             f"`{ROLLUP_JOB}` does not run `{ROLLUP_ACTION}`. A rollup that runs something\n"
             "  else is not the contract the shared action tests.")))
     else:
-        pin = uses.split("@", 1)[1]
-        if not _FULL_SHA_RE.match(pin):
+        ref = uses.split("@", 1)[1]
+        if ref != CLAUDE_SETTINGS_REF:
             out.append((where, (
-                f"`{ROLLUP_JOB}` pins the action to `{pin}`, which is not a 40-character commit sha.\n"
-                "  A tag moves and a branch moves; the check that gates every merge does not.")))
+                f"`{ROLLUP_JOB}` calls the action at `{ref}`, and it must be exactly `{CLAUDE_SETTINGS_REF}`.\n"
+                "  `stable` moves only to a claude-settings main commit whose suites passed; a sha, a tag\n"
+                "  or `main` is a second version of the gate.")))
         with_needs = None
         in_with = False
         for line in step:
@@ -1723,16 +1727,15 @@ def _rollup_findings(where: str, text: str, files: Dict[str, str],
             out.append((where, (
                 f"`{ROLLUP_JOB}` passes `needs: {with_needs}`, and the action reads `${{{{ toJSON(needs) }}}}`.")))
 
-    # Every claude-settings action is pinned to the rollup's commit, here and in every workflow.
-    if pin is not None:
-        for path, body in sorted(files.items()):
-            for line in _blank_block_scalars(body):
-                match = re.match(r"^\s*(?:-\s+)?uses:\s+(\S.*)$", line)
-                found = _CLAUDE_SETTINGS_USES_RE.match(_yaml_value(match.group(1))) if match else None
-                if found and found.group(1) != ROLLUP_JOB and found.group(2) != pin:
-                    out.append((path, (
-                        f"uses `{found.group(1)}` at `{found.group(2)}`, and `{ROLLUP_JOB}` is pinned to `{pin}`.\n"
-                        "  One shared repository, one commit: a second pin is a second version of the gate.")))
+    # Every claude-settings action is called at `stable`, here and in every workflow.
+    for path, body in sorted(files.items()):
+        for line in _blank_block_scalars(body):
+            match = re.match(r"^\s*(?:-\s+)?uses:\s+(\S.*)$", line)
+            found = _CLAUDE_SETTINGS_USES_RE.match(_yaml_value(match.group(1))) if match else None
+            if found and found.group(1) != ROLLUP_JOB and found.group(2) != CLAUDE_SETTINGS_REF:
+                out.append((path, (
+                    f"uses `{found.group(1)}` at `{found.group(2)}`, and it must be `{CLAUDE_SETTINGS_REF}`.\n"
+                    "  One shared repository, one ref: a second ref is a second version of the gate.")))
 
     # `needs` is exactly the jobs that are not excluded. The two reads agree both ways.
     needed_jobs = [name for name in names if name != ROLLUP_JOB and name not in excluded]
@@ -1799,10 +1802,10 @@ def _stamp_findings(stamp: Optional[str]) -> List[Tuple[str, str]]:
 
 
 def check_all_jobs_passed(report: Report) -> None:
-    """`checks.yml`'s rollup against its jobs, its pin and the stamp config (claude-settings
+    """`checks.yml`'s rollup against its jobs, its ref and the stamp config (claude-settings
     decision same-check-kinds).
 
-    MECHANICAL: a job missing from `needs`, a needed job with a skipping `if:` and a second pin are
+    MECHANICAL: a job missing from `needs`, a needed job with a skipping `if:` and a second ref are
     each present or absent in the text. The row cannot read what branch protection names on
     GitHub; it reads the repo's own half of that answer.
     """

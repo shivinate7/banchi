@@ -309,24 +309,24 @@ jobs:
           print('FTS5 is available.')
           "
 
-      # THE MAP CHECK'S SKILL COMES FROM THE PINNED claude-settings, never a second pin
-      # (`make map-check`, `scripts/map-check.py`). The runner downloads the whole pinned
-      # repository for every `uses:` line of a job before any step runs, an `if: false` step
-      # included, and the `all jobs passed` row reads this line with every other pin. The
+      # THE MAP CHECK'S SKILL COMES FROM claude-settings AT `stable`, never a second ref
+      # (`make map-check`, `scripts/map-check.py`). The runner downloads the whole
+      # repository at `stable` for every `uses:` line of a job before any step runs, an `if: false` step
+      # included, and the `all jobs passed` row reads this line with every other claude-settings action. The
       # step below finds that download and runs `npm ci` in it, because the skill loads
-      # `typescript` from the `node_modules` beside it. It names no sha: a glob that finds
-      # not exactly one pinned copy fails.
-      - name: Download the pinned claude-settings for the map check
+      # `typescript` from the `node_modules` beside it. It names no ref: a glob that finds
+      # not exactly one downloaded copy fails.
+      - name: Download claude-settings stable for the map check
         if: false
-        uses: shivinate7/claude-settings/actions/ci-alarm@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+        uses: shivinate7/claude-settings/actions/ci-alarm@stable # tracks claude-settings stable
 
-      - name: Install the map check's skill from the pinned claude-settings
+      - name: Install the map check's skill from claude-settings stable
         run: |
           set -eu
           cached="$(dirname "$RUNNER_WORKSPACE")/_actions/shivinate7/claude-settings"
           set -- "$cached"/*/
           if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
-            echo "expected exactly one pinned claude-settings under $cached, found: $*" >&2
+            echo "expected exactly one claude-settings download under $cached, found: $*" >&2
             exit 1
           fi
           root="${1%/}"
@@ -353,7 +353,7 @@ jobs:
   # SKIPPED, so a job that quietly does not run can never read as green. That is why every needed
   # job below runs on every non-draft event, and says "nothing to do" from inside its steps rather
   # than from a job-level `if:`. The `all jobs passed` row of `make docs-audit` reads this wiring:
-  # the needs list against the jobs, the pin against every other claude-settings pin, and the
+  # the needs list against the jobs, the ref `stable` against every claude-settings action, and the
   # job-level `if:` of each needed job. `if: always()` because a job that `needs` a red job is
   # otherwise skipped, and a skipped required check reads as green; the draft guard keeps a draft
   # at zero runner starts.
@@ -366,7 +366,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: shivinate7/claude-settings/actions/all-jobs-passed@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/all-jobs-passed@stable # tracks claude-settings stable
         with:
           needs: ${{ toJSON(needs) }}
 
@@ -408,17 +408,17 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: shivinate7/claude-settings/actions/stamp@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/stamp@stable # tracks claude-settings stable
         with:
           mode: check
           config: .github/stamp.json
 
-      # Shared doc checks (claude-settings, same pin as every other claude-settings step here).
+      # Shared doc checks (claude-settings, at `stable` like every other claude-settings step here).
       # `claude-md-cites` fails a CLAUDE.md or .claude/**/*.md paragraph that copies a shared record.
       # `ste-lint` fails the added or changed markdown lines of the diff only.
-      - uses: shivinate7/claude-settings/actions/claude-md-cites@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/claude-md-cites@stable # tracks claude-settings stable
 
-      - uses: shivinate7/claude-settings/actions/ste-lint@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/ste-lint@stable # tracks claude-settings stable
 
   # THE SHARED CODE CHECK (claude-settings' `actions/code-check`). One type check and one bug lint
   # per language, read from that action's own table: ruff and mypy --strict for Python, tsc for
@@ -454,7 +454,7 @@ jobs:
       - name: Install
         run: npm ci --prefix app
 
-      - uses: shivinate7/claude-settings/actions/code-check@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/code-check@stable # tracks claude-settings stable
         with:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
@@ -520,7 +520,7 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - uses: shivinate7/claude-settings/actions/mutation-report@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/mutation-report@stable # tracks claude-settings stable
         with:
           profile: banchi
 
@@ -874,6 +874,6 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: shivinate7/claude-settings/actions/ci-done-comment@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/ci-done-comment@stable # tracks claude-settings stable
         with:
           needs: ${{ toJSON(needs) }}
