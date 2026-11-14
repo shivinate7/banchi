@@ -370,7 +370,7 @@ def run(ok) -> None:
     value_fn = getattr(registry_scopes, "_yaml_value", None)
     blank_fn = getattr(registry_scopes, "_blank_block_scalars", None)
     check_fn = getattr(registry_scopes, "check_all_jobs_passed", None)
-    PIN = "1cc47f015bdaf073d8cb0f043a988c28d09aa3e1"
+    PIN = "stable"  # the one ref every claude-settings call takes (CLAUDE_SETTINGS_REF)
     OTHER = "2" * 40
     DEMO = ".github/workflows/demo.yml"
     CHECK_PATH = rel(registry_scopes.CHECK_WORKFLOW)
@@ -629,11 +629,78 @@ jobs:
         "      - run: |\n          uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n          needs: ${{ toJSON(needs) }}",
         "does not run `shivinate7/claude-settings/actions/all-jobs-passed`",
     )
+    # THE REF IS EXACTLY `stable`. A rollup at a tag, at `main` or at a 40-hex sha is a finding that
+    # names `stable`, and so is any other call at a ref that is not `stable`.
+    for ref in ("v1", "main", OTHER):
+        red(
+            f"a rollup at `{ref}`, not `stable`, is a finding that names `stable`",
+            "all-jobs-passed@@PIN@",
+            f"all-jobs-passed@{ref}",
+            "must be exactly `stable`",
+        )
     red(
-        "a rollup pinned to a tag, not a 40-character sha, is a finding",
-        "all-jobs-passed@@PIN@",
-        "all-jobs-passed@v1",
-        "40-character",
+        "a call to another action at `main`, not `stable`, is a finding that names the action",
+        "actions/code-check@@PIN@",
+        "actions/code-check@main",
+        "uses `code-check`",
+    )
+    red(
+        "control: code-check at `main` beside code-check at `stable` in one job is a finding that names the action",
+        "      - uses: shivinate7/claude-settings/actions/code-check@@PIN@",
+        "      - uses: shivinate7/claude-settings/actions/code-check@@PIN@\n      - uses: shivinate7/claude-settings/actions/code-check@main",
+        "uses `code-check`",
+    )
+    # THE SPELLINGS THE READER MISSES. A flow-style step, a job-level reusable call and a second rollup
+    # step beside the stable one (the reader reads only the first rollup step) each reach the rollup
+    # unflagged. Each finding names its file and says the ref must be exactly `stable`.
+    def finding_on(label, files, path, *needles, applied=True):
+        """`files` raises a finding on `path` whose message holds every needle. `applied` says the
+        mutation reached the fixture, so a finding is never read off a fixture that did not change."""
+        got = wiring_fn(files, GREEN_STAMP, WANTED) if wiring_fn else None
+        ok(
+            applied and got is not None and any(where == path and all(n in message for n in needles) for where, message in got),
+            label,
+            NOT_BUILT if got is None else f"mutation applied: {applied}; findings: {got}",
+        )
+
+    STABLE = "must be exactly `stable`"
+    flow_step = FIXTURE.replace(
+        fill("      - uses: shivinate7/claude-settings/actions/code-check@@PIN@"),
+        fill("      - uses: shivinate7/claude-settings/actions/code-check@@PIN@\n"
+             "      - { uses: shivinate7/claude-settings/actions/stamp@main }"),
+        1,
+    )
+    finding_on(
+        "a flow-style step that calls claude-settings at `main` is a finding on checks.yml that says `stable`",
+        {CHECK_PATH: flow_step, DEMO: DEMO_TEXT}, CHECK_PATH, STABLE,
+        applied=flow_step != FIXTURE,
+    )
+    REUSE = ".github/workflows/reuse.yml"
+    reuse_call = (
+        "name: reuse\n"
+        "on:\n"
+        "  workflow_dispatch:\n"
+        "jobs:\n"
+        "  call:\n"
+        "    uses: shivinate7/claude-settings/.github/workflows/ci.yml@main\n"
+    )
+    finding_on(
+        "a job-level reusable call to claude-settings at `main` is a finding on its own file that says `stable`",
+        {CHECK_PATH: FIXTURE, DEMO: DEMO_TEXT, REUSE: reuse_call}, REUSE, STABLE,
+    )
+    extra_rollup = FIXTURE.replace(
+        fill("      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n"
+             "        with:\n          needs: ${{ toJSON(needs) }}"),
+        fill("      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n"
+             "        with:\n          needs: ${{ toJSON(needs) }}\n"
+             "      - uses: shivinate7/claude-settings/actions/all-jobs-passed@main\n"
+             "        with:\n          needs: ${{ toJSON(needs) }}"),
+        1,
+    )
+    finding_on(
+        "a second rollup step at `main`, beside the one at `stable`, is a finding that names the rollup and `main`",
+        {CHECK_PATH: extra_rollup, DEMO: DEMO_TEXT}, CHECK_PATH, "`all-jobs-passed`", "`main`",
+        applied=extra_rollup != FIXTURE,
     )
     red(
         "a needed job whose job-level if is a multi-line block is a finding",
@@ -768,3 +835,58 @@ jobs:
             )
         finally:
             registry_scopes.CHECK_WORKFLOW = saved_check
+
+    # THE LIVE ROW READS EVERY WORKFLOW GITHUB RUNS, `.yaml` as well as `.yml`. The row globs `*.yml`
+    # only, so a call in `x.yaml` is never read. The scope is asserted before the finding: the row must
+    # scan both files of the fixture, then name `x.yaml` for calling claude-settings at `main`. The
+    # control is the same file at `stable`, which must not be a finding. Each fixture is a tree in the
+    # run folder, so the row reads it and nothing of the repo.
+    if check_fn is not None:
+        from .selftest_paths_commands_2 import _fixture_root, _run_folder, _swapped
+
+        def live_row(run_dir, name, workflows):
+            """The live row over one fixture tree: `workflows` maps a file name to its text."""
+            with _fixture_root(run_dir / name) as root:
+                wf = root / ".github" / "workflows"
+                wf.mkdir(parents=True)
+                for file_name, text in workflows.items():
+                    (wf / file_name).write_text(text, encoding="utf-8")
+                stamp = root / ".github" / "stamp.json"
+                stamp.write_text(GREEN_STAMP, encoding="utf-8")
+                report = Report()
+                with _swapped(registry_scopes, CHECK_WORKFLOW=wf / "checks.yml", STAMP_FILE=stamp):
+                    check_fn(report)
+            rows = [row for row in report.checks if row.check == "all jobs passed"]
+            return rows[0] if len(rows) == 1 else None
+
+        def yaml_call(ref):
+            return (
+                "name: x\n"
+                "on:\n"
+                "  workflow_dispatch:\n"
+                "jobs:\n"
+                "  stamp:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    steps:\n"
+                f"      - uses: shivinate7/claude-settings/actions/stamp@{ref}\n"
+            )
+
+        X_YAML = ".github/workflows/x.yaml"
+        with _run_folder() as run_dir:
+            row = live_row(run_dir, "yaml-at-main", {"checks.yml": FIXTURE, "x.yaml": yaml_call("main")})
+            ok(
+                row is not None and row.scanned == 2,
+                "the live row reads x.yaml beside checks.yml: both files of the fixture are in its scope",
+                NOT_BUILT if row is None else f"scanned {row.scanned} of 2 workflow files",
+            )
+            ok(
+                row is not None and any(f.where == X_YAML and STABLE in f.message for f in row.findings),
+                "x.yaml calls claude-settings at `main`: a finding names the file and says `stable`",
+                NOT_BUILT if row is None else f"findings: {[(f.where, f.message) for f in row.findings]}",
+            )
+            control = live_row(run_dir, "yaml-at-stable", {"checks.yml": FIXTURE, "x.yaml": yaml_call("stable")})
+            ok(
+                control is not None and not any(f.where == X_YAML for f in control.findings),
+                "control: x.yaml calling claude-settings at `stable` is not a finding",
+                NOT_BUILT if control is None else f"findings: {[(f.where, f.message) for f in control.findings]}",
+            )
