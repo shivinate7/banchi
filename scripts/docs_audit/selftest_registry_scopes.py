@@ -370,7 +370,7 @@ def run(ok) -> None:
     value_fn = getattr(registry_scopes, "_yaml_value", None)
     blank_fn = getattr(registry_scopes, "_blank_block_scalars", None)
     check_fn = getattr(registry_scopes, "check_all_jobs_passed", None)
-    PIN = "1cc47f015bdaf073d8cb0f043a988c28d09aa3e1"
+    PIN = "stable"  # the one ref every claude-settings call takes (CLAUDE_SETTINGS_REF)
     OTHER = "2" * 40
     DEMO = ".github/workflows/demo.yml"
     CHECK_PATH = rel(registry_scopes.CHECK_WORKFLOW)
@@ -629,11 +629,20 @@ jobs:
         "      - run: |\n          uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n          needs: ${{ toJSON(needs) }}",
         "does not run `shivinate7/claude-settings/actions/all-jobs-passed`",
     )
+    # THE REF IS EXACTLY `stable`. A rollup at a tag, at `main` or at a 40-hex sha is a finding that
+    # names `stable`, and so is any other call at a ref that is not `stable`.
+    for ref in ("v1", "main", OTHER):
+        red(
+            f"a rollup at `{ref}`, not `stable`, is a finding that names `stable`",
+            "all-jobs-passed@@PIN@",
+            f"all-jobs-passed@{ref}",
+            "must be exactly `stable`",
+        )
     red(
-        "a rollup pinned to a tag, not a 40-character sha, is a finding",
-        "all-jobs-passed@@PIN@",
-        "all-jobs-passed@v1",
-        "40-character",
+        "a call to another action at `main`, not `stable`, is a finding that names the action",
+        "actions/code-check@@PIN@",
+        "actions/code-check@main",
+        "uses `code-check`",
     )
     red(
         "a needed job whose job-level if is a multi-line block is a finding",
