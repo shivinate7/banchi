@@ -100,11 +100,12 @@ The gate machinery and the tools around it: the pre-commit hook, the docs audit 
 - `scripts/githooks/post-checkout` — Provisions a worktree that `git worktree add` just made, by calling `scripts/worktree-guard.sh`; it runs only when the previous HEAD is all zeros, and fails open.
   - Decisions: `D18`
 - `scripts/githooks/pre-commit` — The commit gate: fixtures read-only, every staged image decoded for a QR, no printed code-card layout, no symlink that leaves the repository, then the docs audit, whose exit code it maps.
-  - Decisions: `D11`, `D14`, `D16`, `D18`, `D24`, `D47`, `D58`, `D70`, `D92`, `D295`, `D303`, `D312`
+  - Debts: `002-the-maps-reach`, `008-recorded-and-correctly-unfixed`, `118-commit-hook-skips-map-check`
+  - Decisions: `D11`, `D14`, `D16`, `D18`, `D24`, `D47`, `D58`, `D70`, `D92`, `D295`, `D303`, `D312`, `D141`, `D171`, `D178`, `D182`, `D304`
 - `scripts/githooks/pre-push` — Refuses any push whose remote ref is main, and runs `scripts/revert-audit.py branch` on a branch push so a stale copy of a file main has moved on is refused.
-  - Decisions: `D42`, `D133`
+  - Decisions: `D42`, `D133`, `D176`
 - `scripts/githooks/reference-transaction` — Refuses any move of `refs/heads/main` from any worktree of this clone, except a move to a commit origin/main already carries.
-  - Decisions: `D18`, `D42`
+  - Decisions: `D18`, `D42`, `D176`
 - `scripts/guard-opsec.sh` — The PreToolUse opsec twin, with a narrowed shape match: a code stands alone, mixes letters and digits and has no repeated group.
   - Decisions: `D16`, `D24`, `D11`, `D14`
 - `scripts/guard-scope.py` — Does this branch reach what one of the gated self-tests proves?
