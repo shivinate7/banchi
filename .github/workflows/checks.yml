@@ -863,8 +863,9 @@ jobs:
   # on the pull request. This job posts one comment when any job ended red or cancelled, and that
   # comment is the wake. It needs every other job, runs on a pull request that is not a draft,
   # and posts nothing on a green run. `!cancelled()` and not `always()`: a superseded run is
-  # cancelled and posts nothing. The action is pinned to the same commit as every other
-  # claude-settings action here (the `all jobs passed` row of `make docs-audit` holds that).
+  # cancelled and posts nothing. The action is called at `stable`, like every other
+  # claude-settings action here (the `all jobs passed` row of `make docs-audit` holds that);
+  # third-party actions stay pinned to a commit sha.
   ci-done:
     needs: [ci-check, ci-static, revert-guard, records, checks, zizmor, mutation-report, already-passed, browser-scope, design-check, design-check-passed, all-jobs-passed, nightly-alarm]
     if: ${{ !cancelled() && github.event_name == 'pull_request' && !github.event.pull_request.draft }}
