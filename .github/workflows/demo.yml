@@ -223,17 +223,29 @@ jobs:
         # which meant the only way to tell a leak from a false positive was to reproduce the
         # build by hand. A guard that blocks a publish owes the reader the evidence.
         run: |
+          # grep exits 0 on a match, 1 on none, 2 on a fault. Each scan keeps its output in a
+          # variable and reads grep's own exit, so a fault (an unreadable or missing dist-demo/)
+          # fails the build rather than reading as "no match". No pipe sits in a verdict.
           fail=0
-          if grep -rlE '/(Users|home)/[a-z]' dist-demo/ 2>/dev/null; then
+          scan() { rc=0; hits=$(grep -rohE "$1" dist-demo/) || rc=$?; }
+          scan '/(Users|home)/[a-z][^"]{0,60}'
+          if [ "$rc" -gt 1 ]; then
+            echo "::error::the machine-local path scan could not read dist-demo/ — not publishing"
+            fail=1
+          elif [ -n "$hits" ]; then
             echo "::error::a machine-local path reached the built demo — not publishing"
-            grep -rohE '/(Users|home)/[a-z][^"]{0,60}' dist-demo/ 2>/dev/null | sort -u | head -5
+            printf '%s\n' "$hits" | sort -u | sed -n 1,5p
             fail=1
           fi
           # sk-ant-…  a real key body, not the prefix alone.
           # TCGAuthTicket=…  an assignment carrying a value, not the cookie's name.
-          if grep -rohE 'sk-ant-[A-Za-z0-9_-]{16,}|TCGAuthTicket[A-Za-z_]*=[A-Za-z0-9%._-]{8,}' \
-               dist-demo/ 2>/dev/null | head -5 | grep .; then
+          scan 'sk-ant-[A-Za-z0-9_-]{16,}|TCGAuthTicket[A-Za-z_]*=[A-Za-z0-9%._-]{8,}'
+          if [ "$rc" -gt 1 ]; then
+            echo "::error::the secret scan could not read dist-demo/ — not publishing"
+            fail=1
+          elif [ -n "$hits" ]; then
             echo "::error::a secret VALUE reached the built demo — not publishing"
+            printf '%s\n' "$hits" | sed -n 1,5p
             fail=1
           fi
           [ "$fail" -eq 0 ] || exit 1
