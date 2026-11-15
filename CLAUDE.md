@@ -40,7 +40,7 @@ writes, what it costs. `make explain` lists what `make check` runs, and `ARGS=<t
   and `BANCHI_TOKEN_LITERALS=off` skip `make css-var-check` and `make token-literal-check`: owner-only.
 - `./banchi identify` costs money: `--dry-run` first. `make reap` stops what this session started
   and previews first. Each launchd agent target is for the owner's Mac, main tree only.
-- `make backup` copies the photos once, when the owner asks. `make backup-agent` stays here and is not run (D323, the photo backup runs once).
+- `make backup` copies the photos and a store snapshot once, when the owner asks. `make backup-agent` stays here and is not run (D323, the photo backup runs once).
 
 ## Code cards (dormant feature) — DORMANT
 
@@ -116,7 +116,7 @@ whole repo:
 - **A screen answers to the system.** `--bn-*` tokens only, checked at 1440 and 820, light and dark.
   `docs/DESIGN.md` is the record. The `design tokens` row of `make docs-audit` locks every name and hex both ways.
 - **Main moves by pull request. A session never commits to main or pushes it** (D42, main moves by pull request; shared rule `git-main-only-by-pr`).
-  Who merges, and the relayed-yes form: parent decisions `standing-merge-grant` and `session-tiers`. Use `make merge ARGS="<n> --confirm"`, never `--admin`.
+  Who merges: parent decisions `standing-merge-grant` and `session-tiers`. The relayed-yes merge form: parent decision `auto-mode-owner-acts`. Use `make merge ARGS="<n> --confirm"`, never `--admin`.
   One standing exception (D42, main moves by pull request):
   the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
   GitHub branch protection has 0 reviews and `strict: false`. The one check it is to require is `all-jobs-passed`,
@@ -150,7 +150,7 @@ whole repo:
 - **State a fence by intent and name the exception.** Example: "Do not change which cards a walk holds. Rendering
   changes inside `WalkView` are in scope." **NOT MECHANIZED:** a machine cannot tell a fence around
   behavior from one around files.
-- **Screen verdicts** follow shared rule `verification-screens-verdict`. Banchi's sizes: 1440 and 820, both themes.
+- **Show the screen before you say it looks right** (shared rule `verification-screens-verdict`). Banchi's sizes: 1440 and 820, both themes.
 
 ## Map
 
