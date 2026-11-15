@@ -18,10 +18,10 @@ it. `#/fulfillment` is the Fulfiller's whole product, with no shell (D5, two per
 - **A new screen is one `ROUTES` entry (with its `screenKey`), a view that returns `<Page>`, and its `docs/map/`
   Screens line and trace page** (`make map-check` fails without them; D275, every screen inherits
   the page scaffold). `make kit-adoption` fails a view that skips `<Page>` or hand-rolls a kit
-  primitive. `app/tests/scaffold.spec.ts` asserts the frame at 1440, 820, 720 and 390. Exceptions
+  primitive. `app/tests/scaffold.spec.ts` asserts the frame at 1440, 820, 720 and 390 (390 and 720 only while `PHONE_SPECS_ON` is on, below). Exceptions
   live in `scripts/kit-adoption-allow.json`, a list that only shrinks. A lane that moves a
   screen onto `Page` deletes its entries in the same commit.
-- `#/orders` and `#/shipping` are two stages of one screen (`OrdersHub`), joined client-side on order number.
+- `#/orders` and `#/shipping` are two sidebar rows, two screens, no tab strip (D274, separate rows). They share `OrdersHub`'s state and join client-side on order number.
 - `#/inventory` is the one owner-side view of stored cards (D31, one owner-side view). `#/boxes` and `#/pull` are not routes.
   Sold cards are hidden by default (D132, sold is folded away). Order under a search is frozen once taken, and a sale
   may not re-rank it (D181, the order is taken once).

@@ -40,6 +40,7 @@ writes, what it costs. `make explain` lists what `make check` runs, and `ARGS=<t
   and `BANCHI_TOKEN_LITERALS=off` skip `make css-var-check` and `make token-literal-check`: owner-only.
 - `./banchi identify` costs money: `--dry-run` first. `make reap` stops what this session started
   and previews first. Each launchd agent target is for the owner's Mac, main tree only.
+- `make backup` copies the photos once, when the owner asks. `make backup-agent` stays here and is not run (D323, the photo backup runs once).
 
 ## Code cards (dormant feature) — DORMANT
 
@@ -94,6 +95,8 @@ whole repo:
 - **No history date in repo prose.** D308 (no dates in repo prose) allows a deadline date.
   Old dates go when their file is next rewritten, never in a sweep. Old records are deleted, not archived.
   **NOT MECHANIZED:** a machine cannot tell a date from a version number, a port or a test fixture without intent.
+- **A record keeps no owner quote** (D318, records keep no owner quotes; sibling of D308, no dates in repo prose). The `no owner quotes` row of `make docs-audit` refuses the marker forms.
+  **NOT MECHANIZED (the other forms):** a machine cannot tell an owner message from another quote without reading intent.
 - **Opsec.** A live unredeemed code card is a bearer instrument. No code-card photo or real code string in a listing, README,
   screenshot, commit or any tracked file. The gitignored `inventory/` is the sanctioned place.
   `scripts/githooks/pre-commit` enforces it, armed by `make hooks`.
@@ -112,11 +115,7 @@ whole repo:
 - **A screen answers to the system.** `--bn-*` tokens only, checked at 1440 and 820, light and dark.
   `docs/DESIGN.md` is the record. The `design tokens` row of `make docs-audit` locks every name and hex both ways.
 - **Main moves by pull request. A session never commits to main or pushes it** (D42, main moves by pull request; shared rule `git-main-only-by-pr`).
-  Parent decision `standing-merge-grant` says who merges: a batch runner, under the coordinator's grant. The coordinator never merges.
-  A one-lane session the owner started may merge its own lone lane, only under that repo's merge grant or the owner's named act,
-  under the same limits. A lane session a coordinator started never merges: it hands the batch runner each reviewed lane branch.
-  Parent decision `session-tiers` holds the `cs-build` tags and the lane hand-off.
-  Any other merge is the owner's named act, "merge" and not "ship it". Use `make merge ARGS="<n> --confirm"`, never `--admin`.
+  Who merges, and the relayed-yes form: parent decisions `standing-merge-grant` and `session-tiers`. Use `make merge ARGS="<n> --confirm"`, never `--admin`.
   One standing exception (D42, main moves by pull request):
   the weekly demo-mirror script merges its own `demo/mirror-refresh` PR when the whole diff is under `demo-assets/mirror/`.
   GitHub branch protection has 0 reviews and `strict: false`. The one check it is to require is `all-jobs-passed`,
@@ -150,7 +149,7 @@ whole repo:
 - **State a fence by intent and name the exception.** Example: "Do not change which cards a walk holds. Rendering
   changes inside `WalkView` are in scope." **NOT MECHANIZED:** a machine cannot tell a fence around
   behavior from one around files.
-- **Show the screen before you say it looks right** (shared rule `verification-screens-verdict`). Banchi's sizes: 1440 and 820, both themes.
+- **Screen verdicts** follow shared rule `verification-screens-verdict`. Banchi's sizes: 1440 and 820, both themes.
 
 ## Map
 
