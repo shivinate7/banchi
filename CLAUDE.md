@@ -100,6 +100,7 @@ whole repo:
 - **Opsec.** A live unredeemed code card is a bearer instrument. No code-card photo or real code string in a listing, README,
   screenshot, commit or any tracked file. The gitignored `inventory/` is the sanctioned place.
   `scripts/githooks/pre-commit` enforces it, armed by `make hooks`.
+  The repo is public. The demo mirror shows buyers by full real name with every address blank (D295, the public demo is the scrubbed real store).
 - **Three shell mistakes are refused before they run** by `scripts/guard-shell.py --hook` on Bash and Write/Edit.
   Claude Code runs every clause.
   The shared layer's guard owns the checkout, stash and reset refusals, so those clauses are gone from this script. The shared push-stray-branch ask (`plain-push-asks`) asks on a bare or `HEAD` stray push; a `-u` push of the branch's own name is silent there.
