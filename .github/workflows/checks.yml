@@ -318,7 +318,7 @@ jobs:
       # not exactly one pinned copy fails.
       - name: Download the pinned claude-settings for the map check
         if: false
-        uses: shivinate7/claude-settings/actions/ci-alarm@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+        uses: shivinate7/claude-settings/actions/ci-alarm@b600c126d55c1ba53a3d9d3550e5108fc0e3142f # claude-settings main 2026-11-15
 
       - name: Install the map check's skill from the pinned claude-settings
         run: |
@@ -366,7 +366,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: shivinate7/claude-settings/actions/all-jobs-passed@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/all-jobs-passed@b600c126d55c1ba53a3d9d3550e5108fc0e3142f # claude-settings main 2026-11-15
         with:
           needs: ${{ toJSON(needs) }}
 
@@ -408,7 +408,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: shivinate7/claude-settings/actions/stamp@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/stamp@b600c126d55c1ba53a3d9d3550e5108fc0e3142f # claude-settings main 2026-11-15
         with:
           mode: check
           config: .github/stamp.json
@@ -416,9 +416,9 @@ jobs:
       # Shared doc checks (claude-settings, same pin as every other claude-settings step here).
       # `claude-md-cites` fails a CLAUDE.md or .claude/**/*.md paragraph that copies a shared record.
       # `ste-lint` fails the added or changed markdown lines of the diff only.
-      - uses: shivinate7/claude-settings/actions/claude-md-cites@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/claude-md-cites@b600c126d55c1ba53a3d9d3550e5108fc0e3142f # claude-settings main 2026-11-15
 
-      - uses: shivinate7/claude-settings/actions/ste-lint@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/ste-lint@b600c126d55c1ba53a3d9d3550e5108fc0e3142f # claude-settings main 2026-11-15
 
   # THE SHARED CODE CHECK (claude-settings' `actions/code-check`). One type check and one bug lint
   # per language, read from that action's own table: ruff and mypy --strict for Python, tsc for
@@ -454,7 +454,7 @@ jobs:
       - name: Install
         run: npm ci --prefix app
 
-      - uses: shivinate7/claude-settings/actions/code-check@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/code-check@b600c126d55c1ba53a3d9d3550e5108fc0e3142f # claude-settings main 2026-11-15
         with:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
@@ -520,7 +520,7 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - uses: shivinate7/claude-settings/actions/mutation-report@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/mutation-report@b600c126d55c1ba53a3d9d3550e5108fc0e3142f # claude-settings main 2026-11-15
         with:
           profile: banchi
 
@@ -874,6 +874,6 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: shivinate7/claude-settings/actions/ci-done-comment@919106e72ed29cb3adb0a00edf5d509f3254c8e1 # main, 2026-11-05
+      - uses: shivinate7/claude-settings/actions/ci-done-comment@b600c126d55c1ba53a3d9d3550e5108fc0e3142f # claude-settings main 2026-11-15
         with:
           needs: ${{ toJSON(needs) }}
