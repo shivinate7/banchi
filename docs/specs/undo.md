@@ -283,7 +283,7 @@ sentence. It is a reason to give, not an outcome to name. Never borrow "undone" 
 - Orders' pull undo reads "Pull undone". Its `pull_not_recorded` case, where the pull was already reversed
   elsewhere, reads "Already undone".
 - Pricing's restore reads "N prices undone".
-- Refusals read plainly: "Not undone" and "The card was not put back". The reason goes in the body,
+- Refusals read plainly: `Not undone` and "The card was not put back". The reason goes in the body,
   never the raw code.
 
 ### 11.12 Review draws no header undo
