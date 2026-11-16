@@ -21,3 +21,5 @@ Home: CLAUDE.md
 **Also removed, on the coordinator's ruling of 2026-11-04 08:40 CST under item 214 a.** The `--hook` mode of `scripts/reap.py` (D127). Only `.codex/hooks.json` armed it. The shared layer's machine-wide-kill rule owns that guard for Claude Code. Every mode `make reap` uses stays.
 
 The owner deletes the untracked Codex files in the main checkout by hand: `~/Developer/banchi/AGENTS.md`, its `.agents/skills/` mirror, and `.codex/`.
+
+AGENTS.md part superseded: owner 2026-11-15 23:59 CST, claude-settings layout wins.
