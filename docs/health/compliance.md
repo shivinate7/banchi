@@ -20,7 +20,7 @@ Rewritten in place on each run by compliance-check.
 | Verification | partial | in shape | CI shape not run here, screens have no shared screenshot config, one sleep loop waits on a clock edge | compliance_probes.py design .; git grep -n sleep |
 | Verification: ci shape | unknown | in shape | ci-hygiene skill not run in this audit; defer to it | .github/workflows/ |
 | Verification: playwright apt | pass | in shape | no apt step | compliance_probes.py playwright . |
-| Verification: screens at every size and theme | partial | in shape | app/playwright.config.ts design-check exists, but no .claude/shoot.json, so the shared shoot cannot run | compliance_probes.py design . |
+| Verification: screens at every size and theme | partial | in shape | app/playwright.config.ts design-check exists, but no shoot config yet (to be added by lane add-shoot-config), so the shared shoot cannot run | compliance_probes.py design . |
 | Verification: sleep waiters | partial | in shape | harness/tests/t7/cli_identify.py loops on a clock edge with time.sleep(0.005); identify/batch.py and identify/sweep.py poll an outside job; the rest are bounded retries and test waits | git grep -n sleep |
 | Verification: docs and map checks | pass | in shape | make docs-audit exit 0 with 87 ok rows and 4 asks, none red; make map-check pass | make docs-audit; make map-check |
 | Tokens | n/a | in shape | session practice | probes.md |
@@ -28,22 +28,22 @@ Rewritten in place on each run by compliance-check.
 | Building: module has a test | unknown | in shape | one test per product module was not walked | git ls-files '*test*' |
 | Speak plainly | unknown | in shape | id-gloss greps match thousands of lines in 488 md files and need a read by hand; CLAUDE.md glosses its ids by convention | grep -rnE over *.md |
 | Output | partial | in shape | 7 STE errors in 7 md files, 98 warnings, 488 md files read; UI copy is a known gap, 84 UI files get no STE check | ste_lint.py --fail-on error --quiet; compliance_probes.py design . |
-| Output: docs/decisions/D239-four-stored-data-identity-checks.md:43 | finding | in shape | gap - STE011, a phrase longer than it needs to be (ste_lint.py) | none cited |
-| Output: docs/map/app-tests.md:45 | finding | in shape | gap - STE013, a negative of a negative (ste_lint.py) | none cited |
-| Output: docs/specs/batch-script.md:237 | finding | in shape | gap - STE013, a negative of a negative (ste_lint.py) | none cited |
-| Output: docs/specs/motion-trigger.md:434 | finding | in shape | gap - STE013, a negative of a negative (ste_lint.py) | none cited |
-| Output: docs/specs/multi-game.md:4 and 544 | finding | in shape | gap - STE013, a negative of a negative, twice (ste_lint.py) | none cited |
-| Output: docs/specs/undo.md:286 | finding | in shape | gap - STE013, a negative of a negative (ste_lint.py) | none cited |
+| Output: docs/decisions/D239-four-stored-data-identity-checks.md, one line | finding | in shape | gap - STE011, a phrase longer than it needs to be (ste_lint.py) | none cited |
+| Output: docs/map/app-tests.md, one line | finding | in shape | gap - STE013, a negative of a negative (ste_lint.py) | none cited |
+| Output: docs/specs/batch-script.md, one line | finding | in shape | gap - STE013, a negative of a negative (ste_lint.py) | none cited |
+| Output: docs/specs/motion-trigger.md, one line | finding | in shape | gap - STE013, a negative of a negative (ste_lint.py) | none cited |
+| Output: docs/specs/multi-game.md, two lines | finding | in shape | gap - STE013, a negative of a negative, twice (ste_lint.py) | none cited |
+| Output: docs/specs/undo.md, one line | finding | in shape | gap - STE013, a negative of a negative (ste_lint.py) | none cited |
 | Reports | parent-covered | in shape | hooks in shape and guard.log has verdict lines in the last 7 days | compliance_probes.py hooks; guard_log_report.py --days 7 |
 | Style | n/a | in shape | session practice | probes.md |
 | Layout | unknown | in shape | folder shape and core kinds read clean, waiting copy not readable locally because the roadmap record branch is not fetched here | compliance_probes.py layout . |
 | Layout: stray folders | pass | in shape | no folder outside the layout or its extras | compliance_probes.py layout . |
 | Layout: core kinds | pass | in shape | none missing | compliance_probes.py layout . |
 | Layout: waiting copy | unknown | in shape | no local roadmap ref; a GitHub read shows waiting/ on origin roadmap with answers, groups, items, meta, page | compliance_probes.py layout .; GitHub get_file_contents waiting |
-| Design | out | in shape | no .claude/shoot.json, 84 UI files | compliance_probes.py design . |
-| Design: screens named | gap | in shape | no .claude/shoot.json | compliance_probes.py design . |
-| Design: sizes named | gap | in shape | no .claude/shoot.json | compliance_probes.py design . |
-| Design: themes named | gap | in shape | no .claude/shoot.json | compliance_probes.py design . |
+| Design | out | in shape | no shoot config (to be added by lane add-shoot-config), 84 UI files | compliance_probes.py design . |
+| Design: screens named | gap | in shape | no shoot config (to be added by lane add-shoot-config) | compliance_probes.py design . |
+| Design: sizes named | gap | in shape | no shoot config (to be added by lane add-shoot-config) | compliance_probes.py design . |
+| Design: themes named | gap | in shape | no shoot config (to be added by lane add-shoot-config) | compliance_probes.py design . |
 | Design: screenshot command | partial | in shape | own command, not the shared shoot: scripts/screenshot.mjs; scripts/screenshot.sh; Makefile target screenshot | compliance_probes.py design . |
 | Design: token file | pass | in shape | app/src/tokens.css | compliance_probes.py design . |
 | Copies | in shape | in shape | no copies of claude-settings things | find_copies.py . --parent |
