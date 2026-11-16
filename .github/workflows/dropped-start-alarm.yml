@@ -8,6 +8,7 @@
 # person's (`gh workflow run checks.yml --ref <branch>` dispatches the run, or `gh pr ready --undo`
 # then `gh pr ready` fires `ready_for_review`; never an empty commit). It reads the API only; no checkout, no
 # third-party action.
+# This stays inline, not a call to the shared ci-alarm action: that action also raises the red-branch alarm, drops the `gh workflow run` remedy and needs other permissions.
 name: dropped-start-alarm
 
 on:
