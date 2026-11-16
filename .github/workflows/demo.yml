@@ -226,13 +226,16 @@ jobs:
           # grep exits 0 on a match, 1 on none, 2 on a fault. Each scan keeps its output in a
           # variable and reads grep's own exit, so a fault (an unreadable or missing dist-demo/)
           # fails the build rather than reading as "no match". No pipe sits in a verdict.
+          # The verdict is grep's exit 0, never the printed text: on a binary file (the mirror is
+          # mostly jpg) grep prints "binary file matches" to stderr and nothing to stdout. -a
+          # also prints the matched bytes, for the evidence line.
           fail=0
-          scan() { rc=0; hits=$(grep -rohE "$1" dist-demo/) || rc=$?; }
+          scan() { rc=0; hits=$(grep -raohE "$1" dist-demo/) || rc=$?; }
           scan '/(Users|home)/[a-z][^"]{0,60}'
           if [ "$rc" -gt 1 ]; then
             echo "::error::the machine-local path scan could not read dist-demo/ — not publishing"
             fail=1
-          elif [ -n "$hits" ]; then
+          elif [ "$rc" -eq 0 ]; then
             echo "::error::a machine-local path reached the built demo — not publishing"
             printf '%s\n' "$hits" | sort -u | sed -n 1,5p
             fail=1
@@ -243,7 +246,7 @@ jobs:
           if [ "$rc" -gt 1 ]; then
             echo "::error::the secret scan could not read dist-demo/ — not publishing"
             fail=1
-          elif [ -n "$hits" ]; then
+          elif [ "$rc" -eq 0 ]; then
             echo "::error::a secret VALUE reached the built demo — not publishing"
             printf '%s\n' "$hits" | sed -n 1,5p
             fail=1
