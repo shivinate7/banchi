@@ -22,19 +22,18 @@ The local directory is `~/Developer/banchi`. The GitHub repository is `shivinate
 GitHub Pages followed the rename. `.github/workflows/demo.yml` derives `DEMO_BASE` from the repository name.
 The Makefile's own default is a stale fallback for a hand-run build, by design.
 
-**Merge runs through the batch runner.** claude-settings decision session-tiers names the tiers. The batch
-runner owns the integration batch, the CI waits, the merge tool runs and archiving finished lanes. The coordinator
-starts lanes and talks with the owner. The batch runner, the session the coordinator starts and tags `cs-build:batch-runner`, batches every reviewed lane the owner set out, across all
-sessions, into one integration branch and merges it under the coordinator's standing grant. A lane session hands the batch runner
-each reviewed lane branch with its head commit and review verdict. A lane session never builds an integration branch,
-opens an integration PR, marks a PR ready or merges.
-The batch runner merges only through `make merge ARGS="<n> --confirm"`, with CI green, and never with `--admin`.
+**Merge runs through the batch runner.** claude-settings decision session-tiers names the tiers. The batch runner, the session the
+coordinator starts and tags `cs-build:batch-runner`, owns the CI waits, the merge tool runs and archiving finished lanes.
+The coordinator starts lanes and talks with the owner. Ruling own-820-c-five-repos extends the own-green-run merge to all five repos, banchi included: the batch runner merges a lane's own PR on its own green run, under the coordinator's standing grant. A lane session hands the
+batch runner each reviewed lane branch with its head commit and review verdict. A lane session never
+marks a PR ready or merges.
+The batch runner merges only through `make merge ARGS="<n> --confirm"`, with the PR's own run green, and never with `--admin`.
 `make merge` never rebases or force-pushes, and a moved head stops it.
 A session's role comes from its own `cs-build` tag (claude-settings decision session-tiers). D42 (main moves by PR) holds the rest.
 
-**Model tiers.** A lane session runs Opus (claude-settings decision session-tiers). The agents it starts follow
+**Model tiers.** A lane session runs the model of `agent-model-cap`'s lane row. The agents it starts follow
 `agent-model-cap`. Sonnet is the default and the ceiling. Plan, the built-in advisor, the designer, the design
-reviewer and a builder's third try run Opus. Reviewers run Sonnet from round 2; round 1 uses the role's model.
+reviewer, the refuter and a builder's third try run Opus. Reviewers run Sonnet from round 2; round 1 uses the role's model.
 Any other Opus agent needs the owner's grant. It is said in one line first, and raised only on the owner's grant
 in `.claude/settings.local.json`.
 
@@ -49,7 +48,7 @@ Review the built screen against that pass before you call it done.
 ### Screens
 
 **390px is checked only on an owner phone report.** Verify a screen at 1440 and 820, in both themes.
-The specs that assert phone layout stay in CI.
+The specs that assert phone layout stay in the repo, skipped while `PHONE_SPECS_ON` is off (DEBT77, every phone-width spec is off).
 
 **The Sales screen is a nav row on purpose.** The owner saw the cost of 37px past the fold at 390x754.
 The owner chose the sidebar tab anyway. D214 (gross-revenue retrospective) holds the retrospective itself.

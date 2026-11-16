@@ -21,7 +21,7 @@ Each command's `--help` says what it writes.
 - Only two columns are ever written: `Add to Quantity`, `TCG Marketplace Price`. `TCGplayer Id` is never modified.
 - **Batch API, not sequential calls.** Model: `claude-haiku-5-5`.
 - **No duplicate SKU rows in an import file.** Aggregate by SKU. `Add to Quantity` equals the copy count. There is no standing
-  cap (D7, duplicates aggregate by SKU). A send may ask for one (`emit --cap N`) or for a quantity (`emit --quantity SKU=N`).
+  cap (D7, duplicates aggregate by SKU). A press has no spend cap and no threshold notice; its confirm names the cards and the spend (D307, owner rulings CLAUDE.md carried). A send may ask for one (`emit --cap N`) or for a quantity (`emit --quantity SKU=N`).
   `uncommitted_positions` stops a copy going out twice.
 - **`emit` over several runs writes one file, and a cap is spent once** (D86, one pricing file for the store; `pipeline/join.py:add_to_quantity`).
   `#/pricing` lands on every unsent copy in the store (D156, one worklist), read live.

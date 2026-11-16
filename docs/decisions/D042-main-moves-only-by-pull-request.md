@@ -83,7 +83,7 @@ At `prepared`, the hook asks `git merge-base --is-ancestor "$new" refs/remotes/o
 
     fatal: refusing to fetch into branch 'refs/heads/main' checked out at '/Users/shivinate/Developer/banchi'
 
-**That refusal is git's, not the hook's.** Telling them apart is most of why this is written down. Everything else here is about a hook that refuses. A session that reads the word `refusing` might reach for `BANCHI_MAIN=off`, which changes nothing, because no hook has spoken. `git switch main && git pull` is unaffected, and always was. `pull` is a fetch and then a merge, two transactions, in that order. The hook's refusals name themselves and print the variable. This one names a path. Pull in that tree instead:
+**That refusal is git's, not the hook's.** Telling them apart is most of why this is written down. Everything else here is about a hook that refuses. A session that reads the word `refusing` might reach for `BANCHI_MAIN=off`, which changes nothing, because no hook has spoken. `git switch main && git pull` is unaffected, and always was. `pull` is a fetch and then a merge, two transactions, in that order. The hook's refusals name themselves and say owner-only, never the variable. This one names a path. Pull in that tree instead:
 
     git -C <that path> pull --ff-only
 
@@ -133,9 +133,9 @@ At `prepared`, the hook asks `git merge-base --is-ancestor "$new" refs/remotes/o
 
 ### The coordinator's standing grant, run by the batch runner
 
-**"The word" above is still per-PR by default. This is the one exception, and it is scoped, not a repeal.** After being asked twice to name the act for PR #349, the owner gave a standing grant to merge. claude-settings decision standing-merge-grant now holds it: the coordinator holds the grant, and the batch runner runs merges under it. That names the act once for a whole batch, instead of once per PR in it.
+**"The word" above is still per-PR by default. This is the one exception, and it is scoped, not a repeal.** After being asked twice to name the act for PR #349, the owner gave a standing grant to merge. claude-settings decision standing-merge-grant now holds it: the coordinator holds the grant, and the batch runner runs merges under it. Ruling own-820-c-five-repos extends the own-green-run merge to all five repos, banchi included: the batch runner merges a lane's own PR on its own green run. That names the act once, instead of once per PR.
 
-**The batch runner is the session the coordinator starts and tags `cs-build:batch-runner`, and it holds no grant of its own** (claude-settings decision session-tiers). The batch runner owns the integration batch, the CI waits, the merge tool runs and archiving finished lanes. The coordinator starts lanes and talks with the owner. The batch runner batches every reviewed lane the owner set out, across all sessions, into one integration branch and merges it. A lane session hands the batch runner each reviewed lane branch with its head commit and review verdict. It never builds an integration branch, opens an integration PR, marks a PR ready or merges. The grant is exercised only through `make merge ARGS="<n> --confirm"`, only once CI is green, and never with `--admin`. A session's role comes from its own `cs-build` tag.
+**The batch runner is the session the coordinator starts and tags `cs-build:batch-runner`, and it holds no grant of its own** (claude-settings decision session-tiers). The batch runner owns the CI waits, the merge tool runs and archiving finished lanes. The coordinator starts lanes and talks with the owner. The batch runner merges a lane's own PR on its own green run (ruling own-820-c-five-repos). A lane session hands the batch runner each reviewed lane branch with its head commit and review verdict. It never marks a PR ready or merges. The grant is exercised only through `make merge ARGS="<n> --confirm"`, only once the PR's own run is green, and never with `--admin`. A session's role comes from its own `cs-build` tag.
 
 ### A standing grant to the weekly demo refresh
 

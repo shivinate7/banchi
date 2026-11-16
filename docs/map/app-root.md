@@ -22,6 +22,8 @@ The app's build, dev-server and test-runner setup.
   - Decisions: `D261`, `D16`, `D128`, `D5`
 - `app/playwright.unit.config.ts` — The unit tier: the same runner as playwright.config.ts with no browser, no dev server and no globalSetup, over `tests/unit/*.unit.ts`.
   - Decisions: `D18`
+- `app/public/favicon.svg` — The tab icon: the Banchi mark in its small cut, written by `scripts/build-mark.mjs` and never edited by hand.
+  - Decisions: `D102`
 - `app/tsconfig.json` — The TypeScript compiler settings for the app.
 - `app/vite.config.ts` — The dev server, strictPort — a busy port fails loudly rather than serving on `5174`, where CLAUDE.md, the Makefile and scripts/views.txt would all three be wrong.
   - Decisions: `D43`, `D13`, `D261`
