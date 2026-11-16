@@ -1,7 +1,7 @@
 # Multi-game (build-order step 14)
 
 `docs/GATES.md` named step 14. D21 through D25 carry the rulings. This file carries the
-argument and the list of things a later session must not undo.
+argument and the list of things a later session must leave in place.
 
 **The most valuable part is section 2.** Real TCGplayer exports refuted four assumptions that
 were about to be built on. Three of them were the owner's own. Each would have failed quietly.
@@ -541,7 +541,7 @@ Identification accuracy for either game is unmeasured.
 
 ---
 
-## 11. What a later session must not undo
+## 11. What a later session must leave in place
 
 - **Do not narrow `finish_by_rarity` to one export's observations.** Unselectable becomes a
   trap (section 5.2).

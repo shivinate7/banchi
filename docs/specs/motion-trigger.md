@@ -431,7 +431,7 @@ frame's units keep every real card on every session at 4.1x or more.
 | the closest frame of any kind | 03:25 at 74.0 s, 1.02x. It is the plate's dark disc displaced and not a card (contact sheet). Its twin at 73.0 s reads 2.29x |
 | injected 1/3, 1/2, 1 EV on every baseline | uniform, or under the floor, and never a card |
 | injected 1.5 EV | declined on three bright plates (fewer than a quarter of the region unclipped). The floor alone decides, as before |
-| the hand D84 photographed the stand with | 8.96 against a bound of 8.09. Not uniform, and refused by the floor as before |
+| the hand D84 photographed the stand with | 8.96 against a bound of 8.09. Uneven, and refused by the floor as before |
 | the reference rig's genuine empty stand | k = 1, residual = raw, 1.70 to 1.78 |
 | scaled novelty between consecutive fires | at least 6.89 against `tNovel` 4.0 |
 

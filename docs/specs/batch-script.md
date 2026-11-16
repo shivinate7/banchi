@@ -234,7 +234,7 @@ re-bind.
 | Run died at card 300 of 500 | 300 reused, 200 sent. |
 | 200 new cards added to the box | Only the new 200 sent. |
 | Card 47 re-shot | Photo hash changed, so it is re-read automatically. |
-| Prompt changed | **Reused, not invalidated.** The report states how many answers came from an older prompt. |
+| Prompt changed | **Reused as is.** The report states how many answers came from an older prompt. |
 | Prompt changed, `--reidentify-stale` | Re-reads only weak, uncleared entries: confidence `low`, or currently in a queue, and `cleared_by_human == false`. |
 
 **A human-cleared identification is permanent.** Once a person has looked at the photo and picked the

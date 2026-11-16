@@ -42,7 +42,7 @@ The Playwright specs and unit tests of the app, and the helpers they share.
   - Decisions: `D134`, `D196`, `D313`, `D259`
 - `app/tests/demo-coverage.spec.ts` — The BUILT public demo (`dist-demo/`), served on this checkout's own origin under its base path as a static host serves it, or read from a running preview when `DEMO_PREVIEW_URL` is set.
   - Decisions: `D183`, `D227`, `D271`, `D277`, `D298`, `D295`, `D301`, `D213`
-- `app/tests/did-you-mean-coverage.spec.ts` — Reads the screen sources: every file that runs the one matcher or the store's search must draw the Did you mean hint, unless it is named as not a list search.
+- `app/tests/did-you-mean-coverage.spec.ts` — Reads the screen sources: every file that runs the one matcher or the store's search must draw the Did you mean hint, unless it is named a non-list search.
   - Decisions: `D271`
 - `app/tests/dispenser.spec.ts` — The dispenser control on the real capture screen with the same fake: the reason shows in Manual, "Needs Chrome" with no Bluetooth, and a fire with no box stops dealing with STOP the last write.
   - Decisions: `D316`, `D19`, `D313`, `D18`

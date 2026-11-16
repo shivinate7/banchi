@@ -40,8 +40,8 @@ next-longest real name is 35 characters. The one known defect is 152. Sixty sits
 gap. It sits well above every real name this store has held. It sits well below the one
 that is not a name at all.
 
-**Dominant, not first-seen (classes 2 and 3).** The check compares against the value the
-MAJORITY of a set's own cards carry. It never compares against the first value a pass
+**Dominant, not first-seen (classes 2 and 3).** The check compares against the value that
+most of a set's own cards carry. It never compares against the first value a pass
 happens to read. `scripts/identity-checks-selftest.py`'s mutation arm proves the choice is
 load-bearing. A mutant compares against the first-seen value instead. Feed it a set where
 the one disagreeing card is captured first. The mutant blames the majority. The real
