@@ -1,0 +1,17 @@
+{
+  "baseUrl": "http://localhost:5173",
+  "routes": [
+    "/#/",
+    "/#/capture",
+    "/#/review",
+    "/#/pricing",
+    "/#/orders",
+    "/#/shipping",
+    "/#/revenue",
+    "/#/inventory",
+    "/#/codes",
+    "/#/slabs"
+  ],
+  "sizes": [1440, 820],
+  "themes": ["light", "dark"]
+}
