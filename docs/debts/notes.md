@@ -80,3 +80,6 @@ One line per finding that is not yet a debt. A note becomes a debt after a real 
 - `docs/specs/pricing-suggest.md`'s Send bullet and D273 quote "TCGplayer shows $X now. Send $Y?" for a left-out card, which now reads "<name> was left out. TCGplayer shows $X now." The quoted line still holds for a refused press.
 - `pipeline/sendguard.py`'s `live_moves(leave_live_moved=False)` refuse branch has no caller and no test.
 - `app/src/SendCard.tsx`'s `resend`: the refused `live_moved` listing-row resend (the moves branch) has no test. The fix check on PR #1093 (the send live-moved fix) found it unpinned. Only the price-only refused resend is pinned, by "r7: a moved live price is offered back…" in `app/tests/pricing.spec.ts`.
+- Review of PRs #1109 and #1110, low: `docs/specs/motion-trigger.md`: the reworded "Uneven" breaks the spec's shared word "uniform"; "Fails the uniformity test" would keep it.
+- Review of PRs #1109 and #1110, low: `.claude/shoot.json`: `baseUrl` port 5173 fits only the main checkout, and `bin/shoot` has no identity check, so a linked checkout shoots the wrong tree unless it passes `--config` with its own port.
+- Review of PRs #1109 and #1110, low: `docs/health/compliance.md` still scores Design "out"; it needs a scorecard rerun now that `.claude/shoot.json` exists.
