@@ -83,7 +83,7 @@ At `prepared`, the hook asks `git merge-base --is-ancestor "$new" refs/remotes/o
 
     fatal: refusing to fetch into branch 'refs/heads/main' checked out at '/Users/shivinate/Developer/banchi'
 
-**That refusal is git's, not the hook's.** Telling them apart is most of why this is written down. Everything else here is about a hook that refuses. A session that reads the word `refusing` might reach for `BANCHI_MAIN=off`, which changes nothing, because no hook has spoken. `git switch main && git pull` is unaffected, and always was. `pull` is a fetch and then a merge, two transactions, in that order. The hook's refusals name themselves and print the variable. This one names a path. Pull in that tree instead:
+**That refusal is git's, not the hook's.** Telling them apart is most of why this is written down. Everything else here is about a hook that refuses. A session that reads the word `refusing` might reach for `BANCHI_MAIN=off`, which changes nothing, because no hook has spoken. `git switch main && git pull` is unaffected, and always was. `pull` is a fetch and then a merge, two transactions, in that order. The hook's refusals name themselves and say owner-only, never the variable. This one names a path. Pull in that tree instead:
 
     git -C <that path> pull --ff-only
 

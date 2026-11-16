@@ -11,5 +11,7 @@ paths:
   GETs and the cheap lock-free reads in `PHOTO_LANE_EXACT`, `/status` first (refusal `photo_busy`). The pool is safe over HTTP/1.1 only because every response sends
   `Connection: close` (DEBT11, a parked writer still holds a request slot). Ask the owner before `make up ARGS=--restart`, `make down` or `make up`, and name the reason.
   The `server concurrency` row of `make docs-audit` reads these figures.
+- **A secret stays on the server** (D326, the TCGTracking pipe; D320, the Card Ladder login token). The TCGTracking key and `CARDLADDER_REFRESH_TOKEN` live in the gitignored `.env`.
+  The server never sends one to the browser and never logs or prints it. **NOT MECHANIZED:** a machine cannot see that a new route or log line leaks a value it did not know was secret.
 - **A sold card's photograph is reclaimed on purpose** (D89, reclaimed on purpose): `POST /boxes/<box>/photos/reclaim` deletes sold
   photographs and keeps every record.
