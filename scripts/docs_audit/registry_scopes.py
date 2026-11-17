@@ -1449,7 +1449,8 @@ ROLLUP_ACTION = "shivinate7/claude-settings/actions/all-jobs-passed"
 _CLAUDE_SETTINGS_USES_RE = re.compile(r"^shivinate7/claude-settings/(?:actions/)?([^@\s]+)@(\S+)$")
 _FLOW_USES_RE = re.compile(r"(?:^|[{,])\s*uses:\s*")
 
-#: The one ref every claude-settings action is called at (owner ruling, child CI uses `@stable`).
+#: The one ref every claude-settings action is called at: child repos follow the shared `stable` branch, so a
+#: shared fix reaches this CI without a pin bump (restart-plan R44 part 1, P7).
 #: `stable` is a branch of claude-settings that moves only to a main commit whose checks ran their
 #: suites and passed. A sha or any other ref is a second version of the gate.
 CLAUDE_SETTINGS_REF = "stable"
