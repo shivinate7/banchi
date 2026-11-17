@@ -1,0 +1,8 @@
+# zizmor config. Every claude-settings action is called at `stable`, a branch (ref-pin).
+# Every other action stays at a full commit sha (hash-pin).
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        shivinate7/claude-settings/*: ref-pin
+        "*": hash-pin
