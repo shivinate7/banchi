@@ -1,0 +1,1 @@
+- mirror-stalled-gh-clock-assert: In `selftest` of `scripts/demo-mirror-daily.py`, the stalled-gh section ends with an assert on `time.monotonic() - t0 < 10`. It reads the real clock and adds nothing. The assert before it already fails when the timeout does not cut a stalled `gh` call off. From PR #1117 (the daily demo mirror waits for its PR's checks). Seen: 2026-11-19 x1
