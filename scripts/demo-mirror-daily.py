@@ -7,7 +7,7 @@ else. Any error: publish nothing, log why. One log line per run.
 
   demo-mirror-daily.py [--dry-run]   stop before push, print what would go out
   demo-mirror-daily.py --agent [--remove]   install / remove the weekly launchd job
-  demo-mirror-daily.py --selftest    the fence goes red, then green
+  demo-mirror-daily.py --selftest    the fence and the wait for the PR's check go red, then green
 
 The fence is what makes the standing auto-merge grant safe: `fence()` refuses any path
 outside `demo-assets/mirror/`, checked on the local diff and again on the PR's own diff.
@@ -44,8 +44,19 @@ TERM_GRACE_SECONDS = 2  # a worker that traps SIGTERM gets this long before SIGK
 REMOVE_RETRY_SECONDS = 6  # a late writer may recreate the folder; retry removal this long
 
 
+CHECK = "all-jobs-passed"  # the one check branch protection requires; the wait below, not the merge tool, guarantees the order
+PENDING = ("queued", "in_progress", "pending", "waiting", "requested")  # check-run statuses before completed
+CHECK_POLL_SECONDS = 60  # one read a minute, no faster
+GH_TIMEOUT = 60  # seconds per gh call, so a stalled read costs at most one poll beyond the cap
+CHECK_WAIT_SECONDS = 20 * 60  # the cap; a run that is slower than this leaves the PR for clear_stale_pr
+
+
 class Stop(Exception):
     pass
+
+
+class Unreadable(Stop):
+    """The check's status came back in a shape this script does not know: stop now, do not poll on."""
 
 
 def fence(paths):
@@ -95,6 +106,53 @@ def clear_stale_pr(root):
     sh("git", "push", "origin", "--delete", BRANCH, cwd=root, check=False)
 
 
+def read_check(head, cwd):
+    """(status, conclusion) of the newest `all-jobs-passed` check run on `head`, REST API;
+    (None, None) while the run has not created it yet. The merge tool has no wait flag."""
+    out = sh("gh", "api", "repos/{owner}/{repo}/commits/%s/check-runs?per_page=100" % head, cwd=cwd)
+    try:
+        runs = [r for r in json.loads(out)["check_runs"] if r["name"] == CHECK]
+    except (ValueError, KeyError, TypeError):
+        raise Unreadable("checks: cannot read the check runs from %r" % out[:80]) from None
+    if not runs:
+        return None, None
+    run = max(runs, key=lambda r: (r.get("started_at") or "", r.get("id") or 0))  # newest start wins over an older re-run
+    status, conclusion = run.get("status"), run.get("conclusion") or ""
+    if status not in PENDING + ("completed",):
+        raise Unreadable("checks: cannot read %s status %r" % (CHECK, status))
+    return status, conclusion
+
+
+def green_head(num, head, cwd):
+    """Wait for the fenced head's check, then confirm the PR head is still that head: a push during
+    the wait would otherwise merge content the fence never saw."""
+    wait_for_check(lambda: read_check(head, cwd))
+    check_head(sh("gh", "pr", "view", num, "--json", "headRefOid", "--jq", ".headRefOid", cwd=cwd), head)
+
+
+def wait_for_check(read, sleep=time.sleep, clock=time.monotonic):
+    """Block until `read()` says the check completed. Returns only on success; a failure, or still
+    pending at the cap, is a Stop and the PR stays open for the next run's clear_stale_pr.
+    A failed read (network) is retried until the cap."""
+    deadline = clock() + CHECK_WAIT_SECONDS
+    state = "not started"
+    while True:
+        try:
+            status, conclusion = read()
+            state = status or "not started"
+        except Unreadable:
+            raise
+        except Stop as e:  # gh could not reach GitHub: try again next minute
+            status, conclusion, state = None, None, "unreadable (%s)" % e
+        if status == "completed":
+            if conclusion == "success":
+                return
+            raise Stop("checks: %s concluded %s on the PR head; PR left open" % (CHECK, conclusion or "unknown"))
+        if clock() >= deadline:
+            raise Stop("checks: %s still %s after %ds; PR left open" % (CHECK, state, CHECK_WAIT_SECONDS))
+        sleep(CHECK_POLL_SECONDS)
+
+
 def check_photos(wt):
     """Refuse a bundle that names a card whose photograph is neither staged nor tracked.
     Incident: PR #695 merged a bundle naming 62 cards with no photographs (an ignore rule hid them)."""
@@ -109,7 +167,10 @@ def check_photos(wt):
 
 
 def sh(*cmd, cwd=None, check=True):
-    r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+    try:  # a stalled gh must not hold the run; make demo-mirror alone runs for minutes
+        r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=GH_TIMEOUT if cmd[0] == "gh" else None)
+    except subprocess.TimeoutExpired:
+        raise Stop("%s timed out after %ds" % (" ".join(cmd[:3]), GH_TIMEOUT)) from None
     if check and r.returncode:
         raise Stop("%s failed: %s" % (" ".join(cmd[:3]), (r.stderr or r.stdout).strip()[-300:]))
     return r.stdout.strip()
@@ -239,8 +300,9 @@ def _run(dry, left):
         num = url.rsplit("/", 1)[-1]
         files = json.loads(sh("gh", "api", "--paginate", "--slurp", "repos/{owner}/{repo}/pulls/%s/files" % num, cwd=wt))
         fence_pr_files([f for page in files for f in page])
-        check_head(sh("gh", "pr", "view", num, "--json", "headRefOid", "--jq", ".headRefOid", cwd=wt),
-                   sh("git", "rev-parse", "HEAD", cwd=wt))
+        head = sh("git", "rev-parse", "HEAD", cwd=wt)
+        check_head(sh("gh", "pr", "view", num, "--json", "headRefOid", "--jq", ".headRefOid", cwd=wt), head)
+        green_head(num, head, wt)
         m = subprocess.run([str(MERGE), num, "--confirm"], cwd=wt, capture_output=True, text=True)
         if m.returncode:
             reason = (m.stderr or m.stdout).strip()[-300:]
@@ -341,6 +403,107 @@ def selftest():
         raise AssertionError("red: moved head")
     except Stop:
         pass
+    # the merge waits for the PR head's own check: pending, pending, then green returns, one read a minute
+    def waits(reads):
+        """Run wait_for_check over scripted reads on a fake clock. -> (result, sleeps), result 'ok' or the Stop text."""
+        script, now, sleeps = list(reads), [0.0], []
+
+        def read():
+            r = script.pop(0)
+            if isinstance(r, Exception):
+                raise r
+            return r
+
+        def sleep(s):
+            sleeps.append(s)
+            now[0] += s
+        try:
+            wait_for_check(read, sleep=sleep, clock=lambda: now[0])
+            return "ok", sleeps
+        except Stop as e:
+            return str(e), sleeps
+    res, sleeps = waits([(None, None), ("queued", ""), ("in_progress", ""), ("completed", "success")])
+    assert (CHECK_POLL_SECONDS, CHECK_WAIT_SECONDS) == (60, 1200), "pinned: one read a minute, a 20-minute cap"
+    assert res == "ok" and sleeps == [60] * 3, "green: waits out pending, then merges: %r %r" % (res, sleeps)
+    res, sleeps = waits([("in_progress", ""), ("completed", "failure")])
+    assert "concluded failure" in res and len(sleeps) == 1, "red: a failed check never merges: %r" % res
+    for c in ("cancelled", "skipped", "timed_out", "neutral", "action_required", "stale", ""):
+        assert "concluded" in waits([("completed", c)])[0], "red: only success merges (%r)" % c
+    res, sleeps = waits([("in_progress", "")] * 1000)
+    assert "still in_progress" in res and len(sleeps) == 1200 // 60, "red: a check that never ends stops at the cap: %r" % res
+    res, sleeps = waits([Stop("gh api failed"), (None, None), ("completed", "success")])
+    assert res == "ok", "green: a failed read is retried, not fatal"
+    assert "unreadable" in waits([Stop("gh api failed")] * 1000)[0], "red: reads that never work stop at the cap"
+    assert "cannot read" in waits([Unreadable("checks: cannot read")])[0] and not waits([Unreadable("x")])[1], \
+        "red: an unknown shape stops at once"
+    # read_check picks our check by name and the newest start, over the parsed check-runs JSON
+    def runs(*rs):
+        return json.dumps({"check_runs": [{"name": n, "id": i, "started_at": t, "status": s, "conclusion": c}
+                                          for n, i, t, s, c in rs]})
+    g = globals()
+    real_sh, real_wait = g["sh"], g["wait_for_check"]
+    try:
+        for out, want, why in (
+                (runs((CHECK, 1, "2026-01-01T00:00:00Z", "completed", "success"),
+                       (CHECK, 2, "2026-01-01T00:05:00Z", "in_progress", None)),
+                 ("in_progress", ""), "an older success must not hide the newer pending re-run"),
+                (runs((CHECK, 2, "2026-01-01T00:05:00Z", "completed", "failure"),
+                       (CHECK, 1, "2026-01-01T00:00:00Z", "completed", "success")),
+                 ("completed", "failure"), "newest by start, whatever the list order"),
+                (runs(("lint", 3, "2026-01-01T00:09:00Z", "completed", "success"),
+                      (CHECK, 4, "2026-01-01T00:05:00Z", "queued", None)),
+                 ("queued", ""), "another check's success must not stand in for ours"),
+                (runs(("lint", 3, "2026-01-01T00:09:00Z", "completed", "success")), (None, None), "ours not created yet"),
+                (runs((CHECK, 4, "2026-01-01T00:05:00Z", "completed", "success")), ("completed", "success"), "green")):
+            g["sh"] = lambda *a, cwd=None, check=True, out=out: out
+            assert read_check("abc", None) == want, "read_check: %s: %r" % (why, read_check("abc", None))
+        for bad in ("[[]]", "", "not json", "{}", '{"check_runs": [{"id": 1}]}',
+                    runs((CHECK, 1, "t", "bogus", None))):
+            g["sh"] = lambda *a, cwd=None, check=True, bad=bad: bad
+            try:
+                read_check("abc", None)
+                raise AssertionError("red: read_check took an unknown shape %r" % bad)
+            except Unreadable:
+                pass
+        # a push during the wait: the head is read again after it, and a moved head stops the run
+        calls = []
+        g["wait_for_check"] = lambda read: calls.append("wait")
+
+        def pr_view(*a, cwd=None, check=True):
+            calls.append("view")
+            return pr_head[0]
+        g["sh"] = pr_view
+        pr_head = ["abc"]
+        green_head("7", "abc", None)
+        assert calls == ["wait", "view"], "head is re-read after the wait: %r" % calls
+        pr_head[0] = "def"
+        try:
+            green_head("7", "abc", None)
+            raise AssertionError("red: a head that moved during the wait still merged")
+        except Stop as e:
+            assert "fence" in str(e), e
+    finally:
+        g["sh"] = real_sh
+        g["wait_for_check"] = real_wait
+    # a stalled gh call is cut off, and wait_for_check counts it as a failed read
+    d = tempfile.mkdtemp()
+    old_path, old_timeout = os.environ["PATH"], GH_TIMEOUT
+    try:
+        Path(d, "gh").write_text("#!/bin/sh\nexec sleep 30\n")
+        Path(d, "gh").chmod(0o755)
+        os.environ["PATH"] = d + os.pathsep + old_path
+        g["GH_TIMEOUT"] = 1
+        t0 = time.monotonic()
+        try:
+            sh("gh", "api", "x")
+            raise AssertionError("red: a stalled gh was not cut off")
+        except Stop as e:
+            assert "timed out" in str(e), e
+        assert time.monotonic() - t0 < 10, "the timeout fired late"
+    finally:
+        os.environ["PATH"] = old_path
+        g["GH_TIMEOUT"] = old_timeout
+        shutil.rmtree(d, ignore_errors=True)
     print("demo-mirror-daily-selftest: ok")
 
 
