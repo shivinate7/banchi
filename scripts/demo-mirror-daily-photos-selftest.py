@@ -162,17 +162,22 @@ def chunk(cards):
     return json.dumps({"responses": {"/inventory": {"body": body}}, "wire": []})
 
 
-# What `gh api .../check-runs --jq` prints for the PR head's all-jobs-passed run, as read_check reads it:
-# status and conclusion, tab-separated. A run not yet concluded has no conclusion, so its row ends in a tab.
-PASSED = "completed\tsuccess"
-PENDING = "in_progress\t"
-FAILED = "completed\tfailure"
+def run_body(status, conclusion=None, started="2026-11-19T00:00:00Z", name="all-jobs-passed", run_id=1):
+    """The body `gh api .../commits/<sha>/check-runs` returns, with one check run in it, as read_check parses it.
+    A run not yet concluded has a null conclusion."""
+    return json.dumps({"check_runs": [{"name": name, "id": run_id, "started_at": started,
+                                       "status": status, "conclusion": conclusion}]})
 
 
-def check_replies(*rows):
-    """A fake `gh api .../check-runs`: each call answers the next row, and the last row after that.
+PASSED = run_body("completed", "success")
+PENDING = run_body("in_progress")
+FAILED = run_body("completed", "failure")
+
+
+def check_replies(*bodies):
+    """A fake `gh api .../check-runs`: each call answers the next body, and the last body after that.
     The answer is stripped, as the script's sh() strips every command's stdout."""
-    left = list(rows)
+    left = list(bodies)
 
     def answer():
         return (left.pop(0) if len(left) > 1 else left[0]).strip()
