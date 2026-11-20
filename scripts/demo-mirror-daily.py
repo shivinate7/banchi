@@ -45,7 +45,8 @@ REMOVE_RETRY_SECONDS = 6  # a late writer may recreate the folder; retry removal
 
 
 CHECK = "all-jobs-passed"  # the one check branch protection requires; the merge tool refuses while it is pending
-CHECK_POLL_SECONDS = 60  # one read a minute, no faster
+PENDING = ("queued", "in_progress", "pending", "waiting", "requested")  # check-run statuses before completed
+CHECK_POLL_SECONDS = 60 # one read a minute, no faster
 CHECK_WAIT_SECONDS = 20 * 60  # the cap; a run that is slower than this leaves the PR for clear_stale_pr
 
 
@@ -113,7 +114,10 @@ def read_check(head, cwd):
     if not out:
         return None, None
     parts = out.split("\t")
-    if len(parts) != 2:
+    # sh() strips the trailing tab, so a run with no conclusion yet arrives as one field: the status alone.
+    if len(parts) == 1 and parts[0] in PENDING:
+        return parts[0], ""
+    if len(parts) != 2 or parts[0] not in PENDING + ("completed",):
         raise Unreadable("checks: cannot read %s status from %r" % (CHECK, out[:80]))
     return parts[0], parts[1]
 
@@ -426,15 +430,17 @@ def selftest():
     g = globals()
     real_sh = g["sh"]
     try:
-        for out, want in (("in_progress\t", ("in_progress", "")), ("completed\tsuccess", ("completed", "success")), ("", (None, None))):
+        for out, want in (("in_progress", ("in_progress", "")), ("queued", ("queued", "")),  # sh() strips the tab
+                          ("in_progress\t", ("in_progress", "")),("completed\tsuccess", ("completed", "success")), ("", (None, None))):
             g["sh"] = lambda *a, cwd=None, check=True, out=out: out
             assert read_check("abc", None) == want, "green: read_check %r" % out
-        g["sh"] = lambda *a, cwd=None, check=True: "[[]]"
-        try:
-            read_check("abc", None)
-            raise AssertionError("red: read_check took an unknown shape")
-        except Unreadable:
-            pass
+        for bad in ("[[]]", "completed", "bogus", "bogus\tsuccess", "in_progress\tx\ty"):
+            g["sh"] = lambda *a, cwd=None, check=True, bad=bad: bad
+            try:
+                read_check("abc", None)
+                raise AssertionError("red: read_check took an unknown shape %r" % bad)
+            except Unreadable:
+                pass
     finally:
         g["sh"] = real_sh
     print("demo-mirror-daily-selftest: ok")
