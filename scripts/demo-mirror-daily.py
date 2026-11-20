@@ -113,7 +113,7 @@ def read_check(head, cwd):
     try:
         runs = [r for r in json.loads(out)["check_runs"] if r["name"] == CHECK]
     except (ValueError, KeyError, TypeError):
-        raise Unreadable("checks: cannot read the check runs from %r" % out[:80])
+        raise Unreadable("checks: cannot read the check runs from %r" % out[:80]) from None
     if not runs:
         return None, None
     run = max(runs, key=lambda r: (r.get("started_at") or "", r.get("id") or 0))  # newest start wins over an older re-run
@@ -170,7 +170,7 @@ def sh(*cmd, cwd=None, check=True):
     try:  # a stalled gh must not hold the run; make demo-mirror alone runs for minutes
         r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=GH_TIMEOUT if cmd[0] == "gh" else None)
     except subprocess.TimeoutExpired:
-        raise Stop("%s timed out after %ds" % (" ".join(cmd[:3]), GH_TIMEOUT))
+        raise Stop("%s timed out after %ds" % (" ".join(cmd[:3]), GH_TIMEOUT)) from None
     if check and r.returncode:
         raise Stop("%s failed: %s" % (" ".join(cmd[:3]), (r.stderr or r.stdout).strip()[-300:]))
     return r.stdout.strip()
