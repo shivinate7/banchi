@@ -162,6 +162,34 @@ def chunk(cards):
     return json.dumps({"responses": {"/inventory": {"body": body}}, "wire": []})
 
 
+# What `gh api .../check-runs --jq` prints for the PR head's all-jobs-passed run, as read_check reads it:
+# status and conclusion, tab-separated. A run not yet concluded has no conclusion, so its row ends in a tab.
+PASSED = "completed\tsuccess"
+PENDING = "in_progress\t"
+FAILED = "completed\tfailure"
+
+
+def check_replies(*rows):
+    """A fake `gh api .../check-runs`: each call answers the next row, and the last row after that.
+    The answer is stripped, as the script's sh() strips every command's stdout."""
+    left = list(rows)
+
+    def answer():
+        return (left.pop(0) if len(left) > 1 else left[0]).strip()
+    return answer
+
+
+def fake_wait(m):
+    """`wait_for_check` with its sleep and clock faked, so a pending check never waits on the real clock.
+    The real function binds time.sleep and time.monotonic when it is defined, so patching `time` misses it."""
+    real, now = m.wait_for_check, [0.0]
+
+    def sleep(s):
+        now[0] += s
+
+    return lambda read: real(read, sleep=sleep, clock=lambda: now[0])
+
+
 def daily_run():
     """Drive run() in a throwaway origin and clone. Returns (outcome, seen)."""
     spec = importlib.util.spec_from_file_location("daily", ROOT / "scripts" / "demo-mirror-daily.py")
@@ -187,6 +215,7 @@ def daily_run():
         merge.chmod(0o755)
         seen = {}
         real_sh = m.sh
+        reply = check_replies(PASSED)
 
         def sh(*cmd, cwd=None, check=True):
             if cmd[0] == "make":
@@ -207,12 +236,16 @@ def daily_run():
                     return "https://github.com/o/r/pull/1"
                 if "headRefOid" in cmd:
                     return real_sh("git", "rev-parse", "HEAD", cwd=cwd)
+                if any("check-runs" in c for c in cmd):
+                    return reply()
                 if "api" in cmd:
                     return "[[]]"
                 return "OPEN"
             return real_sh(*cmd, cwd=cwd, check=check)
 
         m.sh, m.main_tree, m.clear_stale_pr, m.MERGE = sh, (lambda: clone), (lambda root: None), merge
+        if hasattr(m, "wait_for_check"):  # the merge waits for the check; a script without the wait has nothing to fake
+            m.wait_for_check = fake_wait(m)
         m.LOG = base / "daily.log"  # a run that logs must not write the owner's real log
         try:
             m.run(False)
@@ -292,14 +325,16 @@ def step_writer(m, wt, script=WRITER):
         time.sleep(0.01)
 
 
-def drive(m, origin, merge, name, step, setup=None):
+def drive(m, origin, merge, name, step, setup=None, replies=None):
     """Run m.run() over a fresh clone, `step` standing in for `make demo-mirror`, `setup(clone)`
-    laying out what an earlier run left. Returns (outcome, what is left behind, the clone)."""
+    laying out what an earlier run left, `replies` the check_replies() answering the check. Returns
+    (outcome, what is left behind, the clone)."""
     clone = RF / name
     git(RF, "clone", "-q", str(origin), str(clone))
     if setup:
         setup(clone)
     real_sh = m.sh
+    reply = replies or check_replies(PASSED)
 
     def sh(*cmd, cwd=None, check=True):
         if cmd[0] == "make":
@@ -309,6 +344,8 @@ def drive(m, origin, merge, name, step, setup=None):
         if cmd[0] == "gh":
             if "create" in cmd:
                 return "https://github.com/o/r/pull/1"
+            if any("check-runs" in c for c in cmd):
+                return reply()
             if "api" in cmd:
                 return "[[]]"
             if "headRefOid" in cmd:
@@ -323,6 +360,8 @@ def drive(m, origin, merge, name, step, setup=None):
 
     patch = {"sh": sh, "main_tree": lambda: clone, "clear_stale_pr": clear_stale_pr, "MERGE": merge,
              "LOG": RF / (name + ".log")}
+    if hasattr(m, "wait_for_check"):  # a script without the wait has nothing to fake; its merge cases still run
+        patch["wait_for_check"] = fake_wait(m)
     saved = {k: getattr(m, k) for k in patch}
     for k, v in patch.items():
         setattr(m, k, v)
@@ -386,6 +425,29 @@ for name, step, ok, want in (
     if not ok(outcome):
         left.insert(0, "fixture: run() ended %r, wanted %s" % (outcome, want))
     case("worktree gone after run(): " + name, not left, "; ".join(left))
+
+
+def merge_stub(name):
+    """A merge tool that leaves a marker when it is called, so a case can tell whether the merge was reached."""
+    tool, marker = RF / (name + "-merge.sh"), RF / (name + "-merged")
+    tool.write_text("#!/bin/sh\ntouch %s\n" % marker)
+    tool.chmod(0o755)
+    return tool, marker
+
+
+# The merge waits for the PR head's check (`wait_for_check`). A check that is pending and then fails stops the
+# run before the merge tool runs. The control is the same run with the check passing at the end: it must merge.
+tool, marker = merge_stub("pending-then-failed")
+outcome, _, _ = drive(daily, origin, tool, "pending-then-failed", step_changed, replies=check_replies(PENDING, FAILED))
+case("merge waits for all-jobs-passed: no merge after a pending check fails", not marker.exists(),
+     "the merge tool ran after the check concluded failure")
+case("merge waits for all-jobs-passed: the run stops on the failed check", "concluded failure" in str(outcome),
+     "run() ended %r, not a stop on the failed check" % (outcome,))
+tool, marker = merge_stub("pending-then-passed")
+outcome, _, _ = drive(daily, origin, tool, "pending-then-passed", step_changed, replies=check_replies(PENDING, PASSED))
+case("merge waits for all-jobs-passed: a pending check that then passes merges (control)",
+     marker.exists() and returned("merged PR 1")(outcome),
+     "run() ended %r, merge tool reached: %s" % (outcome, marker.exists()))
 
 # The sweep at the start of run(): leftovers of runs that never reached their finally.
 STALE = ("demo-mirror-daily-1000000001", "demo-mirror-daily-1000000002", "demo-mirror-daily-1000000003")
