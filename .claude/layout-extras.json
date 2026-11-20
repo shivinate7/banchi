@@ -20,5 +20,27 @@
   },
   "rolled-out": true,
   "waiting-page": "https://claude.ai/artifact/DCs2UMoFfYKWR4rxKLqv9N",
-  "visibility": "public"
+  "visibility": "public",
+  "artifacts": [
+    {"id": "banchi-answer-desk", "role": "reference", "collections": [], "export": "artifacts/banchi-answer-desk", "links": [{"account": "outlook", "url": "https://claude.ai/artifact/4Y1AU7esAtpAs8q183b3HT"}]},
+    {"id": "banchi-cockpit", "role": "waiting-page", "export": "waiting", "links": [{"account": "outlook", "url": "https://claude.ai/artifact/DCs2UMoFfYKWR4rxKLqv9N"}]},
+    {"id": "riftbound-card-sort", "role": "reference", "collections": [], "export": "artifacts/riftbound-card-sort", "links": [{"account": "outlook", "url": "https://claude.ai/artifact/1orNpfgim8fQDsYHYjPMnK"}]},
+    {"id": "slabs-mockups", "role": "reference", "collections": [], "export": "artifacts/slabs-mockups", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/338o1cSFMdRVBguXiYPQab"}]},
+    {"id": "text-box-hints", "role": "reference", "collections": [], "export": "artifacts/text-box-hints", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/T1B4QRKoZFsC6Wsgyy8Jf1"}]},
+    {"id": "my-slabs", "role": "reference", "collections": [], "export": "artifacts/my-slabs", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/HS9srTjaKgGwY3kRQUJgTS"}]},
+    {"id": "stock-mix", "role": "reference", "collections": [], "export": "artifacts/stock-mix", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/HaZEKvdBj6DiXLfMPXZ1g9"}]},
+    {"id": "capture-mix", "role": "reference", "collections": [], "export": "artifacts/capture-mix", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/NU9QkcMUpe9KNrGvH6Jgyt"}]},
+    {"id": "retire-to-master-set", "role": "reference", "collections": [], "export": "artifacts/retire-to-master-set", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/VjS1JtjbD7TMo1wDKJibqL"}]},
+    {"id": "spiritforged-card-sort", "role": "reference", "collections": [], "export": "artifacts/spiritforged-card-sort", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/5MSYHu2MgPN2A9yT28YpJW"}]},
+    {"id": "between-line", "role": "reference", "collections": [], "export": "artifacts/between-line", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/3fcbrxUg4S4cxhXnFfULFv"}]},
+    {"id": "anatomy-of-the-rig", "role": "reference", "collections": [], "export": "artifacts/anatomy-of-the-rig", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/Uddo3QsVC8MQRFo2X69PAy"}]},
+    {"id": "rig-line-slab", "role": "reference", "collections": [], "export": "artifacts/rig-line-slab", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/11Yij73m412jnE2VZL7anC"}]},
+    {"id": "four-screens-fixed", "role": "reference", "collections": [], "export": "artifacts/four-screens-fixed", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/XBRcxEFLU8dSCMkzrv3Vjf"}]},
+    {"id": "queue-6nu1", "role": "reference", "collections": ["answers", "asks", "groups", "items", "meta", "receipts"], "export": "artifacts/queue-6nu1", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/6NU1FeyGMvhyrQr7ga3tQe"}]},
+    {"id": "live-book-realignment", "role": "reference", "collections": [], "export": "artifacts/live-book-realignment", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/9Usmw8ijAg5rgXy2brkgpf"}]},
+    {"id": "seams-review", "role": "reference", "collections": [], "export": "artifacts/seams-review", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/6uBUd6DuLqyaSiSCK6TuCQ"}]},
+    {"id": "design-portfolio", "role": "reference", "collections": [], "export": "artifacts/design-portfolio", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/JJTJirz1BzGkGzcYLcwMu7"}]},
+    {"id": "before-after-390", "role": "reference", "collections": [], "export": "artifacts/before-after-390", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/8r6KsV384oFZCHNAEQApCd"}]},
+    {"id": "price-history-placement", "role": "reference", "collections": [], "export": "artifacts/price-history-placement", "links": [{"account": "gmail", "url": "https://claude.ai/artifact/Q4sdkANufjQ546n8y8rgLN"}]}
+  ]
 }
