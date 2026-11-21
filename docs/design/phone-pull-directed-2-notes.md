@@ -16,7 +16,7 @@ group. `h=sell,off,env` hides an option from the Options panel.
 
 - Pull tab: `#s=pull`, `#s=loading`, `#s=empty`.
 - Walk: `#s=walk`, `#s=pulled`, `#s=sold`, `#s=short`, `#s=found-fewer`, `#s=unlocated`,
-  `#s=list`, `#s=offline`, `#s=done`.
+  `#s=list`, `#s=offline`, `#s=sell-failed`, `#s=done`.
 - Find: `#s=find`, `#s=find-card`, `#s=move`, `#s=moved`, `#s=find-sold`.
 - Slabs: `#s=slabs`, `#s=scan`, `#s=scan-read`, `#s=slab-added`.
 - Home: `#s=home`.
@@ -60,7 +60,7 @@ Each answered 200.
    number says how many copies to pull. Gain: one look says how many to grab. Loss: a single press
    now stands for several copies (see 5). Departs from: `Fulfillment.tsx` draws one Pull per copy
    (`copy.key`). Pick: yes.
-4. **The two thumb slots.** Upper slot: list button, then Pull. Lower slot: Can't Find It and Skip
+4. **The two thumb slots.** Upper slot: list button, then Pull. Lower slot: Can't Find It and Later
    before the pull, Mark Sold after it, a "Sold" sentence after the sale. Undo and Next Card take
    the upper slot after a sale. Gain: the sale is always one slot below the pull, so the two-step
    guard holds (DESIGN.md, "Two-step pull"; `Fulfillment.tsx`, the comment above the
@@ -81,7 +81,7 @@ Each answered 200.
    must number the envelopes before the walk. Departs from: today no screen groups a pull by buyer
    (`Fulfillment.tsx` sorts by box-walk order only). Owner grant: yes.
 8. **Option `env`: number or first name on the envelope chip.** Number (pick): short, big, same
-   width. First name: nothing to write on the envelope, but two buyers can share a first name.
+   width. First name: reads with no lookup, but it is wider, and two buyers can share one.
 9. **One Pull tab for both today's Fulfillment and the Orders walk.** All owed orders are in by
    default, as on `#/fulfillment`. Gain: one place to pull and one count. Loss: the Orders walk's
    rule "nothing is ticked by default" (`docs/specs/order-walk-plan.md`, Selecting) does not apply
@@ -99,7 +99,8 @@ Each answered 200.
     name", the stock image (`docs/specs/lean-server.md`, option a) and Pull or Not Found. Gain: an
     action for every owed card. Loss: a walk can end on cards that may not exist. Owner grant: yes.
 13. **The walk sheet.** The list button opens next stops, envelope progress and End Walk, with
-    "Each sale is saved when you press it". Gain: the plan and the exit stay one press away.
+    "Each sale is saved when you press it". Each stop is a press that goes to it. Gain: the plan,
+    a way back to a card set aside with Later, and the exit stay one press away.
     Today: a pull is banked at the press (`store/orders.py`, `record_pull`). Pick: yes.
 14. **Option `off`: the Mac is out of reach.** Wait (pick): a floating notice with Try Again (R19,
     DESIGN.md, Fulfillment) and the lower slot says "Selling waits for the Mac." The list and Pull
@@ -135,6 +136,18 @@ Each answered 200.
     `--bn-accent-press` (light) and `--bn-accent-hover` (dark) the pull fill, as in
     `PullConfirm.css`. Figures use tabular system digits, not JetBrains Mono, for a native look.
     Departs from: DESIGN.md, "EVERY NUMBER AND EVERY MACHINE STRING" in mono. Pick: yes.
+
+23. **Later, not Skip.** The second lower-slot button moves the card to the end of the walk, and
+    the walk sheet marks it "Moved here by Later". Gain: the word says where the card goes. Loss:
+    a longer word than Skip. Pick: yes.
+24. **A sale that does not save.** `#s=sell-failed`: the upper slot says "Nothing was saved. Press
+    Mark 3 Sold again." and the button stays. Today: `Fulfillment.tsx` sets the same sentence for
+    a failed sale (`setTrouble`). Pick: yes.
+25. **The envelope setup line.** The Pull tab says "One envelope per order. Write its number on it
+    before you start." Gain: a first walker learns the one setup step where the list is. Pick: yes.
+26. **Large text.** The one-screen walk fits at the default text size only. At larger Dynamic Type
+    sizes the walk must scroll, or the photo must go under its 320 pt floor. Not drawn. See Input
+    Needed in the report.
 
 ## What a builder needs from outside this folder
 

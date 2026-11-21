@@ -270,6 +270,8 @@ button { font-family: var(--font); color: inherit; }
 .float-note { position: absolute; left: var(--bn-4); right: var(--bn-4); z-index: 15; display: flex; gap: var(--bn-3); align-items: center;
   padding: var(--bn-3) var(--bn-3) var(--bn-3) var(--bn-4); border-radius: var(--bn-r-xl); background: var(--bn-surface); box-shadow: var(--bn-shadow-3); }
 .float-note .grow { flex: 1; min-width: 0; }
+/* Unfolded, the notice sits over the right column, above the slots, so it never covers the card's name. */
+.device[data-device="iphone-duo-unfolded"] .float-note { left: auto; width: 340px; }
 .float-note .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--bn-warn); flex: none; }
 
 /* Sheets: rise from the bottom; Cancel or Close leads, Done trails (HIG Sheets). */
@@ -410,7 +412,7 @@ const BOXES = ['WB1 R2', 'WB2 R1', 'WB3 R1', 'WB3 R4']
 // ---------- States: each has a deep link #s=<id> ----------
 const STATES = [
   ['Pull', [['pull', 'Pull tab'], ['loading', 'Loading'], ['empty', 'Nothing to pull'], ['walk', 'Next card'], ['pulled', 'Pulled'], ['sold', 'Sold'],
-    ['short', "Can't find it"], ['found-fewer', 'Found fewer'], ['unlocated', 'No place on file'], ['list', 'Walk sheet'], ['offline', 'Mac out of reach'], ['done', 'Walk done']]],
+    ['short', "Can't find it"], ['found-fewer', 'Found fewer'], ['unlocated', 'No place on file'], ['list', 'Walk sheet'], ['offline', 'Mac out of reach'], ['sell-failed', 'Sale not saved'], ['done', 'Walk done']]],
   ['Find', [['find', 'Results'], ['find-card', 'One card'], ['move', 'Move sheet'], ['moved', 'Moved'], ['find-sold', 'Sold one']]],
   ['Slabs', [['slabs', 'Slabs'], ['scan', 'Scan cert'], ['scan-read', 'Cert read'], ['slab-added', 'Added']]],
   ['Home', [['home', 'Home']]],
@@ -423,7 +425,7 @@ const OPTIONS = [
   { id: 'off', title: 'When the Mac is out of reach', focus: 'offline-control', choices: [['wait', 'Selling waits for the Mac'], ['hold', 'The phone holds sales and sends them later']],
     why: 'Waiting keeps one writer: the store on the Mac. Holding lets a walk go on in a dead spot, but two copies of the truth exist until the phone reaches the Mac. Owner grant.' },
   { id: 'env', title: 'How an envelope is named on the card', focus: 'envelope-chips', choices: [['num', 'Envelope number'], ['name', 'Buyer first name']],
-    why: 'A number is short, big and the same width for every buyer: it fits the thumb slot at 20 pt. A first name needs no envelope written on, but two buyers can share a first name.' },
+    why: 'A number is short, big and the same width for every buyer: it fits the thumb slot at 20 pt. A first name reads without a lookup, but it is wider, and two buyers can share one.' },
 ]
 
 const DEFAULTS = { s: 'walk', sell: 'all', off: 'wait', env: 'num' }
@@ -497,11 +499,11 @@ function pullTab(pose) {
   const start = `<button type="button" class="btn big primary wide" data-go="walk" ${loading ? 'aria-disabled="true"' : ''}>Start Walk</button>`
   if (pose === 'unfolded') {
     return `<div class="screen">${statusbar()}${navbar('Pull')}<div class="split pad" style="padding-bottom:calc(var(--sa-bottom) + 76px)">
-      <div class="split-pane vstack"><div class="group-head">Envelopes, one per order</div><div class="scroll"><div class="group${ann('new', 'envelopes, one per order')}" role="list">${envRows}</div></div></div>
+      <div class="split-pane vstack"><div class="group-head">One envelope per order. ${st.env === 'name' ? 'Write the buyer on it' : 'Write its number on it'} before you start.</div><div class="scroll"><div class="group${ann('new', 'envelopes, one per order')}" role="list">${envRows}</div></div></div>
       <div class="split-pane vstack">${summary}<div class="group">${unloc}</div><div class="grow" style="flex:1"></div>${start}</div></div>${tabbar('Pull')}</div>`
   }
   return `<div class="screen">${statusbar()}${navbar('Pull')}${summary}<div class="scroll pad vstack" style="padding-bottom:12px">
-      <div class="group">${unloc}</div><div class="group-head">Envelopes, one per order</div><div class="group${ann('new', 'envelopes, one per order')}" role="list">${envRows}</div></div>
+      <div class="group">${unloc}</div><div class="group-head">One envelope per order. ${st.env === 'name' ? 'Write the buyer on it' : 'Write its number on it'} before you start.</div><div class="group${ann('new', 'envelopes, one per order')}" role="list">${envRows}</div></div>
       <div class="pad" style="padding-block:8px calc(var(--sa-bottom) + 72px)">${start}</div>${tabbar('Pull')}</div>`
 }
 
@@ -511,12 +513,18 @@ function walkModel() {
   const unl = s === 'unlocated'
   const c = unl ? UNLOCATED : STOPS[0]
   let phase = 'look'
-  if (s === 'pulled' || s === 'offline') phase = 'pulled'
+  if (s === 'pulled' || s === 'offline' || s === 'sell-failed') phase = 'pulled'
   if (s === 'sold') phase = 'sold'
   const take = s === 'found-fewer' ? local.found : c.take
   let left = LEFT_AT_START
   if (phase === 'sold') left -= take
-  return { c, unl, phase, take, left, offline: s === 'offline' }
+  return { c, unl, phase, take, left, offline: s === 'offline', failed: s === 'sell-failed' }
+}
+// The neighbours and the name: under the place when folded, under the photo when unfolded.
+function nameLines(m) {
+  const { c, unl } = m
+  return `${unl ? `<div class="t-title3 ink2">Owed to envelope ${c.env[0][0]}.</div>` : `<div class="between t-title3 ink2"><span class="ell">After ${esc(c.prev)}, before ${esc(c.next)}</span></div>`}
+    <div class="namebar"><span class="t-title3b ell">${esc(c.name)}</span><span class="t-title3 ink2 ell" style="flex:none">${esc(c.cond)}</span></div>`
 }
 function placeBlock(m, wide) {
   const { c, unl } = m
@@ -529,8 +537,7 @@ function placeBlock(m, wide) {
     <div class="place-b"><span class="place-card"><span class="t-large num">${b}</span>${pos}</span>
       <span class="take${ann('new', 'how many to take', true)}" id="take-count"><span class="t-title3">Take</span><b class="num">${m.take}</b></span></div>
     ${ruler}</div>
-    ${unl ? `<div class="t-title3 ink2">Owed to envelope ${c.env[0][0]}.</div>` : `<div class="between t-title3 ink2"><span class="ell">After ${esc(c.prev)}, before ${esc(c.next)}</span></div>`}
-    <div class="namebar"><span class="t-title3b ell">${esc(c.name)}</span><span class="t-title3 ink2 ell" style="flex:none">${esc(c.cond)}</span></div></div>`
+    ${wide ? '' : nameLines(m)}</div>`
 }
 function dock(m) {
   const { phase, take, offline, unl } = m
@@ -538,9 +545,11 @@ function dock(m) {
   let upper, lower
   if (phase === 'look') {
     upper = `${listBtn}<button type="button" class="btn big primary grow${ann('', 'Pull')}" data-go="pulled">Pull ${take}</button>`
-    lower = `<button type="button" class="btn big gray grow${ann('new', "Can't Find It")}" data-go="short" style="font-size:20px">${unl ? 'Not Found' : "Can't Find It"}</button><button type="button" class="btn big gray" style="width:112px;font-size:20px" data-go="${unl ? 'done' : 'walk'}">Skip</button>`
+    lower = `<button type="button" class="btn big gray grow${ann('new', "Can't Find It")}" data-go="short" style="font-size:20px">${unl ? 'Not Found' : "Can't Find It"}</button><button type="button" class="btn big gray" style="width:112px;font-size:20px" data-go="${unl ? 'done' : 'walk'}" aria-label="Later: this card moves to the end of the walk">Later</button>`
   } else if (phase === 'pulled') {
-    upper = `${listBtn}<div class="slot-say${ann('new', 'which envelope', true)}" id="envelope-chips" role="status"><span style="display:flex;flex-direction:column"><span>Pulled.</span><span>Put in</span></span><span class="hstack" style="gap:10px">${envList(m.c.env)}</span></div>`
+    upper = m.failed
+      ? `${listBtn}<div class="slot-say off" role="alert"><span>Nothing was saved. Press Mark ${take} Sold again.</span></div>`
+      : `${listBtn}<div class="slot-say${ann('new', 'which envelope', true)}" id="envelope-chips" role="status"><span style="display:flex;flex-direction:column"><span>Pulled.</span><span>Put in</span></span><span class="hstack" style="gap:10px">${envList(m.c.env)}</span></div>`
     if (offline && st.off === 'wait') {
       lower = `<div class="slot-say off" id="offline-control" role="status"><span>Selling waits for the Mac.</span></div>`
     } else if (st.sell === 'each') {
@@ -565,7 +574,7 @@ function walkScreen(pose) {
   if (pose === 'unfolded') {
     const ahead = STOPS.slice(1).map((s) => `<div class="upnext-row">${photo(s, 'tiny')}<div class="grow" style="display:flex;flex-direction:column;min-width:0;flex:1"><span class="t-title3 ell">${s.box}, Card ${s.card}</span><span class="t-title3 ink2 ell">Take ${s.take}, ${esc(s.name)}</span></div></div>`).join('')
     return `<div class="screen">${statusbar()}<div class="walk-wide">
-      <div class="photo-wrap${ann('', 'photo check, 320 pt or more on the short edge')}" style="align-items:flex-start">${photo(m.c, '', m.unl)}</div>
+      <div class="walk-col"><div class="photo-wrap${ann('', 'photo check, 320 pt or more on the short edge')}" style="align-items:flex-start">${photo(m.c, '', m.unl)}</div>${nameLines(m)}</div>
       <div class="walk-col">${placeBlock(m, true)}<div class="sep"></div><div class="t-title3b">Up next</div><div class="upnext${ann('new', 'next cards, read only')}">${ahead}</div>${dock(m)}</div>
     </div>${note}</div>`
   }
@@ -584,11 +593,11 @@ function shortSheet(pose) {
     <button type="button" class="btn big primary wide" data-go="found-fewer">${local.found === 0 ? 'None Here' : `Found ${local.found} of ${c.take}`}</button></div>`
 }
 function listSheet(pose) {
-  const stops = STOPS.map((s, i) => `<div class="row" ${i === 0 ? 'aria-current="true"' : ''}><span class="grow"><span class="t-title3 ell">${s.box}, Card ${s.card}</span><span class="t-sub ink2 ell">Take ${s.take}, ${esc(s.name)}</span></span></div>`).join('')
+  const stops = STOPS.map((s, i) => `<button type="button" class="row" data-go="walk" ${i === 0 ? 'aria-current="true"' : ''}><span class="grow"><span class="t-title3 ell">${s.box}, Card ${s.card}</span><span class="t-sub ink2 ell">Take ${s.take}, ${esc(s.name)}${i === 4 ? '. Moved here by Later' : ''}</span></span>${ICON.chev}</button>`).join('')
   const envs = BUYERS.slice(0, 5).map((b, i) => `<div class="row"><span class="env">${envChip(b.n)}</span><span class="grow"><span class="t-title3 ell">${b.name}</span></span><span class="t-title3 ink2 num">${[6, 1, 4, 2, 3][i]} of ${b.cards}</span></div>`).join('')
   return `<div class="scrim" data-go="walk"></div><div class="sheet ${pose === 'unfolded' ? 'side' : ''}" role="dialog" aria-label="Walk"><div class="grabber"></div>
     <div class="sheet-bar"><button type="button" class="navlink" data-go="walk">Close</button><h2>Walk</h2><span></span></div>
-    <div class="scroll vstack"><div class="group-head">Next stops</div><div class="group" style="background:var(--bn-surface-3)">${stops}</div>
+    <div class="scroll vstack"><div class="group-head">Next stops. Press one to go to it.</div><div class="group" style="background:var(--bn-surface-3)">${stops}</div>
     <div class="group-head">Envelopes, cards in so far</div><div class="group${ann('new', 'envelope progress')}" style="background:var(--bn-surface-3)">${envs}</div></div>
     <p class="t-title3 ink2" style="margin:0">Each sale is saved when you press it. Ending loses nothing.</p>
     <button type="button" class="btn big gray wide" data-go="pull">End Walk</button></div>`
