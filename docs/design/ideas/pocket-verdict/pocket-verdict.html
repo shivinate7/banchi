@@ -1,0 +1,858 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pocket Verdict</title>
+<style>
+/* Banchi tokens, base light and dark sets, copied from app/src/tokens.css (palettes left out). */
+:root {
+  color-scheme: light;
+  --bn-bg: #f4f5f8;
+  --bn-surface: #ffffff;
+  --bn-surface-2: #eceef2;
+  --bn-surface-3: #f7f8fa;
+  --bn-surface-glass: rgba(255, 255, 255, 0.72);
+  --bn-ink: #0f1217;
+  --bn-ink-2: #3b414b;
+  --bn-ink-3: #666c76;
+  --bn-ink-4: #7f8791;
+  --bn-line: rgba(15, 18, 23, 0.08);
+  --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-line-focus: rgba(61, 90, 241, 0.55);
+  --bn-accent: #3d5af1;
+  --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10);
+  --bn-accent-tint-2: rgba(61, 90, 241, 0.18);
+  --bn-on-accent: #ffffff;
+  --bn-live: #d63d2b;
+  --bn-ok: #15803d;
+  --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309;
+  --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-danger: #b91c1c;
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32), 0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-stage-bg: #0c0e12;
+  --bn-stage-bg-2: #171b25;
+  --bn-stage-surface: #1b2029;
+  --bn-stage-ink: #eef0f4;
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-1: 4px; --bn-2: 8px; --bn-3: 12px; --bn-4: 16px; --bn-5: 20px; --bn-6: 24px;
+  --bn-7: 32px; --bn-8: 40px; --bn-9: 48px; --bn-10: 64px;
+  --bn-r-sm: 6px; --bn-r: 8px; --bn-r-lg: 12px; --bn-r-xl: 16px; --bn-r-2xl: 22px; --bn-r-full: 999px;
+  --bn-t-fast: 120ms; --bn-t: 200ms; --bn-t-layout: 240ms;
+  --bn-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* iOS Dynamic Type, default (Large) size: HIG Typography page, read 2026-11-21. */
+  --ios-large-title: 34px; --ios-title1: 28px; --ios-title2: 22px; --ios-title3: 20px;
+  --ios-headline: 17px; --ios-body: 17px; --ios-callout: 16px; --ios-subhead: 15px;
+  --ios-footnote: 13px; --ios-caption1: 12px; --ios-caption2: 11px;
+  /* The verdict figure is no text style: it scales with @ScaledMetric from Large Title. */
+  --ios-verdict: 80px;
+  --ios-target: 44px; /* HIG Buttons and Accessibility: 44x44 pt hit region */
+
+  /* PLACEHOLDER device sizes. layout.json writes no size for either Duo pose, and no Apple page
+     read gives one. Each frame is drawn at 1 CSS px = 1 pt, at these stand-in sizes. */
+  --fold-w: 390px; --fold-h: 844px;
+  --open-w: 740px; --open-h: 844px;
+  --bar-h: 50px;   /* status bar area, placeholder */
+  --home-h: 34px;  /* home indicator area, placeholder */
+  --screen-r: 48px;
+  --font: -apple-system, system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+    --bn-surface-glass: rgba(20, 23, 28, 0.72);
+    --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+    --bn-line: rgba(255, 255, 255, 0.08); --bn-line-strong: rgba(255, 255, 255, 0.16);
+    --bn-line-focus: rgba(129, 146, 255, 0.6);
+    --bn-accent: #7f90ff; --bn-accent-press: #6b7dfa; --bn-accent-tint: rgba(127, 144, 255, 0.14);
+    --bn-accent-tint-2: rgba(127, 144, 255, 0.24); --bn-on-accent: #0c0e12;
+    --bn-live: #ff6a58; --bn-ok: #3ddc84; --bn-ok-tint: rgba(61, 220, 132, 0.14);
+    --bn-warn: #f5a524; --bn-warn-tint: rgba(245, 165, 36, 0.14); --bn-danger: #ff5c5c;
+    --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+    --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+  --bn-surface-glass: rgba(20, 23, 28, 0.72);
+  --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+  --bn-line: rgba(255, 255, 255, 0.08); --bn-line-strong: rgba(255, 255, 255, 0.16);
+  --bn-line-focus: rgba(129, 146, 255, 0.6);
+  --bn-accent: #7f90ff; --bn-accent-press: #6b7dfa; --bn-accent-tint: rgba(127, 144, 255, 0.14);
+  --bn-accent-tint-2: rgba(127, 144, 255, 0.24); --bn-on-accent: #0c0e12;
+  --bn-live: #ff6a58; --bn-ok: #3ddc84; --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524; --bn-warn-tint: rgba(245, 165, 36, 0.14); --bn-danger: #ff5c5c;
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bn-bg);
+  color: var(--bn-ink);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+button { font-family: var(--font); color: inherit; }
+button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--bn-line-focus); outline-offset: 2px; }
+
+/* ---------- The page around the phones ---------- */
+.page { display: flex; flex-direction: column; gap: var(--bn-6); padding: var(--bn-6) var(--bn-4) var(--bn-10); max-width: 1376px; margin-inline: auto; }
+.sample {
+  display: flex; gap: var(--bn-3); align-items: baseline; flex-wrap: wrap;
+  padding: var(--bn-3) var(--bn-4); border-radius: var(--bn-r);
+  background: var(--bn-warn-tint); color: var(--bn-ink);
+}
+.sample strong { color: var(--bn-warn); }
+.head { display: flex; flex-direction: column; gap: var(--bn-2); max-width: 68ch; }
+.head h1 { font-size: 28px; line-height: 1.15; margin: 0; letter-spacing: -0.01em; }
+.head p { margin: 0; color: var(--bn-ink-2); }
+.kind { color: var(--bn-ink-3); font-size: 13px; }
+
+.controls { display: grid; grid-template-columns: 1fr auto; gap: var(--bn-4) var(--bn-6); align-items: start; }
+@media (max-width: 1000px) { .controls { grid-template-columns: 1fr; } }
+.group { display: flex; flex-direction: column; gap: var(--bn-2); }
+.group-label { font-size: 13px; color: var(--bn-ink-3); }
+.chips { display: flex; flex-wrap: wrap; gap: var(--bn-2); }
+.chip {
+  min-height: 32px; padding: 0 var(--bn-3); border-radius: var(--bn-r-full);
+  border: 1px solid var(--bn-line-strong); background: var(--bn-surface); font-size: 13px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--bn-ink); color: var(--bn-bg); border-color: var(--bn-ink); }
+.statepicker { display: flex; flex-direction: column; gap: var(--bn-3); }
+.stategroup { display: flex; flex-wrap: wrap; gap: var(--bn-2); align-items: center; }
+.stategroup > span { font-size: 13px; color: var(--bn-ink-3); min-width: 108px; }
+.side-controls { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 300px; }
+.opt { display: flex; gap: var(--bn-2); align-items: center; flex-wrap: wrap; font-size: 13px; }
+.opt .name { color: var(--bn-ink-2); min-width: 92px; }
+.hide { min-height: 28px; padding: 0 var(--bn-2); border: 0; background: none; color: var(--bn-accent); font-size: 13px; cursor: pointer; }
+.hidden-note { font-size: 13px; color: var(--bn-ink-3); }
+
+.stage { display: flex; flex-wrap: wrap; gap: var(--bn-8); align-items: flex-start; justify-content: center; }
+.pose { display: flex; flex-direction: column; gap: var(--bn-3); align-items: center; }
+.pose-label { font-size: 13px; color: var(--bn-ink-3); text-align: center; }
+.caption { display: flex; flex-direction: column; gap: var(--bn-2); max-width: 760px; margin-inline: auto; width: 100%; }
+.tag { border: 1.5px dashed var(--bn-ink-4); border-radius: var(--bn-r); padding: var(--bn-2) var(--bn-3); font-size: 14px; color: var(--bn-ink-2); }
+.tag b { color: var(--bn-ink); }
+.tag.new { border-color: var(--bn-accent); }
+.tag.new b { color: var(--bn-accent); }
+.link { font-size: 13px; color: var(--bn-ink-3); word-break: break-all; }
+
+/* ---------- The device ---------- */
+.device {
+  position: relative; overflow: hidden; flex: none;
+  border-radius: var(--screen-r);
+  background: var(--bn-bg); color: var(--bn-ink);
+  box-shadow: 0 0 0 10px var(--bn-stage-bg), 0 0 0 11px var(--bn-line-strong), var(--bn-shadow-3);
+  font-family: var(--font); font-size: var(--ios-body); line-height: 1.3;
+  container-type: inline-size;
+}
+.device[data-device="iphone-duo-folded"] { width: var(--fold-w); height: var(--fold-h); }
+.device[data-device="iphone-duo-unfolded"] { width: var(--open-w); height: var(--open-h); }
+.screen { position: absolute; inset: 0; display: flex; flex-direction: column; }
+
+.statusbar {
+  position: absolute; inset: 0 0 auto 0; z-index: 5;
+  height: max(env(safe-area-inset-top), var(--bar-h));
+  display: flex; align-items: center; justify-content: space-between; padding: 0 30px 0 36px;
+  font-size: var(--ios-headline); font-weight: 600; pointer-events: none;
+}
+.statusbar .on-dark { color: var(--bn-stage-ink); }
+.bat { width: 27px; height: 13px; border-radius: 4px; border: 1.5px solid currentColor; opacity: .9; position: relative; }
+.bat::after { content: ""; position: absolute; inset: 2px 6px 2px 2px; background: currentColor; border-radius: 1.5px; }
+.sbr { display: flex; gap: var(--bn-2); align-items: center; }
+.nosig { font-size: var(--ios-caption1); font-weight: 600; opacity: .85; }
+.homebar {
+  position: absolute; inset: auto 0 0 0; z-index: 7; pointer-events: none;
+  height: max(env(safe-area-inset-bottom), var(--home-h));
+  display: flex; align-items: flex-end; justify-content: center; padding-bottom: 8px;
+}
+.homebar::after { content: ""; width: 134px; height: 5px; border-radius: 3px; background: var(--bn-ink); opacity: .85; }
+.homebar.on-dark::after { background: var(--bn-stage-ink); }
+
+/* Tab bar: floats above content at the bottom (HIG Tab bars). */
+.tabbar {
+  position: absolute; z-index: 6; left: 50%; transform: translateX(-50%);
+  bottom: calc(max(env(safe-area-inset-bottom), var(--home-h)) + 2px);
+  display: flex; gap: var(--bn-1); padding: var(--bn-1);
+  border-radius: var(--bn-r-full); background: var(--bn-surface-glass);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
+  box-shadow: var(--bn-shadow-2);
+}
+.tab {
+  min-width: 96px; min-height: 52px; border: 0; border-radius: var(--bn-r-full); background: none; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  font-size: var(--ios-caption2); font-weight: 600; color: var(--bn-ink-2);
+}
+.tab[aria-current="page"] { background: var(--bn-accent-tint); color: var(--bn-accent); }
+.tab svg { width: 22px; height: 22px; }
+
+/* Camera */
+.cam {
+  position: relative; flex: none; overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 40%, var(--bn-stage-bg-2), var(--bn-stage-bg));
+  color: var(--bn-stage-ink);
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(max(env(safe-area-inset-top), var(--bar-h)) + 44px) 0 36px;
+}
+.aim { position: relative; padding: 14px; height: 100%; max-height: 240px; display: flex; align-items: center; justify-content: center; }
+.aim > .cardart, .aim > .slab .cardart { height: 100%; width: auto; max-height: 212px; }
+.aim > .slab { height: 100%; max-height: 240px; width: auto; }
+.aim > .slab .cardart { height: auto; flex: 1; min-height: 0; }
+.aim > .binder { height: 100%; grid-template-columns: repeat(3, auto); grid-template-rows: repeat(3, minmax(0, 1fr)); }
+.aim > .binder .cardart { width: auto; height: 100%; }
+.aim svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.cam-top {
+  position: absolute; z-index: 2; inset: calc(max(env(safe-area-inset-top), var(--bar-h)) + 4px) 16px auto 16px;
+  display: flex; justify-content: space-between; gap: var(--bn-2);
+}
+.pill {
+  min-height: 28px; padding: 4px 12px; border-radius: var(--bn-r-full);
+  background: rgba(12, 14, 18, 0.6); color: var(--bn-stage-ink);
+  font-size: var(--ios-footnote); font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--bn-stage-warn); }
+button.pill { border: 0; cursor: pointer; min-height: var(--ios-target); }
+.reticle { position: absolute; inset: 0; pointer-events: none; }
+.cardart {
+  width: 120px; aspect-ratio: 63 / 88; border-radius: 6px; position: relative;
+  background: var(--art, #5b6bd6); box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  display: flex; flex-direction: column; padding: 7px; gap: 5px;
+}
+.cardart::before { content: ""; flex: 0 0 9px; border-radius: 2px; background: rgba(255,255,255,.55); }
+.cardart::after { content: ""; flex: 1; border-radius: 3px; background: rgba(0,0,0,.18); }
+.cardart .code { position: absolute; left: 8px; bottom: 6px; font-size: 7px; color: rgba(255,255,255,.85); }
+.cardart.blur { filter: blur(5px); }
+.slab {
+  width: 136px; padding: 8px; border-radius: 8px; background: rgba(238,240,244,.16);
+  border: 1px solid rgba(238,240,244,.35); display: flex; flex-direction: column; gap: 6px; align-items: center;
+}
+.slab .label { width: 100%; height: 24px; gap: 6px; overflow: hidden; white-space: nowrap; border-radius: 3px; background: #eef0f4; color: #0f1217; font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; padding: 0 6px; }
+.slab .cardart { width: 100px; box-shadow: none; }
+.binder { display: grid; grid-template-columns: repeat(3, 58px); gap: 6px; padding: 10px; border-radius: 8px; background: rgba(238,240,244,.08); }
+.binder .cardart { width: 58px; padding: 4px; gap: 3px; box-shadow: none; }
+.binder .cardart::before { flex-basis: 5px; }
+.binder .cardart.done { outline: 2px solid var(--bn-stage-ok); outline-offset: 1px; }
+.binder .cardart.unk { outline: 2px dashed var(--bn-stage-warn); outline-offset: 1px; }
+.cam-hint { position: absolute; z-index: 2; bottom: 14px; left: 0; right: 0; text-align: center; font-size: var(--ios-footnote); color: rgba(238,240,244,.8); }
+
+/* Sample tray: mockup-only control for choosing which card the camera "sees". */
+.tray { display: flex; flex-direction: column; gap: var(--bn-2); padding: var(--bn-3); border: 1.5px dashed var(--bn-ink-4); border-radius: var(--bn-r-lg); background: var(--bn-surface); }
+.tray-label { font-size: var(--ios-footnote); color: var(--bn-ink-3); }
+.tray-row { display: flex; flex-wrap: wrap; gap: var(--bn-2); }
+.tray button { min-height: var(--ios-target); padding: 0 var(--bn-3); border-radius: var(--bn-r-full); border: 1px solid var(--bn-line-strong); background: var(--bn-surface-3); font-size: var(--ios-subhead); cursor: pointer; }
+
+/* The verdict field: the one bold element. */
+.field {
+  flex: 1; display: flex; flex-direction: column; gap: var(--bn-4);
+  padding: var(--bn-4) var(--bn-5) calc(max(env(safe-area-inset-bottom), var(--home-h)) + 76px);
+  transition: background-color var(--bn-t) var(--bn-ease);
+}
+.field.buy { background: var(--bn-ok); color: var(--bn-surface); }
+.field.toomany { background: var(--bn-warn); color: var(--bn-surface); }
+.field.pass { background: var(--bn-surface-2); color: var(--bn-ink); }
+.field.none { background: var(--bn-surface); color: var(--bn-ink); box-shadow: inset 0 0 0 3px var(--bn-ink-4); }
+.field.work { background: var(--bn-surface); color: var(--bn-ink); }
+.grab { align-self: center; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: var(--ios-caption1); opacity: .85; min-height: 20px; }
+.grab::before { content: ""; width: 36px; height: 5px; border-radius: 3px; background: currentColor; opacity: .5; }
+.who { display: flex; flex-direction: column; gap: 2px; }
+.who .n { font-size: var(--ios-headline); font-weight: 600; }
+.who .s { font-size: var(--ios-subhead); opacity: .85; }
+.verb { font-size: var(--ios-title2); font-weight: 700; line-height: 1.25; }
+.big { font-size: var(--ios-verdict); font-weight: 700; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.mid { font-size: var(--ios-title1); font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.why { font-size: var(--ios-body); line-height: 1.3; max-width: 32ch; }
+.vstack { display: flex; flex-direction: column; gap: var(--bn-1); }
+.spacer { flex: 1; }
+.acts { display: flex; gap: var(--bn-3); }
+.btn {
+  flex: 1; min-height: 50px; padding: 0 var(--bn-4); border-radius: var(--bn-r-full); border: 0; cursor: pointer;
+  font-size: var(--ios-headline); font-weight: 600;
+}
+.btn.primary { background: var(--bn-accent); color: var(--bn-on-accent); }
+.field.buy .btn.primary, .field.toomany .btn.primary { background: var(--bn-surface); color: var(--bn-ink); }
+.btn.plain { background: var(--bn-line-strong); color: inherit; }
+.field.buy .btn.plain, .field.toomany .btn.plain { background: rgba(255,255,255,.2); color: var(--bn-surface); }
+:root[data-theme="dark"] .field.buy .btn.plain, :root[data-theme="dark"] .field.toomany .btn.plain { background: rgba(0,0,0,.18); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .field.buy .btn.plain, :root:not([data-theme="light"]) .field.toomany .btn.plain { background: rgba(0,0,0,.18); } }
+.textbtn { min-height: var(--ios-target); border: 0; background: none; font-size: var(--ios-body); color: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 0 var(--bn-2); align-self: center; }
+.top3 { display: flex; flex-direction: column; border-radius: var(--bn-r-lg); background: rgba(255,255,255,.16); overflow: hidden; }
+.top3 div { display: flex; justify-content: space-between; min-height: var(--ios-target); align-items: center; padding: 0 var(--bn-3); font-size: var(--ios-subhead); }
+.top3 div + div { box-shadow: inset 0 1px 0 rgba(255,255,255,.25); }
+.bar { height: 8px; border-radius: 4px; background: var(--bn-surface-2); overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--bn-accent); transition: width var(--bn-t-layout) var(--bn-ease); }
+
+/* Verdict as a card over the camera (the other option) */
+.v-card .cam { flex: 1; }
+.v-card .field { flex: none; margin: 0 var(--bn-3); border-radius: 28px; padding-bottom: var(--bn-4); }
+.v-card .field-wrap { padding-bottom: calc(max(env(safe-area-inset-bottom), var(--home-h)) + 76px); background: var(--bn-stage-bg); }
+.v-card .field .big { font-size: 56px; }
+
+/* List screens */
+.navbar { padding: calc(max(env(safe-area-inset-top), var(--bar-h)) + 8px) var(--bn-5) var(--bn-2); display: flex; flex-direction: column; gap: var(--bn-1); }
+.navbar h2 { font-size: var(--ios-large-title); font-weight: 700; margin: 0; line-height: 1.2; }
+.navbar .sub { font-size: var(--ios-subhead); color: var(--bn-ink-3); }
+.scroll { flex: 1; overflow: auto; padding: var(--bn-2) var(--bn-4) calc(max(env(safe-area-inset-bottom), var(--home-h)) + 84px); display: flex; flex-direction: column; gap: var(--bn-5); }
+.section { display: flex; flex-direction: column; gap: var(--bn-2); }
+.section-h { font-size: var(--ios-footnote); color: var(--bn-ink-3); padding: 0 var(--bn-4); }
+.section-f { font-size: var(--ios-footnote); color: var(--bn-ink-3); padding: 0 var(--bn-4); }
+.inset { background: var(--bn-surface); border-radius: 22px; overflow: hidden; box-shadow: var(--bn-shadow-1); }
+.row {
+  display: flex; align-items: center; gap: var(--bn-3); min-height: var(--ios-target);
+  padding: 11px var(--bn-4); font-size: var(--ios-body); width: 100%; border: 0; background: none; text-align: left; cursor: default;
+}
+button.row { cursor: pointer; }
+.row + .row { box-shadow: inset 16px 1px 0 -15px var(--bn-line-strong); }
+.row .l { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.row .t { font-size: var(--ios-body); white-space: nowrap; }
+.row .m { font-size: var(--ios-subhead); color: var(--bn-ink-3); }
+.row .r { font-size: var(--ios-body); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; text-align: right; display: flex; flex-direction: column; gap: 2px; }
+.row .r .m { color: var(--bn-ok); }
+.row.sel { background: var(--bn-accent-tint); }
+.row.fresh { background: var(--bn-ok-tint); }
+.thumb { width: 30px; aspect-ratio: 63/88; border-radius: 3px; background: var(--art, var(--bn-surface-2)); flex: none; }
+.thumb.unk { background: var(--bn-surface-2); box-shadow: inset 0 0 0 1.5px var(--bn-ink-4); }
+.sums { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--bn-2); }
+.sum { background: var(--bn-surface); border-radius: var(--bn-r-xl); padding: var(--bn-3); box-shadow: var(--bn-shadow-1); display: flex; flex-direction: column; gap: 2px; }
+.sum .k { font-size: var(--ios-footnote); color: var(--bn-ink-3); }
+.sum .v { font-size: var(--ios-title3); font-weight: 600; font-variant-numeric: tabular-nums; }
+.sum .v.ok { color: var(--bn-ok); }
+.meter { height: 6px; border-radius: 3px; background: var(--bn-surface-2); overflow: hidden; }
+.meter > i { display: block; height: 100%; background: var(--bn-ink-2); }
+.wide { width: 100%; flex: none; }
+.done-mark { width: 56px; height: 56px; border-radius: 50%; background: var(--bn-ok-tint); color: var(--bn-ok); display: flex; align-items: center; justify-content: center; }
+.hero { display: flex; flex-direction: column; gap: var(--bn-3); align-items: flex-start; padding: var(--bn-2) var(--bn-4); }
+.hero .t { font-size: var(--ios-title2); font-weight: 700; }
+.hero .s { font-size: var(--ios-body); color: var(--bn-ink-2); }
+.field-in { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); min-height: var(--ios-target); padding: 11px var(--bn-4); }
+.field-in .val { font-size: var(--ios-body); color: var(--bn-accent); font-variant-numeric: tabular-nums; }
+.receipt { display: flex; flex-direction: column; gap: var(--bn-2); padding: var(--bn-4); border-radius: 22px; background: var(--bn-ok-tint); }
+.receipt .t { font-size: var(--ios-headline); font-weight: 600; }
+.receipt .s { font-size: var(--ios-subhead); color: var(--bn-ink-2); }
+.today-tag { border: 1.5px dashed var(--bn-ink-4); border-radius: var(--bn-r-lg); padding: var(--bn-2) var(--bn-3); font-size: var(--ios-footnote); color: var(--bn-ink-2); }
+.toast {
+  position: absolute; z-index: 4; left: 16px; right: 16px; top: calc(max(env(safe-area-inset-top), var(--bar-h)) + 44px);
+  display: flex; gap: var(--bn-3); align-items: center; padding: var(--bn-3) var(--bn-4); border-radius: 22px;
+  background: var(--bn-surface); box-shadow: var(--bn-shadow-3); font-size: var(--ios-subhead);
+}
+.toast b { font-size: var(--ios-headline); }
+
+/* Sheets (HIG Sheets: Cancel leading, Done trailing). */
+.scrim { position: absolute; inset: 0; z-index: 8; background: rgba(12, 14, 18, 0.32); display: flex; align-items: flex-end; justify-content: center; }
+.sheet {
+  width: 100%; background: var(--bn-bg); border-radius: 34px 34px 0 0; box-shadow: var(--bn-shadow-3);
+  display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-2) 0 max(env(safe-area-inset-bottom), var(--home-h));
+}
+.unfold .scrim { align-items: center; }
+.unfold .sheet { width: 420px; border-radius: 34px; padding-bottom: var(--bn-4); }
+.sheet .grabber { align-self: center; width: 36px; height: 5px; border-radius: 3px; background: var(--bn-ink-4); opacity: .6; }
+.sheet-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 var(--bn-2); }
+.sheet-bar h3 { margin: 0; font-size: var(--ios-headline); font-weight: 600; }
+.sheet-bar button { min-height: var(--ios-target); min-width: var(--ios-target); padding: 0 var(--bn-3); border: 0; border-radius: var(--bn-r-full); background: var(--bn-surface); font-size: var(--ios-body); cursor: pointer; box-shadow: var(--bn-shadow-1); }
+.sheet-bar .lead { justify-self: start; }
+.sheet-bar .trail { justify-self: end; background: var(--bn-accent); color: var(--bn-on-accent); font-weight: 600; }
+.sheet-body { display: flex; flex-direction: column; gap: var(--bn-3); padding: 0 var(--bn-4); }
+.paid { display: flex; flex-direction: column; align-items: center; gap: var(--bn-1); padding: var(--bn-2) 0; }
+.paid .k { font-size: var(--ios-subhead); color: var(--bn-ink-3); }
+.paid .v { font-size: 56px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.paid .v .caret { display: inline-block; width: 2px; height: 46px; background: var(--bn-accent); vertical-align: -4px; margin-left: 2px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.facts { display: flex; flex-direction: column; }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 6px; background: var(--bn-surface-2); }
+.key { min-height: 46px; border: 0; border-radius: 8px; background: var(--bn-surface); font-size: 24px; cursor: pointer; box-shadow: 0 1px 0 var(--bn-line-strong); }
+.key.fn { background: transparent; box-shadow: none; font-size: var(--ios-body); }
+.over { color: var(--bn-danger); }
+
+/* Unfolded pose: two columns, by width. */
+.unfold .split { position: absolute; inset: 0; display: grid; grid-template-columns: 400px 1fr; }
+.unfold .split > .pane { position: relative; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.unfold .split > .pane + .pane { box-shadow: inset 1px 0 0 var(--bn-line-strong); background: var(--bn-bg); }
+.unfold .navbar.small h2 { font-size: var(--ios-title2); }
+.detail-art { width: 132px; aspect-ratio: 63/88; border-radius: 8px; background: var(--art, var(--bn-surface-2)); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="sample" role="note"><strong>Sample.</strong> <span>No figure on this page is real. Every card and set name is made up. Card art is a flat block.</span></div>
+
+  <header class="head">
+    <h1>Card-show Pocket Verdict</h1>
+    <p>A proposal for Banchi's iPhone app. At a card show the owner holds one card to the camera. The phone answers from their own store, offline: buy under a price, pass, or too many. Buys go on a list that comes home as the next capture batch.</p>
+    <p class="kind">Designer kind: informed. Nothing here ships. Both Duo frames are drawn at a placeholder point size: layout.json writes none.</p>
+  </header>
+
+  <section class="controls" aria-label="Mockup controls">
+    <div class="statepicker" id="picker"></div>
+    <div class="side-controls">
+      <div class="group">
+        <span class="group-label">Theme</span>
+        <div class="chips" id="themes"></div>
+      </div>
+      <div class="group" id="opts"></div>
+    </div>
+  </section>
+
+  <section class="stage" aria-label="Phone frames">
+    <div class="pose">
+      <div class="device fold" data-device="iphone-duo-folded" id="dev-fold" aria-label="iPhone Duo, folded"></div>
+      <div class="pose-label">iPhone Duo, folded (placeholder size)</div>
+    </div>
+    <div class="pose">
+      <div class="device unfold" data-device="iphone-duo-unfolded" id="dev-open" aria-label="iPhone Duo, unfolded"></div>
+      <div class="pose-label">iPhone Duo, unfolded (placeholder size)</div>
+    </div>
+  </section>
+
+  <section class="caption" id="caption" aria-live="polite"></section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (s) { return document.querySelector(s); };
+  var money = function (n) { return "$" + n.toFixed(2); };
+  var whole = function (n) { return n % 1 === 0 ? "$" + n : money(n); };
+
+  // Sample data. Card names, sets and figures are invented.
+  var CARDS = {
+    gloamwing: { name: "Gloamwing", set: "Ember Tide", code: "ETD 041/198", art: "#5b6bd6", under: 4.20, net: 5.25, sale: 6.80, days: 18, have: 0 },
+    pebblet:   { name: "Pebblet", set: "Saltmarsh", code: "SLT 112/180", art: "#7a8a6a", best: 0.90, floor: 1.50 },
+    mirefox:   { name: "Mirefox ex", set: "Hollow Crown", code: "HCR 077/190", art: "#9a5bb0", have: 5, months: 7, under: 1.10 },
+    velvet:    { name: "Velvet Wyrm ex", set: "Hollow Crown", code: "HCR 211/190", art: "#b0563f", grader: "PSA", grade: 9, under: 46, net: 57.50, sales: 6, weeks: 5 },
+    velvet10:  { name: "Velvet Wyrm ex", set: "Hollow Crown", code: "HCR 211/190", art: "#b0563f", grader: "PSA", grade: 10, sales: 2, lo: 88, hi: 140 }
+  };
+  var START_BUYS = [
+    { name: "Thornback Rex", code: "ETD 088/198", art: "#3f8a7a", paid: 6.00, margin: 2.10, under: 6.40, wait: "about 3 weeks" },
+    { name: "Lumacoil ex", code: "SLT 019/180", art: "#c08a2f", paid: 12.50, margin: 4.40, under: 13.50, wait: "about 2 weeks" },
+    { name: "Velvet Wyrm ex, PSA 9", code: "HCR 211/190", art: "#b0563f", paid: 40.00, margin: 17.50, under: 46.00, wait: "about 5 weeks" },
+    { name: "Cindermole", code: "HCR 140/190", art: "#6d6f8a", paid: 2.00, margin: 1.15, under: 2.50, wait: "about 6 weeks" },
+    { name: "Briarhop", code: "ETD 012/198", art: "#4f7fb0", paid: 9.00, margin: 3.05, under: 9.60, wait: "about 4 weeks" }
+  ];
+
+  var STATES = [
+    ["Before leaving", [["going-out", "Going out"], ["syncing", "Copying"], ["ready", "Ready offline"]]],
+    ["At a table", [["scan", "Aim"], ["buy", "Buy under"], ["pass", "Pass"], ["toomany", "Too many"], ["notrecognised", "Not recognised"], ["typein", "Type it in"], ["snapped", "Snapped for later"], ["logbuy", "Log a buy"]]],
+    ["Slabs", [["slab", "Slab"], ["slab-thin", "Slab, thin data"]]],
+    ["Lots", [["lot-ask", "Lot price"], ["lot", "Sweeping"], ["lot-end", "Lot verdict"]]],
+    ["Back home", [["bought-today", "Bought today"], ["synced", "Sent home"]]]
+  ];
+  var NAMES = {}; STATES.forEach(function (g) { g[1].forEach(function (s) { NAMES[s[0]] = s[1]; }); });
+
+  var OPTIONS = [
+    { key: "v", label: "Verdict", focus: "verdict", choices: [["field", "Full field"], ["card", "Card over camera"]] },
+    { key: "tm", label: "Too many", focus: "toomany-price", choices: [["drop", "Price dropped"], ["hide", "Price hidden"]] }
+  ];
+
+  var S = {
+    state: "buy", theme: "auto", v: "field", tm: "drop", hidden: [],
+    budget: 300, buys: START_BUYS.slice(), snapped: 1, paid: "3.75", item: "gloamwing",
+    lotN: 22, sel: 0, fresh: -1, sent: false
+  };
+
+  function spent() { return S.buys.reduce(function (a, b) { return a + b.paid; }, 0); }
+  function margin() { return S.buys.reduce(function (a, b) { return a + b.margin; }, 0); }
+  function left() { return S.budget - spent(); }
+
+  // ---------- URL ----------
+  function readHash() {
+    var p = new URLSearchParams(location.hash.slice(1));
+    var st = p.get("state");
+    if (st && NAMES[st]) S.state = st;
+    var t = p.get("t"); S.theme = (t === "dark" || t === "light") ? t : "auto";
+    if (p.get("v") === "card" || p.get("v") === "field") S.v = p.get("v");
+    if (p.get("tm") === "hide" || p.get("tm") === "drop") S.tm = p.get("tm");
+    S.hidden = (p.get("h") || "").split(",").filter(Boolean);
+    applyHidden();
+  }
+  function hashFor(over) {
+    var o = Object.assign({ state: S.state, t: S.theme, v: S.v, tm: S.tm, h: S.hidden.join(",") }, over || {});
+    var parts = ["state=" + o.state];
+    if (o.t !== "auto") parts.push("t=" + o.t);
+    if (o.v !== "field") parts.push("v=" + o.v);
+    if (o.tm !== "drop") parts.push("tm=" + o.tm);
+    if (o.h) parts.push("h=" + o.h);
+    return "#" + parts.join("&");
+  }
+  function go(state, extra) {
+    if (extra) extra();
+    var h = hashFor({ state: state });
+    if (location.hash === h) render(); else location.hash = h;
+  }
+  function applyHidden() {
+    OPTIONS.forEach(function (o) {
+      var shown = o.choices.filter(function (c) { return S.hidden.indexOf(o.key + ":" + c[0]) < 0; });
+      if (shown.length && !shown.some(function (c) { return c[0] === S[o.key]; })) S[o.key] = shown[0][0];
+    });
+  }
+
+  // ---------- Icons ----------
+  var ICON = {
+    scan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><rect x="9" y="7" width="6" height="10" rx="1"/></svg>',
+    today: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>',
+    out: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 19h14"/></svg>',
+    check: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
+  };
+
+  // ---------- Pieces ----------
+  function statusbar(leftDark, rightDark) {
+    return '<div class="statusbar" aria-hidden="true"><span class="' + (leftDark ? 'on-dark' : '') + '">10:42</span><span class="sbr' + (rightDark ? ' on-dark' : '') + '"><span class="nosig">No Service</span><span class="bat"></span></span></div>';
+  }
+  function homebar(dark) { return '<div class="homebar' + (dark ? ' on-dark' : '') + '" aria-hidden="true"></div>'; }
+  function tabbar(active) {
+    var t = [["scan", "Scan", "scan"], ["bought-today", "Today", "today"], ["going-out", "Going Out", "out"]];
+    return '<nav class="tabbar" aria-label="Sections">' + t.map(function (x) {
+      return '<button class="tab" data-go="' + x[0] + '"' + (active === x[2] ? ' aria-current="page"' : '') + '>' + ICON[x[2]] + '<span>' + x[1] + '</span></button>';
+    }).join("") + '</nav>';
+  }
+  function tabOf(st) {
+    if (["going-out", "syncing", "ready"].indexOf(st) >= 0) return "out";
+    if (["bought-today", "synced"].indexOf(st) >= 0) return "today";
+    return "scan";
+  }
+  function camTop(extra) {
+    return '<div class="cam-top"><span class="pill"><span class="dot"></span>Offline, prices from 7:58 AM</span>' +
+      '<button class="pill" data-go="bought-today">' + whole(+left().toFixed(2)) + ' left</button></div>' + (extra || "");
+  }
+  function art(c, cls) { return '<div class="cardart ' + (cls || "") + '" style="--art:' + c.art + '"><span class="code">' + c.code + '</span></div>'; }
+  function reticle() {
+    return '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path fill="none" stroke="rgba(238,240,244,.75)" stroke-width="2.5" vector-effect="non-scaling-stroke" d="M0 14V0h14M86 0h14v14M100 86v14H86M14 100H0V86"/></svg>';
+  }
+  function camera(h, inner, hint, flexFill) {
+    return '<div class="cam" style="' + (flexFill ? 'flex:1' : 'height:' + h + 'px') + '">' + camTop() + '<div class="aim">' + inner + reticle() + '</div>' +
+      (hint ? '<div class="cam-hint">' + hint + '</div>' : '') + '</div>';
+  }
+  function who(c, extra) {
+    return '<div class="who"><span class="n">' + c.name + (extra || "") + '</span><span class="s">' + c.set + ', ' + c.code + '</span></div>';
+  }
+  function binder(n) {
+    var cells = "";
+    var arts = ["#5b6bd6", "#3f8a7a", "#c08a2f", "#9a5bb0", "#4f7fb0", "#b0563f", "#6d6f8a", "#7a8a6a", "#5b6bd6"];
+    var page = Math.min(9, Math.max(0, n % 9 || 9));
+    for (var i = 0; i < 9; i++) {
+      var cls = i < page ? (i === 4 ? "unk" : "done") : "";
+      cells += '<div class="cardart ' + cls + '" style="--art:' + arts[i] + '"></div>';
+    }
+    return '<div class="binder">' + cells + '</div>';
+  }
+
+  // ---------- Verdict fields ----------
+  function verdict(st) {
+    var c, h = "", cls = "", act = "", grab = "";
+    if (st === "buy") {
+      c = CARDS.gloamwing; cls = "buy";
+      grab = '<div class="grab">Swipe up to log a buy</div>';
+      h = who(c) + '<div class="vstack"><span class="verb">Buy under</span><span class="big">' + money(c.under) + '</span></div>' +
+        '<p class="why" style="margin:0">Sells in about ' + c.days + ' days at ' + money(c.sale) + '. You have ' + c.have + '.</p>';
+      act = '<div class="acts"><button class="btn plain" data-go="scan">Next Card</button><button class="btn primary" data-go="logbuy" data-item="gloamwing">Log Buy</button></div>';
+    } else if (st === "pass") {
+      c = CARDS.pebblet; cls = "pass";
+      h = who(c) + '<div class="vstack"><span class="big">Pass</span></div>' +
+        '<p class="why" style="margin:0">Best case ' + money(c.best) + ' after fees, below your ' + money(c.floor) + ' floor.</p>';
+      act = '<div class="acts"><button class="btn primary" data-go="scan">Next Card</button></div>';
+    } else if (st === "toomany") {
+      c = CARDS.mirefox; cls = "toomany";
+      var price = S.tm === "drop"
+        ? '<div class="vstack" id="toomany-price"><span class="verb">One more copy: under</span><span class="mid">' + money(c.under) + '</span></div>'
+        : '<div class="vstack" id="toomany-price"><span class="verb">No buy price for another copy</span></div>';
+      h = who(c) + '<div class="vstack"><span class="big" style="font-size:56px">Too many</span></div>' +
+        '<p class="why" style="margin:0">You have ' + c.have + ', about ' + c.months + ' months of sales on hand.</p>' + price;
+      act = '<div class="acts"><button class="btn plain" data-go="logbuy" data-item="mirefox">Log Anyway</button><button class="btn primary" data-go="scan">Next Card</button></div>';
+    } else if (st === "notrecognised") {
+      cls = "none";
+      h = '<div class="vstack"><span class="mid">Not recognised</span></div>' +
+        '<p class="why" style="margin:0">No set or number could be read, so no price is shown. Type them in, or keep a photo and Banchi names and prices it at home.</p>';
+      act = '<div class="acts"><button class="btn plain" data-go="snapped">Snap for Later</button><button class="btn primary" data-go="typein">Type Set and Number</button></div>';
+    } else if (st === "slab") {
+      c = CARDS.velvet; cls = "buy";
+      grab = '<div class="grab">Swipe up to log a buy</div>';
+      h = who(c, ', ' + c.grader + ' ' + c.grade) + '<div class="vstack"><span class="verb">' + c.grader + ' ' + c.grade + ', buy under</span><span class="big">' + whole(c.under) + '</span></div>' +
+        '<p class="why" style="margin:0">From ' + c.sales + ' graded sales at this grade. Sells in about ' + c.weeks + ' weeks.</p>';
+      act = '<div class="acts"><button class="btn plain" data-go="scan">Next Card</button><button class="btn primary" data-go="logbuy" data-item="velvet">Log Buy</button></div>';
+    } else if (st === "slab-thin") {
+      c = CARDS.velvet10; cls = "none";
+      h = who(c, ', ' + c.grader + ' ' + c.grade) + '<div class="vstack"><span class="verb">Thin data</span><span class="mid">' + whole(c.lo) + ' to ' + whole(c.hi) + '</span></div>' +
+        '<p class="why" style="margin:0">Only ' + c.sales + ' graded sales at ' + c.grader + ' ' + c.grade + '. That is too few for a buy price, so the range is all it shows.</p>';
+      act = '<div class="acts"><button class="btn plain" data-go="logbuy" data-item="velvet10">Log Anyway</button><button class="btn primary" data-go="scan">Next Card</button></div>';
+    } else if (st === "lot") {
+      cls = "work";
+      var n = S.lotN, named = n - Math.round(n * 4 / 35), unk = n - named;
+      var worth = Math.round(112 * n / 35);
+      h = '<div class="vstack"><span class="verb">Lot, $80 asked</span></div>' +
+        '<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="35" aria-valuenow="' + n + '"><i style="width:' + (n / 35 * 100) + '%"></i></div>' +
+        '<p class="why" style="margin:0">Worth ' + whole(worth) + ' to you. ' + named + ' named, ' + unk + ' unknown counted at $0.</p>' +
+        '<p class="why" style="margin:0;color:var(--bn-ink-3);font-size:var(--ios-subhead)">' + n + ' cards swept. Turn the page or hold up the next card.</p>';
+      act = '<div class="acts"><button class="btn plain" data-go="scan">Stop Lot</button><button class="btn primary" data-go="lot-end">Finish Lot</button></div>';
+    } else if (st === "lot-end") {
+      cls = "buy";
+      h = '<div class="vstack"><span class="verb">Buy the lot under</span><span class="big">$112</span></div>' +
+        '<p class="why" style="margin:0">$80 asked. 31 named, 4 unknown counted at $0.</p>' +
+        '<div class="top3" aria-label="Most of the value"><div><span>Velvet Wyrm ex</span><span>$38</span></div><div><span>Lumacoil ex</span><span>$17</span></div><div><span>Thornback Rex</span><span>$9</span></div></div>';
+      act = '<div class="acts"><button class="btn plain" data-go="scan">Offer for These 3</button><button class="btn primary" data-go="logbuy" data-item="lot">Log Lot at $80</button></div>';
+    }
+    return '<div class="field ' + cls + '" id="verdict">' + grab + h + '<div class="spacer"></div>' + act + '</div>';
+  }
+
+  function cameraFor(st) {
+    var cam = { buy: art(CARDS.gloamwing), pass: art(CARDS.pebblet), toomany: art(CARDS.mirefox), notrecognised: art(CARDS.gloamwing, "blur"),
+      slab: '<div class="slab"><div class="label"><span>PSA 9</span><span>Velvet Wyrm ex</span></div>' + art(CARDS.velvet) + '</div>',
+      "slab-thin": '<div class="slab"><div class="label"><span>PSA 10</span><span>Velvet Wyrm ex</span></div>' + art(CARDS.velvet10) + '</div>',
+      lot: binder(S.lotN), "lot-end": binder(35) };
+    return cam[st] || art(CARDS.gloamwing);
+  }
+
+  function scanScreen(st, pose) {
+    var dark = true, body;
+    var hint = { buy: "One firm tap", pass: "Soft double tap", toomany: "Soft double tap", slab: "One firm tap", lot: "Tap the camera to read the next card (sample)" }[st] || "";
+    if (st === "scan" || st === "snapped") {
+      var toast = st === "snapped" ? '<div class="toast" role="status"><span class="done-mark" style="width:36px;height:36px">' + ICON.check + '</span><span><b>Saved for home.</b><br>Banchi names and prices it there. ' + S.snapped + ' waiting.</span></div>' : "";
+      body = camera(0, art(CARDS.gloamwing), "Hold one card inside the corners", true) + toast +
+        '<div style="padding:12px 12px calc(max(env(safe-area-inset-bottom), var(--home-h)) + 80px);background:var(--bn-bg);display:flex;flex-direction:column;gap:8px">' +
+        '<div class="tray"><span class="tray-label">Sample only: pick the card the camera reads</span><div class="tray-row">' +
+        [["buy", "Gloamwing"], ["pass", "Pebblet"], ["toomany", "Mirefox ex"], ["notrecognised", "Blurry card"], ["slab", "Slab"], ["slab-thin", "Slab, PSA 10"]].map(function (x) {
+          return '<button data-go="' + x[0] + '">' + x[1] + '</button>'; }).join("") +
+        '</div></div><div class="acts"><button class="btn plain" data-go="lot-ask">Lot or Binder</button></div></div>';
+      dark = true;
+    } else {
+      var camH = { "lot-end": 280, lot: 340, toomany: 260 }[st] || 290;
+      if (pose === "fold" && S.v === "card" && st !== "lot") {
+        return '<div class="screen v-card">' + camera(0, cameraFor(st), hint, true).replace('class="cam"', 'class="cam" data-tap="' + st + '"') +
+          '<div class="field-wrap">' + verdict(st) + '</div></div>';
+      }
+      body = camera(camH, cameraFor(st), hint, false).replace('class="cam"', 'class="cam" data-tap="' + st + '"') + verdict(st);
+    }
+    return '<div class="screen">' + body + '</div>';
+  }
+
+  function listScreen(title, sub, inner, small) {
+    return '<div class="screen"><div class="navbar' + (small ? ' small' : '') + '"><h2>' + title + '</h2>' + (sub ? '<span class="sub">' + sub + '</span>' : '') + '</div><div class="scroll">' + inner + '</div></div>';
+  }
+
+  function snapshotList() {
+    return '<div class="section"><span class="section-h">What the phone copies</span><div class="inset">' +
+      [["Cards on hand", "3,612"], ["Sales, last 90 days", "1,284"], ["Recent sale prices", "Every card"], ["Fee rates", "Sale, payment, postage"], ["Your floor", "$1.50"], ["Target margin", "25% (sample)"], ["Longest wait", "90 days (sample)"]].map(function (r) {
+        return '<div class="row"><span class="l"><span class="t">' + r[0] + '</span></span><span class="r">' + r[1] + '</span></div>'; }).join("") +
+      '</div><span class="section-f">After this the phone needs no signal. Nothing is sent from the show.</span></div>';
+  }
+
+  function goingOut(st, pose) {
+    var inner;
+    if (st === "going-out") {
+      inner = '<div class="section"><span class="section-h">Today</span><div class="inset">' +
+        '<div class="field-in"><span>Cash budget</span><span class="val">$300</span></div>' +
+        '<div class="row"><span class="l"><span class="t">Last copy</span></span><span class="r">Yesterday, 9:14 PM</span></div></div>' +
+        '<span class="section-f">The budget goes down with each buy you log.</span></div>' +
+        (pose === "fold" ? snapshotList() : "") +
+        '<button class="btn primary wide" data-go="syncing">Going Out</button>';
+      return listScreen("Going out", "On home Wi-Fi", inner);
+    }
+    if (st === "syncing") {
+      inner = '<div class="hero"><span class="t">Copying your store</span><span class="s">Step 2 of 4: sales from the last 90 days.</span></div>' +
+        '<div style="padding:0 16px"><div class="bar"><i style="width:46%"></i></div></div>' +
+        (pose === "fold" ? snapshotList() : "") +
+        '<div class="acts"><button class="btn plain" data-go="going-out">Stop</button><button class="btn primary" data-go="ready">Skip Ahead (sample)</button></div>';
+      return listScreen("Going out", "On home Wi-Fi", inner);
+    }
+    inner = '<div class="hero"><span class="done-mark">' + ICON.check + '</span><span class="t">Ready offline</span><span class="s">Copied at 7:58 AM. Verdicts use these prices until you copy again.</span></div>' +
+      '<div class="section"><div class="inset"><div class="field-in"><span>Cash budget</span><span class="val">$300</span></div></div></div>' +
+      (pose === "fold" ? snapshotList() : "") +
+      '<button class="btn primary wide" data-go="scan">Start Scanning</button>';
+    return listScreen("Going out", "Ready, no signal needed", inner);
+  }
+
+  function boughtRows(selectable) {
+    var rows = S.buys.map(function (b, i) {
+      var cls = (selectable && i === S.sel ? " sel" : "") + (i === S.fresh ? " fresh" : "");
+      return '<button class="row' + cls + '" data-sel="' + i + '"><span class="thumb" style="--art:' + b.art + '"></span><span class="l"><span class="t">' + b.name + '</span><span class="m">' + b.code + '</span></span><span class="r"><span>' + money(b.paid) + '</span><span class="m">+' + money(b.margin) + '</span></span></button>';
+    }).join("");
+    var snaps = '<div class="row"><span class="thumb unk"></span><span class="l"><span class="t">' + S.snapped + (S.snapped === 1 ? ' card' : ' cards') + ' to name at home</span><span class="m">Photo saved. No price yet.</span></span></div>';
+    return '<div class="section"><span class="section-h">Bought</span><div class="inset">' + rows + '</div></div>' +
+      '<div class="section"><span class="section-h">Snapped for later</span><div class="inset">' + snaps + '</div></div>';
+  }
+  function sums() {
+    var l = left();
+    return '<div class="sums"><div class="sum"><span class="k">Spent</span><span class="v">' + money(spent()) + '</span></div>' +
+      '<div class="sum"><span class="k">Expected margin</span><span class="v ok">+' + money(margin()) + '</span></div>' +
+      '<div class="sum"><span class="k">Budget left</span><span class="v' + (l < 0 ? ' over' : '') + '">' + money(l) + '</span></div></div>' +
+      '<div class="meter" aria-label="Budget used"><i style="width:' + Math.min(100, spent() / S.budget * 100) + '%"></i></div>';
+  }
+  function today(st, pose) {
+    var inner;
+    if (st === "synced") {
+      inner = '<div class="receipt" role="status"><span class="t">Sent home</span><span class="s">' + S.buys.length + ' bought cards are in the next capture batch, already priced. ' + S.snapped + ' snapped ' + (S.snapped === 1 ? 'card goes' : 'cards go') + ' to the paid identify.</span><button class="btn plain wide" data-go="bought-today">Undo Send</button></div>' + sums() + boughtRows(pose === "open");
+    } else {
+      inner = sums() + '<div class="section"><button class="btn primary wide" data-go="synced">Send to Banchi</button><span class="section-f">Works on home Wi-Fi only. The list becomes the next capture batch, already priced.</span></div>' + boughtRows(pose === "open");
+    }
+    return listScreen("Today", "Show day, budget $300", inner);
+  }
+
+  function detailPane() {
+    var b = S.buys[S.sel] || S.buys[0];
+    return '<div class="screen"><div class="navbar small"><h2>' + b.name + '</h2><span class="sub">' + b.code + '</span></div><div class="scroll">' +
+      '<div class="hero"><div class="detail-art" style="--art:' + b.art + '"></div></div>' +
+      '<div class="section"><div class="inset">' +
+      [["Paid", money(b.paid)], ["Buy-under price", money(b.under)], ["Expected wait", b.wait], ["Expected margin", "+" + money(b.margin)]].map(function (r) {
+        return '<div class="row"><span class="l"><span class="t">' + r[0] + '</span></span><span class="r">' + r[1] + '</span></div>'; }).join("") +
+      '</div></div><button class="btn plain wide" data-remove="' + S.sel + '">Remove from Today</button></div></div>';
+  }
+  function sidePane() {
+    var rows = S.buys.slice(-4).reverse().map(function (b) {
+      return '<div class="row"><span class="thumb" style="--art:' + b.art + '"></span><span class="l"><span class="t">' + b.name + '</span></span><span class="r">' + money(b.paid) + '</span></div>'; }).join("");
+    return '<div class="screen"><div class="navbar small"><h2>Today</h2><span class="sub">Budget $300</span></div><div class="scroll">' + sums() +
+      '<div class="section"><span class="section-h">Latest buys</span><div class="inset">' + rows + '</div></div>' +
+      '<button class="btn plain wide" data-go="bought-today">See All</button></div></div>';
+  }
+
+  // ---------- Sheets ----------
+  function sheet(st) {
+    if (st === "logbuy") {
+      var it = S.item, c = it === "lot" ? { name: "Lot of 35", code: "31 named, 4 unknown", under: 112, net: 112 } : CARDS[it] || CARDS.gloamwing;
+      var paid = parseFloat(S.paid || "0") || 0;
+      var net = c.net || c.under || 0;
+      var after = left() - paid;
+      var facts = [["Card", c.name], c.under ? ["Buy-under price", money(c.under)] : ["Buy-under price", "None shown"], ["Expected margin", c.net || it === "lot" ? "+" + money(net - paid) : "Not known"], ["Budget left after", '<span class="' + (after < 0 ? 'over' : '') + '">' + money(after) + '</span>']];
+      var keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "del"];
+      return '<div class="scrim"><div class="sheet" role="dialog" aria-label="Log buy"><span class="grabber"></span>' +
+        '<div class="sheet-bar"><button class="lead" data-go="' + (it === "lot" ? "lot-end" : it === "mirefox" ? "toomany" : it === "velvet" ? "slab" : it === "velvet10" ? "slab-thin" : "buy") + '">Cancel</button><h3>Log Buy</h3><button class="trail" data-done="log">Done</button></div>' +
+        '<div class="sheet-body"><div class="paid"><span class="k">You paid</span><span class="v">$' + (S.paid || "0") + '<span class="caret"></span></span></div>' +
+        '<div class="inset facts">' + facts.map(function (r) { return '<div class="row"><span class="l"><span class="t">' + r[0] + '</span></span><span class="r">' + r[1] + '</span></div>'; }).join("") + '</div></div>' +
+        '<div class="keypad" aria-label="Number pad">' + keys.map(function (k) { return '<button class="key' + (k === "del" ? " fn" : "") + '" data-key="' + k + '">' + (k === "del" ? "Delete" : k) + '</button>'; }).join("") + '</div>' +
+        '</div></div>';
+    }
+    if (st === "typein") {
+      return '<div class="scrim"><div class="sheet" role="dialog" aria-label="Type set and number"><span class="grabber"></span>' +
+        '<div class="sheet-bar"><button class="lead" data-go="notrecognised">Cancel</button><h3>Type Card</h3><button class="trail" data-go="buy">Done</button></div>' +
+        '<div class="sheet-body"><div class="inset"><div class="field-in"><span>Set code</span><span class="val">ETD</span></div><div class="field-in"><span>Card number</span><span class="val">041 / 198</span></div></div>' +
+        '<span class="section-f">Printed at the bottom of the card. The verdict uses the copy on this phone.</span></div></div></div>';
+    }
+    if (st === "lot-ask") {
+      return '<div class="scrim"><div class="sheet" role="dialog" aria-label="Lot"><span class="grabber"></span>' +
+        '<div class="sheet-bar"><button class="lead" data-go="scan">Cancel</button><h3>Lot</h3><button class="trail" data-go="lot" data-lot="start">Start</button></div>' +
+        '<div class="sheet-body"><div class="paid"><span class="k">Asking price for the lot</span><span class="v">$80<span class="caret"></span></span></div>' +
+        '<span class="section-f">Then sweep the cards one by one, or a binder page at a time. Cards it cannot name count at $0.</span></div></div></div>';
+    }
+    return "";
+  }
+  function baseFor(st) {
+    return { logbuy: S.item === "lot" ? "lot-end" : S.item === "mirefox" ? "toomany" : S.item === "velvet" ? "slab" : S.item === "velvet10" ? "slab-thin" : "buy", typein: "notrecognised", "lot-ask": "scan" }[st] || st;
+  }
+
+  // ---------- Render ----------
+  function screenFor(st, pose) {
+    var base = baseFor(st), tab = tabOf(base);
+    var main, dark = tab === "scan";
+    if (tab === "out") main = goingOut(base, pose);
+    else if (tab === "today") main = today(base, pose);
+    else main = scanScreen(base, pose);
+    var out;
+    if (pose === "open") {
+      var side = tab === "out" ? '<div class="screen"><div class="navbar small"><h2>Snapshot</h2><span class="sub">What goes in your pocket</span></div><div class="scroll">' + snapshotList() + '</div></div>'
+        : tab === "today" ? detailPane() : sidePane();
+      out = '<div class="split"><div class="pane">' + main + tabbar(tab) + '</div><div class="pane">' + side + '</div></div>';
+    } else out = main + tabbar(tab);
+    return statusbar(dark, dark && pose === "fold") + out + sheet(st) + homebar(dark && pose === "fold" && !sheet(st));
+  }
+
+  var CAPTIONS = {
+    "going-out": [["new", "Going Out copies a snapshot of the store to the phone before the show, plus a cash budget."]],
+    syncing: [["new", "A copy in progress has a Stop. Nothing on the phone changes until the copy finishes."]],
+    ready: [["new", "Ready offline. Every verdict reads this copy; the time it was made is on every scan screen."]],
+    scan: [["new", "The camera reads the set code and number printed on the card. It never calls the paid identify."], ["", "The sample tray is mockup-only: it picks which card the camera sees."]],
+    buy: [["new", "BUY UNDER: one large number to haggle against. Haptic: one firm tap."], ["", "Swipe up, or Log Buy, opens the paid-price sheet."]],
+    pass: [["new", "PASS shows no buy price, so a low number never reads as an offer. Haptic: soft double tap."]],
+    toomany: [["new", "TOO MANY: copies on hand push the wait out, so one more copy is worth less. Haptic: soft double tap (the plan names none)."]],
+    notrecognised: [["new", "NOT RECOGNISED: outlined, no number. It never guesses a price."]],
+    typein: [["new", "Typed set and number: the same offline lookup, then the same verdict."]],
+    snapped: [["new", "Snap for Later keeps the photo. The card is named and priced at home, and counts on Today."]],
+    logbuy: [["new", "Log Buy: the paid price, the margin it leaves, and the budget after. Done adds it to Today."]],
+    slab: [["new", "SLAB: the grade is read from the label; the price comes from graded sales only."]],
+    "slab-thin": [["new", "Fewer than about 3 graded sales: a range, no buy price."]],
+    "lot-ask": [["new", "Lot: enter the asking price, then sweep."]],
+    lot: [["new", "One bar fills as cards are swept. Unknown cards count at $0 (an owner question)."]],
+    "lot-end": [["new", "Lot verdict, with the 3 cards that carry most of the value, so they can offer for just those."]],
+    "bought-today": [["new", "Bought today: spent, expected margin, budget left. Each row opens its detail and can be removed."], ["today", "A capture batch is started on the Mac, and the cards in it are identified and priced there."]],
+    synced: [["new", "Sent home: the list becomes the next capture batch, already priced. Undo Send takes it back."]]
+  };
+
+  function render() {
+    var root = document.documentElement;
+    if (S.theme === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", S.theme);
+    $("#dev-fold").innerHTML = screenFor(S.state, "fold");
+    $("#dev-open").innerHTML = screenFor(S.state, "open");
+
+    $("#picker").innerHTML = STATES.map(function (g) {
+      return '<div class="stategroup"><span>' + g[0] + '</span>' + g[1].map(function (s) {
+        return '<button class="chip" data-go="' + s[0] + '" aria-pressed="' + (s[0] === S.state) + '">' + s[1] + '</button>'; }).join("") + '</div>';
+    }).join("");
+    $("#themes").innerHTML = [["auto", "Follow system"], ["light", "Light"], ["dark", "Dark"]].map(function (t) {
+      return '<button class="chip" data-theme-set="' + t[0] + '" aria-pressed="' + (t[0] === S.theme) + '">' + t[1] + '</button>'; }).join("");
+    $("#opts").innerHTML = '<span class="group-label">Options (my pick first)</span>' + OPTIONS.map(function (o) {
+      var shown = o.choices.filter(function (c) { return S.hidden.indexOf(o.key + ":" + c[0]) < 0; });
+      return '<div class="opt"><span class="name">' + o.label + '</span>' + shown.map(function (c) {
+        return '<button class="chip" data-opt="' + o.key + '" data-val="' + c[0] + '" aria-pressed="' + (S[o.key] === c[0]) + '">' + c[1] + '</button>' +
+          (shown.length > 1 ? '<button class="hide" data-hide="' + o.key + ':' + c[0] + '" aria-label="Hide ' + c[1] + '">Hide</button>' : ''); }).join("") + '</div>';
+    }).join("") + (S.hidden.length ? '<span class="hidden-note">' + S.hidden.length + ' hidden. <button class="hide" data-unhide="1">Show all</button></span>' : '');
+
+    var cap = (CAPTIONS[S.state] || []).map(function (c) {
+      return c[0] === "new" ? '<div class="tag new"><b>New:</b> ' + c[1] + '</div>' : c[0] === "today" ? '<div class="tag"><b>Today:</b> ' + c[1] + '</div>' : '<div class="tag">' + c[1] + '</div>';
+    }).join("");
+    $("#caption").innerHTML = cap + '<span class="link">Deep link: ' + location.pathname.split("/").pop() + hashFor() + '</span>';
+  }
+
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest("button, [data-tap]");
+    if (!el) return;
+    var d = el.dataset;
+    if (d.themeSet) { S.theme = d.themeSet; location.hash = hashFor(); return; }
+    if (d.opt) { S[d.opt] = d.val; location.hash = hashFor(); return; }
+    if (d.hide) { S.hidden.push(d.hide); applyHidden(); location.hash = hashFor(); return; }
+    if (d.unhide) { S.hidden = []; location.hash = hashFor(); return; }
+    if (d.key) {
+      if (d.key === "del") S.paid = S.paid.slice(0, -1);
+      else if (!(d.key === "." && S.paid.indexOf(".") >= 0) && !(S.paid.split(".")[1] || "").match(/^\d\d$/)) S.paid += d.key;
+      render(); return;
+    }
+    if (d.sel !== undefined) { S.sel = +d.sel; render(); return; }
+    if (d.remove !== undefined) { S.buys.splice(+d.remove, 1); S.sel = 0; S.fresh = -1; render(); return; }
+    if (d.done === "log") {
+      var it = S.item, paid = parseFloat(S.paid) || 0;
+      var c = it === "lot" ? { name: "Lot of 35 (4 unknown)", code: "31 named", art: "#6d6f8a", net: 112, under: 112 } : CARDS[it];
+      var name = c.grader ? c.name + ", " + c.grader + " " + c.grade : c.name;
+      S.buys.push({ name: name, code: c.code, art: c.art, paid: paid, margin: Math.max(0, (c.net || paid) - paid), under: c.under || 0, wait: c.days ? "about " + c.days + " days" : c.weeks ? "about " + c.weeks + " weeks" : "unknown" });
+      if (it === "lot") S.snapped += 4;
+      S.fresh = S.buys.length - 1; S.sel = S.fresh;
+      go("bought-today"); return;
+    }
+    if (d.tap === "lot") { S.lotN = Math.min(35, S.lotN + 1); render(); return; }
+    if (d.go) {
+      var target = d.go;
+      if (d.item) { S.item = d.item; S.paid = { gloamwing: "3.75", mirefox: "1.00", velvet: "40", velvet10: "95", lot: "80" }[d.item] || ""; }
+      if (d.lot === "start") S.lotN = 1;
+      if (target === "snapped" && S.state !== "snapped") S.snapped += 1;
+      go(target);
+    }
+  });
+  window.addEventListener("hashchange", function () { readHash(); render(); });
+
+  readHash();
+  if (S.state === "lot") S.lotN = 22;
+  render();
+})();
+</script>
+</body>
+</html>
