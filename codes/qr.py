@@ -43,7 +43,8 @@ wheel supports, so a plain install works. Raising the pin means re-running T8 fi
 THE TABLE BELOW WAS MEASURED ON zxing-cpp 2.3.0 AND WAS NOT RE-MEASURED ON 3.1.1. A smaller
 comparison matched: 28 degraded frames gave 24 hits, 4 refusals (half glare) and 0 wrong
 reads on both versions. Blank, noise and 1x1 frames returned nothing on both, and rotations
-of 0, 90 and 180 degrees gave the same text, orientation and corners. Re-measure the full
+of 0, 90 and 180 degrees gave the same text, orientation and corners. Source: the same probe
+frames were read through both versions in the venv. Re-measure the full
 table before you rely on a number in it for the current pin.
 
 MEASURED HIT RATES OF THIS MODULE AS SHIPPED, over 17 degradation cases x 10 codes = 170
