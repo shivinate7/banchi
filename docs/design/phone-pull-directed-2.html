@@ -28,8 +28,11 @@
   --bn-0-5: 2px; --bn-1: 4px; --bn-1-5: 6px; --bn-2: 8px; --bn-3: 12px; --bn-4: 16px; --bn-5: 20px; --bn-6: 24px; --bn-7: 32px;
   --bn-r: 8px; --bn-r-lg: 12px; --bn-r-xl: 16px; --bn-r-2xl: 22px; --bn-r-full: 999px;
   --bn-t-fast: 120ms; --bn-t: 200ms; --bn-t-slow: 280ms; --bn-ease: cubic-bezier(.2,0,0,1);
-  /* The pull-confirm fill: the one accent step at 7:1 under on-accent (DESIGN.md, The pull-confirm). */
+  /* The pull-confirm fill: the one accent step at 7:1 under on-accent (DESIGN.md, The pull-confirm).
+     The same step is the ink of a tinted button and the current tab. */
   --pc-fill: var(--bn-accent-press);
+  /* A gray button's ground: sunken in light, lifted in dark, where the sunken step is darker than the page. */
+  --btn-gray: var(--bn-surface-2);
   /* Mock insets: a desktop browser reports 0 for env(); these stand in so the frame shows the bars.
      They are not device values. */
   --mock-top: 50px; --mock-bottom: 34px;
@@ -54,7 +57,7 @@
     --bn-shadow-1: 0 0 0 1px var(--bn-line), 0 1px 2px rgb(0 0 0 / .4);
     --bn-shadow-2: 0 0 0 1px var(--bn-line), 0 4px 12px rgb(0 0 0 / .5);
     --bn-shadow-3: 0 0 0 1px var(--bn-line-strong), 0 12px 32px rgb(0 0 0 / .6);
-    --pc-fill: var(--bn-accent-hover);
+    --pc-fill: var(--bn-accent-hover); --btn-gray: var(--bn-surface-3);
   }
 }
 :root[data-theme="dark"] {
@@ -71,7 +74,7 @@
   --bn-shadow-1: 0 0 0 1px var(--bn-line), 0 1px 2px rgb(0 0 0 / .4);
   --bn-shadow-2: 0 0 0 1px var(--bn-line), 0 4px 12px rgb(0 0 0 / .5);
   --bn-shadow-3: 0 0 0 1px var(--bn-line-strong), 0 12px 32px rgb(0 0 0 / .6);
-  --pc-fill: var(--bn-accent-hover);
+  --pc-fill: var(--bn-accent-hover); --btn-gray: var(--bn-surface-3);
 }
 
 * { box-sizing: border-box; }
@@ -175,7 +178,7 @@ button { font-family: var(--font); color: inherit; }
 .hstack { display: flex; align-items: center; gap: var(--bn-2); }
 
 /* Inset grouped list */
-.group { display: flex; flex-direction: column; background: var(--bn-surface); border-radius: var(--bn-r-lg); overflow: hidden; }
+.group { display: flex; flex-direction: column; flex-shrink: 0; background: var(--bn-surface); border-radius: var(--bn-r-lg); overflow: hidden; }
 .group-head { padding: 0 var(--bn-4); font-size: 13px; line-height: 18px; color: var(--bn-ink-2); }
 .row { display: flex; align-items: center; gap: var(--bn-3); min-height: 52px; padding: var(--bn-2) var(--bn-4);
   border: 0; background: none; text-align: left; width: 100%; font: inherit; cursor: pointer; position: relative; }
@@ -187,11 +190,9 @@ button { font-family: var(--font); color: inherit; }
 /* Buttons. Hit regions 44pt or more (HIG Buttons). The pull pair is 64, the extra-large size. */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-2); min-height: 52px; min-width: 44px;
   padding: 0 var(--bn-4); border-radius: var(--bn-r-xl); border: 0; cursor: pointer;
-  font: 600 17px/22px var(--font); background: var(--bn-accent-tint); color: var(--bn-accent-press); }
-:root[data-theme="dark"] .btn, .btn.on-dark { color: var(--bn-accent-hover); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn { color: var(--bn-accent-hover); } }
+  font: 600 17px/22px var(--font); background: var(--bn-accent-tint); color: var(--pc-fill); }
 .btn.primary { background: var(--pc-fill); color: var(--bn-on-accent); }
-.btn.gray { background: var(--bn-surface-2); color: var(--bn-ink); }
+.btn.gray { background: var(--btn-gray); color: var(--bn-ink); }
 .btn.big { min-height: 64px; font-size: 22px; line-height: 28px; font-weight: 700; border-radius: var(--bn-r-xl); }
 .btn.wide { width: 100%; }
 .btn:active { transform: translateY(1px) scale(.985); }
@@ -206,9 +207,7 @@ button { font-family: var(--font); color: inherit; }
   backdrop-filter: blur(20px) saturate(1.6); -webkit-backdrop-filter: blur(20px) saturate(1.6); }
 .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; border: 0;
   border-radius: 26px; background: none; color: var(--bn-ink-2); font: 600 11px/13px var(--font); cursor: pointer; }
-.tab[aria-current="page"] { color: var(--bn-accent-press); background: var(--bn-accent-tint); }
-:root[data-theme="dark"] .tab[aria-current="page"] { color: var(--bn-accent-hover); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tab[aria-current="page"] { color: var(--bn-accent-hover); } }
+.tab[aria-current="page"] { color: var(--pc-fill); background: var(--bn-accent-tint); }
 .tab svg { width: 24px; height: 24px; }
 .tab-space { height: calc(var(--sa-bottom) + 72px); flex: none; }
 
@@ -226,6 +225,8 @@ button { font-family: var(--font); color: inherit; }
 .ruler i { position: absolute; top: -4px; width: 4px; height: 12px; border-radius: 2px; background: var(--bn-accent-press); }
 .between { display: flex; gap: 6px; align-items: baseline; }
 .namebar { display: flex; gap: var(--bn-2); align-items: baseline; }
+.walk-wide .namebar, .walk-wide .between { flex-wrap: wrap; column-gap: var(--bn-2); }
+.walk-wide .namebar .ell, .walk-wide .between .ell { white-space: normal; }
 .photo-wrap { display: flex; justify-content: center; position: relative; }
 .photo { width: 320px; height: 447px; flex: none; border-radius: var(--bn-r-lg); background: var(--bn-stage-bg);
   padding: 10px; display: flex; box-shadow: var(--bn-shadow-2); position: relative; }
@@ -258,7 +259,7 @@ button { font-family: var(--font); color: inherit; }
 .slot-say { flex: 1; display: flex; align-items: center; gap: var(--bn-2); padding: 0 var(--bn-3); border-radius: var(--bn-r-xl);
   background: var(--bn-surface); box-shadow: var(--bn-shadow-1); font: 600 20px/25px var(--font); min-width: 0; }
 .slot-say.ok { background: var(--bn-ok-tint); box-shadow: none; }
-.slot-say.off { background: var(--bn-surface-2); box-shadow: none; font-weight: 400; }
+.slot-say.off { background: var(--btn-gray); box-shadow: none; font-weight: 400; }
 .env { display: inline-flex; align-items: center; gap: 4px; font: 700 20px/25px var(--font); }
 .env-n { display: inline-grid; place-items: center; min-width: 32px; height: 32px; padding: 0 6px; border-radius: 8px;
   border: 2px solid var(--bn-ink); background: var(--bn-surface); color: var(--bn-ink); font: 800 20px/1 var(--font); }
@@ -276,7 +277,7 @@ button { font-family: var(--font); color: inherit; }
 .sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 26; display: flex; flex-direction: column; gap: var(--bn-3);
   padding: var(--bn-2) var(--bn-4) var(--sa-bottom); border-radius: 28px 28px 0 0; background: var(--bn-surface); box-shadow: var(--bn-shadow-3);
   max-height: calc(100% - var(--sa-top) - 12px); }
-.sheet.side { left: auto; width: 420px; right: var(--bn-4); bottom: var(--bn-4); border-radius: 28px; padding-bottom: var(--bn-4); }
+.sheet.side { left: auto; width: 420px; right: var(--bn-4); bottom: var(--sa-bottom); border-radius: 28px; padding-bottom: var(--bn-4); }
 .grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--bn-line-strong); align-self: center; }
 .sheet-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; min-height: 44px; }
 .sheet-bar .navlink:last-child { justify-self: end; font-weight: 600; }
@@ -284,7 +285,12 @@ button { font-family: var(--font); color: inherit; }
 .stepper { display: flex; align-items: center; justify-content: center; gap: var(--bn-6); }
 .stepper .btn { width: 64px; min-height: 64px; font-size: 28px; }
 .stepper output { font: 800 34px/41px var(--font); min-width: 3ch; text-align: center; }
-.sheet .scroll { max-height: 360px; }
+.sheet .scroll { max-height: 300px; border-bottom: 1px solid var(--bn-line); padding-bottom: var(--bn-2); }
+.search svg { width: 22px; height: 22px; flex: none; color: var(--bn-ink-2); }
+/* A segmented control: one track, the chosen segment raised (HIG, segmented controls). */
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--bn-0-5); padding: var(--bn-0-5); border-radius: var(--bn-r-lg); background: var(--btn-gray); }
+.seg button { min-height: 44px; border: 0; border-radius: 10px; background: none; font: 600 17px/22px var(--font); color: var(--bn-ink); cursor: pointer; }
+.seg button[aria-checked="true"] { background: var(--bn-surface); box-shadow: var(--bn-shadow-1); }
 
 /* Find */
 .search-dock { position: absolute; left: var(--bn-4); right: var(--bn-4); z-index: 11; bottom: calc(var(--sa-bottom) + 72px);
@@ -333,8 +339,8 @@ button { font-family: var(--font); color: inherit; }
 .split { flex: 1; display: grid; grid-template-columns: 300px 1fr; gap: var(--bn-4); min-height: 0; }
 .split > * { min-height: 0; }
 .split-pane { display: flex; flex-direction: column; min-height: 0; }
-.walk-wide { flex: 1; display: grid; grid-template-columns: 1fr 300px; gap: var(--bn-5); padding: var(--bn-2) var(--bn-4) var(--sa-bottom); min-height: 0; }
-.walk-wide .photo { width: 412px; height: 575px; }
+.walk-wide { flex: 1; display: grid; grid-template-columns: 1fr 340px; gap: var(--bn-4); padding: var(--bn-2) var(--bn-4) var(--sa-bottom); min-height: 0; }
+.walk-wide .photo-wrap > .photo { width: 372px; height: 520px; }
 .walk-col { display: flex; flex-direction: column; gap: var(--bn-2); min-height: 0; }
 .upnext { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: var(--bn-2); }
 .upnext-row { display: flex; gap: var(--bn-3); align-items: center; }
@@ -422,7 +428,7 @@ const OPTIONS = [
 
 const DEFAULTS = { s: 'walk', sell: 'all', off: 'wait', env: 'num' }
 let st = {}
-let local = { copiesSold: 0, found: 2, moveTo: 'WB3 R1' }
+let local = { copiesSold: 0, found: 2, moveTo: 'WB3 R1', grader: 'PSA' }
 
 function readHash() {
   const p = new URLSearchParams(location.hash.slice(1))
@@ -459,7 +465,7 @@ const ICON = {
   cam: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
 }
 const ann = (kind, text, inside) => ` ann ${kind === 'new' ? 'ann-new' : ''} ${inside ? 'ann-in' : ''}" data-ann="${kind === 'new' ? 'New' : 'Today'}: ${esc(text)}`
-const photo = (c, size, stock) => `<div class="photo ${size || ''}" role="img" aria-label="Photo of ${esc(c.name)}"><div class="card-art" style="--hue:${c.hue}"><span class="cost">${c.cost}</span><div class="art"></div><div class="nm">${esc(c.name.split(',')[0])}</div><div class="txt"></div></div>${stock ? '<span class="stock">Stock image</span>' : ''}</div>`
+const photo = (c, size, stock) => `<div class="photo ${size || ''}" role="img" aria-label="Photo of ${esc(c.name)}"><div class="card-art" style="--hue:${c.hue}"><span class="cost" aria-hidden="true"></span><div class="art"></div><div class="nm">${esc(c.name.split(',')[0])}</div><div class="txt"></div></div>${stock ? '<span class="stock">Stock image</span>' : ''}</div>`
 const envName = (n) => BUYERS.find((b) => b.n === n).name.split(' ')[0]
 const envChip = (n, inv) => (st.env === 'name' ? `<span class="env-n ${inv ? 'inv' : ''}" style="min-width:auto;padding:0 8px">${envName(n)}</span>` : `<span class="env-n ${inv ? 'inv' : ''}" aria-label="Envelope ${n}">${n}</span>`)
 const envList = (env) => env.map(([n, q]) => `<span class="env">${envChip(n)}<span class="num">×${q}</span></span>`).join('')
@@ -486,7 +492,7 @@ function pullTab(pose) {
       <p class="t-title3" style="margin:0">Cards show here when an order comes in.</p>
       <button type="button" class="btn big wide gray" data-go="pull">Check Again</button></div><div class="grow"></div>${tabbar('Pull')}</div>`
   }
-  const envRows = BUYERS.map((b) => `<div class="row" role="listitem"><span class="env">${envChip(b.n)}</span><span class="grow"><span class="t-body ell">${b.name}</span></span><span class="t-body ink2 num">${loading ? '<span class="skel"></span>' : b.cards + ' cards'}</span></div>`).join('')
+  const envRows = BUYERS.map((b) => `<div class="row" role="listitem"><span class="env">${envChip(b.n)}</span><span class="grow"><span class="t-title3 ell">${b.name}</span></span><span class="t-title3 ink2 num">${loading ? '<span class="skel"></span>' : b.cards + (b.cards === 1 ? ' card' : ' cards')}</span></div>`).join('')
   const unloc = `<button type="button" class="row" data-go="unlocated" ${loading ? 'disabled' : ''}><span class="grow"><span class="t-body">1 card has no place on file</span><span class="t-sub ink2">It comes last in the walk, with its photo.</span></span>${ICON.chev}</button>`
   const start = `<button type="button" class="btn big primary wide" data-go="walk" ${loading ? 'aria-disabled="true"' : ''}>Start Walk</button>`
   if (pose === 'unfolded') {
@@ -523,7 +529,7 @@ function placeBlock(m, wide) {
     <div class="place-b"><span class="place-card"><span class="t-large num">${b}</span>${pos}</span>
       <span class="take${ann('new', 'how many to take', true)}" id="take-count"><span class="t-title3">Take</span><b class="num">${m.take}</b></span></div>
     ${ruler}</div>
-    ${unl ? `<div class="t-title3 ink2">Not in any box on file.</div>` : `<div class="between t-title3 ink2"><span class="ell">After ${esc(c.prev)}, before ${esc(c.next)}</span></div>`}
+    ${unl ? `<div class="t-title3 ink2">Owed to envelope ${c.env[0][0]}.</div>` : `<div class="between t-title3 ink2"><span class="ell">After ${esc(c.prev)}, before ${esc(c.next)}</span></div>`}
     <div class="namebar"><span class="t-title3b ell">${esc(c.name)}</span><span class="t-title3 ink2 ell" style="flex:none">${esc(c.cond)}</span></div></div>`
 }
 function dock(m) {
@@ -534,9 +540,9 @@ function dock(m) {
     upper = `${listBtn}<button type="button" class="btn big primary grow${ann('', 'Pull')}" data-go="pulled">Pull ${take}</button>`
     lower = `<button type="button" class="btn big gray grow${ann('new', "Can't Find It")}" data-go="short" style="font-size:20px">${unl ? 'Not Found' : "Can't Find It"}</button><button type="button" class="btn big gray" style="width:112px;font-size:20px" data-go="${unl ? 'done' : 'walk'}">Skip</button>`
   } else if (phase === 'pulled') {
-    upper = `${listBtn}<div class="slot-say${ann('new', 'which envelope', true)}" id="envelope-chips" role="status"><span>Pulled. Put in</span>${envList(m.c.env)}</div>`
+    upper = `${listBtn}<div class="slot-say${ann('new', 'which envelope', true)}" id="envelope-chips" role="status"><span style="display:flex;flex-direction:column"><span>Pulled.</span><span>Put in</span></span><span class="hstack" style="gap:10px">${envList(m.c.env)}</span></div>`
     if (offline && st.off === 'wait') {
-      lower = `<div class="slot-say off" id="offline-control" role="status"><span>Selling needs the Mac. It waits until the Mac answers.</span></div>`
+      lower = `<div class="slot-say off" id="offline-control" role="status"><span>Selling waits for the Mac.</span></div>`
     } else if (st.sell === 'each') {
       const n = local.copiesSold
       lower = `<button type="button" class="btn big primary grow" id="sell-control" data-act="sell-one">Mark 1 Sold <span class="t-title3 num" style="font-weight:600">(${n + 1} of ${take})</span></button>`
@@ -545,7 +551,7 @@ function dock(m) {
     }
   } else {
     upper = `${listBtn}<button type="button" class="btn big gray" style="width:112px;font-size:20px" data-go="pulled">Undo</button><button type="button" class="btn big grow" data-go="walk" data-next="1">Next Card</button>`
-    lower = `<div class="slot-say ok" role="status" id="sell-control"><span class="check">${ICON.check}</span><span>Sold ${take}. In ${m.c.env.map(([n]) => (st.env === 'name' ? envName(n) : n)).join(' and ')}.</span></div>`
+    lower = `<div class="slot-say ok" role="status" id="sell-control"><span class="check">${ICON.check}</span><span>Sold ${take}. ${st.env === 'name' ? 'For' : 'In envelopes'} ${m.c.env.map(([n]) => (st.env === 'name' ? envName(n) : n)).join(' and ')}.</span></div>`
   }
   return `<div class="dock"><div class="slot">${upper}</div><div class="slot">${lower}</div></div>`
 }
@@ -598,7 +604,7 @@ function doneScreen(pose) {
       <div class="split-pane vstack">${head}<div class="group-head">Not found</div>${nf}<div style="flex:1"></div>${act}<button type="button" class="btn big gray wide" data-go="pull">Close</button></div></div></div>`
   }
   return `<div class="screen">${statusbar()}${navbar('Walk Done')}${head}<div class="scroll pad vstack" style="padding-top:12px"><div class="group-head">Not found</div>${nf}<div class="group-head">Envelopes</div><div class="group">${envs}</div></div>
-    <div class="pad vstack" style="padding-block:12px var(--sa-bottom)">${act}</div></div>`
+    <div class="pad hstack" style="gap:12px;padding-block:12px var(--sa-bottom)"><button type="button" class="btn big gray" style="width:112px;font-size:20px" data-go="pull">Close</button>${act.replace('wide', 'grow').replace('class="btn', 'style="flex:1;font-size:20px" class="btn')}</div></div>`
 }
 
 // ---------- Find ----------
@@ -644,17 +650,17 @@ function moveSheet(pose) {
 
 // ---------- Slabs ----------
 function slabRows(added) {
-  const list = added ? [{ grader: 'PSA', grade: '9', name: 'Briar Knight', value: 'Value comes next' }, ...SLABS] : SLABS
+  const list = added ? [{ grader: local.grader, grade: '9', name: 'Briar Knight', value: 'Value comes next' }, ...SLABS] : SLABS
   return `<div class="group" role="list">${list.map((s) => `<div class="row" role="listitem"><span class="env"><span class="env-n" style="min-width:auto;padding:0 8px;font-size:17px">${s.grader} ${s.grade}</span></span><span class="grow"><span class="t-body ell">${esc(s.name)}</span></span><span class="t-body ink2 num">${s.value}</span></div>`).join('')}</div>`
 }
 function slabsScreen(pose) {
   const s = st.s
   if (s === 'scan' || s === 'scan-read') return scanScreen(pose)
   const added = s === 'slab-added'
-  const toast = added ? `<div class="receipt" role="status" style="margin-bottom:12px"><span class="check">${ICON.check}</span><span class="grow">Added PSA 9, Briar Knight.</span><button type="button" class="navlink" data-go="slabs">Undo</button></div>` : ''
+  const toast = added ? `<div class="receipt" role="status"><span class="check">${ICON.check}</span><span class="grow">Added ${local.grader} 9, Briar Knight.</span><button type="button" class="navlink" data-go="slabs">Undo</button></div>` : ''
   const btn = `<button type="button" class="btn big primary wide${ann('new', 'scan a cert with the camera')}" data-go="scan">${ICON.cam}Scan a Cert</button>`
   return `<div class="screen">${statusbar()}${navbar('Slabs', { sub: `${added ? 4 : 3} slabs` })}<div class="scroll pad">${slabRows(added)}</div>
-    <div class="pad" style="padding-block:8px calc(var(--sa-bottom) + 72px);${pose === 'unfolded' ? 'max-width:420px;margin-left:auto;width:100%' : ''}">${toast}${btn}</div>${tabbar('Slabs')}</div>`
+    <div class="pad vstack" style="padding-block:8px calc(var(--sa-bottom) + 72px);${pose === 'unfolded' ? 'max-width:420px;margin-left:auto;width:100%' : ''}">${toast}${btn}</div>${tabbar('Slabs')}</div>`
 }
 function scanScreen(pose) {
   const read = st.s === 'scan-read'
@@ -662,7 +668,7 @@ function scanScreen(pose) {
     <div class="sheet-bar"><button type="button" class="navlink" data-go="scan">Retake</button><h2>Add Slab</h2><span></span></div>
     <div class="hstack" style="gap:16px">${photo(STOPS[3], 'tiny')}<div class="vstack-2" style="gap:2px"><div class="t-title3b">Briar Knight</div><div class="t-body ink2">Grade 9. Cert read from the label.</div></div></div>
     <div class="group-head">Grader</div>
-    <div class="hstack" role="radiogroup" aria-label="Grader" style="gap:8px">${['PSA', 'Beckett', 'SGC', 'CGC'].map((g) => `<button type="button" role="radio" aria-checked="${g === 'PSA'}" class="btn ${g === 'PSA' ? '' : 'gray'}" style="flex:1;padding:0 4px;${g === 'PSA' ? 'box-shadow:inset 0 0 0 2px var(--bn-accent)' : ''}">${g}</button>`).join('')}</div>
+    <div class="seg" role="radiogroup" aria-label="Grader">${['PSA', 'Beckett', 'SGC', 'CGC'].map((g) => `<button type="button" role="radio" data-act="grader" data-g="${g}" aria-checked="${g === local.grader}">${g}</button>`).join('')}</div>
     <button type="button" class="btn big primary wide" data-go="slab-added">Add Slab</button></div>` : ''
   return `<div class="cam stage-dark">${statusbar()}<div class="cam-view${ann('new', 'cert scan, camera on the stage', true)}">
       <div class="slab"><div class="slab-label"><i></i><i></i><i></i></div></div><div class="guide ${read ? 'read' : ''}"></div>
@@ -735,6 +741,7 @@ document.addEventListener('click', (e) => {
   if (a === 'inc') { local.found = Math.min(STOPS[0].take, local.found + 1); return render() }
   if (a === 'dec') { local.found = Math.max(0, local.found - 1); return render() }
   if (a === 'moveto') { local.moveTo = t.dataset.box; return render() }
+  if (a === 'grader') { local.grader = t.dataset.g; return render() }
   if (a === 'sell-one') {
     local.copiesSold += 1
     if (local.copiesSold >= STOPS[0].take) { local.copiesSold = 0; return go('sold') }
