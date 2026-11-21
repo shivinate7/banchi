@@ -1,0 +1,802 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Every upload has a reverse</title>
+<style>
+/* Tokens: copied from app/src/tokens.css (light, dark). No other colour is typed below. */
+:root {
+  color-scheme: light;
+  --bn-bg: #f4f5f8; --bn-surface: #ffffff; --bn-surface-2: #eceef2; --bn-surface-3: #f7f8fa;
+  --bn-hover: rgba(15, 18, 23, 0.03);
+  --bn-ink: #0f1217; --bn-ink-2: #3b414b; --bn-ink-3: #666c76; --bn-ink-4: #7f8791;
+  --bn-line: rgba(15, 18, 23, 0.08); --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-line-focus: rgba(61, 90, 241, 0.55);
+  --bn-accent: #3d5af1; --bn-accent-hover: #2f4bd9; --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10); --bn-on-accent: #ffffff;
+  --bn-live: #d63d2b; --bn-live-tint: rgba(239, 75, 58, 0.12);
+  --bn-ok: #15803d; --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309; --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-danger: #b91c1c; --bn-danger-tint: rgba(220, 38, 38, 0.10);
+  --bn-pill-ink-ok: #11733a; --bn-pill-ink-warn: #a14b09; --bn-pill-ink-danger: #b3123e;
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32), 0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-btn-bg: var(--bn-surface); --bn-btn-bg-hover: var(--bn-surface-3); --bn-btn-shadow: var(--bn-shadow-1);
+  --bn-scrim: rgba(15, 18, 23, 0.32);
+  --bn-font-display: 'Manrope', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --bn-fs-2xs: 10px; --bn-fs-xs: 11px; --bn-fs-sm: 12px; --bn-fs-md: 13px; --bn-fs-base: 14px;
+  --bn-fs-lg: 16px; --bn-fs-xl: 18px; --bn-fs-2xl: 22px; --bn-fs-3xl: 28px; --bn-fs-4xl: 36px;
+  --bn-tracking-tight: -0.02em;
+  --bn-lh-tight: 1.1; --bn-lh-snug: 1.25; --bn-lh-base: 1.4;
+  --bn-0-5: 2px; --bn-1: 4px; --bn-1-5: 6px; --bn-2: 8px; --bn-3: 12px; --bn-4: 16px; --bn-5: 20px;
+  --bn-6: 24px; --bn-7: 32px; --bn-8: 40px; --bn-9: 48px; --bn-10: 64px;
+  --bn-r-xs: 4px; --bn-r-sm: 6px; --bn-r: 8px; --bn-r-lg: 12px; --bn-r-xl: 16px; --bn-r-full: 999px;
+  --bn-t-fast: 120ms; --bn-t: 200ms; --bn-t-slow: 280ms;
+  --bn-ease: cubic-bezier(0.2, 0, 0, 1); --bn-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --bn-control-h: 34px; --bn-control-h-lg: 40px; --bn-pill-h: 22px;
+  --bn-sidebar-w: 236px; --bn-rail-w: 64px;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+  --bn-hover: rgba(255, 255, 255, 0.04);
+  --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+  --bn-line: rgba(255, 255, 255, 0.08); --bn-line-strong: rgba(255, 255, 255, 0.16);
+  --bn-line-focus: rgba(129, 146, 255, 0.6);
+  --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14); --bn-on-accent: #0c0e12;
+  --bn-live: #ff6a58; --bn-live-tint: rgba(255, 106, 88, 0.16);
+  --bn-ok: #3ddc84; --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524; --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-danger: #ff5c5c; --bn-danger-tint: rgba(255, 92, 92, 0.14);
+  --bn-pill-ink-ok: var(--bn-ok); --bn-pill-ink-warn: var(--bn-warn); --bn-pill-ink-danger: #f6799c;
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-btn-bg: var(--bn-surface-3); --bn-btn-bg-hover: #262b34;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --bn-scrim: rgba(0, 0, 0, 0.55);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+    --bn-hover: rgba(255, 255, 255, 0.04);
+    --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+    --bn-line: rgba(255, 255, 255, 0.08); --bn-line-strong: rgba(255, 255, 255, 0.16);
+    --bn-line-focus: rgba(129, 146, 255, 0.6);
+    --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+    --bn-accent-tint: rgba(127, 144, 255, 0.14); --bn-on-accent: #0c0e12;
+    --bn-live: #ff6a58; --bn-live-tint: rgba(255, 106, 88, 0.16);
+    --bn-ok: #3ddc84; --bn-ok-tint: rgba(61, 220, 132, 0.14);
+    --bn-warn: #f5a524; --bn-warn-tint: rgba(245, 165, 36, 0.14);
+    --bn-danger: #ff5c5c; --bn-danger-tint: rgba(255, 92, 92, 0.14);
+    --bn-pill-ink-ok: var(--bn-ok); --bn-pill-ink-warn: var(--bn-warn); --bn-pill-ink-danger: #f6799c;
+    --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+    --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    --bn-btn-bg: var(--bn-surface-3); --bn-btn-bg-hover: #262b34;
+    --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+    --bn-scrim: rgba(0, 0, 0, 0.55);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bn-bg); color: var(--bn-ink);
+  font: 400 var(--bn-fs-base)/var(--bn-lh-base) var(--bn-font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--bn-accent); outline-offset: 2px; }
+.money { font-family: var(--bn-font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.bn-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---- mockup chrome (not product) ---------------------------------------------------------- */
+.sample {
+  display: flex; gap: var(--bn-2); align-items: baseline; flex-wrap: wrap;
+  padding: var(--bn-2) var(--bn-6);
+  background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn);
+  font-size: var(--bn-fs-md); border-bottom: 1px solid var(--bn-line);
+}
+.sample b { font-weight: 700; }
+.proposal { padding: var(--bn-4) var(--bn-6) var(--bn-4); display: grid; gap: var(--bn-3); }
+.proposal-head { display: flex; align-items: baseline; gap: var(--bn-3); flex-wrap: wrap; }
+.proposal-head h1 { margin: 0; font: 700 var(--bn-fs-xl)/var(--bn-lh-snug) var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.proposal-head p { margin: 0; color: var(--bn-ink-3); font-size: var(--bn-fs-md); }
+.controls { display: flex; flex-wrap: wrap; gap: var(--bn-2) var(--bn-4); align-items: center; }
+.ctl { display: inline-flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; background: var(--bn-surface-2); border-radius: var(--bn-r); }
+.seg button {
+  border: 0; background: transparent; border-radius: var(--bn-r-sm);
+  height: 30px; padding: 0 var(--bn-3); font-size: var(--bn-fs-md); color: var(--bn-ink-2); cursor: pointer;
+}
+.seg button:hover { color: var(--bn-ink); }
+.seg button[aria-pressed='true'] { background: var(--bn-surface); color: var(--bn-ink); box-shadow: var(--bn-shadow-1); font-weight: 600; }
+.ctl-label { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+details.choices { font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+details.choices summary { cursor: pointer; }
+details.choices ul { list-style: none; margin: var(--bn-2) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-4); }
+details.choices label { display: inline-flex; gap: var(--bn-1-5); align-items: center; cursor: pointer; }
+
+.anno { position: relative; outline: 1.5px dashed var(--bn-ink-4); outline-offset: 3px; }
+.anno-new { outline-color: var(--bn-accent); }
+.anno::after {
+  content: attr(data-anno); position: absolute; top: -10px; right: 8px; z-index: 5;
+  padding: 0 var(--bn-1-5); font: 600 var(--bn-fs-2xs)/16px var(--bn-font-ui); white-space: nowrap;
+  background: var(--bn-bg); color: var(--bn-ink-3); border: 1px dashed var(--bn-ink-4); border-radius: var(--bn-r-xs);
+}
+.anno-new::after { color: var(--bn-accent); border-color: var(--bn-accent); }
+.no-anno .anno { outline: none; }
+.no-anno .anno::after { display: none; }
+
+/* ---- the app frame ------------------------------------------------------------------------ */
+.frame-wrap { padding: 0 var(--bn-6) var(--bn-6); }
+.frame {
+  position: relative; display: grid; grid-template-columns: var(--bn-sidebar-w) minmax(0, 1fr);
+  min-height: 900px; border-radius: var(--bn-r-xl); overflow: hidden;
+  background: var(--bn-bg); box-shadow: var(--bn-shadow-3);
+}
+.side { background: var(--bn-surface-2); border-right: 1px solid var(--bn-line); padding: var(--bn-5) var(--bn-3); display: flex; flex-direction: column; gap: 2px; }
+.brand { padding: 0 var(--bn-2) var(--bn-4); font: 800 var(--bn-fs-lg)/1 var(--bn-font-display); }
+.nav { display: flex; align-items: center; gap: var(--bn-2); height: 34px; padding: 0 var(--bn-2); border-radius: var(--bn-r); color: var(--bn-ink-3); font-size: var(--bn-fs-md); }
+.nav.is-here { background: var(--bn-accent-tint); color: var(--bn-accent); font-weight: 600; }
+
+.page { padding: var(--bn-6) var(--bn-7) var(--bn-9); min-width: 0; display: flex; flex-direction: column; gap: var(--bn-5); container: page / inline-size; }
+.page-head { display: flex; align-items: flex-start; gap: var(--bn-4); flex-wrap: wrap; }
+.page-head h2 { margin: 0; font: 700 var(--bn-fs-3xl)/var(--bn-lh-tight) var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.page-head p { margin: var(--bn-1-5) 0 0; color: var(--bn-ink-3); font-size: var(--bn-fs-md); }
+.head-actions { margin-left: auto; display: flex; gap: var(--bn-2); align-items: center; }
+
+/* kit-shaped controls */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-1-5);
+  height: var(--bn-control-h); padding: 0 var(--bn-3); border: 0; border-radius: var(--bn-r);
+  background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow); color: var(--bn-ink);
+  font-size: var(--bn-fs-md); font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: background var(--bn-t-fast) var(--bn-ease);
+}
+.btn:hover { background: var(--bn-btn-bg-hover); }
+.btn-lg { height: var(--bn-control-h-lg); padding: 0 var(--bn-4); font-size: var(--bn-fs-base); }
+.btn-sm { height: 28px; padding: 0 var(--bn-2); font-size: var(--bn-fs-sm); }
+.btn-primary { background: var(--bn-accent); color: var(--bn-on-accent); box-shadow: none; }
+.btn-primary:hover { background: var(--bn-accent-hover); }
+.btn-quiet { background: transparent; box-shadow: none; color: var(--bn-ink-2); }
+.btn-quiet:hover { background: var(--bn-hover); color: var(--bn-ink); }
+.btn[disabled] { cursor: not-allowed; opacity: .45; }
+.btn-icon { width: var(--bn-control-h-lg); padding: 0; }
+.pill {
+  display: inline-flex; align-items: center; height: var(--bn-pill-h); padding: 0 var(--bn-2);
+  border-radius: var(--bn-r-full); font-size: var(--bn-fs-xs); font-weight: 600; white-space: nowrap;
+  background: var(--bn-surface-2); color: var(--bn-ink-2);
+}
+.pill-ok { background: var(--bn-ok-tint); color: var(--bn-pill-ink-ok); }
+.pill-warn { background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn); }
+.pill-danger { background: var(--bn-danger-tint); color: var(--bn-pill-ink-danger); }
+.pill-accent { background: var(--bn-accent-tint); color: var(--bn-accent); }
+
+/* ---- the check (New) ------------------------------------------------------------------------ */
+.check { background: var(--bn-surface); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-2); display: flex; flex-direction: column; }
+.check-top { display: flex; gap: var(--bn-4) var(--bn-6); flex-wrap: wrap; align-items: flex-start; padding: var(--bn-5) var(--bn-5) var(--bn-4); }
+.check-say { display: flex; flex-direction: column; gap: var(--bn-2); min-width: 0; flex: 1 1 360px; }
+.check-src { margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.check-title { margin: 0; display: flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; font: 700 var(--bn-fs-2xl)/var(--bn-lh-snug) var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.figs { margin: 0; display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-4); font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+.figs b { color: var(--bn-ink); font-variant-numeric: tabular-nums; }
+.check-act { display: flex; flex-direction: column; gap: var(--bn-2); align-items: flex-end; flex: 0 0 auto; }
+.act-row { display: flex; gap: var(--bn-2); align-items: center; }
+.act-why { margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); min-height: 18px; text-align: right; max-width: 340px; }
+.act-why.is-ok { color: var(--bn-pill-ink-ok); }
+.check-status { flex: 1 1 100%; margin: 0; min-height: 44px; display: flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; padding: var(--bn-2) var(--bn-3); border-radius: var(--bn-r); font-size: var(--bn-fs-md); background: var(--bn-surface-3); color: var(--bn-ink-2); }
+.check-status:empty { display: none; }
+/* Touch (the iPad at 820): the price choice is a 40px target, like every control under a finger. */
+@media (pointer: coarse) { .choice button { height: var(--bn-control-h-lg); padding: 0 var(--bn-3); } }
+.check-status.ok { background: var(--bn-ok-tint); color: var(--bn-ink); }
+.check-status.warn { background: var(--bn-warn-tint); color: var(--bn-ink); }
+.check-status .btn { margin-left: auto; }
+
+.flag-head, .flag {
+  display: grid; align-items: center; gap: var(--bn-2) var(--bn-4);
+  grid-template-columns: minmax(180px, 1fr) 72px 72px 72px 156px 84px 276px;
+  grid-template-areas: 'card was new mkt sales risk choice';
+  padding: 0 var(--bn-5);
+}
+.flag-head { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-weight: 600; padding-top: var(--bn-2); padding-bottom: var(--bn-2); border-top: 1px solid var(--bn-line); }
+.flag-head .num, .flag .num { text-align: right; }
+.flag { padding-top: var(--bn-3); padding-bottom: var(--bn-3); border-top: 1px solid var(--bn-line); font-size: var(--bn-fs-md); }
+.flag .c-card { grid-area: card; min-width: 0; }
+.flag .c-was { grid-area: was; } .flag .c-new { grid-area: new; } .flag .c-mkt { grid-area: mkt; }
+.flag .c-sales { grid-area: sales; } .flag .c-risk { grid-area: risk; } .flag .c-choice { grid-area: choice; justify-self: end; }
+.c-card b { display: block; font-weight: 600; }
+.c-card .meta { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.c-card .why { display: block; margin-top: 2px; color: var(--bn-pill-ink-warn); font-size: var(--bn-fs-sm); font-weight: 600; }
+.c-card .chain { display: block; margin-top: 2px; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.c-new .money { color: var(--bn-pill-ink-danger); font-weight: 600; }
+.c-sales { color: var(--bn-ink-2); font-size: var(--bn-fs-sm); text-align: right; }
+.c-risk { text-align: right; font-weight: 600; }
+.c-risk .copies { display: block; font-weight: 400; color: var(--bn-ink-3); font-size: var(--bn-fs-xs); }
+.side.anno::after, .sheet.anno::after { top: auto; bottom: 8px; right: 8px; }
+.page-head > :first-child { flex: 1 1 0; min-width: 0; }
+.rows li .r-right > * { white-space: nowrap; }
+.lab { display: none; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-family: var(--bn-font-ui); font-weight: 400; }
+.choice { display: inline-flex; gap: 2px; padding: 2px; background: var(--bn-surface-2); border-radius: var(--bn-r); }
+.choice button { border: 0; background: transparent; height: 30px; padding: 0 var(--bn-2); border-radius: var(--bn-r-sm); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); cursor: pointer; white-space: nowrap; }
+.choice button:hover { color: var(--bn-ink); }
+.choice button[aria-pressed='true'] { background: var(--bn-surface); color: var(--bn-ink); font-weight: 600; box-shadow: var(--bn-shadow-1); }
+.flag.is-chosen .c-new .money { color: var(--bn-ink); }
+.flag.is-chosen.chose-old .c-was .money, .flag.is-chosen.chose-market .c-mkt .money { color: var(--bn-accent); font-weight: 600; }
+
+/* the high-value cut: its own confirm, always first */
+.hv { margin: 0 var(--bn-5) var(--bn-4); padding: var(--bn-4); border-radius: var(--bn-r); background: var(--bn-danger-tint); display: grid; gap: var(--bn-3) var(--bn-6); grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.hv h3 { margin: 0; font: 700 var(--bn-fs-lg)/var(--bn-lh-snug) var(--bn-font-display); }
+.hv p { margin: var(--bn-1) 0 0; font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+.hv-nums { display: flex; gap: var(--bn-5); margin-top: var(--bn-2); font-size: var(--bn-fs-md); }
+.hv-nums span { display: grid; }
+.hv-nums small { color: var(--bn-ink-3); font-size: var(--bn-fs-xs); }
+.hv-confirm { display: flex; flex-direction: column; gap: var(--bn-1); }
+.hv-confirm label { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); font-weight: 600; }
+.hv-field { display: flex; gap: var(--bn-2); align-items: center; }
+.field { position: relative; }
+.field span { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--bn-ink-3); font-family: var(--bn-font-mono); font-size: var(--bn-fs-md); }
+.field input { width: 128px; height: var(--bn-control-h); padding: 0 var(--bn-2) 0 22px; border-radius: var(--bn-r); border: 1px solid var(--bn-line-strong); background: var(--bn-surface); font-family: var(--bn-font-mono); font-size: var(--bn-fs-md); }
+.field input:focus { outline: none; border-color: var(--bn-accent); box-shadow: 0 0 0 3px var(--bn-accent-tint); }
+.hv.is-done { background: var(--bn-surface-3); }
+.hv-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); min-height: 18px; margin: 0; }
+.hv-note.is-ok { color: var(--bn-pill-ink-ok); font-weight: 600; }
+
+.flags-foot { display: flex; gap: var(--bn-3); align-items: center; flex-wrap: wrap; padding: var(--bn-3) var(--bn-5) var(--bn-4); border-top: 1px solid var(--bn-line); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.flags-foot .count-lines { display: flex; flex-direction: column; gap: 2px; }
+.flags-foot .btn { margin-left: auto; }
+.clean-body { padding: 0 var(--bn-5) var(--bn-4); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--bn-3); }
+.move { background: var(--bn-surface-3); border-radius: var(--bn-r); padding: var(--bn-3); font-size: var(--bn-fs-md); display: grid; gap: 2px; }
+.move small { color: var(--bn-ink-3); font-size: var(--bn-fs-xs); }
+.move b { font-weight: 600; }
+
+/* today's worklist, drawn faint behind the check */
+.worklist { display: flex; flex-direction: column; opacity: .55; }
+.wl-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 80px 96px; gap: var(--bn-4); align-items: center; padding: var(--bn-3) 0; border-top: 1px solid var(--bn-line); font-size: var(--bn-fs-md); }
+.wl-thumb { width: 28px; height: 38px; border-radius: var(--bn-r-xs); background: var(--bn-surface-2); box-shadow: var(--bn-shadow-1); }
+.wl-row small { color: var(--bn-ink-3); }
+.wl-price { height: 32px; border-radius: var(--bn-r); border: 1px solid var(--bn-line-strong); display: flex; align-items: center; padding: 0 var(--bn-2); font-family: var(--bn-font-mono); font-size: var(--bn-fs-md); }
+.wl-title { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); padding-bottom: var(--bn-2); }
+
+/* ---- Past Sends sheet (New) ----------------------------------------------------------------- */
+.scrim { position: absolute; inset: 0; background: var(--bn-scrim); z-index: 20; display: none; }
+.sheet {
+  position: absolute; top: 0; right: 0; bottom: 0; z-index: 21; width: min(680px, calc(100% - var(--bn-sidebar-w)));
+  background: var(--bn-surface); box-shadow: var(--bn-shadow-3); display: none; flex-direction: column;
+}
+.has-sheet .scrim { display: block; }
+.has-sheet .sheet { display: flex; }
+.sheet-head { display: flex; align-items: center; gap: var(--bn-3); padding: var(--bn-5) var(--bn-6) var(--bn-4); border-bottom: 1px solid var(--bn-line); }
+.sheet-head h2 { margin: 0; font: 700 var(--bn-fs-xl)/var(--bn-lh-snug) var(--bn-font-display); }
+.sheet-head .btn:last-child { margin-left: auto; }
+.sheet-body { padding: var(--bn-5) var(--bn-6) var(--bn-7); overflow: auto; display: flex; flex-direction: column; gap: var(--bn-5); }
+.sheet-lede { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+.sends { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.send { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--bn-1) var(--bn-4); padding: var(--bn-3) 0; border-top: 1px solid var(--bn-line); align-items: center; }
+.send:first-child { border-top: 0; }
+.send-when { display: flex; gap: var(--bn-2); align-items: center; flex-wrap: wrap; font-weight: 600; font-size: var(--bn-fs-base); }
+.send-figs { grid-column: 1; display: flex; gap: var(--bn-1) var(--bn-4); flex-wrap: wrap; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.send-figs b { color: var(--bn-ink-2); font-weight: 600; font-variant-numeric: tabular-nums; }
+.send .btn { grid-column: 2; grid-row: 1 / span 2; }
+.send.is-picked { background: var(--bn-accent-tint); margin: 0 calc(-1 * var(--bn-3)); padding-left: var(--bn-3); padding-right: var(--bn-3); border-radius: var(--bn-r); }
+
+.rev-big { margin: 0; font: 700 var(--bn-fs-4xl)/var(--bn-lh-tight) var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.rev-sub { margin: var(--bn-2) 0 0; font-size: var(--bn-fs-md); color: var(--bn-ink-2); max-width: 60ch; }
+.grp { display: flex; flex-direction: column; gap: var(--bn-2); }
+.grp h3 { margin: 0; display: flex; align-items: center; gap: var(--bn-2); font: 600 var(--bn-fs-base)/var(--bn-lh-snug) var(--bn-font-ui); }
+.grp > p { margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.cnt { font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+.rows { list-style: none; margin: 0; padding: 0; border-radius: var(--bn-r); background: var(--bn-surface-3); }
+.rows li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--bn-4); padding: var(--bn-2) var(--bn-3); border-top: 1px solid var(--bn-line); font-size: var(--bn-fs-md); align-items: center; }
+.rows li:first-child { border-top: 0; }
+.rows li small { grid-column: 1; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.rows li .r-right { grid-column: 2; grid-row: 1 / span 2; text-align: right; display: grid; gap: 2px; justify-items: end; }
+.gap { color: var(--bn-pill-ink-danger); font-weight: 600; }
+.back-price { color: var(--bn-ink-2); }
+.back-price b { color: var(--bn-ink); }
+.sheet-foot { display: flex; gap: var(--bn-3); align-items: center; flex-wrap: wrap; padding: var(--bn-4) var(--bn-6); border-top: 1px solid var(--bn-line); margin-top: auto; }
+.sheet-foot p { margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); flex: 1 1 220px; }
+
+/* hidden options */
+.hide-sales .c-sales, .hide-sales .h-sales { display: none; }
+.hide-risk .c-risk, .hide-risk .h-risk, .hide-risk .c-risk-hv { display: none; }
+.hide-usemkt [data-pick='market'] { display: none; }
+.hide-keepall .keep-all { display: none; }
+.hide-download .door-download { display: none; }
+.hide-counts .count-lines { display: none; }
+.hide-orders .orders-col { display: none; }
+
+/* ---- 820 and below: the rail, and the flag row folds into three lines ---------------------- */
+@container page (max-width: 980px) {
+  .flag-head { display: none; }
+  .flag { grid-template-columns: repeat(4, minmax(0, 1fr)) auto; grid-template-areas: 'card card card card risk' 'was new mkt sales sales' 'choice choice choice choice choice'; }
+  .flag .c-choice { justify-self: start; }
+  .flag .num, .c-sales, .c-risk { text-align: left; }
+  .c-risk { text-align: right; }
+  .lab { display: block; }
+  .hide-sales .flag { grid-template-areas: 'card card card card risk' 'was new mkt mkt mkt' 'choice choice choice choice choice'; }
+  .clean-body { grid-template-columns: minmax(0, 1fr); }
+  .check-act { align-items: flex-start; flex-basis: 100%; }
+  .act-why { text-align: left; }
+}
+@media (max-width: 1100px) {
+  .frame { grid-template-columns: var(--bn-rail-w) minmax(0, 1fr); }
+  .side { padding: var(--bn-4) var(--bn-2); align-items: center; }
+  .brand { font-size: var(--bn-fs-base); padding-left: 0; padding-right: 0; }
+  .nav span { display: none; }
+  .side.anno::after { display: none; }
+  .nav { width: 40px; justify-content: center; padding: 0; }
+  .page { padding: var(--bn-5) var(--bn-5) var(--bn-8); }
+  .sheet { width: calc(100% - var(--bn-rail-w)); }
+  .hv { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  .sample, .proposal, .frame-wrap { padding-left: var(--bn-4); padding-right: var(--bn-4); }
+  .head-actions { margin-left: 0; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .has-sheet .sheet { animation: sheet-in var(--bn-t-slow) var(--bn-ease-out) backwards; }
+  @keyframes sheet-in { from { transform: translateX(24px); opacity: 0; } }
+}
+</style>
+</head>
+<body>
+<div class="sample" role="note"><b>Sample.</b> No card, set, price, count, time or order on this page is real.</div>
+
+<section class="proposal" aria-label="Mockup controls">
+  <div class="proposal-head">
+    <h1>Every Upload Has a Reverse</h1>
+    <p>A proposal for Pricing: a check before each send, and a way back after it. Nothing here ships.</p>
+  </div>
+  <div class="controls">
+    <span class="ctl-label">State</span>
+    <div class="seg" id="states" role="group" aria-label="State"></div>
+  </div>
+  <div class="controls">
+    <span class="ctl">
+      <span class="ctl-label">Theme</span>
+      <span class="seg" role="group" aria-label="Theme">
+        <button type="button" data-theme-set="light">Light</button>
+        <button type="button" data-theme-set="dark">Dark</button>
+      </span>
+    </span>
+    <span class="ctl">
+      <span class="ctl-label">Compare With</span>
+      <span class="seg" role="group" aria-label="Compare with">
+        <button type="button" data-cmp="last">Your Last Send</button>
+        <button type="button" data-cmp="live">What Is Live Now</button>
+      </span>
+    </span>
+    <span class="ctl">
+      <span class="ctl-label">A Sale at a Bad Price</span>
+      <span class="seg" role="group" aria-label="A sale at a bad price">
+        <button type="button" data-sold="honor">You Honor It</button>
+        <button type="button" data-sold="cancel">You Cancel It</button>
+      </span>
+    </span>
+    <span class="ctl">
+      <span class="ctl-label">Own Confirm For</span>
+      <span class="seg" role="group" aria-label="Own confirm for">
+        <button type="button" data-hv="line">Value Line Only</button>
+        <button type="button" data-hv="slab">Every Slab Too</button>
+      </span>
+    </span>
+    <span class="ctl">
+      <span class="ctl-label">Labels</span>
+      <span class="seg" role="group" aria-label="Today and New labels">
+        <button type="button" data-labels="on">Show</button>
+        <button type="button" data-labels="off">Hide</button>
+      </span>
+    </span>
+  </div>
+  <details class="choices">
+    <summary>Choices on this page (untick one to remove it)</summary>
+    <ul>
+      <li><label><input type="checkbox" data-hide="sales" checked> 1. Recent sales on each flag</label></li>
+      <li><label><input type="checkbox" data-hide="risk" checked> 2. Dollars at risk</label></li>
+      <li><label><input type="checkbox" data-hide="usemkt" checked> 3. Use Market</label></li>
+      <li><label><input type="checkbox" data-hide="keepall" checked> 4. Keep New for All</label></li>
+      <li><label><input type="checkbox" data-hide="retype" checked> 5. Retype the price</label></li>
+      <li><label><input type="checkbox" data-hide="download" checked> 6. Download door and Mark Uploaded</label></li>
+      <li><label><input type="checkbox" data-hide="counts" checked> 7. Count lines</label></li>
+      <li><label><input type="checkbox" data-hide="orders" checked> 8. Orders on the reverse</label></li>
+    </ul>
+  </details>
+</section>
+
+<div class="frame-wrap">
+  <div class="frame" id="frame">
+    <nav class="side anno" data-anno="Today: shell" aria-label="Sample navigation">
+      <div class="brand">banchi</div>
+      <div class="nav"><svg class="svg" viewBox="0 0 24 24"><path d="M4 11l8-6 8 6v8H4z"/></svg><span>Home</span></div>
+      <div class="nav"><svg class="svg" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><circle cx="12" cy="13" r="3"/></svg><span>Capture</span></div>
+      <div class="nav"><svg class="svg" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 12l2 2 4-4"/></svg><span>Review</span></div>
+      <div class="nav"><svg class="svg" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 9h6M9 13h6"/></svg><span>Inventory</span></div>
+      <div class="nav is-here"><svg class="svg" viewBox="0 0 24 24"><path d="M4 12V5h7l9 9-7 7z"/><circle cx="8.5" cy="8.5" r="1"/></svg><span>Pricing</span></div>
+      <div class="nav"><svg class="svg" viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="17" r="1.5"/><circle cx="17" cy="17" r="1.5"/></svg><span>Orders</span></div>
+      <div class="nav"><svg class="svg" viewBox="0 0 24 24"><path d="M5 19V9M10 19V5M15 19v-7M20 19v-4"/></svg><span>Sales</span></div>
+    </nav>
+    <main class="page" id="page">
+      <header class="page-head">
+        <div class="anno" data-anno="Today: page title">
+          <h2>Pricing</h2>
+          <p>One list. Every row says where its price comes from. Nothing live changes until you send.</p>
+        </div>
+        <div class="head-actions">
+          <button class="btn anno anno-new" data-anno="New: Past Sends" type="button" data-open="history" id="open-history">
+            <svg class="svg" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 5v4h4"/><path d="M12 8v4l3 2"/></svg>Past Sends
+          </button>
+        </div>
+      </header>
+      <section class="check anno anno-new" data-anno="New: check before send" id="check" aria-labelledby="check-title"></section>
+      <section class="anno" data-anno="Today: worklist" aria-label="Worklist">
+        <div class="worklist" id="worklist"></div>
+      </section>
+    </main>
+    <div class="scrim" data-close="1"></div>
+    <aside class="sheet anno anno-new" data-anno="New: Past Sends sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title"></aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  const STATES = [
+    ['clean', 'Clean Send'],
+    ['outliers', 'A Few Outliers'],
+    ['high-value', 'High-Value Cut'],
+    ['history', 'Past Sends'],
+    ['reverse', 'Reverse, Some Sold'],
+    ['reverse-check', 'Checking the Reverse'],
+    ['reverse-of-reverse', 'Reverse of a Reverse'],
+  ];
+  const SHEET_STATES = ['history', 'reverse', 'reverse-of-reverse'];
+  const opt = { state: 'outliers', t: null, anno: 'on', cmp: 'last', sold: 'honor', hv: 'line', hide: [] };
+  let local = { picks: {}, typed: '', door: null };
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const $ = (n) => `<span class="money">$${n.toFixed(2)}</span>`;
+  const ICON = {
+    send: '<svg class="svg" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2-6z"/></svg>',
+    down: '<svg class="svg" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+    back: '<svg class="svg" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
+    close: '<svg class="svg" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    rev: '<svg class="svg" viewBox="0 0 24 24"><path d="M9 7H5V3"/><path d="M5.5 7A8 8 0 1 1 4 12"/></svg>',
+  };
+
+  // Flags, sorted by dollars at risk: (market - new) x copies. Raises are never flagged.
+  const FLAGS = [
+    { id: 'emberwing', name: 'Emberwing Drake ex', meta: 'Near Mint, Hollow Tides 112/190', copies: 2, why: 'Decimal slip: a tenth of the old price', was: 38.5, now: 3.85, mkt: 39.1, sales: [37.9, 40.25, 38.0], risk: 70.5 },
+    { id: 'siren', name: 'Saltmarsh Siren', meta: 'Near Mint, Saltmarsh Reverie 207/198', copies: 1, why: 'Under half of market', was: 22.0, now: 9.8, mkt: 21.4, sales: [20.1, 22.75, 21.0], risk: 11.6 },
+    { id: 'wyrmling', name: 'Quartz Wyrmling', meta: 'Lightly Played, Glimmerwake 064/172', copies: 3, why: 'Decimal slip: a tenth of the old price', was: 4.2, now: 0.42, mkt: 4.05, sales: [3.95, 4.1, 4.4], risk: 10.89 },
+    { id: 'sprite', name: 'Thornveil Sprite', meta: 'Near Mint, Emberfall Crown 033/180', copies: 1, why: 'Under half of market', was: 6.75, now: 2.95, mkt: 6.6, sales: [6.4, 6.9, 6.55], risk: 3.65 },
+  ];
+  const HV = { id: 'regent', name: 'Glacier Regent ex', meta: 'Graded 10 slab, Emberfall Crown 201/180', copies: 1, was: 142.0, now: 96.0, mkt: 138.5, risk: 42.5 };
+  const ROR_FLAGS = [
+    { id: 'siren2', name: 'Saltmarsh Siren', meta: 'Near Mint, Saltmarsh Reverie 207/198', copies: 1, why: 'Under half of market, flagged again', chain: 'Reverse of reverse of send from Today 1:12 am', was: 21.4, now: 9.8, mkt: 21.4, sales: [20.1, 22.75, 21.0], risk: 11.6 },
+    { id: 'wyrm2', name: 'Quartz Wyrmling', meta: 'Lightly Played, Glimmerwake 064/172', copies: 3, why: 'Decimal slip, flagged again', chain: 'Reverse of reverse of send from Today 1:12 am', was: 4.2, now: 0.42, mkt: 4.05, sales: [3.95, 4.1, 4.4], risk: 10.89 },
+  ];
+
+  const hidden = (k) => opt.hide.includes(k);
+  const flagsFor = (s) => {
+    if (s === 'outliers') return FLAGS;
+    if (s === 'high-value') return hidden('retype') ? [{ ...HV, why: 'Above your $25 value line, down 32%', sales: [136.0, 141.5, 139.0] }, ...FLAGS.slice(0, 3)] : FLAGS.slice(0, 3);
+    if (s === 'ror-check') return ROR_FLAGS;
+    return [];
+  };
+  const checkKind = () => (SHEET_STATES.includes(opt.state) ? 'clean' : opt.state);
+
+  function srcLine(kind) {
+    if (kind === 'reverse-check') return 'Checking the reverse of your send from Today 1:12 am, against what that send changed.';
+    if (kind === 'ror-check') return 'Checking the reverse of Today 1:40 am, which re-applies your send from Today 1:12 am.';
+    return opt.cmp === 'live' ? 'Compared with what is live on TCGplayer, read Today 1:09 am.' : 'Compared with your last send, Fri 11:48 pm.';
+  }
+
+  function flagRow(f) {
+    const pick = local.picks[f.id];
+    const btn = (k, l) => `<button type="button" data-pick="${k}" data-card="${f.id}" aria-pressed="${pick === k}">${l}</button>`;
+    return `<div class="flag${pick ? ' is-chosen chose-' + pick : ''}" id="flag-${f.id}">
+      <div class="c-card"><b>${esc(f.name)}</b><span class="meta">${esc(f.meta)}</span><span class="why">${esc(f.why)}</span>${f.chain ? `<span class="chain">${esc(f.chain)}</span>` : ''}</div>
+      <div class="c-was num"><span class="lab">Was</span>${$(f.was)}</div>
+      <div class="c-new num"><span class="lab">New</span>${$(f.now)}</div>
+      <div class="c-mkt num"><span class="lab">Market</span>${$(f.mkt)}</div>
+      <div class="c-sales"><span class="lab">Recent Sales</span><span class="money">${f.sales.map((s) => '$' + s.toFixed(2)).join(' ')}</span></div>
+      <div class="c-risk"><span class="lab">At Risk</span><span class="money">$${f.risk.toFixed(2)}</span><small class="copies">${f.copies} ${f.copies === 1 ? 'copy' : 'copies'}</small></div>
+      <div class="c-choice"><span class="choice" role="group" aria-label="Price for ${esc(f.name)}" id="choice-${f.id}">${btn('new', 'Keep New')}${btn('old', 'Use Old')}${btn('market', 'Use Market')}</span></div>
+    </div>`;
+  }
+
+  function hvBlock() {
+    const ok = local.typed.replace(/^\$/, '').trim() === HV.now.toFixed(2) || local.picks[HV.id] === 'old';
+    const slab = opt.hv === 'slab' ? 'It is a slab, and every slab gets this confirm.' : 'It is above your $25 value line and drops 32%.';
+    let note = 'It cannot ride on Keep New for All.';
+    if (local.picks[HV.id] === 'old') note = 'Old price kept: $142.00.';
+    else if (ok) note = 'Confirmed at $96.00.';
+    else if (/^\$?\d+\.\d{2}$/.test(local.typed.trim())) note = 'That is not the new price. Type 96.00, or press Use Old.';
+    return `<div class="hv${ok ? ' is-done' : ''}" id="hv-confirm">
+      <div>
+        <h3>${esc(HV.name)}</h3>
+        <p>${esc(HV.meta)}. ${slab}</p>
+        <div class="hv-nums">
+          <span><small>Was</small>${$(HV.was)}</span>
+          <span><small>New</small><b class="money">$${HV.now.toFixed(2)}</b></span>
+          <span><small>Market</small>${$(HV.mkt)}</span>
+          <span class="c-risk-hv"><small>At Risk</small>${$(HV.risk)}</span>
+        </div>
+      </div>
+      <div class="hv-confirm">
+        <label for="hv-input">Type the New Price to Send It</label>
+        <div class="hv-field">
+          <span class="field"><span>$</span><input id="hv-input" inputmode="decimal" autocomplete="off" value="${esc(local.typed)}" placeholder="0.00"></span>
+          <button class="btn" type="button" data-pick="old" data-card="${HV.id}">Use Old</button>
+        </div>
+        <p class="hv-note${ok ? ' is-ok' : ''}" id="hv-note" aria-live="polite">${note}</p>
+      </div>
+    </div>`;
+  }
+
+  function renderCheck() {
+    const kind = checkKind();
+    const flags = flagsFor(kind);
+    const hvOn = kind === 'high-value' && !hidden('retype');
+    const hvDone = !hvOn || local.picks[HV.id] === 'old' || local.typed.replace(/^\$/, '').trim() === HV.now.toFixed(2);
+    const open = flags.filter((f) => !local.picks[f.id]).length + (hvDone ? 0 : 1);
+    const total = flags.length + (hvOn ? 1 : 0);
+    const isRev = kind === 'reverse-check';
+    const n = isRev || kind === 'ror-check' ? 309 : 312;
+    const figs = isRev
+      ? '<span><b>309</b> up</span><span><b>0</b> down</span><span>Middle change <b>+6%</b></span><span><b>0</b> copies added or taken off</span>'
+      : kind === 'ror-check'
+        ? '<span><b>0</b> up</span><span><b>309</b> down</span><span>Middle change <b>-6%</b></span><span><b>0</b> copies added or taken off</span>'
+        : '<span><b>180</b> up</span><span><b>132</b> down</span><span>Middle change <b>4%</b></span>';
+    let title, pill;
+    if (total === 0) { title = `${n} changes, none look wrong`; pill = '<span class="pill pill-ok">Clear</span>'; }
+    else if (open === 0) { title = `${n} changes, ${total} looked wrong`; pill = '<span class="pill pill-ok">All Chosen</span>'; }
+    else { title = `${n} changes, ${total} look wrong`; pill = `<span class="pill pill-warn">Held</span>`; }
+
+    let why = '';
+    if (open > 0) why = `Choose a price for ${open} more ${open === 1 ? 'card' : 'cards'} first.`;
+    else if (total > 0) {
+      const c = { old: 0, market: 0 };
+      Object.values(local.picks).forEach((p) => { if (c[p] !== undefined) c[p] += 1; });
+      why = `Ready. ${c.old} at the old price, ${c.market} at market.`;
+    } else why = isRev ? 'Raises are never flagged, so a reverse of a cut checks clean.' : 'Ready.';
+
+    let body = '';
+    if (total === 0) {
+      const moves = isRev
+        ? [['Biggest Rise', 'Brindlefox', 1.2, 14.8], ['Biggest Rise', 'Cobalt Mantis ex', 2.1, 18.6], ['Most Copies', 'Hearthmoss Golem', 0.6, 1.9]]
+        : [['Biggest Rise', 'Lanternfin', 3.1, 3.6], ['Biggest Cut', 'Cindertail Vix', 5.4, 4.95], ['Most Copies', 'Mossback Tortle', 0.62, 0.58]];
+      body = `<div class="clean-body">${moves.map(([k, nm, a, b]) => `<div class="move"><small>${k}</small><b>${nm}</b><span>${$(a)} to ${$(b)}</span></div>`).join('')}</div>`;
+    } else {
+      body = (hvOn ? hvBlock() : '') +
+        `<div class="flag-head" aria-hidden="true"><span>Card, Sorted by Dollars at Risk</span><span class="num">Was</span><span class="num">New</span><span class="num">Market</span><span class="num h-sales">Recent Sales</span><span class="num h-risk">At Risk</span><span class="num">Price to Send</span></div>` +
+        flags.map(flagRow).join('');
+    }
+    const keepAll = flags.length > 0 && flags.some((f) => !local.picks[f.id])
+      ? `<button class="btn btn-sm keep-all" type="button" data-keepall="1">Keep New for All ${flags.filter((f) => !local.picks[f.id]).length}</button>` : '';
+    const countLines = `<span class="count-lines"><span>11 cards have no market price. They are counted, not checked.</span><span>Raises are never flagged. The worst a raise does is not sell.</span></span>`;
+    const foot = `<div class="flags-foot">${countLines}${keepAll}</div>`;
+
+    let status = '', tone = '';
+    if (local.door === 'sent') {
+      tone = 'ok';
+      status = `<span>${n} prices sent. Banchi checks TCGplayer again after the wait. This send is kept in Past Sends, with its reverse.</span><button class="btn btn-sm" type="button" data-open="history">Open Past Sends</button>`;
+    } else if (local.door === 'downloaded') {
+      tone = 'warn';
+      status = `<span>The file is downloaded. Banchi cannot see an upload you make by hand, so mark it once it is on TCGplayer.</span><button class="btn btn-sm" type="button" data-door="marked">Mark Uploaded</button>`;
+    } else if (local.door === 'marked') {
+      tone = 'ok';
+      status = `<span>Marked uploaded at 1:16 am. Kept in Past Sends, with its reverse.</span><button class="btn btn-sm" type="button" data-open="history">Open Past Sends</button>`;
+    }
+
+    const locked = open > 0;
+    document.getElementById('check').innerHTML = `
+      <div class="check-top">
+        <div class="check-say">
+          <p class="check-src">${esc(srcLine(kind))}</p>
+          <h2 class="check-title" id="check-title">${title} ${pill}</h2>
+          <p class="figs">${figs}</p>
+        </div>
+        <div class="check-act">
+          <div class="act-row">
+            <button class="btn btn-primary btn-lg" type="button" data-door="sent" id="send-press" ${locked ? 'disabled aria-describedby="act-why"' : ''}>${ICON.send}Send ${n} Prices to TCGplayer</button>
+            <button class="btn btn-lg btn-icon door-download" type="button" data-door="downloaded" aria-label="Download the File Instead" title="Download the File Instead" ${locked ? 'disabled' : ''}>${ICON.down}</button>
+          </div>
+          <p class="act-why${locked ? '' : ' is-ok'}" id="act-why" aria-live="polite">${why}</p>
+        </div>
+        <div class="check-status ${tone}" role="status" id="check-status">${status}</div>
+      </div>
+      ${body}
+      ${foot}`;
+  }
+
+  function renderWorklist() {
+    const rows = [['Lanternfin', 'Near Mint, Glimmerwake 041/172', 3.1, 3.6], ['Cindertail Vix', 'Near Mint, Hollow Tides 088/190', 5.4, 4.95], ['Mossback Tortle', 'Near Mint, Emberfall Crown 120/180', 0.62, 0.58]];
+    document.getElementById('worklist').innerHTML = '<div class="wl-title">Going at the Rule</div>' + rows.map(([n, m, mk, p]) =>
+      `<div class="wl-row"><span class="wl-thumb"></span><span>${n}<br><small>${m}</small></span><span>${$(mk)}</span><span class="wl-price">$${p.toFixed(2)}</span></div>`).join('');
+  }
+
+  const SENDS = [
+    { id: 's112', when: 'Today 1:12 am', how: 'Sent', changes: 312, kept: 2, sold: 3, tags: [] },
+    { id: 's2348', when: 'Fri 11:48 pm', how: 'Sent', changes: 46, kept: 0, sold: 9, tags: [] },
+    { id: 's1405', when: 'Fri 2:05 pm', how: 'Downloaded, marked uploaded', changes: 128, kept: 1, sold: 14, tags: [] },
+    { id: 's0802', when: 'Thu 8:02 am', how: 'Sent', changes: 8, kept: 0, sold: 0, tags: [['pill-accent', 'Reverse of Wed 9:30 pm']] },
+    { id: 's2130', when: 'Wed 9:30 pm', how: 'Sent', changes: 8, kept: 0, sold: 1, tags: [['', 'Reversed by Thu 8:02 am']] },
+    { id: 's2215', when: 'Tue 10:15 pm', how: 'Downloaded', changes: 61, kept: 0, sold: 5, tags: [['pill-warn', 'Not marked uploaded']] },
+  ];
+
+  function sendRow(s, picked) {
+    const unmarked = s.id === 's2215' && !local.marked;
+    const how = s.how === 'Sent' ? '<span class="pill pill-ok">Sent</span>'
+      : s.id === 's2215' && local.marked ? '<span class="pill">Downloaded, marked uploaded</span>' : `<span class="pill">${s.how}</span>`;
+    if (s.id === 's2215') s = { ...s, tags: local.marked ? [] : s.tags };
+    // A file not marked uploaded never reached buyers, so it has nothing to reverse until it is marked.
+    const act = unmarked
+      ? `<button class="btn btn-sm" type="button" data-mark="1">Mark Uploaded</button>`
+      : s.id === 's2130'
+        ? '<span class="send-figs" style="grid-column:2;grid-row:1 / span 2">Already reversed</span>'
+        : `<button class="btn btn-sm" type="button" data-reverse="${s.id}">${ICON.rev}Make Reverse</button>`;
+    return `<li class="send${picked ? ' is-picked' : ''}" id="send-${s.id}">
+      <span class="send-when">${s.when} ${how} ${s.tags.map(([c, t]) => `<span class="pill ${c}">${t}</span>`).join(' ')}</span>
+      <span class="send-figs"><span><b>${s.changes}</b> changes</span><span><b>${s.kept}</b> ${s.kept === 1 ? 'flag' : 'flags'} kept</span><span><b>${s.sold}</b> sold since</span></span>
+      ${act}
+    </li>`;
+  }
+
+  function renderSheet() {
+    const sh = document.getElementById('sheet');
+    const head = (title, back) => `<div class="sheet-head">${back ? `<button class="btn btn-quiet btn-sm" type="button" data-state-go="history">${ICON.back}Past Sends</button>` : ''}<h2 id="sheet-title">${title}</h2><button class="btn btn-quiet btn-sm" type="button" data-close="1">${ICON.close}Close</button></div>`;
+    if (opt.state === 'history') {
+      sh.innerHTML = head('Past Sends', false) + `<div class="sheet-body">
+        <p class="sheet-lede">Every send and every downloaded file, newest first. A reverse puts back the old prices for cards that have not sold since. It moves prices only, never a copy.</p>
+        <ul class="sends" id="history-list">${SENDS.map((s) => sendRow(s, false)).join('')}</ul>
+      </div>`;
+    } else if (opt.state === 'reverse') {
+      const sold = [['Brindlefox', 'Near Mint, Glimmerwake 017/172', 1.2, 14.8, '7Q2-41'], ['Cobalt Mantis ex', 'Near Mint, Hollow Tides 151/190', 2.1, 18.6, '7Q2-44'], ['Hearthmoss Golem', 'Lightly Played, Saltmarsh Reverie 090/198', 0.6, 1.9, '7Q2-47']];
+      const back = [['Lanternfin', 0.36, 3.6], ['Cindertail Vix', 0.5, 4.95], ['Mossback Tortle', 0.06, 0.58], ['Duskhollow Owl', 0.9, 8.95]]
+        .concat(local.more ? [['Pebblewick', 0.12, 1.15], ['Gloamstag ex', 1.4, 13.9], ['Riverglass Newt', 0.08, 0.79], ['Ashen Lark', 0.31, 2.95]] : []);
+      const cancel = opt.sold === 'cancel';
+      sh.innerHTML = head('Reverse of Today 1:12 am', true) + `<div class="sheet-body">
+        <div id="reverse-head">
+          <p class="rev-big">Restores 309 of 312</p>
+          <p class="rev-sub">Puts back the price each card had before Today 1:12 am, only where that send's price is still the live one. Prices only: no copy is added or taken off.</p>
+        </div>
+        <div class="grp" id="grp-sold">
+          <h3>Sold at the Bad Price <span class="cnt">3</span></h3>
+          <p>${cancel ? 'A reverse cannot unsell a card. Cancel these orders on TCGplayer; the reverse leaves them out either way.' : 'A reverse cannot unsell a card. These stay sold, and the reverse leaves them out.'}</p>
+          <ul class="rows">${sold.map(([n, m, at, mk, o]) => `<li><span>${n}</span><small>${m}${cancel ? `<span class="orders-col">, order ${o}</span>` : ''}</small><span class="r-right"><span>Sold at ${$(at)}, market ${$(mk)}</span><span class="gap money">$${(mk - at).toFixed(2)} under</span></span></li>`).join('')}</ul>
+        </div>
+        <div class="grp" id="grp-later">
+          <h3>Changed by a Later Send <span class="cnt">0</span></h3>
+          <p>None. A card a later send changed is named here and left alone, never overwritten.</p>
+        </div>
+        <div class="grp" id="grp-back">
+          <h3>Puts Back <span class="cnt">309</span></h3>
+          <ul class="rows">${back.map(([n, now, old]) => `<li><span>${n}</span><small>Live now at ${$(now)}</small><span class="r-right back-price">Back to <b>${$(old)}</b></span></li>`).join('')}</ul>
+          <button class="btn btn-sm btn-quiet" type="button" data-more="1" aria-expanded="${!!local.more}" style="align-self:flex-start">${local.more ? 'Show Fewer' : 'Show All 309'}</button>
+        </div>
+      </div>
+      <div class="sheet-foot"><p>The reverse goes through the same check as any send. Raises are never flagged.</p><button class="btn btn-primary btn-lg" type="button" data-state-go="reverse-check">Check the Reverse</button></div>`;
+    } else if (opt.state === 'reverse-of-reverse') {
+      sh.innerHTML = head('Reverse of Today 1:40 am', true) + `<div class="sheet-body">
+        <ul class="sends">${sendRow({ id: 's140', when: 'Today 1:40 am', how: 'Sent', changes: 309, kept: 0, sold: 0, tags: [['pill-accent', 'Reverse of Today 1:12 am']] }, true)}</ul>
+        <div id="ror-chain">
+          <p class="rev-big">Re-applies 309 of 309</p>
+          <p class="rev-sub">This is a plain reverse whose source is a reverse. It puts back the prices from Today 1:12 am. Each row says so: reverse of reverse of send from Today 1:12 am.</p>
+        </div>
+        <div class="grp">
+          <h3>Flagged Again <span class="cnt">2</span></h3>
+          <p>These were bad prices the first time. The check flags them again before the send.</p>
+          <ul class="rows">${ROR_FLAGS.map((f) => `<li><span>${f.name}</span><small>${f.chain}</small><span class="r-right"><span>Goes back to ${$(f.now)}, market ${$(f.mkt)}</span><span class="gap">${f.why}</span></span></li>`).join('')}</ul>
+        </div>
+        <div class="grp">
+          <h3>Kept on Purpose the First Time <span class="cnt">2</span></h3>
+          <p>You chose Keep New for these at 1:12 am. They go back without a flag.</p>
+          <ul class="rows"><li><span>Emberwing Drake ex</span><small>Reverse of reverse of send from Today 1:12 am</small><span class="r-right back-price">Back to <b>${$(36.0)}</b></span></li><li><span>Thornveil Sprite</span><small>Reverse of reverse of send from Today 1:12 am</small><span class="r-right back-price">Back to <b>${$(3.1)}</b></span></li></ul>
+        </div>
+        <div class="grp"><h3>Sold Since <span class="cnt">0</span></h3><p>None sold between the two sends.</p></div>
+      </div>
+      <div class="sheet-foot"><p>The 2 flags wait for a choice on the check, like any send.</p><button class="btn btn-primary btn-lg" type="button" data-state-go="ror-check">Check This Reverse</button></div>`;
+    } else sh.innerHTML = '';
+  }
+
+  function render() {
+    const root = document.documentElement;
+    if (opt.t) root.setAttribute('data-theme', opt.t); else root.removeAttribute('data-theme');
+    const eff = opt.t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.body.classList.toggle('no-anno', opt.anno === 'off');
+    const fr = document.getElementById('frame');
+    ['sales', 'risk', 'usemkt', 'keepall', 'retype', 'download', 'counts', 'orders'].forEach((h) => fr.classList.toggle('hide-' + h, hidden(h)));
+    fr.classList.toggle('has-sheet', SHEET_STATES.includes(opt.state));
+    document.querySelectorAll('[data-state]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.state === opt.state)));
+    document.querySelectorAll('[data-theme-set]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themeSet === eff)));
+    document.querySelectorAll('[data-labels]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.labels === opt.anno)));
+    document.querySelectorAll('[data-cmp]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cmp === opt.cmp)));
+    document.querySelectorAll('[data-sold]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.sold === opt.sold)));
+    document.querySelectorAll('[data-hv]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.hv === opt.hv)));
+    document.querySelectorAll('[data-hide]').forEach((c) => { c.checked = !hidden(c.dataset.hide); });
+    renderCheck();
+    renderWorklist();
+    renderSheet();
+    writeHash();
+  }
+
+  function readHash() {
+    const p = new URLSearchParams(location.hash.replace(/^#/, ''));
+    const s = p.get('state') || p.get('s');
+    if (s && (STATES.some(([k]) => k === s) || s === 'ror-check')) opt.state = s;
+    const t = p.get('t'); opt.t = t === 'dark' || t === 'light' ? t : null;
+    opt.anno = p.get('labels') === 'off' ? 'off' : 'on';
+    opt.cmp = p.get('cmp') === 'live' ? 'live' : 'last';
+    opt.sold = p.get('sold') === 'cancel' ? 'cancel' : 'honor';
+    opt.hv = p.get('hv') === 'slab' ? 'slab' : 'line';
+    opt.hide = (p.get('hide') || '').split(',').filter(Boolean);
+  }
+  function writeHash() {
+    const p = new URLSearchParams();
+    p.set('state', opt.state);
+    if (opt.t) p.set('t', opt.t);
+    if (opt.anno !== 'on') p.set('labels', 'off');
+    if (opt.cmp !== 'last') p.set('cmp', opt.cmp);
+    if (opt.sold !== 'honor') p.set('sold', opt.sold);
+    if (opt.hv !== 'line') p.set('hv', opt.hv);
+    if (opt.hide.length) p.set('hide', opt.hide.join(','));
+    const h = '#' + p.toString().replace(/%2C/g, ',');
+    if (location.hash !== h) history.replaceState(null, '', h);
+  }
+  const go = (s) => { opt.state = s; local = { picks: {}, typed: '', door: null }; };
+
+  document.getElementById('states').innerHTML = STATES.map(([k, l]) => `<button type="button" data-state="${k}">${l}</button>`).join('');
+  document.addEventListener('click', (ev) => {
+    const el = ev.target.closest('button, .scrim'); if (!el) return;
+    const ds = el.dataset;
+    if (ds.state) go(ds.state);
+    else if (ds.stateGo) go(ds.stateGo);
+    else if (ds.themeSet) opt.t = ds.themeSet;
+    else if (ds.labels) opt.anno = ds.labels;
+    else if (ds.cmp) opt.cmp = ds.cmp;
+    else if (ds.sold) opt.sold = ds.sold;
+    else if (ds.hv) opt.hv = ds.hv;
+    else if (ds.pick) { local.picks[ds.card] = ds.pick; if (ds.card === HV.id) local.typed = ''; }
+    else if (ds.keepall) { flagsFor(checkKind()).forEach((f) => { if (!local.picks[f.id]) local.picks[f.id] = 'new'; }); }
+    else if (ds.door) local.door = ds.door;
+    else if (ds.mark) local.marked = true;
+    else if (ds.more) local.more = !local.more;
+    else if (ds.open) go(ds.open);
+    else if (ds.reverse) go(ds.reverse === 's140' ? 'reverse-of-reverse' : 'reverse');
+    else if (ds.close) go('clean');
+    else return;
+    render();
+    if (ds.open || ds.reverse || ds.stateGo) { const f = document.querySelector('#sheet .btn'); if (f && SHEET_STATES.includes(opt.state)) f.focus(); }
+  });
+  document.addEventListener('input', (ev) => {
+    if (ev.target.id !== 'hv-input') return;
+    local.typed = ev.target.value;
+    if (local.picks[HV.id] === 'old') delete local.picks[HV.id];
+    const pos = ev.target.selectionStart;
+    render();
+    const i = document.getElementById('hv-input'); i.focus(); i.setSelectionRange(pos, pos);
+  });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && SHEET_STATES.includes(opt.state)) { go('clean'); render(); } });
+  document.addEventListener('change', (ev) => {
+    const c = ev.target; if (!c.dataset || !c.dataset.hide) return;
+    opt.hide = opt.hide.filter((h) => h !== c.dataset.hide);
+    if (!c.checked) opt.hide.push(c.dataset.hide);
+    render();
+  });
+  window.addEventListener('hashchange', () => { const before = opt.state; readHash(); if (before !== opt.state) { local = { picks: {}, typed: '', door: null }; } render(); });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+  readHash();
+  render();
+})();
+</script>
+</body>
+</html>
