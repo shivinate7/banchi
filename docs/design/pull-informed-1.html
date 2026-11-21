@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cards to Pull mockup</title>
+<style>
+/* ---- Tokens: copied from app/src/tokens.css (light :root and :root[data-theme='dark']) ---- */
+:root {
+  --bn-bg: #f4f5f8; --bn-surface: #ffffff; --bn-surface-2: #eceef2; --bn-surface-3: #f7f8fa;
+  --bn-surface-glass: rgba(255, 255, 255, 0.72); --bn-hover: rgba(15, 18, 23, 0.03);
+  --bn-ink: #0f1217; --bn-ink-2: #3b414b; --bn-ink-3: #666c76; --bn-ink-4: #7f8791;
+  --bn-line: rgba(15, 18, 23, 0.08); --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-line-focus: rgba(61, 90, 241, 0.55); --bn-field-edge: var(--bn-ink-4);
+  --bn-accent: #3d5af1; --bn-accent-hover: #2f4bd9; --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10); --bn-accent-tint-2: rgba(61, 90, 241, 0.18);
+  --bn-on-accent: #ffffff;
+  --bn-ok: #15803d; --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309; --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-pill-ink-ok: #11733a; --bn-pill-ink-warn: #a14b09;
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32), 0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-shadow-accent: 0 8px 24px -8px rgba(61, 90, 241, 0.55);
+  --bn-btn-bg: var(--bn-surface); --bn-btn-bg-hover: var(--bn-surface-3); --bn-btn-shadow: var(--bn-shadow-1);
+  --bn-font-display: 'Manrope', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --bn-fs-xs: 11px; --bn-fs-sm: 12px; --bn-fs-md: 13px; --bn-fs-base: 14px; --bn-fs-lg: 16px; --bn-fs-xl: 18px; --bn-fs-2xl: 22px;
+  --bn-tracking-tight: -0.02em;
+  --bn-lh-tight: 1.1; --bn-lh-snug: 1.25; --bn-lh-base: 1.4; --bn-lh-relaxed: 1.55;
+  --bn-0-5: 2px; --bn-1: 4px; --bn-1-5: 6px; --bn-2: 8px; --bn-3: 12px; --bn-4: 16px; --bn-5: 20px; --bn-6: 24px; --bn-7: 32px; --bn-8: 40px; --bn-9: 48px; --bn-10: 64px;
+  --bn-r-sm: 6px; --bn-r: 8px; --bn-r-lg: 12px; --bn-r-xl: 16px; --bn-r-2xl: 22px; --bn-r-full: 999px;
+  --bn-t-fast: 120ms; --bn-t: 200ms; --bn-ease: cubic-bezier(0.2, 0, 0, 1); --bn-ease-out: cubic-bezier(0, 0, 0.2, 1); --bn-ease-spring: cubic-bezier(0.34, 1.4, 0.44, 1);
+  --bn-stage-bg: #0c0e12; --bn-stage-bg-2: #171b25; --bn-stage-surface: #1b2029; --bn-stage-ink: #eef0f4;
+  --bn-stage-accent: #7f90ff; --bn-stage-ok: #3ddc84; --bn-stage-warn: #f5a524; --bn-stage-danger: #ff5c5c; --bn-stage-live: #ff6a58;
+  /* The Fulfiller's own type scale: app/src/Fulfillment.css `--ff-fs-*` (20px body floor). */
+  --ff-fs-base: 20px; --ff-fs-md: 24px; --ff-fs-lg: 26px; --ff-fs-xl: 32px; --ff-fs-2xl: 34px; --ff-fs-3xl: 38px; --ff-fs-4xl: 56px;
+  /* PullConfirm's fill (docs/DESIGN.md, the pull-confirm): the accent step that clears 7:1. */
+  --ff-fill: var(--bn-accent-press);
+  --ff-accent-ink: var(--bn-accent-press);
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+  --bn-surface-glass: rgba(20, 23, 28, 0.72); --bn-hover: rgba(255, 255, 255, 0.04);
+  --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+  --bn-line: rgba(255, 255, 255, 0.08); --bn-line-strong: rgba(255, 255, 255, 0.16);
+  --bn-line-focus: rgba(129, 146, 255, 0.6);
+  --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14); --bn-accent-tint-2: rgba(127, 144, 255, 0.24);
+  --bn-on-accent: #0c0e12;
+  --bn-ok: #3ddc84; --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524; --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-pill-ink-ok: var(--bn-ok); --bn-pill-ink-warn: var(--bn-warn);
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(127, 144, 255, 0.55);
+  --bn-btn-bg: var(--bn-surface-3); --bn-btn-bg-hover: #262b34;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --ff-fill: var(--bn-accent-hover);
+  --ff-accent-ink: var(--bn-accent-hover);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; margin: 0; }
+html, body { background: var(--bn-bg); color: var(--bn-ink); font-family: var(--bn-font-ui); font-size: var(--bn-fs-base); line-height: var(--bn-lh-base); }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--bn-line-focus); outline-offset: 2px; }
+.ico { flex: none; display: block; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
+
+/* ---- Mockup chrome (outside the Fulfiller's frame; the floors do not apply here) ---- */
+.mk-sample { display: flex; flex-wrap: wrap; gap: var(--bn-2) var(--bn-4); align-items: baseline; padding: var(--bn-2) var(--bn-4); background: var(--bn-warn-tint); color: var(--bn-ink); font-size: var(--bn-fs-md); box-shadow: inset 0 -1px 0 var(--bn-line); }
+.mk-sample b { font-family: var(--bn-font-display); font-weight: 800; }
+.mk-bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2) var(--bn-4); padding: var(--bn-2) var(--bn-4); background: var(--bn-surface-glass); backdrop-filter: blur(12px); box-shadow: inset 0 -1px 0 var(--bn-line); font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+.mk-bar strong { font-family: var(--bn-font-display); font-weight: 800; color: var(--bn-ink); font-size: var(--bn-fs-lg); }
+.mk-kind { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); padding: var(--bn-0-5) var(--bn-2); border-radius: var(--bn-r-sm); box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+.mk-bar label { display: inline-flex; align-items: center; gap: var(--bn-1-5); }
+.mk-bar select { font: inherit; height: 30px; border-radius: var(--bn-r-sm); border: 1px solid var(--bn-field-edge); background: var(--bn-surface); color: var(--bn-ink); padding: 0 var(--bn-1); }
+.mk-stage { padding: var(--bn-4) var(--bn-4) var(--bn-9); display: flex; flex-direction: column; gap: var(--bn-4); }
+.mk-caption { max-width: 72ch; font-size: var(--bn-fs-base); color: var(--bn-ink-2); }
+.mk-caption b { color: var(--bn-ink); }
+.mk-fit { position: relative; }
+.mk-frame { position: absolute; top: 0; left: 0; transform-origin: 0 0; overflow: hidden; border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-3); background: var(--bn-bg); }
+.mk-size { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.mk-options { display: flex; flex-direction: column; gap: var(--bn-4); max-width: 1100px; }
+.mk-options h2 { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; }
+.mk-set { display: flex; flex-direction: column; gap: var(--bn-2); }
+.mk-set h3 { font-size: var(--bn-fs-lg); font-weight: 700; }
+.mk-opt { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--bn-3); align-items: center; padding: var(--bn-3) var(--bn-4); border-radius: var(--bn-r); background: var(--bn-surface); box-shadow: var(--bn-shadow-1); }
+.mk-opt p { font-size: var(--bn-fs-base); color: var(--bn-ink-2); }
+.mk-opt p b { color: var(--bn-ink); }
+.mk-opt a, .mk-opt button, .mk-unhide { font-size: var(--bn-fs-md); color: var(--bn-ink-2); padding: var(--bn-1) var(--bn-3); border-radius: var(--bn-r-sm); box-shadow: inset 0 0 0 1px var(--bn-line-strong); text-decoration: none; white-space: nowrap; }
+.mk-opt a:hover, .mk-opt button:hover { color: var(--bn-ink); background: var(--bn-hover); }
+.mk-pick { font-size: var(--bn-fs-sm); font-weight: 700; color: var(--bn-pill-ink-ok); }
+
+/* Today / New labels. Outline only, so a label moves nothing. */
+.mk-marks [data-mark] { outline: 2px dashed var(--bn-ink-4); outline-offset: 4px; position: relative; }
+.mk-marks [data-mark^='New'] { outline-color: var(--bn-accent); }
+.mk-marks .ff-list { padding-top: var(--bn-4); }
+.mk-marks [data-mark]::after { content: attr(data-mark); position: absolute; z-index: 3; top: -14px; right: 6px; font: 600 11px/16px var(--bn-font-mono); padding: 0 var(--bn-1-5); border-radius: var(--bn-r-sm); background: var(--bn-surface); color: var(--bn-ink-2); box-shadow: 0 0 0 1px var(--bn-ink-4); pointer-events: none; white-space: nowrap; }
+.mk-marks [data-mark^='New']::after { color: var(--ff-accent-ink); box-shadow: 0 0 0 1px var(--bn-accent); }
+
+/* ---- The Fulfiller's screen ---- */
+.ff { height: 100%; display: flex; flex-direction: column; background: var(--bn-bg); color: var(--bn-ink); font-size: var(--ff-fs-base); line-height: 1.5; position: relative; }
+.ff-head { flex: none; display: flex; align-items: center; gap: var(--bn-6); padding: var(--bn-5) var(--bn-8); background: var(--bn-surface-glass); box-shadow: inset 0 -1px 0 var(--bn-line); }
+.ff-brand { display: flex; align-items: center; gap: var(--bn-3); }
+.ff-mark { width: 44px; height: 44px; border-radius: var(--bn-r-lg); background: var(--bn-ink); color: var(--bn-bg); display: grid; place-items: center; }
+.ff-title { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--ff-fs-2xl); letter-spacing: var(--bn-tracking-tight); line-height: var(--bn-lh-tight); white-space: nowrap; }
+.ff-count { display: flex; align-items: center; gap: var(--bn-3); margin-left: auto; }
+.ff-count-num { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--ff-fs-4xl); line-height: 1; font-variant-numeric: tabular-nums; min-width: 1.2ch; text-align: right; }
+.ff-count-say { display: flex; flex-direction: column; line-height: 1.25; color: var(--bn-ink); }
+.ff-count-say span + span { color: var(--bn-ink-2); }
+.ff-search { position: relative; width: 380px; flex: none; }
+.ff-search .ico { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--bn-ink-2); }
+.ff-search input { width: 100%; height: 60px; padding: 0 var(--bn-4) 0 52px; border-radius: var(--bn-r-xl); border: 2px solid var(--bn-field-edge); background: var(--bn-surface); color: var(--bn-ink); font: inherit; font-size: var(--ff-fs-base); }
+.ff-search input::placeholder { color: var(--bn-ink-2); }
+
+.ff-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 500px minmax(0, 1fr); gap: var(--bn-6); padding: var(--bn-6) var(--bn-8) 0; }
+.ff-list, .ff-pane { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.ff-list { display: flex; flex-direction: column; gap: var(--bn-5); padding: var(--bn-1) var(--bn-2) var(--bn-8) var(--bn-1); }
+.ff-pane { border-radius: var(--bn-r-2xl) var(--bn-r-2xl) 0 0; background: var(--bn-surface); box-shadow: var(--bn-shadow-2); padding: var(--bn-7) var(--bn-7) var(--bn-9); }
+
+/* By Box / By Envelope */
+.ff-switch { display: grid; grid-template-columns: 1fr 1fr; gap: var(--bn-3); padding: var(--bn-1); border-radius: var(--bn-r-xl); background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-line); }
+.ff-switch button { min-height: 52px; border-radius: var(--bn-r-lg); font-size: var(--ff-fs-base); font-weight: 600; color: var(--bn-ink-2); display: flex; align-items: center; justify-content: center; gap: var(--bn-2); }
+.ff-switch button[aria-pressed='true'] { background: var(--bn-surface); color: var(--bn-ink); box-shadow: var(--bn-shadow-1); }
+
+.ff-group { display: flex; flex-direction: column; gap: var(--bn-3); }
+.ff-group-head { display: flex; align-items: center; gap: var(--bn-3); padding: 0 var(--bn-1); min-height: 44px; }
+.ff-group-name { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--ff-fs-lg); letter-spacing: var(--bn-tracking-tight); }
+.ff-group-head .ff-tag { margin-left: auto; }
+.ff-rows { display: flex; flex-direction: column; gap: var(--bn-3); }
+
+.ff-row { width: 100%; text-align: left; display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: var(--bn-4); align-items: center; min-height: 96px; padding: var(--bn-4) var(--bn-5) var(--bn-4) var(--bn-4); border-radius: var(--bn-r-xl); background: var(--bn-surface); box-shadow: var(--bn-shadow-1); transition: box-shadow var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease); }
+.ff-row:hover { box-shadow: var(--bn-shadow-2); }
+.ff-row[aria-current='true'] { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 2px var(--bn-accent); }
+.ff-row-text { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
+.ff-row-name { font-size: var(--ff-fs-md); font-weight: 650; line-height: 1.25; }
+.ff-row-sub { color: var(--bn-ink-2); display: flex; align-items: center; gap: var(--bn-2); min-width: 0; }
+.ff-row-sub .ico { color: var(--bn-ink-2); }
+.ff-row-sub span { min-width: 0; }
+.ff-row[data-done='true'] .ff-row-name { color: var(--bn-ink-2); }
+.ff-badge { width: 48px; height: 48px; border-radius: var(--bn-r-full); display: grid; place-items: center; font-family: var(--bn-font-display); font-weight: 800; font-size: var(--ff-fs-md); font-variant-numeric: tabular-nums; background: var(--bn-surface-2); color: var(--bn-ink); box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+.ff-badge[data-tone='ok'] { background: var(--bn-ok-tint); color: var(--bn-pill-ink-ok); box-shadow: none; }
+.ff-badge[data-tone='todo'] { background: transparent; box-shadow: inset 0 0 0 2px var(--bn-ink-4); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ff-badge[data-tone='warn'] { background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn); box-shadow: none; }
+.ff-pullcount { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--ff-fs-md); color: var(--bn-ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ff-tag { display: inline-flex; align-items: center; gap: var(--bn-1-5); min-height: 36px; padding: 0 var(--bn-3); border-radius: var(--bn-r-full); font-size: var(--ff-fs-base); font-weight: 600; white-space: nowrap; }
+/* A tag's word is ink: the pill inks clear 4.5:1, and this view's floor is 7:1. The tone rides the icon and the ground. */
+.ff-tag[data-tone='ok'] { background: var(--bn-ok-tint); color: var(--bn-ink); }
+.ff-tag[data-tone='ok'] .ico { color: var(--bn-ok); }
+.ff-tag[data-tone='warn'] { background: var(--bn-warn-tint); color: var(--bn-ink); }
+.ff-tag[data-tone='warn'] .ico { color: var(--bn-warn); }
+.ff-tag[data-tone='plain'] { background: var(--bn-surface-2); color: var(--bn-ink); }
+
+.ff-note { display: flex; gap: var(--bn-3); align-items: flex-start; padding: var(--bn-4) var(--bn-5); border-radius: var(--bn-r-xl); background: var(--bn-surface); box-shadow: inset 4px 0 0 var(--bn-warn), var(--bn-shadow-1); }
+.ff-note .ico { color: var(--bn-warn); margin-top: 3px; }
+.ff-short-row { cursor: pointer; }
+
+.ff-quiet { display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-2); min-height: 56px; padding: 0 var(--bn-5); border-radius: var(--bn-r-xl); background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow); font-size: var(--ff-fs-base); font-weight: 600; }
+.ff-quiet:hover { background: var(--bn-btn-bg-hover); }
+.ff-foot { display: flex; flex-direction: column; gap: var(--bn-3); padding-top: var(--bn-3); box-shadow: inset 0 1px 0 var(--bn-line); }
+.ff-h2 { display: flex; align-items: center; gap: var(--bn-2); font-family: var(--bn-font-display); font-weight: 800; font-size: var(--ff-fs-lg); min-height: 44px; }
+.ff-h2 .ico { color: var(--bn-ink-2); }
+.ff-done-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: var(--bn-3); }
+.ff-done-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--bn-1) var(--bn-4); align-items: center; padding: var(--bn-3) var(--bn-4); border-radius: var(--bn-r-lg); background: var(--bn-surface); box-shadow: var(--bn-shadow-1); }
+.ff-done-row .who { color: var(--bn-ink-2); grid-column: 1; }
+.ff-done-row .ff-undo { grid-column: 2; grid-row: 1 / span 2; }
+.ff-undo { display: inline-flex; align-items: center; gap: var(--bn-2); min-height: 48px; padding: 0 var(--bn-4); border-radius: var(--bn-r-lg); background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow); font-weight: 600; }
+.ff-boxes { display: flex; flex-direction: column; gap: var(--bn-3); }
+.ff-box-head { width: 100%; display: flex; align-items: center; gap: var(--bn-3); min-height: 64px; padding: 0 var(--bn-5); border-radius: var(--bn-r-xl); background: var(--bn-surface); box-shadow: var(--bn-shadow-1); text-align: left; }
+.ff-box-head span:first-child { font-weight: 650; }
+.ff-box-head span + span { color: var(--bn-ink-2); }
+.ff-box-head .ico { margin-left: auto; transition: transform var(--bn-t) var(--bn-ease); }
+.ff-box-head[aria-expanded='true'] .ico { transform: rotate(180deg); }
+.ff-box-body { list-style: none; padding: var(--bn-2) var(--bn-5); display: flex; flex-direction: column; gap: var(--bn-2); }
+.ff-box-body li { display: flex; justify-content: space-between; gap: var(--bn-3); }
+.ff-box-body li span + span { color: var(--bn-ink-2); white-space: nowrap; }
+
+/* The pull pane */
+.ff-card { display: flex; flex-direction: column; gap: var(--bn-6); }
+.ff-card-head { display: flex; flex-direction: column; gap: var(--bn-1); }
+.ff-for { display: flex; align-items: center; gap: var(--bn-2); color: var(--bn-ink-2); }
+.ff-card-name { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--ff-fs-3xl); line-height: 1.15; letter-spacing: var(--bn-tracking-tight); }
+.ff-card-about { color: var(--bn-ink-2); display: flex; gap: var(--bn-3); flex-wrap: wrap; }
+.ff-mono { font-family: var(--bn-font-mono); }
+.ff-card-grid { display: grid; grid-template-columns: 408px minmax(0, 1fr); gap: var(--bn-7); align-items: start; }
+.ff-photo { position: relative; width: 100%; aspect-ratio: 63 / 88; border-radius: var(--bn-r-xl); background: var(--bn-stage-bg); box-shadow: var(--bn-shadow-2); padding: var(--bn-3); display: block; }
+.ff-photo-card { width: 100%; height: 100%; border-radius: var(--bn-r-lg); background: var(--bn-stage-surface); padding: var(--bn-3); display: flex; flex-direction: column; gap: var(--bn-2); box-shadow: inset 0 0 0 3px var(--hue); }
+.ff-photo-art { flex: 1; border-radius: var(--bn-r); background: radial-gradient(120% 80% at 30% 20%, var(--hue), var(--bn-stage-bg-2) 70%); }
+.ff-photo-name { color: var(--bn-stage-ink); font-family: var(--bn-font-display); font-weight: 800; font-size: var(--ff-fs-md); line-height: 1.1; }
+.ff-photo-box { height: 26%; border-radius: var(--bn-r); background: var(--bn-stage-bg-2); }
+.ff-photo-tag { position: absolute; left: 50%; bottom: var(--bn-5); transform: translateX(-50%); padding: var(--bn-1) var(--bn-3); border-radius: var(--bn-r-full); background: var(--bn-stage-bg); color: var(--bn-stage-ink); font-size: var(--ff-fs-base); white-space: nowrap; }
+.ff-photo-hint { display: flex; align-items: center; gap: var(--bn-2); color: var(--bn-ink-2); margin-top: var(--bn-3); }
+.ff-side { display: flex; flex-direction: column; gap: var(--bn-5); }
+.ff-need { display: flex; flex-direction: column; gap: var(--bn-1); }
+.ff-need-big { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--ff-fs-2xl); line-height: 1.1; color: var(--ff-accent-ink); font-variant-numeric: tabular-nums; }
+.ff-where { display: flex; flex-direction: column; gap: var(--bn-2); }
+.ff-where-label { display: flex; align-items: center; gap: var(--bn-2); color: var(--bn-ink-2); font-weight: 600; }
+.ff-place { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--ff-fs-xl); line-height: 1.2; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; }
+.ff-posbar { display: flex; flex-direction: column; gap: var(--bn-1); }
+.ff-track { position: relative; height: 14px; border-radius: var(--bn-r-full); background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+.ff-track i { position: absolute; top: -5px; width: 8px; height: 24px; border-radius: var(--bn-r-full); background: var(--ff-fill); transform: translateX(-50%); }
+.ff-track-ends { display: flex; justify-content: space-between; color: var(--bn-ink-2); }
+.ff-action { display: flex; flex-direction: column; gap: var(--bn-6); min-height: 152px; align-self: stretch; }
+.ff-step { width: 100%; min-height: 64px; display: flex; align-items: center; justify-content: center; gap: var(--bn-3); border-radius: var(--bn-r-xl); background: var(--bn-ink); color: var(--bn-bg); box-shadow: var(--bn-shadow-2); font-size: var(--bn-fs-2xl); font-weight: 700; transition: transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease); }
+.ff-step:hover { transform: translateY(-1px); box-shadow: var(--bn-shadow-3); }
+.ff-step:active { transform: scale(0.985); }
+.ff-pulled { min-height: 64px; display: flex; align-items: center; gap: var(--bn-3); font-size: var(--ff-fs-md); font-weight: 700; color: var(--bn-ink); }
+.ff-pulled .ff-badge { width: 44px; height: 44px; }
+.ff-sell { width: 100%; min-height: 64px; display: flex; align-items: center; justify-content: center; gap: var(--bn-3); border-radius: var(--bn-r-xl); background: var(--ff-fill); color: var(--bn-on-accent); box-shadow: var(--bn-shadow-2), var(--bn-shadow-accent); font-size: var(--bn-fs-2xl); font-weight: 700; transition: transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease); }
+.ff-sell:hover { transform: translateY(-1px); box-shadow: var(--bn-shadow-3), var(--bn-shadow-accent); }
+.ff-sell:active { transform: scale(0.985); }
+.ff-other { display: flex; flex-direction: column; gap: var(--bn-3); padding-top: var(--bn-5); box-shadow: inset 0 1px 0 var(--bn-line); }
+.ff-other-list { display: flex; flex-direction: column; gap: var(--bn-3); }
+.ff-other-list .ff-quiet { justify-content: flex-start; font-variant-numeric: tabular-nums; }
+.ff-choose { display: flex; flex-direction: column; gap: var(--bn-3); }
+.ff-choose .ff-quiet { justify-content: flex-start; min-height: 72px; padding-block: var(--bn-2); text-align: left; font-variant-numeric: tabular-nums; }
+.ff-choose-place { display: flex; flex-direction: column; line-height: 1.3; }
+.ff-choose-place span { font-weight: 500; }
+.ff-photo-wait { width: 100%; aspect-ratio: 63 / 88; border-radius: var(--bn-r-xl); background: var(--bn-surface-2); box-shadow: inset 0 0 0 2px var(--bn-line-strong); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--bn-3); padding: var(--bn-6); text-align: center; color: var(--bn-ink-2); }
+.ff-results { display: flex; flex-direction: column; gap: var(--bn-5); }
+.ff-row-chev { color: var(--bn-ink-2); }
+.ff-cardnote { display: flex; flex-direction: column; gap: var(--bn-4); align-items: flex-start; }
+.ff-big-ok { display: flex; align-items: center; gap: var(--bn-4); font-family: var(--bn-font-display); font-weight: 800; font-size: var(--ff-fs-xl); line-height: 1.2; }
+.ff-big-ok .ff-badge { width: 64px; height: 64px; flex: none; }
+.ff-env-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: var(--bn-3); width: 100%; }
+.ff-env-list li { display: flex; align-items: center; gap: var(--bn-3); min-height: 56px; padding: 0 var(--bn-4); border-radius: var(--bn-r-lg); background: var(--bn-surface-3); box-shadow: inset 0 0 0 1px var(--bn-line); }
+.ff-env-list li .ff-tag { margin-left: auto; }
+.ff-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--bn-5); max-width: 640px; margin: var(--bn-10) auto 0; }
+.ff-empty-art { width: 72px; height: 72px; border-radius: var(--bn-r-full); display: grid; place-items: center; background: var(--bn-ok-tint); color: var(--bn-pill-ink-ok); }
+
+/* The receipt sheet: today's, at the foot of the screen with a clock he can see draining. */
+.ff-receipt { position: absolute; left: 50%; bottom: var(--bn-6); transform: translateX(-50%); width: min(720px, calc(100% - 32px)); display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--bn-4); align-items: center; padding: var(--bn-4) var(--bn-4) var(--bn-5) var(--bn-5); border-radius: var(--bn-r-2xl); background: var(--bn-surface); box-shadow: var(--bn-shadow-3); overflow: hidden; z-index: 4; animation: ff-rise var(--bn-t) var(--bn-ease-out); }
+.ff-receipt-text { display: flex; flex-direction: column; }
+.ff-receipt-text b { font-size: var(--ff-fs-md); }
+.ff-receipt .ff-undo { min-height: 56px; font-size: var(--ff-fs-base); }
+.ff-clock { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; background: var(--bn-surface-2); }
+.ff-clock i { display: block; height: 100%; background: var(--ff-fill); transform-origin: 0 50%; animation: ff-drain linear forwards; }
+@keyframes ff-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes ff-rise { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: 0 0; } }
+
+.ff-zoom { position: absolute; inset: 0; z-index: 6; background: var(--bn-stage-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--bn-5); color: var(--bn-stage-ink); }
+.ff-zoom .ff-photo { width: auto; height: 78%; }
+
+.ff-back { display: inline-flex; align-items: center; gap: var(--bn-2); min-height: 56px; padding: 0 var(--bn-5) 0 var(--bn-4); border-radius: var(--bn-r-xl); background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow); font-weight: 600; }
+
+/* ---- 820: one column; the pull opens over the list (today's shape at this width) ---- */
+.ff[data-w='820'] .ff-head { flex-wrap: wrap; gap: var(--bn-4); padding: var(--bn-4); }
+.ff[data-w='820'] .ff-count { margin-left: 0; order: 2; }
+.ff[data-w='820'] .ff-search { order: 3; flex: 1; width: auto; }
+.ff[data-w='820'] .ff-brand { width: 100%; }
+.ff[data-w='820'] .ff-body { display: block; overflow-y: auto; padding: var(--bn-4) var(--bn-4) 0; }
+.ff[data-w='820'] .ff-list { overflow: visible; padding-bottom: var(--bn-10); }
+.ff[data-w='820'] .ff-pane { overflow: visible; border-radius: var(--bn-r-2xl); padding: var(--bn-6); margin-bottom: var(--bn-10); }
+/* 408, not less: DESIGN.md's photo column, so the painted photo clears the 320px floor. */
+.ff[data-w='820'] .ff-pane { padding: var(--bn-5); }
+.ff[data-w='820'] .ff-card-grid { grid-template-columns: 408px minmax(0, 1fr); gap: var(--bn-5); }
+.ff[data-w='820'] .ff-done-top { margin-bottom: var(--bn-5); }
+.ff[data-w='820'] .ff-open-head { display: flex; align-items: center; gap: var(--bn-4); padding: var(--bn-4); background: var(--bn-surface-glass); box-shadow: inset 0 -1px 0 var(--bn-line); }
+.ff[data-w='820'] .ff-open-head .ff-count { margin-left: auto; order: 0; }
+</style>
+</head>
+<body>
+<div class="mk-sample" role="note"><b>Sample</b><span>Every name, card, place and figure on this page is made up. No figure is real.</span><span>Designer kind: informed (pull-informed-1)</span></div>
+<div class="mk-bar" id="mk-bar">
+  <strong>Cards to Pull</strong><span class="mk-kind">Designer kind: informed</span>
+  <label>State <select id="mk-s"></select></label>
+  <label>Width <select id="mk-w"><option value="1440">1440 x 900</option><option value="820">820 x 1180</option></select></label>
+  <label>Theme <select id="mk-t"><option value="light">Light</option><option value="dark">Dark</option></select></label>
+  <label><input type="checkbox" id="mk-m"> Today / New labels</label>
+</div>
+<main class="mk-stage">
+  <p class="mk-caption" id="mk-caption"></p>
+  <div class="mk-fit" id="mk-fit"><div class="mk-frame" id="mk-frame"></div></div>
+  <p class="mk-size" id="mk-size"></p>
+  <section class="mk-options" id="mk-options" aria-label="Options"></section>
+</main>
+
+<script>
+/* ------------------------------------------------------------------ data (all made up) */
+const BUYERS = { rosa: 'Rosa Lindqvist', tomas: 'Tomas Ebert', priya: 'Priya Natarajan', walt: 'Walt Oduya', june: 'June Castellanos' }
+const BUYER_ORDER = ['rosa', 'tomas', 'priya', 'walt', 'june']
+const CARDS = [
+  { id: 'ember', name: 'Ember Warden', num: '012/210', cond: 'Near Mint', hue: 'live', orders: ['rosa', 'tomas'], copies: [
+    { key: 'e1', box: 'WB4 R1', sec: 2, card: 14, of: 40, between: ['Sea Glass Idol', 'Iron Finch'] },
+    { key: 'e2', box: 'WB4 R1', sec: 2, card: 16, of: 40, between: ['Iron Finch', 'Pale Rider'] },
+    { key: 'e3', box: 'WB5 R2', sec: 1, card: 3, of: 36, between: ['Bramble Knight', 'Coldwater Seer'] } ] },
+  { id: 'tide', name: 'Tidecaller Imani', num: '047/210', cond: 'Near Mint Foil', hue: 'accent', orders: ['priya'], copies: [
+    { key: 't1', box: 'WB4 R1', sec: 3, card: 22, of: 40, between: ['Salt Wyrm', 'Hollow Bell'] } ] },
+  { id: 'moss', name: 'Moss Golem, Patient', num: '088/210', cond: 'Lightly Played', hue: 'ok', orders: ['rosa'], copies: [
+    { key: 'm1', box: 'WB4 R2', sec: 1, card: 5, of: 38, between: ['Fen Lantern', 'Root Choir'] },
+    { key: 'm2', box: 'WB4 R2', sec: 4, card: 31, of: 38, between: ['Dust Prophet', 'Glimmer Fox'] } ] },
+  { id: 'star', name: 'Starling Courier', num: '103/210', cond: 'Near Mint', hue: 'warn', orders: ['walt', 'june'], copies: [
+    { key: 's1', box: 'WB4 R2', sec: 2, card: 9, of: 38, between: ['Kite Runner', 'Starling Courier'] },
+    { key: 's2', box: 'WB4 R2', sec: 2, card: 10, of: 38, between: ['Starling Courier', 'Wren Herald'] } ] },
+  { id: 'moth', name: 'Lantern Moth', num: '131/210', cond: 'Near Mint', hue: 'warn', orders: ['tomas'], copies: [
+    { key: 'l1', box: 'WB5 R1', sec: 1, card: 2, of: 30, between: ['the front of the box', 'Ash Vane'] } ] },
+  { id: 'ash', name: 'Ashen Cartographer', num: '150/210', cond: 'Near Mint Foil', hue: 'danger', orders: ['priya'], copies: [
+    { key: 'a1', box: 'WB5 R1', sec: 3, card: 31, of: 33, between: ['Cinder Map', 'Lost Compass'] } ] },
+  { id: 'harbor', name: 'Quiet Harbor', num: '199/210', cond: 'Near Mint', hue: 'accent', orders: ['rosa'], copies: [
+    { key: 'h1', box: 'WB5 R2', sec: 2, card: 17, of: 36, between: ['Tide Gate', 'Gull Shrine'] } ] },
+  { id: 'heron', name: 'Glass Heron', num: '064/210', cond: 'Near Mint', hue: 'ok', orders: ['june'], copies: [] },
+]
+const BOXES = [
+  { name: 'WB4 R1', n: 40, sample: [['Sea Glass Idol', 'Section 2, Card 13'], ['Ember Warden', 'Section 2, Card 14'], ['Iron Finch', 'Section 2, Card 15']] },
+  { name: 'WB4 R2', n: 38, sample: [['Fen Lantern', 'Section 1, Card 4'], ['Moss Golem, Patient', 'Section 1, Card 5'], ['Kite Runner', 'Section 2, Card 8']] },
+  { name: 'WB5 R1', n: 33, sample: [['Lantern Moth', 'Section 1, Card 2'], ['Ash Vane', 'Section 1, Card 3'], ['Cinder Map', 'Section 3, Card 30']] },
+  { name: 'WB5 R2', n: 36, sample: [['Bramble Knight', 'Section 1, Card 2'], ['Ember Warden', 'Section 1, Card 3'], ['Tide Gate', 'Section 2, Card 16']] },
+]
+/* Cards in the boxes that no order wants: what search finds beyond the list (today's second way in). */
+const OWED_NAMES = new Set(CARDS.map((c) => c.name))
+const LOOSE = BOXES.flatMap((b) => b.sample.filter(([n]) => !OWED_NAMES.has(n)).map(([n, p]) => {
+  const [, sec, cd] = p.match(/Section (\d+), Card (\d+)/)
+  const id = 'x-' + n.toLowerCase().replace(/[^a-z]+/g, '-')
+  return { id, name: n, num: String(100 + +cd).padStart(3, '0') + '/210', cond: 'Near Mint', hue: 'accent', orders: [], loose: true,
+    copies: [{ key: id, box: b.name, sec: +sec, card: +cd, of: b.n, between: null }] }
+}))
+const card = (id) => CARDS.find((c) => c.id === id) || LOOSE.find((c) => c.id === id)
+const HUE = { live: 'var(--bn-stage-live)', accent: 'var(--bn-stage-accent)', ok: 'var(--bn-stage-ok)', warn: 'var(--bn-stage-warn)', danger: 'var(--bn-stage-danger)' }
+const UNDO_MS = 20000 // the built window, twice docs/DESIGN.md's 10s floor
+
+/* ------------------------------------------------------------------ states */
+const STATES = [
+  ['list', 'The list, By Box', 'One trip through the boxes. One row per card says how many to pull and whose envelope each goes in. The next card is open beside the list, so Pull is on the first screen.', 'walk-list'],
+  ['envelopes', 'The list, By Envelope', 'The same cards, grouped by the envelope they go in. Each envelope says when it is ready to seal.', 'envelope-list'],
+  ['pull', 'One card, any copy', 'Pull 2 of 3: every place has the same weight and none is picked for him. Pressing a place shows its photo and Pull.', 'copy-choice'],
+  ['pull-first', 'One card, first copy shown', 'The alternative: the nearest copy opens with its photo and Pull, and the other places wait under Not there.', 'pull-need'],
+  ['chosen', 'One pull, before the press', 'A place is chosen. The photo check: the card, where to find it, then Pull.', 'pull-btn'],
+  ['pulled', 'After Pull', 'Pull is acknowledged; Mark it sold appears below it, never on top of it.', 'mark-sold'],
+  ['sold', 'After Mark it sold', 'The receipt names the envelope. Undo stays for 20 seconds. The card says 1 more to pull.', 'receipt'],
+  ['card-done', 'A card finished', 'Both copies are sold. The action slot offers the next card.', 'next-card'],
+  ['short-end', 'A card not in any box, at the end of the list', 'The card he cannot pull sits in its own group at the end, and says which envelope stays open.', 'short-end-group'],
+  ['short-top', 'A card not in any box, one line at the top', 'The alternative: one sentence above the list.', 'short-top-line'],
+  ['short-open', 'A card not in any box, opened', 'Opening it says what to do: leave the envelope open and ask for help.', 'short-pane'],
+  ['search', 'Search', 'Search still finds any card in the boxes, as today. Cards on the list come first, then the rest.', 'search-results'],
+  ['done', 'Every card pulled', 'The done state: four envelopes ready to seal, one left open, and what was pulled today.', 'done-panel'],
+  ['empty', 'An empty day', 'No order is waiting. The search and the boxes stay.', 'empty-day'],
+]
+const OPTIONS = [
+  { set: 'List order', items: [
+    { id: 'by-box', title: 'By Box', desc: 'One trip through the boxes, in walk order. Each row names its envelopes.', s: 'list', pick: true },
+    { id: 'by-envelope', title: 'By Envelope', desc: 'Grouped by buyer envelope. Each envelope says Ready to Seal or Leave Open.', s: 'envelopes', pick: true } ],
+    note: 'With both shown, a switch at the top of the list moves between them, By Box first.' },
+  { set: 'A card not in any box', items: [
+    { id: 'short-end', title: 'A Group at the End', desc: 'The card sits last, under Not in Any Box, and names the envelope that stays open.', s: 'short-end', pick: true },
+    { id: 'short-top', title: 'One Line at the Top', desc: 'One sentence above the list, as today, but naming the envelope.', s: 'short-top' } ] },
+  { set: 'Which copy to pull', items: [
+    { id: 'copy-equal', title: 'Any of These', desc: 'Every place has the same weight; none is picked for him. One more press per card with a choice.', s: 'pull', pick: true },
+    { id: 'copy-first', title: 'First Copy Shown', desc: 'The nearest copy opens at once; the other places wait under Not there. One press fewer, but it picks a copy for him.', s: 'pull-first' } ] },
+]
+
+let S = {}
+function preset(s) {
+  S = { s, view: 'box', sel: 'ember', copy: null, phase: 'idle', sold: [], receipt: null, open: false, zoom: false, openBoxes: [], query: '', empty: false, shortStyle: 'end', copyStyle: 'equal' }
+  const sellAll = () => { for (const c of CARDS) c.copies.slice(0, c.orders.length).forEach((cp, i) => S.sold.push({ card: c.id, copy: cp.key, buyer: c.orders[i], at: 0 })) }
+  if (s === 'envelopes') S.view = 'env'
+  if (s === 'pull') S.open = true
+  if (s === 'pull-first') { S.open = true; S.copyStyle = 'first' }
+  if (s === 'chosen') { S.open = true; S.copy = 'e1' }
+  if (s === 'pulled') { S.open = true; S.copy = 'e1'; S.phase = 'pulled' }
+  if (s === 'search') { S.query = 'glass'; S.sel = 'x-sea-glass-idol' }
+  if (s === 'sold') { S.open = true; S.sold.push({ card: 'ember', copy: 'e1', buyer: 'rosa', at: Date.now() }); S.receipt = { i: 0, until: Date.now() + UNDO_MS } }
+  if (s === 'card-done') { S.open = true; S.sold.push({ card: 'ember', copy: 'e1', buyer: 'rosa', at: 0 }, { card: 'ember', copy: 'e2', buyer: 'tomas', at: 0 }) }
+  if (s === 'short-top') S.shortStyle = 'top'
+  if (s === 'short-open') { S.sel = 'heron'; S.open = true }
+  if (s === 'done') { sellAll(); S.sel = null }
+  if (s === 'empty') { S.empty = true; S.sel = null }
+}
+
+/* ------------------------------------------------------------------ derived */
+const soldOf = (c) => S.sold.filter((x) => x.card === c.id)
+const pullable = (c) => (c.loose ? 1 : Math.min(c.orders.length, c.copies.length))
+const leftOf = (c) => pullable(c) - soldOf(c).length
+const shortOf = (c) => Math.max(0, c.orders.length - c.copies.length)
+const freeCopies = (c) => c.copies.filter((cp) => !S.sold.some((x) => x.copy === cp.key))
+const totalLeft = () => (S.empty ? 0 : CARDS.reduce((n, c) => n + leftOf(c), 0))
+const envelopesOpen = () => BUYER_ORDER.length
+function chosenCopy(c) {
+  const free = freeCopies(c)
+  const hit = free.find((cp) => cp.key === S.copy)
+  if (hit) return hit
+  if (copyStyle() === 'first' || free.length <= leftOf(c)) return free[0] || null
+  return null
+}
+function copyStyle() {
+  const h = hiddenSet()
+  if (h.has('copy-equal') && !h.has('copy-first')) return 'first'
+  if (h.has('copy-first') && !h.has('copy-equal')) return 'equal'
+  return S.copyStyle
+}
+function byBox() {
+  const groups = new Map()
+  for (const c of CARDS) {
+    if (!c.copies.length) continue
+    const box = c.copies[0].box
+    if (!groups.has(box)) groups.set(box, [])
+    groups.get(box).push(c)
+  }
+  for (const list of groups.values()) list.sort((a, b) => a.copies[0].sec - b.copies[0].sec || a.copies[0].card - b.copies[0].card)
+  return [...groups.entries()]
+}
+function walkOrder() { return byBox().flatMap(([, cs]) => cs) }
+function envelopeOf(b) {
+  const lines = []
+  for (const c of CARDS) c.orders.forEach((o, i) => { if (o === b) lines.push({ c, i }) })
+  const done = lines.filter(({ c, i }) => i < soldOf(c).length).length
+  const short = lines.filter(({ c, i }) => i >= c.copies.length).length
+  return { lines, done, short, ready: done === lines.length - short && short === 0, open: short > 0 }
+}
+const hiddenSet = () => new Set((readHash().h || '').split(',').filter(Boolean))
+function viewsShown() {
+  const h = hiddenSet()
+  return ['box', 'env'].filter((v) => !h.has(v === 'box' ? 'by-box' : 'by-envelope'))
+}
+function shortStyle() {
+  const h = hiddenSet()
+  if (h.has('short-end') && !h.has('short-top')) return 'top'
+  if (h.has('short-top') && !h.has('short-end')) return 'end'
+  return S.shortStyle
+}
+
+/* ------------------------------------------------------------------ icons */
+const P = {
+  envelope: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  box: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+  check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  hand: '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12m0-6.5v-1a1.5 1.5 0 0 1 3 0V12m0-6a1.5 1.5 0 0 1 3 0v6m0-3.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-4.6-2.2L4.4 15.5a1.5 1.5 0 0 1 2.3-1.9L8 15"/>',
+  pin: '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>',
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  back: '<path d="M19 12H5m6-6-6 6 6 6"/>',
+  alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4m0 3h.01"/>',
+  chev: '<path d="m6 9 6 6 6-6"/>',
+  zoom: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2M11 8v6M8 11h6"/>',
+  next: '<path d="M5 12h14m-6-6 6 6-6 6"/>',
+  cards: '<rect x="4" y="3" width="12" height="16" rx="2"/><path d="M8 21h10a2 2 0 0 0 2-2V7"/>',
+}
+const icon = (n, s = 24) => `<svg class="ico" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`
+const esc = (t) => String(t).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]))
+const names = (ids) => { const n = ids.map((b) => BUYERS[b]); return n.length < 2 ? n[0] : n.slice(0, -1).join(', ') + ' and ' + n[n.length - 1] }
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+const placeLine = (cp) => `${cp.box}, Section ${cp.sec}, Card ${cp.card}`
+
+/* ------------------------------------------------------------------ the screen */
+function header(w) {
+  const left = totalLeft()
+  const count = `<div class="ff-count" data-mark="New: one unit, cards"><span class="ff-count-num" id="count">${left}</span>
+    <span class="ff-count-say"><span>${left === 1 ? 'card' : 'cards'} to pull</span><span>${S.empty ? 'no envelopes waiting' : left === 0 ? 'all pulled' : 'for ' + plural(envelopesOpen(), 'envelope', 'envelopes')}</span></span></div>`
+  const search = `<label class="ff-search" data-mark="Today: search">${icon('search', 24)}<input type="search" id="ff-q" placeholder="Card name or number…" aria-label="Search" value="${esc(S.query)}"></label>`
+  return `<header class="ff-head"><div class="ff-brand"><span class="ff-mark">${icon('cards', 26)}</span><h1 class="ff-title">Cards to Pull</h1></div>${count}${search}</header>`
+}
+
+function shortCard() { return CARDS.find((c) => shortOf(c) > 0) }
+function shortTopLine() {
+  const c = shortCard()
+  if (!c) return ''
+  return `<p class="ff-note" id="short-top-line" data-mark="New: names the envelope">${icon('alert', 22)}<span>${c.name} is not in any box, so ${BUYERS[c.orders[c.orders.length - 1]]}’s envelope stays open. Ask for help with it.</span></p>`
+}
+function shortEndGroup() {
+  const c = shortCard()
+  if (!c) return ''
+  return `<section class="ff-group" id="short-end-group" data-mark="New: Not in Any Box group"><div class="ff-group-head"><span class="ff-group-name">Not in Any Box</span></div>
+    <div class="ff-rows"><button class="ff-row ff-short-row" data-act="open" data-card="${c.id}" aria-current="${S.sel === c.id && S.open !== false ? 'true' : 'false'}">
+      <span class="ff-badge" data-tone="warn">${icon('alert', 22)}</span>
+      <span class="ff-row-text"><span class="ff-row-name">${c.name}</span><span class="ff-row-sub">Leave ${BUYERS[c.orders[c.orders.length - 1]]}’s envelope open.</span></span>
+      <span></span></button></div></section>`
+}
+
+function row(c, w) {
+  const left = leftOf(c)
+  const done = left === 0
+  const cur = S.sel === c.id && (w === 1440 || S.open)
+  const where = `Section ${(chosenCopy(c) || c.copies[0]).sec}`
+  const badge = done ? `<span class="ff-badge" data-tone="ok">${icon('check', 24)}<span class="sr">Pulled</span></span>` : `<span class="ff-badge" data-tone="todo"></span>`
+  return `<button class="ff-row" data-act="open" data-card="${c.id}" data-done="${done}" aria-current="${cur}">
+    ${badge}
+    <span class="ff-row-text"><span class="ff-row-name">${c.name}</span>
+      <span class="ff-row-sub">${where}</span>
+      <span class="ff-row-sub" ${c.id === 'ember' ? 'data-mark="New: envelope names"' : ''}>${icon('envelope', 20)}<span>${names(c.orders.slice(0, pullable(c)))}</span></span></span>
+    ${done ? '<span></span>' : `<span class="ff-pullcount" ${c.id === 'ember' ? 'data-mark="New: Pull N"' : ''}>Pull ${left}</span>`}
+  </button>`
+}
+
+function listBox(w) {
+  const q = S.query.trim().toLowerCase()
+  const groups = byBox().map(([box, cs]) => [box, cs.filter((c) => !q || c.name.toLowerCase().includes(q) || c.num.includes(q))]).filter(([, cs]) => cs.length)
+  if (!groups.length) return `<p>No card on the list has that name. Check the spelling.</p>`
+  return `<div class="ff-rows" id="walk-list" style="gap: var(--bn-5)">${groups.map(([box, cs]) => `<section class="ff-group">
+      <div class="ff-group-head">${icon('box', 24)}<span class="ff-group-name">${box}</span></div>
+      <div class="ff-rows">${cs.map((c) => row(c, w)).join('')}</div></section>`).join('')}</div>`
+}
+
+function listEnv(w) {
+  return `<div class="ff-rows" id="envelope-list" style="gap: var(--bn-5)" data-mark="New: By Envelope">${BUYER_ORDER.map((b) => {
+    const e = envelopeOf(b)
+    const tag = e.open ? `<span class="ff-tag" data-tone="warn">${icon('alert', 20)}Leave Open</span>` : e.ready ? `<span class="ff-badge" data-tone="ok" style="margin-left:auto">${icon('check', 24)}<span class="sr">Ready to seal</span></span>` : `<span class="ff-tag" data-tone="plain">${e.done} of ${e.lines.length} in</span>`
+    return `<section class="ff-group" ${b === 'june' ? 'id="env-june"' : ''}>
+      <div class="ff-group-head">${icon('envelope', 24)}<span class="ff-group-name">${BUYERS[b]}</span>${tag}</div>
+      <div class="ff-rows">${e.lines.map(({ c, i }) => {
+        const isShort = i >= c.copies.length
+        const isDone = !isShort && i < soldOf(c).length
+        const cur = S.sel === c.id && (w === 1440 || S.open)
+        const cp = c.copies[0]
+        const badge = isShort ? `<span class="ff-badge" data-tone="warn">${icon('alert', 22)}</span>` : isDone ? `<span class="ff-badge" data-tone="ok">${icon('check', 24)}</span>` : `<span class="ff-badge" data-tone="todo"></span>`
+        const sub = isShort ? 'Not in any box. Ask for help with it.' : isDone ? 'In the envelope.' : `${cp.box}, Section ${cp.sec}`
+        return `<button class="ff-row" data-act="open" data-card="${c.id}" data-done="${isDone}" aria-current="${cur}">${badge}
+          <span class="ff-row-text"><span class="ff-row-name">${c.name}</span><span class="ff-row-sub">${sub}</span></span><span></span></button>`
+      }).join('')}</div></section>`
+  }).join('')}</div>`
+}
+
+function pulledToday() {
+  const list = S.sold.map((x, i) => ({ ...x, i })).filter((x) => x.at !== 0 || S.s === 'done' || S.s === 'card-done')
+  if (!list.length) return ''
+  return `<section class="ff-foot" aria-label="Pulled today" data-mark="Today: Pulled today"><h2 class="ff-h2">${icon('check', 22)}Pulled Today</h2>
+    <ul class="ff-done-list">${list.slice().reverse().map((x) => `<li class="ff-done-row"><span>${card(x.card).name}</span><span class="who">${x.buyer ? `${BUYERS[x.buyer]}’s envelope` : 'Not for an order'}</span>
+      <button class="ff-undo" data-act="undo" data-i="${x.i}" aria-label="Undo ${card(x.card).name}">${icon('undo', 20)}Undo</button></li>`).join('')}</ul></section>`
+}
+
+function lookThrough() {
+  return `<section class="ff-foot" aria-label="Look through a box" data-mark="Today: look through a box"><h2 class="ff-h2">${icon('box', 22)}Or Look Through a Box</h2>
+    <div class="ff-boxes">${BOXES.map((b) => {
+      const open = S.openBoxes.includes(b.name)
+      return `<div><button class="ff-box-head" data-act="box" data-box="${b.name}" aria-expanded="${open}"><span>${b.name}</span><span>${b.n} cards</span>${icon('chev', 26)}</button>
+        ${open ? `<ul class="ff-box-body">${b.sample.map(([n, p]) => `<li><span>${n}</span><span>${p}</span></li>`).join('')}</ul>` : ''}</div>`
+    }).join('')}</div></section>`
+}
+
+function searchResults(w) {
+  const q = S.query.trim().toLowerCase()
+  const hit = (c) => c.name.toLowerCase().includes(q) || c.num.includes(q)
+  const owed = CARDS.filter(hit)
+  const loose = LOOSE.filter(hit)
+  const looseRow = (c) => `<button class="ff-row" data-act="open" data-card="${c.id}" aria-current="${S.sel === c.id && (w === 1440 || S.open)}">
+      <span class="ff-badge">${icon('box', 22)}</span>
+      <span class="ff-row-text"><span class="ff-row-name">${c.name}</span><span class="ff-row-sub">${placeLine(c.copies[0])}</span></span>
+      <span class="ff-row-chev">${icon('next', 24)}</span></button>`
+  const ownRow = (c) => (c.copies.length ? row(c, w) : `<button class="ff-row" data-act="open" data-card="${c.id}" aria-current="${S.sel === c.id && (w === 1440 || S.open)}"><span class="ff-badge" data-tone="warn">${icon('alert', 22)}</span><span class="ff-row-text"><span class="ff-row-name">${c.name}</span><span class="ff-row-sub">Not in any box.</span></span><span></span></button>`)
+  if (!owed.length && !loose.length) return `<p class="ff-note" id="search-results" style="box-shadow:var(--bn-shadow-1)">No card here has that name. Check the spelling.</p>`
+  return `<div class="ff-results" id="search-results" data-mark="Today: search reaches every box">
+    ${owed.length ? `<section class="ff-group"><h2 class="ff-h2">${icon('envelope', 22)}On Your List</h2><div class="ff-rows">${owed.map(ownRow).join('')}</div></section>` : ''}
+    ${loose.length ? `<section class="ff-group"><h2 class="ff-h2">${icon('box', 22)}In the Boxes</h2><div class="ff-rows">${loose.map(looseRow).join('')}</div></section>` : ''}</div>`
+}
+
+function listPane(w) {
+  if (S.empty) return ''
+  if (S.query.trim()) return `<div class="ff-list" id="ff-list">${searchResults(w)}</div>`
+  const doneTop = w === 820 && totalLeft() === 0 ? `<div class="ff-pane ff-done-top">${donePanel()}</div>` : ''
+  const shown = viewsShown()
+  if (!shown.includes(S.view)) S.view = shown[0] || 'box'
+  const sw = shown.length > 1 ? `<div class="ff-switch" role="group" aria-label="List order" data-mark="New: By Box or By Envelope">
+      <button data-act="view" data-view="box" aria-pressed="${S.view === 'box'}">${icon('box', 22)}By Box</button>
+      <button data-act="view" data-view="env" aria-pressed="${S.view === 'env'}">${icon('envelope', 22)}By Envelope</button></div>` : ''
+  const style = shortStyle()
+  const body = S.view === 'box' ? listBox(w) : listEnv(w)
+  return `<div class="ff-list" id="ff-list">${doneTop}${sw}${style === 'top' ? shortTopLine() : ''}${body}${S.view === 'box' && style === 'end' ? shortEndGroup() : ''}${pulledToday()}${lookThrough()}</div>`
+}
+
+function photo(c, big) {
+  return `<span class="ff-photo" style="--hue:${HUE[c.hue]}" ${big ? '' : 'data-act="zoom" role="button" tabindex="0" aria-label="Show the photo bigger"'}>
+    <span class="ff-photo-card"><span class="ff-photo-art"></span><span class="ff-photo-name">${c.name}</span><span class="ff-photo-box"></span></span>
+    <span class="ff-photo-tag">Sample photo</span></span>`
+}
+
+function pullPane(w) {
+  if (S.empty) return ''
+  const c = S.sel ? card(S.sel) : null
+  if (!c) return donePanel()
+  const head = `<div class="ff-card-head">
+      ${c.loose ? '<p class="ff-for">Not on any order.</p>' : `<p class="ff-for" data-mark="New: whose envelope">${icon('envelope', 22)}For ${names(c.orders)}</p>`}
+      <h2 class="ff-card-name">${c.name}</h2>
+      <p class="ff-card-about"><span class="ff-mono">${c.num}</span><span>${c.cond}</span></p></div>`
+  if (!c.copies.length) {
+    return `<article class="ff-card" id="short-pane">${head}
+      <div class="ff-cardnote"><p class="ff-big-ok"><span class="ff-badge" data-tone="warn">${icon('alert', 30)}</span>This card is not in any box.</p>
+      <p>You cannot pull it today. Leave ${BUYERS[c.orders[0]]}’s envelope open, and ask for help with this card.</p>
+      ${nextButton(c)}</div></article>`
+  }
+  const left = leftOf(c)
+  if (left === 0) {
+    const sold = soldOf(c)
+    return `<article class="ff-card">${head}<div class="ff-card-grid">${photo(c)}<div class="ff-side">
+      <p class="ff-big-ok"><span class="ff-badge" data-tone="ok">${icon('check', 32)}</span>${c.loose ? 'This card is sold.' : sold.length === 1 ? 'This card is done.' : 'Both are done.'}</p>
+      ${c.loose ? '' : `<ul class="ff-env-list">${sold.map((x) => `<li>${icon('envelope', 22)}${BUYERS[x.buyer]}’s envelope</li>`).join('')}</ul>`}
+      <div class="ff-action">${nextButton(c)}</div></div></div></article>`
+  }
+  const cp = chosenCopy(c)
+  const free = freeCopies(c)
+  const soldN = soldOf(c).length
+  const choice = free.length > left
+  const need = c.loose ? ''
+    : (soldN ? `${plural(soldN, 'is', 'are')} sold. ` : '') +
+      (choice ? (left === 1 ? `Any of these ${free.length} will do.` : `Any ${left} of these ${free.length} will do.`) : free.length === 1 ? 'It is the only one in the boxes.' : `Pull all ${free.length}.`)
+  const needBlock = c.loose ? '' : `<div class="ff-need" id="pull-need" data-mark="New: how many to pull"><span class="ff-need-big">${soldN ? `${left} more to pull` : `Pull ${left}`}</span><span>${need}</span></div>`
+  if (!cp) {
+    /* No copy is picked for him (D97, every copy is fungible): each place has the same weight. */
+    return `<article class="ff-card" id="pull-pane">${head}
+      <div class="ff-card-grid">
+        <div class="ff-photo-wait">${icon('pin', 36)}<p>Choose a place. The card’s photo shows here.</p></div>
+        <div class="ff-side">${needBlock}
+          <div class="ff-choose" id="copy-choice" data-mark="New: any copy, none picked">${free.map((o) => `<button class="ff-quiet" data-act="copy" data-copy="${o.key}">${icon('pin', 22)}<span class="ff-choose-place"><b>${o.box}</b><span>Section ${o.sec}, Card ${o.card}</span></span></button>`).join('')}</div>
+        </div></div></article>`
+  }
+  const others = free.filter((x) => x.key !== cp.key)
+  const pos = Math.round(((cp.card - 0.5) / cp.of) * 100)
+  const action = S.phase === 'pulled'
+    ? `<p class="ff-pulled"><span class="ff-badge" data-tone="ok">${icon('check', 24)}</span>Pulled.</p>
+       <button class="ff-sell" id="mark-sold" data-act="sell" data-mark="Today: second step">Mark it sold</button>`
+    : `<button class="ff-step" id="pull-btn" data-act="pull" data-mark="Today: Pull first">${icon('hand', 26)}Pull</button>`
+  return `<article class="ff-card" id="pull-pane">${head}
+    <div class="ff-card-grid">
+      <div>${photo(c)}<p class="ff-photo-hint">${icon('zoom', 22)}Tap the photo to see it bigger.</p></div>
+      <div class="ff-side">
+        ${needBlock}
+        <section class="ff-where" aria-label="Where to find it" data-mark="Today: where to find it">
+          <p class="ff-where-label">${icon('pin', 22)}Where to find it</p>
+          <p class="ff-place"><span>${cp.box}</span><span>Section ${cp.sec}</span><span>Card ${cp.card}</span></p>
+          <div class="ff-posbar"><div class="ff-track"><i style="left:${pos}%"></i></div><div class="ff-track-ends"><span>Back</span><span>Front</span></div></div>
+          ${cp.between ? `<p>Between ${cp.between[0]} and ${cp.between[1]}.</p>` : ''}
+        </section>
+        <div class="ff-action">${action}</div>
+        ${others.length ? `<div class="ff-other" data-mark="New: other copies"><p>${choice ? 'Not there? Any of these will do:' : 'Also to pull:'}</p><div class="ff-other-list">${others.map((o) => `<button class="ff-quiet" data-act="copy" data-copy="${o.key}">${icon('pin', 22)}${placeLine(o)}</button>`).join('')}</div></div>` : ''}
+      </div>
+    </div></article>`
+}
+
+function nextCard(c) {
+  const order = S.view === 'env' ? BUYER_ORDER.flatMap((b) => envelopeOf(b).lines.map((l) => l.c)) : walkOrder()
+  const seen = new Set()
+  const list = order.filter((x) => (seen.has(x.id) ? false : seen.add(x.id)))
+  const at = list.findIndex((x) => x.id === c.id)
+  return [...list.slice(at + 1), ...list.slice(0, at)].find((x) => leftOf(x) > 0) || null
+}
+function nextButton(c) {
+  const n = nextCard(c)
+  if (!n) return `<button class="ff-step" id="next-card" data-act="finish" data-mark="New: Next Card">${icon('check', 26)}See the Envelopes</button>`
+  return `<button class="ff-step" id="next-card" data-act="next" data-card="${n.id}" data-mark="New: Next Card">Next Card: ${n.name}${icon('next', 26)}</button>`
+}
+
+function donePanel() {
+  const ready = BUYER_ORDER.filter((b) => envelopeOf(b).ready)
+  const open = BUYER_ORDER.filter((b) => envelopeOf(b).open)
+  if (totalLeft() > 0) return `<div class="ff-cardnote"><p>Choose a card from the list.</p></div>`
+  return `<article class="ff-card" id="done-panel" data-mark="New: done names the envelopes">
+    <p class="ff-big-ok"><span class="ff-badge" data-tone="ok">${icon('check', 34)}</span>All ${CARDS.reduce((n, c) => n + pullable(c), 0)} cards are pulled.</p>
+    <p>${plural(ready.length, 'envelope is', 'envelopes are')} ready to seal.${open.length ? ` Leave ${names(open)}’s open: a card is not in any box. Ask for help with it.` : ''}</p>
+    <ul class="ff-env-list">${BUYER_ORDER.map((b) => {
+      const e = envelopeOf(b)
+      return `<li>${icon('envelope', 22)}<span>${BUYERS[b]}</span>${e.open ? `<span class="ff-tag" data-tone="warn">${icon('alert', 20)}Leave Open</span>` : `<span class="ff-badge" data-tone="ok" style="margin-left:auto">${icon('check', 24)}<span class="sr">Ready to seal</span></span>`}</li>`
+    }).join('')}</ul></article>`
+}
+
+function emptyDay() {
+  return `<div class="ff-empty" id="empty-day" data-mark="Today: empty day sentence"><span class="ff-empty-art">${icon('check', 34)}</span>
+    <p>No orders are waiting for a card right now. You can still find any card by name.</p></div>
+    <div style="max-width:640px;margin:var(--bn-8) auto 0">${lookThrough()}</div>`
+}
+
+function receipt() {
+  if (!S.receipt) return ''
+  const x = S.sold[S.receipt.i]
+  if (!x) return ''
+  const total = UNDO_MS / 1000
+  const gone = Math.max(0, (UNDO_MS - (S.receipt.until - Date.now())) / 1000)
+  return `<div class="ff-receipt" id="receipt" role="status">
+    <span class="ff-badge" data-tone="ok">${icon('check', 24)}</span>
+    <span class="ff-receipt-text" data-mark="New: names the envelope"><b>Marked sold.</b>${x.buyer ? `<span>Put it in ${BUYERS[x.buyer]}’s envelope.</span>` : ''}</span>
+    <button class="ff-undo" data-act="undo" data-i="${S.receipt.i}">${icon('undo', 22)}Undo</button>
+    <span class="ff-clock" aria-hidden="true"><i style="animation-duration:${total}s;animation-delay:-${gone}s"></i></span></div>`
+}
+
+function zoom() {
+  if (!S.zoom || !S.sel) return ''
+  return `<div class="ff-zoom" data-act="unzoom" role="dialog" aria-label="The photo, bigger">${photo(card(S.sel), true)}<p>Tap anywhere to go back.</p></div>`
+}
+
+function screen(w) {
+  if (w === 820 && S.open && S.sel) {
+    const back = `<div class="ff-open-head"><button class="ff-back" data-act="back">${icon('back', 24)}Back to the cards</button>
+      <div class="ff-count"><span class="ff-count-num" style="font-size:var(--ff-fs-xl)">${totalLeft()}</span><span class="ff-count-say"><span>to pull</span></span></div></div>`
+    return `<div class="ff" data-w="820">${back}<div class="ff-body"><div class="ff-pane">${pullPane(w)}</div></div>${receipt()}${zoom()}</div>`
+  }
+  if (S.empty) return `<div class="ff" data-w="${w}">${header(w)}<div class="ff-body" style="display:block;overflow:auto">${emptyDay()}</div></div>`
+  const pane = w === 1440 ? `<div class="ff-pane" id="ff-pane">${pullPane(w)}</div>` : ''
+  return `<div class="ff" data-w="${w}">${header(w)}<div class="ff-body" id="ff-scroll">${listPane(w)}${pane}</div>${receipt()}${zoom()}</div>`
+}
+
+/* ------------------------------------------------------------------ actions */
+let receiptTimer = null
+function armReceipt() {
+  clearTimeout(receiptTimer)
+  if (!S.receipt) return
+  receiptTimer = setTimeout(() => { S.receipt = null; render() }, Math.max(0, S.receipt.until - Date.now()))
+}
+function act(el) {
+  const a = el.dataset.act
+  const w = +readHash().w || 1440
+  if (a === 'open') { S.sel = el.dataset.card; S.copy = null; S.phase = 'idle'; S.open = true }
+  if (a === 'back') { S.open = false; S.phase = 'idle' }
+  if (a === 'view') { S.view = el.dataset.view }
+  if (a === 'copy') { S.copy = el.dataset.copy; S.phase = 'idle' }
+  if (a === 'pull') { S.phase = 'pulled' }
+  if (a === 'sell') {
+    const c = card(S.sel)
+    const cp = chosenCopy(c)
+    S.sold.push({ card: c.id, copy: cp.key, buyer: c.loose ? null : c.orders[soldOf(c).length], at: Date.now() })
+    S.receipt = { i: S.sold.length - 1, until: Date.now() + UNDO_MS }
+    S.phase = 'idle'; S.copy = null
+  }
+  if (a === 'undo') {
+    const i = +el.dataset.i
+    const x = S.sold[i]
+    S.sold.splice(i, 1)
+    S.receipt = null
+    if (x) { S.sel = x.card; S.copy = x.copy; S.phase = 'idle' }
+  }
+  if (a === 'next') { S.sel = el.dataset.card; S.copy = null; S.phase = 'idle'; S.open = true }
+  if (a === 'finish') { S.sel = null; S.open = false }
+  if (a === 'zoom') S.zoom = true
+  if (a === 'unzoom') S.zoom = false
+  if (a === 'box') { const b = el.dataset.box; S.openBoxes = S.openBoxes.includes(b) ? S.openBoxes.filter((x) => x !== b) : [...S.openBoxes, b] }
+  armReceipt()
+  render(true)
+}
+
+/* ------------------------------------------------------------------ hash, frame, options */
+function readHash() { return Object.fromEntries(new URLSearchParams(location.hash.slice(1))) }
+function writeHash(patch) {
+  const h = { ...readHash(), ...patch }
+  for (const k of Object.keys(h)) if (h[k] === '' || h[k] == null) delete h[k]
+  location.hash = new URLSearchParams(h).toString()
+}
+function theme() {
+  const t = readHash().t
+  if (t === 'light' || t === 'dark') return t
+  return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+function fit() {
+  const w = +readHash().w === 820 ? 820 : 1440
+  const h = w === 820 ? 1180 : 900
+  const fitEl = document.getElementById('mk-fit')
+  const avail = fitEl.parentElement.clientWidth
+  const scale = Math.min(1, avail / w)
+  const frame = document.getElementById('mk-frame')
+  frame.style.width = w + 'px'; frame.style.height = h + 'px'; frame.style.transform = `scale(${scale})`
+  fitEl.style.width = w * scale + 'px'; fitEl.style.height = h * scale + 'px'
+  document.getElementById('mk-size').textContent = `${w} x ${h}, drawn at ${Math.round(scale * 100)}%. Open at a window wider than ${w + 32}px to see it at 100%.`
+}
+function render(keepScroll) {
+  const hs = readHash()
+  const w = +hs.w === 820 ? 820 : 1440
+  document.documentElement.dataset.theme = theme()
+  document.documentElement.classList.toggle('mk-marks', hs.m !== '0')
+  const frame = document.getElementById('mk-frame')
+  const listTop = keepScroll ? document.getElementById('ff-list')?.scrollTop : 0
+  const bodyTop = keepScroll ? document.getElementById('ff-scroll')?.scrollTop : 0
+  frame.innerHTML = screen(w)
+  if (keepScroll) {
+    const l = document.getElementById('ff-list'); if (l) l.scrollTop = listTop
+    const b = document.getElementById('ff-scroll'); if (b) b.scrollTop = bodyTop
+  }
+  const st = STATES.find((x) => x[0] === S.s) || STATES[0]
+  document.getElementById('mk-caption').innerHTML = `<b>${st[1]}.</b> ${st[2]}`
+  const q = document.getElementById('ff-q')
+  if (q) q.oninput = (e) => { S.query = e.target.value; render(true); const n = document.getElementById('ff-q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length) }
+  document.getElementById('mk-s').value = S.s
+  document.getElementById('mk-w').value = String(w)
+  document.getElementById('mk-t').value = theme()
+  document.getElementById('mk-m').checked = hs.m !== '0'
+  renderOptions()
+  fit()
+}
+function renderOptions() {
+  const hidden = hiddenSet()
+  const el = document.getElementById('mk-options')
+  el.innerHTML = `<h2>Options</h2>` + OPTIONS.map((set) => `<div class="mk-set"><h3>${set.set}</h3>
+    ${set.items.filter((o) => !hidden.has(o.id)).map((o) => `<div class="mk-opt" data-option="${o.id}"><p><b>${o.title}.</b> ${o.desc} ${o.pick ? '<span class="mk-pick">My pick</span>' : ''}</p>
+      <a href="#s=${o.s}">Open it</a><button type="button" data-hide="${o.id}">Hide this option</button></div>`).join('')}
+    ${set.note ? `<p class="mk-caption">${set.note}</p>` : ''}</div>`).join('') +
+    (hidden.size ? `<p class="mk-caption">Hidden: ${[...hidden].join(', ')}. <button class="mk-unhide" type="button" id="mk-unhide">Show all</button></p>` : '')
+  el.querySelectorAll('[data-hide]').forEach((b) => (b.onclick = () => writeHash({ h: [...hidden, b.dataset.hide].join(',') })))
+  const un = document.getElementById('mk-unhide'); if (un) un.onclick = () => writeHash({ h: '' })
+}
+function focusState() {
+  const st = STATES.find((x) => x[0] === S.s)
+  const el = st && document.getElementById(st[3])
+  if (el && S.s === 'short-end') el.scrollIntoView({ block: 'nearest' })
+  window.scrollTo(0, 0)
+}
+
+let lastS = null
+function onHash() {
+  const hs = readHash()
+  const s = STATES.some((x) => x[0] === hs.s) ? hs.s : 'list'
+  if (s !== lastS) { preset(s); lastS = s; armReceipt(); render(); focusState() } else render(true)
+}
+document.getElementById('mk-s').innerHTML = STATES.map(([id, label]) => `<option value="${id}">${label}</option>`).join('')
+document.getElementById('mk-s').onchange = (e) => writeHash({ s: e.target.value })
+document.getElementById('mk-w').onchange = (e) => writeHash({ w: e.target.value })
+document.getElementById('mk-t').onchange = (e) => writeHash({ t: e.target.value })
+document.getElementById('mk-m').onchange = (e) => writeHash({ m: e.target.checked ? '' : '0' })
+document.getElementById('mk-frame').addEventListener('click', (e) => { const el = e.target.closest('[data-act]'); if (el) act(el) })
+document.getElementById('mk-frame').addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.zoom) { S.zoom = false; render(true) } if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-act="zoom"]')) { e.preventDefault(); act(e.target) } })
+addEventListener('hashchange', onHash)
+addEventListener('resize', fit)
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => render(true))
+onHash()
+</script>
+<script type="application/json" id="mk-focus">{"list":"walk-list","envelopes":"envelope-list","pull":"copy-choice","pull-first":"pull-need","chosen":"pull-btn","search":"search-results","pulled":"mark-sold","sold":"receipt","card-done":"next-card","short-end":"short-end-group","short-top":"short-top-line","short-open":"short-pane","done":"done-panel","empty":"empty-day"}</script>
+</body>
+</html>
