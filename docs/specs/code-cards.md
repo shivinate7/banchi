@@ -23,7 +23,7 @@ machine, or sourced from web research named in the text.
       -> capture screen, game = pokemon_code, product picker, set hint
       -> POST /capture per card           photo + sidecar + record, exactly as singles
     ./banchi scan <capture-dir>         FREE. QR decode. NO model call. NO network.
-      -> codes/qr.py                      100% of physically-readable frames, 0 mis-reads
+      -> codes/qr.py                      100% of physically-readable frames, 0 mis-reads (on 2.3.0)
       -> codes/ledger.py                  inventory/codes.jsonl, keyed by the CODE
       -> whatever QR refused              queued for the paid vision read, then a human
     #/codes                               the screen: what is held, what is dead, what sold
@@ -74,14 +74,13 @@ Verified against first-party sources. Two corrections to C1 and C3.
 ## 3. Decoding, and why there is no OCR
 
 `codes/qr.py` carries the full measurement. In summary, at the rig's frame size of 3840x2160,
-the shipped ladder reads **140 of 140 physically-possible frames with zero mis-reads at 87 ms
-each**. It refuses the rest. Ablation against eleven transforms shows three cases are
+on zxing-cpp 2.3.0 the shipped ladder reads **140 of 140 physically-possible frames with zero
+mis-reads at 87 ms each**. It refuses the rest. Ablation against eleven transforms shows three cases are
 unrecoverable: a QR under about 40 px, a 3.5 px defocus, and glare that clips the symbol to
 white.
 
-**The decoder is pinned, and the pin is load-bearing.** `codes/qr.py` uses `zxing-cpp==2.3.0`.
-Plain `pip install zxing-cpp` fails on this repo's Python 3.9. Install from `requirements.txt`.
-Never install freehand.
+**The decoder is pinned.** `codes/qr.py` uses `zxing-cpp==3.1.1`, the newest release that passes T8.
+Install from `requirements.txt`. Never install freehand.
 
 **C2's OCR half is not built, and should not be.** C2 specified a SKU crop taken off the QR as a
 fiducial. Then Tesseract, with an `A-Z0-9` whitelist. Three findings retire it:
@@ -571,7 +570,7 @@ JavaScript bundle. It reads a `2d_code` parameter and feeds the value straight i
 The one field that must be exactly right is the thing being sold. It is recovered by arithmetic over
 pixels. There is no model call, no network call and no cost.
 
-**Measured at 3840x2160, the rig's frame size: 140 of 140 physically-possible frames, ZERO mis-reads, 87 ms
+**Measured on zxing-cpp 2.3.0 at 3840x2160, the rig's frame size: 140 of 140 physically-possible frames, ZERO mis-reads, 87 ms
 each.** Three cases are unrecoverable. Ablation against eleven transforms established them: a QR under
 about 40 px, a 3.5 px defocus, and glare that clips the symbol to white. All three return nothing.
 
@@ -586,9 +585,8 @@ about 40 px, a 3.5 px defocus, and glare that clips the symbol to white. All thr
    A GitHub code search for the two examples in the fork's own notes returns zero hits. C2's "build the
    table empirically" would build the only copy in existence. Nobody would keep it honest.
 
-**The decoder is `zxing-cpp==2.3.0`, and the pin is load-bearing.** This repo's venv is Python 3.9.6. The 3.x
-line dropped cp39 wheels. An unpinned install resolves 3.1.1, finds no wheel, falls back to source, and dies
-in CMake. An unpinned requirement here is a broken clone.
+**The decoder is `zxing-cpp==3.1.1`, pinned to the newest release that passes T8.** The venv is Python 3.12,
+which every 3.x wheel supports. The pin is a gate: raise it only after T8 passes on the new release.
 
 **OpenCV was declined twice. The first refusal stands.** A first pass tested opencv's two QR detectors on a
 benchmark whose frames were at most 1600 px wide. That is not this rig. Re-measured at 3840x2160, opencv scored
