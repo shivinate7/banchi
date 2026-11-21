@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>banchi · lot tag (sample)</title>
+<style>
+/* ---- tokens: app/src/tokens.css, light and dark, inlined (palettes and legacy aliases left out) ---- */
+:root {
+  color-scheme: light;
+  --bn-bg: #f4f5f8;
+  --bn-surface: #ffffff;
+  --bn-surface-2: #eceef2;
+  --bn-surface-3: #f7f8fa;
+  --bn-surface-glass: rgba(255, 255, 255, 0.72);
+  --bn-hover: rgba(15, 18, 23, 0.03);
+  --bn-ink: #0f1217;
+  --bn-ink-2: #3b414b;
+  --bn-ink-3: #666c76;
+  --bn-ink-4: #7f8791;
+  --bn-line: rgba(15, 18, 23, 0.08);
+  --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-line-focus: rgba(61, 90, 241, 0.55);
+  --bn-field-edge: var(--bn-ink-4);
+  --bn-accent: #3d5af1;
+  --bn-accent-hover: #2f4bd9;
+  --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10);
+  --bn-accent-tint-2: rgba(61, 90, 241, 0.18);
+  --bn-on-accent: #ffffff;
+  --bn-mask: #000000;
+  --bn-flash: #ffffff;
+  --bn-live: #d63d2b;
+  --bn-live-tint: rgba(239, 75, 58, 0.12);
+  --bn-ok: #15803d;
+  --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309;
+  --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-danger: #b91c1c;
+  --bn-danger-tint: rgba(220, 38, 38, 0.10);
+  --bn-money: #0f1217;
+  --bn-pill-ink-accent: var(--bn-accent-hover);
+  --bn-pill-ink-ok: #11733a;
+  --bn-pill-ink-warn: #a14b09;
+  --bn-pill-ink-danger: #b3123e;
+  --bn-pill-ink-live: #a53f12;
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18),
+  0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32),
+  0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-shadow-accent: 0 8px 24px -8px rgba(61, 90, 241, 0.55);
+  --bn-btn-bg: var(--bn-surface);
+  --bn-btn-bg-hover: var(--bn-surface-3);
+  --bn-btn-shadow: var(--bn-shadow-1);
+  --bn-font-display: 'Manrope', 'Manrope Fallback', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', 'Inter Fallback', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace, 'SF Mono', Menlo, monospace;
+  --bn-fs-h1: var(--bn-fs-3xl);
+  --bn-fs-h2: var(--bn-fs-xl);
+  --bn-fs-h3: var(--bn-fs-lg);
+  --bn-fs-read: var(--bn-fs-md);
+  --bn-fs-label: var(--bn-fs-xs);
+  --bn-fs-2xs: 10px;
+  --bn-fs-xs: 11px;
+  --bn-fs-sm: 12px;
+  --bn-fs-md: 13px;
+  --bn-fs-base: 14px;
+  --bn-fs-lg: 16px;
+  --bn-fs-xl: 18px;
+  --bn-fs-2xl: 22px;
+  --bn-fs-3xl: 28px;
+  --bn-fs-4xl: 36px;
+  --bn-fs-5xl: 48px;
+  --bn-tracking-caps: 0.06em;
+  --bn-tracking-tight: -0.02em;
+  --bn-lh-tight: 1.1;
+  --bn-lh-snug: 1.25;
+  --bn-lh-base: 1.4;
+  --bn-lh-relaxed: 1.55;
+  --bn-1: 4px;
+  --bn-2: 8px;
+  --bn-3: 12px;
+  --bn-4: 16px;
+  --bn-5: 20px;
+  --bn-6: 24px;
+  --bn-7: 32px;
+  --bn-8: 40px;
+  --bn-9: 48px;
+  --bn-10: 64px;
+  --bn-0-5: 2px;
+  --bn-0-75: 3px;
+  --bn-1-5: 6px;
+  --bn-r-xs: 4px;
+  --bn-r-sm: 6px;
+  --bn-r: 8px;
+  --bn-r-lg: 12px;
+  --bn-r-xl: 16px;
+  --bn-r-2xl-sm: 18px;
+  --bn-r-2xl: 22px;
+  --bn-r-full: 999px;
+  --bn-t-fast: 120ms;
+  --bn-t: 200ms;
+  --bn-t-slow: 280ms;
+  --bn-t-layout: 240ms;
+  --bn-ease: cubic-bezier(0.2, 0, 0, 1);
+  --bn-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --bn-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --bn-ease-spring: cubic-bezier(0.34, 1.4, 0.44, 1);
+  --bn-ease-loop: ease-in-out;
+  --bn-ease-linear: linear;
+  --bn-rise: 6px;
+  --bn-stagger: 30ms;
+  --bn-stagger-cap: 12;
+  --bn-t-flash: 200ms;
+  --bn-t-draw: 480ms;
+  --bn-t-pulse: 1.8s;
+  --bn-t-spin: 0.7s;
+  --bn-t-shimmer: 1.4s;
+  --bn-t-highlight: 700ms;
+  --bn-t-instant: 0.01ms;
+  --bn-disabled: 0.45;
+  --bn-stage-bg: #0c0e12;
+  --bn-stage-bg-2: #171b25;
+  --bn-stage-surface: #1b2029;
+  --bn-stage-ink: #eef0f4;
+  --bn-stage-accent: #7f90ff;
+  --bn-stage-accent-hover: #93a2ff;
+  --bn-stage-accent-press: #6b7dfa;
+  --bn-stage-on-accent: #0c0e12;
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+  --bn-sidebar-w: 236px;
+  --bn-rail-w: 64px;
+  --bn-topbar-h: 52px;
+  --bn-page-w: 1600px;
+  --bn-page-w-rows: 1344px;
+  --bn-empty-w: 960px;
+  --bn-page-top: var(--bn-6);
+  --bn-control-h: 34px;
+  --bn-control-h-lg: 40px;
+  --bn-control-h-sm: 28px;
+  --bn-pill-h: 22px;
+  --bn-pill-h-sm: 18px;
+  --bn-nav-label-2: var(--bn-ink-3);
+  --bn-nav-label-3: var(--bn-ink-3);
+  --bn-nav-label-4: var(--bn-ink-3);
+  --bn-nav-hover-2: var(--bn-ink);
+  --bn-nav-hover-3: var(--bn-ink);
+  --bn-nav-hover-4: var(--bn-ink);
+  --bn-nav-accent-2: var(--bn-accent);
+  --bn-nav-accent-3: var(--bn-accent);
+  --bn-nav-accent-4: var(--bn-accent);
+  --bn-nav-tint-2: var(--bn-accent-tint);
+  --bn-nav-tint-3: var(--bn-accent-tint);
+  --bn-nav-tint-4: var(--bn-accent-tint);
+  --bn-seg-active-ink: var(--bn-ink);
+  --bn-seg-active-bg: var(--bn-surface);
+  --bn-seg-active-bg-2: var(--bn-surface);
+  --bn-page-backdrop: none;
+  --bn-row-stripe: transparent;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bn-bg: #0c0e12;
+  --bn-surface: #14171c;
+  --bn-surface-2: #090b0e;
+  --bn-surface-3: #1b1f26;
+  --bn-surface-glass: rgba(20, 23, 28, 0.72);
+  --bn-hover: rgba(255, 255, 255, 0.04);
+  --bn-ink: #eef0f4;
+  --bn-ink-2: #b9bfc9;
+  --bn-ink-3: #838b98;
+  --bn-ink-4: #707886;
+  --bn-line: rgba(255, 255, 255, 0.08);
+  --bn-line-strong: rgba(255, 255, 255, 0.16);
+  --bn-line-focus: rgba(129, 146, 255, 0.6);
+  --bn-accent: #7f90ff;
+  --bn-accent-hover: #93a2ff;
+  --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14);
+  --bn-accent-tint-2: rgba(127, 144, 255, 0.24);
+  --bn-on-accent: #0c0e12;
+  --bn-live: #ff6a58;
+  --bn-live-tint: rgba(255, 106, 88, 0.16);
+  --bn-ok: #3ddc84;
+  --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524;
+  --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-danger: #ff5c5c;
+  --bn-danger-tint: rgba(255, 92, 92, 0.14);
+  --bn-money: #eef0f4;
+  --bn-pill-ink-accent: var(--bn-accent-hover);
+  --bn-pill-ink-ok: var(--bn-ok);
+  --bn-pill-ink-warn: var(--bn-warn);
+  --bn-pill-ink-danger: #f6799c;
+  --bn-pill-ink-live: #ffab70;
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6),
+  0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75),
+  0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(127, 144, 255, 0.55);
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #262b34;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bn-bg: #0c0e12;
+    --bn-surface: #14171c;
+    --bn-surface-2: #090b0e;
+    --bn-surface-3: #1b1f26;
+    --bn-surface-glass: rgba(20, 23, 28, 0.72);
+    --bn-hover: rgba(255, 255, 255, 0.04);
+    --bn-ink: #eef0f4;
+    --bn-ink-2: #b9bfc9;
+    --bn-ink-3: #838b98;
+    --bn-ink-4: #707886;
+    --bn-line: rgba(255, 255, 255, 0.08);
+    --bn-line-strong: rgba(255, 255, 255, 0.16);
+    --bn-line-focus: rgba(129, 146, 255, 0.6);
+    --bn-accent: #7f90ff;
+    --bn-accent-hover: #93a2ff;
+    --bn-accent-press: #6b7dfa;
+    --bn-accent-tint: rgba(127, 144, 255, 0.14);
+    --bn-accent-tint-2: rgba(127, 144, 255, 0.24);
+    --bn-on-accent: #0c0e12;
+    --bn-live: #ff6a58;
+    --bn-live-tint: rgba(255, 106, 88, 0.16);
+    --bn-ok: #3ddc84;
+    --bn-ok-tint: rgba(61, 220, 132, 0.14);
+    --bn-warn: #f5a524;
+    --bn-warn-tint: rgba(245, 165, 36, 0.14);
+    --bn-danger: #ff5c5c;
+    --bn-danger-tint: rgba(255, 92, 92, 0.14);
+    --bn-money: #eef0f4;
+    --bn-pill-ink-accent: var(--bn-accent-hover);
+    --bn-pill-ink-ok: var(--bn-ok);
+    --bn-pill-ink-warn: var(--bn-warn);
+    --bn-pill-ink-danger: #f6799c;
+    --bn-pill-ink-live: #ffab70;
+    --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+    --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+    --bn-shadow-accent: 0 8px 28px -8px rgba(127, 144, 255, 0.55);
+    --bn-btn-bg: var(--bn-surface-3);
+    --bn-btn-bg-hover: #262b34;
+    --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+}
+
+
+/* ---- base ---------------------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bn-bg);
+  color: var(--bn-ink);
+  font-family: var(--bn-font-ui);
+  font-size: var(--bn-fs-base);
+  line-height: var(--bn-lh-base);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--bn-line-focus); outline-offset: 2px; border-radius: var(--bn-r-sm); }
+.bn-tnum, .num { font-variant-numeric: tabular-nums; }
+.bn-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ---- mockup chrome (not the product) --------------------------------------------------- */
+.mk-sample {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2);
+  padding: var(--bn-2) var(--bn-4);
+  background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn);
+  font-size: var(--bn-fs-md); font-weight: 600;
+  border-bottom: 1px solid var(--bn-line);
+}
+.mk-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2) var(--bn-4);
+  padding: var(--bn-2) var(--bn-4);
+  background: var(--bn-surface-2);
+  border-bottom: 1px dashed var(--bn-line-strong);
+  font-size: var(--bn-fs-sm);
+}
+.mk-bar-group { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1); }
+.mk-bar-label { color: var(--bn-ink-3); font-weight: 600; margin-inline-end: var(--bn-1); }
+.mk-chip {
+  height: 26px; padding: 0 var(--bn-2); border-radius: var(--bn-r-sm);
+  font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2);
+  background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow);
+}
+.mk-chip[aria-pressed='true'] { background: var(--bn-accent); color: var(--bn-on-accent); box-shadow: none; }
+.mk-choices { position: relative; }
+.mk-choices > summary { list-style: none; cursor: pointer; }
+.mk-choices > summary::-webkit-details-marker { display: none; }
+.mk-choices-panel {
+  position: absolute; z-index: 20; top: calc(100% + var(--bn-1)); right: 0;
+  width: min(420px, calc(100vw - 32px));
+  display: flex; flex-direction: column; gap: var(--bn-3);
+  padding: var(--bn-4); border-radius: var(--bn-r-lg);
+  background: var(--bn-surface); box-shadow: var(--bn-shadow-3);
+}
+.mk-choice { display: flex; flex-direction: column; gap: var(--bn-1); }
+.mk-choice-title { font-weight: 600; color: var(--bn-ink); }
+.mk-choice-opts { display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-3); color: var(--bn-ink-2); }
+.mk-choice-opts label { display: inline-flex; align-items: center; gap: var(--bn-1-5); }
+
+/* Today / New: the dashed marks that say what exists and what this proposal adds */
+.mk { position: relative; outline: 1.5px dashed var(--mk-c); outline-offset: 4px; border-radius: var(--bn-r); }
+.mk::before {
+  content: attr(data-mk);
+  position: absolute; z-index: 5; top: -13px; left: 8px;
+  padding: 0 var(--bn-1-5); border-radius: var(--bn-r-xs);
+  font-size: var(--bn-fs-2xs); font-weight: 700; line-height: 16px; white-space: nowrap;
+  color: var(--mk-c); background: var(--bn-bg);
+}
+.mk-today { --mk-c: var(--bn-ink-3); }
+.mk-new { --mk-c: var(--bn-accent); }
+html[data-labels='off'] .mk { outline: none; }
+html[data-labels='off'] .mk::before { display: none; }
+
+/* ---- shell ------------------------------------------------------------------------------ */
+.bn-shell { display: grid; grid-template-columns: var(--bn-sidebar-w) minmax(0, 1fr); min-height: 100vh; }
+.bn-sidebar {
+  position: sticky; top: 0; align-self: start; height: 100vh;
+  display: flex; flex-direction: column; gap: var(--bn-2);
+  padding: var(--bn-4) var(--bn-3);
+  background: var(--bn-surface-2);
+  border-right: 1px solid var(--bn-line);
+}
+.bn-brand { display: flex; align-items: center; gap: var(--bn-2); padding: var(--bn-1) var(--bn-3) var(--bn-2); }
+.bn-brand-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bn-live); flex: none; }
+.bn-brand-word { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-lg); letter-spacing: var(--bn-tracking-tight); }
+.bn-brand-kanji { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.bn-nav { display: flex; flex-direction: column; gap: var(--bn-3); padding-top: var(--bn-2); }
+.bn-nav-group { display: flex; flex-direction: column; gap: var(--bn-0-5); }
+.bn-nav-group-label { padding: var(--bn-1) var(--bn-3); font-size: var(--bn-fs-2xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--bn-ink-3); }
+.bn-nav-link {
+  display: flex; align-items: center; gap: var(--bn-3); height: 36px; padding: 0 var(--bn-3);
+  border-radius: var(--bn-r); color: var(--bn-ink-2); font-size: var(--bn-fs-md); font-weight: 500;
+  text-decoration: none; white-space: nowrap; width: 100%; text-align: left;
+}
+.bn-nav-link:hover { background: var(--bn-hover); color: var(--bn-ink); }
+.bn-nav-link svg { flex: none; color: var(--bn-ink-3); }
+.bn-nav-link[aria-current='page'] { color: var(--bn-accent); background: var(--bn-accent-tint); font-weight: 600; }
+.bn-nav-link[aria-current='page'] svg { color: var(--bn-accent); }
+.bn-nav-link[hidden] { display: none; }
+
+/* 640-1023: the desktop rail (D276, TABLET_RAIL) */
+@media (max-width: 1023px) {
+  .bn-shell { grid-template-columns: var(--bn-rail-w) minmax(0, 1fr); }
+  .bn-sidebar { padding: var(--bn-4) var(--bn-2); align-items: center; }
+  .bn-brand { padding: var(--bn-1) 0 var(--bn-2); }
+  .bn-brand-word, .bn-brand-kanji, .bn-nav-group-label, .bn-nav-text { display: none; }
+  .bn-nav-link { justify-content: center; padding: 0; width: 44px; }
+}
+
+.bn-main { min-width: 0; container-type: inline-size; container-name: page; }
+.bn-page { padding: var(--bn-page-top) var(--bn-7) var(--bn-10); max-width: var(--bn-page-w); }
+@media (max-width: 767px) { .bn-page { padding: var(--bn-4) var(--bn-4) var(--bn-10); } }
+
+/* ---- kit (inlined from kit.css, trimmed) ------------------------------------------------ */
+.bn-page-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--bn-5) var(--bn-6); margin-bottom: var(--bn-6); }
+.bn-head-text { display: flex; flex-direction: column; gap: var(--bn-1); min-width: 0; }
+.bn-head-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); margin-top: 19px; }
+.bn-eyebrow { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); font-weight: 500; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); }
+.bn-eyebrow > *:not(:last-child)::after { content: '·'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
+.bn-title { margin: 0; font-family: var(--bn-font-display); font-size: var(--bn-fs-h1); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+.bn-lede { margin: 0; font-size: var(--bn-fs-base); color: var(--bn-ink-3); max-width: 72ch; }
+.bn-verdict { margin: 0; max-width: 72ch; font-size: var(--bn-fs-lg); font-weight: 600; line-height: var(--bn-lh-base); color: var(--bn-ink); }
+.bn-panel { background: var(--bn-surface); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-1); }
+.bn-panel-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); padding: var(--bn-3) var(--bn-5); border-bottom: 1px solid var(--bn-line); }
+.bn-panel-title { margin: 0; font-size: var(--bn-fs-h3); font-weight: 700; font-family: var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.bn-panel-body { padding: var(--bn-4) var(--bn-5); }
+.bn-btn {
+  --btn-h: var(--bn-control-h);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-2);
+  height: var(--btn-h); padding: 0 var(--bn-4); border-radius: var(--bn-r);
+  font-size: var(--bn-fs-md); font-weight: 600; line-height: 1; white-space: nowrap;
+  color: var(--bn-ink); background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow);
+}
+.bn-btn:hover { background: var(--bn-btn-bg-hover); }
+.bn-btn:disabled, .bn-btn[aria-disabled='true'] { opacity: var(--bn-disabled); cursor: not-allowed; }
+.bn-btn-primary { color: var(--bn-on-accent); background: var(--bn-accent); box-shadow: none; }
+.bn-btn-primary:hover { background: var(--bn-accent-hover); }
+.bn-btn-ghost { background: transparent; box-shadow: none; color: var(--bn-ink-2); }
+.bn-btn-ghost:hover { background: var(--bn-accent-tint); color: var(--bn-ink); }
+.bn-btn-sm { --btn-h: var(--bn-control-h-sm); padding: 0 var(--bn-3); font-size: var(--bn-fs-sm); border-radius: var(--bn-r-sm); }
+.bn-pill { display: inline-flex; align-items: center; gap: var(--bn-1-5); height: var(--bn-pill-h); padding: 0 var(--bn-2); border-radius: var(--bn-r-full); font-size: var(--bn-fs-xs); font-weight: 600; line-height: 1; white-space: nowrap; color: var(--bn-ink-2); background: var(--bn-surface-2); }
+.bn-pill-accent { color: var(--bn-pill-ink-accent); background: var(--bn-accent-tint); }
+.bn-pill-ok { color: var(--bn-pill-ink-ok); background: var(--bn-ok-tint); }
+.bn-pill-warn { color: var(--bn-pill-ink-warn); background: var(--bn-warn-tint); }
+.bn-pill-outline { background: transparent; box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+.bn-seg { display: inline-flex; align-items: center; gap: var(--bn-0-5); padding: var(--bn-0-75); border-radius: var(--bn-r); background: var(--bn-surface-2); }
+.bn-seg-item { display: inline-flex; align-items: center; height: 28px; padding: 0 var(--bn-3); border-radius: var(--bn-r-sm); font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); white-space: nowrap; }
+.bn-seg-item:hover { color: var(--bn-ink); }
+.bn-seg-item[aria-current] { color: var(--bn-seg-active-ink); background: var(--bn-seg-active-bg); box-shadow: var(--bn-shadow-1); }
+.bn-kbd { white-space: nowrap; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 var(--bn-1); border-radius: var(--bn-r-xs); border: 1px solid var(--bn-line-strong); font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs); font-weight: 600; color: var(--bn-ink-3); }
+.bn-input { height: var(--bn-control-h); padding: 0 var(--bn-3); border-radius: var(--bn-r); border: 1px solid var(--bn-field-edge); background: var(--bn-surface); min-width: 0; }
+.bn-field { display: flex; flex-direction: column; gap: var(--bn-1); font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2); }
+.bn-field-hint { font-weight: 400; color: var(--bn-ink-3); }
+
+/* ---- this proposal ---------------------------------------------------------------------- */
+.lt-stack { display: flex; flex-direction: column; gap: var(--bn-4); }
+.lt-cover { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4) var(--bn-5); }
+.lt-cover-line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--bn-1) var(--bn-4); font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+.lt-cover-line strong { color: var(--bn-ink); }
+.lt-meter { position: relative; height: 8px; border-radius: var(--bn-r-full); background: repeating-linear-gradient(135deg, var(--bn-surface-2) 0 4px, var(--bn-line-strong) 4px 6px); overflow: hidden; }
+.lt-meter > span { position: absolute; inset: 0 auto 0 0; border-radius: var(--bn-r-full); background: var(--bn-ink-2); }
+.lt-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--bn-4); }
+.lt-fig { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
+.lt-fig-v { font-family: var(--bn-font-display); font-size: var(--bn-fs-2xl); font-weight: 800; letter-spacing: var(--bn-tracking-tight); line-height: var(--bn-lh-tight); }
+.lt-fig-k { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.lt-fig-unknown .lt-fig-v { color: var(--bn-ink-3); font-weight: 600; font-size: var(--bn-fs-lg); }
+
+.lt-body { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: var(--bn-5); align-items: start; }
+@container page (max-width: 899px) { .lt-body { grid-template-columns: minmax(0, 1fr); } }
+
+/* the purchase list */
+.lt-list { display: flex; flex-direction: column; padding: var(--bn-1); }
+.lt-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--bn-1) var(--bn-3);
+  padding: var(--bn-2) var(--bn-3); border-radius: var(--bn-r); text-align: left; width: 100%;
+}
+.lt-row:hover { background: var(--bn-hover); }
+.lt-row[aria-current='true'] { background: var(--bn-accent-tint); }
+.lt-row[aria-current='true'] .lt-row-name { color: var(--bn-accent-hover); }
+.lt-row + .lt-row { border-top: 1px solid var(--bn-line); }
+.lt-row[aria-current='true'] + .lt-row, .lt-row:has(+ .lt-row[aria-current='true']) { border-top-color: transparent; }
+.lt-row-name { font-weight: 600; font-size: var(--bn-fs-md); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-row-sub { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); grid-column: 1; }
+.lt-row-right { grid-row: 1 / 3; grid-column: 2; display: flex; flex-direction: column; align-items: flex-end; gap: var(--bn-1); }
+.lt-row-money { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); white-space: nowrap; }
+.lt-mini { grid-column: 1 / -1; height: 4px; border-radius: var(--bn-r-full); background: var(--bn-surface-2); position: relative; overflow: hidden; }
+.lt-mini > span { position: absolute; inset: 0 auto 0 0; background: var(--bn-ink-3); border-radius: var(--bn-r-full); }
+.lt-mini.is-even > span { background: var(--bn-ok); }
+html[data-hide~='bar'] .lt-mini { display: none; }
+
+/* the purchase page */
+.lt-detail { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
+.lt-dhead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--bn-2) var(--bn-4); }
+.lt-dtitle { margin: 0; font-family: var(--bn-font-display); font-size: var(--bn-fs-h2); font-weight: 800; letter-spacing: var(--bn-tracking-tight); line-height: var(--bn-lh-snug); }
+.lt-dsub { font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+.lt-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: var(--bn-4); }
+.lt-figs .lt-fig-v { font-size: var(--bn-fs-xl); }
+
+/* the recovery bar: the one figure this page is for */
+.lt-rec { display: flex; flex-direction: column; gap: var(--bn-2); padding-top: var(--bn-5); }
+.lt-rec-track { position: relative; height: 28px; border-radius: var(--bn-r); background: var(--bn-surface-2); }
+.lt-rec-fill { position: absolute; inset: 0 auto 0 0; border-radius: var(--bn-r) 0 0 var(--bn-r); background: var(--bn-ink-2); }
+.lt-rec-over { position: absolute; top: 0; bottom: 0; background: var(--bn-ok); border-radius: 0 var(--bn-r) var(--bn-r) 0; }
+.lt-rec-proj { position: absolute; top: 4px; bottom: 4px; border: 1.5px dashed var(--bn-ink-4); border-left: 0; border-radius: 0 var(--bn-r-sm) var(--bn-r-sm) 0; }
+.lt-rec-mark { position: absolute; top: -6px; bottom: -6px; width: 2px; margin-left: -1px; background: var(--bn-ink); }
+.lt-rec-mark-label { position: absolute; bottom: calc(100% + 2px); transform: translateX(-50%); font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-ink-2); white-space: nowrap; }
+.lt-rec-legend { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--bn-1) var(--bn-4); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.lt-proj { color: var(--bn-ink-3); }
+html[data-hide~='proj'] .lt-proj, html[data-hide~='proj'] .lt-rec-proj { display: none; }
+
+.lt-table { width: 100%; border-collapse: collapse; font-size: var(--bn-fs-md); }
+.lt-table th { text-align: left; font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-ink-3); padding: var(--bn-1-5) var(--bn-2); border-bottom: 1px solid var(--bn-line); }
+.lt-table td { padding: var(--bn-2); border-bottom: 1px solid var(--bn-line); vertical-align: top; }
+.lt-table tr:last-child td { border-bottom: 0; }
+.lt-table .r { text-align: right; white-space: nowrap; }
+.lt-table .muted { color: var(--bn-ink-3); }
+.lt-runs td:nth-child(1) { width: 9em; }
+.lt-runs td:nth-child(2) { width: 8em; text-align: left; }
+.lt-cardrow { cursor: pointer; }
+.lt-cardrow:hover td { background: var(--bn-hover); }
+.lt-prov { font-style: italic; color: var(--bn-ink-3); }
+.lt-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--bn-4); align-items: start; }
+.lt-kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--bn-1-5) var(--bn-4); margin: 0; font-size: var(--bn-fs-md); }
+.lt-kv dt { color: var(--bn-ink-3); }
+.lt-kv dd { margin: 0; color: var(--bn-ink); }
+.lt-note { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); max-width: 72ch; }
+.lt-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); }
+.lt-why { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+
+/* one card's cost line */
+.lt-card { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: var(--bn-5); }
+@container page (max-width: 599px) { .lt-card { grid-template-columns: minmax(0, 1fr); } }
+.lt-card-art { aspect-ratio: 63 / 88; border-radius: var(--bn-r); background: linear-gradient(160deg, var(--bn-accent-tint-2), var(--bn-surface-2)); box-shadow: var(--bn-shadow-1); display: grid; place-items: center; color: var(--bn-ink-3); font-size: var(--bn-fs-xs); text-align: center; padding: var(--bn-2); }
+.lt-costline { display: flex; flex-direction: column; gap: var(--bn-2); padding: var(--bn-4); border-radius: var(--bn-r); background: var(--bn-surface-2); }
+.lt-costline-main { font-size: var(--bn-fs-lg); font-weight: 600; color: var(--bn-ink); }
+.lt-costline-main b { font-family: var(--bn-font-display); font-size: var(--bn-fs-2xl); font-weight: 800; letter-spacing: var(--bn-tracking-tight); margin-inline-end: var(--bn-1); }
+.lt-costline-sub { font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+.lt-unknown { display: inline-flex; align-items: center; gap: var(--bn-1-5); }
+.lt-unknown::before { content: ''; width: 10px; height: 10px; border-radius: 2px; background: repeating-linear-gradient(135deg, var(--bn-surface-2) 0 2px, var(--bn-ink-4) 2px 3px); }
+
+/* capture setup: the rows (CaptureScreen.css `.capture-row`) */
+.cap-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); gap: var(--bn-5); align-items: start; }
+@container page (max-width: 899px) { .cap-wrap { grid-template-columns: minmax(0, 1fr); } }
+.cap-stage { aspect-ratio: 16 / 10; border-radius: var(--bn-r-lg); background: var(--bn-stage-bg); color: var(--bn-stage-ink); display: grid; place-items: center; font-size: var(--bn-fs-md); }
+.cap-stage span { opacity: 0.7; }
+.cap-setup { display: flex; flex-direction: column; gap: var(--bn-0-5); padding: var(--bn-3); }
+.capture-row { display: grid; grid-template-columns: minmax(22px, auto) auto minmax(0, 1fr) 14px; align-items: center; gap: var(--bn-2); width: 100%; min-height: 32px; padding: 0 var(--bn-1-5); border-radius: var(--bn-r); text-align: left; }
+.capture-row:hover { background: var(--bn-hover); }
+.capture-row:hover .bn-kbd, .capture-row[aria-expanded='true'] .bn-kbd { color: var(--bn-accent); border-color: var(--bn-accent); }
+.capture-lab { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); white-space: nowrap; }
+.capture-val { justify-self: end; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--bn-fs-md); font-weight: 500; }
+.capture-val.is-default { color: var(--bn-ink-3); font-weight: 400; }
+.capture-chev { color: var(--bn-ink-4); }
+.capture-opts { display: flex; flex-direction: column; gap: var(--bn-0-5); margin: var(--bn-1) 0 var(--bn-2) 30px; padding: var(--bn-1); border-radius: var(--bn-r); background: var(--bn-surface-2); }
+.capture-opt { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: var(--bn-2); min-height: 36px; padding: var(--bn-1) var(--bn-2); border-radius: var(--bn-r-sm); text-align: left; width: 100%; }
+.capture-opt:hover { background: var(--bn-hover); }
+.capture-opt[aria-checked='true'] { background: var(--bn-surface); box-shadow: var(--bn-shadow-1); }
+.capture-opt-name { font-size: var(--bn-fs-md); font-weight: 600; }
+.capture-opt-sub { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.capture-opt-tick { color: var(--bn-accent); font-weight: 700; }
+.cap-form { margin-top: var(--bn-4); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bn-3); padding: var(--bn-3) var(--bn-2) var(--bn-2); }
+.cap-form .full { grid-column: 1 / -1; }
+.cap-sticky { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); padding: var(--bn-1) var(--bn-1-5) 0; }
+.lt-tagform { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--bn-3); }
+</style>
+</head>
+<body>
+<div class="mk-sample" role="note">Sample. No figure, card, set, seller or box on this page is real. Nothing here ships.</div>
+<div class="mk-bar" aria-label="Mockup controls">
+  <div class="mk-bar-group" id="mk-states"><span class="mk-bar-label">State</span></div>
+  <div class="mk-bar-group"><span class="mk-bar-label">Theme</span>
+    <button class="mk-chip" data-theme-set="light">Light</button>
+    <button class="mk-chip" data-theme-set="dark">Dark</button>
+  </div>
+  <details class="mk-choices">
+    <summary class="mk-chip" style="display:inline-flex;align-items:center">Choices on This Page</summary>
+    <div class="mk-choices-panel">
+      <div class="mk-choice"><span class="mk-choice-title">1. The word for a bought batch</span>
+        <div class="mk-choice-opts"><label><input type="radio" name="word" value="purchase"> purchase (the repo's term)</label><label><input type="radio" name="word" value="lot"> lot (the idea's word)</label></div></div>
+      <div class="mk-choice"><span class="mk-choice-title">2. What Back counts</span>
+        <div class="mk-choice-opts"><label><input type="radio" name="back" value="gross"> gross sales (what the screen has today)</label><label><input type="radio" name="back" value="net"> after fees and postage (needs fees)</label></div></div>
+      <div class="mk-choice"><span class="mk-choice-title">3. After break-even</span>
+        <div class="mk-choice-opts"><label><input type="radio" name="be" value="gross"> "$86 more back than paid"</label><label><input type="radio" name="be" value="plan"> "+$86 since" (the plan's words)</label></div></div>
+      <div class="mk-choice"><span class="mk-choice-title">4. Where it lives</span>
+        <div class="mk-choice-opts"><label><input type="radio" name="home" value="lens"> a Purchases tab inside Sales</label><label><input type="radio" name="home" value="nav"> its own row in the nav</label></div></div>
+      <div class="mk-choice"><span class="mk-choice-title">Shown parts</span>
+        <div class="mk-choice-opts">
+          <label><input type="checkbox" data-hide="proj" checked> break-even projection</label>
+          <label><input type="checkbox" data-hide="bar" checked> bar on each list row</label>
+          <label><input type="checkbox" id="mk-labels" checked> Today and New marks</label>
+        </div></div>
+    </div>
+  </details>
+</div>
+
+<div class="bn-shell">
+  <aside class="bn-sidebar" aria-label="Main">
+    <div class="bn-brand"><span class="bn-brand-dot"></span><span class="bn-brand-word">banchi</span><span class="bn-brand-kanji">番地</span></div>
+    <nav class="bn-nav" id="nav"></nav>
+  </aside>
+  <main class="bn-main"><div class="bn-page" id="page"></div></main>
+</div>
+
+<script>
+(function () {
+'use strict';
+var root = document.documentElement;
+
+/* ---- sample data ------------------------------------------------------------------------ */
+var STOCK = 3600, KNOWN = 2950;
+var P = [
+  { id: 'marlow', name: 'Marlow Street collection', seller: 'a private seller', date: '11 Feb', paid: 260, back: 0, cards: 262, left: 262, shelf: 260, kind: 'split',
+    runs: [['12 Feb', 88, 'Long Box Fern, Sections 1 to 4'], ['14 Feb', 120, 'Long Box Fern, Sections 5 to 11'], ['19 Feb', 54, 'Long Box Fern, Sections 12 and 13']] },
+  { id: 'copperleaf', name: 'Copperleaf Games bulk box', seller: 'Copperleaf Games', date: '3 Feb', paid: 400, back: 0, cards: 212, expect: 300, unpriced: 41, left: 212, shelf: 400, kind: 'new',
+    runs: [['3 Feb', 212, 'Long Box Ember, Sections 1 to 6']] },
+  { id: 'tidewell', name: 'Tidewell estate binder', seller: 'Tidewell estate sale', date: '9 Dec', paid: 400, back: 230, cards: 248, sold: 77, soldCost: 230, left: 171, shelf: 170, proj: 'March', snap: '11 Dec', kind: 'partway',
+    runs: [['10 Dec', 248, 'Long Box Ember, Sections 7 to 14']] },
+  { id: 'kestrel', name: 'Kestrel swap meet lot', seller: 'Kestrel Swap Meet', date: '2 Dec', paid: 40, back: 126, cards: 120, sold: 38, soldCost: 18.70, left: 82, shelf: 21.30, even: '14 Jan', snap: '3 Dec', kind: 'even',
+    runs: [['3 Dec', 120, 'Long Box Fern, Sections 14 to 16']] },
+  { id: 'fernhill', name: 'Fernhill trade night', seller: 'Fernhill Games', date: '18 Nov', paid: 150, back: 97, cards: 150, left: 70, shelf: 62.60, snap: '20 Nov', kind: 'kept',
+    out: [['Sold', 64, 52.00], ['Kept', 6, 14.00], ['Traded', 9, 21.00], ['Lost', 1, 0.40], ['Left', 70, 62.60]],
+    runs: [['19 Nov', 150, 'Long Box Ember, Sections 15 to 18']] },
+  { id: 'quillmark', name: 'Quillmark auction lot', seller: 'Quillmark Auctions', date: '2 Oct', paid: 520, back: 311, cards: 1010, left: 913, shelf: 402, snap: '4 Oct', kind: 'spread',
+    runs: [['tagged by range', 1010, 'Long Box Ash, all sections']] },
+  { id: 'harborlight', name: 'Harborlight Cards bulk', seller: 'Harborlight Cards', date: '14 Aug', paid: 610, back: 702, cards: 1420, left: 1240, shelf: 388, even: '28 Oct', snap: '16 Aug', kind: 'even',
+    runs: [['tagged by range', 1420, 'Long Box Birch, Sections 1 to 13; Long Box Cedar']] }
+];
+var NONE = [['Long Box Oak, Sections 1 to 9', 412], ['Long Box Birch, Sections 14 to 22', 238]];
+var CARDS = {
+  kestrel: [
+    { name: 'Glimmerfin Drake', set: 'Tidal Reach', no: '041', fin: 'Holo', mv: 4.10, cost: 1.84, pct: 4.6, pos: 'Long Box Fern, Section 14, Card 17' },
+    { name: 'Moss-Crowned Stag', set: 'Tidal Reach', no: '112', fin: 'Reverse Holo', mv: 2.35, cost: 1.08, pct: 2.7, pos: 'Long Box Fern, Section 14, Card 31' },
+    { name: 'Emberwick Pup', set: 'Ashen Spires', no: '007', fin: 'Normal', mv: 0.42, cost: 0.23, pct: 0.6, pos: 'Long Box Fern, Section 15, Card 4' },
+    { name: 'Hollowbell Owl', set: 'Ashen Spires', no: '088', fin: 'Normal', mv: 0.08, cost: 0.08, pct: 0.2, pos: 'Long Box Fern, Section 16, Card 22' }
+  ],
+  tidewell: [
+    { name: 'Saltwind Leviathan', set: 'Tidal Reach', no: '150', fin: 'Holo', mv: 18.40, cost: 9.62, pct: 2.4, pos: 'Long Box Ember, Section 9, Card 2' },
+    { name: 'Cinderback Tortoise', set: 'Ashen Spires', no: '063', fin: 'Normal', mv: 1.10, cost: 0.62, pct: 0.2, pos: 'Long Box Ember, Section 11, Card 40' }
+  ],
+  marlow: [
+    { name: 'Lanternmoth', set: 'Gloamwood', no: '019', fin: 'Holo', mv: 6.80, cost: 3.10, pct: 1.2, pos: 'Long Box Fern, Section 2, Card 9', prov: true },
+    { name: 'Briarhide Boar', set: 'Gloamwood', no: '077', fin: 'Normal', mv: 0.30, cost: 0.17, pct: 0.1, pos: 'Long Box Fern, Section 6, Card 12', prov: true }
+  ],
+  none: [
+    { name: 'Silt Wyrm', set: 'Tidal Reach', no: '099', fin: 'Normal', mv: 0.55, pos: 'Long Box Oak, Section 3, Card 14' },
+    { name: 'Gloamwood Wisp', set: 'Gloamwood', no: '120', fin: 'Holo', mv: 3.20, pos: 'Long Box Birch, Section 18, Card 6' }
+  ]
+};
+
+var STATES = [
+  ['new', 'New Purchase'], ['partway', 'Partway Back'], ['broke-even', 'Broke Even'], ['no-lot', 'No Purchase'],
+  ['split', 'Split Across Runs'], ['kept-traded', 'Kept or Traded'], ['picker', 'At Capture'], ['picker-new', 'At Capture, New'], ['card', 'One Card']
+];
+var STATE_TO_ID = { 'new': 'copperleaf', partway: 'tidewell', 'broke-even': 'kestrel', split: 'marlow', 'kept-traded': 'fernhill', card: 'kestrel' };
+
+/* ---- url state -------------------------------------------------------------------------- */
+var S = { state: 'partway', t: '', word: 'purchase', back: 'gross', be: 'gross', home: 'lens', hide: [], labels: 'on', sel: '' };
+function readHash() {
+  var h = location.hash.replace(/^#/, '');
+  h.split('&').forEach(function (kv) {
+    if (!kv) return;
+    var i = kv.indexOf('='); var k = i < 0 ? kv : kv.slice(0, i); var v = i < 0 ? '' : decodeURIComponent(kv.slice(i + 1));
+    if (k === 'hide') S.hide = v ? v.split(',') : []; else if (k in S) S[k] = v;
+  });
+  if (!STATES.some(function (s) { return s[0] === S.state; })) S.state = 'partway';
+}
+function writeHash() {
+  var parts = ['state=' + S.state];
+  if (S.sel) parts.push('sel=' + S.sel);
+  if (S.t) parts.push('t=' + S.t);
+  if (S.word !== 'purchase') parts.push('word=' + S.word);
+  if (S.back !== 'gross') parts.push('back=' + S.back);
+  if (S.be !== 'gross') parts.push('be=' + S.be);
+  if (S.home !== 'lens') parts.push('home=' + S.home);
+  if (S.hide.length) parts.push('hide=' + S.hide.join(','));
+  if (S.labels === 'off') parts.push('labels=off');
+  history.replaceState(null, '', '#' + parts.join('&'));
+}
+
+/* ---- helpers ------------------------------------------------------------------------------ */
+function money(n, cents) {
+  var c = cents || (Math.round(n) !== n);
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: c ? 2 : 0, maximumFractionDigits: c ? 2 : 0 });
+}
+function count(n) { return n.toLocaleString('en-US'); }
+function W(cap, plural) { var w = S.word === 'lot' ? (plural ? 'lots' : 'lot') : (plural ? 'purchases' : 'purchase'); return cap ? w.charAt(0).toUpperCase() + w.slice(1) : w; }
+function back(p) { return S.back === 'net' ? Math.round(p.back * 0.85) : p.back; }
+function backWord() { return S.back === 'net' ? 'after fees and postage' : 'gross before fees'; }
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function byId(id) { for (var i = 0; i < P.length; i++) if (P[i].id === id) return P[i]; return null; }
+
+var ICON = {
+  home: '<path d="M3 8l5-4 5 4v5H3z"/>', camera: '<rect x="2" y="4.5" width="12" height="8.5" rx="1.5"/><circle cx="8" cy="8.7" r="2.3"/>',
+  inbox: '<path d="M2 9h3.5l1 2h3l1-2H14M3 3h10l1 6v4H2V9z"/>', tag: '<path d="M2 2h6l6 6-6 6-6-6z"/><circle cx="5.5" cy="5.5" r="1"/>',
+  cart: '<path d="M1.5 2h2l1.6 8h7.4l1.5-5.5H4.3"/><circle cx="6" cy="13" r="1"/><circle cx="12" cy="13" r="1"/>',
+  truck: '<path d="M1.5 4h8v7h-8zM9.5 6.5h3l2 2V11h-5"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/>',
+  dollar: '<path d="M8 1.5v13M11 4.5c0-1-1.3-1.8-3-1.8S5 3.5 5 4.8 6.3 6.6 8 7s3 1 3 2.4-1.3 2.4-3 2.4-3-.8-3-1.8"/>',
+  receipt: '<path d="M3.5 1.5h9v13l-1.5-1-1.5 1-1.5-1-1.5 1-1.5-1-1.5 1zM6 5h4M6 8h4"/>',
+  box: '<path d="M2 5l6-3 6 3v6l-6 3-6-3zM2 5l6 3 6-3M8 8v6"/>', qr: '<rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="5" height="5"/><path d="M9 9h2v2H9zM12 12h2v2h-2z"/>',
+  layers: '<path d="M8 2l6 3-6 3-6-3zM2 8l6 3 6-3M2 11l6 3 6-3"/>', chev: '<path d="M6 4l4 4-4 4"/>', grid: '<rect x="2.5" y="2.5" width="4" height="4"/><rect x="9.5" y="2.5" width="4" height="4"/><rect x="2.5" y="9.5" width="4" height="4"/><rect x="9.5" y="9.5" width="4" height="4"/>'
+};
+function icon(n, sz) { return '<svg width="' + (sz || 16) + '" height="' + (sz || 16) + '" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[n] + '</svg>'; }
+
+/* ---- nav ------------------------------------------------------------------------------------- */
+function renderNav() {
+  var atCapture = S.state === 'picker' || S.state === 'picker-new';
+  var cur = atCapture ? 'capture' : (S.home === 'nav' ? 'purchases' : 'revenue');
+  var groups = [
+    ['', [['home', 'Home', 'home']]],
+    ['Work', [['capture', 'Capture', 'camera'], ['review', 'Review', 'inbox'], ['pricing', 'Pricing', 'tag']]],
+    ['Sell', [['orders', 'Orders', 'cart'], ['shipping', 'Shipping', 'truck'], ['revenue', 'Sales', 'dollar'], ['purchases', W(true, true), 'receipt']]],
+    ['Library', [['inventory', 'Inventory', 'box'], ['codes', 'Codes', 'qr'], ['slabs', 'Slabs', 'layers']]]
+  ];
+  document.getElementById('nav').innerHTML = groups.map(function (g) {
+    return '<div class="bn-nav-group">' + (g[0] ? '<div class="bn-nav-group-label">' + g[0] + '</div>' : '') +
+      g[1].map(function (l) {
+        var hidden = l[0] === 'purchases' && S.home !== 'nav';
+        var mk = l[0] === 'purchases' ? ' mk mk-new" data-mk="New: nav row' : '';
+        var go = l[0] === 'capture' ? 'picker' : (l[0] === 'revenue' || l[0] === 'purchases') ? 'partway' : '';
+        return '<button class="bn-nav-link' + mk + '"' + (hidden ? ' hidden' : '') + (cur === l[0] ? ' aria-current="page"' : '') +
+          (go ? ' data-go="' + go + '"' : ' aria-disabled="true" title="Not drawn in this mockup"') + ' aria-label="' + l[1] + '">' + icon(l[2]) + '<span class="bn-nav-text">' + l[1] + '</span></button>';
+      }).join('') + '</div>';
+  }).join('');
+}
+
+/* ---- the Sales page with the Purchases tab --------------------------------------------- */
+function header() {
+  if (S.home === 'nav') {
+    return '<header class="bn-page-head"><div class="bn-head-text"><span class="bn-eyebrow">Sell</span><h1 class="bn-title">' + W(true, true) + '</h1>' +
+      '<p class="bn-lede">What you paid for stock, what has come back, and what is still on the shelf at cost.</p></div>' +
+      '<div class="bn-head-actions"><button class="bn-btn bn-btn-primary" data-go="picker-new">Add ' + W(true) + '</button></div></header>';
+  }
+  return '<header class="bn-page-head"><div class="bn-head-text"><span class="bn-eyebrow">Sell</span><h1 class="bn-title">Sales</h1>' +
+    '<p class="bn-lede">What you paid for stock, what has come back, and what is still on the shelf at cost. Never profit.</p></div>' +
+    '<div class="bn-head-actions"><nav class="bn-seg mk mk-new" data-mk="New: third tab. Sales, Mix are today" aria-label="Sales views"><button class="bn-seg-item" aria-disabled="true" title="Sales today: not redrawn here">Sales</button><button class="bn-seg-item" aria-disabled="true" title="Mix today: not redrawn here">Mix</button>' +
+    '<button class="bn-seg-item" aria-current="page">' + W(true, true) + '</button></nav>' +
+    '<button class="bn-btn bn-btn-primary" data-go="picker-new">Add ' + W(true) + '</button></div></header>';
+}
+
+function coverage() {
+  var paid = 0, bk = 0, shelf = 0, unspread = 0;
+  P.forEach(function (p) { paid += p.paid; bk += back(p); shelf += p.shelf; if (p.kind === 'new' || p.kind === 'split') unspread += p.shelf; });
+  var pct = Math.round(KNOWN / STOCK * 100);
+  return '<section class="bn-panel lt-cover mk mk-new" data-mk="New: coverage over every total" id="coverage" aria-label="Totals">' +
+    '<div class="lt-cover-line"><span>These totals cover <strong>' + count(KNOWN) + ' of ' + count(STOCK) + ' cards (' + pct + '%)</strong>.</span>' +
+    '<button class="bn-btn bn-btn-ghost bn-btn-sm" data-go="no-lot"><span class="lt-unknown">' + count(STOCK - KNOWN) + ' cards with cost unknown</span></button></div>' +
+    '<div class="lt-meter" role="img" aria-label="' + pct + '% of cards have a known cost"><span style="width:' + pct + '%"></span></div>' +
+    '<div class="lt-totals">' +
+      fig(money(paid), 'paid, with shipping and tax') +
+      fig(money(bk), 'back so far, ' + backWord()) +
+      fig(money(Math.round(shelf)), 'on the shelf at cost, ' + money(unspread) + ' of it not yet spread') +
+    '</div></section>';
+}
+function fig(v, k, cls) { return '<div class="lt-fig ' + (cls || '') + '"><span class="lt-fig-v num">' + v + '</span><span class="lt-fig-k">' + k + '</span></div>'; }
+
+function list(selId) {
+  var rows = P.map(function (p) {
+    var b = back(p), pctBack = Math.min(100, Math.round(b * 100 / p.paid));
+    var pill = p.kind === 'new' ? '<span class="bn-pill bn-pill-warn">Not Spread</span>'
+      : p.kind === 'split' ? '<span class="bn-pill bn-pill-accent">Provisional</span>'
+      : b >= p.paid ? '<span class="bn-pill bn-pill-ok">Broke Even</span>'
+      : '<span class="bn-pill bn-pill-outline">' + pctBack + '% Back</span>';
+    return '<button class="lt-row" data-sel="' + p.id + '"' + (p.id === selId ? ' aria-current="true"' : '') + '>' +
+      '<span class="lt-row-name" data-typed>' + esc(p.name) + '</span>' +
+      '<span class="lt-row-sub">' + p.date + ' · ' + count(p.cards) + ' cards</span>' +
+      '<span class="lt-row-right"><span class="lt-row-money num">' + money(b) + ' of ' + money(p.paid) + '</span>' + pill + '</span>' +
+      '<span class="lt-mini' + (b >= p.paid ? ' is-even' : '') + '"><span style="width:' + pctBack + '%"></span></span></button>';
+  }).join('');
+  rows += '<button class="lt-row lt-row-none" data-go="no-lot"' + (selId === 'none' ? ' aria-current="true"' : '') + '>' +
+    '<span class="lt-row-name">No ' + W() + '</span><span class="lt-row-sub">' + count(STOCK - KNOWN) + ' cards</span>' +
+    '<span class="lt-row-right"><span class="bn-pill"><span class="lt-unknown">Cost Unknown</span></span></span></button>';
+  return '<section class="bn-panel" aria-label="' + W(true, true) + '"><div class="bn-panel-head"><h2 class="bn-panel-title">' + W(true, true) + '</h2><span class="lt-why">Newest first</span></div><div class="lt-list">' + rows + '</div></section>';
+}
+
+/* the recovery bar: back against paid, with the break-even mark at paid */
+function recBar(p) {
+  var b = back(p), scale = Math.max(p.paid, b) * (b > p.paid ? 1.04 : 1.12);
+  var paidX = p.paid / scale * 100, backX = Math.min(b, p.paid) / scale * 100;
+  var over = b > p.paid ? '<span class="lt-rec-over" style="left:' + paidX + '%;width:' + ((b - p.paid) / scale * 100) + '%"></span>' : '';
+  var proj = (p.proj && b < p.paid) ? '<span class="lt-rec-proj mk-proj" style="left:' + backX + '%;width:' + (paidX - backX) + '%"></span>' : '';
+  return '<div class="lt-rec" id="recovery"><div class="lt-rec-track" role="img" aria-label="' + money(b) + ' back of ' + money(p.paid) + ' paid">' +
+    '<span class="lt-rec-fill" style="width:' + backX + '%"></span>' + over + proj +
+    '<span class="lt-rec-mark" style="left:' + paidX + '%"><span class="lt-rec-mark-label">Paid ' + money(p.paid) + '</span></span></div>' +
+    '<div class="lt-rec-legend"><span>' + money(b) + ' back, ' + backWord() + '</span>' +
+    (p.proj && b < p.paid ? '<span class="lt-proj mk mk-new" data-mk="New: projection, after v1">Break-even near ' + p.proj + ' at the last 60 days\' pace</span>' : '') + '</div></div>';
+}
+
+function verdict(p) {
+  var b = back(p);
+  if (p.kind === 'new') return money(p.paid) + ' paid · ' + p.cards + ' of ~' + p.expect + ' captured · ' + p.unpriced + ' unpriced · cost not yet spread.';
+  if (p.kind === 'split') return money(p.paid) + ' paid · ' + p.cards + ' cards over ' + p.runs.length + ' capture runs · the spread is provisional until you mark capture done.';
+  if (b >= p.paid) {
+    var more = money(b - p.paid);
+    return 'Broke even ' + p.even + ' · ' + (S.be === 'plan' ? '+' + more + ' since.' : more + ' more back than paid.');
+  }
+  return money(b) + ' of ' + money(p.paid) + ' back (' + Math.round(b * 100 / p.paid) + '%) · ' + p.left + ' left, ' + money(p.shelf) + ' cost on shelf' +
+    (p.proj ? '<span class="lt-proj"> · break-even ~' + p.proj + '</span>' : '') + '.';
+}
+
+function detail(p) {
+  var b = back(p);
+  var figs = '<div class="lt-figs">' + fig(money(p.paid), 'paid') +
+    (p.kind === 'new' || p.kind === 'split' ? fig('Not yet', 'back: listings go up after the spread', 'lt-fig-unknown') : fig(money(b), 'back')) +
+    fig(count(p.left), p.kind === 'new' ? 'captured of ~' + p.expect : 'cards left') +
+    (p.kind === 'new' ? fig('Waits', 'cost per card: ' + p.unpriced + ' still unpriced', 'lt-fig-unknown') : fig(money(p.shelf, true), p.kind === 'split' ? 'on shelf, provisional' : 'on shelf at cost')) +
+    (b >= p.paid ? fig(p.even, 'broke even') : '') + '</div>';
+
+  var out = '';
+  if (p.kind === 'kept') {
+    out = '<section class="bn-panel mk mk-new" data-mk="New: kept and traded, after v1" id="dispositions"><div class="bn-panel-head"><h3 class="bn-panel-title">Where the Cards Went</h3></div><div class="bn-panel-body"><table class="lt-table"><thead><tr><th></th><th class="r">Cards</th><th class="r">Cost</th></tr></thead><tbody>' +
+      p.out.map(function (o) { return '<tr><td>' + o[0] + '</td><td class="r num">' + o[1] + '</td><td class="r num">' + money(o[2], true) + '</td></tr>'; }).join('') +
+      '</tbody></table><p class="lt-note">Kept cards leave stock at cost. They are not a sale and not a loss. Traded cards wait on how you value a trade.</p></div></section>';
+  } else if (p.sold) {
+    out = '<section class="bn-panel"><div class="bn-panel-head"><h3 class="bn-panel-title">Where the Cards Went</h3></div><div class="bn-panel-body"><table class="lt-table"><thead><tr><th></th><th class="r">Cards</th><th class="r">Cost</th></tr></thead><tbody>' +
+      '<tr><td>Sold</td><td class="r num">' + p.sold + '</td><td class="r num">' + money(p.soldCost, true) + '</td></tr>' +
+      '<tr><td>Left</td><td class="r num">' + p.left + '</td><td class="r num">' + money(p.shelf, true) + '</td></tr></tbody></table>' +
+      (b >= p.paid ? '<p class="lt-note">The ' + p.left + ' cards left still carry ' + money(p.shelf, true) + ' of cost. Breaking even does not make them free.</p>' : '') + '</div></section>';
+  }
+
+  var spreadState = p.kind === 'new'
+    ? '<dd><span class="bn-pill bn-pill-warn">Not Spread</span></dd>'
+    : p.kind === 'split' ? '<dd><span class="bn-pill bn-pill-accent">Provisional</span></dd>' : '<dd>Version 1, market value taken ' + p.snap + '</dd>';
+  var doneBtn = p.kind === 'new'
+    ? '<div class="lt-actions"><button class="bn-btn bn-btn-sm" aria-disabled="true" title="' + p.unpriced + ' cards are still unpriced">Mark Capture Done</button><span class="lt-why">' + p.unpriced + ' cards are still unpriced. Price them in Review first.</span></div>'
+    : p.kind === 'split' ? '<div class="lt-actions"><button class="bn-btn bn-btn-primary bn-btn-sm" id="capture-done">Mark Capture Done</button><span class="lt-why">Spreads the cost once, over all ' + p.cards + ' cards, as version 1.</span></div>' : '';
+  var spread = '<section class="bn-panel mk mk-new" data-mk="New: the spread" id="spread"><div class="bn-panel-head"><h3 class="bn-panel-title">How the Cost Is Spread</h3></div><div class="bn-panel-body lt-stack">' +
+    '<dl class="lt-kv"><dt>Method</dt><dd>$0.05 floor on every card, the rest by market-value share</dd><dt>State</dt>' + spreadState + '</dl>' + doneBtn + '</div></section>';
+
+  var runs = '<section class="bn-panel' + (p.kind === 'split' ? ' mk mk-new" data-mk="New: runs of one ' + W() : '') + '" id="runs"><div class="bn-panel-head"><h3 class="bn-panel-title">Capture Runs</h3><span class="lt-why">' + p.runs.length + '</span></div><div class="bn-panel-body"><table class="lt-table lt-runs"><tbody>' +
+    p.runs.map(function (r) { return '<tr><td class="num">' + r[0] + '</td><td class="r num">' + count(r[1]) + ' cards</td><td class="muted" data-typed>' + r[2] + '</td></tr>'; }).join('') + '</tbody></table></div></section>';
+
+  var cards = CARDS[p.id] ? '<section class="bn-panel"><div class="bn-panel-head"><h3 class="bn-panel-title">Cards</h3><span class="lt-why">Highest cost first. Open one for its cost line.</span></div><div class="bn-panel-body"><table class="lt-table"><thead><tr><th>Card</th><th class="r">Market</th><th class="r">Cost</th></tr></thead><tbody>' +
+    CARDS[p.id].map(function (c, i) {
+      return '<tr class="lt-cardrow" tabindex="0" data-card="' + p.id + ':' + i + '"><td><span data-typed>' + c.name + '</span><br><span class="muted">' + c.set + ' #' + c.no + ' · ' + c.fin + '</span></td><td class="r num">' + money(c.mv, true) + '</td><td class="r num' + (c.prov ? ' lt-prov' : '') + '">' + money(c.cost, true) + (c.prov ? ' provisional' : '') + '</td></tr>';
+    }).join('') + '</tbody></table></div></section>' : '';
+
+  return '<section class="lt-detail" id="detail" aria-label="' + esc(p.name) + '">' +
+    '<div class="lt-dhead"><div class="bn-head-text"><h2 class="lt-dtitle" data-typed>' + esc(p.name) + '</h2><span class="lt-dsub">Bought ' + p.date + ' from <span data-typed>' + esc(p.seller) + '</span></span></div>' +
+    '<button class="bn-btn bn-btn-ghost bn-btn-sm" aria-disabled="true" title="Not drawn in this mockup">Edit ' + W(true) + '</button></div>' +
+    '<section class="bn-panel bn-panel-body lt-stack mk mk-new" data-mk="New: ' + W() + ' page" id="verdict"><p class="bn-verdict">' + verdict(p) + '</p>' + (p.kind === 'new' || p.kind === 'split' ? '' : recBar(p)) + figs + '</section>' +
+    '<div class="lt-two">' + (out || '') + spread + '</div>' + runs + cards + '</section>';
+}
+
+function noneDetail() {
+  return '<section class="lt-detail" id="detail" aria-label="No ' + W() + '">' +
+    '<div class="lt-dhead"><div class="bn-head-text"><h2 class="lt-dtitle">No ' + W(true) + '</h2><span class="lt-dsub">Stock that came from no recorded ' + W() + '</span></div></div>' +
+    '<section class="bn-panel bn-panel-body lt-stack mk mk-new" data-mk="New: cost unknown" id="verdict"><p class="bn-verdict"><span class="lt-unknown">' + count(STOCK - KNOWN) + ' cards read Cost Unknown.</span></p>' +
+    '<p class="lt-note">Their cost is unknown, not $0. They are left out of every total above, which is why each total says how many cards it covers. They still sell, and Sales still counts their gross.</p></section>' +
+    '<section class="bn-panel mk mk-new" data-mk="New: tag by box and section" id="tag"><div class="bn-panel-head"><h3 class="bn-panel-title">Tag Old Stock by Range</h3></div><div class="bn-panel-body lt-stack">' +
+    '<table class="lt-table"><tbody>' + NONE.map(function (n) { return '<tr><td data-typed>' + n[0] + '</td><td class="r num">' + n[1] + ' cards</td></tr>'; }).join('') + '</tbody></table>' +
+    '<div class="lt-tagform"><label class="bn-field">Box<select class="bn-input"><option>Long Box Oak</option><option>Long Box Birch</option></select></label>' +
+    '<label class="bn-field">From Section<input class="bn-input num" value="1" size="3"></label><label class="bn-field">To Section<input class="bn-input num" value="9" size="3"></label>' +
+    '<label class="bn-field">' + W(true) + '<select class="bn-input"><option>Pick a ' + W() + '</option><option>Add a ' + W() + ' from a receipt</option></select></label>' +
+    '<button class="bn-btn" aria-disabled="true" title="Pick a ' + W() + ' first">Tag 412 Cards</button></div>' +
+    '<p class="lt-note">A tag by range is one write with an Undo. If no receipt is left, these cards stay Cost Unknown, and that is a fine answer.</p></div></section>' +
+    '<section class="bn-panel"><div class="bn-panel-head"><h3 class="bn-panel-title">Cards</h3></div><div class="bn-panel-body"><table class="lt-table"><thead><tr><th>Card</th><th class="r">Market</th><th class="r">Cost</th></tr></thead><tbody>' +
+    CARDS.none.map(function (c) { return '<tr><td><span data-typed>' + c.name + '</span><br><span class="muted">' + c.set + ' #' + c.no + ' · ' + c.fin + '</span></td><td class="r num">' + money(c.mv, true) + '</td><td class="r"><span class="bn-pill"><span class="lt-unknown">Unknown</span></span></td></tr>'; }).join('') +
+    '</tbody></table></div></section></section>';
+}
+
+/* ---- one card's cost line ---------------------------------------------------------------- */
+function cardView(pid, idx) {
+  var p = byId(pid), c = CARDS[pid][idx];
+  var isMain = pid === 'kestrel' && idx === 0;
+  var main = isMain
+    ? '<b>$1.84</b> = 4.6% of $40 ' + W() + ', by market value, v1'
+    : '<b>' + money(c.cost, true) + '</b> = ' + c.pct + '% of ' + money(p.paid) + ' ' + W() + ', by market value, ' + (c.prov ? 'provisional' : 'v1');
+  var sub = isMain
+    ? 'The $0.05 floor plus 5.3% of the $34.00 left after floors. Your 120 cards were worth $77.90 on 3 Dec; this one was $4.10. That snapshot is never re-priced.'
+    : 'The $0.05 floor plus its share of market value when the ' + W() + ' was spread.';
+  return '<section class="bn-panel" id="card"><div class="bn-panel-head"><h2 class="bn-panel-title" data-typed>' + c.name + '</h2><button class="bn-btn bn-btn-ghost bn-btn-sm" data-sel="' + pid + '">Back to ' + esc(p.name) + '</button></div>' +
+    '<div class="bn-panel-body lt-card"><div class="lt-card-art">Card photo</div><div class="lt-stack">' +
+    '<dl class="lt-kv mk mk-today" data-mk="Today: card facts"><dt>Set</dt><dd data-typed>' + c.set + ' #' + c.no + ' · ' + c.fin + ' · Near Mint</dd><dt>Where</dt><dd data-typed>' + c.pos + '</dd><dt>Market Now</dt><dd class="num">' + money(isMain ? 4.62 : c.mv, true) + '</dd></dl>' +
+    '<div class="lt-costline mk mk-new" data-mk="New: cost line" id="costline"><span class="lt-costline-main num">' + main + '</span><span class="lt-costline-sub">' + sub + '</span>' +
+    '<span class="lt-costline-sub">A change of method writes version 2 for unsold cards only. Once this card sells, it keeps the version in force that day.</span></div>' +
+    '<div class="lt-costline"><span class="lt-costline-sub">A card with no ' + W() + ' reads like this instead:</span><span class="lt-costline-main"><span class="lt-unknown">Cost unknown</span></span><span class="lt-costline-sub">Left out of every total. Never shown as $0.</span></div>' +
+    '</div></div></section>';
+}
+
+/* ---- capture: the purchase row in Capture setup ------------------------------------------- */
+function capture(isNew) {
+  var cur = byId('copperleaf');
+  var opts = [['1', cur.name, money(cur.paid) + ' · ' + cur.cards + ' of ~' + cur.expect + ' captured', true],
+    ['2', byId('marlow').name, money(260) + ' · capture still open', false],
+    ['3', 'No ' + W(), 'Cards read cost unknown', false]];
+  var form = isNew ? '<form class="cap-form mk mk-new" data-mk="New: add a ' + W() + '" id="newform" onsubmit="return false">' +
+    '<label class="bn-field">Paid<input class="bn-input num" placeholder="$ with shipping and tax"></label>' +
+    '<label class="bn-field">Bought On<input class="bn-input" value="20 Feb"></label>' +
+    '<label class="bn-field full">Seller<input class="bn-input" placeholder="A shop, a person, an auction"></label>' +
+    '<label class="bn-field">Expected Cards<input class="bn-input num" placeholder="optional, like 300"></label>' +
+    '<div class="full lt-actions"><button class="bn-btn bn-btn-primary" aria-disabled="true" title="Type what you paid first">Add and Use for This Run</button><span class="lt-why">Type what you paid first.</span></div></form>' : '';
+  return '<header class="bn-page-head"><div class="bn-head-text"><span class="bn-eyebrow">Work</span><h1 class="bn-title">Capture</h1><p class="bn-lede">Photograph each card of a box as it feeds.</p></div></header>' +
+    '<div class="cap-wrap"><div class="cap-stage mk mk-today" data-mk="Today: the stage"><span>Camera stage, unchanged</span></div>' +
+    '<section class="bn-panel cap-setup" aria-label="Capture setup">' +
+      '<div class="mk mk-today" data-mk="Today: setup rows" style="display:flex;flex-direction:column;gap:var(--bn-0-5)">' +
+      row('B', 'Box', 'Long Box Ember') + row('[ ]', 'Section', '7') + row('H', 'Set Hint', 'Tidal Reach') + '</div>' +
+      '<div class="mk mk-new" data-mk="New: ' + W() + ' row" id="picker" style="margin-top:var(--bn-3)">' +
+        '<button class="capture-row" aria-expanded="true"><span class="bn-kbd">L</span><span class="capture-lab">' + W(true) + '</span><span class="capture-val num" data-typed>' + cur.name + ' · ' + money(cur.paid) + '</span><span class="capture-chev">' + icon('chev', 14) + '</span></button>' +
+        '<div class="capture-opts" role="radiogroup" aria-label="' + W(true) + ' for this run">' +
+          opts.map(function (o) { return '<button class="capture-opt" role="radio" aria-checked="' + o[3] + '"><span class="bn-kbd">' + o[0] + '</span><span><span class="capture-opt-name" data-typed>' + o[1] + '</span><br><span class="capture-opt-sub">' + o[2] + '</span></span>' + (o[3] ? '<span class="capture-opt-tick">✓</span>' : '<span></span>') + '</button>'; }).join('') +
+          '<button class="capture-opt" data-go="' + (isNew ? 'picker' : 'picker-new') + '" aria-expanded="' + isNew + '"><span class="bn-kbd">N</span><span class="capture-opt-name">New ' + W(true) + '</span><span></span></button>' +
+          form +
+        '</div>' +
+        '<p class="cap-sticky">Stays set for every card of this run. Press L to switch.</p>' +
+      '</div></section></div>';
+}
+function row(k, lab, val) { return '<button class="capture-row"><span class="bn-kbd">' + k + '</span><span class="capture-lab">' + lab + '</span><span class="capture-val" data-typed>' + val + '</span><span class="capture-chev">' + icon('chev', 14) + '</span></button>'; }
+
+/* ---- render ---------------------------------------------------------------------------------- */
+function render() {
+  root.setAttribute('data-labels', S.labels);
+  root.setAttribute('data-hide', S.hide.join(' '));
+  if (S.t === 'dark' || S.t === 'light') root.setAttribute('data-theme', S.t);
+  else root.setAttribute('data-theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  renderNav();
+  var page = document.getElementById('page'), html;
+  if (S.state === 'picker' || S.state === 'picker-new') html = capture(S.state === 'picker-new');
+  else {
+    var selId = S.state === 'no-lot' ? 'none' : (S.sel || STATE_TO_ID[S.state]);
+    var right;
+    if (S.state === 'card') { var parts = (S.sel && S.sel.indexOf(':') > 0 ? S.sel : 'kestrel:0').split(':'); selId = parts[0]; right = cardView(parts[0], +parts[1]); }
+    else right = selId === 'none' ? noneDetail() : detail(byId(selId));
+    html = header() + '<div class="lt-stack">' + coverage() + '<div class="lt-body">' + list(selId) + right + '</div></div>';
+  }
+  page.innerHTML = html;
+  document.querySelectorAll('#mk-states .mk-chip').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.state === S.state)); });
+  document.querySelectorAll('[data-theme-set]').forEach(function (b) { b.setAttribute('aria-pressed', String(root.getAttribute('data-theme') === b.dataset.themeSet)); });
+  ['word', 'back', 'be', 'home'].forEach(function (n) { document.querySelectorAll('input[name="' + n + '"]').forEach(function (i) { i.checked = i.value === S[n]; }); });
+  document.querySelectorAll('input[data-hide]').forEach(function (i) { i.checked = S.hide.indexOf(i.dataset.hide) < 0; });
+  document.getElementById('mk-labels').checked = S.labels !== 'off';
+  writeHash();
+}
+function go(state, sel) { S.state = state; S.sel = sel || ''; render(); window.scrollTo(0, 0); }
+
+/* ---- wiring ------------------------------------------------------------------------------------ */
+var bar = document.getElementById('mk-states');
+STATES.forEach(function (s) { var b = document.createElement('button'); b.className = 'mk-chip'; b.dataset.state = s[0]; b.textContent = s[1]; bar.appendChild(b); });
+document.addEventListener('click', function (e) {
+  var t = e.target.closest('[data-state],[data-go],[data-sel],[data-card],[data-theme-set],#capture-done');
+  if (!t || t.getAttribute('aria-disabled') === 'true') return;
+  if (t.dataset.state) return go(t.dataset.state);
+  if (t.dataset.themeSet) { S.t = t.dataset.themeSet; return render(); }
+  if (t.dataset.go) return go(t.dataset.go);
+  if (t.dataset.card) return go('card', t.dataset.card);
+  if (t.id === 'capture-done') { var m = byId('marlow'); m.kind = 'spread'; CARDS.marlow.forEach(function (c) { c.prov = false; }); m.snap = '20 Feb'; return render(); }
+  if (t.dataset.sel) {
+    var p = byId(t.dataset.sel), map = { 'new': 'new', partway: 'partway', even: 'broke-even', split: 'split', kept: 'kept-traded', spread: 'partway' };
+    var st = map[p.kind] || 'partway';
+    return go(st, STATE_TO_ID[st] === p.id ? '' : p.id);
+  }
+});
+document.addEventListener('keydown', function (e) {
+  var r = e.target.closest && e.target.closest('[data-card]');
+  if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); go('card', r.dataset.card); }
+});
+document.addEventListener('change', function (e) {
+  var i = e.target;
+  if (i.name && i.name in S) S[i.name] = i.value;
+  else if (i.dataset.hide) { S.hide = S.hide.filter(function (h) { return h !== i.dataset.hide; }); if (!i.checked) S.hide.push(i.dataset.hide); }
+  else if (i.id === 'mk-labels') S.labels = i.checked ? 'on' : 'off';
+  render();
+});
+window.addEventListener('hashchange', function () { readHash(); render(); });
+readHash(); render();
+})();
+</script>
+</body>
+</html>
