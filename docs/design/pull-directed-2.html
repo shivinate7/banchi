@@ -1,0 +1,1786 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cards to Pull, route first</title>
+<style>
+/* app/src/fonts.css */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url('../../app/src/fonts/jetbrains-mono-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url('../../app/src/fonts/jetbrains-mono-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src: url('../../app/src/fonts/jetbrains-mono-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src: url('../../app/src/fonts/jetbrains-mono-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src: url('../../app/src/fonts/jetbrains-mono-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src: url('../../app/src/fonts/jetbrains-mono-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 700;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 700;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 800;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 800;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter Fallback';
+  font-weight: 400 599;
+  src: local('Arial'), local('ArialMT'), local('Liberation Sans'), local('LiberationSans'), local('Arimo'), local('Helvetica');
+  size-adjust: 106.27%;
+  ascent-override: 91.16%;
+  descent-override: 22.70%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Inter Fallback';
+  font-weight: 600 900;
+  src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'), local('LiberationSans-Bold'), local('Arimo Bold'), local('Arimo-Bold'), local('Helvetica Bold');
+  size-adjust: 102.53%;
+  ascent-override: 94.48%;
+  descent-override: 23.52%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Manrope Fallback';
+  font-weight: 400 599;
+  src: local('Arial'), local('ArialMT'), local('Liberation Sans'), local('LiberationSans'), local('Arimo'), local('Helvetica');
+  size-adjust: 100.49%;
+  ascent-override: 106.08%;
+  descent-override: 29.85%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Manrope Fallback';
+  font-weight: 600 900;
+  src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'), local('LiberationSans-Bold'), local('Arimo Bold'), local('Arimo-Bold'), local('Helvetica Bold');
+  size-adjust: 99.57%;
+  ascent-override: 107.06%;
+  descent-override: 30.13%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'JetBrains Mono Fallback';
+  font-weight: 400 599;
+  src: local('Courier New'), local('CourierNewPSMT'), local('Liberation Mono'), local('LiberationMono'), local('Cousine'), local('Courier');
+  size-adjust: 99.98%;
+  ascent-override: 102.02%;
+  descent-override: 30.00%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'JetBrains Mono Fallback';
+  font-weight: 600 900;
+  src: local('Courier New Bold'), local('CourierNewPS-BoldMT'), local('Liberation Mono Bold'), local('LiberationMono-Bold'), local('Cousine Bold'), local('Cousine-Bold'), local('Courier Bold');
+  size-adjust: 99.98%;
+  ascent-override: 102.02%;
+  descent-override: 30.00%;
+  line-gap-override: 0%;
+}
+
+/* app/src/tokens.css */
+/* ============================================================================
+   BANCHI — design tokens
+   ----------------------------------------------------------------------------
+   番地 (banchi): a lot number — the address of a thing. Every card in the store has
+   one: box → section → card. The product is named after that idea, and the system
+   below is built around three registers that idea needs:
+
+     ink   — what you read
+     line  — what separates
+     brand — where to look (indigo for action, vermilion for what is live)
+
+   Two themes, one set of names. Light is the default; `[data-theme="dark"]` on <html>
+   switches every surface and ink together. Nothing in a component sheet may name a
+   colour — components paint from these tokens only.
+
+   LEGACY ALIASES are at the bottom, AND THEY ARE SPENT. The old sheet exported
+   --ink/--muted/--line/--s1…, and keeping the names live is what let every screen re-skin the
+   moment this file landed rather than being ported one by one. That migration is over:
+   measured 2026-09-07 across all 102 files under app/src, NOT ONE reads any of the twenty-four,
+   against 266 uses of var(--bn-ink) alone. This header claimed "40 stylesheets read them" until
+   that count was taken. They are kept rather than deleted — docs/DESIGN.md's call — and a new
+   rule may not read one.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* ---- neutrals ---------------------------------------------------------- */
+  --bn-bg: #f4f5f8;              /* the page */
+  --bn-surface: #ffffff;         /* raised: panels, rows, cards */
+  --bn-surface-2: #eceef2;       /* sunken: wells, code, inactive tracks */
+  --bn-surface-3: #f7f8fa;       /* an object that paints its own ground, lifted: see --bn-hover */
+  --bn-surface-glass: rgba(255, 255, 255, 0.72);
+
+  /* THE POINTER IS OVER THIS SURFACE (D110) — an alpha, so it rides the ground, exactly as the
+     three `--bn-line` tokens do and for the same reason. A hover painted as an OPAQUE
+     surface has to know what it is sitting on: `--bn-surface-3` was the hover everywhere,
+     and a sweep of every hover target on every screen found it landing on THREE grounds of
+     different lightness — the sidebar (`--bn-surface-2`), a panel (`--bn-surface`), and the
+     page — so one name produced three different steps: ΔL* 8.67, 4.00 and 7.70. The
+     sidebar's was more than double the product's own step and read as SELECTION rather
+     than hover, competing with the accent tint two rows below it. A dark-only override on
+     `.bn-nav-link` had been compensating for that ground by hand, and for that element
+     only, which is why the brand directly above it and the footer buttons directly below
+     it did not get the correction. An alpha composites against whatever is beneath it, so
+     the compensation is automatic and no element needs to know its ground. Measured over
+     those same three: 3.61 / 4.51 / 4.22, a spread of 0.90 ΔL* against 4.67.
+     ONLY FOR A SURFACE THAT RESTS TRANSPARENT. An element that paints its own ground —
+     a button, a chip, a card — lifts from its OWN colour and reads `--bn-btn-bg-hover`
+     or `--bn-surface-3`; an alpha there would replace the resting paint, not sit on it. */
+  --bn-hover: rgba(15, 18, 23, 0.03);
+
+  --bn-ink: #0f1217;             /* primary text, headings, money */
+  --bn-ink-2: #3b414b;           /* secondary text, values in a key/value row */
+  --bn-ink-3: #666c76;           /* metadata, captions, placeholders — 4.85:1 on --bn-bg,
+                                    4.55:1 on --bn-surface-2 (was #6b7280, 4.43:1 / 4.16:1,
+                                    failing this token's own documented job; measured 2026-09-20) */
+  --bn-ink-4: #7f8791;           /* NOT FOR TEXT (2026-09-23): icons, separators, rules, a field's edge.
+                                    3.33:1 on --bn-bg, 3.64:1 on --bn-surface, 3.13:1 on --bn-surface-2 —
+                                    the 3:1 a graphic needs, and a visible step below ink-3. A word is
+                                    ink-3 at the faintest (UX-047) */
+
+  --bn-line: rgba(15, 18, 23, 0.08);
+  --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-line-focus: rgba(61, 90, 241, 0.55);
+  /* THE EDGE OF A CONTROL YOU TYPE INTO OR TICK, at 3:1 on every ground (UX-094).
+     `--bn-line-strong` is 1.41:1 on a white field, which D50 set at 3.36:1 before the legacy
+     `--field` moved onto it. A name of its own, so every hairline that reads `--bn-line-strong`
+     keeps its weight. It is ink-4, because a field's edge is exactly ink-4's job: a graphic. */
+  --bn-field-edge: var(--bn-ink-4);
+
+  /* ---- brand ------------------------------------------------------------- */
+  --bn-accent: #3d5af1;          /* action. Buttons, links, selection, focus ring */
+  --bn-accent-hover: #2f4bd9;
+  --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10);
+  --bn-accent-tint-2: rgba(61, 90, 241, 0.18);
+  --bn-on-accent: #ffffff;
+
+  /* TWO COLOURS THAT ARE NOT PAINT, and they are tokens because the audit was right to ask.
+     `make docs-audit`'s `raw color` row says a hex literal in a stylesheet is a token nobody
+     wrote — and where the literal genuinely is not a colour the reader will see, the honest
+     answer is a named constant saying so rather than an exemption.
+       --bn-mask: the opaque end of a `mask-image` gradient. A mask carries ALPHA and no colour;
+         the paint underneath shows through unchanged, so this is black in both themes not by
+         choice but by definition, and theming it would be meaningless.
+       --bn-flash: the capture flash overlay, which stands in for a camera's own. It is white in
+         both themes for the same reason a shutter is: it reads as light rather than as a
+         surface, and a dark "flash" is not a flash. */
+  --bn-mask: #000000;
+  --bn-flash: #ffffff;
+
+  --bn-live: #d63d2b;            /* vermilion. The logo dot, a live camera, a capture — 4.6:1 as text */
+  --bn-live-tint: rgba(239, 75, 58, 0.12);
+
+  /* ---- semantic ---------------------------------------------------------- */
+  --bn-ok: #15803d;              /* 5.0:1 on white — the kit paints these as TEXT (pills, buttons) */
+  --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309;            /* 5.0:1 */
+  --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-danger: #b91c1c;          /* 6.5:1 */
+  --bn-danger-tint: rgba(220, 38, 38, 0.10);
+  --bn-money: #0f1217;
+
+  /* PILL INKS: a word in a tone, drawn on that tone's tint (UX-047). The tone inks above are
+     4.0-4.4:1 once the tint is under them, at 10-11px. These clear 4.5:1 on the tint over
+     --bn-bg, --bn-surface and --bn-surface-2. Dark keeps the tone ink itself, which already
+     clears 5:1 on its tint. */
+  --bn-pill-ink-accent: var(--bn-accent-hover);
+  --bn-pill-ink-ok: #11733a;
+  --bn-pill-ink-warn: #a14b09;
+  /* danger is crimson and live is vermilion, so the two pills read apart at a glance */
+  --bn-pill-ink-danger: #b3123e;
+  --bn-pill-ink-live: #a53f12;
+
+  /* ---- elevation --------------------------------------------------------- */
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18),
+    0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32),
+    0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-shadow-accent: 0 8px 24px -8px rgba(61, 90, 241, 0.55);
+
+  /* the default button's ground. A token rather than a rule so the dark theme can lift a
+     button off a panel that is the same colour as it, without a specificity fight */
+  --bn-btn-bg: var(--bn-surface);
+  --bn-btn-bg-hover: var(--bn-surface-3);
+  --bn-btn-shadow: var(--bn-shadow-1);
+
+  /* ---- type -------------------------------------------------------------- */
+  --bn-font-display: 'Manrope', 'Manrope Fallback', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', 'Inter Fallback', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* TYPE ROLES — aliases onto the scale below, never new sizes (UX-067, UX-115). A heading is
+     one of three steps; a sentence a person must read is at least 13px; a label (a caps word,
+     a pill, a keycap) is 10-11px and is never a sentence. */
+  --bn-fs-h1: var(--bn-fs-3xl);
+  --bn-fs-h2: var(--bn-fs-xl);
+  --bn-fs-h3: var(--bn-fs-lg);
+  --bn-fs-read: var(--bn-fs-md);
+  --bn-fs-label: var(--bn-fs-xs);
+
+  --bn-fs-2xs: 10px;
+  --bn-fs-xs: 11px;
+  --bn-fs-sm: 12px;
+  --bn-fs-md: 13px;
+  --bn-fs-base: 14px;
+  --bn-fs-lg: 16px;
+  --bn-fs-xl: 18px;
+  --bn-fs-2xl: 22px;
+  --bn-fs-3xl: 28px;
+  --bn-fs-4xl: 36px;
+  --bn-fs-5xl: 48px;
+
+  /* -015em and -02em were one intent written as two numbers: 36 raw uses of -0.02em sat
+     beside this token's own -0.015em (system review, 2026-09-20). Moved to -0.02em, the
+     value the larger group already carries, so a future sweep repoints fewer call sites to
+     reach one name than the other way round. */
+  --bn-tracking-caps: 0.06em;
+  --bn-tracking-tight: -0.02em;
+
+  /* Four line-heights, not the fifteen the shipped CSS was hand-typing beside a token'd
+     font-size (system review, 2026-09-20). Named by role, not by value, so a future re-tune
+     changes what "tight" means rather than a number nobody can place:
+       --bn-lh-tight    1, 1.05, 1.1, 1.15   — a hero figure or a headline set close
+       --bn-lh-snug     1.2, 1.25, 1.3       — UI labels, controls, table rows
+       --bn-lh-base     1.35, 1.4, 1.45      — body default
+       --bn-lh-relaxed  1.5, 1.55, 1.6       — long-form, wrapped sentences
+     One more value shipped, a bare `line-height: 22` with no unit — not traced to a file in
+     this pass (the review that found it could not place it either); confirm it is real
+     before mapping it to anything. Values only, no call sites moved here — that sweep is a
+     separate lane's, once these names exist to sweep onto. */
+  --bn-lh-tight: 1.1;
+  --bn-lh-snug: 1.25;
+  --bn-lh-base: 1.4;
+  --bn-lh-relaxed: 1.55;
+
+  /* ---- spacing ----------------------------------------------------------- */
+  --bn-1: 4px;
+  --bn-2: 8px;
+  --bn-3: 12px;
+  --bn-4: 16px;
+  --bn-5: 20px;
+  --bn-6: 24px;
+  --bn-7: 32px;
+  --bn-8: 40px;
+  --bn-9: 48px;
+  --bn-10: 64px;
+
+  /* Micro-spacing, below the 4px floor `--bn-1` sets (system review, 2026-09-20): 2px (68
+     uses) and 6px (77 uses) ship more often than several of the tokens above, re-invented
+     file by file because the scale had nowhere for them to live. Named as fractions of
+     `--bn-1` — a continuation of the same scale's own unit, not a second one — so
+     `--bn-0-5`/`--bn-0-75`/`--bn-1-5` read beside `--bn-1`..`--bn-10` rather than competing
+     with them. 3px (11 uses) is named alongside for the same reason, though less common. */
+  --bn-0-5: 2px;
+  --bn-0-75: 3px;
+  --bn-1-5: 6px;
+
+  /* ---- radius ------------------------------------------------------------ */
+  --bn-r-xs: 4px;
+  --bn-r-sm: 6px;
+  --bn-r: 8px;
+  --bn-r-lg: 12px;
+  --bn-r-xl: 16px;
+  /* One design decision made nine times independently (system review, 2026-09-20): 18px
+     splits the gap between `--bn-r-xl` (16) and `--bn-r-2xl` (22) at every one of its 9
+     call sites. Named rather than folded into either neighbour, since nine independent
+     agreements on the same value is itself the evidence it is a real step, not a rounding
+     error. */
+  --bn-r-2xl-sm: 18px;
+  --bn-r-2xl: 22px;
+  --bn-r-full: 999px;
+
+  /* ---- motion ------------------------------------------------------------ */
+  --bn-t-fast: 120ms;
+  --bn-t: 200ms;
+  --bn-t-slow: 280ms;
+  --bn-t-layout: 240ms;      /* a width or a column moving layout: the rail fold, a progress bar */
+  --bn-ease: cubic-bezier(0.2, 0, 0, 1);
+  --bn-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --bn-ease-in: cubic-bezier(0.4, 0, 1, 1);  /* leaving: it speeds up as it goes */
+  --bn-ease-spring: cubic-bezier(0.34, 1.4, 0.44, 1);
+  --bn-ease-loop: ease-in-out;   /* a loop that never ends: breathe, shimmer */
+  --bn-ease-linear: linear;      /* a pace the data sets: a drain, a spin, a scroll-driven fade */
+  --bn-rise: 6px;                /* the one enter distance */
+  /* one cadence for every list: row i waits min(i, cap) * stagger. `.bn-stagger` in kit.css
+     reads `--i` off each child so the arithmetic leaves the JSX */
+  --bn-stagger: 30ms;
+  --bn-stagger-cap: 12;
+  --bn-t-flash: 200ms;       /* the capture flash, one shot */
+  --bn-t-draw: 480ms;        /* a bar or a line drawing in */
+  --bn-t-pulse: 1.8s;        /* a live dot */
+  --bn-t-spin: 0.7s;         /* a busy ring */
+  --bn-t-shimmer: 1.4s;      /* a skeleton sweep, an indeterminate bar */
+  --bn-t-highlight: 700ms;   /* a cell that just changed, flashing once */
+  --bn-t-instant: 0.01ms;    /* the reduced-motion floor: long enough to fire the end events */
+  --bn-disabled: 0.45;       /* the one opacity a disabled pressable wears */
+
+
+  /* ---- stage: a dark ground in BOTH themes (viewfinder, photo heroes) ---------- */
+  --bn-stage-bg: #0c0e12;
+  --bn-stage-bg-2: #171b25;
+  --bn-stage-surface: #1b2029;
+  --bn-stage-ink: #eef0f4;
+  --bn-stage-accent: #7f90ff;
+  --bn-stage-accent-hover: #93a2ff;
+  --bn-stage-accent-press: #6b7dfa;
+  --bn-stage-on-accent: #0c0e12;
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+
+  /* ---- shell ------------------------------------------------------------- */
+  --bn-sidebar-w: 236px;
+  --bn-rail-w: 64px;
+  --bn-topbar-h: 52px;
+
+  /* HOW WIDE A SCREEN MAY EVER BE, and it is a CAP rather than a breakpoint on purpose.
+     `.bn-page` is border-box with a 32px inset, so `--bn-page-w` is 1536px of content and
+     nothing the shell can hand a screen exceeds it — at any monitor, at any browser zoom.
+     A cap is measured against the column the shell actually gave, so it is correct beside
+     the 236px sidebar, beside the 64px rail, and at 80% zoom, with no query to keep in
+     step. That is the whole argument for preferring one to a `@media` width above 1024.
+     `--bn-page-w-rows` is for a screen whose body is a LIST OF ROWS. Those rows are almost
+     all fixed tracks with one flexible identity cell, so every pixel the page gains lands
+     in that cell and nowhere else: at 1536 the pricing row's card name is 784px wide for a
+     string that is never past 44 characters, with the price it is deciding a screen away.
+     1280px of content is that row's fixed tracks plus ~44ch for the name.
+     A screen asks for one by setting `--bn-page-max` on its own root; the kit reads it with
+     `--bn-page-w` as the fallback. `--bn-page-max` is deliberately NOT declared here — it
+     is a screen's word, never the system's, which is why it is not in docs/DESIGN.md.
+     A CAP NARROWS THE PAGE, IT NEVER RECENTERS IT (`D197`). `.bn-page`'s
+     `margin` is `0`, not `0 auto` — a lower `--bn-page-max` gives up width on the RIGHT
+     only, so every screen's left edge sits against the shell's own inset and only the
+     width a screen asks for may differ. Centering a narrower cap inside the wider column
+     the shell handed every OTHER screen is what moved the left edge between routes by up
+     to 330px on the owner's own rig; `app/tests/page-edge.spec.ts` asserts the anchor. */
+  --bn-page-w: 1600px;
+  --bn-page-w-rows: 1344px;
+  /* ONE CAP FOR AN EMPTY OR LONE STATE (D309): `.bn-empty-frame` in kit.css reads it. */
+  --bn-empty-w: 960px;
+  /* ONE WIDTH AND ONE TOP GAP FOR EVERY PAGE BUILT ON `Page` (D272, amends D197).
+     A page drawn by `Page` carries `data-bn-page` and ignores `--bn-page-max`: the width is
+     `--bn-page-w` at every screen, fluid below it, and the title sits `--bn-page-top` below the
+     shell's own edge. `--bn-page-max` and `--bn-page-w-rows` stay for the screens that have not
+     moved onto `Page` yet, and go dead one screen at a time as they do. */
+  --bn-page-top: var(--bn-6);    /* 16px below 768: the phone's own page inset */
+
+  --bn-control-h: 34px;
+  --bn-control-h-lg: 40px;
+  --bn-control-h-sm: 28px;
+
+  /* A PILL'S OWN HEIGHT (D313). A line that may or may not hold a pill reserves it
+     (`min-block-size: var(--bn-pill-h)`), and `.bn-pill` reads the same token, so a pill
+     arriving never changes its line's height. `-sm` is the pill inside a button or a tab. */
+  --bn-pill-h: 22px;
+  --bn-pill-h-sm: 18px;
+
+  /* ---- what a palette may recolor beyond the neutrals -------------------------------
+     Each default reproduces today's rule, so light and dark paint exactly as before and only
+     a `data-palette` block below moves them. Nav slots 2-4 are the three labelled groups
+     (Workflow, Sell, Library) in `App.css`; Home keeps the primary accent. */
+  --bn-nav-label-2: var(--bn-ink-3);
+  --bn-nav-label-3: var(--bn-ink-3);
+  --bn-nav-label-4: var(--bn-ink-3);
+  --bn-nav-hover-2: var(--bn-ink);
+  --bn-nav-hover-3: var(--bn-ink);
+  --bn-nav-hover-4: var(--bn-ink);
+  --bn-nav-accent-2: var(--bn-accent);   /* the current page's ink and edge bar */
+  --bn-nav-accent-3: var(--bn-accent);
+  --bn-nav-accent-4: var(--bn-accent);
+  --bn-nav-tint-2: var(--bn-accent-tint);
+  --bn-nav-tint-3: var(--bn-accent-tint);
+  --bn-nav-tint-4: var(--bn-accent-tint);
+  --bn-seg-active-ink: var(--bn-ink);    /* the chosen tab of a segmented control */
+  --bn-seg-active-bg: var(--bn-surface);
+  --bn-seg-active-bg-2: var(--bn-surface);  /* the chosen tab when it is the second */
+  --bn-page-backdrop: none;              /* a gradient behind the page, fixed to the window */
+  --bn-row-stripe: transparent;          /* every second row of a table */
+
+  /* ======================================================================
+     LEGACY ALIASES — the names every existing stylesheet reads.
+     ====================================================================== */
+  --bg: var(--bn-bg);
+  --surface: var(--bn-surface);
+  --ink: var(--bn-ink);
+  --muted: var(--bn-ink-3);
+  --line: var(--bn-line);
+  --accent: var(--bn-accent);
+  --hover: var(--bn-surface-3);
+  --pressed: var(--bn-accent-press);
+  --on-accent: var(--bn-on-accent);
+  --field: var(--bn-line-strong);
+  --field-hover: var(--bn-ink-4);
+  --display: var(--bn-font-display);
+  --body: var(--bn-font-ui);
+  --util: var(--bn-font-mono);
+  --font-utility: var(--bn-font-mono);
+  --radius: var(--bn-r);
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+  --s8: 64px;
+  --r: var(--bn-r);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bn-bg: #0c0e12;
+  --bn-surface: #14171c;
+  --bn-surface-2: #090b0e;
+  --bn-surface-3: #1b1f26;
+  --bn-surface-glass: rgba(20, 23, 28, 0.72);
+  --bn-hover: rgba(255, 255, 255, 0.04);
+
+  --bn-ink: #eef0f4;
+  --bn-ink-2: #b9bfc9;
+  --bn-ink-3: #838b98;
+  --bn-ink-4: #707886;           /* not for text: 4.34:1 on the dark page, 3.71:1 on --bn-surface-3 */
+
+  --bn-line: rgba(255, 255, 255, 0.08);
+  --bn-line-strong: rgba(255, 255, 255, 0.16);
+  --bn-line-focus: rgba(129, 146, 255, 0.6);
+
+  --bn-accent: #7f90ff;
+  --bn-accent-hover: #93a2ff;
+  --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14);
+  --bn-accent-tint-2: rgba(127, 144, 255, 0.24);
+  --bn-on-accent: #0c0e12;
+
+  --bn-live: #ff6a58;
+  --bn-live-tint: rgba(255, 106, 88, 0.16);
+
+  --bn-ok: #3ddc84;
+  --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524;
+  --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-danger: #ff5c5c;
+  --bn-danger-tint: rgba(255, 92, 92, 0.14);
+  --bn-money: #eef0f4;
+
+  --bn-pill-ink-accent: var(--bn-accent-hover);  /* a pill on an accent-tinted row is two tints deep */
+  --bn-pill-ink-ok: var(--bn-ok);
+  --bn-pill-ink-warn: var(--bn-warn);
+  /* live is a light orange-vermilion and danger a deeper crimson-rose: apart in hue and in
+     lightness, each over 4.5:1 on its tint on every dark ground, INCLUDING a selected
+     (accent-tinted) row (kit-frame-2, 2026-09-24): a danger pill drawn on a selected row is a
+     second tint over a first one, and the review found it at 4.08:1 there against this token's
+     former #f7608a — lighter than the plain-row floor needed, so nobody had reason to raise it
+     until a row could tint under it. gallery.spec.ts now composites the row's own tint into the
+     ground it checks every pill against. */
+  --bn-pill-ink-danger: #f6799c;
+  --bn-pill-ink-live: #ffab70;
+
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(127, 144, 255, 0.55);
+
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #262b34;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* A thumb needs 40px. Every kit control reads these, so the floor is raised once — and it
+   follows the POINTER, not the width: an iPad in portrait is 820px wide and all thumb. */
+/* The gap above a page's title follows the page's own side inset: 16px on a phone. */
+@media (max-width: 767px) {
+  :root { --bn-page-top: var(--bn-4); }
+}
+
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  :root {
+    --bn-control-h-sm: 40px;
+    --bn-control-h: 42px;
+    --bn-control-h-lg: 46px;
+  }
+}
+
+/* Abyssal Bloom — A submersible viewport at crush depth: bioluminescent siphonophores, an anglerfish lure, and a bloom of jellyfish light in the black water. */
+:root[data-theme='dark'][data-palette='abyssal-bloom'] {
+  color-scheme: dark;
+
+  --bn-bg: #050d14;
+  --bn-surface: #0a1c2c;
+  --bn-surface-2: #040b12;
+  --bn-surface-3: #0f2740;
+  --bn-surface-glass: rgba(10, 28, 44, 0.72);
+  --bn-hover: rgba(234, 247, 255, 0.05);
+
+  --bn-ink: #eaf7ff;
+  --bn-ink-2: #bfe3ee;
+  --bn-ink-3: #8bb3c4;
+  --bn-ink-4: #6d95a8;
+
+  --bn-line: rgba(180, 230, 255, 0.10);
+  --bn-line-strong: rgba(180, 230, 255, 0.20);
+  --bn-line-focus: rgba(53, 228, 255, 0.6);
+
+  --bn-accent: #35e4ff;
+  --bn-accent-hover: #68ecff;
+  --bn-accent-press: #1fc2df;
+  --bn-accent-tint: rgba(53, 228, 255, 0.16);
+  --bn-accent-tint-2: rgba(53, 228, 255, 0.26);
+  --bn-on-accent: #031017;
+
+  --bn-live: #ff5a36;
+  --bn-live-tint: rgba(255, 90, 54, 0.18);
+
+  --bn-ok: #4dffb8;
+  --bn-ok-tint: rgba(77, 255, 184, 0.16);
+  --bn-warn: #ffb020;
+  --bn-warn-tint: rgba(255, 176, 32, 0.16);
+  --bn-danger: #ff2e6d;
+  --bn-danger-tint: rgba(255, 46, 109, 0.16);
+  --bn-money: #ffd76a;
+
+  --bn-pill-ink-accent: #68ecff;
+  --bn-pill-ink-ok: #4dffb8;
+  --bn-pill-ink-warn: #ffb020;
+  --bn-pill-ink-danger: #ff2e6d;
+  --bn-pill-ink-live: #ff5a36;
+
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(53, 228, 255, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(255, 90, 54, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(53, 228, 255, 0.65);
+
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #0f2740;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  /* the camera/photo stage keeps its own accent apart from the UI's, so the
+     capture screen clashes on purpose against the shell around it */
+  --bn-stage-accent: #59c7ff;
+  --bn-stage-accent-hover: rgba(89, 199, 255, 1);
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+  /* nav groups, segmented tabs, page ground and table stripe (were per-selector rules) */
+  --bn-nav-accent-2: #29ffb0;
+  --bn-nav-label-2: var(--bn-nav-accent-2);
+  --bn-nav-hover-2: var(--bn-nav-accent-2);
+  --bn-nav-tint-2: rgba(41, 255, 176, 0.14);
+  --bn-nav-accent-3: #ff6a2e;
+  --bn-nav-label-3: var(--bn-nav-accent-3);
+  --bn-nav-hover-3: var(--bn-nav-accent-3);
+  --bn-nav-tint-3: rgba(255, 106, 46, 0.14);
+  --bn-nav-accent-4: #ff2ec4;
+  --bn-nav-label-4: var(--bn-nav-accent-4);
+  --bn-nav-hover-4: var(--bn-nav-accent-4);
+  --bn-nav-tint-4: rgba(255, 46, 196, 0.14);
+  --bn-seg-active-ink: #031017;
+  --bn-seg-active-bg: #35e4ff;
+  --bn-seg-active-bg-2: #ff6a2e;
+  --bn-page-backdrop: radial-gradient(1200px 700px at 85% -10%, rgba(53,228,255,0.16), transparent 60%), radial-gradient(900px 600px at -10% 90%, rgba(255,46,196,0.14), transparent 55%), radial-gradient(700px 500px at 60% 60%, rgba(41,255,176,0.10), transparent 60%);
+  --bn-row-stripe: rgba(53, 228, 255, 0.045);
+}
+
+/* Carnival Midway — A traveling carnival after dark: big-top magenta stripes, ticket-booth gold, a funhouse mirror’s teal, cotton candy glowing under string lights. */
+:root[data-theme='dark'][data-palette='carnival-midway'] {
+  color-scheme: dark;
+
+  --bn-bg: #0f0817;
+  --bn-surface: #1c0f28;
+  --bn-surface-2: #0b0512;
+  --bn-surface-3: #291536;
+  --bn-surface-glass: rgba(28, 15, 40, 0.72);
+  --bn-hover: rgba(248, 241, 255, 0.05);
+
+  --bn-ink: #f8f1ff;
+  --bn-ink-2: #dcc8ee;
+  --bn-ink-3: #ad95c6;
+  --bn-ink-4: #8c76a8;
+
+  --bn-line: rgba(240, 210, 255, 0.10);
+  --bn-line-strong: rgba(240, 210, 255, 0.20);
+  --bn-line-focus: rgba(255, 204, 51, 0.6);
+
+  --bn-accent: #ffcc33;
+  --bn-accent-hover: #ffdb66;
+  --bn-accent-press: #e6b21c;
+  --bn-accent-tint: rgba(255, 204, 51, 0.16);
+  --bn-accent-tint-2: rgba(255, 204, 51, 0.26);
+  --bn-on-accent: #180f02;
+
+  --bn-live: #ff3b3b;
+  --bn-live-tint: rgba(255, 59, 59, 0.18);
+
+  --bn-ok: #4dff9e;
+  --bn-ok-tint: rgba(77, 255, 158, 0.16);
+  --bn-warn: #ffab2e;
+  --bn-warn-tint: rgba(255, 171, 46, 0.16);
+  --bn-danger: #ff1a63;
+  --bn-danger-tint: rgba(255, 26, 99, 0.16);
+  --bn-money: #ffe066;
+
+  --bn-pill-ink-accent: #ffdb66;
+  --bn-pill-ink-ok: #4dff9e;
+  --bn-pill-ink-warn: #ffab2e;
+  --bn-pill-ink-danger: #ff1a63;
+  --bn-pill-ink-live: #ff3b3b;
+
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(255, 204, 51, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(255, 59, 59, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(255, 204, 51, 0.65);
+
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #291536;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  /* the camera/photo stage keeps its own accent apart from the UI's, so the
+     capture screen clashes on purpose against the shell around it */
+  --bn-stage-accent: #4de8ff;
+  --bn-stage-accent-hover: rgba(77, 232, 255, 1);
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+  /* nav groups, segmented tabs, page ground and table stripe (were per-selector rules) */
+  --bn-nav-accent-2: #2de0d0;
+  --bn-nav-label-2: var(--bn-nav-accent-2);
+  --bn-nav-hover-2: var(--bn-nav-accent-2);
+  --bn-nav-tint-2: rgba(45, 224, 208, 0.14);
+  --bn-nav-accent-3: #ff2e7a;
+  --bn-nav-label-3: var(--bn-nav-accent-3);
+  --bn-nav-hover-3: var(--bn-nav-accent-3);
+  --bn-nav-tint-3: rgba(255, 46, 122, 0.14);
+  --bn-nav-accent-4: #c86bff;
+  --bn-nav-label-4: var(--bn-nav-accent-4);
+  --bn-nav-hover-4: var(--bn-nav-accent-4);
+  --bn-nav-tint-4: rgba(200, 107, 255, 0.14);
+  --bn-seg-active-ink: #180f02;
+  --bn-seg-active-bg: #ffcc33;
+  --bn-seg-active-bg-2: #ff2e7a;
+  --bn-page-backdrop: radial-gradient(1100px 650px at 10% -10%, rgba(255,204,51,0.14), transparent 55%), radial-gradient(1000px 700px at 100% 10%, rgba(255,46,122,0.16), transparent 55%), radial-gradient(800px 600px at 50% 100%, rgba(45,224,208,0.12), transparent 55%);
+  --bn-row-stripe: rgba(255, 46, 122, 0.05);
+}
+
+/* ===== base: the few element rules this page needs from app/src/base.css ===== */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font-family: var(--bn-font-ui); font-size: var(--bn-fs-base); color: var(--bn-ink); background: var(--bn-surface-2); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; }
+h1, h2, h3, p, ul, ol, figure { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+[data-typed] { font: inherit; }
+:focus-visible { outline: 3px solid var(--bn-accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: var(--bn-t-instant) !important; transition-duration: var(--bn-t-instant) !important; } }
+
+/* ===== mockup chrome: not part of the screen ===== */
+.mk-sample {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-3);
+  padding: var(--bn-2) var(--bn-4);
+  background: var(--bn-warn-tint); color: var(--bn-ink);
+  font-size: var(--bn-fs-sm); box-shadow: inset 0 -1px 0 var(--bn-line);
+}
+.mk-sample b { font-family: var(--bn-font-display); font-weight: 800; }
+.mk-bar {
+  position: relative; z-index: 200;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2) var(--bn-4);
+  padding: var(--bn-2) var(--bn-4);
+  background: var(--bn-surface); box-shadow: 0 1px 0 var(--bn-line);
+  font-size: var(--bn-fs-sm); color: var(--bn-ink-2);
+}
+.mk-bar strong { font-family: var(--bn-font-display); color: var(--bn-ink); }
+.mk-bar label { display: inline-flex; align-items: center; gap: var(--bn-1); }
+.mk-bar select { font: inherit; height: 28px; border-radius: var(--bn-r-sm); border: 1px solid var(--bn-field-edge); background: var(--bn-surface); color: var(--bn-ink); padding: 0 var(--bn-1); }
+.mk-kind { font-size: var(--bn-fs-xs); color: var(--bn-ink-2); }
+.mk-stage { padding: var(--bn-5) var(--bn-4) var(--bn-8); overflow-x: auto; }
+.mk-caption { max-width: 1440px; margin-bottom: var(--bn-3); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); line-height: var(--bn-lh-relaxed); }
+.mk-caption b { color: var(--bn-ink); }
+.mk-options { max-width: 1440px; margin-top: var(--bn-6); display: flex; flex-direction: column; gap: var(--bn-3); }
+.mk-options h2 { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; }
+.mk-options > p { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+.mk-group { display: flex; flex-direction: column; gap: var(--bn-2); }
+.mk-group h3 { font-size: var(--bn-fs-md); font-weight: 700; }
+.mk-opt {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--bn-1) var(--bn-3); align-items: center;
+  padding: var(--bn-3) var(--bn-4); border-radius: var(--bn-r-lg);
+  background: var(--bn-bg); box-shadow: inset 0 0 0 1px var(--bn-line-strong);
+  font-size: var(--bn-fs-sm);
+}
+.mk-opt[aria-current='true'] { box-shadow: inset 0 0 0 2px var(--bn-accent); }
+.mk-opt b { font-size: var(--bn-fs-md); }
+.mk-opt p { grid-column: 1; color: var(--bn-ink-2); line-height: var(--bn-lh-base); }
+.mk-opt-acts { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: var(--bn-2); }
+.mk-opt-acts button, .mk-options button { font-size: var(--bn-fs-xs); background: var(--bn-surface); border: 1px solid var(--bn-line-strong); border-radius: var(--bn-r-sm); padding: var(--bn-1) var(--bn-2); }
+.mk-opt[hidden] { display: none; }
+
+/* The frame is the window: 1440 x 900 or 820 x 1180. */
+.mk-frame {
+  position: relative; overflow: hidden;
+  width: 1440px; height: 900px;
+  background: var(--bn-bg); background-image: var(--bn-page-backdrop);
+  box-shadow: var(--bn-shadow-3); border-radius: var(--bn-r);
+}
+.mk-frame[data-w='820'] { width: 820px; height: 1180px; }
+
+/* Today: / New: labels. Dashed, so they never read as part of the screen. */
+.mk-ann { position: relative; outline: 2px dashed var(--mk-ann, var(--bn-ink-4)); outline-offset: 5px; }
+.mk-ann[data-ann^='New'] { --mk-ann: var(--bn-accent); }
+.mk-ann::after {
+  content: attr(data-ann); position: absolute; z-index: 30; top: -17px; left: 10px;
+  padding: 0 var(--bn-1-5); border-radius: var(--bn-r-xs);
+  font: 600 var(--bn-fs-2xs)/16px var(--bn-font-ui); letter-spacing: 0;
+  color: var(--mk-ann, var(--bn-ink-2)); background: var(--bn-surface);
+  border: 1px dashed var(--mk-ann, var(--bn-ink-4)); white-space: nowrap; pointer-events: none;
+}
+.mk-ann[data-ann^='Today'] { --mk-ann: var(--bn-ink-2); }
+.mk-anns-off .mk-ann { outline: 0; }
+.mk-anns-off .mk-ann::after { display: none; }
+
+/* ===== the screen: Cards to Pull ===== */
+.ff {
+  /* The one solid fill he ever sees, per theme: the accent step that clears 7:1 under on-accent. */
+  --ff-fill: var(--bn-accent-press);
+  --ff-gutter: var(--bn-8);
+  --ff-photo: 408px;
+  height: 100%; display: flex; flex-direction: column;
+  font-family: var(--bn-font-ui); font-size: 20px; line-height: var(--bn-lh-snug); color: var(--bn-ink);
+}
+:root[data-theme='dark'] .ff { --ff-fill: var(--bn-accent-hover); }
+.mk-frame[data-w='820'] .ff { --ff-gutter: var(--bn-6); }
+
+/* --- the bar: count, view, search --- */
+.ff-bar {
+  flex: none; position: relative; z-index: 20;
+  display: grid; grid-template-columns: auto auto auto minmax(0, 1fr); align-items: center; gap: var(--bn-4) var(--bn-7);
+  padding: var(--bn-4) var(--ff-gutter);
+  background: var(--bn-surface-glass); backdrop-filter: blur(12px);
+  box-shadow: 0 1px 0 var(--bn-line);
+}
+.mk-frame[data-w='820'] .ff-bar { grid-template-columns: auto minmax(0, 1fr); gap: var(--bn-3) var(--bn-5); }
+.mk-frame[data-w='820'] .ff-seg { grid-row: 2; }
+.mk-frame[data-w='820'] .ff-search { grid-row: 2; }
+.ff-title { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-3xl); letter-spacing: var(--bn-tracking-tight); white-space: nowrap; }
+.ff-count { display: flex; align-items: baseline; gap: var(--bn-2); white-space: nowrap; min-width: 9.5ch; }
+.ff-count b { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-4xl); font-variant-numeric: tabular-nums; line-height: 1; }
+.ff-count span { font-weight: 600; }
+.ff-seg { display: inline-flex; padding: var(--bn-1); gap: var(--bn-1); border-radius: var(--bn-r-xl); background: var(--bn-surface-2); }
+.ff-seg button {
+  min-height: 48px; padding: 0 var(--bn-5); border: 0; border-radius: var(--bn-r-lg);
+  background: transparent; color: var(--bn-ink-2); font-weight: 600;
+  display: inline-flex; align-items: center; gap: var(--bn-2);
+}
+.ff-seg button[aria-pressed='true'] { background: var(--bn-surface); color: var(--bn-ink); box-shadow: var(--bn-shadow-1); }
+.ff-search { position: relative; justify-self: end; width: min(100%, 460px); }
+.mk-frame[data-w='820'] .ff-search { justify-self: stretch; width: 100%; }
+.ff-search input {
+  width: 100%; height: 56px; padding: 0 var(--bn-4) 0 52px;
+  font: inherit; color: var(--bn-ink); background: var(--bn-surface);
+  border: 1px solid var(--bn-field-edge); border-radius: var(--bn-r-xl);
+}
+.ff-search input::placeholder { color: var(--bn-ink-2); }
+.ff-search input:focus { outline: 0; border-color: var(--bn-accent); box-shadow: 0 0 0 4px var(--bn-accent-tint-2); }
+.ff-search > .bn-icon { position: absolute; left: 18px; top: 16px; color: var(--bn-ink-2); }
+.ff-finds {
+  position: absolute; top: calc(100% + var(--bn-2)); left: 0; right: 0;
+  display: flex; flex-direction: column; gap: var(--bn-1); padding: var(--bn-2);
+  background: var(--bn-surface); border-radius: var(--bn-r-xl); box-shadow: var(--bn-shadow-3);
+}
+.ff-finds button { display: grid; gap: var(--bn-0-5); text-align: left; min-height: 56px; padding: var(--bn-2) var(--bn-3); border: 0; border-radius: var(--bn-r-lg); background: transparent; }
+.ff-finds button:hover { background: var(--bn-hover); }
+.ff-finds small { font-size: 20px; color: var(--bn-ink-2); }
+.ff-finds p { padding: var(--bn-2) var(--bn-3); color: var(--bn-ink-2); }
+
+/* --- the scroll area and its two columns --- */
+.ff-scroll { flex: 1; min-height: 0; overflow: auto; }
+.ff-main {
+  display: grid; grid-template-columns: 480px minmax(0, 1fr); align-items: start; gap: var(--bn-7);
+  padding: var(--bn-6) var(--ff-gutter) var(--bn-8);
+}
+.ff-main[data-map='strip'], .mk-frame[data-w='820'] .ff-main { grid-template-columns: minmax(0, 1fr); gap: var(--bn-5); }
+.ff-panel { background: var(--bn-surface); border-radius: var(--bn-r-2xl); box-shadow: var(--bn-shadow-1); padding: var(--bn-6); }
+.ff-h2 { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-2xl); letter-spacing: var(--bn-tracking-tight); }
+
+/* --- the route map: each box a line read back to front, each stop a station in walk order --- */
+.map { display: flex; flex-direction: column; gap: var(--bn-4); }
+.map-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--bn-4); }
+.map-ends { display: flex; gap: var(--bn-2); align-items: center; color: var(--bn-ink-2); }
+.map-rows { position: relative; display: flex; flex-direction: column; gap: var(--bn-4); padding-right: var(--bn-6); }
+.map-rows > svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+/* The box name sits above its own track, so the stations get the whole width and their captions never meet. */
+.map-row { position: relative; display: flex; flex-direction: column; gap: var(--bn-4); }
+.map-row[data-skip] { flex-direction: row; align-items: center; gap: var(--bn-4); min-height: 32px; }
+.map-box { font-family: var(--bn-font-display); font-weight: 700; white-space: nowrap; position: relative; z-index: 1; }
+.map-row[data-skip] .map-box, .map-row[data-skip] .map-skip { color: var(--bn-ink-2); font-weight: 600; }
+.map-track { position: relative; height: 76px; }
+.map-track::before { content: ''; position: absolute; left: 0; right: 0; top: 23px; height: 2px; border-radius: 2px; background: var(--bn-line-strong); }
+.map-ticks { position: absolute; left: 0; right: 0; top: 17px; height: 14px; display: flex; }
+.map-ticks i { flex: 1; border-left: 1px solid var(--bn-line-strong); }
+.map-ticks i:first-child { border-left: 0; }
+.map-skip { font-weight: 500; }
+.st-wrap { position: absolute; top: 0; left: clamp(56px, var(--x), calc(100% - 56px)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: var(--bn-1); z-index: 2; }
+.st-cap { color: var(--bn-ink-2); white-space: nowrap; }
+.st {
+  position: relative; width: 48px; height: 48px; border: 0; border-radius: var(--bn-r-full);
+  display: grid; place-items: center;
+  font-family: var(--bn-font-display); font-weight: 800; font-size: 20px; font-variant-numeric: tabular-nums;
+  background: var(--bn-surface); color: var(--bn-ink); box-shadow: inset 0 0 0 2px var(--bn-ink-2);
+  transition: box-shadow var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease), scale var(--bn-t-fast) var(--bn-ease);
+}
+.st:hover { box-shadow: inset 0 0 0 3px var(--bn-ink); }
+.st[data-state='done'] { background: var(--bn-ok); color: var(--bn-on-accent); box-shadow: none; }
+.st[data-state='now'] { background: var(--ff-fill); color: var(--bn-on-accent); box-shadow: 0 0 0 6px var(--bn-accent-tint-2); scale: 1.08; }
+.st[data-state='open'] { background: var(--bn-surface); color: var(--bn-ink); box-shadow: inset 0 0 0 3px var(--bn-ok); }
+.st[data-match] { box-shadow: 0 0 0 4px var(--bn-surface), 0 0 0 7px var(--bn-ink); }
+.st-wrap[data-current] .st-cap { color: var(--bn-ink); font-weight: 700; }
+.map-end { display: flex; padding-top: var(--bn-2); }
+.map-end-btn {
+  position: relative; z-index: 2; justify-self: start; display: inline-flex; align-items: center; gap: var(--bn-3);
+  min-height: 52px; padding: 0 var(--bn-5) 0 var(--bn-2); border: 0; border-radius: var(--bn-r-full);
+  background: var(--bn-surface-3); box-shadow: inset 0 0 0 2px var(--bn-ink-2); font-weight: 600;
+}
+.map-end-btn .ff-env-ic { width: 36px; height: 36px; border-radius: var(--bn-r-full); display: grid; place-items: center; background: var(--bn-surface); }
+.map-end-btn[data-ready] { box-shadow: inset 0 0 0 2px var(--bn-ok); }
+.map-rows > svg, .strip-line > svg { z-index: 0; }
+.route-walked { fill: none; stroke: var(--bn-ok); stroke-width: 4; stroke-linecap: round; }
+.route-ahead { fill: none; stroke: var(--bn-ink-4); stroke-width: 3; stroke-dasharray: 2 9; stroke-linecap: round; }
+
+/* --- the route strip: one line of stations, boxes as brackets over it --- */
+.strip { display: flex; flex-direction: column; gap: var(--bn-3); }
+.strip-head { display: flex; align-items: center; gap: var(--bn-4); }
+.strip-head .ff-h2 { margin-right: auto; }
+.strip-scroll { overflow-x: auto; padding: var(--bn-2) var(--bn-1) var(--bn-1); }
+.strip-line { position: relative; display: flex; align-items: flex-end; gap: var(--bn-4); width: max-content; }
+.strip-line > svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.strip-box { display: flex; flex-direction: column; gap: var(--bn-2); }
+.strip-box-name { font-family: var(--bn-font-display); font-weight: 700; padding-bottom: var(--bn-1); border-bottom: 2px solid var(--bn-line-strong); white-space: nowrap; }
+.strip-sts { display: flex; gap: var(--bn-3); position: relative; z-index: 2; }
+.strip-skip { align-self: flex-end; color: var(--bn-ink-2); padding-bottom: 10px; white-space: nowrap; position: relative; z-index: 2; background: var(--bn-surface); }
+.ff-btn-quiet {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-2);
+  min-height: 52px; padding: 0 var(--bn-5); border: 0; border-radius: var(--bn-r-xl);
+  background: var(--bn-surface-3); color: var(--bn-ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--bn-line-strong), var(--bn-shadow-1);
+  white-space: nowrap;
+}
+.ff-btn-quiet:hover { box-shadow: inset 0 0 0 2px var(--bn-ink-2), var(--bn-shadow-2); }
+
+/* --- the stop: where to reach, what to take, the photo check, the two-step pull --- */
+.stop { display: flex; flex-direction: column; gap: var(--bn-5); }
+.stop-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--bn-1) var(--bn-4); }
+.stop-place { font-family: var(--bn-font-display); font-weight: 800; font-size: 32px; letter-spacing: var(--bn-tracking-tight); font-variant-numeric: tabular-nums; }
+.stop-of { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stop-body { display: grid; grid-template-columns: var(--ff-photo) minmax(0, 1fr); gap: var(--bn-6); align-items: start; }
+.photo-col { display: flex; flex-direction: column; gap: var(--bn-3); }
+.photo {
+  width: var(--ff-photo); aspect-ratio: 63 / 88; padding: 0; border: 0; border-radius: var(--bn-r-xl); overflow: hidden;
+  background: var(--bn-stage-bg); box-shadow: var(--bn-shadow-2); cursor: zoom-in;
+}
+.photo svg { display: block; width: 100%; height: 100%; }
+.side { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
+.takes { display: flex; flex-direction: column; gap: var(--bn-2); }
+.take {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--bn-1) var(--bn-3);
+  width: 100%; min-height: 72px; padding: var(--bn-2) var(--bn-4); border: 0; border-radius: var(--bn-r-lg);
+  text-align: left; background: var(--bn-surface-3); box-shadow: inset 0 0 0 1px var(--bn-line);
+}
+.take:hover { box-shadow: inset 0 0 0 2px var(--bn-ink-4); }
+.take[aria-current='true'] { background: var(--bn-accent-tint); box-shadow: inset 4px 0 0 var(--ff-fill), inset 0 0 0 1px var(--bn-line-focus); }
+.take-name { font-weight: 700; overflow-wrap: anywhere; }
+.take-sub { grid-column: 1; color: var(--bn-ink-2); }
+.take-need { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; align-items: flex-end; gap: var(--bn-1-5); white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pips { display: flex; gap: var(--bn-1-5); }
+.pip { width: 14px; height: 14px; border-radius: var(--bn-r-full); box-shadow: inset 0 0 0 2px var(--bn-ink-2); }
+.pip[data-on] { background: var(--bn-ok); box-shadow: none; }
+.take[data-full] .take-need { color: var(--bn-ink-2); }
+.take-icon { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: var(--bn-r-full); }
+.take-icon[data-tone='ok'] { background: var(--bn-ok); color: var(--bn-on-accent); }
+.take-icon[data-tone='warn'] { background: var(--bn-warn-tint); color: var(--bn-ink); box-shadow: inset 0 0 0 2px var(--bn-warn); }
+.copies { display: flex; flex-direction: column; gap: var(--bn-2); }
+.copies p { color: var(--bn-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip-ic { display: inline-flex; }
+.chips { display: flex; flex-wrap: wrap; gap: var(--bn-3); }
+.chip {
+  min-height: 48px; padding: 0 var(--bn-4); border: 0; border-radius: var(--bn-r-full);
+  display: inline-flex; align-items: center; gap: var(--bn-2);
+  background: var(--bn-surface); box-shadow: inset 0 0 0 2px var(--bn-line-strong); font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.chip[aria-pressed='true'] { box-shadow: inset 0 0 0 3px var(--ff-fill); background: var(--bn-accent-tint); }
+.chip[data-sold] { background: var(--bn-surface-2); color: var(--bn-ink-2); box-shadow: none; text-decoration: line-through; text-decoration-thickness: 2px; }
+.chip[data-leave] { background: transparent; color: var(--bn-ink-2); box-shadow: inset 0 0 0 2px var(--bn-line); font-weight: 500; }
+/* A box kept for a part that is gone, so the press beside it never moves (D118). */
+[data-keep] { visibility: hidden; }
+.ff-btn-quiet[hidden][data-keep] { display: inline-flex; }
+.leave { color: var(--bn-ink-2); }
+.where { display: flex; flex-direction: column; gap: var(--bn-2); }
+.where-card { font-family: var(--bn-font-display); font-weight: 800; font-size: 32px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.ruler { position: relative; height: 14px; border-radius: var(--bn-r-full); background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+.ruler i { position: absolute; top: -6px; width: 8px; height: 26px; border-radius: var(--bn-r-full); background: var(--ff-fill); transform: translateX(-50%); box-shadow: 0 0 0 3px var(--bn-surface); }
+.ruler-ends { display: flex; justify-content: space-between; color: var(--bn-ink-2); }
+.between, .goes { color: var(--bn-ink-2); }
+/* One line always: a longer name on the next copy must move nothing below it. The full name is in the answer. */
+.goes { display: flex; align-items: center; gap: var(--bn-2); white-space: nowrap; }
+.goes span { overflow: hidden; text-overflow: ellipsis; }
+.goes .bn-icon { flex: none; }
+.goes b { color: var(--bn-ink); }
+
+/* The action block reserves all three steps from the start, so nothing reflows on a press and
+   each step lands BELOW the one before it (the double-tap guard). 64 + 24 + 64 + 24 + 64. */
+.act { display: grid; grid-template-rows: 64px 64px 64px; row-gap: var(--bn-6); }
+.ff-step {
+  display: flex; align-items: center; justify-content: center; gap: var(--bn-3);
+  width: 100%; min-height: 64px; border: 0; border-radius: var(--bn-r-xl);
+  background: var(--bn-ink); color: var(--bn-bg); box-shadow: var(--bn-shadow-2);
+  font-size: var(--bn-fs-2xl); font-weight: 700;
+  transition: translate var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+.ff-step:hover { translate: 0 -1px; box-shadow: var(--bn-shadow-3); }
+.ff-step:active { translate: 0 1px; }
+.pull-confirm {
+  display: flex; align-items: center; justify-content: center; gap: var(--bn-3);
+  width: 100%; min-height: 64px; padding: var(--bn-3) var(--bn-5); border: 0; border-radius: var(--bn-r-xl);
+  background: var(--ff-fill); color: var(--bn-on-accent); font-size: 22px; font-weight: 700;
+  box-shadow: var(--bn-shadow-2), var(--bn-shadow-accent);
+  transition: translate var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease), filter var(--bn-t-fast) var(--bn-ease);
+}
+.pull-confirm:hover { translate: 0 -1px; box-shadow: var(--bn-shadow-3), var(--bn-shadow-accent); }
+.pull-confirm:active { translate: 0 1px; scale: .985; filter: brightness(.92); }
+:root[data-theme='dark'] .pull-confirm:active { filter: brightness(1.08); }
+.act-said { display: flex; align-items: center; gap: var(--bn-3); font-weight: 600; line-height: var(--bn-lh-snug); }
+.act-said .take-icon { flex: none; }
+.ff-next {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3);
+  width: 100%; min-height: 64px; padding: 0 var(--bn-5); border: 0; border-radius: var(--bn-r-xl);
+  background: var(--bn-surface-3); box-shadow: inset 0 0 0 2px var(--bn-ink-2); font-weight: 700; text-align: left;
+}
+.ff-next span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ff-next:hover { box-shadow: inset 0 0 0 3px var(--bn-ink); }
+.ff-trouble { color: var(--bn-ink); }
+
+/* --- the dock: the newest sale's receipt, and every envelope this walk fills --- */
+.ff-dock {
+  flex: none; position: relative; z-index: 20;
+  display: flex; align-items: center; gap: var(--bn-4);
+  padding: var(--bn-3) var(--ff-gutter);
+  background: var(--bn-surface-glass); backdrop-filter: blur(12px); box-shadow: 0 -1px 0 var(--bn-line);
+}
+/* The receipt floats over the page, above the dock, so its arrival moves no envelope. */
+.receipt {
+  position: absolute; bottom: calc(100% + var(--bn-3)); left: var(--ff-gutter);
+  display: flex; align-items: center; gap: var(--bn-3);
+  min-height: 56px; padding: 0 var(--bn-1) 0 var(--bn-4); border-radius: var(--bn-r-xl);
+  background: var(--bn-surface); box-shadow: var(--bn-shadow-2);
+}
+.receipt[hidden] { display: none; }
+.receipt button { min-height: 48px; padding: 0 var(--bn-4); border: 0; border-radius: var(--bn-r-lg); background: var(--bn-accent-tint); color: var(--bn-ink); font-weight: 700; display: inline-flex; align-items: center; gap: var(--bn-2); }
+.envs-dock { display: flex; gap: var(--bn-3); overflow-x: auto; min-width: 0; padding: var(--bn-1); }
+.env {
+  flex: none; display: inline-flex; align-items: center; gap: var(--bn-2);
+  min-height: 56px; padding: 0 var(--bn-4) 0 var(--bn-2); border: 0; border-radius: var(--bn-r-xl);
+  background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-line-strong); white-space: nowrap;
+  transition: box-shadow var(--bn-t) var(--bn-ease), background-color var(--bn-t) var(--bn-ease);
+}
+.env b { font-weight: 700; }
+.env span { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+.env[data-lit] { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 3px var(--ff-fill); animation: env-in var(--bn-t-slow) var(--bn-ease-spring); }
+@keyframes env-in { from { scale: .96; } to { scale: 1; } }
+.ff-env-ic { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: var(--bn-r-full); background: var(--bn-surface-2); color: var(--bn-ink); flex: none; }
+.ff-env-ic[data-tone='ok'] { background: var(--bn-ok); color: var(--bn-on-accent); }
+.ff-env-ic[data-tone='warn'] { background: var(--bn-warn-tint); box-shadow: inset 0 0 0 2px var(--bn-warn); }
+
+/* --- envelopes: the same cards, grouped by the parcel they go in --- */
+.envp-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bn-5); }
+.envp { display: flex; flex-direction: column; gap: var(--bn-4); }
+.envp-head { display: flex; align-items: center; gap: var(--bn-3); }
+.envp-head div { display: flex; flex-direction: column; gap: var(--bn-0-5); }
+.envp-say { color: var(--bn-ink-2); }
+.envp ul { display: flex; flex-direction: column; gap: var(--bn-2); }
+.envp li { display: grid; grid-template-columns: 48px minmax(0, 1fr); align-items: center; gap: var(--bn-3); min-height: 56px; }
+.envp li div { display: flex; flex-direction: column; }
+.envp li small { font-size: 20px; color: var(--bn-ink-2); }
+.st-mini { width: 44px; height: 44px; font-size: 20px; }
+
+/* --- whole-screen states --- */
+.ff-lone { grid-column: 1 / -1; justify-self: center; width: min(100%, var(--bn-empty-w)); display: flex; flex-direction: column; align-items: flex-start; gap: var(--bn-5); padding: var(--bn-9) var(--bn-8); }
+.ff-lone p { font-size: var(--bn-fs-2xl); line-height: var(--bn-lh-base); max-width: 34ch; }
+.ff-lone .take-icon, .done .take-icon { width: 56px; height: 56px; }
+.done { display: flex; flex-direction: column; gap: var(--bn-5); }
+.done h2 { font-family: var(--bn-font-display); font-weight: 800; font-size: 32px; }
+.done p { line-height: var(--bn-lh-base); max-width: 36ch; }
+
+/* --- sheets: a dialog over a scrim, inside the frame --- */
+.sheet-scrim { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; padding: var(--bn-6); background: color-mix(in srgb, var(--bn-mask) 45%, transparent); animation: fade-in var(--bn-t) var(--bn-ease-out); }
+.sheet {
+  width: min(100%, 600px); max-height: 100%; overflow: auto;
+  display: flex; flex-direction: column; gap: var(--bn-5); padding: var(--bn-7);
+  background: var(--bn-surface); border-radius: var(--bn-r-2xl); box-shadow: var(--bn-shadow-3);
+  font-size: 20px; line-height: var(--bn-lh-base); animation: rise-in var(--bn-t-slow) var(--bn-ease-out);
+}
+.sheet-wide { width: min(100%, 680px); }
+.sheet h2 { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-2xl); line-height: var(--bn-lh-snug); }
+.sheet-acts { display: flex; flex-direction: column; gap: var(--bn-3); }
+.sheet .ff-step, .sheet .ff-btn-quiet { width: 100%; }
+.sheet-close { align-self: flex-end; }
+.zoom-scrim { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; gap: var(--bn-3); background: var(--bn-stage-bg); cursor: zoom-out; border: 0; padding: var(--bn-6); }
+.zoom-scrim svg { height: min(80%, 900px); width: auto; aspect-ratio: 63 / 88; border-radius: var(--bn-r-2xl); }
+.zoom-scrim span { color: var(--bn-stage-ink); }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes rise-in { from { opacity: 0; translate: 0 var(--bn-rise); } }
+</style>
+</head>
+<body>
+<div class="mk-sample" role="note"><b>Sample</b><span>No name, card, count, box or place on this page is real. Buyers and cards are made up.</span></div>
+<main class="mk-stage" id="mk-stage"></main>
+<script>
+/* Mockup chrome: the hash holds the state (s), theme (t), width (w), the shown options
+   (map, word, copies), hidden options (h) and the labels switch (a). Everything below the
+   chrome is the screen. */
+const ICONS = {
+  check: 'M5 12l5 5 9-10', x: 'M6 6l12 12 M18 6L6 18',
+  alert: 'M12 3l10 18H2z M12 10v5 M12 18h.01',
+  undo: 'M9 14L4 9l5-5 M4 9h10a6 6 0 0 1 0 12h-3',
+  search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M20 20l-4-4',
+  hand: 'M8 13V5.5a1.5 1.5 0 0 1 3 0V12 M11 11.5v-8a1.5 1.5 0 0 1 3 0V12 M14 5.5a1.5 1.5 0 0 1 3 0V12 M17 8.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-5-2.7L4.2 14a1.6 1.6 0 0 1 2.6-1.9L8 14',
+  env: 'M3 6h18v12H3z M3 7l9 6 9-6',
+  route: 'M6 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M18 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M8 17h8a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h8',
+  map: 'M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z M9 3v15 M15 6v15',
+  next: 'M5 12h14 M13 6l6 6-6 6', retry: 'M20 12a8 8 0 1 1-2.3-5.7 M20 4v5h-5',
+  later: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 7v5l3 2',
+}
+function icon(name, size = 20) {
+  return `<svg class="bn-icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICONS[name]}"/></svg>`
+}
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+
+/* ---------- sample data: the plan's own shape, made up ----------
+   stops = WalkPlanStop in walk order (box, then section). takes = WalkPlanTake: wanted, the
+   copies here (place.card), and `for` = the envelopes it fills, in the order a press records
+   against them. */
+const BOXES = [
+  { id: 'A1', sections: 12 }, { id: 'A2', sections: 11 }, { id: 'A3', sections: 14 },
+  { id: 'A4', sections: 9 }, { id: 'A5', sections: 12 }, { id: 'A6', sections: 8 },
+]
+const STOPS = [
+  { box: 'A1', section: 3, span: [31, 58], takes: [
+    { name: 'Glasswing Moth', num: '036/221', hue: 'accent', want: 1, here: [41], for: ['Mara Quill'], nb: { 41: ['Tin Lantern', 'Glasswing Moth'] } },
+    { name: 'Ashen Sentinel', num: '112/221', hue: 'warn', want: 1, here: [47], for: ['Theo Brandt'], nb: { 47: ['Pale Courier', 'Fen Lantern'] } } ] },
+  { box: 'A1', section: 9, span: [281, 318], takes: [
+    { name: 'Lantern Keeper', num: '154/221', hue: 'ok', want: 1, here: [301], for: ['Odile Ferris'], nb: { 301: ['Grey Ferryman', 'Lantern Keeper'] } } ] },
+  { box: 'A3', section: 2, span: [41, 76], takes: [
+    { name: 'Copper Drake', num: '088/221', hue: 'warn', want: 2, here: [58, 59, 66], for: ['Mara Quill', 'Theo Brandt'],
+      nb: { 58: ['Tin Lantern', 'Copper Drake'], 59: ['Copper Drake', 'Brass Hound'], 66: ['Brass Hound', 'Hollow Bell'] } },
+    { name: 'Hollow Bell', num: '019/221', hue: 'danger', want: 1, here: [71], for: ['Juno Sato'], nb: { 71: ['Brass Hound', 'Cinder Imp'] },
+      other: { stop: 7, card: 201 } } ] },
+  { box: 'A3', section: 7, span: [233, 270], takes: [
+    { name: 'Riverstone Oracle', num: '163/221', hue: 'accent', want: 1, here: [255], for: ['Odile Ferris'], nb: { 255: ['Marsh Heron', 'Wick Spirit'] } } ] },
+  { box: 'A3', section: 12, span: [452, 488], takes: [
+    { name: 'Moss Golem', num: '071/221', hue: 'ok', want: 1, here: [470], for: ['Theo Brandt'], nb: { 470: ['Bramble Fox', 'Quiet Comet'] } },
+    { name: 'Quiet Comet', num: '205/221', hue: 'accent', want: 1, here: [476], for: ['Mara Quill'], nb: { 476: ['Moss Golem', 'Starfall Monk'] } } ] },
+  { box: 'A4', section: 5, span: [134, 170], takes: [
+    { name: 'Starling Courier', num: '127/221', hue: 'warn', want: 1, here: [160], for: ['Juno Sato'], nb: { 160: ['Reed Archer', 'Starling Courier'] } } ] },
+  { box: 'A6', section: 1, span: [1, 27], takes: [
+    { name: 'Saltmarsh Witch', num: '099/221', hue: 'danger', want: 1, here: [9], for: ['Odile Ferris'], nb: { 9: ['the first card in the box', 'Tide Clerk'] } },
+    { name: 'Iron Orchard', num: '141/221', hue: 'ok', want: 1, here: [14], for: ['Theo Brandt'], nb: { 14: ['Tide Clerk', 'Rust Wyvern'] } } ] },
+  { box: 'A6', section: 6, span: [168, 205], takes: [
+    { name: 'Duskmere Gate', num: '187/221', hue: 'accent', want: 1, here: [190], for: ['Mara Quill'], nb: { 190: ['Lamp Moth', 'Owl Bishop'] } } ] },
+]
+/* WalkPlanShort: owed, with no copy in any box. */
+const NOT_IN_BOXES = [
+  { name: 'Ember Choir', num: '011/221', for: 'Juno Sato' },
+  { name: 'Vellum Wyrm', num: '214/221', for: 'Juno Sato' },
+]
+const BUYERS = ['Mara Quill', 'Theo Brandt', 'Odile Ferris', 'Juno Sato']
+
+/* ---------- screen state ---------- */
+let S
+const ck = (si, ti, card) => `${si}-${ti}-${card}`
+const tk = (si, ti) => `${si}-${ti}`
+function base() {
+  return { view: 'route', mode: 'walk', stop: 2, take: 0, copy: 0, phase: 'idle', sold: [], held: [], moved: [],
+    sheet: null, lit: null, query: '', zoom: false }
+}
+function soldAll(st, upTo) {
+  STOPS.forEach((stop, si) => { if (si < upTo) stop.takes.forEach((t, ti) => t.here.slice(0, t.want).forEach((c) => st.sold.push(ck(si, ti, c)))) })
+}
+const PRESETS = {
+  route: () => { const s = base(); soldAll(s, 2); return s },
+  pull: () => { const s = PRESETS.route(); s.phase = 'pulled'; return s },
+  sold: () => { const s = PRESETS.route(); s.sold.push(ck(2, 0, 58)); s.lastSale = { si: 2, ti: 0, card: 58 }; s.lit = 'Mara Quill'; return s },
+  short: () => { const s = PRESETS.route(); s.take = 1; s.sheet = 'missing'; return s },
+  unlocated: () => { const s = PRESETS.route(); s.sheet = 'env:Juno Sato'; return s },
+  envelopes: () => { const s = PRESETS.route(); s.view = 'envelopes'; return s },
+  done: () => { const s = base(); soldAll(s, STOPS.length); s.mode = 'done'; return s },
+  empty: () => ({ ...base(), mode: 'empty' }),
+  failed: () => { const s = PRESETS.route(); s.mode = 'failed'; return s },
+}
+const STATES = [
+  ['route', 'The list of cards to pull', 'Opened mid-walk: two stops done, stop 3 is next. The map is the list. Each station is one place to open, numbered in the order you walk. A box with nothing to pull is a faint line you pass.'],
+  ['pull', 'One pull, after the photo check', 'He held the card against the photo and pressed Pull. Pull became a sentence. Mark It Sold arrived below it, never in its place.'],
+  ['sold', 'Marked sold', 'The answer is where the press was: it names the envelope. That envelope lights in the dock. The receipt in the dock holds Undo. Copper Drake now reads 1 of 2, and Next names Card 59.'],
+  ['short', 'A card is not there', 'Hollow Bell is not at Card 71. The sheet shows the other copy, which is on the route already, at stop 8.'],
+  ['unlocated', 'Cards not in any box', 'No count of cards he cannot act on. Each such card is named in the envelope it belongs to, and that envelope reads Keep Open.'],
+  ['envelopes', 'Grouped by envelope', 'The same cards, sorted by the envelope they go in. Each stop badge returns to the route at that stop.'],
+  ['done', 'The walk is done', 'Every station is green. The panel says which envelopes to seal and which to keep open.'],
+  ['empty', 'An empty day', 'No order is waiting. One sentence, and one press that opens the search.'],
+  ['failed', 'The cards did not load', 'The count keeps the last figure it showed. One sentence and Try Again.'],
+]
+
+/* ---------- derived facts ---------- */
+function takeOf(si, ti) {
+  const stop = STOPS[si]
+  return stop.takes[ti] || detours(si)[ti - stop.takes.length]
+}
+function takesAt(si) { return [...STOPS[si].takes, ...detours(si)] }
+/* A copy moved to a later stop by "Get It at Stop N" is drawn as one more take there. */
+function detours(si) {
+  const out = []
+  S.moved.forEach((key) => {
+    const [fs, ft] = key.split('-').map(Number)
+    const t = STOPS[fs].takes[ft]
+    if (t.other && t.other.stop === si) out.push({ ...t, here: [t.other.card], nb: { [t.other.card]: ['Owl Bishop', 'Fable Smith'] }, from: key })
+  })
+  return out
+}
+function soldIn(si, ti) { const t = takeOf(si, ti); return t.here.filter((c) => S.sold.includes(ck(si, ti, c))) }
+function takeState(si, ti) {
+  const t = takeOf(si, ti)
+  if (!t.from && S.moved.includes(tk(si, ti))) return 'moved'
+  if (!t.from && S.held.includes(tk(si, ti))) return 'held'
+  return soldIn(si, ti).length >= t.want ? 'full' : 'open'
+}
+function stopState(si) {
+  const states = takesAt(si).map((_, ti) => takeState(si, ti))
+  if (states.every((x) => x === 'full')) return 'done'
+  if (states.every((x) => x !== 'open')) return 'open-done'
+  return 'ahead'
+}
+function cardsLeft() {
+  let n = 0
+  STOPS.forEach((stop, si) => takesAt(si).forEach((t, ti) => { const st = takeState(si, ti); if (st === 'open') n += t.want - soldIn(si, ti).length }))
+  return n
+}
+function envelopes() {
+  return BUYERS.map((name) => {
+    const items = []
+    STOPS.forEach((stop, si) => takesAt(si).forEach((t, ti) => {
+      if (t.from) return
+      t.for.forEach((buyer, k) => {
+        if (buyer !== name) return
+        const st = takeState(si, ti)
+        const pulled = soldIn(si, ti).length > k
+        const where = st === 'moved' ? { si: t.other.stop, card: t.other.card } : { si, card: t.here[k] ?? t.here[0] }
+        if (st === 'moved') {
+          const dti = takesAt(t.other.stop).findIndex((d) => d.from === tk(si, ti))
+          items.push({ name: t.name, si: t.other.stop, card: t.other.card, state: soldIn(t.other.stop, dti).length > 0 ? 'in' : 'ahead' })
+        } else items.push({ name: t.name, si: where.si, card: where.card, state: pulled ? 'in' : st === 'held' ? 'held' : 'ahead' })
+      })
+    }))
+    NOT_IN_BOXES.filter((c) => c.for === name).forEach((c) => items.push({ name: c.name, state: 'nobox' }))
+    const inN = items.filter((i) => i.state === 'in').length
+    const hold = items.some((i) => i.state === 'nobox' || i.state === 'held')
+    return { name, items, inN, total: items.length, hold, ready: inN === items.length }
+  })
+}
+const placeOf = (si) => `Box ${STOPS[si].box}, Section ${STOPS[si].section}`
+/* The figure only: the icon beside it says ready (check) or keep open (alert), so no status word repeats. */
+function envSay(e) {
+  return `${e.inN} of ${e.total}`
+}
+/* Which envelope the NEXT press on this take records against: the take's `for` list in order. */
+function envFor(si, ti, card) {
+  const t = takeOf(si, ti)
+  const sold = soldIn(si, ti)
+  const i = sold.indexOf(card)
+  return t.for[i >= 0 ? i : sold.length] || t.for[t.for.length - 1]
+}
+function nextAfter(si, ti) {
+  const t = takeOf(si, ti)
+  if (takeState(si, ti) === 'open') {
+    const c = t.here.find((x) => !S.sold.includes(ck(si, ti, x)))
+    if (c !== undefined) return { si, ti, copy: t.here.indexOf(c), say: `Next: Card ${c}` }
+  }
+  for (let s = si; s < STOPS.length; s++) {
+    const takes = takesAt(s)
+    for (let x = s === si ? 0 : 0; x < takes.length; x++) {
+      if (s === si && x === ti) continue
+      if (takeState(s, x) !== 'open') continue
+      const c = takes[x].here.findIndex((card) => !S.sold.includes(ck(s, x, card)))
+      return { si: s, ti: x, copy: Math.max(0, c), say: s === si ? `Next: ${takes[x].name}` : `Next Stop: ${placeOf(s)}` }
+    }
+  }
+  return { done: true, say: 'Pack the Envelopes' }
+}
+
+/* ---------- the sample photograph: a drawn stand-in for the copy's own photo ---------- */
+function art(t, card) {
+  const hue = `var(--bn-stage-${t.hue})`
+  return `<svg viewBox="0 0 63 88" role="img" aria-label="Photo of ${esc(t.name)}, Card ${card}">
+    <rect width="63" height="88" fill="var(--bn-stage-bg)"/>
+    <rect x="3" y="3" width="57" height="82" rx="3.2" fill="var(--bn-stage-surface)" stroke="color-mix(in srgb, ${hue} 55%, var(--bn-stage-ink))" stroke-width="1.2"/>
+    <rect x="6" y="8" width="51" height="40" rx="1.5" fill="color-mix(in srgb, ${hue} 70%, var(--bn-stage-bg))"/>
+    <circle cx="31.5" cy="28" r="${10 + (card % 5)}" fill="color-mix(in srgb, ${hue} 35%, var(--bn-stage-ink))" opacity=".85"/>
+    <path d="M6 44 L${18 + (card % 9)} 30 L30 40 L42 26 L57 42 V48 H6 Z" fill="color-mix(in srgb, ${hue} 40%, var(--bn-stage-bg))"/>
+    <circle cx="10" cy="11" r="4" fill="var(--bn-stage-bg)" stroke="${hue}" stroke-width=".8"/>
+    <rect x="6" y="51" width="51" height="7" rx="1" fill="color-mix(in srgb, ${hue} 30%, var(--bn-stage-bg))"/>
+    <text x="8" y="56.3" font-family="Manrope, sans-serif" font-weight="800" font-size="4.2" fill="var(--bn-stage-ink)">${esc(t.name)}</text>
+    <rect x="8" y="62" width="47" height="1.4" rx=".7" fill="var(--bn-stage-ink)" opacity=".35"/>
+    <rect x="8" y="66" width="40" height="1.4" rx=".7" fill="var(--bn-stage-ink)" opacity=".35"/>
+    <rect x="8" y="70" width="44" height="1.4" rx=".7" fill="var(--bn-stage-ink)" opacity=".35"/>
+    <text x="8" y="81" font-family="JetBrains Mono, monospace" font-size="2.6" fill="var(--bn-stage-ink)" opacity=".7">${t.num}</text>
+  </svg>`
+}
+
+/* ---------- render ---------- */
+const ann = (on, label) => (on ? ` mk-ann" data-ann="${label}` : '')
+function station(si, size = '') {
+  const state = stopState(si)
+  const cur = S.mode === 'walk' && si === S.stop
+  const ds = cur ? 'now' : state === 'done' ? 'done' : state === 'open-done' ? 'open' : 'ahead'
+  const match = S.query && takesAt(si).some((t) => t.name.toLowerCase().includes(S.query.toLowerCase()))
+  const said = ds === 'done' ? 'done' : ds === 'now' ? 'you are here' : ds === 'open' ? 'done, one card left for later' : 'ahead'
+  return `<button type="button" class="st ${size}" data-go="${si}" data-state="${ds}" data-route-pt${match ? ' data-match' : ''}${cur ? ' aria-current="step"' : ''} aria-label="Stop ${si + 1}, ${placeOf(si)}, ${said}">${ds === 'done' ? icon('check', 24) : si + 1}</button>`
+}
+function shelfMap(a) {
+  const used = new Set(STOPS.map((s) => s.box))
+  const rows = BOXES.map((b) => {
+    if (!used.has(b.id)) return `<div class="map-row" data-skip><div class="map-box">Box <span data-typed>${b.id}</span></div><span class="map-skip">Nothing to pull</span></div>`
+    const sts = STOPS.map((s, si) => (s.box === b.id ? si : -1)).filter((x) => x >= 0)
+    return `<div class="map-row"><div class="map-box">Box <span data-typed>${b.id}</span></div><div class="map-track"><span class="map-ticks" aria-hidden="true">${'<i></i>'.repeat(b.sections)}</span>
+      ${sts.map((si) => `<div class="st-wrap" style="--x:${(((STOPS[si].section - 0.5) / b.sections) * 100).toFixed(1)}%"${S.mode === 'walk' && si === S.stop ? ' data-current' : ''}>${station(si)}<span class="st-cap">Section ${STOPS[si].section}</span></div>`).join('')}
+    </div></div>`
+  }).join('')
+  const envs = envelopes()
+  const ready = envs.every((e) => e.ready || e.hold) && cardsLeft() === 0
+  return `<section class="ff-panel map${ann(a, 'New: the route is the list')}" id="opt-shelf-map" aria-label="Your route">
+    <div class="map-head"><h2 class="ff-h2">Your Route</h2><p class="map-ends">Back${icon('next', 20)}Front</p></div>
+    <div class="map-rows" data-route><svg aria-hidden="true"></svg>${rows}</div>
+    <div class="map-end"><button type="button" class="map-end-btn" data-route-pt data-view="envelopes"${ready ? ' data-ready' : ''}><span class="ff-env-ic">${icon('env', 20)}</span>Then Pack ${envs.length} Envelopes</button></div>
+  </section>`
+}
+function strip(a) {
+  const used = new Set(STOPS.map((s) => s.box))
+  const parts = BOXES.map((b) => {
+    if (!used.has(b.id)) return `<span class="strip-skip">Skip <span data-typed>${b.id}</span></span>`
+    const sts = STOPS.map((s, si) => (s.box === b.id ? si : -1)).filter((x) => x >= 0)
+    return `<div class="strip-box"><span class="strip-box-name">Box <span data-typed>${b.id}</span></span><div class="strip-sts">${sts.map((si) => station(si)).join('')}</div></div>`
+  }).join('')
+  return `<section class="ff-panel strip${ann(a, 'New: the route as one line')}" id="opt-route-strip" aria-label="Your route">
+    <div class="strip-head"><h2 class="ff-h2">Your Route</h2><button type="button" class="ff-btn-quiet" data-sheet="map">${icon('map', 22)}Show the Whole Map</button></div>
+    <div class="strip-scroll"><div class="strip-line" data-route><svg aria-hidden="true"></svg>${parts}</div></div>
+  </section>`
+}
+function takeRow(si, ti) {
+  const t = takeOf(si, ti)
+  const st = takeState(si, ti)
+  const n = soldIn(si, ti).length
+  const cur = ti === S.take
+  let sub = t.here.length === 1 ? `Card ${t.here[0]}` : `Card ${t.here.slice(0, -1).join(', ')} or ${t.here[t.here.length - 1]}`
+  let need = `<span>Pull ${t.want}</span><span class="pips">${Array.from({ length: t.want }, (_, i) => `<i class="pip"${i < n ? ' data-on' : ''}></i>`).join('')}</span>`
+  if (st === 'full') need = `<span class="take-icon" data-tone="ok">${icon('check', 20)}</span>`
+  if (st === 'moved') { sub = `Get it at stop ${t.other.stop + 1}`; need = `<span class="take-icon" data-tone="warn">${icon('next', 18)}</span>` }
+  if (st === 'held') { sub = 'Left for now'; need = `<span class="take-icon" data-tone="warn">${icon('later', 18)}</span>` }
+  if (t.from) sub = `${sub}, moved here`
+  return `<button type="button" class="take" data-take="${ti}"${cur ? ' aria-current="true"' : ''}${st === 'full' ? ' data-full' : ''}>
+    <span class="take-name" data-typed>${esc(t.name)}</span><span class="take-sub">${sub}</span><span class="take-need">${need}</span></button>`
+}
+function actionBlock(si, ti, card, opt) {
+  const sold = S.sold.includes(ck(si, ti, card))
+  const env = envFor(si, ti, card)
+  const word = opt.word === 'envelope' ? `Into ${esc(env)}’s Envelope` : 'Mark It Sold'
+  if (sold) {
+    const nx = nextAfter(si, ti)
+    return `<div class="act${ann(opt.a, 'Today: two steps, each below the last')}" id="act">
+      <p class="act-said"><span class="take-icon" data-tone="ok">${icon('check', 20)}</span>Pulled.</p>
+      <p class="act-said"><span class="ff-env-ic" data-tone="ok">${icon('env', 20)}</span><span>Sold. Into <b data-typed>${esc(env)}</b>’s envelope.</span></p>
+      <button type="button" class="ff-next" id="ff-next" data-next>${'<span>' + esc(nx.say) + '</span>'}${icon('next', 24)}</button></div>`
+  }
+  if (S.phase === 'pulled') {
+    return `<div class="act${ann(opt.a, 'Today: two steps, each below the last')}" id="act">
+      <p class="act-said"><span class="take-icon" data-tone="ok">${icon('check', 20)}</span>Pulled.</p>
+      <button type="button" class="pull-confirm" id="ff-sell" data-sell>${word}</button><span></span></div>`
+  }
+  return `<div class="act${ann(opt.a, 'Today: two steps, each below the last')}" id="act">
+    <button type="button" class="ff-step" id="ff-pull" data-pull aria-label="Pull ${esc(takeOf(si, ti).name)}, Card ${card}">${icon('hand', 26)}Pull</button><span></span><span></span></div>`
+}
+function stopPanel(opt) {
+  const si = S.stop
+  const takes = takesAt(si)
+  const ti = Math.min(S.take, takes.length - 1)
+  const t = takes[ti]
+  const st = takeState(si, ti)
+  const card = t.here[Math.min(S.copy, t.here.length - 1)]
+  const n = soldIn(si, ti).length
+  const cardsHere = takes.reduce((sum, x) => sum + x.want, 0)
+  const [before, after] = t.nb[card] || ['', '']
+  const pct = ((card - STOPS[si].span[0] + 0.5) / (STOPS[si].span[1] - STOPS[si].span[0] + 1)) * 100
+  let copies = ''
+  if (t.here.length > 1) {
+    const unsold = t.here.filter((c) => !S.sold.includes(ck(si, ti, c)))
+    copies = `<div class="copies${ann(opt.a, 'New: how many, and which copies')}" id="copies">
+      <p>${st === 'full' ? `Done. Card ${unsold.join(' and Card ')} ${unsold.length === 1 ? 'stays' : 'stay'}.` : `Any ${t.want} of these ${t.here.length}.`}</p>
+      <div class="chips">${t.here.map((c, i) => {
+        const done = S.sold.includes(ck(si, ti, c))
+        if (st === 'full' && !done) return `<span class="chip" data-leave aria-label="Card ${c} stays in the box">Card ${c}</span>`
+        return `<button type="button" class="chip" data-copy="${i}" aria-pressed="${c === card}"${done ? ' data-sold' : ''}${done ? ` aria-label="Card ${c}, sold"` : ''}>Card ${c}</button>`
+      }).join('')}</div></div>`
+  }
+  const elsewhere = opt.copies === 'all' && t.other ? `<p class="between" id="opt-copies">Another copy: ${placeOf(t.other.stop)}, Card ${t.other.card}.</p>` : ''
+  let action
+  if (st === 'moved') action = `<div class="act" id="act"><p class="act-said"><span class="take-icon" data-tone="warn">${icon('next', 18)}</span>Get this card at stop ${t.other.stop + 1}.</p><span></span><button type="button" class="ff-next" data-go="${t.other.stop}"><span>Go to Stop ${t.other.stop + 1}</span>${icon('next', 24)}</button></div>`
+  else if (st === 'held') action = `<div class="act" id="act"><p class="act-said"><span class="take-icon" data-tone="warn">${icon('later', 18)}</span>Left for now. ${esc(t.for[0])}’s envelope stays open.</p><span></span><button type="button" class="ff-next" data-next><span>${esc(nextAfter(si, ti).say)}</span>${icon('next', 24)}</button></div>`
+  else action = actionBlock(si, ti, card, opt)
+  return `<section class="ff-panel stop" aria-label="Stop ${si + 1}">
+    <header class="stop-head"><h2 class="stop-place" id="stop-place">${placeOf(si)}, Card ${card}</h2><span class="stop-of">Stop ${si + 1} of ${STOPS.length}, ${cardsHere === 1 ? '1 card' : cardsHere + ' cards'} here</span></header>
+    <div class="stop-body">
+      <div class="photo-col">
+        <button type="button" class="photo${ann(opt.a, 'Today: the photo check')}" data-zoom aria-label="Enlarge the photo of ${esc(t.name)}, Card ${card}">${art(t, card)}</button>
+        ${opt.copies !== 'all' ? `<button type="button" class="ff-btn-quiet${ann(opt.a, 'New: a way on when a card is not there')}" data-sheet="missing" id="opt-copies"${st === 'open' && !S.sold.includes(ck(si, ti, card)) ? '' : ' data-keep hidden'}>Not There?</button>` : ''}
+        ${elsewhere}
+        <div class="where">
+          <div class="ruler" role="img" aria-label="Card ${card} in Section ${STOPS[si].section}, cards ${STOPS[si].span[0]} to ${STOPS[si].span[1]}"><i style="left:${pct.toFixed(1)}%"></i></div>
+          <div class="ruler-ends"><span>Back</span><span>Front</span></div>
+          <p class="between">Between ${esc(before)} and ${esc(after)}.</p>
+        </div>
+      </div>
+      <div class="side">
+        <div class="takes${ann(opt.a, 'New: what to take here')}">${takes.map((_, x) => takeRow(si, x)).join('')}</div>
+        ${copies}
+        <p class="goes"${st === 'moved' || st === 'held' ? ' data-keep' : ''}>${icon('env', 22)}<span>For <b data-typed>${esc(envFor(si, ti, card))}</b></span></p>
+        ${action}
+      </div>
+    </div>
+  </section>`
+}
+function envIcon(e, size = 20) {
+  return `<span class="ff-env-ic" data-tone="${e.ready ? 'ok' : e.hold ? 'warn' : ''}">${icon(e.ready ? 'check' : e.hold ? 'alert' : 'env', size)}</span>`
+}
+function dock(opt) {
+  const newest = S.lastSale
+  const r = newest ? `<div class="receipt${ann(opt.a, 'Today: Undo lives in the receipt')}" id="receipt"><span>Sold: <b data-typed>${esc(takeOf(newest.si, newest.ti).name)}</b>, Card ${newest.card}.</span><button type="button" data-undo>${icon('undo', 20)}Undo</button></div>` : ''
+  if (S.view === 'envelopes' && !r) return ''
+  return `<footer class="ff-dock">${r}${S.view === 'envelopes' ? '' : `<div class="envs-dock${ann(opt.a, 'New: one envelope per buyer')}" id="envs-dock" aria-label="Envelopes">${envelopes().map((e) => `<button type="button" class="env" data-sheet="env:${esc(e.name)}"${S.lit === e.name ? ' data-lit' : ''}>${envIcon(e)}<b data-typed>${esc(e.name)}</b><span>${envSay(e)}</span></button>`).join('')}</div>`}</footer>`
+}
+function envPanels() {
+  return `<div class="envp-grid" id="envp-grid">${envelopes().map((e) => `<section class="ff-panel envp" aria-label="${esc(e.name)}’s envelope">
+    <div class="envp-head">${envIcon(e, 24)}<div><h2 class="ff-h2" data-typed>${esc(e.name)}</h2><span class="envp-say">${e.ready ? 'Ready to seal.' : e.hold ? `Keep it open. ${e.inN} of ${e.total} cards are in.` : `${e.inN} of ${e.total} cards are in.`}</span></div></div>
+    <ul>${e.items.map((i) => `<li>${i.state === 'nobox' ? `<span class="take-icon st-mini" data-tone="warn">${icon('alert', 20)}</span>` : i.state === 'in' ? `<span class="take-icon st-mini" data-tone="ok">${icon('check', 20)}</span>` : `<button type="button" class="st st-mini" data-go="${i.si}" data-state="ahead" aria-label="Go to stop ${i.si + 1}">${i.si + 1}</button>`}
+      <div><span data-typed>${esc(i.name)}</span><small>${i.state === 'nobox' ? 'Not in any box' : i.state === 'held' ? 'Left for now' : `${placeOf(i.si)}, Card ${i.card}`}</small></div></li>`).join('')}</ul>
+  </section>`).join('')}</div>`
+}
+function sheet() {
+  if (!S.sheet) return ''
+  if (S.sheet === 'map') return `<div class="sheet-scrim" data-close><div class="sheet sheet-wide" role="dialog" aria-modal="true" aria-label="The whole map">${shelfMap(false)}<button type="button" class="ff-btn-quiet sheet-close" data-close>Close</button></div></div>`
+  if (S.sheet === 'missing') {
+    const t = takeOf(S.stop, S.take)
+    const card = t.here[Math.min(S.copy, t.here.length - 1)]
+    const other = t.other
+    return `<div class="sheet-scrim" data-close><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-t" id="sheet-missing">
+      <h2 id="sh-t">${esc(t.name)} Is Not at Card ${card}?</h2>
+      <p>Look two or three cards each way first. A card can slip.</p>
+      ${other ? `<p>Another copy is in ${placeOf(other.stop)}, Card ${other.card}. That is stop ${other.stop + 1}, on your route already.</p>` : '<p>There is no other copy in the boxes.</p>'}
+      <div class="sheet-acts">
+        ${other ? `<button type="button" class="ff-step" data-move>${icon('next', 24)}Get It at Stop ${other.stop + 1}</button>` : ''}
+        <button type="button" class="ff-btn-quiet" data-hold>Leave It for Now</button>
+        <button type="button" class="ff-btn-quiet" data-close>Close</button>
+      </div></div></div>`
+  }
+  if (S.sheet.startsWith('env:')) {
+    const e = envelopes().find((x) => x.name === S.sheet.slice(4))
+    const nobox = e.items.filter((i) => i.state === 'nobox')
+    return `<div class="sheet-scrim" data-close><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-e" id="sheet-env">
+      <div class="envp-head">${envIcon(e, 24)}<h2 id="sh-e"><span data-typed>${esc(e.name)}</span>’s Envelope</h2></div>
+      ${nobox.length ? `<p>${nobox.length === 1 ? 'One card is' : `${nobox.length} cards are`} not in any box. Keep this envelope open. The owner sees ${nobox.length === 1 ? 'it' : 'them'} on Orders.</p>` : `<p>${e.ready ? 'Every card is in. Seal it.' : `${e.inN} of ${e.total} cards are in.`}</p>`}
+      <ul class="envp">${e.items.map((i) => `<li>${i.state === 'nobox' ? `<span class="take-icon st-mini" data-tone="warn">${icon('alert', 20)}</span>` : i.state === 'in' ? `<span class="take-icon st-mini" data-tone="ok">${icon('check', 20)}</span>` : `<button type="button" class="st st-mini" data-go="${i.si}" data-state="ahead" aria-label="Go to stop ${i.si + 1}">${i.si + 1}</button>`}
+        <div><span data-typed>${esc(i.name)}</span><small>${i.state === 'nobox' ? 'Not in any box' : i.state === 'held' ? 'Left for now' : `${placeOf(i.si)}, Card ${i.card}`}</small></div></li>`).join('')}</ul>
+      <button type="button" class="ff-btn-quiet" data-close>Close</button></div></div>`
+  }
+  return ''
+}
+function screen(opt) {
+  const w = opt.w
+  const mapMode = w === '820' ? 'strip' : opt.map
+  const left = S.mode === 'empty' ? 0 : S.mode === 'failed' ? 10 : cardsLeft()
+  const bar = `<header class="ff-bar">
+    <h1 class="ff-title">Cards to Pull</h1>
+    <p class="ff-count${ann(opt.a, 'Today: the count, now in cards')}" aria-live="polite"><b>${left}</b><span>${left === 1 ? 'Card Left' : 'Cards Left'}</span></p>
+    ${S.mode === 'walk' || S.mode === 'done' ? `<div class="ff-seg${ann(opt.a, 'New: by route or by envelope')}" role="group" aria-label="Show the cards">
+      <button type="button" aria-pressed="${S.view === 'route'}" data-view="route">${icon('route', 22)}Route</button>
+      <button type="button" aria-pressed="${S.view === 'envelopes'}" data-view="envelopes">${icon('env', 22)}Envelopes</button></div>` : '<span></span>'}
+    <div class="ff-search">${icon('search', 24)}<input id="ff-q" type="search" placeholder="Card name or number" aria-label="Find a card" value="${esc(S.query)}" autocomplete="off">${finds()}</div>
+  </header>`
+  let main
+  if (S.mode === 'empty') {
+    main = `<div class="ff-main"><div class="ff-panel ff-lone" id="lone"><span class="take-icon" data-tone="ok">${icon('check', 28)}</span><p>No orders are waiting for a card right now.</p><button type="button" class="ff-step" style="width:auto;padding:0 var(--bn-7)" data-find>${icon('search', 24)}Find a Card by Name</button></div></div>`
+  } else if (S.mode === 'failed') {
+    main = `<div class="ff-main"><div class="ff-panel ff-lone" id="lone"><span class="take-icon" data-tone="warn">${icon('alert', 26)}</span><p>The cards did not load.</p><button type="button" class="ff-step" style="width:auto;padding:0 var(--bn-7)" data-retry>${icon('retry', 24)}Try Again</button></div></div>`
+  } else if (S.view === 'envelopes') {
+    main = `<div class="ff-main">${envPanels()}</div>`
+  } else {
+    const map = mapMode === 'strip' ? strip(opt.a) : shelfMap(opt.a)
+    let right
+    if (S.mode === 'done') {
+      const envs = envelopes()
+      const seal = envs.filter((e) => e.ready).length
+      const open = envs.filter((e) => e.hold)
+      right = `<section class="ff-panel done" id="done"><span class="take-icon" data-tone="ok">${icon('check', 28)}</span>
+        <h2>All ${STOPS.reduce((n, s) => n + s.takes.reduce((m, t) => m + t.want, 0), 0)} Cards Pulled</h2>
+        <p>Seal ${seal} envelopes.${open.length ? ` Keep <b data-typed>${esc(open[0].name)}</b>’s envelope open. ${NOT_IN_BOXES.length} cards for it are not in any box.` : ''}</p>
+        <button type="button" class="ff-step" data-view="envelopes">${icon('env', 24)}See the Envelopes</button></section>`
+    } else right = stopPanel(opt)
+    main = `<div class="ff-main" data-map="${mapMode}">${map}${right}</div>`
+  }
+  const showDock = S.mode === 'walk' || S.mode === 'done'
+  return `<div class="ff" id="ff">${bar}<div class="ff-scroll" id="ff-scroll">${main}</div>${showDock ? dock(opt) : ''}${sheet()}${S.zoom ? zoom() : ''}</div>`
+}
+function finds() {
+  if (!S.query) return ''
+  const q = S.query.toLowerCase()
+  const hits = []
+  STOPS.forEach((s, si) => takesAt(si).forEach((t, ti) => { if (t.name.toLowerCase().includes(q) || t.num.includes(q)) hits.push({ si, ti, t }) }))
+  const say = (h) => (S.mode === 'empty' ? `${placeOf(h.si)}, Card ${h.t.here[0]}` : `Stop ${h.si + 1}, ${placeOf(h.si)}`)
+  return `<div class="ff-finds" role="listbox">${hits.length ? hits.map((h) => `<button type="button" role="option"${S.mode === 'empty' ? '' : ` data-hit="${h.si}-${h.ti}"`}><span data-typed>${esc(h.t.name)}</span><small>${say(h)}</small></button>`).join('') : '<p>No card here has that name. Check the spelling.</p>'}</div>`
+}
+function zoom() {
+  const t = takeOf(S.stop, S.take)
+  const card = t.here[Math.min(S.copy, t.here.length - 1)]
+  return `<button type="button" class="zoom-scrim" data-unzoom aria-label="Close the enlarged photo">${art(t, card)}<span>Tap anywhere to go back.</span></button>`
+}
+
+/* The route line: walked part solid, the rest dotted, through every station in walk order.
+   Along a box it runs on the track. Between boxes it leaves past the box's front end, drops
+   below the captions and comes in to the next station from above, so it never crosses a word. */
+function drawRoutes(root) {
+  root.querySelectorAll('[data-route]').forEach((box) => {
+    const svg = box.querySelector(':scope > svg')
+    const host = box.closest('.map, .strip') || box
+    const ref = box.getBoundingClientRect()
+    const track = host.querySelector('.map-track')
+    const right = track ? track.getBoundingClientRect().right - ref.left + 16 : 0
+    const pts = [...host.querySelectorAll('[data-route-pt]')].map((el) => {
+      const r = el.getBoundingClientRect()
+      const end = el.classList.contains('map-end-btn')
+      const row = el.closest('.map-track')
+      return { x: (end ? r.left + 26 : r.left + r.width / 2) - ref.left, y: r.top + r.height / 2 - ref.top, state: el.dataset.state, end,
+        top: row ? row.getBoundingClientRect().top - ref.top : r.top - ref.top }
+    })
+    if (pts.length < 2) { svg.innerHTML = ''; return }
+    let cut = pts.findIndex((p) => p.state === 'now')
+    if (cut < 0) cut = pts.every((p, i) => i === pts.length - 1 || p.state === 'done') ? pts.length - 1 : 0
+    const r = 12
+    const seg = (a, b) => {
+      if (Math.abs(a.y - b.y) < 4) return `L${b.x} ${b.y}`
+      const gy = b.end ? b.y : b.top - 8
+      return `L${right - r} ${a.y} Q${right} ${a.y} ${right} ${a.y + r} L${right} ${gy - r} Q${right} ${gy} ${right - r} ${gy} L${b.x + (b.end ? 0 : r)} ${gy}` +
+        (b.end ? '' : ` Q${b.x} ${gy} ${b.x} ${gy + r} L${b.x} ${b.y}`)
+    }
+    const path = (list) => list.map((p, i) => (i === 0 ? `M${p.x} ${p.y}` : seg(list[i - 1], p))).join(' ')
+    svg.innerHTML = `<path class="route-ahead" d="${path(pts.slice(cut))}"/>${cut > 0 ? `<path class="route-walked" d="${path(pts.slice(0, cut + 1))}"/>` : ''}`
+  })
+}
+
+/* ---------- wiring ---------- */
+function opts() {
+  const h = readHash()
+  return { w: h.w, map: h.map === 'strip' ? 'strip' : 'shelf', word: h.word === 'envelope' ? 'envelope' : 'sold', copies: h.copies === 'all' ? 'all' : 'fold', a: h.a !== 'off' }
+}
+function paint() {
+  const host = document.getElementById('ff-host')
+  const scroll = document.getElementById('ff-scroll')
+  const keep = scroll ? scroll.scrollTop : 0
+  host.innerHTML = screen(opts())
+  host.classList.toggle('mk-anns-off', !opts().a)
+  const sc = document.getElementById('ff-scroll')
+  if (sc) sc.scrollTop = keep
+  requestAnimationFrame(() => drawRoutes(host))
+}
+function act(e) {
+  const b = e.target.closest('button, [data-close]')
+  if (!b || !document.getElementById('ff-host').contains(b)) return
+  if (b.classList.contains('sheet-scrim') && e.target !== b) return
+  const d = b.dataset
+  if (d.go !== undefined) { S.stop = Number(d.go); S.take = firstOpen(S.stop); S.copy = firstCopy(S.stop, S.take); S.phase = 'idle'; S.view = 'route'; S.sheet = null; S.lit = null }
+  else if (d.take !== undefined) { S.take = Number(d.take); S.copy = firstCopy(S.stop, S.take); S.phase = 'idle' }
+  else if (d.copy !== undefined) { S.copy = Number(d.copy); S.phase = 'idle' }
+  else if (d.pull !== undefined) S.phase = 'pulled'
+  else if (d.sell !== undefined) {
+    const t = takeOf(S.stop, S.take); const card = t.here[S.copy]
+    const env = envFor(S.stop, S.take, card)
+    S.sold.push(ck(S.stop, S.take, card)); S.lastSale = { si: S.stop, ti: S.take, card }; S.lit = env; S.phase = 'idle'
+  }
+  else if (d.next !== undefined) {
+    const nx = nextAfter(S.stop, S.take)
+    if (nx.done) { S.mode = cardsLeft() === 0 ? 'done' : S.mode; S.view = 'envelopes' } else { S.stop = nx.si; S.take = nx.ti; S.copy = nx.copy }
+    S.phase = 'idle'; S.lit = null
+  }
+  else if (d.undo !== undefined) {
+    const n = S.lastSale
+    if (!n) return
+    S.sold = S.sold.filter((k) => k !== ck(n.si, n.ti, n.card)); S.lastSale = null; S.lit = null
+    S.stop = n.si; S.take = n.ti; S.copy = takeOf(n.si, n.ti).here.indexOf(n.card); S.phase = 'idle'; if (S.mode === 'done') S.mode = 'walk'
+  }
+  else if (d.view) { S.view = d.view; S.sheet = null }
+  else if (d.sheet) S.sheet = d.sheet
+  else if (d.close !== undefined) S.sheet = null
+  else if (d.move !== undefined) { S.moved.push(tk(S.stop, S.take)); S.sheet = null }
+  else if (d.hold !== undefined) { S.held.push(tk(S.stop, S.take)); S.sheet = null }
+  else if (d.zoom !== undefined) S.zoom = true
+  else if (d.unzoom !== undefined) S.zoom = false
+  else if (d.retry !== undefined) S = PRESETS.route()
+  else if (d.find !== undefined) { paint(); document.getElementById('ff-q').focus(); return }
+  else if (d.hit) { const [si, ti] = d.hit.split('-').map(Number); S.stop = si; S.take = ti; S.copy = firstCopy(si, ti); S.query = ''; S.view = 'route'; S.phase = 'idle' }
+  else return
+  paint()
+}
+function firstOpen(si) { const i = takesAt(si).findIndex((_, ti) => takeState(si, ti) === 'open'); return i < 0 ? 0 : i }
+function firstCopy(si, ti) { const t = takeOf(si, ti); const i = t.here.findIndex((c) => !S.sold.includes(ck(si, ti, c))); return i < 0 ? 0 : i }
+
+/* ---------- chrome ---------- */
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1))
+  return { s: p.get('s'), t: p.get('t'), w: p.get('w') === '820' ? '820' : '1440', map: p.get('map'), word: p.get('word'), copies: p.get('copies'), a: p.get('a'), h: (p.get('h') || '').split(',').filter(Boolean) }
+}
+function writeHash(next) {
+  const cur = { ...readHash(), ...next }
+  const p = new URLSearchParams()
+  for (const k of ['s', 't', 'w', 'map', 'word', 'copies', 'a']) if (cur[k]) p.set(k, cur[k])
+  if (cur.h.length) p.set('h', cur.h.join(','))
+  history.replaceState(null, '', '#' + p.toString().replace(/%2C/g, ','))
+  apply()
+}
+const THEMES = { light: ['light', null], dark: ['dark', null], 'abyssal-bloom': ['dark', 'abyssal-bloom'], 'carnival-midway': ['dark', 'carnival-midway'] }
+function themeOf(t) { return t && THEMES[t] ? t : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light' }
+/* Each option has a name, the hash that shows it, and the id the waiting page focuses. */
+const OPTIONS = [
+  { group: 'The map at 1440', items: [
+    { id: 'shelf-map', name: 'Shelf Map', set: { map: 'shelf', w: '1440' }, focus: 'opt-shelf-map', say: 'Each box is a line, back on the left and front on the right. Each stop sits at its section. A box with nothing to pull is a faint line. It shows the walk as the room is laid out. It costs 560px beside the stop.' },
+    { id: 'route-strip', name: 'Route Strip', set: { map: 'strip', w: '1440' }, focus: 'opt-route-strip', say: 'The stops in one line, with boxes as brackets over them. The stop panel gets the whole width. The whole map is one press away. At 820 this is the only form.' } ] },
+  { group: 'The second press', items: [
+    { id: 'mark-it-sold', name: 'Mark It Sold', set: { s: 'pull', word: 'sold' }, focus: 'ff-sell', say: 'Today’s word, the same word as Inventory and Orders. The envelope shows in the line above it and in the answer.' },
+    { id: 'into-envelope', name: 'Into the Envelope', set: { s: 'pull', word: 'envelope' }, focus: 'ff-sell', say: 'The press names where the card goes: “Into Mara Quill’s Envelope”. It still records the sale. Departs from: one act, one name (Mark It Sold, D57).' } ] },
+  { group: 'Other copies of a card', items: [
+    { id: 'behind-not-there', name: 'Behind Not There?', set: { s: 'route', copies: 'fold' }, focus: 'opt-copies', say: 'Only the copies at this stop show. The other places show when he presses Not There? It stops over-pulling and keeps one place on screen.' },
+    { id: 'listed-under-card', name: 'Listed Under the Photo', set: { s: 'short', copies: 'all' }, focus: 'opt-copies', say: 'The other places show as one line under the photo, always. No sheet. Closer to today, which shows every copy with its own Pull.' } ] },
+]
+function apply() {
+  const h = readHash()
+  const s = STATES.some(([id]) => id === h.s) ? h.s : STATES[0][0]
+  const t = themeOf(h.t)
+  const [theme, palette] = THEMES[t]
+  document.documentElement.dataset.theme = theme
+  if (palette) document.documentElement.dataset.palette = palette
+  else delete document.documentElement.dataset.palette
+  document.getElementById('mk-s').value = s
+  document.getElementById('mk-w').value = h.w
+  document.getElementById('mk-t').value = t
+  document.getElementById('mk-a').checked = h.a !== 'off'
+  S = PRESETS[s]()
+  if (s === 'short' && h.copies === 'all') S.sheet = null
+  const st = STATES.find(([id]) => id === s)
+  const hidden = new Set(h.h)
+  const DEF = { map: 'shelf', word: 'sold', copies: 'fold' }
+  const cur = (o) => Object.entries(o.set).every(([k, v]) => (k === 's' ? true : k === 'w' ? h.w === v : (h[k] || DEF[k]) === v))
+  const stage = document.getElementById('mk-stage')
+  stage.innerHTML = `<p class="mk-caption"><b>${st[1]}.</b> ${st[2]}</p>
+    <div class="mk-frame" data-w="${h.w}"><div id="ff-host" style="height:100%"></div></div>
+    <section class="mk-options"><h2>Options</h2><p>Each option is drawn in the frame by its Show press. Hide removes it from this list.</p>
+    ${OPTIONS.map((g) => `<div class="mk-group"><h3>${g.group}</h3>${g.items.map((o) => `<div class="mk-opt" data-opt="${o.id}"${hidden.has(o.id) ? ' hidden' : ''} aria-current="${cur(o)}">
+      <b>${o.name}</b><p>${o.say}</p><div class="mk-opt-acts"><button type="button" data-show="${o.id}">Show</button><button type="button" data-hide="${o.id}">Hide this option</button></div></div>`).join('')}</div>`).join('')}
+    ${hidden.size ? `<p>${hidden.size} hidden. <button type="button" id="mk-unhide">Show all</button></p>` : ''}</section>`
+  stage.querySelectorAll('[data-hide]').forEach((b) => (b.onclick = () => writeHash({ h: [...hidden, b.dataset.hide] })))
+  stage.querySelectorAll('[data-show]').forEach((b) => (b.onclick = () => { const o = OPTIONS.flatMap((g) => g.items).find((x) => x.id === b.dataset.show); writeHash({ ...o.set }) }))
+  const un = document.getElementById('mk-unhide')
+  if (un) un.onclick = () => writeHash({ h: [] })
+  document.getElementById('ff-host').addEventListener('click', act)
+  document.getElementById('ff-host').addEventListener('input', (e) => { if (e.target.id === 'ff-q') { S.query = e.target.value; paint(); const q = document.getElementById('ff-q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length) } })
+  document.getElementById('ff-host').addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (S.zoom) S.zoom = false; else if (S.sheet) S.sheet = null; else if (S.query) S.query = ''; else return; paint() } })
+  paint()
+}
+const bar = document.createElement('div')
+bar.className = 'mk-bar'
+bar.innerHTML = `<strong>Cards to Pull: the route first</strong><span class="mk-kind">Designer kind: directed. Direction: the route first, the physical walk along the boxes as a map, with the cards placed on it in walking order.</span>
+  <label>State <select id="mk-s">${STATES.map(([id, label]) => `<option value="${id}">${label}</option>`).join('')}</select></label>
+  <label>Width <select id="mk-w"><option value="1440">1440</option><option value="820">820</option></select></label>
+  <label>Theme <select id="mk-t"><option value="light">Light</option><option value="dark">Dark</option><option value="abyssal-bloom">Abyssal Bloom</option><option value="carnival-midway">Carnival Midway</option></select></label>
+  <label><input type="checkbox" id="mk-a"> Today and New labels</label>`
+document.body.insertBefore(bar, document.getElementById('mk-stage'))
+bar.querySelector('#mk-s').onchange = (e) => writeHash({ s: e.target.value })
+bar.querySelector('#mk-w').onchange = (e) => writeHash({ w: e.target.value })
+bar.querySelector('#mk-t').onchange = (e) => writeHash({ t: e.target.value })
+bar.querySelector('#mk-a').onchange = (e) => writeHash({ a: e.target.checked ? '' : 'off' })
+addEventListener('hashchange', apply)
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply)
+if (document.fonts) document.fonts.ready.then(() => { const host = document.getElementById('ff-host'); if (host) drawRoutes(host) })
+apply()
+</script>
+</body>
+</html>
