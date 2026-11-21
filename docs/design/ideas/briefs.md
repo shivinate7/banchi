@@ -64,3 +64,23 @@ End with one line: **Bet:** the one direction you would build first, and why.
 | `p-condition` | Condition, damage and disputes: grading by eye, returns, "not as described" claims. |
 | `p-learning` | A system that learns: every correction the owner makes teaches it something. |
 | `p-money` | Money and books: cost basis, profit, taxes, cash tied up in slow cards. |
+
+## Round 2 lenses
+
+Same common context. Each was told the round-1 lenses already taken, and asked to avoid pick walks,
+photo-match at packing, price rules, and sort-order identify checks, which round 1 covered.
+
+| Planner | Lens |
+|---|---|
+| `p-handover` | A new or stand-in Fulfiller: the first week, a sick day, the owner away for two weeks. |
+| `p-intake` | Where stock comes from: buying collections, lots and trade-ins before the rig ever sees them. |
+| `p-ambient` | Interfaces that are not screens: lights on boxes, sounds, printed labels, the room itself. |
+| `p-resilience` | The Mac dies, the network drops, the marketplace is down, the owner is away a week. |
+| `p-local` | Life outside the marketplace: the local game store, friends, trade nights, a show table. |
+| `p-attention` | The owner's attention budget: what deserves an interruption, and a weekly rhythm. |
+| `p-pride` | Craft and pride: making careful work visible and satisfying for both people. |
+| `p-photos` | The photo archive as an asset: thousands of square-on card photos, what else they can do. |
+| `p-supplies` | Packaging, postage, supplies and waste: the physical consumables and their cost. |
+| `p-rivals` | Other sellers of the same cards: positioning, undercutting, and where this seller wins. |
+| `p-tenx` | The store at ten times its size: 36,000 cards and 30 to 400 orders a day. What breaks first. |
+| `p-subtract` | Subtraction: which steps, screens or habits to delete because they add no value. |
