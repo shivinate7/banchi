@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Season Clock</title>
+<script>
+  /* Hash keys, joined by &:
+       state=quiet|week-out|first-kind|spike|after|overlap   the six states of the plan's section 2
+       view=owner|fulfiller                                  whose screen (default owner)
+       guess=none                                            first-kind only: the "no guess" answer
+       t=dark|t=light                                        theme (default: prefers-color-scheme)
+       hide=rig,learn,...                                    options the owner culled (the cull strip)
+       notes=off                                             hides the dashed Today/New tags */
+  function readHash() {
+    return new Map(location.hash.slice(1).split('&').filter(Boolean).map((p) => {
+      const i = p.indexOf('='); return i < 0 ? [p, ''] : [p.slice(0, i), decodeURIComponent(p.slice(i + 1))]
+    }))
+  }
+  function applyTheme() {
+    const h = readHash()
+    const dark = h.has('t') ? h.get('t') === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
+  }
+  applyTheme()
+</script>
+<style>
+  /* The --bn-* tokens, inlined from the app's token file so this page opens from disk.
+     Only the tokens this mockup paints with. Fonts are the token stacks; no font file loads,
+     so the system fallback draws. */
+  :root {
+    --bn-bg: #f4f5f8; --bn-surface: #ffffff; --bn-surface-2: #eceef2; --bn-surface-3: #f7f8fa;
+    --bn-surface-glass: rgba(255, 255, 255, 0.72); --bn-hover: rgba(15, 18, 23, 0.03);
+    --bn-ink: #0f1217; --bn-ink-2: #3b414b; --bn-ink-3: #666c76; --bn-ink-4: #7f8791;
+    --bn-line: rgba(15, 18, 23, 0.08); --bn-line-strong: rgba(15, 18, 23, 0.16); --bn-line-focus: rgba(61, 90, 241, 0.55);
+    --bn-field-edge: var(--bn-ink-4);
+    --bn-accent: #3d5af1; --bn-accent-hover: #2f4bd9; --bn-accent-press: #2540c2;
+    --bn-accent-tint: rgba(61, 90, 241, 0.10); --bn-accent-tint-2: rgba(61, 90, 241, 0.18); --bn-on-accent: #ffffff;
+    --bn-ok: #15803d; --bn-ok-tint: rgba(22, 163, 74, 0.12);
+    --bn-warn: #b45309; --bn-warn-tint: rgba(217, 119, 6, 0.13);
+    --bn-danger: #b91c1c; --bn-danger-tint: rgba(220, 38, 38, 0.10);
+    --bn-pill-ink-accent: var(--bn-accent-hover); --bn-pill-ink-ok: #11733a; --bn-pill-ink-warn: #a14b09; --bn-pill-ink-danger: #b3123e;
+    --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+    --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18), 0 0 0 1px rgba(15, 18, 23, 0.05);
+    --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32), 0 0 0 1px rgba(15, 18, 23, 0.06);
+    --bn-btn-bg: var(--bn-surface); --bn-btn-bg-hover: var(--bn-surface-3); --bn-btn-shadow: var(--bn-shadow-1);
+    --bn-font-display: 'Manrope', 'Inter', system-ui, sans-serif;
+    --bn-font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --bn-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --bn-fs-2xs: 10px; --bn-fs-xs: 11px; --bn-fs-sm: 12px; --bn-fs-md: 13px; --bn-fs-base: 14px; --bn-fs-lg: 16px;
+    --bn-fs-xl: 18px; --bn-fs-2xl: 22px; --bn-fs-3xl: 28px; --bn-fs-4xl: 36px; --bn-fs-5xl: 48px;
+    --bn-tracking-caps: 0.06em; --bn-tracking-tight: -0.02em;
+    --bn-lh-tight: 1.1; --bn-lh-snug: 1.25; --bn-lh-base: 1.4; --bn-lh-relaxed: 1.55;
+    --bn-0-5: 2px; --bn-1: 4px; --bn-1-5: 6px; --bn-2: 8px; --bn-3: 12px; --bn-4: 16px; --bn-5: 20px; --bn-6: 24px;
+    --bn-7: 32px; --bn-8: 40px; --bn-9: 48px; --bn-10: 64px;
+    --bn-r-xs: 4px; --bn-r-sm: 6px; --bn-r: 8px; --bn-r-lg: 12px; --bn-r-xl: 16px; --bn-r-full: 999px;
+    --bn-t-fast: 120ms; --bn-t: 200ms; --bn-ease: cubic-bezier(0.2, 0, 0, 1);
+    --bn-sidebar-w: 236px; --bn-rail-w: 64px; --bn-control-h: 34px; --bn-control-h-lg: 40px; --bn-pill-h: 22px;
+    --bn-disabled: 0.45;
+  }
+  :root[data-theme='dark'] {
+    --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+    --bn-surface-glass: rgba(20, 23, 28, 0.72); --bn-hover: rgba(255, 255, 255, 0.04);
+    --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+    --bn-line: rgba(255, 255, 255, 0.08); --bn-line-strong: rgba(255, 255, 255, 0.16); --bn-line-focus: rgba(129, 146, 255, 0.6);
+    --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+    --bn-accent-tint: rgba(127, 144, 255, 0.14); --bn-accent-tint-2: rgba(127, 144, 255, 0.24); --bn-on-accent: #0c0e12;
+    --bn-ok: #3ddc84; --bn-ok-tint: rgba(61, 220, 132, 0.14);
+    --bn-warn: #f5a524; --bn-warn-tint: rgba(245, 165, 36, 0.14);
+    --bn-danger: #ff5c5c; --bn-danger-tint: rgba(255, 92, 92, 0.14);
+    --bn-pill-ink-accent: var(--bn-accent-hover); --bn-pill-ink-ok: var(--bn-ok); --bn-pill-ink-warn: var(--bn-warn); --bn-pill-ink-danger: #f6799c;
+    --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+    --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    --bn-btn-bg: var(--bn-surface-3); --bn-btn-bg-hover: #262b34; --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+  @media (hover: none) and (pointer: coarse) { :root { --bn-control-h: 42px; --bn-control-h-lg: 46px; } }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: var(--bn-bg); }
+  body { background: var(--bn-bg); color: var(--bn-ink); font-family: var(--bn-font-ui); font-size: var(--bn-fs-base);
+         line-height: var(--bn-lh-base); -webkit-font-smoothing: antialiased; }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--bn-accent); outline-offset: 2px; }
+  .num { font-family: var(--bn-font-mono); font-variant-numeric: tabular-nums; }
+  [hidden] { display: none !important; }
+
+  /* ---------- the kit, as much of it as this page uses ---------- */
+  .btn { height: var(--bn-control-h); padding: 0 var(--bn-3); border: 0; border-radius: var(--bn-r); background: var(--bn-btn-bg);
+         box-shadow: var(--bn-btn-shadow); font-weight: 600; font-size: var(--bn-fs-md); cursor: pointer; white-space: nowrap;
+         display: inline-flex; align-items: center; gap: var(--bn-1-5); transition: background var(--bn-t-fast) var(--bn-ease); }
+  .btn:hover { background: var(--bn-btn-bg-hover); }
+  .btn.primary { background: var(--bn-accent); color: var(--bn-on-accent); box-shadow: var(--bn-shadow-1); }
+  .btn.primary:hover { background: var(--bn-accent-hover); }
+  .btn.ghost { background: transparent; box-shadow: none; color: var(--bn-ink-2); }
+  .btn.ghost:hover { background: var(--bn-hover); color: var(--bn-ink); }
+  .btn.lg { height: var(--bn-control-h-lg); padding: 0 var(--bn-4); }
+  .seg { display: inline-flex; padding: var(--bn-0-5); gap: var(--bn-0-5); border-radius: var(--bn-r); background: var(--bn-surface-2); }
+  .seg button { height: calc(var(--bn-control-h) - 4px); padding: 0 var(--bn-3); border: 0; border-radius: var(--bn-r-sm); background: transparent;
+                color: var(--bn-ink-2); font-weight: 600; font-size: var(--bn-fs-md); cursor: pointer; }
+  .seg button[aria-pressed='true'] { background: var(--bn-surface); color: var(--bn-ink); box-shadow: var(--bn-shadow-1); }
+  .pill { display: inline-flex; align-items: center; height: var(--bn-pill-h); padding: 0 var(--bn-2); border-radius: var(--bn-r-full);
+          font-size: var(--bn-fs-xs); font-weight: 600; white-space: nowrap; background: var(--bn-surface-2); color: var(--bn-ink-2); }
+  .pill.accent { background: var(--bn-accent-tint); color: var(--bn-pill-ink-accent); }
+  .pill.warn { background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn); }
+  .pill.ok { background: var(--bn-ok-tint); color: var(--bn-pill-ink-ok); }
+  .field { height: var(--bn-control-h); padding: 0 var(--bn-3); border-radius: var(--bn-r); background: var(--bn-surface);
+           border: 1px solid var(--bn-field-edge); min-width: 0; }
+  .field:focus { outline: none; border-color: var(--bn-accent); box-shadow: 0 0 0 3px var(--bn-accent-tint-2); }
+  .lab { display: flex; flex-direction: column; gap: var(--bn-1); font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2); }
+
+  /* ---------- mockup-only layer: sample ribbon, state and view switch, cull strip, Today/New tags ---------- */
+  .mock { position: relative; z-index: 20; background: linear-gradient(var(--bn-warn-tint), var(--bn-warn-tint)), var(--bn-bg);
+          box-shadow: 0 1px 0 var(--bn-line-strong); }
+  .mock-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2) var(--bn-3); padding: var(--bn-2) var(--bn-6); font-size: var(--bn-fs-sm); }
+  .mock-row + .mock-row { border-top: 1px dashed var(--bn-line-strong); }
+  .mock-say { font-weight: 600; margin-right: auto; }
+  .mock-k { color: var(--bn-ink-2); font-weight: 600; }
+  .mock .pill.warn { background: var(--bn-surface); }
+  .mock .seg button { height: 28px; font-size: var(--bn-fs-sm); padding: 0 var(--bn-2); }
+  .cull button { height: 28px; padding: 0 var(--bn-2); font-size: var(--bn-fs-sm); }
+  .cull button[aria-pressed='true'] { text-decoration: line-through; color: var(--bn-ink-2); }
+  .mk { position: relative; }
+  .tag { position: absolute; z-index: 3; top: -9px; right: var(--bn-3); padding: 0 var(--bn-1-5); font-family: var(--bn-font-mono);
+         font-size: var(--bn-fs-xs); line-height: 16px; color: var(--bn-accent); background: var(--bn-bg);
+         border: 1px dashed var(--bn-accent); border-radius: var(--bn-r-xs); white-space: nowrap; pointer-events: none; }
+  .tag.new { color: var(--bn-pill-ink-warn); border-color: var(--bn-warn); }
+  body.nonotes .tag { display: none; }
+
+  /* ---------- owner shell: sidebar at 1024 and up, the desktop rail below ---------- */
+  .app { display: flex; align-items: stretch; min-height: 100vh; }
+  .side { flex: none; width: var(--bn-sidebar-w); background: var(--bn-surface); border-right: 1px solid var(--bn-line);
+          padding: var(--bn-4) var(--bn-3); display: flex; flex-direction: column; gap: var(--bn-0-5); }
+  .brand { display: flex; align-items: center; gap: var(--bn-2); font-family: var(--bn-font-display); font-weight: 800;
+           font-size: var(--bn-fs-lg); padding: 0 var(--bn-2) var(--bn-4); }
+  .brand i { width: 8px; height: 8px; border-radius: 50%; background: var(--bn-ink); display: block; }
+  .grp { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-weight: 600; padding: var(--bn-3) var(--bn-2) var(--bn-1); }
+  .nav { height: 36px; display: flex; align-items: center; gap: var(--bn-3); padding: 0 var(--bn-2); border-radius: var(--bn-r);
+         color: var(--bn-ink-2); font-weight: 500; text-decoration: none; }
+  .nav svg { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .nav[aria-current='page'] { background: var(--bn-accent-tint); color: var(--bn-accent); font-weight: 600; }
+  @media (max-width: 1023px) {
+    .side { width: var(--bn-rail-w); align-items: center; padding: var(--bn-4) var(--bn-2); }
+    .brand span, .nav span, .grp { display: none; }
+    .brand { padding: 0 0 var(--bn-4); }
+    .nav { width: 40px; justify-content: center; padding: 0; }
+    .mock-row { padding: var(--bn-2) var(--bn-4); }
+  }
+  .main { flex: 1; min-width: 0; }
+
+  /* ---------- the page ---------- */
+  .pg { container-type: inline-size; max-width: 1600px; padding: var(--bn-6) var(--bn-7) var(--bn-10); display: flex; flex-direction: column; gap: var(--bn-5); }
+  @media (max-width: 1023px) { .pg { padding: var(--bn-6) var(--bn-6) var(--bn-10); } }
+  .pg-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--bn-4); flex-wrap: wrap; }
+  .pg-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-3xl); font-weight: 800; letter-spacing: var(--bn-tracking-tight); line-height: var(--bn-lh-tight); }
+  .pg-lede { color: var(--bn-ink-3); font-size: var(--bn-fs-md); margin-top: var(--bn-1-5); }
+
+  .verdict { display: flex; flex-direction: column; gap: var(--bn-1); }
+  .verdict-main { font-family: var(--bn-font-display); font-size: var(--bn-fs-2xl); font-weight: 700; line-height: var(--bn-lh-snug); letter-spacing: var(--bn-tracking-tight); max-width: 46ch; }
+  .verdict-sub { color: var(--bn-ink-2); font-size: var(--bn-fs-md); }
+  .verdict.warn .verdict-main::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+          background: var(--bn-warn); margin-right: var(--bn-2); vertical-align: 3px; }
+
+  .panel { background: var(--bn-surface); border-radius: var(--bn-r-xl); box-shadow: var(--bn-shadow-1); }
+  .strip { padding: var(--bn-4) var(--bn-5) var(--bn-3); }
+  .strip-head { display: flex; align-items: center; gap: var(--bn-2) var(--bn-4); flex-wrap: wrap; margin-bottom: var(--bn-3); }
+  .h2 { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; letter-spacing: var(--bn-tracking-tight); }
+  .legend { display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-4); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); margin-right: auto; }
+  .legend span { display: inline-flex; align-items: center; gap: var(--bn-1-5); }
+  .sw { width: 10px; height: 14px; border-radius: 3px; display: inline-block; }
+  .sw.act { width: 5px; background: var(--bn-ink-2); border-radius: 2px; }
+  .sw.band { background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+  .sw.ev { background: var(--bn-accent-tint-2); box-shadow: inset 0 0 0 1px var(--bn-accent); }
+  .add-say { font-size: var(--bn-fs-sm); color: var(--bn-ok); font-weight: 600; }
+  #chart { width: 100%; display: block; overflow: visible; }
+  #chart text { font-family: var(--bn-font-ui); }
+  .c-grid { stroke: var(--bn-line); stroke-width: 1; }
+  .c-y { font-family: var(--bn-font-mono) !important; font-size: 10px; fill: var(--bn-ink-3); }
+  .c-wk { font-size: 11px; fill: var(--bn-ink-3); font-weight: 600; }
+  .c-wktick { stroke: var(--bn-line-strong); }
+  .c-wkend { fill: var(--bn-surface-2); opacity: 0.7; }
+  .c-today { fill: var(--bn-accent-tint); }
+  .c-today-lab { font-size: 11px; font-weight: 700; fill: var(--bn-accent); }
+  .c-band { fill: var(--bn-surface-2); stroke: var(--bn-line-strong); stroke-width: 1; }
+  .c-band.ev { fill: var(--bn-accent-tint-2); stroke: var(--bn-accent); }
+  .c-band.wide { fill: url(#hatch); stroke: var(--bn-warn); stroke-dasharray: 3 2; }
+  .c-band.dim { opacity: 0.55; }
+  .hatch-line { stroke: var(--bn-warn); stroke-width: 1.5; opacity: 0.55; }
+  .c-act { fill: var(--bn-ink-2); }
+  .c-act.hot { fill: var(--bn-warn); }
+  .c-act-lab { font-family: var(--bn-font-mono) !important; font-size: 11px; font-weight: 700; fill: var(--bn-pill-ink-warn); }
+  .c-ev { cursor: pointer; }
+  .c-probe { font-size: 12px; font-weight: 700; }
+  .c-ev .hit { fill: transparent; }
+  .c-ev .bar { fill: var(--bn-surface-2); stroke: var(--bn-ink-4); stroke-width: 1; }
+  .c-ev text { font-size: 12px; font-weight: 600; fill: var(--bn-ink-2); }
+  .c-ev:hover text { fill: var(--bn-ink); }
+  .c-ev.on .bar { fill: var(--bn-accent); stroke: var(--bn-accent); }
+  .c-ev.on text { fill: var(--bn-accent); font-weight: 700; }
+  .c-ev:focus-visible { outline: none; }
+  .c-ev:focus-visible .hit { stroke: var(--bn-accent); stroke-width: 2; }
+  .c-ev.nohist .bar { fill: url(#hatch); stroke: var(--bn-warn); stroke-dasharray: 3 2; }
+  .c-ev.on.nohist .bar { stroke: var(--bn-accent); stroke-dasharray: none; }
+  .strip-foot { display: flex; justify-content: space-between; gap: var(--bn-3); flex-wrap: wrap; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-top: var(--bn-2); }
+
+  .below { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--bn-5); align-items: start; }
+  @container (min-width: 1000px) { .below { grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); } }
+
+  /* ---------- the lead card ---------- */
+  .card { padding: var(--bn-5) var(--bn-6) var(--bn-6); display: flex; flex-direction: column; gap: var(--bn-5); }
+  .card.warn { box-shadow: inset 0 0 0 1px var(--bn-warn), var(--bn-shadow-1); }
+  .card-top { display: flex; flex-direction: column; gap: var(--bn-1-5); }
+  .card-pills { display: flex; flex-wrap: wrap; gap: var(--bn-1-5); align-items: center; }
+  .card-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-2xl); font-weight: 800; letter-spacing: var(--bn-tracking-tight); line-height: var(--bn-lh-snug); }
+  .card-when { color: var(--bn-ink-2); font-size: var(--bn-fs-md); }
+  .figure { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--bn-1) var(--bn-3); padding: var(--bn-4) 0; border-top: 1px solid var(--bn-line); border-bottom: 1px solid var(--bn-line); }
+  .figure-n { font-family: var(--bn-font-display); font-size: var(--bn-fs-5xl); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+  .figure-n.wide { color: var(--bn-pill-ink-warn); }
+  .figure-u { font-size: var(--bn-fs-lg); font-weight: 600; color: var(--bn-ink-2); }
+  .figure-basis { flex-basis: 100%; font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--bn-5); }
+  .fact h3 { font-size: var(--bn-fs-md); font-weight: 700; margin-bottom: var(--bn-2); }
+  .fact ul { list-style: none; display: flex; flex-direction: column; gap: var(--bn-1-5); }
+  .fact li { display: flex; justify-content: space-between; gap: var(--bn-3); font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+  .fact li b { color: var(--bn-ink); font-weight: 600; }
+  .fact .note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-top: var(--bn-2); }
+  .ff-preview { background: var(--bn-surface-2); border-radius: var(--bn-r-lg); padding: var(--bn-4); display: flex; flex-direction: column; gap: var(--bn-2); }
+  .ff-preview-head { display: flex; justify-content: space-between; align-items: center; gap: var(--bn-3); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-weight: 600; }
+  .ff-preview p { font-size: var(--bn-fs-base); }
+  details.why { font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+  details.why summary { cursor: pointer; font-weight: 600; color: var(--bn-ink); width: max-content; }
+  details.why ul { margin: var(--bn-2) 0 0 var(--bn-5); display: flex; flex-direction: column; gap: var(--bn-1); }
+  .acts { display: flex; flex-wrap: wrap; gap: var(--bn-2); align-items: center; }
+  .said { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-pill-ink-ok); }
+  .said.warn { color: var(--bn-pill-ink-warn); }
+  .notice { display: flex; gap: var(--bn-3); align-items: flex-start; padding: var(--bn-3) var(--bn-4); border-radius: var(--bn-r-lg);
+            background: var(--bn-warn-tint); color: var(--bn-ink); font-size: var(--bn-fs-md); }
+  .notice b { font-weight: 700; }
+  .form-row { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: var(--bn-3); }
+  .watch { font-family: var(--bn-font-display); font-size: var(--bn-fs-3xl); font-weight: 800; letter-spacing: var(--bn-tracking-tight); }
+
+  /* after-event comparison */
+  #afterChart { width: 100%; height: 200px; display: block; }
+  .a-band { fill: var(--bn-accent-tint-2); stroke: var(--bn-accent); stroke-width: 1; }
+  .a-line { fill: none; stroke: var(--bn-ink); stroke-width: 2; }
+  .a-dot { fill: var(--bn-ink); }
+  .a-dot.out { fill: var(--bn-warn); stroke: var(--bn-surface); stroke-width: 2; }
+  .a-x { font-size: 10px; fill: var(--bn-ink-3); font-family: var(--bn-font-mono); }
+  .sets { width: 100%; border-collapse: collapse; font-size: var(--bn-fs-md); }
+  .sets th { text-align: left; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-weight: 600; padding: 0 var(--bn-2) var(--bn-1-5) 0; border-bottom: 1px solid var(--bn-line); }
+  .sets td { padding: var(--bn-2) var(--bn-2) var(--bn-2) 0; border-bottom: 1px solid var(--bn-line); }
+  .sets td.n, .sets th.n { text-align: right; font-family: var(--bn-font-mono); font-variant-numeric: tabular-nums; }
+
+  /* ---------- the side column ---------- */
+  .side-col { display: flex; flex-direction: column; gap: var(--bn-5); }
+  .list { padding: var(--bn-4) var(--bn-2) var(--bn-2); }
+  .list .h2 { padding: 0 var(--bn-3) var(--bn-2); font-size: var(--bn-fs-lg); }
+  .ev-row { width: 100%; display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: var(--bn-3); align-items: center; text-align: left;
+            padding: var(--bn-2) var(--bn-3); border: 0; border-radius: var(--bn-r); background: transparent; cursor: pointer; min-height: 52px; }
+  .ev-row:hover { background: var(--bn-hover); }
+  .ev-row[aria-pressed='true'] { background: var(--bn-accent-tint); }
+  .ev-date { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); font-weight: 600; line-height: var(--bn-lh-snug); }
+  .ev-name { font-weight: 600; line-height: var(--bn-lh-snug); }
+  .ev-kind { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .ev-rng { font-family: var(--bn-font-mono); font-size: var(--bn-fs-md); font-weight: 600; text-align: right; }
+  .ask { padding: var(--bn-4) var(--bn-5) var(--bn-5); display: flex; flex-direction: column; gap: var(--bn-3); }
+  .ask p { font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+  .ask .form-row { grid-template-columns: minmax(0, 1fr); }
+
+  dialog { margin: auto; border: 0; border-radius: var(--bn-r-xl); background: var(--bn-surface); color: var(--bn-ink); box-shadow: var(--bn-shadow-3);
+           padding: var(--bn-6); width: min(480px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.4); }
+  dialog form { display: flex; flex-direction: column; gap: var(--bn-4); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--bn-3); }
+
+  /* ---------- the Fulfiller's view: no shell, the Fulfillment floors (20px text, 7:1, 44px targets) ---------- */
+  .ff { min-height: 100vh; padding: var(--bn-6) var(--bn-6) var(--bn-10); display: flex; justify-content: center; }
+  .ff-col { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: var(--bn-6); }
+  .ff-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-4); padding: var(--bn-3) var(--bn-5);
+            background: var(--bn-surface); border-radius: var(--bn-r-xl); box-shadow: var(--bn-shadow-1); font-size: 22px; }
+  .ff-bar b { font-family: var(--bn-font-display); font-size: 32px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .ff-search { height: 52px; flex: 1; max-width: 320px; border-radius: var(--bn-r-lg); border: 1px solid var(--bn-field-edge); background: var(--bn-surface);
+               padding: 0 var(--bn-4); font-size: 20px; color: var(--bn-ink); display: flex; align-items: center; }
+  .ff-week { background: var(--bn-surface); border-radius: var(--bn-r-2xl, 22px); box-shadow: var(--bn-shadow-2); padding: var(--bn-7) var(--bn-7) var(--bn-8);
+             display: flex; flex-direction: column; gap: var(--bn-5); }
+  .ff-week.busy { box-shadow: inset 6px 0 0 var(--bn-accent), var(--bn-shadow-2); }
+  .ff-week h2 { font-family: var(--bn-font-display); font-size: 32px; font-weight: 800; letter-spacing: var(--bn-tracking-tight); line-height: var(--bn-lh-tight); }
+  .ff-week ul { list-style: none; display: flex; flex-direction: column; gap: var(--bn-4); }
+  .ff-week li { font-size: 22px; line-height: var(--bn-lh-relaxed); color: var(--bn-ink); max-width: 34em; }
+  .ff-rest { display: flex; flex-direction: column; gap: var(--bn-3); }
+  .ff-ghost { height: 120px; border-radius: var(--bn-r-xl); border: 1px dashed var(--bn-line-strong); display: flex; align-items: center; justify-content: center;
+              color: var(--bn-ink-2); font-size: 20px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<!-- Mockup layer: nothing in this bar ships. -->
+<div class="mock" role="region" aria-label="Mockup controls">
+  <div class="mock-row">
+    <span class="pill warn">Sample</span>
+    <span class="mock-say">No figure, date, set or event on this page is real. Season Clock is a proposal; nothing ships.</span>
+    <span class="mock-k">View</span>
+    <div class="seg" id="viewSeg"><button type="button" data-view="owner">Owner</button><button type="button" data-view="fulfiller">Fulfiller</button></div>
+    <span class="mock-k">Theme</span>
+    <div class="seg" id="themeSeg"><button type="button" data-t="light">Light</button><button type="button" data-t="dark">Dark</button></div>
+  </div>
+  <div class="mock-row">
+    <span class="mock-k">State</span>
+    <div class="seg" id="stateSeg">
+      <button type="button" data-state="quiet">Quiet Stretch</button>
+      <button type="button" data-state="week-out">Event a Week Out</button>
+      <button type="button" data-state="first-kind">First of Its Kind</button>
+      <button type="button" data-state="spike">Surprise Spike</button>
+      <button type="button" data-state="after">After the Event</button>
+      <button type="button" data-state="overlap">Two at Once</button>
+    </div>
+  </div>
+  <div class="mock-row cull" id="cull">
+    <span class="mock-k">Hide an option</span>
+    <button class="btn ghost" type="button" data-hide="rig">Capture hint</button>
+    <button class="btn ghost" type="button" data-hide="learn">Past-spike question</button>
+    <button class="btn ghost" type="button" data-hide="supplies">Supply counts</button>
+    <button class="btn ghost" type="button" data-hide="extra">Extra Fulfiller days</button>
+    <button class="btn ghost" type="button" data-hide="boxes">Box hint</button>
+    <button class="btn ghost" type="button" data-hide="preview">Fulfiller preview</button>
+    <button class="btn ghost" type="button" data-hide="weekends">Weekend shading</button>
+    <button class="btn ghost" type="button" data-hide="notes">Today/New tags</button>
+  </div>
+</div>
+
+<!-- ======================= OWNER VIEW: Sales, Season lens ======================= -->
+<div class="app" id="ownerView">
+  <nav class="side" aria-label="Screens">
+    <div class="brand"><i></i><span>banchi</span></div>
+    <a class="nav" href="#"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></a>
+    <div class="grp">Workflow</div>
+    <a class="nav" href="#"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="12" cy="13.5" r="3.5"/><path d="M8 7l2-3h4l2 3"/></svg><span>Capture</span></a>
+    <a class="nav" href="#"><svg viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M3 13h5l1 3h6l1-3h5"/></svg><span>Review</span></a>
+    <a class="nav" href="#"><svg viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg><span>Pricing</span></a>
+    <div class="grp">Sell</div>
+    <a class="nav" href="#"><svg viewBox="0 0 24 24"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l3 12h11l2-8H6"/></svg><span>Orders</span></a>
+    <a class="nav" href="#"><svg viewBox="0 0 24 24"><path d="M2 6h12v10H2zM14 10h4l3 3v3h-7"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg><span>Shipping</span></a>
+    <a class="nav" href="#" aria-current="page"><svg viewBox="0 0 24 24"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Sales</span></a>
+    <div class="grp">Library</div>
+    <a class="nav" href="#"><svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/></svg><span>Inventory</span></a>
+    <a class="nav" href="#"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h3v3H8zM13 13h3v3h-3z"/></svg><span>Slabs</span></a>
+  </nav>
+
+  <main class="main">
+    <div class="pg">
+      <header class="pg-head mk">
+        <span class="tag" style="left:0;right:auto;top:-14px">Today: Page, title Sales (Revenue.tsx Revenue)</span>
+        <div>
+          <h1 class="pg-title">Sales</h1>
+          <p class="pg-lede">Busy stretches ahead, guessed from your own past orders. Order counts only, never money.</p>
+        </div>
+        <div class="mk">
+          <span class="tag new" style="top:auto;bottom:-20px">New: Season tab on LensSwitch</span>
+          <div class="seg" role="group" aria-label="View">
+            <button type="button" aria-pressed="false">Sales</button>
+            <button type="button" aria-pressed="false">Mix</button>
+            <button type="button" aria-pressed="true">Season</button>
+          </div>
+        </div>
+      </header>
+
+      <section class="verdict mk" id="verdict" aria-live="polite">
+        <p class="verdict-main" id="verdictMain"></p>
+        <p class="verdict-sub" id="verdictSub"></p>
+      </section>
+
+      <section class="panel strip mk" id="strip" aria-labelledby="stripTitle">
+        <span class="tag new">New: the 8-week strip</span>
+        <div class="strip-head">
+          <h2 class="h2" id="stripTitle">Next 8 Weeks</h2>
+          <div class="legend" aria-hidden="true">
+            <span><i class="sw act"></i>Your Orders a Day</span>
+            <span><i class="sw band"></i>Normal Range</span>
+            <span><i class="sw ev"></i>Expected Range</span>
+          </div>
+          <span class="add-say" id="addSay" role="status"></span>
+          <button class="btn" type="button" id="addBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            Add Event</button>
+        </div>
+        <svg id="chart" role="img" aria-labelledby="chartDesc"><desc id="chartDesc"></desc></svg>
+        <div class="strip-foot"><span id="stripFoot"></span><span>Orders as of the last order import, Sat 2:40 pm</span></div>
+      </section>
+
+      <div class="below">
+        <section class="panel card mk" id="lead" aria-live="polite"></section>
+        <div class="side-col">
+          <section class="panel list mk" aria-labelledby="listTitle">
+            <span class="tag new">New: events on the clock</span>
+            <h2 class="h2" id="listTitle">On the Clock</h2>
+            <div id="evList"></div>
+          </section>
+          <section class="panel ask mk" id="learn" data-opt="learn" aria-labelledby="learnTitle">
+            <span class="tag new">New: a past spike to name</span>
+            <h2 class="h2" id="learnTitle" style="font-size:var(--bn-fs-lg)">From Your Past Orders</h2>
+            <p><b>Oct 9 to Oct 18</b> ran at 3 times normal, mostly Gilded Hollow. What was it?</p>
+            <div class="form-row">
+              <label class="lab">Name<input class="field" id="learnName" placeholder="e.g. Gilded Hollow release" /></label>
+            </div>
+            <div class="acts"><button class="btn" type="button" id="learnSave">Save to History</button><span class="said" id="learnSaid" role="status"></span></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<dialog id="addDlg" aria-labelledby="addTitle">
+  <form method="dialog" id="addForm">
+    <h2 class="h2" id="addTitle">Add Event</h2>
+    <label class="lab">Name<input class="field" id="addName" required placeholder="e.g. Frostbound Reliquary release" /></label>
+    <label class="lab">Kind<select class="field" id="addKind">
+      <option>Release</option><option>Prerelease</option><option>Rotation</option><option>Tournament</option><option>Holiday</option><option>School break</option>
+    </select></label>
+    <div class="two">
+      <label class="lab">From<input class="field" type="date" value="2026-12-25" /></label>
+      <label class="lab">To<input class="field" type="date" value="2027-01-03" /></label>
+    </div>
+    <label class="lab">Sets It Touches<input class="field" placeholder="e.g. Frostbound Reliquary, Mistral Crown" /></label>
+    <div class="acts" style="justify-content:flex-end">
+      <button class="btn ghost" type="button" id="addCancel">Cancel</button>
+      <button class="btn primary" type="submit" value="add">Add Event</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ======================= FULFILLER VIEW: on Cards to Pull, no shell ======================= -->
+<div class="ff" id="ffView" hidden>
+  <div class="ff-col">
+    <div class="ff-bar mk">
+      <span class="tag">Today: the count bar (Fulfillment.tsx, ff-count)</span>
+      <span><b>3</b> Left</span>
+      <span class="ff-search">Find a card</span>
+    </div>
+    <section class="ff-week mk" id="ffWeek" aria-labelledby="ffTitle">
+      <span class="tag new">New: This Week, plain sentences only</span>
+      <h2 id="ffTitle">This Week</h2>
+      <ul id="ffList"></ul>
+    </section>
+    <div class="ff-rest mk">
+      <span class="tag">Today: the cards to pull, in box-walk order (CardRow)</span>
+      <div class="ff-ghost">Your 3 cards to pull follow here, as today.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------------- sample data ---------------- */
+const START = new Date(2026, 10, 16)          // Mon Nov 16: the strip's first day
+const TODAY = 5                                // Sat Nov 21
+const DAYS = 56
+const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const dayOf = (i) => { const d = new Date(START); d.setDate(d.getDate() + i); return d }
+const short = (i) => { const d = dayOf(i); return `${WD[d.getDay()]} ${MO[d.getMonth()]} ${d.getDate()}` }
+const md = (i) => { const d = dayOf(i); return `${MO[d.getMonth()]} ${d.getDate()}` }
+const isWkend = (i) => { const w = dayOf(i).getDay(); return w === 0 || w === 6 }
+const NORMAL = (i) => isWkend(i) ? [2, 5] : [1, 4]
+
+const EV = {
+  emberfall: { name: 'Emberfall Tides', kind: 'Release', from: 11, to: 20, rng: [14, 24], shape: 'release' },
+  ashenFar:  { name: 'Ashen Circuit Regional', kind: 'Tournament', from: 26, to: 27, rng: null, nohist: true },
+  ashenNear: { name: 'Ashen Circuit Regional', kind: 'Tournament', from: 12, to: 13, rng: [4, 18], nohist: true, wide: true },
+  winterfest:{ name: 'Winterfest Break', kind: 'School break', from: 33, to: 48, rng: [2, 8], shape: 'flat' },
+  frostPre:  { name: 'Frostbound Prerelease', kind: 'Prerelease', from: 31, to: 32, rng: [5, 12], shape: 'flat' },
+  hollowmere:{ name: 'Hollowmere Fair', kind: 'Holiday', from: 10, to: 13, rng: [2, 10], shape: 'flat' },
+  emberOver: { name: 'Emberfall Tides', kind: 'Release', from: 11, to: 20, rng: [14, 24], shape: 'release' },
+}
+const ACT = [3, 2, 4, 1, 3, 2]
+const STATES = {
+  'quiet':      { events: ['ashenFar', 'winterfest'], lead: null, act: ACT },
+  'week-out':   { events: ['emberfall', 'ashenFar', 'winterfest'], lead: 'emberfall', act: ACT },
+  'first-kind': { events: ['ashenNear', 'winterfest'], lead: 'ashenNear', act: ACT },
+  'spike':      { events: ['frostPre', 'winterfest'], lead: null, act: [3, 2, 4, 1, 3, 14] },
+  'after':      { events: ['ashenFar', 'winterfest'], lead: null, act: [7, 6, 4, 3, 4, 2] },
+  'overlap':    { events: ['hollowmere', 'emberOver', 'winterfest'], lead: 'overlap', act: ACT },
+}
+
+function bandFor(stateKey, i, events) {
+  let [lo, hi] = NORMAL(i); let kind = 'band'
+  const hits = []
+  for (const id of events) {
+    const e = EV[id]
+    if (i < e.from || i > e.to || !e.rng) continue
+    const k = i - e.from
+    const f = e.shape === 'release' ? (k < 3 ? 1 : Math.max(0.35, 1 - (k - 2) * 0.12)) : 1
+    hits.push([lo + (e.rng[0] - lo) * f, hi + (e.rng[1] - hi) * f, e])
+  }
+  if (hits.length === 1) { [lo, hi] = hits[0]; kind = hits[0][2].wide ? 'wide' : 'ev' }
+  if (hits.length > 1) {   // two events at once: the guess cannot separate them, so it takes the union and widens it
+    lo = Math.max(...hits.map((h) => h[0])); hi = hits.reduce((s, h) => s + h[1], 0); kind = 'ev'
+  }
+  return { lo: Math.round(lo), hi: Math.round(hi), kind }
+}
+
+/* ---------------- state from the hash ---------------- */
+let H = readHash()
+let selected = null
+const hidden = () => new Set((H.get('hide') || '').split(',').filter(Boolean))
+function setHash(mut) {
+  const m = new Map(H); mut(m)
+  const s = [...m].filter(([, v]) => v !== '' && v != null).map(([k, v]) => `${k}=${v}`).join('&')
+  location.hash = s
+}
+const stateKey = () => STATES[H.get('state')] ? H.get('state') : 'week-out'
+const view = () => H.get('view') === 'fulfiller' ? 'fulfiller' : 'owner'
+
+/* ---------------- the strip ---------------- */
+const NS = 'http://www.w3.org/2000/svg'
+function el(tag, attrs, parent, text) {
+  const n = document.createElementNS(NS, tag)
+  for (const k in attrs) n.setAttribute(k, attrs[k])
+  if (text != null) n.textContent = text
+  if (parent) parent.appendChild(n)
+  return n
+}
+const isOn = (sk, id) => selected === id || (selected == null && (STATES[sk].lead === id || (sk === 'overlap' && (id === 'hollowmere' || id === 'emberOver'))))
+function drawStrip() {
+  const sk = stateKey(), st = STATES[sk], svg = document.getElementById('chart')
+  const W = Math.max(320, svg.parentElement.clientWidth - 40)
+  const laneH = 30
+  const padL0 = 30, colW0 = (W - padL0 - 4) / DAYS
+  // lanes: a marker drops to the next lane when its name would run into the marker before it
+  const probe = el('text', { class: 'c-probe' }, svg)
+  const ends = [], laneOf = {}
+  st.events.map((id) => EV[id]).forEach((e, n) => {
+    probe.textContent = e.name
+    const sx = padL0 + e.from * colW0, ex = Math.max(sx + probe.getComputedTextLength() + 12, sx + (e.to - e.from + 1) * colW0 + 6)
+    let l = 0; while (ends[l] != null && ends[l] > sx) l++
+    ends[l] = ex; laneOf[st.events[n]] = l
+  })
+  probe.remove()
+  const lanes = Math.max(1, ends.length), top = lanes * laneH + 4, wkH = 20, cTop = top + wkH, cH = 150, H2 = cTop + cH + 6
+  const padL = 30, colW = (W - padL - 4) / DAYS
+  const bands = Array.from({ length: DAYS }, (_, i) => bandFor(sk, i, st.events))
+  const ymax = Math.max(20, Math.ceil((Math.max(...bands.map((b) => b.hi), ...st.act) + 2) / 10) * 10)
+  const y = (v) => cTop + cH - (v / ymax) * cH
+  const x = (i) => padL + i * colW
+  svg.setAttribute('viewBox', `0 0 ${W} ${H2}`); svg.setAttribute('height', H2)
+  svg.innerHTML = '<desc id="chartDesc"></desc>'
+  const defs = el('defs', {}, svg)
+  const pat = el('pattern', { id: 'hatch', width: 5, height: 5, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs)
+  el('line', { x1: 0, y1: 0, x2: 0, y2: 5, class: 'hatch-line' }, pat)
+
+  const hide = hidden()
+  if (!hide.has('weekends')) for (let i = 0; i < DAYS; i++) if (isWkend(i)) el('rect', { x: x(i), y: cTop, width: colW, height: cH, class: 'c-wkend' }, svg)
+  el('rect', { x: x(TODAY), y: top, width: colW, height: wkH + cH, class: 'c-today' }, svg)
+  for (let v = 0; v <= ymax; v += 10) {
+    el('line', { x1: padL, x2: W, y1: y(v), y2: y(v), class: 'c-grid' }, svg)
+    el('text', { x: padL - 6, y: y(v) + 3, 'text-anchor': 'end', class: 'c-y' }, svg, v)
+  }
+  for (let i = 0; i < DAYS; i += 7) {
+    el('line', { x1: x(i), x2: x(i), y1: top + 2, y2: cTop + cH, class: 'c-wktick' }, svg)
+    if (Math.abs(i - TODAY) > 2 || colW > 18) el('text', { x: x(i) + 4, y: top + 14, class: 'c-wk' }, svg, md(i))
+  }
+  el('text', { x: x(TODAY) + colW / 2, y: top + 14, 'text-anchor': 'middle', class: 'c-today-lab' }, svg, 'Today')
+
+  bands.forEach((b, i) => {
+    const bw = Math.max(4, colW * 0.62), bx = x(i) + (colW - bw) / 2
+    const r = el('rect', { x: bx, y: y(b.hi), width: bw, height: Math.max(3, y(b.lo) - y(b.hi)), rx: Math.min(bw / 2, 4),
+      class: `c-band ${b.kind === 'band' ? '' : b.kind} ${i < TODAY ? 'dim' : ''}` }, svg)
+    el('title', {}, r, `${short(i)}: ${b.lo}–${b.hi} orders expected`)
+  })
+  st.act.forEach((v, i) => {
+    const aw = Math.max(3, colW * 0.3), ax = x(i) + (colW - aw) / 2
+    const hot = sk === 'spike' && i === TODAY
+    const r = el('rect', { x: ax, y: y(v), width: aw, height: y(0) - y(v), rx: 1.5, class: `c-act ${hot ? 'hot' : ''}` }, svg)
+    el('title', {}, r, `${short(i)}: ${v} orders${i === TODAY ? ' so far' : ''}`)
+    if (hot) el('text', { x: x(i) + colW / 2, y: y(v) - 6, 'text-anchor': 'middle', class: 'c-act-lab' }, svg, v)
+  })
+
+  // event markers: a name over a bar, one lane each; a name is cut to the room before the next marker
+  const placed = st.events.map((id) => ({ id, e: EV[id], lane: laneOf[id] }))
+  placed.forEach(({ id, e, lane }) => {
+    const ex = x(e.from) + 1, ew = (e.to - e.from + 1) * colW - 2, ey = lane * laneH
+    const next = placed.filter((p) => p.lane === lane && p.e.from > e.from).map((p) => x(p.e.from)).sort((a, b) => a - b)[0]
+    const room = (next == null ? W : next) - ex - 8
+    const on = isOn(sk, id)
+    const g = el('g', { class: `c-ev ${e.nohist ? 'nohist' : ''} ${on ? 'on' : ''}`, tabindex: 0, role: 'button',
+      'aria-label': `${e.name}, ${e.kind}, ${short(e.from)} to ${short(e.to)}`, 'aria-pressed': on }, svg)
+    el('rect', { x: ex, y: ey, width: Math.max(room, ew), height: laneH - 2, class: 'hit' }, g)
+    el('rect', { x: ex, y: ey + laneH - 12, width: ew, height: 8, rx: 4, class: 'bar' }, g)
+    const t = el('text', { x: ex, y: ey + 12 }, g, e.name)
+    if (t.getComputedTextLength && t.getComputedTextLength() > room) {
+      let n = e.name
+      while (n.length > 3 && t.getComputedTextLength() > room) { n = n.slice(0, -1); t.textContent = n.trimEnd() + '…' }
+      el('title', {}, g, e.name)
+    }
+    g.addEventListener('click', () => select(id))
+    g.addEventListener('keydown', (k) => { if (k.key === 'Enter' || k.key === ' ') { k.preventDefault(); select(id) } })
+  })
+  svg.querySelector('desc').textContent = `Orders per day for 8 weeks from ${short(0)}. ` +
+    st.events.map((id) => `${EV[id].name}, ${short(EV[id].from)} to ${short(EV[id].to)}`).join('; ') + '.'
+}
+
+/* ---------------- copy per state ---------------- */
+const VERDICT = {
+  'quiet':      ['Nothing expected for 3 weeks.', 'Normal: 1 to 5 orders a day. Next on the clock: Ashen Circuit Regional, Sat Dec 12.'],
+  'week-out':   ['Emberfall Tides lands in 6 days. Expect 14–24 orders a day at the start.', 'Normal is 1–5. It eases over 10 days, Fri Nov 27 to Sun Dec 6.'],
+  'first-kind': ['Ashen Circuit Regional is in 7 days, and you have never had one.', 'The range below is borrowed from the closest kind, so it is wide.'],
+  'spike':      ['Today: 14 orders so far, against 1–5 expected.', 'Nothing on the clock explains it.'],
+  'after':      ['Mistral Crown is over. Your orders stayed inside the guess on 8 of 10 days.', 'Score it below, so the next release guess learns from it.'],
+  'overlap':    ['Two events land together from Thu Nov 26. Expect 14–34 orders a day.', 'Hollowmere Fair and Emberfall Tides overlap. The guess cannot tell them apart.'],
+}
+const FF = {
+  'quiet':      { busy: false, lines: [['Normal week. Nothing to prepare.']] },
+  'week-out':   { busy: true, lines: [
+    ['Busy days ahead: Friday Nov 27 to Sunday Nov 29. Busier than usual until Sunday Dec 6.'],
+    ['Be ready for up to 24 orders a day.'],
+    ['Have 72 mailers, 240 sleeves and 2 rolls of tape ready by Thursday.', 'supplies'],
+    ['Most cards will come from boxes 3 and 5.', 'boxes'],
+    ['Two extra days to pack: Saturday Nov 28 and Sunday Nov 29.', 'extra']] },
+  'first-kind': { busy: true, lines: [
+    ['Saturday Nov 28 and Sunday Nov 29 may be busy. This is a new kind of weekend, so nobody knows how busy.'],
+    ['Be ready for up to 18 orders a day.'],
+    ['Have 40 mailers and 120 sleeves ready by Friday.', 'supplies'],
+    ['One extra day to pack: Sunday Nov 29.', 'extra']] },
+  'first-kind-none': { busy: true, lines: [
+    ['Saturday Nov 28 and Sunday Nov 29 may be busy. This is a new kind of weekend, so nobody knows how busy.'],
+    ['Keep your usual supplies ready.', 'supplies']] },
+  'spike':      { busy: true, lines: [['Busier than usual today: 14 orders so far.'], ['The cards are below, in the usual order.']] },
+  'after':      { busy: false, lines: [['The busy stretch is over. Normal week ahead.'], ['Nothing to prepare.']] },
+  'overlap':    { busy: true, lines: [
+    ['Busy days ahead: Thursday Nov 26 to Sunday Dec 6. A holiday and a new set come together.'],
+    ['Be ready for up to 34 orders a day.'],
+    ['Have 100 mailers, 330 sleeves and 3 rolls of tape ready by Wednesday.', 'supplies'],
+    ['Most cards will come from boxes 3 and 5.', 'boxes'],
+    ['Three extra days to pack: Friday Nov 27 to Sunday Nov 29.', 'extra']] },
+}
+const ffKey = () => stateKey() === 'first-kind' && H.get('guess') === 'none' ? 'first-kind-none' : stateKey()
+const ffPreview = () => FF[ffKey()].lines.filter(([, o]) => !o || !hidden().has(o)).map(([t]) => `<p>${t}</p>`).join('')
+
+/* ---------------- the lead card ---------------- */
+const kindPill = (e) => `<span class="pill">${e.kind}</span>`
+function previewBlock() {
+  return `<div class="ff-preview" data-opt="preview">
+      <div class="ff-preview-head"><span>The Fulfiller sees this on Cards to Pull</span>
+        <button class="btn ghost" type="button" data-go-view="fulfiller">Open the Fulfiller View</button></div>
+      ${ffPreview()}</div>`
+}
+function prepCard() {
+  const e = EV.emberfall
+  return `<div class="card-top">
+      <div class="card-pills">${kindPill(e)}<span class="pill accent">In 6 Days</span></div>
+      <h2 class="card-title" id="focus-prep">${e.name}</h2>
+      <p class="card-when">Fri Nov 27 to Sun Dec 6. Busiest the first 3 days, then easing.</p>
+    </div>
+    <div class="figure"><span class="figure-n">14–24</span><span class="figure-u">orders a day at the start</span>
+      <span class="figure-basis">From your 2 past releases. Normal is 1–5. The last release ran 12–31.</span></div>
+    <div class="facts">
+      <div class="fact"><h3>Sets to Watch</h3><ul>
+        <li><span data-typed>Mistral Crown</span><b class="num">58%</b></li>
+        <li><span data-typed>Gilded Hollow</span><b class="num">22%</b></li>
+        <li><span data-typed>Ashfall Promos</span><b class="num">12%</b></li></ul>
+        <p class="note">Share of cards sold in the last release.</p>
+        <p class="note" data-opt="boxes">Mostly from boxes 3 and 5.</p></div>
+      <div class="fact" data-opt="supplies"><h3>Supplies</h3><ul>
+        <li>Mailers<b class="num">72</b></li><li>Sleeves<b class="num">240</b></li><li>Tape<b class="num">2 rolls</b></li></ul>
+        <p class="note">Enough for the first 3 days at the top of the range.</p></div>
+      <div class="fact"><h3>Fulfiller Days</h3><ul>
+        <li>Fri Nov 27<b>Usual</b></li><li>Sat Nov 28<b data-opt="extra">Extra</b></li><li>Sun Nov 29<b data-opt="extra">Extra</b></li></ul>
+        <p class="note" data-opt="extra">2 extra sessions.</p></div>
+    </div>
+    ${previewBlock()}
+    <details class="why"><summary>Why This Range</summary><ul>
+      <li>Mistral Crown release, Nov 6 to Nov 15: 12–31 a day at the start.</li>
+      <li>Gilded Hollow release, Aug 7 to Aug 16: 9–22 a day at the start.</li></ul></details>
+    <div class="acts"><button class="btn" type="button">Edit Event</button></div>`
+}
+function nohistCard() {
+  const none = H.get('guess') === 'none', e = EV.ashenNear
+  const body = none
+    ? `<div class="figure"><span class="watch">No guess. Watch this one.</span>
+        <span class="figure-basis">Its days are scored afterwards and become the first tournament in your history.</span></div>`
+    : `<div class="figure"><span class="figure-n wide">4–18</span><span class="figure-u">orders a day, borrowed</span>
+        <span class="figure-basis">From your 3 prerelease weekends, the closest kind you have. Wide on purpose.</span></div>
+       <div class="facts"><div class="fact" data-opt="supplies"><h3>Supplies</h3><ul>
+         <li>Mailers<b class="num">40</b></li><li>Sleeves<b class="num">120</b></li></ul>
+         <p class="note">Enough for 2 days at the top of the borrowed range.</p></div>
+         <div class="fact"><h3>Fulfiller Days</h3><ul><li>Sat Nov 28<b>Usual</b></li><li>Sun Nov 29<b data-opt="extra">Extra</b></li></ul></div></div>`
+  return `<div class="card-top">
+      <div class="card-pills">${kindPill(e)}<span class="pill accent">In 7 Days</span></div>
+      <h2 class="card-title" id="focus-nohist">${e.name}</h2>
+      <p class="card-when">Sat Nov 28 to Sun Nov 29.</p></div>
+    <div class="notice"><span><b>No past event like this.</b> Choose how the clock treats it.</span></div>
+    <div class="seg" role="group" aria-label="How to guess">
+      <button type="button" data-guess="borrow" aria-pressed="${!none}">Borrow from Prereleases</button>
+      <button type="button" data-guess="none" aria-pressed="${none}">No Guess</button></div>
+    ${body}
+    ${previewBlock()}`
+}
+function quietCard() {
+  return `<div class="card-top"><div class="card-pills"><span class="pill ok">Quiet</span></div>
+      <h2 class="card-title" id="focus-quiet">Three Normal Weeks</h2>
+      <p class="card-when">Sun Nov 22 to Fri Dec 11. Nothing on the clock, and nothing like a past spike.</p></div>
+    <div class="figure"><span class="figure-n">1–5</span><span class="figure-u">orders a day, your normal</span>
+      <span class="figure-basis">From your last 90 days with no event.</span></div>
+    <div class="notice" data-opt="rig" style="background:var(--bn-accent-tint)"><span>Quiet weeks are a good time to run the capture rig.</span></div>
+    <div class="acts"><button class="btn primary" type="button" data-opt="rig">Open Capture</button>
+      <button class="btn" type="button" data-pick="ashenFar">See the Next Event</button></div>`
+}
+function spikeCard() {
+  return `<div class="card-top"><div class="card-pills"><span class="pill warn">Above the Range</span></div>
+      <h2 class="card-title" id="focus-spike">Is Something Happening?</h2>
+      <p class="card-when">9 of today's 14 orders are Gilded Hollow cards. Yesterday ran 3.</p></div>
+    <div class="figure"><span class="figure-n">14</span><span class="figure-u">orders so far today</span>
+      <span class="figure-basis">1–5 expected for a Saturday.</span></div>
+    <div class="form-row">
+      <label class="lab">Name It<input class="field" id="spikeName" placeholder="e.g. a deck won a tournament" /></label>
+      <label class="lab">Kind<select class="field" id="spikeKind"><option>Tournament</option><option>Release</option><option>Prerelease</option>
+        <option>Rotation</option><option>Holiday</option><option>School break</option><option>Something else</option></select></label></div>
+    <div class="acts"><button class="btn primary" type="button" id="spikeSave">Add to History</button>
+      <button class="btn ghost" type="button" id="spikeLater">Not Sure Yet</button>
+      <span class="said" id="spikeSaid" role="status"></span></div>`
+}
+const AFTER = { lo: [], hi: [], act: [26, 33, 24, 19, 17, 14, 12, 11, 9, 16] }
+for (let k = 0; k < 10; k++) {
+  const f = k < 3 ? 1 : Math.max(0.35, 1 - (k - 2) * 0.12)
+  AFTER.lo.push(Math.round(1 + 11 * f)); AFTER.hi.push(Math.round(5 + 26 * f))
+}
+function afterCard() {
+  return `<div class="card-top"><div class="card-pills"><span class="pill">Release</span><span class="pill">Over</span></div>
+      <h2 class="card-title" id="focus-after">Mistral Crown: Guess Against What Happened</h2>
+      <p class="card-when">Fri Nov 6 to Sun Nov 15.</p></div>
+    <svg id="afterChart" role="img" aria-label="Guess range against your orders per day, Nov 6 to Nov 15"></svg>
+    <div class="legend" aria-hidden="true"><span><i class="sw ev"></i>The Guess</span><span><i class="sw act" style="background:var(--bn-ink)"></i>Your Orders</span>
+      <span><i class="sw" style="width:10px;height:10px;border-radius:50%;background:var(--bn-warn)"></i>Outside the Guess</span></div>
+    <table class="sets"><thead><tr><th>Set</th><th class="n">Guessed</th><th class="n">Sold</th><th>Against the Guess</th></tr></thead><tbody>
+      <tr><td data-typed>Mistral Crown</td><td class="n">45%</td><td class="n">58%</td><td><span class="pill warn">More</span></td></tr>
+      <tr><td data-typed>Gilded Hollow</td><td class="n">30%</td><td class="n">22%</td><td><span class="pill">Less</span></td></tr>
+      <tr><td data-typed>Ashfall Promos</td><td class="n">15%</td><td class="n">12%</td><td><span class="pill ok">As Guessed</span></td></tr>
+      <tr><td>Other sets</td><td class="n">10%</td><td class="n">8%</td><td><span class="pill ok">As Guessed</span></td></tr></tbody></table>
+    <div class="acts"><span style="font-weight:600;margin-right:var(--bn-2)">Was the prep card worth it?</span>
+      <button class="btn" type="button" data-score="Useful">Useful</button>
+      <button class="btn" type="button" data-score="Missed">Missed</button>
+      <span class="said" id="scoreSaid" role="status"></span></div>`
+}
+function drawAfter() {
+  const svg = document.getElementById('afterChart'); if (!svg) return
+  const W = Math.max(280, svg.clientWidth || svg.parentElement.clientWidth - 48), Hh = 200, pl = 28, pb = 22, pt = 10, pr = 24
+  const n = 10, cw = (W - pl - pr) / (n - 1), ymax = 40
+  const x = (k) => pl + k * cw, y = (v) => pt + (Hh - pt - pb) * (1 - v / ymax)
+  svg.setAttribute('viewBox', `0 0 ${W} ${Hh}`); svg.innerHTML = ''
+  for (let v = 0; v <= ymax; v += 10) { el('line', { x1: pl, x2: W, y1: y(v), y2: y(v), class: 'c-grid' }, svg); el('text', { x: pl - 6, y: y(v) + 3, 'text-anchor': 'end', class: 'c-y' }, svg, v) }
+  const up = AFTER.hi.map((v, k) => `${x(k)},${y(v)}`).join(' '), dn = AFTER.lo.map((v, k) => `${x(k)},${y(v)}`).reverse().join(' ')
+  el('polygon', { points: `${up} ${dn}`, class: 'a-band' }, svg)
+  el('polyline', { points: AFTER.act.map((v, k) => `${x(k)},${y(v)}`).join(' '), class: 'a-line' }, svg)
+  AFTER.act.forEach((v, k) => {
+    const out = v > AFTER.hi[k] || v < AFTER.lo[k]
+    const c = el('circle', { cx: x(k), cy: y(v), r: out ? 5 : 3, class: `a-dot ${out ? 'out' : ''}` }, svg)
+    el('title', {}, c, `Nov ${6 + k}: ${v} orders, guess ${AFTER.lo[k]}–${AFTER.hi[k]}`)
+    el('text', { x: x(k), y: Hh - 6, 'text-anchor': 'middle', class: 'a-x' }, svg, `Nov ${6 + k}`)
+  })
+}
+function overlapCard() {
+  return `<div class="card-top">
+      <div class="card-pills"><span class="pill">Holiday</span><span class="pill">Release</span><span class="pill accent">In 5 Days</span></div>
+      <h2 class="card-title" id="focus-overlap">Hollowmere Fair and Emberfall Tides</h2>
+      <p class="card-when">Thu Nov 26 to Sun Dec 6. They share Fri Nov 27 to Sun Nov 29.</p></div>
+    <div class="figure"><span class="figure-n">14–34</span><span class="figure-u">orders a day on the shared days</span>
+      <span class="figure-basis">Releases ran 14–24 at the start, holiday weekends 2–10. You have never had both at once, so the guess cannot tell them apart and adds the two.</span></div>
+    <div class="facts">
+      <div class="fact" data-opt="supplies"><h3>Supplies</h3><ul>
+        <li>Mailers<b class="num">100</b></li><li>Sleeves<b class="num">330</b></li><li>Tape<b class="num">3 rolls</b></li></ul>
+        <p class="note">Enough for the 3 shared days at the top of the range.</p></div>
+      <div class="fact"><h3>Fulfiller Days</h3><ul>
+        <li>Thu Nov 26<b>Usual</b></li><li>Fri Nov 27<b data-opt="extra">Extra</b></li><li>Sat Nov 28<b data-opt="extra">Extra</b></li><li>Sun Nov 29<b data-opt="extra">Extra</b></li></ul></div>
+    </div>
+    ${previewBlock()}
+    <p class="note" style="font-size:var(--bn-fs-sm);color:var(--bn-ink-3)">Afterwards they are scored together, as one stretch.</p>`
+}
+function farCard(id) {
+  const e = EV[id]
+  const rng = e.rng ? `<div class="figure"><span class="figure-n ${e.wide ? 'wide' : ''}">${e.rng[0]}–${e.rng[1]}</span><span class="figure-u">orders a day</span>
+      <span class="figure-basis">The full prep card opens ${short(Math.max(TODAY, e.from - 7))}, a week before.</span></div>`
+    : `<div class="notice"><span><b>No past event like this.</b> A week before, choose to borrow a range or watch it.</span></div>`
+  return `<div class="card-top"><div class="card-pills">${kindPill(e)}<span class="pill">In ${e.from - TODAY} Days</span></div>
+      <h2 class="card-title">${e.name}</h2><p class="card-when">${short(e.from)} to ${short(e.to)}.</p></div>
+    ${rng}
+    <div class="acts"><button class="btn" type="button">Edit Event</button><button class="btn ghost" type="button" data-pick="">Back</button></div>`
+}
+
+function drawLead() {
+  const sk = stateKey(), lead = document.getElementById('lead')
+  lead.classList.toggle('warn', sk === 'spike' && selected == null)
+  if (selected && !(sk === 'overlap' && (selected === 'hollowmere' || selected === 'emberOver')) && selected !== STATES[sk].lead) lead.innerHTML = farCard(selected)
+  else lead.innerHTML = ({ 'quiet': quietCard, 'week-out': prepCard, 'first-kind': nohistCard, 'spike': spikeCard, 'after': afterCard, 'overlap': overlapCard })[sk]()
+  lead.insertAdjacentHTML('afterbegin', `<span class="tag new">New: the ${sk === 'after' ? 'after-event score' : sk === 'spike' ? 'spike question' : sk === 'quiet' ? 'quiet-weeks card' : 'prep card'}</span>`)
+  drawAfter(); applyHide(); wireLead()
+}
+function wireLead() {
+  const lead = document.getElementById('lead')
+  lead.querySelectorAll('[data-guess]').forEach((b) => b.onclick = () => setHash((m) => m.set('guess', b.dataset.guess === 'none' ? 'none' : '')))
+  lead.querySelectorAll('[data-go-view]').forEach((b) => b.onclick = () => setHash((m) => m.set('view', 'fulfiller')))
+  lead.querySelectorAll('[data-pick]').forEach((b) => b.onclick = () => select(b.dataset.pick || null))
+  lead.querySelectorAll('[data-score]').forEach((b) => b.onclick = () => {
+    const s = document.getElementById('scoreSaid')
+    s.innerHTML = `Marked ${b.dataset.score}. Mistral Crown joins your history. <button class="btn ghost" type="button" id="scoreUndo">Undo</button>`
+    lead.querySelectorAll('[data-score]').forEach((o) => o.setAttribute('aria-pressed', o === b))
+    document.getElementById('scoreUndo').onclick = () => { s.textContent = ''; lead.querySelectorAll('[data-score]').forEach((o) => o.removeAttribute('aria-pressed')) }
+  })
+  const save = document.getElementById('spikeSave')
+  if (save) {
+    const said = document.getElementById('spikeSaid')
+    save.onclick = () => {
+      const name = document.getElementById('spikeName').value.trim()
+      if (!name) { said.className = 'said warn'; said.textContent = 'Type a name first.'; return }
+      said.className = 'said'; said.textContent = ''
+      said.append(`Added “${name}” to your history as a ${document.getElementById('spikeKind').value}. `)
+      const u = document.createElement('button'); u.className = 'btn ghost'; u.type = 'button'; u.textContent = 'Undo'
+      u.onclick = () => { said.textContent = '' }; said.append(u)
+    }
+    document.getElementById('spikeLater').onclick = () => { said.className = 'said'; said.textContent = 'Asked again tomorrow if it keeps up.' }
+  }
+}
+
+function drawList() {
+  const sk = stateKey(), st = STATES[sk], box = document.getElementById('evList')
+  box.innerHTML = st.events.map((id) => {
+    const e = EV[id]
+    const on = isOn(sk, id)
+    const rng = e.rng ? `<span class="ev-rng ${e.wide ? 'num' : ''}" ${e.wide ? 'style="color:var(--bn-pill-ink-warn)"' : ''}>${e.rng[0]}–${e.rng[1]}</span>` : '<span class="pill warn">New Kind</span>'
+    return `<button class="ev-row" type="button" data-ev="${id}" aria-pressed="${on}">
+      <span class="ev-date">${short(e.from)}</span>
+      <span><span class="ev-name" data-typed>${e.name}</span><br><span class="ev-kind">${e.kind}, ${e.to - e.from + 1} days</span></span>${rng}</button>`
+  }).join('')
+  box.querySelectorAll('[data-ev]').forEach((b) => b.onclick = () => select(b.dataset.ev))
+}
+
+function drawFf() {
+  const f = FF[ffKey()]
+  document.getElementById('ffWeek').classList.toggle('busy', f.busy)
+  document.getElementById('ffList').innerHTML = f.lines.map(([t, o]) => `<li ${o ? `data-opt="${o}"` : ''}>${t}</li>`).join('')
+  applyHide()
+}
+
+function select(id) { selected = id; drawStrip(); drawLead(); drawList() }
+
+function applyHide() {
+  const h = hidden()
+  document.querySelectorAll('[data-opt]').forEach((n) => { n.hidden = h.has(n.dataset.opt) })
+  document.body.classList.toggle('nonotes', h.has('notes') || H.get('notes') === 'off')
+  document.querySelectorAll('[data-hide]').forEach((b) => b.setAttribute('aria-pressed', h.has(b.dataset.hide)))
+}
+
+function render() {
+  H = readHash(); applyTheme()
+  const sk = stateKey(), v = view()
+  document.querySelectorAll('[data-state]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.state === sk))
+  document.querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.view === v))
+  const t = document.documentElement.getAttribute('data-theme')
+  document.querySelectorAll('[data-t]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.t === t))
+  document.getElementById('ownerView').hidden = v !== 'owner'
+  document.getElementById('ffView').hidden = v !== 'fulfiller'
+  document.getElementById('verdict').classList.toggle('warn', sk === 'spike')
+  document.getElementById('verdictMain').textContent = VERDICT[sk][0]
+  document.getElementById('verdictSub').textContent = VERDICT[sk][1]
+  document.getElementById('stripFoot').textContent = sk === 'spike' ? 'Today is drawn in amber: above the range, with no event behind it.' : 'Press an event to open its card.'
+  document.getElementById('learn').style.display = sk === 'spike' ? 'none' : ''
+  if (v === 'owner') { drawStrip(); drawLead(); drawList() }
+  drawFf(); applyHide()
+}
+
+/* ---------------- wiring ---------------- */
+document.querySelectorAll('[data-state]').forEach((b) => b.onclick = () => { selected = null; setHash((m) => { m.set('state', b.dataset.state); m.delete('guess') }) })
+document.querySelectorAll('[data-view]').forEach((b) => b.onclick = () => setHash((m) => m.set('view', b.dataset.view === 'owner' ? '' : 'fulfiller')))
+document.querySelectorAll('[data-t]').forEach((b) => b.onclick = () => setHash((m) => m.set('t', b.dataset.t)))
+document.querySelectorAll('[data-hide]').forEach((b) => b.onclick = () => {
+  const h = hidden(); h.has(b.dataset.hide) ? h.delete(b.dataset.hide) : h.add(b.dataset.hide)
+  setHash((m) => m.set('hide', [...h].join(',')))
+})
+const dlg = document.getElementById('addDlg')
+document.getElementById('addBtn').onclick = () => { document.getElementById('addSay').textContent = ''; dlg.showModal() }
+document.getElementById('addCancel').onclick = () => dlg.close()
+document.getElementById('addForm').onsubmit = () => { setTimeout(() => { document.getElementById('addSay').textContent = `Added ${document.getElementById('addName').value || 'the event'}. Sample only.` }, 0) }
+document.getElementById('learnSave').onclick = () => {
+  const n = document.getElementById('learnName').value.trim(), s = document.getElementById('learnSaid')
+  s.className = n ? 'said' : 'said warn'; s.textContent = n ? 'Saved. Oct 9 to Oct 18 is now a past event.' : 'Type a name first.'
+}
+addEventListener('hashchange', render)
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render)
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (view() === 'owner') { drawStrip(); drawAfter() } }, 80) })
+render()
+</script>
+</body>
+</html>
