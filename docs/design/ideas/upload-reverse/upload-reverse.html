@@ -193,8 +193,10 @@ details.choices label { display: inline-flex; gap: var(--bn-1-5); align-items: c
 .act-row { display: flex; gap: var(--bn-2); align-items: center; }
 .act-why { margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); min-height: 18px; text-align: right; max-width: 340px; }
 .act-why.is-ok { color: var(--bn-pill-ink-ok); }
-.check-status { margin: 0 var(--bn-5) var(--bn-4); min-height: 44px; display: flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; padding: var(--bn-2) var(--bn-3); border-radius: var(--bn-r); font-size: var(--bn-fs-md); background: var(--bn-surface-3); color: var(--bn-ink-2); }
-.check-status:empty { visibility: hidden; }
+.check-status { flex: 1 1 100%; margin: 0; min-height: 44px; display: flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; padding: var(--bn-2) var(--bn-3); border-radius: var(--bn-r); font-size: var(--bn-fs-md); background: var(--bn-surface-3); color: var(--bn-ink-2); }
+.check-status:empty { display: none; }
+/* Touch (the iPad at 820): the price choice is a 40px target, like every control under a finger. */
+@media (pointer: coarse) { .choice button { height: var(--bn-control-h-lg); padding: 0 var(--bn-3); } }
 .check-status.ok { background: var(--bn-ok-tint); color: var(--bn-ink); }
 .check-status.warn { background: var(--bn-warn-tint); color: var(--bn-ink); }
 .check-status .btn { margin-left: auto; }
@@ -219,7 +221,7 @@ details.choices label { display: inline-flex; gap: var(--bn-1-5); align-items: c
 .c-sales { color: var(--bn-ink-2); font-size: var(--bn-fs-sm); text-align: right; }
 .c-risk { text-align: right; font-weight: 600; }
 .c-risk .copies { display: block; font-weight: 400; color: var(--bn-ink-3); font-size: var(--bn-fs-xs); }
-.side.anno::after { top: auto; bottom: 8px; right: 8px; }
+.side.anno::after, .sheet.anno::after { top: auto; bottom: 8px; right: 8px; }
 .page-head > :first-child { flex: 1 1 0; min-width: 0; }
 .rows li .r-right > * { white-space: nowrap; }
 .lab { display: none; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-family: var(--bn-font-ui); font-weight: 400; }
@@ -517,6 +519,7 @@ details.choices label { display: inline-flex; gap: var(--bn-1-5); align-items: c
     let note = 'It cannot ride on Keep New for All.';
     if (local.picks[HV.id] === 'old') note = 'Old price kept: $142.00.';
     else if (ok) note = 'Confirmed at $96.00.';
+    else if (/^\$?\d+\.\d{2}$/.test(local.typed.trim())) note = 'That is not the new price. Type 96.00, or press Use Old.';
     return `<div class="hv${ok ? ' is-done' : ''}" id="hv-confirm">
       <div>
         <h3>${esc(HV.name)}</h3>
@@ -563,7 +566,7 @@ details.choices label { display: inline-flex; gap: var(--bn-1-5); align-items: c
     else if (total > 0) {
       const c = { old: 0, market: 0 };
       Object.values(local.picks).forEach((p) => { if (c[p] !== undefined) c[p] += 1; });
-      why = `Ready. ${c.old} use the old price, ${c.market} use market.`;
+      why = `Ready. ${c.old} at the old price, ${c.market} at market.`;
     } else why = isRev ? 'Raises are never flagged, so a reverse of a cut checks clean.' : 'Ready.';
 
     let body = '';
@@ -609,10 +612,10 @@ details.choices label { display: inline-flex; gap: var(--bn-1-5); align-items: c
           </div>
           <p class="act-why${locked ? '' : ' is-ok'}" id="act-why" aria-live="polite">${why}</p>
         </div>
+        <div class="check-status ${tone}" role="status" id="check-status">${status}</div>
       </div>
       ${body}
-      ${foot}
-      <div class="check-status ${tone}" role="status">${status}</div>`;
+      ${foot}`;
   }
 
   function renderWorklist() {
@@ -631,11 +634,20 @@ details.choices label { display: inline-flex; gap: var(--bn-1-5); align-items: c
   ];
 
   function sendRow(s, picked) {
-    const how = s.how === 'Sent' ? '<span class="pill pill-ok">Sent</span>' : `<span class="pill">${s.how}</span>`;
+    const unmarked = s.id === 's2215' && !local.marked;
+    const how = s.how === 'Sent' ? '<span class="pill pill-ok">Sent</span>'
+      : s.id === 's2215' && local.marked ? '<span class="pill">Downloaded, marked uploaded</span>' : `<span class="pill">${s.how}</span>`;
+    if (s.id === 's2215') s = { ...s, tags: local.marked ? [] : s.tags };
+    // A file not marked uploaded never reached buyers, so it has nothing to reverse until it is marked.
+    const act = unmarked
+      ? `<button class="btn btn-sm" type="button" data-mark="1">Mark Uploaded</button>`
+      : s.id === 's2130'
+        ? '<span class="send-figs" style="grid-column:2;grid-row:1 / span 2">Already reversed</span>'
+        : `<button class="btn btn-sm" type="button" data-reverse="${s.id}">${ICON.rev}Make Reverse</button>`;
     return `<li class="send${picked ? ' is-picked' : ''}" id="send-${s.id}">
       <span class="send-when">${s.when} ${how} ${s.tags.map(([c, t]) => `<span class="pill ${c}">${t}</span>`).join(' ')}</span>
-      <span class="send-figs"><span><b>${s.changes}</b> changes</span><span><b>${s.kept}</b> flags kept</span><span><b>${s.sold}</b> sold since</span></span>
-      <button class="btn btn-sm" type="button" data-reverse="${s.id}">${ICON.rev}Make Reverse</button>
+      <span class="send-figs"><span><b>${s.changes}</b> changes</span><span><b>${s.kept}</b> ${s.kept === 1 ? 'flag' : 'flags'} kept</span><span><b>${s.sold}</b> sold since</span></span>
+      ${act}
     </li>`;
   }
 
@@ -649,7 +661,8 @@ details.choices label { display: inline-flex; gap: var(--bn-1-5); align-items: c
       </div>`;
     } else if (opt.state === 'reverse') {
       const sold = [['Brindlefox', 'Near Mint, Glimmerwake 017/172', 1.2, 14.8, '7Q2-41'], ['Cobalt Mantis ex', 'Near Mint, Hollow Tides 151/190', 2.1, 18.6, '7Q2-44'], ['Hearthmoss Golem', 'Lightly Played, Saltmarsh Reverie 090/198', 0.6, 1.9, '7Q2-47']];
-      const back = [['Lanternfin', 0.36, 3.6], ['Cindertail Vix', 0.5, 4.95], ['Mossback Tortle', 0.06, 0.58], ['Duskhollow Owl', 0.9, 8.95]];
+      const back = [['Lanternfin', 0.36, 3.6], ['Cindertail Vix', 0.5, 4.95], ['Mossback Tortle', 0.06, 0.58], ['Duskhollow Owl', 0.9, 8.95]]
+        .concat(local.more ? [['Pebblewick', 0.12, 1.15], ['Gloamstag ex', 1.4, 13.9], ['Riverglass Newt', 0.08, 0.79], ['Ashen Lark', 0.31, 2.95]] : []);
       const cancel = opt.sold === 'cancel';
       sh.innerHTML = head('Reverse of Today 1:12 am', true) + `<div class="sheet-body">
         <div id="reverse-head">
@@ -668,7 +681,7 @@ details.choices label { display: inline-flex; gap: var(--bn-1-5); align-items: c
         <div class="grp" id="grp-back">
           <h3>Puts Back <span class="cnt">309</span></h3>
           <ul class="rows">${back.map(([n, now, old]) => `<li><span>${n}</span><small>Live now at ${$(now)}</small><span class="r-right back-price">Back to <b>${$(old)}</b></span></li>`).join('')}</ul>
-          <button class="btn btn-sm btn-quiet" type="button" style="align-self:flex-start">Show All 309</button>
+          <button class="btn btn-sm btn-quiet" type="button" data-more="1" aria-expanded="${!!local.more}" style="align-self:flex-start">${local.more ? 'Show Fewer' : 'Show All 309'}</button>
         </div>
       </div>
       <div class="sheet-foot"><p>The reverse goes through the same check as any send. Raises are never flagged.</p><button class="btn btn-primary btn-lg" type="button" data-state-go="reverse-check">Check the Reverse</button></div>`;
@@ -755,6 +768,8 @@ details.choices label { display: inline-flex; gap: var(--bn-1-5); align-items: c
     else if (ds.pick) { local.picks[ds.card] = ds.pick; if (ds.card === HV.id) local.typed = ''; }
     else if (ds.keepall) { flagsFor(checkKind()).forEach((f) => { if (!local.picks[f.id]) local.picks[f.id] = 'new'; }); }
     else if (ds.door) local.door = ds.door;
+    else if (ds.mark) local.marked = true;
+    else if (ds.more) local.more = !local.more;
     else if (ds.open) go(ds.open);
     else if (ds.reverse) go(ds.reverse === 's140' ? 'reverse-of-reverse' : 'reverse');
     else if (ds.close) go('clean');
