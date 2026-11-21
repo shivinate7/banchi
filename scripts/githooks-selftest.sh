@@ -36,7 +36,8 @@ trap cleanup EXIT
 
 say()  { printf '  %-6s %s\n' "$1" "$2"; }
 ok()   { pass=$((pass + 1)); say "ok" "$1"; }
-bad()  { fail=$((fail + 1)); say "FAIL" "$1"; }
+# A FAIL line starts at column 0: red-run reads a red only from a line that starts with FAIL.
+bad()  { fail=$((fail + 1)); printf 'FAIL   %s\n' "$1"; }
 
 # Runs a command with output swallowed and compares its exit status against what the guard
 # is supposed to do. `refuse` means non-zero, `allow` means zero — asserting the DIRECTION
@@ -265,6 +266,18 @@ echo "  -- every staged image gets the QR scan, wherever it lands (D303) --"
 # never let into this repository.
 git switch -q -c qrtest 2>/dev/null
 
+# THE PLAIN TOOLS A HOOK RUN CALLS, AND NO PYTHON. A case that needs a python3 puts its own shim
+# first on its PATH, so no venv and no system python3 reaches a case by accident.
+base_bin() {
+  local dir="$1" bin src
+  mkdir -p "$dir"
+  for bin in bash env git grep sed awk tr cat basename dirname mkdir rm cp mv ls \
+             head tail sort uniq wc xargs find; do
+    src="$(command -v "$bin" 2>/dev/null)" || continue
+    ln -sf "$src" "$dir/$bin"
+  done
+}
+
 # THE INTERPRETER THE HOOK USES. hook_python is the hook's own function: it is read out of
 # scripts/githooks/pre-commit and run from THIS checkout, not copied here. Run inside the fixture,
 # it would find no .venv and fall through to a bare python3 with no Pillow. The hook is a script,
@@ -272,10 +285,17 @@ git switch -q -c qrtest 2>/dev/null
 sed -n '/^hook_python() {$/,/^}$/p' "$REPO_ROOT/scripts/githooks/pre-commit" > "$tmp/hook_python.sh"
 . "$tmp/hook_python.sh"
 hook_py="$(cd "$REPO_ROOT" && hook_python)"
-# The commits below run the hook inside the fixture, where its `python3` fallback is whatever
-# PATH holds first. Put the same interpreter first for the QR cases, and restore PATH after them.
-saved_path="$PATH"
-if [ -n "$hook_py" ]; then PATH="$(dirname "$hook_py"):$PATH"; fi
+# The PNG builder must still get an interpreter when the hook yields none, or a broken hook would
+# fail the fixture build instead of the refusal under test. So the builder takes PATH's python3.
+[ -n "$hook_py" ] || hook_py="$(command -v python3 2>/dev/null || true)"
+# THE FIXTURE GETS THAT SAME VENV, BY THE HOOK'S OWN RULE: the hook finds `.venv/bin/python3` under
+# the repo top, so the fixture links it. PATH is not touched. A venv on PATH would let a call site
+# reverted to a bare `python3` pass every case below.
+case "$hook_py" in
+  */.venv/bin/python3)
+    ln -s "${hook_py%/bin/python3}" "$tmp/work/.venv"
+    printf '%s\n' .venv >> "$tmp/work/.git/info/exclude" ;;
+esac
 
 # THE CHECKER ITSELF IS NOT PART OF THIS FIXTURE REPOSITORY, SO IT IS COPIED IN. The hook
 # runs `scripts/qr-clear-check.py` under `hook_py` with the fixture repo as its cwd, and that script
@@ -323,14 +343,11 @@ if [ -s "$tmp/clean.png" ] && [ -s "$tmp/qr.png" ]; then
   # A SCANNER THAT CANNOT RUN REFUSES, WHERE IT USED TO WARN AND ALLOW. `fakebin` carries
   # every plain command scripts/githooks/pre-commit calls before reaching the image scan —
   # git, grep, sed, awk, tr, cat, basename, dirname — with python3 left out on purpose, so
-  # `command -v python3` fails exactly as it would on a machine with no interpreter at all.
+  # `command -v python3` fails exactly as it would on a machine with no interpreter at all. The
+  # fixture has no venv for this case, so the hook's own rule finds none either.
+  rm -f "$tmp/work/.venv"
   fakebin="$tmp/fakebin-nopython"
-  mkdir -p "$fakebin"
-  for bin in bash env git grep sed awk tr cat basename dirname mkdir rm cp mv ls \
-             head tail sort uniq wc xargs find; do
-    src="$(command -v "$bin" 2>/dev/null)" || continue
-    ln -sf "$src" "$fakebin/$bin"
-  done
+  base_bin "$fakebin"
   cp "$tmp/clean.png" docs/needs-a-scanner.png
   git add docs/needs-a-scanner.png
   expect refuse "no python3 on PATH — the commit refuses rather than warns" \
@@ -340,7 +357,78 @@ if [ -s "$tmp/clean.png" ] && [ -s "$tmp/qr.png" ]; then
 else
   bad "the fixture could not build a QR test image — PIL or zxing-cpp is missing here"
 fi
-PATH="$saved_path"
+
+if [ -s "$tmp/clean.png" ] && [ -s "$tmp/qr.png" ]; then
+  # THE HOOK'S OWN INTERPRETER WITH NO VENV ON PATH. The cases above reach the venv by the hook's own
+  # rule. These run where PATH holds only a `python3` shim that cannot import PIL, and the plain
+  # tools. A call site reverted to a bare `python3` gets the shim and refuses, so each case goes red
+  # on it. Every case builds its own repo and commits through the real hook.
+  interp="$tmp/interp"
+  mkdir -p "$interp/nopil"
+  cat > "$interp/nopil/python3" <<'SHIM'
+#!/bin/sh
+echo "ImportError: No module named 'PIL'" >&2
+exit 1
+SHIM
+  chmod +x "$interp/nopil/python3"
+  base_bin "$interp/bin"
+  case_path="$interp/nopil:$interp/bin"
+
+  # One repo on branch `feature` (never main), with the checker committed, so a linked worktree made
+  # from it has the checker too. The hook is armed after the seed commit. `.venv` stays out of git.
+  interp_repo() {
+    git init -q -b feature "$1"
+    git -C "$1" config user.email selftest@example.com
+    git -C "$1" config user.name selftest
+    git -C "$1" config commit.gpgsign false
+    mkdir -p "$1/scripts" "$1/codes" "$1/docs"
+    cp "$REPO_ROOT/scripts/qr-clear-check.py" "$1/scripts/"
+    cp "$REPO_ROOT/codes/__init__.py" "$REPO_ROOT/codes/qr.py" "$1/codes/"
+    echo seed > "$1/docs/seed.txt"
+    git -C "$1" add scripts codes docs/seed.txt
+    git -C "$1" commit -qm seed
+    git -C "$1" config core.hooksPath "$HOOKS_DIR"
+    printf '%s\n' .venv >> "$1/.git/info/exclude"
+  }
+  # A .venv whose bin/python3 runs the interpreter that can scan. The hook finds it by its own rule.
+  interp_venv() {
+    mkdir -p "$1/.venv/bin"
+    printf '#!/bin/sh\nexec "%s" "$@"\n' "$hook_py" > "$1/.venv/bin/python3"
+    chmod +x "$1/.venv/bin/python3"
+  }
+
+  venv_repo="$interp/venv-wins"
+  interp_repo "$venv_repo"
+  interp_venv "$venv_repo"
+  cp "$tmp/clean.png" "$venv_repo/docs/clean.png"
+  git -C "$venv_repo" add docs/clean.png
+  expect allow "the repo .venv wins over a python3 that cannot import PIL: a clean PNG is allowed" \
+    env PATH="$case_path" git -C "$venv_repo" commit -qm "clean, with the repo venv"
+  cp "$tmp/qr.png" "$venv_repo/docs/qr.png"
+  git -C "$venv_repo" add docs/qr.png
+  expect refuse "the repo .venv scans too: a decodable QR is refused" \
+    env PATH="$case_path" git -C "$venv_repo" commit -qm "qr, with the repo venv"
+  git -C "$venv_repo" reset -q -- docs/qr.png
+  rm -f "$venv_repo/docs/qr.png"
+
+  fb_main="$interp/fb-main"
+  interp_repo "$fb_main"
+  interp_venv "$fb_main"
+  git -C "$fb_main" worktree add -q "$interp/fb-linked" -b linked
+  cp "$tmp/clean.png" "$interp/fb-linked/docs/clean.png"
+  git -C "$interp/fb-linked" add docs/clean.png
+  expect allow "a linked worktree with no .venv uses the main checkout's: a clean PNG is allowed" \
+    env PATH="$case_path" git -C "$interp/fb-linked" commit -qm "clean, in a linked worktree"
+
+  broken="$interp/broken"
+  interp_repo "$broken"
+  mkdir -p "$broken/.venv/bin"
+  ln -s "$interp/nowhere/python3" "$broken/.venv/bin/python3"
+  cp "$tmp/clean.png" "$broken/docs/clean.png"
+  git -C "$broken" add docs/clean.png
+  expect refuse "a dangling .venv/bin/python3 falls through to the shim, and a clean PNG is still refused" \
+    env PATH="$case_path" git -C "$broken" commit -qm "clean, with a broken venv"
+fi
 
 # ----------------------------------------------------------- every refusal is logged
 # One line per refusal in the refusal log, and a log that cannot be written never changes the
