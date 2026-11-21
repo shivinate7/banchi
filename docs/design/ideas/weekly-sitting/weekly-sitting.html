@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weekly Sitting</title>
+<style>
+/* Tokens: copied from app/src/tokens.css (light and dark). No other colour is typed below. */
+:root {
+  color-scheme: light;
+  --bn-bg: #f4f5f8; --bn-surface: #ffffff; --bn-surface-2: #eceef2; --bn-surface-3: #f7f8fa;
+  --bn-hover: rgba(15, 18, 23, 0.03);
+  --bn-ink: #0f1217; --bn-ink-2: #3b414b; --bn-ink-3: #666c76; --bn-ink-4: #7f8791;
+  --bn-line: rgba(15, 18, 23, 0.08); --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-line-focus: rgba(61, 90, 241, 0.55);
+  --bn-accent: #3d5af1; --bn-accent-hover: #2f4bd9; --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10); --bn-accent-tint-2: rgba(61, 90, 241, 0.18); --bn-on-accent: #ffffff;
+  --bn-live: #d63d2b; --bn-live-tint: rgba(239, 75, 58, 0.12);
+  --bn-ok: #15803d; --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309; --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-danger: #b91c1c; --bn-danger-tint: rgba(220, 38, 38, 0.10);
+  --bn-money: #0f1217;
+  --bn-pill-ink-accent: var(--bn-accent-hover);
+  --bn-pill-ink-ok: #11733a; --bn-pill-ink-warn: #a14b09; --bn-pill-ink-danger: #b3123e; --bn-pill-ink-live: #a53f12;
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32), 0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-btn-bg: var(--bn-surface); --bn-btn-bg-hover: var(--bn-surface-3); --bn-btn-shadow: var(--bn-shadow-1);
+  --bn-font-display: 'Manrope', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --bn-fs-2xs: 10px; --bn-fs-xs: 11px; --bn-fs-sm: 12px; --bn-fs-md: 13px; --bn-fs-base: 14px;
+  --bn-fs-lg: 16px; --bn-fs-xl: 18px; --bn-fs-2xl: 22px; --bn-fs-3xl: 28px;
+  --bn-tracking-caps: 0.06em; --bn-tracking-tight: -0.02em;
+  --bn-lh-tight: 1.1; --bn-lh-snug: 1.25; --bn-lh-base: 1.4; --bn-lh-relaxed: 1.55;
+  --bn-0-5: 2px; --bn-1: 4px; --bn-1-5: 6px; --bn-2: 8px; --bn-3: 12px; --bn-4: 16px; --bn-5: 20px;
+  --bn-6: 24px; --bn-7: 32px; --bn-8: 40px; --bn-9: 48px; --bn-10: 64px;
+  --bn-r-xs: 4px; --bn-r-sm: 6px; --bn-r: 8px; --bn-r-lg: 12px; --bn-r-xl: 16px; --bn-r-full: 999px;
+  --bn-t-fast: 120ms; --bn-t: 200ms; --bn-t-layout: 240ms;
+  --bn-ease: cubic-bezier(0.2, 0, 0, 1); --bn-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --bn-control-h: 34px; --bn-control-h-lg: 40px; --bn-pill-h: 22px;
+  --bn-sidebar-w: 236px; --bn-rail-w: 64px;
+  --bn-page-w: 1600px;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+  --bn-hover: rgba(255, 255, 255, 0.04);
+  --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+  --bn-line: rgba(255, 255, 255, 0.08); --bn-line-strong: rgba(255, 255, 255, 0.16);
+  --bn-line-focus: rgba(129, 146, 255, 0.6);
+  --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14); --bn-accent-tint-2: rgba(127, 144, 255, 0.24); --bn-on-accent: #0c0e12;
+  --bn-live: #ff6a58; --bn-live-tint: rgba(255, 106, 88, 0.16);
+  --bn-ok: #3ddc84; --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524; --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-danger: #ff5c5c; --bn-danger-tint: rgba(255, 92, 92, 0.14);
+  --bn-money: #eef0f4;
+  --bn-pill-ink-accent: var(--bn-accent-hover);
+  --bn-pill-ink-ok: var(--bn-ok); --bn-pill-ink-warn: var(--bn-warn); --bn-pill-ink-danger: #f6799c; --bn-pill-ink-live: #ffab70;
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-btn-bg: var(--bn-surface-3); --bn-btn-bg-hover: #262b34;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+    --bn-hover: rgba(255, 255, 255, 0.04);
+    --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+    --bn-line: rgba(255, 255, 255, 0.08); --bn-line-strong: rgba(255, 255, 255, 0.16);
+    --bn-line-focus: rgba(129, 146, 255, 0.6);
+    --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+    --bn-accent-tint: rgba(127, 144, 255, 0.14); --bn-accent-tint-2: rgba(127, 144, 255, 0.24); --bn-on-accent: #0c0e12;
+    --bn-live: #ff6a58; --bn-live-tint: rgba(255, 106, 88, 0.16);
+    --bn-ok: #3ddc84; --bn-ok-tint: rgba(61, 220, 132, 0.14);
+    --bn-warn: #f5a524; --bn-warn-tint: rgba(245, 165, 36, 0.14);
+    --bn-danger: #ff5c5c; --bn-danger-tint: rgba(255, 92, 92, 0.14);
+    --bn-money: #eef0f4;
+    --bn-pill-ink-accent: var(--bn-accent-hover);
+    --bn-pill-ink-ok: var(--bn-ok); --bn-pill-ink-warn: var(--bn-warn); --bn-pill-ink-danger: #f6799c; --bn-pill-ink-live: #ffab70;
+    --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+    --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    --bn-btn-bg: var(--bn-surface-3); --bn-btn-bg-hover: #262b34;
+    --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+}
+/* iPad first: a thumb needs 40px, so the sitting's own presses never go below it. */
+@media (max-width: 1023px), (hover: none) and (pointer: coarse) {
+  :root { --bn-control-h: 42px; --bn-control-h-lg: 46px; }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bn-bg);
+  color: var(--bn-ink);
+  font: 400 var(--bn-fs-base)/var(--bn-lh-base) var(--bn-font-ui);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--bn-accent); outline-offset: 2px; }
+.mono { font-family: var(--bn-font-mono); font-variant-numeric: tabular-nums; }
+[hidden] { display: none !important; }
+
+/* ---- mockup chrome (not product) ---------------------------------------------------------- */
+.sample {
+  display: flex; gap: var(--bn-2); align-items: baseline; flex-wrap: wrap;
+  padding: var(--bn-2) var(--bn-6);
+  background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn);
+  font-size: var(--bn-fs-md); border-bottom: 1px solid var(--bn-line);
+}
+.sample b { font-weight: 700; }
+.proposal { padding: var(--bn-4) var(--bn-6) var(--bn-3); display: grid; gap: var(--bn-3); border-bottom: 1px solid var(--bn-line); }
+.proposal-head { display: flex; align-items: baseline; gap: var(--bn-3); flex-wrap: wrap; }
+.proposal-head h1 { margin: 0; font: 700 var(--bn-fs-xl)/var(--bn-lh-snug) var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.proposal-head p { margin: 0; color: var(--bn-ink-3); font-size: var(--bn-fs-md); }
+.controls { display: flex; flex-wrap: wrap; gap: var(--bn-2) var(--bn-4); align-items: center; }
+.ctl { display: inline-flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; background: var(--bn-surface-2); border-radius: var(--bn-r); }
+.seg button {
+  border: 0; background: transparent; border-radius: var(--bn-r-sm);
+  height: 30px; padding: 0 var(--bn-3); font-size: var(--bn-fs-md); color: var(--bn-ink-2); cursor: pointer;
+}
+.seg button:hover { color: var(--bn-ink); }
+.seg button[aria-pressed='true'] { background: var(--bn-surface); color: var(--bn-ink); box-shadow: var(--bn-shadow-1); font-weight: 600; }
+.ctl-label { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+details.choices { font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+details.choices summary { cursor: pointer; }
+details.choices ul { list-style: none; margin: var(--bn-2) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-4); }
+details.choices label { display: inline-flex; gap: var(--bn-1-5); align-items: center; cursor: pointer; }
+
+/* Today / New annotations: dashed outline with a tag. */
+.anno { position: relative; outline: 1.5px dashed var(--bn-ink-4); outline-offset: 3px; }
+.anno-new { outline-color: var(--bn-accent); }
+.anno::after {
+  content: attr(data-anno); position: absolute; top: -10px; right: 8px; z-index: 5;
+  padding: 0 var(--bn-1-5); font: 600 var(--bn-fs-2xs)/16px var(--bn-font-ui); white-space: nowrap;
+  background: var(--bn-bg); color: var(--bn-ink-3); border: 1px dashed var(--bn-ink-4); border-radius: var(--bn-r-xs);
+}
+.anno-new::after { color: var(--bn-accent); border-color: var(--bn-accent); }
+section.anno::after { top: -20px; }
+.no-anno .anno { outline: none; }
+.no-anno .anno::after { display: none; }
+
+/* ---- shell ---------------------------------------------------------------------------------- */
+.frame { display: grid; grid-template-columns: var(--bn-sidebar-w) minmax(0, 1fr); min-height: 100vh; }
+.side {
+  background: var(--bn-surface-2); border-right: 1px solid var(--bn-line);
+  padding: var(--bn-4) var(--bn-3); display: flex; flex-direction: column; gap: var(--bn-0-5);
+}
+.brand { display: flex; align-items: center; gap: var(--bn-2); padding: 0 var(--bn-2) var(--bn-4); font: 700 var(--bn-fs-lg)/1 var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.brand-dot { width: 10px; height: 10px; border-radius: var(--bn-r-full); background: var(--bn-live); }
+.nav {
+  display: flex; align-items: center; gap: var(--bn-3); height: 36px; padding: 0 var(--bn-2);
+  border-radius: var(--bn-r-sm); color: var(--bn-ink-2); font-size: var(--bn-fs-base);
+}
+.nav i { width: 18px; height: 18px; border-radius: var(--bn-r-xs); border: 1.75px solid var(--bn-ink-4); flex: none; }
+.nav.is-here { background: var(--bn-accent-tint); color: var(--bn-accent); font-weight: 600; }
+.nav.is-here i { border-color: var(--bn-accent); }
+.nav .count { margin-left: auto; font: 600 var(--bn-fs-xs)/1 var(--bn-font-mono); color: var(--bn-ink-3); }
+.nav.is-here .count { color: var(--bn-accent); }
+.nav-gap { height: var(--bn-3); }
+
+.page {
+  container: page / inline-size;
+  padding: var(--bn-6) var(--bn-7) var(--bn-10);
+  max-width: var(--bn-page-w); min-width: 0;
+}
+.page-head { display: flex; align-items: flex-start; gap: var(--bn-4); flex-wrap: wrap; justify-content: space-between; }
+.page-head h2 { margin: 0; font: 700 var(--bn-fs-3xl)/var(--bn-lh-tight) var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.page-head .lede { margin: var(--bn-1-5) 0 0; color: var(--bn-ink-3); font-size: var(--bn-fs-md); }
+
+/* ---- kit stand-ins -------------------------------------------------------------------------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-1-5);
+  min-height: var(--bn-control-h); padding: 0 var(--bn-4); border-radius: var(--bn-r);
+  border: 0; background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow); color: var(--bn-ink);
+  font-size: var(--bn-fs-md); font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: background var(--bn-t-fast) var(--bn-ease);
+}
+.btn:hover { background: var(--bn-btn-bg-hover); }
+.btn.primary { background: var(--bn-accent); color: var(--bn-on-accent); box-shadow: none; }
+.btn.primary:hover { background: var(--bn-accent-hover); }
+.btn.ghost { background: transparent; box-shadow: none; color: var(--bn-ink-2); }
+.btn.ghost:hover { background: var(--bn-hover); color: var(--bn-ink); }
+.btn.link { background: transparent; box-shadow: none; color: var(--bn-accent); padding: 0 var(--bn-2); min-height: 32px; }
+.btn.def { box-shadow: 0 0 0 1.5px var(--bn-accent) inset; color: var(--bn-accent); background: var(--bn-accent-tint); }
+.btn.def:hover { background: var(--bn-accent-tint-2); }
+.btn .tag { font: 600 var(--bn-fs-2xs)/1 var(--bn-font-ui); padding: 3px 5px; border-radius: var(--bn-r-xs); background: var(--bn-accent); color: var(--bn-on-accent); }
+.pill {
+  display: inline-flex; align-items: center; min-height: var(--bn-pill-h); padding: 0 var(--bn-2);
+  border-radius: var(--bn-r-full); font: 600 var(--bn-fs-xs)/1 var(--bn-font-ui); white-space: nowrap;
+  background: var(--bn-surface-2); color: var(--bn-ink-2);
+}
+.pill.ok { background: var(--bn-ok-tint); color: var(--bn-pill-ink-ok); }
+.pill.warn { background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn); }
+.pill.danger { background: var(--bn-danger-tint); color: var(--bn-pill-ink-danger); }
+.pill.accent { background: var(--bn-accent-tint); color: var(--bn-pill-ink-accent); }
+.notice {
+  display: flex; gap: var(--bn-3); align-items: flex-start; flex-wrap: wrap;
+  padding: var(--bn-3) var(--bn-4); border-radius: var(--bn-r-lg);
+  background: var(--bn-surface); box-shadow: var(--bn-shadow-1); border-left: 3px solid var(--bn-warn);
+  font-size: var(--bn-fs-md); line-height: var(--bn-lh-base);
+}
+.notice.danger { border-left-color: var(--bn-danger); }
+.notice .grow { flex: 1 1 280px; min-width: 0; }
+.notice b { display: block; font-size: var(--bn-fs-base); margin-bottom: 2px; }
+.notice .acts { display: flex; gap: var(--bn-2); flex-wrap: wrap; }
+.panel { background: var(--bn-surface); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-1); }
+
+/* ---- the sitting ---------------------------------------------------------------------------- */
+.stack { display: grid; gap: var(--bn-5); margin-top: var(--bn-5); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--bn-3); }
+.stat { padding: var(--bn-3) var(--bn-4); }
+.stat .fig { font: 700 var(--bn-fs-2xl)/var(--bn-lh-tight) var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); color: var(--bn-money); font-variant-numeric: tabular-nums; }
+.stat .cap { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-top: 2px; }
+
+/* The memorable thing: the week drawn as minutes. One segment per item, the budget a hard tick. */
+.budget { padding: var(--bn-4); display: grid; gap: var(--bn-2); }
+.budget-top { display: flex; justify-content: space-between; gap: var(--bn-3); flex-wrap: wrap; font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+.budget-top b { color: var(--bn-ink); }
+.bar { position: relative; height: 28px; margin-top: var(--bn-1); }
+.bar-track { position: absolute; inset: 0; display: flex; gap: 2px; }
+.seg-m { height: 100%; border-radius: 3px; background: var(--bn-accent-tint-2); transition: background var(--bn-t) var(--bn-ease); }
+.seg-m.read { background: transparent; box-shadow: 0 0 0 1.5px var(--bn-ink-4) inset; }
+.seg-m.done { background: var(--bn-ok); }
+.seg-m.below { background: var(--bn-line-strong); }
+.seg-m.wait { background: var(--bn-danger-tint); box-shadow: 0 0 0 1.5px var(--bn-danger) inset; }
+.bar-cut { position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--bn-ink); border-radius: 1px; transition: left var(--bn-t-layout) var(--bn-ease); }
+.bar-cut span { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font: 600 var(--bn-fs-xs)/1 var(--bn-font-mono); color: var(--bn-ink); white-space: nowrap; }
+.bar-scale { display: flex; justify-content: space-between; font: 400 var(--bn-fs-xs)/1 var(--bn-font-mono); color: var(--bn-ink-3); }
+.legend { display: flex; gap: var(--bn-4); flex-wrap: wrap; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: var(--bn-1-5); vertical-align: -1px; }
+
+.body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--bn-5); }
+@container page (min-width: 1100px) {
+  .body { grid-template-columns: minmax(0, 1fr) 320px; align-items: start; }
+  .aside { position: sticky; top: var(--bn-4); }
+}
+.sec-h { display: flex; align-items: baseline; justify-content: space-between; gap: var(--bn-3); flex-wrap: wrap; margin: 0 0 var(--bn-2); }
+.sec-h h3 { margin: 0; font: 700 var(--bn-fs-xl)/var(--bn-lh-snug) var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.sec-h p { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+
+/* What defaulted */
+.dlist { list-style: none; margin: 0; padding: 0; }
+.drow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--bn-2) var(--bn-3); align-items: center; padding: var(--bn-3) var(--bn-4); border-top: 1px solid var(--bn-line); }
+.drow:first-child { border-top: 0; }
+.drow .what { font-size: var(--bn-fs-base); color: var(--bn-ink); }
+.drow .when { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-top: 2px; }
+.drow .right { display: flex; align-items: center; gap: var(--bn-2); }
+.drow.undone .what { color: var(--bn-ink-3); text-decoration: line-through; text-decoration-color: var(--bn-ink-4); }
+.drow .fixed { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+
+/* Autopilot offer */
+.offer { padding: var(--bn-4) var(--bn-5); display: flex; gap: var(--bn-4); align-items: center; flex-wrap: wrap; border-left: 3px solid var(--bn-accent); }
+.offer .grow { flex: 1 1 320px; }
+.offer b { display: block; font-size: var(--bn-fs-lg); margin-bottom: 2px; }
+.offer p { margin: 0; color: var(--bn-ink-2); font-size: var(--bn-fs-md); }
+.agree { display: inline-flex; gap: 3px; margin-top: var(--bn-2); }
+.agree i { width: 12px; height: 12px; border-radius: 2px; background: var(--bn-ok); }
+
+/* The list */
+.ilist { list-style: none; margin: 0; padding: 0; }
+.group-h { padding: var(--bn-2) var(--bn-4); font: 600 var(--bn-fs-sm)/var(--bn-lh-snug) var(--bn-font-ui); color: var(--bn-pill-ink-danger); background: var(--bn-danger-tint); }
+.item {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: var(--bn-1) var(--bn-4);
+  align-items: center; padding: var(--bn-2) var(--bn-4) var(--bn-2) var(--bn-2);
+  border-top: 1px solid var(--bn-line); transition: background var(--bn-t) var(--bn-ease);
+}
+.item:first-child { border-top: 0; }
+.clock { align-self: start; padding-top: 3px; text-align: right; font: 500 var(--bn-fs-sm)/1.2 var(--bn-font-mono); color: var(--bn-ink-3); }
+.clock small { display: block; font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); margin-top: 2px; }
+.no-clock .item { grid-template-columns: 0 minmax(0, 1fr) auto; padding-left: var(--bn-4); }
+.no-clock .clock { visibility: hidden; }
+.it-title { display: flex; gap: var(--bn-2); align-items: center; flex-wrap: wrap; font-size: var(--bn-fs-base); font-weight: 600; }
+.it-sub { font-size: var(--bn-fs-md); color: var(--bn-ink-2); margin-top: 2px; }
+.it-meta { display: flex; gap: var(--bn-2) var(--bn-3); flex-wrap: wrap; align-items: center; margin-top: var(--bn-1-5); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.it-meta .money { color: var(--bn-money); font-weight: 600; }
+.it-def { margin-top: var(--bn-1-5); font-size: var(--bn-fs-md); color: var(--bn-ink-2); display: flex; gap: var(--bn-2); align-items: center; flex-wrap: wrap; }
+.it-def .date { font-weight: 600; color: var(--bn-ink); }
+.no-rate .rate { display: none; }
+.acts { display: flex; gap: var(--bn-2); align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.item.below { background: var(--bn-surface-3); }
+.item.below .it-title { color: var(--bn-ink-2); }
+.item.wait { box-shadow: inset 3px 0 0 var(--bn-danger); }
+.item.is-done { background: transparent; }
+.item.is-done .it-sub, .item.is-done .it-meta, .item.is-done .it-def { display: none; }
+.item.is-done .it-title { color: var(--bn-ink-3); font-weight: 500; }
+.done-line { display: flex; gap: var(--bn-2); align-items: center; font-size: var(--bn-fs-md); color: var(--bn-pill-ink-ok); font-weight: 600; }
+.item.focus { box-shadow: inset 3px 0 0 var(--bn-danger), 0 0 0 2px var(--bn-line-focus); }
+.item.back { box-shadow: inset 3px 0 0 var(--bn-accent); }
+@container page (max-width: 760px) {
+  .item { grid-template-columns: 44px minmax(0, 1fr); }
+  .item .acts { grid-column: 2; justify-content: flex-start; margin-top: var(--bn-2); }
+  .item .acts .btn { flex: 1 1 0; }
+  .no-clock .item { grid-template-columns: 0 minmax(0, 1fr); }
+}
+
+.cut {
+  position: relative; display: flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap;
+  padding: var(--bn-3) var(--bn-4); background: var(--bn-surface); border-top: 2px solid var(--bn-ink); border-bottom: 1px solid var(--bn-line);
+}
+.cut .mark { font: 700 var(--bn-fs-md)/1 var(--bn-font-mono); color: var(--bn-ink); padding: var(--bn-1-5) var(--bn-2); border-radius: var(--bn-r-sm); background: var(--bn-ink); color: var(--bn-bg); }
+.cut p { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-2); flex: 1 1 260px; }
+.cut p b { color: var(--bn-ink); }
+
+.closebar {
+  position: sticky; bottom: var(--bn-3); z-index: 4; margin-top: var(--bn-4);
+  display: flex; align-items: center; gap: var(--bn-4); flex-wrap: wrap; padding: var(--bn-3) var(--bn-4);
+  background: var(--bn-surface); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-3);
+}
+.closebar p { margin: 0; flex: 1 1 260px; font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+.closebar p b { color: var(--bn-ink); }
+
+/* Kinds ledger */
+.ledger { padding: var(--bn-4); }
+.ledger h3 { margin: 0 0 var(--bn-1); font: 700 var(--bn-fs-lg)/var(--bn-lh-snug) var(--bn-font-display); }
+.ledger > p { margin: 0 0 var(--bn-3); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.lrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--bn-2); padding: var(--bn-2) 0; border-top: 1px solid var(--bn-line); align-items: center; }
+.lrow .k { font-size: var(--bn-fs-md); font-weight: 600; }
+.lrow .r { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); grid-column: 1; }
+.lrow .pill { grid-row: 1 / span 2; grid-column: 2; }
+
+/* Closed and empty */
+.summary { padding: var(--bn-6); display: grid; gap: var(--bn-4); }
+.summary h3 { margin: 0; font: 700 var(--bn-fs-2xl)/var(--bn-lh-snug) var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.summary p { margin: 0; color: var(--bn-ink-2); font-size: var(--bn-fs-base); max-width: 62ch; }
+.summary .row { display: flex; gap: var(--bn-2); flex-wrap: wrap; }
+.empty { padding: var(--bn-8) var(--bn-6); text-align: left; max-width: 960px; }
+
+.toast {
+  position: fixed; left: 50%; bottom: var(--bn-6); transform: translate(-50%, 12px); opacity: 0; pointer-events: none;
+  display: flex; align-items: center; gap: var(--bn-3); padding: var(--bn-2) var(--bn-2) var(--bn-2) var(--bn-4);
+  background: var(--bn-ink); color: var(--bn-bg); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-3);
+  font-size: var(--bn-fs-md); z-index: 20; max-width: calc(100vw - 32px);
+  transition: opacity var(--bn-t) var(--bn-ease-out), transform var(--bn-t) var(--bn-ease-out);
+}
+.toast.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.toast button { background: transparent; border: 0; color: var(--bn-bg); font-weight: 700; padding: var(--bn-2) var(--bn-3); border-radius: var(--bn-r-sm); cursor: pointer; text-decoration: underline; }
+
+@media (prefers-reduced-motion: reduce) { * { transition-duration: 0.01ms !important; } }
+
+/* Rail below the desk width: the iPad's 820 gets the 64px rail (D95, D276). */
+@media (max-width: 1023px) {
+  .frame { grid-template-columns: var(--bn-rail-w) minmax(0, 1fr); }
+  .side { padding: var(--bn-4) var(--bn-2); align-items: center; }
+  .brand span, .nav span, .nav .count { display: none; }
+  .side .anno::after { display: none; }
+  .brand { padding: 0 0 var(--bn-4); }
+  .nav { width: 44px; justify-content: center; padding: 0; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  .page { padding: var(--bn-4) var(--bn-4) var(--bn-10); }
+  .sample, .proposal { padding-left: var(--bn-4); padding-right: var(--bn-4); }
+}
+@media (max-width: 639px) {
+  .frame { grid-template-columns: minmax(0, 1fr); }
+  .side { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="sample" role="note"><b>Sample.</b> No card, set, box, buyer, price or count on this page is real. Dates are a sample week.</div>
+
+<section class="proposal" aria-label="Mockup controls">
+  <div class="proposal-head">
+    <h1>The Weekly Sitting, Defaults Included</h1>
+    <p>A proposal for a new owner screen. Nothing here ships.</p>
+  </div>
+  <div class="controls">
+    <span class="ctl-label">State</span>
+    <div class="seg" id="states" role="group" aria-label="State"></div>
+  </div>
+  <div class="controls">
+    <span class="ctl"><span class="ctl-label">Theme</span>
+      <span class="seg" role="group" aria-label="Theme">
+        <button type="button" data-t="auto">System</button>
+        <button type="button" data-t="light">Light</button>
+        <button type="button" data-t="dark">Dark</button>
+      </span></span>
+    <span class="ctl"><span class="ctl-label">Time Budget</span>
+      <span class="seg" role="group" aria-label="Time budget">
+        <button type="button" data-budget="20">20 min</button>
+        <button type="button" data-budget="40">40 min</button>
+        <button type="button" data-budget="60">60 min</button>
+      </span></span>
+    <span class="ctl"><span class="ctl-label">Item Kinds</span>
+      <span class="seg" role="group" aria-label="Item kinds">
+        <button type="button" data-kinds="full">Full Plan (10)</button>
+        <button type="button" data-kinds="v1">First Version (3)</button>
+      </span></span>
+    <span class="ctl"><span class="ctl-label">Labels</span>
+      <span class="seg" role="group" aria-label="Today and New labels">
+        <button type="button" data-anno="on">Show</button>
+        <button type="button" data-anno="off">Hide</button>
+      </span></span>
+  </div>
+  <details class="choices">
+    <summary>Choices on this page (untick one to remove it)</summary>
+    <ul>
+      <li><label><input type="checkbox" data-hide="bar" checked> 1. Minutes bar</label></li>
+      <li><label><input type="checkbox" data-hide="clock" checked> 2. Running clock on each row</label></li>
+      <li><label><input type="checkbox" data-hide="rate" checked> 3. Dollars per minute on each row</label></li>
+      <li><label><input type="checkbox" data-hide="ledger" checked> 4. Kinds ledger</label></li>
+      <li><label><input type="checkbox" data-hide="closebar" checked> 5. Close bar that names what defaults</label></li>
+    </ul>
+  </details>
+</section>
+
+<div class="frame" id="frame">
+  <nav class="side" aria-label="Sample navigation">
+    <div class="brand"><i class="brand-dot"></i><span>banchi</span></div>
+    <div class="nav"><i></i><span>Home</span></div>
+    <div class="nav anno anno-new is-here" data-anno="New: nav item" id="nav-week"><i></i><span>Weekly Sitting</span><b class="count" id="nav-count"></b></div>
+    <div class="nav-gap"></div>
+    <div class="nav"><i></i><span>Capture</span></div>
+    <div class="nav"><i></i><span>Review</span></div>
+    <div class="nav"><i></i><span>Pricing</span></div>
+    <div class="nav"><i></i><span>Orders</span></div>
+    <div class="nav"><i></i><span>Shipping</span></div>
+    <div class="nav"><i></i><span>Inventory</span></div>
+  </nav>
+  <main class="page" id="page">
+    <div id="interrupt-slot"></div>
+    <header class="page-head">
+      <div>
+        <h2>Weekly Sitting</h2>
+        <p class="lede" id="lede"></p>
+      </div>
+    </header>
+    <div class="stack" id="stack"></div>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><span id="toast-text"></span><button type="button" id="toast-undo">Undo</button></div>
+
+<script>
+(() => {
+  const TODAY = 'Sun 22 Nov';
+  const NEXT = 'Sun 29 Nov';
+
+  const STATES = [
+    ['normal', 'Normal Sitting'],
+    ['closed', 'Closed'],
+    ['skipped', 'Skipped Week'],
+    ['missed-2', '2 Weeks Missed'],
+    ['must-not-default', 'Must Not Default'],
+    ['empty', 'Empty Week'],
+    ['autopilot', 'Autopilot Offer'],
+    ['undo', 'Undo a Default'],
+  ];
+
+  // One entry per item kind in plan section 3. `none` kinds have no default and no date.
+  const KINDS = {
+    identify: { label: 'Identify Waiting', v1: false, undo: false, def: 'Run up to Cap', done: 'Ran up to the cap', alt: 'Hold All', altDone: 'Held all' },
+    batch:    { label: 'Ready to List', v1: true, undo: true, def: 'List at Rule Price', done: 'Listed at the rule price', alt: 'Hold', altDone: 'Held', back: 'Delist' },
+    slab:     { label: 'High Value Missing', v1: false, none: true, def: 'Find the Card', done: 'Opened the card', alt: 'Open the Order', altDone: 'Opened the order' },
+    unclear:  { label: 'Unclear Match', v1: true, undo: true, def: 'Keep in Review', done: 'Kept unlisted in Review', alt: 'Answer in Review', altDone: 'Opened in Review', back: 'Send Back' },
+    stale:    { label: 'Stale Listing', v1: true, undo: true, def: 'Keep Listed', done: 'Kept listed', alt: 'Reprice in Pricing', altDone: 'Opened in Pricing', back: 'Send Back' },
+    imports:  { label: 'Orders Not Imported', v1: false, none: true, def: 'Import Orders', done: 'Opened the import', alt: null },
+    refile:   { label: 'Fulfiller Re-filed', v1: false, undo: true, def: 'Accept Fix', done: 'Accepted the fix', alt: 'Put Old Place Back', altDone: 'Put the old place back', back: 'Put Old Place Back' },
+    band:     { label: 'Price Outside Band', v1: false, undo: true, def: 'Keep Price', done: 'Kept the price', alt: 'Use Rule Price', altDone: 'Used the rule price', back: 'Put Old Price Back' },
+    cancel:   { label: 'Cheap Card Missing', v1: false, undo: false, def: 'Cancel the Line', done: 'Canceled the line', alt: 'Find the Card', altDone: 'Opened the card' },
+    full:     { label: 'Section Nearly Full', v1: false, undo: true, def: 'Start Next Section', done: 'Started the next section', alt: 'Pick a Box', altDone: 'Opened boxes', back: 'Send Back' },
+  };
+
+  // Sample items. value = dollars at stake, min = owner minutes, date = the day its default applies.
+  const ITEMS = [
+    { id: 'i-identify', kind: 'identify', title: 'Identify Batch, 140 Cards', sub: 'Photographed in Long Box Slate and never identified. This run needs $5.60; your weekly cap is $4.00.', value: 180, min: 2, date: NEXT, defText: 'run 100 cards up to the $4.00 cap, hold 40' },
+    { id: 'i-slab', kind: 'slab', title: 'Gilded Seraph, PSA 9', sub: 'Not in its slot: Long Box Vault, Section 1, Card 6. The order from Ines Varga ships by Tue 24 Nov.', value: 240, min: 8, deadline: 'Tue 24 Nov' },
+    { id: 'i-batch1', kind: 'batch', title: 'Hollowtide, 38 Cards', sub: 'Priced and ready. Long Box Cedar, Sections 3 to 5.', value: 212, min: 8, date: NEXT, defText: 'list all 38 at the rule price' },
+    { id: 'i-gloam', kind: 'unclear', title: 'Gloamfin Drake', sub: 'Two variants match: Holo and Reverse Holo. The photo is in Review.', value: 64, min: 3, date: NEXT, defText: 'stays unlisted in Review, never a guess' },
+    { id: 'i-moth', kind: 'stale', title: 'Ember Lantern Moth', sub: 'Listed 41 days at $18.00 with no sale.', value: 18, min: 1, date: NEXT, defText: 'stays listed at $18.00' },
+    { id: 'i-import', kind: 'imports', title: 'Orders Not Imported for 9 Days', sub: 'About $95 of orders are not in the store yet. This gets louder each week.', value: 95, min: 6, deadline: null },
+    { id: 'i-vixen', kind: 'refile', title: 'Cinder Vixen', sub: 'The Fulfiller found it in Long Box Slate, Section 4, not Section 3, and re-filed it.', value: 6, min: 0.5, date: NEXT, defText: 'the new place stands' },
+    { id: 'i-batch2', kind: 'batch', title: 'Starfall Rift, 12 Cards', sub: 'Priced and ready. Long Box Slate, Section 6.', value: 41, min: 4, date: NEXT, defText: 'list all 12 at the rule price' },
+    { id: 'i-ollo', kind: 'stale', title: 'Tidewarden Ollo', sub: 'Listed 63 days at $9.25 with no sale.', value: 9.25, min: 1, date: NEXT, defText: 'stays listed at $9.25' },
+    { id: 'i-sola', kind: 'band', title: 'Rift Warden Sola', sub: 'Your price $15.00 is 2.4 times the rule price, $6.20.', value: 8.8, min: 1, date: NEXT, defText: 'keeps $15.00' },
+    { id: 'i-salt', kind: 'band', title: 'Saltmarsh Oracle', sub: 'Your price $8.90 is 31% under the rule price, $12.90.', value: 4, min: 0.5, date: NEXT, defText: 'keeps $8.90' },
+    { id: 'i-owlet', kind: 'stale', title: 'Vesper Owlet', sub: 'Listed 35 days at $3.40 with no sale.', value: 3.4, min: 1, date: NEXT, defText: 'stays listed at $3.40' },
+    { id: 'i-under', kind: 'stale', title: '6 Listings Under $1', sub: 'Each listed over 30 days with no sale.', value: 4.2, min: 1.5, date: NEXT, defText: 'all 6 stay listed' },
+    { id: 'i-kestrel', kind: 'unclear', title: 'Ashen Meridian Kestrel', sub: 'Two sets print this card. The photo is in Review.', value: 3, min: 3, date: NEXT, defText: 'stays unlisted in Review' },
+    { id: 'i-pebble', kind: 'cancel', title: 'Pebblehorn Calf', sub: 'Missing on an order from Theo Marsh. Worth $0.35.', value: 0.35, min: 0.5, date: 'Mon 23 Nov', defText: 'cancel the line, a day before it ships by Tue 24 Nov' },
+    { id: 'i-quill', kind: 'unclear', title: 'Quillfern Sprite', sub: 'The photo is blurred. Review has it.', value: 1.2, min: 2, date: NEXT, defText: 'stays unlisted in Review' },
+    { id: 'i-moss', kind: 'unclear', title: 'Mossback Tortoise', sub: 'The photo shows the card back.', value: 0.5, min: 1, date: NEXT, defText: 'stays unlisted in Review' },
+    { id: 'i-full', kind: 'full', title: 'Long Box Cedar, Section 9', sub: 'Holds 96 of 100 cards.', value: 0, min: 0.5, date: NEXT, defText: 'the next section starts in Long Box Slate' },
+  ];
+  const CARRIED_EXTRA = { id: 'i-refund', kind: 'slab', title: 'Refund Asked on a $120 Order', sub: 'Maren Holt asks for a refund on an order of 3 cards. Nothing moves without you.', value: 120, min: 4, deadline: null };
+
+  // Last week's applied defaults. `back` names the reverse press; `kind` sets whether it can be undone.
+  const DEFAULTED = [
+    { id: 'd-batch', kind: 'batch', what: 'Listed Ashen Meridian, 22 cards, at the rule price', when: 'Sun 15 Nov, $96', back: 'Delist 22', returns: { id: 'i-back', kind: 'batch', title: 'Ashen Meridian, 22 Cards', sub: 'Delisted. Back in the list, dated today.', value: 96, min: 4, date: NEXT, defText: 'list all 22 at the rule price', back: true } },
+    { id: 'd-stale', kind: 'stale', what: 'Kept 3 stale listings listed', when: 'Sun 15 Nov, $31', back: 'Send Back' },
+    { id: 'd-brine', kind: 'unclear', what: 'Kept Brineshell Hermit unlisted in Review', when: 'Sun 15 Nov, $7', back: 'Send Back' },
+    { id: 'd-finch', kind: 'refile', what: 'Accepted the Fulfiller’s fix: Quillback Finch is in Long Box Slate, Section 2', when: 'Wed 18 Nov', back: 'Put Old Place Back' },
+    { id: 'd-owl', kind: 'band', what: 'Kept Lantern Wisp at $4.10', when: 'Sun 15 Nov', back: 'Put Old Price Back' },
+    { id: 'd-ident', kind: 'identify', what: 'Ran identify on 80 cards, $2.60 of your $4.00 cap', when: 'Sun 15 Nov', back: null },
+  ];
+  const SKIPPED_EXTRA = [
+    { id: 'd-s1', kind: 'batch', what: 'Listed Hollowtide, 15 cards, at the rule price', when: 'Sun 8 Nov, $58', back: 'Delist 15' },
+    { id: 'd-s2', kind: 'stale', what: 'Kept 4 stale listings listed', when: 'Sun 8 Nov, $22', back: 'Send Back' },
+    { id: 'd-s3', kind: 'unclear', what: 'Kept Driftglass Imp unlisted in Review', when: 'Sun 8 Nov, $5', back: 'Send Back' },
+  ];
+  const EMPTY_DEFAULTED = DEFAULTED.slice(0, 5).concat([{ id: 'd-e1', kind: 'stale', what: 'Kept Gloamfin Drake listed', when: 'Sun 15 Nov, $14', back: 'Send Back' }]);
+
+  const LEDGER = [
+    { kind: 'stale', agree: '12 of 12 kept the default' },
+    { kind: 'batch', agree: '7 of 8 kept the default' },
+    { kind: 'unclear', agree: 'Never defaults to a guess' },
+    { kind: 'refile', agree: '5 of 5 kept the default' },
+    { kind: 'band', agree: '3 of 6 kept the default' },
+    { kind: 'full', agree: '2 of 2 kept the default' },
+    { kind: 'identify', agree: 'Spends money' },
+    { kind: 'cancel', agree: 'Cancels an order line' },
+    { kind: 'slab', agree: 'Waits for you' },
+    { kind: 'imports', agree: 'Waits for you' },
+  ];
+
+  const S = { state: 'normal', budget: 40, kinds: 'full', anno: 'on', t: 'auto', hide: new Set(),
+              decided: {}, undone: new Set(), auto: new Set(), offer: 'open', emptyRead: false, emptySkip: false };
+
+  const $ = (sel, el = document) => el.querySelector(sel);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const money = (v) => v >= 10 ? '$' + Math.round(v) : '$' + v.toFixed(2);
+  const mins = (m) => m < 1 ? Math.round(m * 60) + ' s' : (Number.isInteger(m) ? m : m.toFixed(1)) + ' min';
+  const clock = (m) => { const t = Math.round(m * 60); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+  const rate = (it) => it.min ? it.value / it.min : 0;
+  const rateText = (r) => (r >= 10 ? '$' + Math.round(r) : '$' + r.toFixed(2)) + '/min';
+  const kindOn = (k) => S.kinds === 'full' || KINDS[k].v1;
+
+  function defaultedList() {
+    let list = S.state === 'empty' ? EMPTY_DEFAULTED : DEFAULTED;
+    if (S.state === 'skipped' || S.state === 'missed-2') list = SKIPPED_EXTRA.concat(list);
+    if (S.state === 'missed-2') list = [{ id: 'd-m1', kind: 'stale', what: 'Kept 2 stale listings listed', when: 'Sun 1 Nov, $9', back: 'Send Back' }].concat(list);
+    list = list.filter((d) => kindOn(d.kind));
+    if (S.auto.has('stale')) list = list.concat([{ id: 'd-auto', kind: 'stale', what: 'Autopilot: kept 2 stale listings listed', when: 'Today, $12', back: 'Send Back', auto: true }]);
+    return list;
+  }
+
+  function carriedIds() {
+    if (S.state === 'skipped') return ['i-slab', 'i-import'];
+    if (S.state === 'missed-2') return ['i-slab', 'i-import', 'i-refund'];
+    return [];
+  }
+
+  function itemList() {
+    if (S.state === 'empty') return [];
+    let items = ITEMS.slice();
+    if (S.state === 'missed-2') items.push(CARRIED_EXTRA);
+    for (const d of DEFAULTED) if (S.undone.has(d.id) && d.returns) items.push(d.returns);
+    items = items.filter((it) => kindOn(it.kind) && !S.auto.has(it.kind));
+    const carried = carriedIds();
+    items.forEach((it) => { it.carried = carried.includes(it.id); });
+    items.sort((a, b) => (b.carried - a.carried) || (b.back ? 1 : 0) - (a.back ? 1 : 0) || rate(b) - rate(a));
+    return items;
+  }
+
+  function plan() {
+    const defs = defaultedList();
+    const readMin = Math.max(0.5, Math.round(defs.length * 0.4 * 2) / 2);
+    const items = itemList();
+    let cum = readMin; let cut = items.length;
+    items.forEach((it, i) => {
+      it.start = cum;
+      if (cut === items.length && cum + it.min > S.budget) cut = i;
+      cum += it.min;
+    });
+    items.forEach((it, i) => { it.below = i >= cut; });
+    return { defs, readMin, items, cut, total: cum };
+  }
+
+  // ---- render ---------------------------------------------------------------------------------
+  function render() {
+    const root = document.documentElement;
+    if (S.t === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', S.t);
+    document.body.classList.toggle('no-anno', S.anno === 'off');
+    document.body.classList.toggle('no-clock', S.hide.has('clock'));
+    document.body.classList.toggle('no-rate', S.hide.has('rate'));
+    document.querySelectorAll('[data-hide]').forEach((c) => { c.checked = !S.hide.has(c.dataset.hide); });
+    document.querySelectorAll('#states button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.state === S.state)));
+    document.querySelectorAll('[data-t]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.t === S.t)));
+    document.querySelectorAll('[data-budget]').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.budget === S.budget)));
+    document.querySelectorAll('[data-kinds]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.kinds === S.kinds)));
+    document.querySelectorAll('[data-anno]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.anno === S.anno)));
+
+    const P = plan();
+    const open = P.items.filter((it) => !S.decided[it.id]);
+    $('#nav-count').textContent = S.state === 'closed' || S.state === 'empty' ? '' : String(open.length);
+    $('#lede').textContent = S.state === 'closed'
+      ? 'Closed for this week. The next sitting is ' + NEXT + '.'
+      : TODAY + ', your ' + S.budget + ' minutes. Sorted by dollars at stake per minute.';
+
+    $('#interrupt-slot').innerHTML = S.state === 'must-not-default' && kindOn('slab') ? interruptHTML() : '';
+
+    const parts = [];
+    parts.push(bannerHTML());
+    if (S.state === 'empty') { parts.push(emptyHTML(P)); $('#stack').innerHTML = parts.join(''); return; }
+    parts.push(statsHTML(P));
+    if (!S.hide.has('bar')) parts.push(barHTML(P));
+    const main = [];
+    if (S.state === 'closed') main.push(closedHTML(P));
+    else {
+      main.push(defaultedHTML(P));
+      if (S.state === 'autopilot' && S.offer === 'open' && kindOn('stale')) main.push(offerHTML());
+      main.push(listHTML(P));
+      if (!S.hide.has('closebar')) main.push(closebarHTML(P));
+    }
+    const aside = S.hide.has('ledger') ? '' : '<aside class="aside">' + ledgerHTML() + '</aside>';
+    parts.push('<div class="body"><div class="main stack" style="margin-top:0">' + main.join('') + '</div>' + aside + '</div>');
+    $('#stack').innerHTML = parts.join('');
+  }
+
+  function interruptHTML() {
+    return '<div class="notice danger anno anno-new" data-anno="New: the one interruption, on any screen" id="interrupt" role="alert" style="margin-bottom: var(--bn-5)">'
+      + '<div class="grow"><b>Gilded Seraph, PSA 9 is not in its slot</b>Its order ships by Tue 24 Nov. This item has no default, so it interrupts you once, now, instead of waiting for Sunday.</div>'
+      + '<div class="acts"><button class="btn primary" type="button" data-press="interrupt-find">Find the Card</button><button class="btn" type="button" data-press="interrupt-order">Open the Order</button></div></div>';
+  }
+
+  function bannerHTML() {
+    if (S.state === 'skipped') {
+      return '<div class="notice anno anno-new" data-anno="New: skipped week" id="banner"><div class="grow"><b>You skipped last week’s sitting</b>9 defaults applied on their dates anyway. The 2 items that wait for you are carried to the top.</div></div>';
+    }
+    if (S.state === 'missed-2') {
+      return '<div class="notice danger anno anno-new" data-anno="New: second missed week" id="banner"><div class="grow"><b>2 weeks missed: 3 items have waited 14 days</b>Every default applied on its date. These 3 have none, so they are at the top.</div></div>';
+    }
+    return '';
+  }
+
+  function statsHTML(P) {
+    const atStake = P.items.reduce((s, it) => s + it.value, 0);
+    const cells = [
+      [Math.round(P.total) + ' min', 'Estimate, with what defaulted'],
+      [String(P.items.length), 'Items'],
+      [money(atStake), 'At stake'],
+      [String(P.defs.length), 'Defaults already applied'],
+    ];
+    return '<div class="stats anno anno-new" data-anno="New: the sitting header">' + cells.map(([f, c]) => '<div class="panel stat"><div class="fig">' + f + '</div><div class="cap">' + c + '</div></div>').join('') + '</div>';
+  }
+
+  function barHTML(P) {
+    const scale = Math.max(P.total, S.budget) * 1.04;
+    const segs = ['<div class="seg-m read" style="flex: 0 0 calc(' + (P.readMin / scale * 100) + '% - 2px)" title="Reading what defaulted"></div>'];
+    P.items.forEach((it) => {
+      const cls = S.decided[it.id] ? 'done' : (KINDS[it.kind].none ? 'wait' : (it.below ? 'below' : ''));
+      segs.push('<div class="seg-m ' + cls + '" style="flex: 0 0 calc(' + (it.min / scale * 100) + '% - 2px)" title="' + esc(it.title) + '"></div>');
+    });
+    const above = P.items.slice(0, P.cut);
+    const covered = above.reduce((s, it) => s + it.value, 0);
+    const all = P.items.reduce((s, it) => s + it.value, 0);
+    const doneN = P.items.filter((it) => S.decided[it.id]).length;
+    return '<div class="panel budget anno anno-new" data-anno="New: the week in minutes" id="minutes-bar">'
+      + '<div class="budget-top"><span>Your <b>' + S.budget + ' minutes</b> cover <b>' + above.length + ' of ' + P.items.length + '</b> items and <b>' + money(covered) + '</b> of the ' + money(all) + ' at stake.</span><span>' + doneN + ' decided</span></div>'
+      + '<div class="bar" role="img" aria-label="' + Math.round(P.total) + ' minutes of items against a ' + S.budget + ' minute budget"><div class="bar-track">' + segs.join('') + '</div>'
+      + '<div class="bar-cut" style="left: ' + (S.budget / scale * 100) + '%"><span>' + S.budget + ' min</span></div></div>'
+      + '<div class="bar-scale"><span>0</span><span>' + Math.round(scale) + ' min</span></div>'
+      + '<div class="legend"><span><i style="box-shadow: 0 0 0 1.5px var(--bn-ink-4) inset"></i>Reading what defaulted</span><span><i style="background: var(--bn-accent-tint-2)"></i>To decide</span><span><i style="background: var(--bn-ok)"></i>Decided</span><span><i style="background: var(--bn-danger-tint); box-shadow: 0 0 0 1.5px var(--bn-danger) inset"></i>Waits for you</span><span><i style="background: var(--bn-line-strong)"></i>Keeps its default</span></div>'
+      + '</div>';
+  }
+
+  function defaultedHTML(P) {
+    const rows = P.defs.map((d) => {
+      const k = KINDS[d.kind];
+      let right;
+      if (S.undone.has(d.id)) right = '<span class="fixed">Undone. Back in the list, dated today.</span>';
+      else if (!d.back || !k.undo) right = '<span class="pill warn">Cannot Undo</span>';
+      else right = (d.auto ? '<span class="pill accent">Autopilot</span>' : '') + '<button class="btn" type="button" data-undo="' + d.id + '">' + esc(d.back) + '</button>';
+      return '<li class="drow' + (S.undone.has(d.id) ? ' undone' : '') + '" id="' + d.id + '"><div><div class="what">' + esc(d.what) + '</div><div class="when">' + esc(k.label) + ', ' + esc(d.when) + '</div></div><div class="right">' + right + '</div></li>';
+    }).join('');
+    return '<section class="anno anno-new" data-anno="New: what defaulted" id="what-defaulted"><div class="sec-h"><h3>What Defaulted</h3><p>' + P.defs.length + ' since your last sitting. About ' + mins(P.readMin) + ' to read.</p></div>'
+      + '<ul class="dlist panel">' + rows + '</ul></section>';
+  }
+
+  function offerHTML() {
+    return '<div class="panel offer anno anno-new" data-anno="New: autopilot offer" id="autopilot"><div class="grow"><b>You kept the default for 12 of 12 stale listings. Make this automatic?</b>'
+      + '<p>Stale listings would leave the sitting and show only in What Defaulted, each with its Undo. One Undo there sends the kind back to asking.</p>'
+      + '<div class="agree" aria-label="12 of 12 kept">' + '<i></i>'.repeat(12) + '</div></div>'
+      + '<div class="acts"><button class="btn primary" type="button" data-press="auto-yes">Make Automatic</button><button class="btn" type="button" data-press="auto-no">Not Yet</button></div></div>';
+  }
+
+  function itemHTML(it) {
+    const k = KINDS[it.kind];
+    const d = S.decided[it.id];
+    const cls = ['item'];
+    if (it.below && !d) cls.push('below');
+    if (k.none) cls.push('wait');
+    if (d) cls.push('is-done');
+    if (it.back) cls.push('back');
+    if (S.state === 'must-not-default' && it.id === 'i-slab') cls.push('focus');
+    const pills = [];
+    if (it.carried) pills.push('<span class="pill danger">Waited ' + (S.state === 'missed-2' ? '14' : '7') + ' Days</span>');
+    if (it.back) pills.push('<span class="pill accent">Back Today</span>');
+    if (k.none) pills.push('<span class="pill danger">No Default</span>');
+    else if (!k.undo) pills.push('<span class="pill warn">Cannot Undo</span>');
+    const meta = '<div class="it-meta"><span>' + esc(k.label) + '</span><span class="money">' + money(it.value) + ' at stake</span><span>' + mins(it.min) + '</span><span class="rate mono">' + rateText(rate(it)) + '</span></div>';
+    let def;
+    if (k.none) {
+      def = '<div class="it-def"><span>Waits for you, with no date.' + (it.deadline ? ' Interrupts you once if <span class="date">' + esc(it.deadline) + '</span> gets close.' : (it.id === 'i-import' ? ' Never interrupts; it gets louder each Sunday.' : '')) + '</span></div>';
+    } else {
+      const lead = it.below ? 'Keeps its default on ' : 'Default on ';
+      def = '<div class="it-def"><span>' + lead + '<span class="date">' + esc(it.date) + '</span>' + (k.undo ? '' : ', with no undo') + ': ' + esc(it.defText) + '.</span>' + '</div>';
+    }
+    let acts;
+    if (d) {
+      const said = d === 'def' ? k.done : k.altDone;
+      acts = '<div class="acts"><span class="done-line">' + esc(said) + '</span><button class="btn link" type="button" data-reopen="' + it.id + '">Undo</button></div>';
+    } else if (k.none) {
+      acts = '<div class="acts"><button class="btn primary" type="button" data-decide="' + it.id + '" data-how="def">' + esc(k.def) + '</button>' + (k.alt ? '<button class="btn" type="button" data-decide="' + it.id + '" data-how="alt">' + esc(k.alt) + '</button>' : '') + '</div>';
+    } else {
+      acts = '<div class="acts"><button class="btn def" type="button" data-decide="' + it.id + '" data-how="def">' + esc(k.def) + ' <span class="tag">Default</span></button><button class="btn" type="button" data-decide="' + it.id + '" data-how="alt">' + esc(k.alt) + '</button></div>';
+    }
+    return '<li class="' + cls.join(' ') + '" id="' + it.id + '"><div class="clock">' + clock(it.start) + '<small>' + mins(it.min) + '</small></div>'
+      + '<div><div class="it-title"><span data-typed>' + esc(it.title) + '</span>' + pills.join('') + '</div><div class="it-sub">' + esc(it.sub) + '</div>' + meta + def + '</div>' + acts + '</li>';
+  }
+
+  function cutHTML(P) {
+    const below = P.items.slice(P.cut);
+    const keep = below.filter((it) => !KINDS[it.kind].none && !S.decided[it.id]).length;
+    const wait = below.filter((it) => KINDS[it.kind].none && !S.decided[it.id]).length;
+    const said = '<b>Your ' + S.budget + ' minutes end here.</b> ' + (keep ? 'The ' + keep + ' below keep their default on their dates.' : 'Nothing below has a default left to apply.') + (wait ? ' ' + wait + ' below waits for you with no default.' : '') + ' You can still decide any of them.';
+    return '<li class="cut anno anno-new" data-anno="New: the cut line" id="cut" role="separator" aria-label="Your ' + S.budget + ' minute budget ends here"><span class="mark">' + S.budget + ':00</span><p>' + said + '</p></li>';
+  }
+
+  function listHTML(P) {
+    const rows = [];
+    const carried = P.items.filter((it) => it.carried);
+    if (carried.length) rows.push('<li class="group-h">Carried: no default, waiting since your last sitting</li>');
+    P.items.forEach((it, i) => {
+      if (i === P.cut) rows.push(cutHTML(P));
+      if (carried.length && i === carried.length) rows.push('<li class="group-h" style="background: var(--bn-surface-2); color: var(--bn-ink-2)">This week, by dollars at stake per minute</li>');
+      rows.push(itemHTML(it));
+    });
+    if (P.cut === P.items.length) rows.push('<li class="cut" id="cut"><span class="mark">' + S.budget + ':00</span><p><b>Everything fits in your ' + S.budget + ' minutes.</b> Nothing keeps a default unless you leave it.</p></li>');
+    return '<section id="this-week"><div class="sec-h"><h3>This Week</h3><p>' + P.items.length + ' items. Leave one and its default applies on its date.</p></div>'
+      + '<ul class="ilist panel" style="overflow: hidden">' + rows.join('') + '</ul></section>';
+  }
+
+  function closebarHTML(P) {
+    const decided = P.items.filter((it) => S.decided[it.id]).length;
+    const keep = P.items.filter((it) => !S.decided[it.id] && !KINDS[it.kind].none).length;
+    const wait = P.items.filter((it) => !S.decided[it.id] && KINDS[it.kind].none).length;
+    return '<div class="closebar anno anno-new" data-anno="New: says what defaults before you close" id="closebar"><p><b>' + decided + ' decided.</b> If you close now, ' + keep + ' keep their default on their dates' + (wait ? ' and ' + wait + ' wait for next Sunday' : '') + '.</p>'
+      + '<button class="btn primary" type="button" data-press="close">Close Sitting</button></div>';
+  }
+
+  function closedHTML(P) {
+    const decided = P.items.filter((it) => S.decided[it.id]).length;
+    const keep = P.items.filter((it) => !S.decided[it.id] && !KINDS[it.kind].none);
+    const wait = P.items.filter((it) => !S.decided[it.id] && KINDS[it.kind].none).length;
+    const list = keep.map((it) => '<li class="drow"><div><div class="what" data-typed>' + esc(it.title) + '</div><div class="when">On ' + esc(it.date) + ': ' + esc(it.defText) + '</div></div><div class="right">' + (KINDS[it.kind].undo ? '<span class="pill">Can Undo</span>' : '<span class="pill warn">Cannot Undo</span>') + '</div></li>').join('');
+    return '<section class="panel summary anno anno-new" data-anno="New: closing summary" id="closed"><h3>' + decided + ' decided, ' + keep.length + ' kept their default.</h3>'
+      + '<p>Each default applies on its date and opens next week’s sitting under What Defaulted, with its Undo.' + (wait ? ' ' + wait + ' with no default wait at the top of next week.' : '') + '</p>'
+      + '<div class="row"><button class="btn" type="button" data-press="reopen">Reopen Sitting</button></div>'
+      + (list ? '<ul class="dlist panel" style="box-shadow: none; border: 1px solid var(--bn-line)">' + list + '</ul>' : '') + '</section>';
+  }
+
+  function emptyHTML(P) {
+    if (S.emptySkip) {
+      return '<section class="panel summary empty" id="empty"><h3>Skipped. Nothing needs you.</h3><p>The next sitting is ' + NEXT + '. Last week’s defaults stay in its What Defaulted, with their Undo.</p><div class="row"><button class="btn" type="button" data-press="unskip">Undo Skip</button></div></section>';
+    }
+    return '<section class="panel summary empty anno anno-new" data-anno="New: empty week" id="empty"><h3>Nothing needs you. ' + P.defs.length + ' defaults applied.</h3>'
+      + '<p>Reading them takes under a minute, or you can skip this week. Nothing will ask again until ' + NEXT + '.</p>'
+      + '<div class="row"><button class="btn primary" type="button" data-press="empty-read">' + (S.emptyRead ? 'Hide What Defaulted' : 'Read What Defaulted') + '</button><button class="btn" type="button" data-press="empty-skip">Skip This Week</button></div></section>'
+      + (S.emptyRead ? defaultedHTML(P) : '');
+  }
+
+  function ledgerHTML() {
+    const rows = LEDGER.filter((l) => kindOn(l.kind)).map((l) => {
+      const k = KINDS[l.kind];
+      let pill;
+      if (k.none) pill = '<span class="pill danger">No Default</span>';
+      else if (!k.undo) pill = '<span class="pill warn">Never Automatic</span>';
+      else if (S.auto.has(l.kind)) pill = '<span class="pill ok">Automatic</span>';
+      else if (l.kind === 'stale' && S.state === 'autopilot') pill = '<span class="pill accent">Offered</span>';
+      else if (l.kind === 'unclear') pill = '<span class="pill">Asks</span>';
+      else pill = '<span class="pill">Asks</span>';
+      return '<div class="lrow"><span class="k">' + esc(k.label) + '</span><span class="r">' + esc(l.agree) + '</span>' + pill + '</div>';
+    }).join('');
+    return '<section class="panel ledger anno anno-new" data-anno="New: kinds ledger" id="ledger"><h3>Kinds</h3><p>A kind is offered autopilot after 10 defaults kept in a row. A kind that cannot be undone never is.</p>' + rows + '</section>';
+  }
+
+  // ---- toast ----------------------------------------------------------------------------------
+  let toastTimer = null; let toastUndo = null;
+  function toast(text, undo) {
+    $('#toast-text').textContent = text;
+    toastUndo = undo;
+    $('#toast-undo').hidden = !undo;
+    $('#toast').classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => $('#toast').classList.remove('on'), 6000);
+  }
+  $('#toast-undo').addEventListener('click', () => { if (toastUndo) toastUndo(); $('#toast').classList.remove('on'); });
+
+  // ---- state and hash -------------------------------------------------------------------------
+  function resetFor(name) {
+    S.state = name; S.decided = {}; S.undone = new Set(); S.auto = new Set(); S.offer = 'open'; S.emptyRead = false; S.emptySkip = false;
+    if (name === 'closed') {
+      const P = plan();
+      P.items.slice(0, P.cut).forEach((it, i) => { S.decided[it.id] = (i % 4 === 3 && KINDS[it.kind].alt) ? 'alt' : 'def'; });
+    }
+    if (name === 'undo') S.undone.add('d-batch');
+  }
+
+  function writeHash() {
+    const p = new URLSearchParams();
+    p.set('state', S.state);
+    if (S.t !== 'auto') p.set('t', S.t);
+    if (S.budget !== 40) p.set('budget', String(S.budget));
+    if (S.kinds !== 'full') p.set('kinds', S.kinds);
+    if (S.anno !== 'on') p.set('labels', 'off');
+    if (S.hide.size) p.set('hide', [...S.hide].join(','));
+    const h = '#' + p.toString().replace(/%2C/g, ',');
+    if (location.hash !== h) history.replaceState(null, '', h);
+  }
+
+  function readHash() {
+    const p = new URLSearchParams(location.hash.slice(1));
+    const st = p.get('state');
+    const name = STATES.some(([k]) => k === st) ? st : 'normal';
+    S.t = ['light', 'dark'].includes(p.get('t')) ? p.get('t') : 'auto';
+    S.budget = [20, 40, 60].includes(+p.get('budget')) ? +p.get('budget') : 40;
+    S.kinds = p.get('kinds') === 'v1' ? 'v1' : 'full';
+    S.anno = p.get('labels') === 'off' ? 'off' : 'on';
+    S.hide = new Set((p.get('hide') || '').split(',').filter(Boolean));
+    resetFor(name);
+  }
+
+  $('#states').innerHTML = STATES.map(([k, label]) => '<button type="button" data-state="' + k + '">' + label + '</button>').join('');
+
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('button, input');
+    if (!b) return;
+    if (b.dataset.state) { resetFor(b.dataset.state); writeHash(); render(); return; }
+    if (b.dataset.t) { S.t = b.dataset.t; writeHash(); render(); return; }
+    if (b.dataset.budget) { S.budget = +b.dataset.budget; if (S.state === 'closed') resetFor('closed'); writeHash(); render(); return; }
+    if (b.dataset.kinds) { S.kinds = b.dataset.kinds; resetFor(S.state); writeHash(); render(); return; }
+    if (b.dataset.anno) { S.anno = b.dataset.anno; writeHash(); render(); return; }
+    if (b.dataset.hide) { if (b.checked) S.hide.delete(b.dataset.hide); else S.hide.add(b.dataset.hide); writeHash(); render(); return; }
+    if (b.dataset.decide) {
+      const id = b.dataset.decide; S.decided[id] = b.dataset.how; render();
+      const it = plan().items.find((x) => x.id === id); const k = KINDS[it.kind];
+      toast((b.dataset.how === 'def' ? k.done : k.altDone) + ': ' + it.title + '.', () => { delete S.decided[id]; render(); });
+      return;
+    }
+    if (b.dataset.reopen) { delete S.decided[b.dataset.reopen]; render(); return; }
+    if (b.dataset.undo) {
+      const id = b.dataset.undo; const d = defaultedList().find((x) => x.id === id);
+      S.undone.add(id); render();
+      toast('Undone: ' + d.what.charAt(0).toLowerCase() + d.what.slice(1) + '. Back in the list, dated today.', () => { S.undone.delete(id); render(); });
+      return;
+    }
+    const press = b.dataset.press;
+    if (!press) return;
+    if (press === 'close') { const keep = S.decided; S.state = 'closed'; S.decided = keep; writeHash(); render(); window.scrollTo(0, 0); }
+    if (press === 'reopen') { S.state = 'normal'; writeHash(); render(); }
+    if (press === 'auto-yes') { S.auto.add('stale'); S.offer = 'yes'; render(); toast('Stale listings are automatic now. They show only in What Defaulted.', () => { S.auto.delete('stale'); S.offer = 'open'; render(); }); }
+    if (press === 'auto-no') { S.offer = 'no'; render(); toast('Stale listings keep asking. Offered again after 10 more.', () => { S.offer = 'open'; render(); }); }
+    if (press === 'empty-read') { S.emptyRead = !S.emptyRead; render(); }
+    if (press === 'empty-skip') { S.emptySkip = true; render(); }
+    if (press === 'unskip') { S.emptySkip = false; render(); }
+    if (press === 'interrupt-find' || press === 'interrupt-order') toast(press === 'interrupt-find' ? 'Opens the card on Inventory, with its last photo.' : 'Opens the order on Orders.', null);
+  });
+
+  window.addEventListener('hashchange', () => { readHash(); render(); });
+  readHash(); writeHash(); render();
+})();
+</script>
+</body>
+</html>
