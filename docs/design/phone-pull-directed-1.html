@@ -235,7 +235,8 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 3px s
 .cam-panel .cp-say b { display: block; font-size: var(--ts-title2); margin-bottom: 2px; }
 .cam-panel .cp-sub { font-size: var(--ts-subhead); color: #b9bfc9; }
 .cam-panel .primary { background: var(--bn-stage-accent); color: #0c0e12; box-shadow: none; }
-.cam-panel .primary.ok { background: var(--bn-stage-ok); }
+.cam .banner { background: rgba(245,165,36,.2); color: var(--bn-stage-ink); }
+.cam .banner svg { color: var(--bn-stage-warn); flex: none; }
 .cam-panel .secondary { background: transparent; color: var(--bn-stage-ink); box-shadow: 0 0 0 1px rgba(255,255,255,.24); }
 .cam-panel .why { color: #b9bfc9; }
 .checks { display: flex; flex-direction: column; gap: 6px; font-size: var(--ts-callout); }
@@ -567,7 +568,7 @@ function viewfinder(kind, c, held) {
 function camPanel(kind, c) {
   const who = BUYERS[c.env[0]].name;
   if (kind === 'look') return `<div class="cam-panel" aria-live="polite"><div class="cp-say"><b>Looking for ${c.num}</b>Hold the card flat, face up, inside the corners.</div><div class="cp-sub">The camera reads the name and the number. Nothing to press.</div></div>`;
-  if (kind === 'match') return `<div class="cam-panel" aria-live="polite"><div class="checks"><div class="ok">${I.check}<span>Name: ${c.name}</span></div><div class="ok">${I.check}<span>Number: ${c.num}</span></div><div class="warn ${tg('new', 'Eye Check')}" style="border-radius:6px">${I.warn}<span>Check by eye: ${c.fin}, ${c.cond}</span></div></div><button class="primary ok" type="button" data-go="sold" id="sellBtn">Mark It Sold</button><div class="why">Goes in ${who}'s envelope.</div></div>`;
+  if (kind === 'match') return `<div class="cam-panel" aria-live="polite"><div class="checks"><div class="ok">${I.check}<span>Name: ${c.name}</span></div><div class="ok">${I.check}<span>Number: ${c.num}</span></div><div class="warn ${tg('new', 'Eye Check')}" style="border-radius:6px">${I.warn}<span>Check by eye: ${c.fin}, ${c.cond}</span></div></div><button class="primary" type="button" data-go="sold" id="sellBtn">Mark It Sold</button><div class="why">Goes in ${who}'s envelope.</div></div>`;
   if (kind === 'wrong') {
     const other = byId.corvin;
     return `<div class="cam-panel" aria-live="polite"><div class="cp-say"><b>That is ${other.name}</b>It belongs at ${placeOf(other.copies[0])}.</div>${on('swap') ? `<button class="secondary ${tg('new', 'Pull This One')}" type="button" id="opt-swap" data-go="match">Pull ${other.name.split(',')[0]} Instead</button>` : ''}<div class="cp-sub">Or put it back and hold up ${c.name.split(',')[0]}.</div></div>`;
@@ -683,13 +684,13 @@ function slabMiss() {
 }
 
 /* ---------------- Today (read only) ---------------- */
-function todayBody() {
+function todayBody(wide) {
   const k = counts('pull');
   return `<h1 class="large-title">Today</h1><div class="glance">
-    <div class="tile warn"><span class="t-head">Needs you</span><span class="t-note" style="color:var(--bn-ink)">${k.short} cards are not in a box.</span><button class="secondary" type="button" data-go="short" style="margin-top:8px">Open</button></div>
+    <div class="tile warn"><span class="t-head">Needs you</span><span class="t-note" style="color:var(--bn-ink)">${k.short} cards are not in a box.</span><button class="secondary" type="button" data-go="short" style="margin-top:8px">Show Them</button></div>
     <button class="tile" type="button" data-go="pull" style="text-align:left"><span class="t-head">Pull</span><span class="t-fig ${tg('new', 'Same Count')}" style="border-radius:6px">${k.left} cards left</span><span class="t-note">For ${k.envs} envelopes</span></button>
-    <div class="tile"><span class="t-head">Shipping</span><div class="lane"><span>Letter, stamp</span><span>3 envelopes</span></div><div class="lane"><span>Tracked</span><span>1 envelope</span></div></div>
-    <div class="tile"><span class="t-head">Sales this week</span><span class="t-fig">$412.50</span><span class="t-note">31 cards</span></div>
+    ${wide ? "" : `<div class="tile"><span class="t-head">Shipping</span><div class="lane"><span>Letter, stamp</span><span>3 envelopes</span></div><div class="lane"><span>Tracked</span><span>1 envelope</span></div></div>`}
+    ${wide ? "" : `<div class="tile"><span class="t-head">Sales this week</span><span class="t-fig">$412.50</span><span class="t-note">31 cards</span></div>`}
   </div>`;
 }
 function todayScreen() { return `<div class="screen"><div class="scroll">${todayBody()}</div>${tabbar('today')}</div>`; }
@@ -770,7 +771,7 @@ function unfolded(state) {
       : inner ? `<div class="detail">${inner.replace('<div class="scrim"></div>', '').replace('class="sheet"', 'class="sheet" style="position:static;border-radius:20px;box-shadow:none"')}</div>`
       : `<div class="detail" style="justify-content:center;align-items:center;gap:16px"><span style="color:var(--bn-ink-2);font-size:var(--ts-title3);text-align:center">Scan a slab's label to add it.</span><button class="primary ${tg('new', 'Scan Cert')}" type="button" data-go="slab-scan" style="max-width:320px">${I.viewfinder}Scan a Slab</button></div>`;
   } else {
-    left = `<div class="scroll">${todayBody()}</div>${tabbar('today')}`;
+    left = `<div class="scroll">${todayBody(true)}</div>${tabbar('today')}`;
     right = `<div class="detail"><div class="tile"><span class="t-head">Shipping lanes</span><div class="lane"><span>Letter, stamp</span><span>3 envelopes</span></div><div class="lane"><span>Tracked</span><span>1 envelope</span></div></div><div class="tile"><span class="t-head">Sales</span><div class="lane"><span>Today</span><span>$58.25</span></div><div class="lane"><span>This week</span><span>$412.50</span></div></div><div class="why" style="text-align:left">Read only. Pricing and sending stay on the Mac.</div></div>`;
   }
   return sb(false) + `<div class="split${state.startsWith('eye') ? ' full' : ''}"><div class="pane">${left}</div><div class="pane">${right}</div></div>` + home(false);
