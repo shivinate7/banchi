@@ -222,7 +222,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--bn-line-foc
 .ff-choose .ff-quiet { justify-content: flex-start; min-height: 72px; padding-block: var(--bn-2); text-align: left; font-variant-numeric: tabular-nums; }
 .ff-choose-place { display: flex; flex-direction: column; line-height: 1.3; }
 .ff-choose-place span { font-weight: 500; }
-.ff-photo-wait { width: 100%; aspect-ratio: 63 / 88; border-radius: var(--bn-r-xl); background: var(--bn-surface-2); box-shadow: inset 0 0 0 2px var(--bn-line-strong); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--bn-3); padding: var(--bn-6); text-align: center; color: var(--bn-ink-2); }
+.ff-photo-wait { width: 100%; aspect-ratio: 63 / 88; border-radius: var(--bn-r-xl); background: var(--bn-surface-3); border: 2px dashed var(--bn-line-strong); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--bn-3); padding: var(--bn-6); text-align: center; color: var(--bn-ink-2); }
 .ff-results { display: flex; flex-direction: column; gap: var(--bn-5); }
 .ff-row-chev { color: var(--bn-ink-2); }
 .ff-cardnote { display: flex; flex-direction: column; gap: var(--bn-4); align-items: flex-start; }
@@ -585,7 +585,7 @@ function pullPane(w) {
   if (left === 0) {
     const sold = soldOf(c)
     return `<article class="ff-card">${head}<div class="ff-card-grid">${photo(c)}<div class="ff-side">
-      <p class="ff-big-ok"><span class="ff-badge" data-tone="ok">${icon('check', 32)}</span>${c.loose ? 'This card is sold.' : sold.length === 1 ? 'This card is done.' : 'Both are done.'}</p>
+      <p class="ff-big-ok"><span class="ff-badge" data-tone="ok">${icon('check', 32)}</span>${c.loose ? 'This card is sold.' : sold.length === 1 ? 'This card is done.' : sold.length === 2 ? 'Both are done.' : `All ${sold.length} are done.`}</p>
       ${c.loose ? '' : `<ul class="ff-env-list">${sold.map((x) => `<li>${icon('envelope', 22)}${BUYERS[x.buyer]}’s envelope</li>`).join('')}</ul>`}
       <div class="ff-action">${nextButton(c)}</div></div></div></article>`
   }
