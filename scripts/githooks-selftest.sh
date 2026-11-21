@@ -265,15 +265,27 @@ echo "  -- every staged image gets the QR scan, wherever it lands (D303) --"
 # never let into this repository.
 git switch -q -c qrtest 2>/dev/null
 
+# THE INTERPRETER THE HOOK USES. hook_python is the hook's own function: it is read out of
+# scripts/githooks/pre-commit and run from THIS checkout, not copied here. Run inside the fixture,
+# it would find no .venv and fall through to a bare python3 with no Pillow. The hook is a script,
+# not a library, so this one function is all that is taken.
+sed -n '/^hook_python() {$/,/^}$/p' "$REPO_ROOT/scripts/githooks/pre-commit" > "$tmp/hook_python.sh"
+. "$tmp/hook_python.sh"
+hook_py="$(cd "$REPO_ROOT" && hook_python)"
+# The commits below run the hook inside the fixture, where its `python3` fallback is whatever
+# PATH holds first. Put the same interpreter first for the QR cases, and restore PATH after them.
+saved_path="$PATH"
+if [ -n "$hook_py" ]; then PATH="$(dirname "$hook_py"):$PATH"; fi
+
 # THE CHECKER ITSELF IS NOT PART OF THIS FIXTURE REPOSITORY, SO IT IS COPIED IN. The hook
-# runs `python3 scripts/qr-clear-check.py` with the fixture repo as its cwd, and that script
+# runs `scripts/qr-clear-check.py` under `hook_py` with the fixture repo as its cwd, and that script
 # reads `codes/qr.py` relative to ITS OWN location — so both have to exist inside `$tmp/work`
 # for the same reason `serve.py` is copied in above rather than referenced from here.
 mkdir -p scripts codes
 cp "$REPO_ROOT/scripts/qr-clear-check.py" scripts/qr-clear-check.py
 cp "$REPO_ROOT/codes/__init__.py" "$REPO_ROOT/codes/qr.py" codes/
 
-python3 - "$tmp/clean.png" "$tmp/qr.png" <<'PYEOF'
+"$hook_py" - "$tmp/clean.png" "$tmp/qr.png" <<'PYEOF'
 import sys
 from PIL import Image
 import numpy as np
@@ -328,6 +340,7 @@ if [ -s "$tmp/clean.png" ] && [ -s "$tmp/qr.png" ]; then
 else
   bad "the fixture could not build a QR test image — PIL or zxing-cpp is missing here"
 fi
+PATH="$saved_path"
 
 # ----------------------------------------------------------- every refusal is logged
 # One line per refusal in the refusal log, and a log that cannot be written never changes the
