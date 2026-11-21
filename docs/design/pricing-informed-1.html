@@ -1,0 +1,1570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pricing, one send line</title>
+<script>
+  /* Hash keys, joined by &:
+       s=loaded|loading|failed|empty|nomatch|done|card|held|review|sending|sent|leftout   the state
+       t=light|dark|abyssal-bloom|carnival-midway                                         theme (default: prefers-color-scheme)
+       w=1440|820                                                                          one frame (default: both, stacked)
+       o=fold-rule,review-sheet,unit-listings,movers-line,reason-sentence                 options tried on the frames
+       hide=<option keys>                                                                  options the owner culled
+       tags=off                                                                            hides the dashed Today and New tags */
+  const HASH = new Map(location.hash.slice(1).split('&').filter(Boolean).map((p) => { const [k, v = ''] = p.split('='); return [k, decodeURIComponent(v)] }))
+  const T = HASH.get('t') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+  document.documentElement.setAttribute('data-theme', T === 'light' ? 'light' : 'dark')
+  if (T === 'abyssal-bloom' || T === 'carnival-midway') document.documentElement.setAttribute('data-palette', T)
+</script>
+<style>
+/*@FONTS-START@*/
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: optional;
+  src: url('../../app/src/fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url('../../app/src/fonts/jetbrains-mono-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url('../../app/src/fonts/jetbrains-mono-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src: url('../../app/src/fonts/jetbrains-mono-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src: url('../../app/src/fonts/jetbrains-mono-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src: url('../../app/src/fonts/jetbrains-mono-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src: url('../../app/src/fonts/jetbrains-mono-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 700;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 700;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 800;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 800;
+  font-display: optional;
+  src: url('../../app/src/fonts/manrope-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+@font-face {
+  font-family: 'Inter Fallback';
+  font-weight: 400 599;
+  src: local('Arial'), local('ArialMT'), local('Liberation Sans'), local('LiberationSans'), local('Arimo'), local('Helvetica');
+  size-adjust: 106.27%;
+  ascent-override: 91.16%;
+  descent-override: 22.70%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Inter Fallback';
+  font-weight: 600 900;
+  src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'), local('LiberationSans-Bold'), local('Arimo Bold'), local('Arimo-Bold'), local('Helvetica Bold');
+  size-adjust: 102.53%;
+  ascent-override: 94.48%;
+  descent-override: 23.52%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Manrope Fallback';
+  font-weight: 400 599;
+  src: local('Arial'), local('ArialMT'), local('Liberation Sans'), local('LiberationSans'), local('Arimo'), local('Helvetica');
+  size-adjust: 100.49%;
+  ascent-override: 106.08%;
+  descent-override: 29.85%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Manrope Fallback';
+  font-weight: 600 900;
+  src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'), local('LiberationSans-Bold'), local('Arimo Bold'), local('Arimo-Bold'), local('Helvetica Bold');
+  size-adjust: 99.57%;
+  ascent-override: 107.06%;
+  descent-override: 30.13%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'JetBrains Mono Fallback';
+  font-weight: 400 599;
+  src: local('Courier New'), local('CourierNewPSMT'), local('Liberation Mono'), local('LiberationMono'), local('Cousine'), local('Courier');
+  size-adjust: 99.98%;
+  ascent-override: 102.02%;
+  descent-override: 30.00%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'JetBrains Mono Fallback';
+  font-weight: 600 900;
+  src: local('Courier New Bold'), local('CourierNewPS-BoldMT'), local('Liberation Mono Bold'), local('LiberationMono-Bold'), local('Cousine Bold'), local('Cousine-Bold'), local('Courier Bold');
+  size-adjust: 99.98%;
+  ascent-override: 102.02%;
+  descent-override: 30.00%;
+  line-gap-override: 0%;
+}
+/*@FONTS-END@*/
+/*@TOKENS-START@*/
+:root {
+  color-scheme: light;
+
+  
+  --bn-bg: #f4f5f8;              
+  --bn-surface: #ffffff;         
+  --bn-surface-2: #eceef2;       
+  --bn-surface-3: #f7f8fa;       
+  --bn-surface-glass: rgba(255, 255, 255, 0.72);
+
+  
+  --bn-hover: rgba(15, 18, 23, 0.03);
+
+  --bn-ink: #0f1217;             
+  --bn-ink-2: #3b414b;           
+  --bn-ink-3: #666c76;           
+  --bn-ink-4: #7f8791;           
+
+  --bn-line: rgba(15, 18, 23, 0.08);
+  --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-line-focus: rgba(61, 90, 241, 0.55);
+  
+  --bn-field-edge: var(--bn-ink-4);
+
+  
+  --bn-accent: #3d5af1;          
+  --bn-accent-hover: #2f4bd9;
+  --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10);
+  --bn-accent-tint-2: rgba(61, 90, 241, 0.18);
+  --bn-on-accent: #ffffff;
+
+  
+  --bn-mask: #000000;
+  --bn-flash: #ffffff;
+
+  --bn-live: #d63d2b;            
+  --bn-live-tint: rgba(239, 75, 58, 0.12);
+
+  
+  --bn-ok: #15803d;              
+  --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309;            
+  --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-danger: #b91c1c;          
+  --bn-danger-tint: rgba(220, 38, 38, 0.10);
+  --bn-money: #0f1217;
+
+  
+  --bn-pill-ink-accent: var(--bn-accent-hover);
+  --bn-pill-ink-ok: #11733a;
+  --bn-pill-ink-warn: #a14b09;
+  
+  --bn-pill-ink-danger: #b3123e;
+  --bn-pill-ink-live: #a53f12;
+
+  
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18),
+    0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32),
+    0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-shadow-accent: 0 8px 24px -8px rgba(61, 90, 241, 0.55);
+
+  
+  --bn-btn-bg: var(--bn-surface);
+  --bn-btn-bg-hover: var(--bn-surface-3);
+  --bn-btn-shadow: var(--bn-shadow-1);
+
+  
+  --bn-font-display: 'Manrope', 'Manrope Fallback', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', 'Inter Fallback', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  
+  --bn-fs-h1: var(--bn-fs-3xl);
+  --bn-fs-h2: var(--bn-fs-xl);
+  --bn-fs-h3: var(--bn-fs-lg);
+  --bn-fs-read: var(--bn-fs-md);
+  --bn-fs-label: var(--bn-fs-xs);
+
+  --bn-fs-2xs: 10px;
+  --bn-fs-xs: 11px;
+  --bn-fs-sm: 12px;
+  --bn-fs-md: 13px;
+  --bn-fs-base: 14px;
+  --bn-fs-lg: 16px;
+  --bn-fs-xl: 18px;
+  --bn-fs-2xl: 22px;
+  --bn-fs-3xl: 28px;
+  --bn-fs-4xl: 36px;
+  --bn-fs-5xl: 48px;
+
+  
+  --bn-tracking-caps: 0.06em;
+  --bn-tracking-tight: -0.02em;
+
+  
+  --bn-lh-tight: 1.1;
+  --bn-lh-snug: 1.25;
+  --bn-lh-base: 1.4;
+  --bn-lh-relaxed: 1.55;
+
+  
+  --bn-1: 4px;
+  --bn-2: 8px;
+  --bn-3: 12px;
+  --bn-4: 16px;
+  --bn-5: 20px;
+  --bn-6: 24px;
+  --bn-7: 32px;
+  --bn-8: 40px;
+  --bn-9: 48px;
+  --bn-10: 64px;
+
+  
+  --bn-0-5: 2px;
+  --bn-0-75: 3px;
+  --bn-1-5: 6px;
+
+  
+  --bn-r-xs: 4px;
+  --bn-r-sm: 6px;
+  --bn-r: 8px;
+  --bn-r-lg: 12px;
+  --bn-r-xl: 16px;
+  
+  --bn-r-2xl-sm: 18px;
+  --bn-r-2xl: 22px;
+  --bn-r-full: 999px;
+
+  
+  --bn-t-fast: 120ms;
+  --bn-t: 200ms;
+  --bn-t-slow: 280ms;
+  --bn-t-layout: 240ms;      
+  --bn-ease: cubic-bezier(0.2, 0, 0, 1);
+  --bn-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --bn-ease-in: cubic-bezier(0.4, 0, 1, 1);  
+  --bn-ease-spring: cubic-bezier(0.34, 1.4, 0.44, 1);
+  --bn-ease-loop: ease-in-out;   
+  --bn-ease-linear: linear;      
+  --bn-rise: 6px;                
+  
+  --bn-stagger: 30ms;
+  --bn-stagger-cap: 12;
+  --bn-t-flash: 200ms;       
+  --bn-t-draw: 480ms;        
+  --bn-t-pulse: 1.8s;        
+  --bn-t-spin: 0.7s;         
+  --bn-t-shimmer: 1.4s;      
+  --bn-t-highlight: 700ms;   
+  --bn-t-instant: 0.01ms;    
+  --bn-disabled: 0.45;       
+
+
+  
+  --bn-stage-bg: #0c0e12;
+  --bn-stage-bg-2: #171b25;
+  --bn-stage-surface: #1b2029;
+  --bn-stage-ink: #eef0f4;
+  --bn-stage-accent: #7f90ff;
+  --bn-stage-accent-hover: #93a2ff;
+  --bn-stage-accent-press: #6b7dfa;
+  --bn-stage-on-accent: #0c0e12;
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+
+  
+  --bn-sidebar-w: 236px;
+  --bn-rail-w: 64px;
+  --bn-topbar-h: 52px;
+
+  
+  --bn-page-w: 1600px;
+  --bn-page-w-rows: 1344px;
+  
+  --bn-empty-w: 960px;
+  
+  --bn-page-top: var(--bn-6);    
+
+  --bn-control-h: 34px;
+  --bn-control-h-lg: 40px;
+  --bn-control-h-sm: 28px;
+
+  
+  --bn-pill-h: 22px;
+  --bn-pill-h-sm: 18px;
+
+  
+  --bn-nav-label-2: var(--bn-ink-3);
+  --bn-nav-label-3: var(--bn-ink-3);
+  --bn-nav-label-4: var(--bn-ink-3);
+  --bn-nav-hover-2: var(--bn-ink);
+  --bn-nav-hover-3: var(--bn-ink);
+  --bn-nav-hover-4: var(--bn-ink);
+  --bn-nav-accent-2: var(--bn-accent);   
+  --bn-nav-accent-3: var(--bn-accent);
+  --bn-nav-accent-4: var(--bn-accent);
+  --bn-nav-tint-2: var(--bn-accent-tint);
+  --bn-nav-tint-3: var(--bn-accent-tint);
+  --bn-nav-tint-4: var(--bn-accent-tint);
+  --bn-seg-active-ink: var(--bn-ink);    
+  --bn-seg-active-bg: var(--bn-surface);
+  --bn-seg-active-bg-2: var(--bn-surface);  
+  --bn-page-backdrop: none;              
+  --bn-row-stripe: transparent;          
+
+  
+  --bg: var(--bn-bg);
+  --surface: var(--bn-surface);
+  --ink: var(--bn-ink);
+  --muted: var(--bn-ink-3);
+  --line: var(--bn-line);
+  --accent: var(--bn-accent);
+  --hover: var(--bn-surface-3);
+  --pressed: var(--bn-accent-press);
+  --on-accent: var(--bn-on-accent);
+  --field: var(--bn-line-strong);
+  --field-hover: var(--bn-ink-4);
+  --display: var(--bn-font-display);
+  --body: var(--bn-font-ui);
+  --util: var(--bn-font-mono);
+  --font-utility: var(--bn-font-mono);
+  --radius: var(--bn-r);
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+  --s8: 64px;
+  --r: var(--bn-r);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bn-bg: #0c0e12;
+  --bn-surface: #14171c;
+  --bn-surface-2: #090b0e;
+  --bn-surface-3: #1b1f26;
+  --bn-surface-glass: rgba(20, 23, 28, 0.72);
+  --bn-hover: rgba(255, 255, 255, 0.04);
+
+  --bn-ink: #eef0f4;
+  --bn-ink-2: #b9bfc9;
+  --bn-ink-3: #838b98;
+  --bn-ink-4: #707886;           
+
+  --bn-line: rgba(255, 255, 255, 0.08);
+  --bn-line-strong: rgba(255, 255, 255, 0.16);
+  --bn-line-focus: rgba(129, 146, 255, 0.6);
+
+  --bn-accent: #7f90ff;
+  --bn-accent-hover: #93a2ff;
+  --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14);
+  --bn-accent-tint-2: rgba(127, 144, 255, 0.24);
+  --bn-on-accent: #0c0e12;
+
+  --bn-live: #ff6a58;
+  --bn-live-tint: rgba(255, 106, 88, 0.16);
+
+  --bn-ok: #3ddc84;
+  --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524;
+  --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-danger: #ff5c5c;
+  --bn-danger-tint: rgba(255, 92, 92, 0.14);
+  --bn-money: #eef0f4;
+
+  --bn-pill-ink-accent: var(--bn-accent-hover);  
+  --bn-pill-ink-ok: var(--bn-ok);
+  --bn-pill-ink-warn: var(--bn-warn);
+  
+  --bn-pill-ink-danger: #f6799c;
+  --bn-pill-ink-live: #ffab70;
+
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(127, 144, 255, 0.55);
+
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #262b34;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+
+
+@media (max-width: 767px) {
+  :root { --bn-page-top: var(--bn-4); }
+}
+
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  :root {
+    --bn-control-h-sm: 40px;
+    --bn-control-h: 42px;
+    --bn-control-h-lg: 46px;
+  }
+}
+
+
+:root[data-theme='dark'][data-palette='abyssal-bloom'] {
+  color-scheme: dark;
+
+  --bn-bg: #050d14;
+  --bn-surface: #0a1c2c;
+  --bn-surface-2: #040b12;
+  --bn-surface-3: #0f2740;
+  --bn-surface-glass: rgba(10, 28, 44, 0.72);
+  --bn-hover: rgba(234, 247, 255, 0.05);
+
+  --bn-ink: #eaf7ff;
+  --bn-ink-2: #bfe3ee;
+  --bn-ink-3: #8bb3c4;
+  --bn-ink-4: #6d95a8;
+
+  --bn-line: rgba(180, 230, 255, 0.10);
+  --bn-line-strong: rgba(180, 230, 255, 0.20);
+  --bn-line-focus: rgba(53, 228, 255, 0.6);
+
+  --bn-accent: #35e4ff;
+  --bn-accent-hover: #68ecff;
+  --bn-accent-press: #1fc2df;
+  --bn-accent-tint: rgba(53, 228, 255, 0.16);
+  --bn-accent-tint-2: rgba(53, 228, 255, 0.26);
+  --bn-on-accent: #031017;
+
+  --bn-live: #ff5a36;
+  --bn-live-tint: rgba(255, 90, 54, 0.18);
+
+  --bn-ok: #4dffb8;
+  --bn-ok-tint: rgba(77, 255, 184, 0.16);
+  --bn-warn: #ffb020;
+  --bn-warn-tint: rgba(255, 176, 32, 0.16);
+  --bn-danger: #ff2e6d;
+  --bn-danger-tint: rgba(255, 46, 109, 0.16);
+  --bn-money: #ffd76a;
+
+  --bn-pill-ink-accent: #68ecff;
+  --bn-pill-ink-ok: #4dffb8;
+  --bn-pill-ink-warn: #ffb020;
+  --bn-pill-ink-danger: #ff2e6d;
+  --bn-pill-ink-live: #ff5a36;
+
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(53, 228, 255, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(255, 90, 54, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(53, 228, 255, 0.65);
+
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #0f2740;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  
+  --bn-stage-accent: #59c7ff;
+  --bn-stage-accent-hover: rgba(89, 199, 255, 1);
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+  
+  --bn-nav-accent-2: #29ffb0;
+  --bn-nav-label-2: var(--bn-nav-accent-2);
+  --bn-nav-hover-2: var(--bn-nav-accent-2);
+  --bn-nav-tint-2: rgba(41, 255, 176, 0.14);
+  --bn-nav-accent-3: #ff6a2e;
+  --bn-nav-label-3: var(--bn-nav-accent-3);
+  --bn-nav-hover-3: var(--bn-nav-accent-3);
+  --bn-nav-tint-3: rgba(255, 106, 46, 0.14);
+  --bn-nav-accent-4: #ff2ec4;
+  --bn-nav-label-4: var(--bn-nav-accent-4);
+  --bn-nav-hover-4: var(--bn-nav-accent-4);
+  --bn-nav-tint-4: rgba(255, 46, 196, 0.14);
+  --bn-seg-active-ink: #031017;
+  --bn-seg-active-bg: #35e4ff;
+  --bn-seg-active-bg-2: #ff6a2e;
+  --bn-page-backdrop: radial-gradient(1200px 700px at 85% -10%, rgba(53,228,255,0.16), transparent 60%), radial-gradient(900px 600px at -10% 90%, rgba(255,46,196,0.14), transparent 55%), radial-gradient(700px 500px at 60% 60%, rgba(41,255,176,0.10), transparent 60%);
+  --bn-row-stripe: rgba(53, 228, 255, 0.045);
+}
+
+
+:root[data-theme='dark'][data-palette='carnival-midway'] {
+  color-scheme: dark;
+
+  --bn-bg: #0f0817;
+  --bn-surface: #1c0f28;
+  --bn-surface-2: #0b0512;
+  --bn-surface-3: #291536;
+  --bn-surface-glass: rgba(28, 15, 40, 0.72);
+  --bn-hover: rgba(248, 241, 255, 0.05);
+
+  --bn-ink: #f8f1ff;
+  --bn-ink-2: #dcc8ee;
+  --bn-ink-3: #ad95c6;
+  --bn-ink-4: #8c76a8;
+
+  --bn-line: rgba(240, 210, 255, 0.10);
+  --bn-line-strong: rgba(240, 210, 255, 0.20);
+  --bn-line-focus: rgba(255, 204, 51, 0.6);
+
+  --bn-accent: #ffcc33;
+  --bn-accent-hover: #ffdb66;
+  --bn-accent-press: #e6b21c;
+  --bn-accent-tint: rgba(255, 204, 51, 0.16);
+  --bn-accent-tint-2: rgba(255, 204, 51, 0.26);
+  --bn-on-accent: #180f02;
+
+  --bn-live: #ff3b3b;
+  --bn-live-tint: rgba(255, 59, 59, 0.18);
+
+  --bn-ok: #4dff9e;
+  --bn-ok-tint: rgba(77, 255, 158, 0.16);
+  --bn-warn: #ffab2e;
+  --bn-warn-tint: rgba(255, 171, 46, 0.16);
+  --bn-danger: #ff1a63;
+  --bn-danger-tint: rgba(255, 26, 99, 0.16);
+  --bn-money: #ffe066;
+
+  --bn-pill-ink-accent: #ffdb66;
+  --bn-pill-ink-ok: #4dff9e;
+  --bn-pill-ink-warn: #ffab2e;
+  --bn-pill-ink-danger: #ff1a63;
+  --bn-pill-ink-live: #ff3b3b;
+
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(255, 204, 51, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(255, 59, 59, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(255, 204, 51, 0.65);
+
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #291536;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  
+  --bn-stage-accent: #4de8ff;
+  --bn-stage-accent-hover: rgba(77, 232, 255, 1);
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+  
+  --bn-nav-accent-2: #2de0d0;
+  --bn-nav-label-2: var(--bn-nav-accent-2);
+  --bn-nav-hover-2: var(--bn-nav-accent-2);
+  --bn-nav-tint-2: rgba(45, 224, 208, 0.14);
+  --bn-nav-accent-3: #ff2e7a;
+  --bn-nav-label-3: var(--bn-nav-accent-3);
+  --bn-nav-hover-3: var(--bn-nav-accent-3);
+  --bn-nav-tint-3: rgba(255, 46, 122, 0.14);
+  --bn-nav-accent-4: #c86bff;
+  --bn-nav-label-4: var(--bn-nav-accent-4);
+  --bn-nav-hover-4: var(--bn-nav-accent-4);
+  --bn-nav-tint-4: rgba(200, 107, 255, 0.14);
+  --bn-seg-active-ink: #180f02;
+  --bn-seg-active-bg: #ffcc33;
+  --bn-seg-active-bg-2: #ff2e7a;
+  --bn-page-backdrop: radial-gradient(1100px 650px at 10% -10%, rgba(255,204,51,0.14), transparent 55%), radial-gradient(1000px 700px at 100% 10%, rgba(255,46,122,0.16), transparent 55%), radial-gradient(800px 600px at 50% 100%, rgba(45,224,208,0.12), transparent 55%);
+  --bn-row-stripe: rgba(255, 46, 122, 0.05);
+}
+/*@TOKENS-END@*/
+</style>
+<style>
+  /* ============ Mockup rules. Every colour is a --bn-* token. ============ */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: var(--bn-bg); }
+  body { background: var(--bn-bg); color: var(--bn-ink); font-family: var(--bn-font-ui); font-size: var(--bn-fs-base);
+         line-height: var(--bn-lh-base); -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--bn-accent); outline-offset: 2px; border-radius: var(--bn-r-sm); }
+  svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+  [hidden] { display: none !important; }
+
+  /* ---- the kit, the parts this page uses (kit.css, copied by name) ---- */
+  .bn-money { font-family: var(--bn-font-mono); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-money); }
+  .bn-btn { --btn-h: var(--bn-control-h); display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-2);
+            height: var(--btn-h); padding: 0 var(--bn-4); border-radius: var(--bn-r); font-size: var(--bn-fs-md); font-weight: 600;
+            line-height: 1; white-space: nowrap; color: var(--bn-ink); background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow);
+            transition: background-color var(--bn-t-fast) var(--bn-ease); }
+  .bn-btn:hover { background: var(--bn-btn-bg-hover); }
+  .bn-btn:disabled, .bn-btn[aria-disabled='true'] { opacity: var(--bn-disabled); cursor: default; }
+  .bn-btn-primary { color: var(--bn-on-accent); background: var(--bn-accent); box-shadow: var(--bn-shadow-1); }
+  .bn-btn-primary:hover { background: var(--bn-accent-hover); }
+  .bn-btn-primary:disabled:hover { background: var(--bn-accent); }
+  .bn-btn-ghost { background: transparent; box-shadow: none; color: var(--bn-ink-2); }
+  .bn-btn-ghost:hover { background: var(--bn-accent-tint); color: var(--bn-ink); }
+  .bn-btn-quiet { background: var(--bn-surface-2); box-shadow: none; }
+  .bn-btn-sm { --btn-h: var(--bn-control-h-sm); padding: 0 var(--bn-3); font-size: var(--bn-fs-sm); border-radius: var(--bn-r-sm); }
+  .bn-btn[aria-pressed='true'] { color: var(--bn-accent-hover); background: var(--bn-accent-tint); box-shadow: none; }
+  .bn-icon-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+                 border-radius: var(--bn-r-sm); color: var(--bn-ink-2); }
+  .bn-icon-btn:hover { background: var(--bn-accent-tint); color: var(--bn-ink); }
+  .bn-icon-btn:disabled { opacity: var(--bn-disabled); cursor: default; }
+  .bn-icon-btn:disabled:hover { background: transparent; }
+  .bn-icon-btn[aria-pressed='true'] { background: var(--bn-accent-tint); color: var(--bn-accent); }
+  .bn-pill { display: inline-flex; align-items: center; gap: var(--bn-1-5); height: var(--bn-pill-h); padding: 0 var(--bn-2);
+             border-radius: var(--bn-r-full); font-size: var(--bn-fs-xs); font-weight: 600; line-height: 1; white-space: nowrap;
+             color: var(--bn-ink-2); background: var(--bn-surface-2); }
+  .bn-pill-sm { height: var(--bn-pill-h-sm); padding: 0 var(--bn-1-5); font-size: var(--bn-fs-2xs); }
+  .bn-pill-accent { color: var(--bn-pill-ink-accent); background: var(--bn-accent-tint); }
+  .bn-pill-ok { color: var(--bn-pill-ink-ok); background: var(--bn-ok-tint); }
+  .bn-pill-warn { color: var(--bn-pill-ink-warn); background: var(--bn-warn-tint); }
+  .bn-pill-danger { color: var(--bn-pill-ink-danger); background: var(--bn-danger-tint); }
+  .bn-kbd { font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); padding: 1px var(--bn-1);
+            border-radius: var(--bn-r-xs); box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+  .spin { width: 16px; height: 16px; border-radius: var(--bn-r-full); border: 2px solid currentColor; border-right-color: transparent;
+          animation: spin var(--bn-t-spin) var(--bn-ease-linear) infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .wait { display: inline-block; border-radius: var(--bn-r-xs); background: var(--bn-surface-2); vertical-align: middle; }
+  @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s; } }
+
+  /* ---- mockup-only layer: ribbon, the walk panel, tags ---- */
+  .mock-ribbon { position: sticky; top: 0; z-index: 60; height: 40px; display: flex; align-items: center; gap: var(--bn-3);
+                 padding: 0 var(--bn-6); background: linear-gradient(var(--bn-warn-tint), var(--bn-warn-tint)), var(--bn-bg);
+                 font-size: var(--bn-fs-sm); font-weight: 600; box-shadow: 0 1px 0 var(--bn-line); white-space: nowrap; overflow: hidden; }
+  .mock-ribbon .kind { margin-left: auto; font-weight: 500; color: var(--bn-ink-2); }
+  .walk { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4) var(--bn-6) var(--bn-5);
+          border-bottom: 1px dashed var(--bn-line-strong); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); max-width: 1440px; }
+  .walk-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); }
+  .walk-row > b { min-width: 72px; color: var(--bn-ink); }
+  .walk .bn-btn { --btn-h: 32px; }
+  .walk-lede { max-width: 72ch; color: var(--bn-ink-2); line-height: var(--bn-lh-relaxed); }
+  .opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--bn-2); }
+  .opt { display: flex; flex-direction: column; gap: var(--bn-1-5); padding: var(--bn-3); border-radius: var(--bn-r);
+         border: 1px dashed var(--bn-line-strong); background: var(--bn-surface); }
+  .opt b { color: var(--bn-ink); }
+  .opt p { color: var(--bn-ink-3); line-height: var(--bn-lh-base); }
+  .opt .walk-row { gap: var(--bn-1-5); }
+  .opt[data-on] { border-style: solid; border-color: var(--bn-accent); }
+  .frames { display: flex; flex-direction: column; gap: var(--bn-8); padding: var(--bn-6) 0 var(--bn-10); }
+  .frame-cap { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); padding: 0 var(--bn-6) var(--bn-2); }
+  .frame { position: relative; background: var(--bn-bg); box-shadow: 0 0 0 1px var(--bn-line); }
+  .frame[data-w='1440'] { width: 1440px; }
+  .frame[data-w='820'] { width: 820px; }
+  .tag { position: absolute; z-index: 4; top: -9px; right: var(--bn-2); padding: 0 var(--bn-1-5); font-family: var(--bn-font-mono);
+         font-size: var(--bn-fs-2xs); line-height: 16px; color: var(--bn-accent); background: var(--bn-bg); border: 1px dashed var(--bn-accent);
+         border-radius: var(--bn-r-xs); white-space: nowrap; pointer-events: none; font-weight: 500; }
+  .tag.new { color: var(--bn-pill-ink-warn); border-color: var(--bn-warn); }
+  .tag.left { right: auto; left: var(--bn-2); }
+  .tag.below { top: auto; bottom: -9px; }
+  body.notags .tag, body.notags .mock-note { display: none; }
+  .mock-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); border: 1px dashed var(--bn-line-strong); border-radius: var(--bn-r);
+               padding: var(--bn-2) var(--bn-3); margin: var(--bn-3) 0; }
+  .mock-note b { color: var(--bn-ink-2); font-family: var(--bn-font-mono); font-weight: 600; }
+
+  /* ---- the shell: sidebar at 1440, rail at 820 ---- */
+  .app { display: flex; align-items: stretch; min-height: 900px; }
+  .side { flex: none; width: 236px; background: var(--bn-surface); border-right: 1px solid var(--bn-line);
+          padding: var(--bn-4) var(--bn-3); display: flex; flex-direction: column; gap: var(--bn-0-5); }
+  .frame[data-w='820'] .side { width: 64px; padding: var(--bn-4) var(--bn-3); align-items: center; }
+  .brand { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-2xl); padding: var(--bn-1) var(--bn-2) var(--bn-4); }
+  .frame[data-w='820'] .brand { font-size: var(--bn-fs-lg); padding: 0 0 var(--bn-4); }
+  .navcap { font-size: var(--bn-fs-label); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase;
+            color: var(--bn-ink-3); padding: var(--bn-4) var(--bn-2) var(--bn-1); }
+  .frame[data-w='820'] .navcap { display: none; }
+  .nav { height: 36px; display: flex; align-items: center; gap: var(--bn-3); padding: 0 var(--bn-2); border-radius: var(--bn-r);
+         color: var(--bn-ink-2); font-weight: 500; font-size: var(--bn-fs-md); }
+  .nav[aria-current='page'] { background: var(--bn-nav-tint-3); color: var(--bn-nav-accent-3); font-weight: 600; }
+  .frame[data-w='820'] .nav { width: 40px; height: 40px; justify-content: center; padding: 0; }
+  .frame[data-w='820'] .nav span { display: none; }
+  .main { position: relative; flex: 1; min-width: 0; container: page / inline-size; }
+
+  /* ---- the page: header, send line, toolbar, list ---- */
+  .pg { display: flex; flex-direction: column; gap: var(--bn-4); padding: var(--bn-page-top) var(--bn-8) var(--bn-10); }
+  .frame[data-w='820'] .pg { padding: var(--bn-page-top) var(--bn-4) var(--bn-10); }
+  .top { display: flex; flex-direction: column; gap: var(--bn-3); }
+  .head { display: flex; align-items: center; gap: var(--bn-3); min-height: 40px; }
+  .title { font-family: var(--bn-font-display); font-size: var(--bn-fs-h1); font-weight: 800; letter-spacing: var(--bn-tracking-tight);
+           line-height: var(--bn-lh-tight); margin-right: var(--bn-2); }
+  .head-acts { margin-left: auto; display: flex; align-items: center; gap: var(--bn-1); }
+
+  /* The rule chip and the status chip: one line each, beside the title. */
+  .chipbtn { position: relative; display: inline-flex; align-items: center; gap: var(--bn-2); height: 36px; padding: 0 var(--bn-3);
+             border-radius: var(--bn-r-full); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); background: var(--bn-surface);
+             box-shadow: inset 0 0 0 1px var(--bn-line-strong); white-space: nowrap; }
+  .chipbtn:hover { background: var(--bn-surface-3); }
+  .chipbtn .bn-money { font-weight: 600; }
+  .chipbtn .act { color: var(--bn-accent-hover); font-weight: 600; }
+  .dot { width: 8px; height: 8px; border-radius: var(--bn-r-full); background: var(--bn-ink-4); flex: none; }
+  .chipbtn[data-tone='warn'] .dot { background: var(--bn-warn); }
+  .chipbtn[data-tone='ok'] .dot { background: var(--bn-ok); }
+  .chipbtn[data-tone='unknown'] .dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--bn-ink-3); }
+  .status { min-width: 132px; justify-content: flex-start; }
+  .status b { font-weight: 600; color: var(--bn-ink); }
+
+  /* THE SEND LINE: one fixed height that every state fills, so nothing under it moves. */
+  .sl { position: sticky; top: 40px; z-index: 30; height: 80px; display: grid; grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center; gap: var(--bn-4); padding: 0 var(--bn-3) 0 var(--bn-5); border-radius: var(--bn-r-xl);
+        background: var(--bn-surface); box-shadow: var(--bn-shadow-2); }
+  .sl-slot { position: relative; height: 56px; min-width: 0; display: flex; align-items: center; gap: var(--bn-3); overflow: hidden; }
+  .ledger { display: flex; align-items: stretch; gap: 0; height: 48px; }
+  .lg { display: flex; flex-direction: column; justify-content: center; gap: var(--bn-0-5); padding: 0 var(--bn-4); min-width: 112px;
+        border-left: 1px solid var(--bn-line); }
+  .lg:first-child { border-left: 0; padding-left: 0; }
+  .lg-n { display: flex; align-items: baseline; gap: var(--bn-1-5); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); white-space: nowrap; }
+  .lg-n b { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xl); font-weight: 600; color: var(--bn-ink); font-variant-numeric: tabular-nums;
+            line-height: 1; }
+  .lg-m { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; }
+  .lg-m .bn-money { color: var(--bn-ink-2); font-weight: 500; }
+  .lg[data-k='down'] .lg-m .bn-money { color: var(--bn-ink-2); }
+  .lg[data-zero] .lg-n b { color: var(--bn-ink-3); }
+  .goes { flex: none; }
+  .sl-say { display: flex; align-items: center; gap: var(--bn-3); min-width: 0; font-size: var(--bn-fs-md); line-height: var(--bn-lh-snug); }
+  .sl-say p { min-width: 0; }
+  .sl-say .sub { display: block; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .sl-say[data-tone='ok'] .sym { color: var(--bn-ok); }
+  .sl-say[data-tone='warn'] .sym { color: var(--bn-warn); }
+  .sl-say[data-tone='danger'] .sym { color: var(--bn-danger); }
+  .sl-say .sym svg { width: 20px; height: 20px; }
+  .sl-act { display: flex; align-items: center; gap: var(--bn-1); }
+  /* The press keeps one box from first paint (DEBT91): a fixed width, two lines, the count in a mono slot. */
+  .press { --btn-h: 56px; width: 304px; padding: 0 var(--bn-4); justify-content: flex-start; gap: var(--bn-3); border-radius: var(--bn-r-lg); }
+  .press .lines { display: flex; flex-direction: column; align-items: flex-start; gap: var(--bn-1); min-width: 0; }
+  .press .l1 { font-size: var(--bn-fs-base); font-weight: 700; }
+  .press .l1 .n { font-family: var(--bn-font-mono); font-variant-numeric: tabular-nums; }
+  .press .l2 { font-size: var(--bn-fs-xs); font-weight: 500; opacity: 0.86; }
+  .press svg { width: 18px; height: 18px; }
+  .press[aria-busy='true'] { cursor: progress; }
+  .frame[data-w='820'] .sl { padding: 0 var(--bn-2) 0 var(--bn-4); gap: var(--bn-3); }
+  .frame[data-w='820'] .press { width: 252px; padding: 0 var(--bn-3); }
+  .frame[data-w='820'] .press .l1 { font-size: var(--bn-fs-md); }
+  .frame[data-w='820'] .lg { min-width: 0; padding: 0 var(--bn-3); }
+  .frame[data-w='820'] .lg:first-child { padding-left: 0; }
+  .frame[data-w='820'] .lg-m { display: none; }
+  .frame[data-w='820'] .lg-n b { font-size: var(--bn-fs-lg); }
+  .frame[data-w='820'] .goes .word { display: none; }
+  .frame[data-w='820'] .goes { width: 40px; padding: 0; }
+  .frame[data-w='820'] .sl-act .door { display: none; }
+  .frame[data-w='820'] .sl-act .more { display: inline-flex; }
+  .sl-act .more { display: none; }
+
+  /* Toolbar: the filters sit right on the list they change (ux-control-beside-area). */
+  .tools { display: flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; padding-top: var(--bn-1); }
+  .search { display: flex; align-items: center; gap: var(--bn-2); height: 40px; width: 320px; padding: 0 var(--bn-3);
+            border-radius: var(--bn-r); background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-field-edge); color: var(--bn-ink-3); }
+  .search input { all: unset; flex: 1; min-width: 0; color: var(--bn-ink); font-size: var(--bn-fs-md); }
+  .search input::placeholder { color: var(--bn-ink-3); }
+  .search:focus-within { box-shadow: inset 0 0 0 2px var(--bn-line-focus); }
+  .tools .bn-btn { --btn-h: 40px; }
+  .tools .count { margin-left: auto; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; }
+  .tools .count b { font-family: var(--bn-font-mono); font-weight: 600; color: var(--bn-ink-2); }
+  .frame[data-w='820'] .search { width: 240px; }
+
+  /* ---- the one list ---- */
+  .list { display: flex; flex-direction: column; margin-top: calc(-1 * var(--bn-1)); }
+  .cols { display: grid; column-gap: var(--bn-3); align-items: center;
+          grid-template-columns: 40px 32px minmax(0, 1fr) 76px 76px 210px 84px 40px 40px; }
+  .caption { padding: 0 0 var(--bn-2); font-size: var(--bn-fs-label); font-weight: 600; color: var(--bn-ink-3);
+             letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; border-bottom: 1px solid var(--bn-line); }
+  .caption .num { text-align: right; }
+  .group { display: flex; flex-direction: column; }
+  .group-head { display: flex; align-items: baseline; gap: var(--bn-2); padding: var(--bn-5) 0 var(--bn-2); border-bottom: 1px solid var(--bn-line); }
+  .group-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-h3); font-weight: 800; }
+  .group-count { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); }
+  .group-lede { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-left: var(--bn-1); }
+  .group[data-g='needs'] .group-title { color: var(--bn-pill-ink-warn); }
+  .group-head .bn-btn { margin-left: auto; }
+
+  .row { position: relative; padding: var(--bn-2) 0; border-bottom: 1px solid var(--bn-line); background: transparent; }
+  .row:nth-child(even of .row) { background: var(--bn-row-stripe); }
+  .row:hover { background: var(--bn-hover); }
+  .row[data-open] { background: var(--bn-accent-tint); box-shadow: inset 3px 0 0 var(--bn-accent); }
+  .row[data-kept] { opacity: 0.62; }
+  .row[data-kept]:hover { opacity: 1; }
+  .row > * { grid-row: 1; }
+  .row .why { grid-row: 2; grid-column: 3 / 6; }
+  .row .tick, .row .thumb, .row .price, .row .src, .row .ib { grid-row: 1 / 3; }
+  .row.one { padding: var(--bn-1) 0; }
+  .row.one .why { display: none; }
+  .tick { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+  .tick input { width: 18px; height: 18px; accent-color: var(--bn-accent); cursor: pointer; }
+  .thumb { width: 32px; aspect-ratio: 5 / 7; border-radius: var(--bn-r-xs); background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-line); }
+  .row.one .thumb { width: 26px; justify-self: center; }
+  .item { min-width: 0; display: flex; align-items: baseline; gap: var(--bn-2); }
+  .row:not(.one) .item { flex-direction: column; align-items: flex-start; gap: 0; }
+  .name { font-weight: 600; color: var(--bn-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+          min-height: 32px; display: inline-flex; align-items: center; }
+  .set { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row:not(.one) .name { min-height: 24px; }
+  .ref { text-align: right; font-size: var(--bn-fs-md); }
+  .ref .bn-money { font-weight: 500; }
+  .dash { color: var(--bn-ink-4); }
+  /* The reasons: one chip per fact, so a row is one line of reasons, never a paragraph. */
+  .why { display: flex; flex-wrap: wrap; gap: var(--bn-1); padding-top: var(--bn-1); min-width: 0; }
+  .why .bn-pill .bn-money { font-size: inherit; font-weight: 600; color: inherit; }
+  .why-sentence { font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row[data-g='needs'] .why-sentence { color: var(--bn-pill-ink-warn); }
+  .price { display: flex; align-items: center; justify-content: flex-end; gap: var(--bn-2); }
+  .was { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; }
+  .was .bn-money { color: var(--bn-ink-3); font-weight: 500; }
+  .to { color: var(--bn-ink-4); width: 14px; height: 14px; }
+  .field { display: inline-flex; align-items: center; gap: 2px; height: 40px; width: 104px; padding: 0 var(--bn-2); border-radius: var(--bn-r);
+           background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-field-edge); font-family: var(--bn-font-mono); font-weight: 600; }
+  .row.one .field { height: 36px; }
+  .field > span { color: var(--bn-ink-3); }
+  .field input { all: unset; width: 100%; min-width: 0; color: var(--bn-money); font-variant-numeric: tabular-nums; }
+  .field input::placeholder { color: var(--bn-ink-3); font-family: var(--bn-font-ui); font-weight: 500; }
+  .field:focus-within { box-shadow: inset 0 0 0 2px var(--bn-line-focus); }
+  .row[data-src='Suggested'] .field { box-shadow: inset 0 0 0 1px var(--bn-accent); background: var(--bn-accent-tint); }
+  .row[data-src='You'] .field { box-shadow: inset 0 0 0 1px var(--bn-ok); background: var(--bn-ok-tint); }
+  .src { justify-self: start; }
+  .src .bn-pill { height: var(--bn-pill-h-sm); }
+  .ib { color: var(--bn-ink-3); }
+  .group-more { display: flex; align-items: center; gap: var(--bn-3); padding: var(--bn-3) 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+
+  /* 820: the references fold under the name; the price keeps its column. */
+  .frame[data-w='820'] .cols { grid-template-columns: 40px 32px minmax(0, 1fr) 176px 40px 40px; }
+  .frame[data-w='820'] .c-market, .frame[data-w='820'] .c-low, .frame[data-w='820'] .c-src { display: none; }
+  .frame[data-w='820'] .row .why { grid-column: 3 / -1; grid-row: 3; }
+  .frame[data-w='820'] .row .refs { display: flex; grid-row: 2; grid-column: 3; }
+  .frame[data-w='820'] .row .tick, .frame[data-w='820'] .row .thumb { grid-row: 1 / 4; }
+  .frame[data-w='820'] .row .price, .frame[data-w='820'] .row .ib { grid-row: 1 / 3; }
+  .frame[data-w='820'] .price { flex-direction: column; align-items: flex-end; gap: var(--bn-0-5); }
+  .frame[data-w='820'] .price .to { display: none; }
+  .frame[data-w='820'] .row.one .item { flex-direction: column; align-items: flex-start; gap: 0; }
+  .frame[data-w='820'] .row.one .name { min-height: 22px; }
+  .frame[data-w='820'] .caption .c-trend { display: none; }
+  .refs { display: none; gap: var(--bn-3); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; }
+  .refs .bn-money { color: var(--bn-ink-2); font-weight: 500; }
+  .srcmini { display: none; }
+  .frame[data-w='820'] .srcmini { display: inline-flex; }
+
+  /* ---- floating parts: the history card, the "what goes" panel, the status panel, the review sheet ---- */
+  .float { position: absolute; z-index: 40; display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4) var(--bn-5) var(--bn-5);
+           border-radius: var(--bn-r-xl); background: var(--bn-surface); box-shadow: var(--bn-shadow-3), inset 0 0 0 1px var(--bn-line); }
+  .float h3 { font-family: var(--bn-font-display); font-size: var(--bn-fs-h3); font-weight: 800; display: flex; align-items: center; gap: var(--bn-2); }
+  .float h3 .x { margin-left: auto; }
+  .float .lede { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .kinds { display: grid; grid-template-columns: auto auto 1fr; gap: var(--bn-1-5) var(--bn-4); font-size: var(--bn-fs-md); align-items: baseline; }
+  .kinds dt { font-weight: 600; }
+  .kinds dd { color: var(--bn-ink-2); }
+  .kinds dd.r { text-align: right; }
+  .kinds .n { font-family: var(--bn-font-mono); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--bn-ink); }
+  .moves { max-height: 216px; overflow: auto; overscroll-behavior: contain; border-radius: var(--bn-r); box-shadow: inset 0 0 0 1px var(--bn-line); }
+  .moves li { list-style: none; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--bn-3); align-items: baseline;
+              padding: var(--bn-1-5) var(--bn-3); border-bottom: 1px solid var(--bn-line); font-size: var(--bn-fs-sm); }
+  .moves li:last-child { border-bottom: 0; }
+  .moves .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .moves .cp { color: var(--bn-ink-3); font-family: var(--bn-font-mono); }
+  .moves .more { color: var(--bn-ink-3); display: block; }
+  .stat-list { display: flex; flex-direction: column; }
+  .stat-list li { list-style: none; display: flex; align-items: center; gap: var(--bn-3); padding: var(--bn-2) 0; border-bottom: 1px solid var(--bn-line);
+                  font-size: var(--bn-fs-md); line-height: var(--bn-lh-snug); }
+  .stat-list li:last-child { border-bottom: 0; }
+  .stat-list li p { flex: 1; min-width: 0; }
+  .stat-list .sub { display: block; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .stat-list .bn-btn { flex: none; }
+  .scrim { position: absolute; inset: 0; z-index: 50; background: color-mix(in srgb, var(--bn-bg) 60%, transparent); }
+  .sheet { position: absolute; z-index: 55; top: 120px; left: 50%; translate: -50% 0; width: 520px; }
+  .sheet .foot { display: flex; justify-content: flex-end; gap: var(--bn-2); padding-top: var(--bn-2); }
+  .sheet .foot .bn-btn { --btn-h: 44px; }
+
+  .hx-chart { display: block; overflow: visible; width: 100%; }
+  .hx-chart text { font-family: var(--bn-font-ui); font-size: 10px; fill: var(--bn-ink-3); }
+  .hx-guide { stroke: var(--bn-line); stroke-width: 1; }
+  .hx-market { fill: none; stroke: var(--bn-ink-2); stroke-width: 1.75; stroke-linejoin: round; }
+  .hx-asking { fill: none; stroke: var(--bn-accent); stroke-width: 1.75; stroke-dasharray: 5 3; }
+  .hx-sale { fill: var(--bn-ok); stroke: var(--bn-surface); stroke-width: 1.5; }
+  .hx-suggest { fill: var(--bn-accent); stroke: var(--bn-surface); stroke-width: 2; }
+  .hx-legend { display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-4); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+  .hx-legend span { display: inline-flex; align-items: center; gap: var(--bn-1-5); }
+  .sw { width: 16px; border-top: 2px solid var(--bn-ink-2); }
+  .sw.ask { border-top: 2px dashed var(--bn-accent); }
+  .sw.sale { width: 8px; height: 8px; border: 0; background: var(--bn-ok); rotate: 45deg; }
+  .hx-why { font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2); line-height: var(--bn-lh-base); }
+  .hx-facts { display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-5); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .hx-facts b { color: var(--bn-ink); }
+  .caret { position: absolute; bottom: -6px; width: 12px; height: 12px; rotate: 45deg; background: var(--bn-surface); box-shadow: 1px 1px 0 var(--bn-line); }
+
+  /* ---- empty, failed and no-match frames ---- */
+  .empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--bn-3); padding: var(--bn-10) 0; max-width: var(--bn-empty-w); }
+  .empty h2 { font-family: var(--bn-font-display); font-size: var(--bn-fs-h2); font-weight: 800; }
+  .empty p { color: var(--bn-ink-2); font-size: var(--bn-fs-md); }
+  .empty .acts { display: flex; gap: var(--bn-2); }
+  .empty .bn-btn { --btn-h: 40px; }
+  .empty details { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .empty summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+  .empty code { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); }
+  .skel .row { height: 72px; }
+  .skel .wait { height: 12px; }
+</style>
+</head>
+<body>
+<div class="mock-ribbon" role="note"><span class="bn-pill bn-pill-warn">Sample</span>No figure, card or name on this page is real. Pricing (route #/pricing), one send line.<span class="kind">Designer kind: informed, pricing-informed-1</span></div>
+
+<section class="walk" aria-label="Mockup controls">
+  <p class="walk-lede">The idea: every state the send bar can be in fills one line of one fixed height. The press keeps one box from its first paint, and the five tallies, the refresh block, the movers, the two "no read" lines, the rule and the value line fold into that line, a rule chip and a status chip. Row 1 sits under them. Every press below works; each state has its own link.</p>
+  <div class="walk-row" id="states"><b>State</b></div>
+  <div class="walk-row" id="themes"><b>Theme</b></div>
+  <div class="walk-row" id="widths"><b>Width</b></div>
+  <div class="walk-row"><b>Tags</b><button class="bn-btn bn-btn-sm" type="button" id="tagsbtn" aria-pressed="false">Hide Today and New tags</button></div>
+  <div class="walk-row"><b>Options</b><span>The frames draw my pick. Try an option on the frames, or hide it to cull it.</span></div>
+  <div class="opts" id="opts"></div>
+</section>
+
+<div class="frames" id="frames"></div>
+
+<script>
+/* ===================================== data: all made up ===================================== */
+const ICON = {
+  send: '<path d="M4 12 20 4l-6 16-3-7-7-1Z"/>', download: '<path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/>', lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  unlock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>',
+  history: '<path d="M4 12a8 8 0 1 0 2.3-5.7M4 5v4h4M12 8v4l3 2"/>', search: '<circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/>',
+  chev: '<path d="m6 9 6 6 6-6"/>', check: '<path d="m5 12 5 5 9-10"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h0"/>',
+  warn: '<path d="M12 4 3 20h18L12 4Z"/><path d="M12 10v4M12 17h0"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', arrow: '<path d="M5 12h14m-5-5 5 5-5 5"/>',
+  eraser: '<path d="m15 4 5 5-9 9H6l-3-3 12-11Z"/><path d="M9 20h11"/>', undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+  dots: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>', layers: '<path d="m12 4 8 4-8 4-8-4 8-4Z"/><path d="m4 12 8 4 8-4M4 16l8 4 8-4"/>',
+  home: '<path d="M4 11 12 4l8 7v9h-5v-6H9v6H4Z"/>', cam: '<rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="12" cy="13" r="4"/><path d="M8 7l2-3h4l2 3"/>',
+  inbox: '<path d="M4 13h5l1 3h4l1-3h5M4 13l3-8h10l3 8v6H4Z"/>', tag: '<path d="M3 12V4h8l10 10-8 8L3 12Z"/><circle cx="7.5" cy="7.5" r="1"/>',
+  cart: '<path d="M3 4h3l2 12h11l2-8H7"/><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/>', truck: '<path d="M3 6h11v10H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
+  dollar: '<path d="M12 3v18M16 7H10a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6H8"/>', box: '<path d="m12 3 9 5v8l-9 5-9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+  grid: '<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>',
+}
+const svg = (k, s = 16) => `<svg class="i" viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true">${ICON[k]}</svg>`
+const money = (v, sign = false) => `<span class="bn-money">${sign && v > 0 ? '+' : v < 0 ? '−' : ''}$${Math.abs(v).toFixed(2)}</span>`
+const pill = (t, tone = '') => `<span class="bn-pill bn-pill-sm ${tone ? 'bn-pill-' + tone : ''}"><span>${t}</span></span>`
+
+/* g: needs | sug | rule. kind: new (a new copy at the rule) | live (a live listing). now: the live price. sug: the proposed price. */
+const ROWS = [
+  { k: 'r1', g: 'needs', name: 'Moonlit Vessel Tin [Quillfox V]', set: 'Lantern Fates', market: 71.44, low: 75.0, now: 84.95, sug: 75.37, cp: 1, kind: 'live',
+    why: [['Unsold 69 days', 'warn'], ['19% over market', 'warn'], ['Others list at $75.00 with shipping', ''], ['Worth $25.00 or more', 'warn']],
+    sentence: 'Unsold 69 days, and priced 19% over market. Others list it at $75.00 with shipping, 12% under yours. Worth $25.00 or more: check the price before it goes.' },
+  { k: 'r2', g: 'needs', name: 'Harvest Collector Chest', set: 'Harvest Fest', market: 172.46, low: 169.99, now: 194.95, sug: 181.95, cp: 1, kind: 'live',
+    why: [['Market down 17% since listed', 'warn'], ['Unsold 69 days', 'warn'], ['Worth $25.00 or more', 'warn']],
+    sentence: 'Market down 17% since listed. Unsold 69 days. Worth $25.00 or more: check the price before it goes.' },
+  { k: 'r3', g: 'needs', name: 'Brambleking Special Collection', set: 'Starfall Tides', market: 125.33, low: 152.98, now: 169.99, sug: 132.22, cp: 1, kind: 'live',
+    why: [['Unsold 69 days', 'warn'], ['36% over market', 'warn'], ['Worth $25.00 or more', 'warn']],
+    sentence: 'Unsold 69 days, and priced 36% over market. Worth $25.00 or more: check the price before it goes.' },
+  { k: 'r4', g: 'needs', name: 'Listing 4402117', set: 'No market price', market: null, low: null, now: null, sug: null, cp: 1, kind: 'live',
+    why: [['No market price', 'warn']], sentence: 'No market price. Type a price to send it.' },
+  { k: 'r5', g: 'needs', name: 'Voltmole', set: 'Tidebreak', market: 0.19, low: null, now: 0.15, sug: 0.19, cp: 4, kind: 'live',
+    why: [['Market up 217% since listed', ''], ['Capped at your 25%', 'warn']],
+    sentence: 'Market up 217% since listed. The raise stops at your 25% limit: $0.15 to $0.19.' },
+  { k: 'r6', g: 'sug', name: 'Glimmerfox ex', set: 'Starfall Tides', market: 4.01, low: 3.8, now: 4.6, sug: 4.01, cp: 3, kind: 'live',
+    why: [['Unsold 21 days', ''], ['15% over market', '']], sentence: 'Unsold 21 days, and priced 15% over market.' },
+  { k: 'r7', g: 'sug', name: 'Cindermoth', set: 'Lantern Fates', market: 1.12, low: 0.99, now: 0.95, sug: 1.12, cp: 2, kind: 'live',
+    why: [['Market up 18% since listed', ''], ['14 sold in 30 days, $0.98 to $1.25', '']],
+    sentence: 'Market up 18% since listed. 14 sold on TCGplayer in 30 days, $0.98 to $1.25.' },
+  { k: 'r8', g: 'sug', name: 'Riverstone Guardian', set: 'Harvest Fest', market: 2.3, low: 1.95, now: 2.75, sug: 2.3, cp: 1, kind: 'live',
+    why: [['Others list at $2.10 with shipping', '']], sentence: 'Others list it from $2.10 with shipping, 24% under your $2.75.' },
+  { k: 'r9', g: 'sug', name: 'Pebblewhisk', set: 'Starfall Tides', market: 0.42, low: 0.25, now: 0.5, sug: 0.42, cp: 4, kind: 'live',
+    why: [['Unsold 30 days', ''], ['19% over market', '']], sentence: 'Unsold 30 days, and priced 19% over market.' },
+  { k: 'r10', g: 'rule', name: 'Thornpup', set: 'Tidebreak', market: 0.21, low: 0.1, rule: 0.22, src: 'Rule', cp: 2, kind: 'new' },
+  { k: 'r11', g: 'rule', name: 'Coral Warden', set: 'Harvest Fest', market: 0.88, low: 0.7, rule: 0.93, src: 'Rule', cp: 1, kind: 'new' },
+  { k: 'r12', g: 'rule', name: 'Gale Sprite', set: 'Lantern Fates', market: 0.09, low: 0.05, rule: 0.15, src: 'Floor', cp: 3, kind: 'new' },
+  { k: 'r13', g: 'rule', name: 'Quartz Owl', set: 'Starfall Tides', market: 2.31, low: 2.05, rule: 2.44, typed: '2.50', now: 2.4, cp: 3, kind: 'live' },
+  { k: 'r14', g: 'rule', name: 'Duskwing', set: 'Tidebreak', market: 0.33, low: 0.29, rule: 0.35, src: 'Live', now: 0.35, cp: 2, kind: 'live' },
+  { k: 'r15', g: 'rule', name: 'Saltmarsh Toad', set: 'Harvest Fest', market: 1.4, low: 1.25, rule: 1.48, src: 'Rule', cp: 1, kind: 'new' },
+  { k: 'r16', g: 'rule', name: 'Fernling', set: 'Lantern Fates', market: 0.12, low: 0.08, rule: 0.15, src: 'Floor', cp: 2, kind: 'new' },
+  { k: 'r17', g: 'rule', name: 'Ashen Lynx', set: 'Tidebreak', market: 0.64, low: 0.55, rule: 0.68, src: 'Live', now: 0.68, cp: 1, kind: 'live' },
+  { k: 'r18', g: 'rule', name: 'Aurora Drake ex', set: 'Starfall Tides', market: 38.2, low: 36.5, rule: 40.3, src: 'Rule', cp: 1, kind: 'new', kept: true },
+]
+/* What the page shows in all: the drawn rows are a sample, so the rest is added to them. */
+const TOTAL = { new: { cp: 18, ls: 11, usd: 13.5 }, up: { cp: 24, ls: 15, usd: 4.1 }, down: { cp: 58, ls: 31, usd: -38.6 }, typed: { cp: 10, ls: 7, usd: 41.25 },
+                kept: 31, rows: 1110, needs: 34, sug: 62, rule: 983 }
+const OPTS = [
+  { key: 'fold-rule', name: 'Fold Going at the rule', says: 'The group draws as one line, 983 rows and their total, with Show them. Page: about 6,900px at 1440 against about 46,000px. Departs from: spec section 1, "Every row, made clearer". Owner grant: yes.' },
+  { key: 'review-sheet', name: 'Review before Send', says: 'The press opens a sheet with what goes; a second press sends. Gain: a last look. Loss: a press the owner ruled out. Departs from: D273, one press sends. Owner grant: yes.' },
+  { key: 'unit-listings', name: 'Count listings, not copies', says: 'The ledger and the press count listings (64), and the second line still names the 92 live copies that move. Departs from: list-notes item 13, "Send N copies".' },
+  { key: 'movers-line', name: 'Keep the movers line', says: 'The status chip keeps "599 live listings moved more than 10%". Spec section 9a picks cutting it, unruled. Owner grant: yes.' },
+  { key: 'reason-sentence', name: 'Reason as one sentence', says: 'One line of words, cut with an ellipsis, in place of chips. Gain: reads as prose. Loss: the end of the line is lost at 820.' },
+]
+const STATES = [
+  ['loaded', 'Loaded'], ['loading', 'Loading'], ['failed', 'Failed load'], ['empty', 'Zero runs'], ['nomatch', 'Search finds nothing'],
+  ['card', 'Row history'], ['held', 'Kept off'], ['review', 'What goes'], ['sending', 'Sending'], ['sent', 'Receipt'], ['leftout', 'Receipt, 3 left out'], ['done', 'Everything sent'],
+]
+
+/* ===================================== state ===================================== */
+const S = {
+  s: HASH.get('s') || 'loaded',
+  w: HASH.get('w') || '',
+  opts: new Set((HASH.get('o') || '').split(',').filter(Boolean)),
+  hide: new Set((HASH.get('hide') || '').split(',').filter(Boolean)),
+  tags: HASH.get('tags') !== 'off',
+  rows: [], open: null, pop: null, q: '', showKept: false, fold: true, sentAt: '12:41',
+}
+function reset() {
+  S.rows = ROWS.map((r) => ({ ...r, tick: r.g === 'sug' || (r.g === 'rule' && r.src !== 'Live'), kept: !!r.kept, typed: r.typed ?? '' }))
+  S.open = null; S.pop = null; S.q = ''; S.showKept = false; S.fold = true
+  if (S.s === 'card') S.open = 'r6'
+  if (S.s === 'held') { const r = S.rows.find((x) => x.k === 'r9'); r.kept = true; r.tick = false; S.justKept = 'r9' } else S.justKept = null
+  if (S.s === 'review') S.pop = S.opts.has('review-sheet') ? 'sheet' : 'goes'
+  if (S.s === 'nomatch') S.q = 'zephyr hollow'
+  if (S.s === 'sent' || S.s === 'leftout' || S.s === 'done') for (const r of S.rows) if (r.tick) { r.tick = false; r.went = true }
+  /* Left out: the row comes back ticked at its new suggested price (send-card notes, item 8). */
+  if (S.s === 'leftout') for (const [k, p] of [['r6', 4.3], ['r7', 1.19], ['r9', 0.47]]) { const r = S.rows.find((x) => x.k === k); r.went = false; r.tick = true; r.left = true; r.sug = p }
+}
+const on = (key) => S.opts.has(key) && !S.hide.has(key)
+
+/* The price a row will go at, and where it came from. */
+function src(r) {
+  if (r.went) return 'Live'
+  if (r.typed !== '') return 'You'
+  if (r.g === 'rule') return r.src
+  return r.sug === null ? 'Live' : 'Suggested'
+}
+function goesAt(r) { return r.typed !== '' ? Number(r.typed) : r.g === 'rule' ? r.rule : r.sug }
+/* The one count, by kind. A drawn row adds to the sample totals only while it is ticked. */
+function figures() {
+  const base = JSON.parse(JSON.stringify(TOTAL))
+  const out = { new: { ...base.new }, up: { ...base.up }, down: { ...base.down }, typed: { ...base.typed } }
+  for (const r of ROWS) { const c = contrib({ ...r, tick: r.g === 'sug' || (r.g === 'rule' && r.src !== 'Live'), typed: r.typed ?? '', kept: !!r.kept }); if (c) { out[c.kind].cp -= c.cp; out[c.kind].ls -= 1; out[c.kind].usd -= c.usd } }
+  const settled = S.s === 'sent' || S.s === 'leftout' || S.s === 'done'
+  if (settled) for (const k of Object.keys(out)) out[k] = { cp: 0, ls: 0, usd: 0 }
+  for (const r of S.rows) { const c = contrib(r); if (c) { out[c.kind].cp += c.cp; out[c.kind].ls += 1; out[c.kind].usd += c.usd } }
+  for (const k of Object.keys(out)) out[k].usd = Math.round(out[k].usd * 100) / 100
+  const kept = TOTAL.kept - (ROWS.filter((r) => r.kept).reduce((n, r) => n + r.cp, 0)) + S.rows.filter((r) => r.kept).reduce((n, r) => n + r.cp, 0)
+  return { ...out, kept, cp: out.new.cp + out.up.cp + out.down.cp + out.typed.cp, ls: out.new.ls + out.up.ls + out.down.ls + out.typed.ls,
+           moves: out.up.cp + out.down.cp + out.typed.cp }
+}
+function contrib(r) {
+  if (!r.tick || r.kept) return null
+  const p = goesAt(r); if (p === null || p === undefined || Number.isNaN(p)) return null
+  if (r.typed !== '') return { kind: 'typed', cp: r.cp, usd: p * r.cp }
+  if (r.kind === 'new') return { kind: 'new', cp: r.cp, usd: p * r.cp }
+  if (r.now === undefined || r.now === null || p === r.now) return null
+  return { kind: p > r.now ? 'up' : 'down', cp: r.cp, usd: (p - r.now) * r.cp }
+}
+
+/* ===================================== drawing ===================================== */
+const tag = (t, cls = '') => (S.tags ? `<span class="tag ${cls}">${t}</span>` : '')
+
+function sideHTML() {
+  const nav = (ic, t, cur = false) => `<a class="nav" ${cur ? 'aria-current="page"' : ''}>${svg(ic, 20)}<span>${t}</span></a>`
+  return `<nav class="side" aria-label="Main">
+    <div class="brand">番地</div>
+    ${nav('home', 'Home')}<div class="navcap">Workflow</div>${nav('cam', 'Capture')}${nav('inbox', 'Review')}${nav('tag', 'Pricing', true)}
+    <div class="navcap">Sell</div>${nav('cart', 'Orders')}${nav('truck', 'Shipping')}${nav('dollar', 'Sales')}
+    <div class="navcap">Library</div>${nav('box', 'Inventory')}${nav('grid', 'Codes')}${nav('layers', 'Slabs')}
+  </nav>`
+}
+
+function statusChip() {
+  const st = S.s
+  if (st === 'loading') return `<button class="chipbtn status" type="button" disabled><span class="dot"></span><span class="wait" style="width:96px;height:10px"></span></button>`
+  if (st === 'failed') return `<button class="chipbtn status" type="button" data-tone="unknown" data-pop="status" aria-expanded="${S.pop === 'status'}"><span class="dot"></span><b>Unknown</b><span>status</span></button>`
+  if (st === 'done' || st === 'empty') return `<button class="chipbtn status" type="button" data-tone="ok" data-pop="status" aria-expanded="${S.pop === 'status'}"><span class="dot"></span><b>All is well.</b></button>`
+  const n = on('movers-line') ? 3 : 2
+  return `<button class="chipbtn status" type="button" data-tone="warn" data-pop="status" aria-expanded="${S.pop === 'status'}"><span class="dot"></span><b>${n} to check</b>${svg('chev', 14)}</button>`
+}
+function ruleChip(w) {
+  return `<button class="chipbtn" type="button" title="Opens today's rule sheet, unchanged"><span>${w === 820
+    ? `Rule +5.5%, floor ${money(0.15)}, value line ${money(25)}`
+    : `New cards list 5.5% over market, ${money(0.15)} floor. Value line ${money(25)}.`}</span><span class="act">Change</span>${tag('New: one chip for the rule line and the value line', 'new')}</button>`
+}
+
+function ledgerHTML(f, w) {
+  const listings = on('unit-listings')
+  const cell = (k, word, n, money_, zero) => `<div class="lg" data-k="${k}" ${zero ? 'data-zero' : ''}><span class="lg-n"><b>${n}</b>${word}</span><span class="lg-m">${money_}</span></div>`
+  const c = (k) => (listings ? f[k].ls : f[k].cp)
+  return `<div class="ledger" role="group" aria-label="What this send carries">
+    ${cell('new', 'new', c('new'), `listing for ${money(f.new.usd)}`, !c('new'))}
+    ${cell('up', c('up') === 1 ? 'rise' : 'rise', c('up'), `up ${money(f.up.usd)} in all`, !c('up'))}
+    ${cell('down', 'fall', c('down'), `down ${money(Math.abs(f.down.usd))} in all`, !c('down'))}
+    ${cell('typed', 'typed', c('typed'), `listing for ${money(f.typed.usd)}`, !c('typed'))}
+  </div>
+  <button class="bn-btn bn-btn-ghost goes" type="button" data-pop="goes" aria-expanded="${S.pop === 'goes'}" aria-label="What goes">${svg('chev')}<span class="word">What goes</span></button>`
+}
+function waitLedger() {
+  const c = () => `<div class="lg"><span class="lg-n"><span class="wait" style="width:28px;height:18px"></span><span class="wait" style="width:36px;height:10px"></span></span><span class="lg-m"><span class="wait" style="width:84px;height:10px"></span></span></div>`
+  return `<div class="ledger" aria-hidden="true">${c()}${c()}${c()}${c()}</div><button class="bn-btn bn-btn-ghost goes" type="button" disabled>${svg('chev')}<span class="word">What goes</span></button>`
+}
+function say(tone, icon, main, sub, act = '') {
+  return `<div class="sl-say" data-tone="${tone}"><span class="sym">${icon}</span><p>${main}${sub ? `<span class="sub">${sub}</span>` : ''}</p>${act}</div>`
+}
+function sendLine(w, first) {
+  const f = figures(), st = S.s, listings = on('unit-listings')
+  let slot, l1, l2, dis = false, busy = false
+  const n = listings ? f.ls : f.cp, unit = listings ? (n === 1 ? 'listing' : 'listings') : n === 1 ? 'copy' : 'copies'
+  if (st === 'loading') { slot = waitLedger(); l1 = 'Send to TCGplayer'; l2 = 'Counting what goes…'; dis = true }
+  else if (st === 'failed') { slot = say('danger', svg('warn'), 'Nothing can go yet.', 'The figures come with the list below.'); l1 = 'Send to TCGplayer'; l2 = 'Waiting for the list'; dis = true }
+  else if (st === 'empty') { slot = say('', svg('info'), 'Nothing to send yet.', 'Cards land here once a run is read.'); l1 = 'Send to TCGplayer'; l2 = 'No card is priced yet'; dis = true }
+  else if (st === 'sending') { slot = say('', '<span class="spin" aria-hidden="true"></span>', 'Checking TCGplayer, then sending…', 'Step 2 of 3: writing the new prices.'); l1 = `Send <span class="n">${n}</span> ${unit} to TCGplayer`; l2 = `${f.moves} live copies move to new prices`; busy = true }
+  else if (st === 'sent') { slot = say('ok', svg('check'), `Sent at ${S.sentAt}. TCGplayer shows all 110 copies.`, '92 live copies are at their new prices.', `<button class="bn-btn bn-btn-ghost bn-btn-sm" type="button" data-pop="went">Show what went</button>`) }
+  else if (st === 'leftout') { slot = say('warn', svg('warn'), `Sent at ${S.sentAt}. 107 copies went, 3 were left out.`, 'Their price moved since you loaded this list.', `<button class="bn-btn bn-btn-ghost bn-btn-sm" type="button" data-pop="left" aria-expanded="${S.pop === 'left'}">Show 3 cards</button>`) }
+  else if (st === 'done') { slot = say('ok', svg('check'), 'Nothing to send.', `Last send at ${S.sentAt}: every ticked price is live.`) }
+  else slot = ledgerHTML(f, w)
+  if (st === 'sent' || st === 'leftout' || st === 'done') {
+    if (f.cp > 0) { l1 = `Send <span class="n">${n}</span> ${unit} to TCGplayer`; l2 = f.moves ? `${f.moves} live copies move to new prices` : 'No live copy moves' }
+    else { l1 = 'Send to TCGplayer'; l2 = 'Tick a row or type a price'; dis = true }
+  } else if (!l1) {
+    if (f.cp === 0) { l1 = 'Send to TCGplayer'; l2 = 'Tick a row or type a price'; dis = true }
+    else { l1 = `Send <span class="n">${n}</span> ${unit} to TCGplayer`; l2 = f.moves ? `${f.moves} live copies move to new prices` : 'No live copy moves' }
+  }
+  const why = dis ? `title="${l2}"` : ''
+  return `<aside class="sl" role="region" aria-label="Send to TCGplayer" ${first ? 'id="send-line"' : ''} ${st === 'loading' ? 'aria-busy="true"' : ''}>
+    ${tag('New: one line, 80px in every state. Today: five tallies, the press, a moves notice', 'new left below')}
+    <div class="sl-slot">${slot}</div>
+    <div class="sl-act">
+      <button class="bn-btn bn-btn-primary press" type="button" data-act="send" ${dis ? 'aria-disabled="true"' : ''} ${busy ? 'aria-busy="true"' : ''} ${why}>
+        ${busy ? '<span class="spin" aria-hidden="true"></span>' : svg('send')}<span class="lines"><span class="l1">${l1}</span><span class="l2">${l2}</span></span></button>
+      <button class="bn-icon-btn door" type="button" aria-label="Download the file instead" title="Download the file instead" ${st === 'loading' || st === 'failed' || st === 'empty' ? 'disabled' : ''}>${svg('download', 18)}</button>
+      <button class="bn-icon-btn door" type="button" aria-label="Check what is live" title="Check what is live" ${st === 'loading' ? 'disabled' : ''}>${svg('refresh', 18)}</button>
+      <button class="bn-icon-btn more" type="button" aria-label="More send options: Download, Check what is live" title="Download, Check what is live">${svg('dots', 18)}</button>
+    </div>
+  </aside>`
+}
+
+function reasonHTML(r) {
+  if (!r.why) return ''
+  if (on('reason-sentence')) return `<div class="why"><span class="why-sentence" title="${r.sentence}">${r.sentence}</span></div>`
+  return `<div class="why">${r.why.map(([t, tone]) => pill(t.replace(/\$([\d.]+)/g, (m, v) => `<span class="bn-money">$${v}</span>`), tone)).join('')}</div>`
+}
+function rowHTML(r, w, first) {
+  const s = src(r), one = r.g === 'rule'
+  const p = goesAt(r), val = r.typed !== '' ? r.typed : p === null || p === undefined ? '' : p.toFixed(2)
+  const was = r.now !== undefined && r.now !== null && !r.went && p !== r.now ? `<span class="was">Now ${money(r.now)}</span>${svg('arrow')}`.replace('<svg class="i"', '<svg class="i to"') : ''
+  const pillTone = s === 'Suggested' ? 'accent' : s === 'You' ? 'ok' : ''
+  const tickable = !r.kept && !r.went && !(s === 'Live' && r.typed === '' && r.g === 'rule')
+  const refs = `<span class="refs">Market ${r.market === null ? '<span class="dash">—</span>' : money(r.market)}<span>Lowest ${r.low === null ? '<span class="dash">—</span>' : money(r.low)}</span>${pill(r.kept ? 'Kept off' : s, r.kept ? '' : pillTone).replace('bn-pill ', 'bn-pill srcmini ')}</span>`
+  return `<div class="row cols ${one ? 'one' : ''}" data-k="${r.k}" data-g="${r.g}" data-src="${s}" ${r.kept ? 'data-kept' : ''} ${S.open === r.k ? 'data-open' : ''}>
+    <label class="tick">${tickable ? `<input type="checkbox" ${r.tick ? 'checked' : ''} data-act="tick" aria-label="Send ${r.name}">` : ''}</label>
+    <span class="thumb" aria-hidden="true"></span>
+    <div class="item"><span class="name" title="${r.name}">${r.name}</span><span class="set">${r.set}${r.cp > 1 ? `, ${r.cp} copies` : ''}</span></div>
+    <span class="ref c-market">${r.market === null ? '<span class="dash">—</span>' : money(r.market)}</span>
+    <span class="ref c-low">${r.low === null ? '<span class="dash">—</span>' : money(r.low)}</span>
+    ${refs}
+    <div class="price">${was}<label class="field"><span>$</span><input inputmode="decimal" value="${val}" placeholder="${p === null ? 'Price' : ''}" data-act="price" aria-label="Price for ${r.name}" ${r.kept ? 'disabled' : ''}></label></div>
+    <span class="src c-src">${r.kept ? pill('Kept off') : r.went ? pill('Sent', 'ok') : pill(s, pillTone)}</span>
+    <button class="bn-icon-btn ib" type="button" data-act="hist" aria-label="Price history for ${r.name}" title="Price history" ${S.open === r.k ? 'aria-pressed="true"' : ''}>${svg('history', 18)}</button>
+    <button class="bn-icon-btn ib" type="button" data-act="keep" aria-pressed="${r.kept}" aria-label="${r.kept ? 'Put back in the send: ' : 'Keep off TCGplayer: '}${r.name}" title="${r.kept ? 'Put back in the send' : 'Keep off TCGplayer'}">${svg(r.kept ? 'unlock' : 'lock', 18)}</button>
+    ${one || r.went ? '' : r.left ? `<div class="why">${pill(`Left out: TCGplayer moved to $${r.sug.toFixed(2)}`, 'warn')}</div>` : reasonHTML(r)}
+  </div>`
+}
+
+function listHTML(w, first) {
+  const st = S.s
+  if (st === 'loading') return `<div class="list skel" aria-hidden="true"><div class="cols caption"><span>Send</span><span></span><span>Item</span></div><div class="group-head"><span class="wait" style="width:120px;height:23px"></span></div>${Array.from({ length: 6 }, () => `<div class="row cols"><span></span><span class="thumb"></span><div class="item"><span class="wait" style="width:220px"></span><span class="wait" style="width:120px;margin-top:8px"></span></div></div>`).join('')}</div>`
+  if (st === 'failed') return `<div class="empty"><h2>The price list did not load</h2><p>The capture server did not answer. Your typed prices are kept.</p><div class="acts"><button class="bn-btn bn-btn-primary" type="button" data-act="retry">${svg('refresh')}Try again</button></div><details><summary>What the server said</summary><code>GET /pipeline/pricing: 503, read timed out after 20s</code></details></div>`
+  if (st === 'empty') return `<div class="empty"><h2>Nothing to price</h2><p>Read what is live at TCGplayer, or add cards in Review.</p><div class="acts"><button class="bn-btn bn-btn-primary" type="button">${svg('refresh')}Refresh</button><button class="bn-btn" type="button">Go to Review</button></div></div>`
+  const q = S.q.trim().toLowerCase()
+  const rows = S.rows.filter((r) => (S.showKept ? r.kept : !r.kept || r.k === S.justKept) && (!q || r.name.toLowerCase().includes(q) || r.set.toLowerCase().includes(q)))
+  if (!rows.length) return `<div class="empty"><p>No row matches “${S.q}”.</p><div class="acts"><button class="bn-btn" type="button" data-act="clear">${svg('x')}Clear the search</button></div></div>`
+  const groups = S.showKept ? [['kept', 'Kept off TCGplayer', TOTAL.kept, 'Not in any send until you put them back.']] : [
+    ['needs', 'Needs you', TOTAL.needs, 'Nothing here goes until you tick it or type a price.'],
+    ['sug', 'Suggested changes', TOTAL.sug, 'Live listings with a reason to move, inside your 25% limit.'],
+    ['rule', 'Going at the rule', TOTAL.rule, 'Each row says where its price came from.'],
+  ]
+  const done = st === 'done'
+  return `<div class="list" role="table" aria-label="Pricing list">
+    <div class="cols caption" role="row"><span>Send</span><span></span><span>Item</span><span class="num c-market">Market</span><span class="num c-low">Lowest</span><span class="num">Price</span><span class="c-src">From</span><span></span><span></span></div>
+    ${groups.map(([g, title, count, lede]) => {
+      const gr = S.showKept ? rows : rows.filter((r) => r.g === g)
+      const empty = done && g !== 'rule'
+      const folded = g === 'rule' && on('fold-rule') && S.fold && !q
+      return `<section class="group" data-g="${g}" aria-label="${title}">
+        <header class="group-head"><h2 class="group-title">${title}</h2><span class="group-count">${empty ? 0 : count.toLocaleString()}</span><span class="group-lede">${empty ? (g === 'needs' ? 'Every price here is set.' : 'No live listing has a reason to move.') : lede}</span>
+          ${folded ? `<button class="bn-btn bn-btn-sm" type="button" data-act="unfold">Show them</button>` : ''}</header>
+        ${empty ? '' : folded ? `<p class="group-more">${count.toLocaleString()} rows at the rule, listing for ${money(412.3)}. ${tag('Option: Fold Going at the rule', 'new')}</p>` : gr.map((r) => rowHTML(r, w, first)).join('')}
+        ${!empty && !folded && !q && !S.showKept && gr.length < count ? `<p class="mock-note">Mockup: the other <b>${(count - gr.length).toLocaleString()}</b> rows of this group are not drawn. Each is ${g === 'rule' ? '<b>48px</b> at 1440 and <b>64px</b> at 820' : '<b>76px</b> at 1440 and <b>104px</b> at 820'}.</p>` : ''}
+      </section>`
+    }).join('')}
+  </div>`
+}
+
+function historyCard(r, w) {
+  const pts = [0.92, 0.95, 0.97, 1.0, 0.99, 1.02, 1.0, 0.98, 1.01, 1.03, 1.0, 1.0].map((m) => m * (r.market ?? 1))
+  const W = w === 820 ? 344 : 520, H = 120, lo = Math.min(...pts, r.now ?? Infinity) * 0.97, hi = Math.max(...pts, r.now ?? 0) * 1.03
+  const x = (i) => 28 + (i / (pts.length - 1)) * (W - 36), y = (v) => 8 + (1 - (v - lo) / (hi - lo)) * (H - 24)
+  const line = pts.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
+  const ask = r.now ? `<polyline class="hx-asking" points="${x(3)},${y(r.now)} ${x(11)},${y(r.now)}"/>` : ''
+  return `<div class="float" data-card style="width:${W + 40}px" role="group" aria-label="Price history for ${r.name}">
+    <span class="caret" style="left:${w === 820 ? 300 : 460}px"></span>
+    <h3>${svg('history', 18)}<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.name}</span><button class="bn-icon-btn x" type="button" data-act="close" aria-label="Close the history">${svg('x')}</button></h3>
+    <p class="hx-why">${r.sentence ?? 'Goes at the rule. No reason to move.'}</p>
+    <svg class="hx-chart" viewBox="0 0 ${W} ${H}" height="${H}" aria-hidden="true">
+      <line class="hx-guide" x1="28" x2="${W - 8}" y1="${y(hi * 0.99)}" y2="${y(hi * 0.99)}"/><line class="hx-guide" x1="28" x2="${W - 8}" y1="${y(lo * 1.01)}" y2="${y(lo * 1.01)}"/>
+      <text x="0" y="${y(hi * 0.99) + 3}">$${(hi * 0.99).toFixed(2)}</text><text x="0" y="${y(lo * 1.01) + 3}">$${(lo * 1.01).toFixed(2)}</text>
+      <polyline class="hx-market" points="${line}"/>${ask}
+      <path class="hx-sale" d="M${x(4)} ${y(pts[4]) - 4}l4 4-4 4-4-4Z"/><path class="hx-sale" d="M${x(8)} ${y(pts[8]) - 4}l4 4-4 4-4-4Z"/>
+      <circle class="hx-suggest" cx="${x(11)}" cy="${y(r.sug ?? pts[11])}" r="5"/>
+      <text x="28" y="${H}">30 days ago</text><text x="${W - 30}" y="${H}">Today</text>
+    </svg>
+    <p class="hx-legend"><span><i class="sw"></i>Market</span><span><i class="sw ask"></i>Your live price</span><span><i class="sw sale"></i>A sale here</span></p>
+    <p class="hx-facts"><span>Market <b>${r.market === null ? '—' : money(r.market)}</b></span><span>Lowest <b>${r.low === null ? '—' : money(r.low)}</b></span>${r.now ? `<span>Now <b>${money(r.now)}</b></span>` : ''}<span>Goes at <b>${money(goesAt(r) ?? 0)}</b></span></p>
+  </div>`
+}
+
+function popHTML(w) {
+  const f = figures(), listings = on('unit-listings')
+  if (S.pop === 'goes' || S.pop === 'sheet') {
+    const sheet = S.pop === 'sheet'
+    const sample = S.rows.filter((r) => contrib(r) && r.kind === 'live').map((r) => [r.name, r.cp, r.now, goesAt(r)])
+    const more = f.moves - sample.reduce((n, m) => n + m[1], 0)
+    const k = (word, kk, money_) => `<dt>${word}</dt><dd><span class="n">${f[kk].cp}</span> copies on <span class="n">${f[kk].ls}</span> cards</dd><dd class="r">${money_}</dd>`
+    const body = `<h3>${sheet ? 'Send these to TCGplayer?' : 'What goes'}${sheet ? '' : `<button class="bn-icon-btn x" type="button" data-act="close" aria-label="Close">${svg('x')}</button>`}</h3>
+      <dl class="kinds">${k('New', 'new', `listing for ${money(f.new.usd)}`)}${k('Rises', 'up', `up ${money(f.up.usd)} in all`)}${k('Falls', 'down', `down ${money(Math.abs(f.down.usd))} in all`)}${k('Typed', 'typed', `listing for ${money(f.typed.usd)}`)}</dl>
+      <p class="lede"><b class="bn-money">${f.moves}</b> live copies move to new prices:</p>
+      <ul class="moves">${sample.map(([nm, cp, a, b]) => `<li><span class="nm">${nm}</span><span class="cp">${cp}×</span><span>${money(a)} to ${money(b)}</span></li>`).join('')}<li><span class="more">and ${more} more copies on other cards</span></li></ul>
+      <p class="lede">${f.kept} copies kept off TCGplayer stay out of this send.</p>
+      ${sheet ? `<div class="foot"><button class="bn-btn" type="button" data-act="close">Not now</button><button class="bn-btn bn-btn-primary" type="button" data-act="confirm">${svg('send')}Send ${listings ? f.ls + ' listings' : f.cp + ' copies'}</button></div>` : ''}`
+    return sheet ? `<div class="scrim" data-act="close"></div><div class="float sheet" role="dialog" aria-label="Send these to TCGplayer?">${body}</div>`
+      : `<div class="float" data-anchor="goes" role="dialog" aria-label="What goes" style="width:460px">${body}</div>`
+  }
+  if (S.pop === 'status') {
+    const items = S.s === 'failed' ? [['Status is unknown until the price list loads.', '', '']] : S.s === 'done' || S.s === 'empty' ? [['All is well.', 'Prices were read today at 09:10.', '']] : [
+      ['No daily price read has run yet.', 'Trends and market moves wait for it. 12 listings had no earlier price to compare.', 'Refresh now'],
+      ['14 readings in 2 runs did not match a card.', 'They are not in this list.', 'Show them'],
+      ...(on('movers-line') ? [['599 live listings moved more than 10% since first seen.', 'Today: the PriceMovers block.', 'Show']] : []),
+    ]
+    return `<div class="float" data-anchor="status" role="dialog" aria-label="Status" style="width:420px">
+      <h3>${S.s === 'done' || S.s === 'empty' ? 'Status' : S.s === 'failed' ? 'Status unknown' : 'To check'}<button class="bn-icon-btn x" type="button" data-act="close" aria-label="Close">${svg('x')}</button></h3>
+      <ul class="stat-list">${items.map(([a, b, c]) => `<li><p>${a}${b ? `<span class="sub">${b}</span>` : ''}</p>${c ? `<button class="bn-btn bn-btn-sm" type="button">${c}</button>` : ''}</li>`).join('')}</ul>
+      ${tag('Today: the refresh block, the movers line, two "no read" lines, the excluded line', '')}
+    </div>`
+  }
+  if (S.pop === 'left' || S.pop === 'went') {
+    const left = S.pop === 'left'
+    const li = left ? [['Glimmerfox ex', 4.01, 4.3], ['Cindermoth', 1.12, 1.19], ['Pebblewhisk', 0.42, 0.47]] : [['Glimmerfox ex', 4.6, 4.01], ['Cindermoth', 0.95, 1.12], ['Riverstone Guardian', 2.75, 2.3], ['Pebblewhisk', 0.5, 0.42]]
+    return `<div class="float" data-anchor="slot" role="dialog" aria-label="${left ? 'Left out' : 'What went'}" style="width:460px">
+      <h3>${left ? 'Left out, check them in your list' : 'Went at the new price'}<button class="bn-icon-btn x" type="button" data-act="close" aria-label="Close">${svg('x')}</button></h3>
+      <ul class="moves">${li.map(([n, a, b]) => `<li><span class="nm">${n}</span><span class="cp"></span><span>${money(a)} to ${money(b)}</span></li>`).join('')}${left ? '' : '<li><span class="more">and 88 more copies</span></li>'}</ul>
+      ${tag('Today: SendCard.SuggestionNotes, send-card.html', '')}
+    </div>`
+  }
+  return ''
+}
+
+function frameHTML(w, first) {
+  const st = S.s
+  const f = figures()
+  const showTools = !(st === 'failed' || st === 'empty'), pend = st === 'loading' ? 'disabled' : ''
+  const shown = S.showKept ? f.kept : TOTAL.rows - f.kept
+  return `<div class="app">${sideHTML()}<main class="main">
+    <div class="pg">
+      <div class="top">
+        <header class="head"><h1 class="title">Pricing</h1>${ruleChip(w)}<span style="position:relative">${statusChip()}${tag('New: status chip', 'new')}</span>
+          <span class="head-acts"><button class="bn-icon-btn" type="button" aria-label="Clear Typed Prices" title="Clear Typed Prices">${svg('eraser', 18)}</button><button class="bn-icon-btn" type="button" aria-label="Undo" title="Undo (U)" disabled>${svg('undo', 18)}</button><button class="bn-icon-btn" type="button" aria-label="Reload" title="Reload">${svg('refresh', 18)}</button></span></header>
+      </div>
+      ${sendLine(w, first)}
+      ${showTools ? `<div class="tools" role="toolbar" aria-label="Which rows">
+        <button class="bn-btn" type="button" ${pend}>${svg('layers')}All games${svg('chev', 14)}</button>
+        <label class="search">${svg('search')}<input type="search" placeholder="Name, set, number or SKU…" value="${S.q}" data-act="q" aria-label="Search this list" ${pend}><span class="bn-kbd">/</span></label>
+        <button class="bn-btn" type="button" data-act="kept" aria-pressed="${S.showKept}" ${pend}>${svg('lock')}Show kept off <span class="bn-money">${pend ? '<span class="wait" style="width:16px;height:10px"></span>' : f.kept}</span></button>
+        <span class="count">${pend ? '<span class="wait" style="width:120px;height:10px"></span>' : `<b>${shown.toLocaleString()}</b> of <b>${TOTAL.rows.toLocaleString()}</b> items`}</span>
+      </div>` : ''}
+      ${listHTML(w, first)}
+    </div>
+    <div data-layer></div>
+  </main></div>`
+}
+
+/* ===================================== wiring ===================================== */
+const frames = document.getElementById('frames')
+let lastHash = location.hash
+function widths() { return S.w ? [S.w] : ['1440', '820'] }
+function render() {
+  const keep = document.activeElement?.closest('[data-w]') && document.activeElement.dataset.act === 'price'
+    ? { w: document.activeElement.closest('[data-w]').dataset.w, k: document.activeElement.closest('.row').dataset.k } : null
+  frames.innerHTML = widths().map((w, i) => `<div><p class="frame-cap">${w} wide, ${T}, ${S.s}</p><div class="frame" data-w="${w}">${frameHTML(Number(w), i === 0)}</div></div>`).join('')
+  for (const fr of frames.querySelectorAll('.frame')) place(fr)
+  if (keep) frames.querySelector(`.frame[data-w="${keep.w}"] .row[data-k="${keep.k}"] input[data-act="price"]`)?.focus({ preventScroll: true })
+  drawWalk()
+}
+/* Floating parts sit in a layer over the list, so opening one moves nothing (D313). */
+function place(fr) {
+  const w = Number(fr.dataset.w), layer = fr.querySelector('[data-layer]'), main = fr.querySelector('.main')
+  layer.innerHTML = ''
+  if (S.open) {
+    const r = S.rows.find((x) => x.k === S.open), row = fr.querySelector(`.row[data-k="${S.open}"]`)
+    if (r && row) {
+      layer.innerHTML = historyCard(r, w)
+      const card = layer.firstElementChild, mr = main.getBoundingClientRect(), rr = row.getBoundingClientRect(), price = row.querySelector('.price').getBoundingClientRect()
+      card.style.top = `${rr.top - mr.top - card.offsetHeight - 8}px`
+      card.style.left = `${Math.max(16, price.right - mr.left - card.offsetWidth + 40)}px`
+    }
+  }
+  const pop = popHTML(w)
+  if (pop) {
+    layer.insertAdjacentHTML('beforeend', pop)
+    const el = layer.querySelector('[data-anchor]')
+    if (el) {
+      const mr = main.getBoundingClientRect()
+      const a = el.dataset.anchor === 'goes' ? fr.querySelector('.goes') : el.dataset.anchor === 'status' ? fr.querySelector('.status') : fr.querySelector('.sl-slot')
+      const ar = a.getBoundingClientRect()
+      el.style.top = `${ar.bottom - mr.top + 12}px`
+      el.style.left = `${Math.min(ar.left - mr.left, mr.width - el.offsetWidth - 16)}px`
+    }
+  }
+}
+function setState(s) { S.s = s; reset(); writeHash(); render() }
+function writeHash() {
+  const parts = [`s=${S.s}`]
+  if (HASH.get('t')) parts.push(`t=${HASH.get('t')}`)
+  if (S.w) parts.push(`w=${S.w}`)
+  const o = [...S.opts].filter((k) => !S.hide.has(k)); if (o.length) parts.push(`o=${o.join(',')}`)
+  if (S.hide.size) parts.push(`hide=${[...S.hide].join(',')}`)
+  if (!S.tags) parts.push('tags=off')
+  history.replaceState(null, '', '#' + parts.join('&')); lastHash = location.hash
+}
+function drawWalk() {
+  const link = (k, v, label, cur) => `<a class="bn-btn bn-btn-sm" href="#" data-walk="${k}" data-v="${v}" ${cur ? 'aria-pressed="true"' : ''}>${label}</a>`
+  document.getElementById('states').innerHTML = '<b>State</b>' + STATES.map(([v, l]) => link('s', v, l, S.s === v)).join('')
+  document.getElementById('themes').innerHTML = '<b>Theme</b>' + [['light', 'Light'], ['dark', 'Dark'], ['abyssal-bloom', 'Abyssal Bloom'], ['carnival-midway', 'Carnival Midway']].map(([v, l]) => link('t', v, l, T === v)).join('')
+  document.getElementById('widths').innerHTML = '<b>Width</b>' + [['', 'Both'], ['1440', '1440'], ['820', '820']].map(([v, l]) => link('w', v, l, S.w === v)).join('')
+  document.getElementById('opts').innerHTML = OPTS.filter((o) => !S.hide.has(o.key)).map((o) => `<div class="opt" id="opt-${o.key}" ${S.opts.has(o.key) ? 'data-on' : ''}>
+    <b>${o.name}</b><p>${o.says}</p><div class="walk-row"><button class="bn-btn bn-btn-sm" type="button" data-opt="${o.key}" aria-pressed="${S.opts.has(o.key)}">${S.opts.has(o.key) ? 'Showing on the frames' : 'Try it on the frames'}</button><button class="bn-btn bn-btn-sm bn-btn-ghost" type="button" data-cull="${o.key}">Hide this option</button></div></div>`).join('')
+    + (S.hide.size ? `<div class="opt"><b>Hidden: ${S.hide.size}</b><div class="walk-row"><button class="bn-btn bn-btn-sm" type="button" data-cull="">Show hidden options</button></div></div>` : '')
+  document.getElementById('tagsbtn').setAttribute('aria-pressed', String(!S.tags))
+}
+
+document.addEventListener('click', (e) => {
+  const wk = e.target.closest('[data-walk]')
+  if (wk) {
+    e.preventDefault()
+    const k = wk.dataset.walk, v = wk.dataset.v
+    if (k === 's') return setState(v)
+    if (k === 'w') { S.w = v; writeHash(); return render() }
+    if (k === 't') { HASH.set('t', v); writeHash(); return location.reload() }
+  }
+  const op = e.target.closest('[data-opt]')
+  if (op) { const k = op.dataset.opt; S.opts.has(k) ? S.opts.delete(k) : S.opts.add(k); if (S.s === 'review') reset(); writeHash(); return render() }
+  const cu = e.target.closest('[data-cull]')
+  if (cu) { if (cu.dataset.cull) { S.hide.add(cu.dataset.cull); S.opts.delete(cu.dataset.cull) } else S.hide.clear(); writeHash(); return render() }
+  if (e.target.closest('#tagsbtn')) { S.tags = !S.tags; document.body.classList.toggle('notags', !S.tags); writeHash(); return render() }
+  const pb = e.target.closest('[data-pop]')
+  if (pb) { const p = pb.dataset.pop; S.pop = S.pop === p ? null : p; S.open = null; return render() }
+  const a = e.target.closest('[data-act]')
+  if (!a) { if (S.pop && !e.target.closest('.float')) { S.pop = null; render() } return }
+  const act = a.dataset.act, row = a.closest('.row'), r = row && S.rows.find((x) => x.k === row.dataset.k)
+  if (act === 'tick' && r) { r.tick = a.checked; return render() }
+  if (act === 'keep' && r) { r.kept = !r.kept; if (r.kept) r.tick = false; S.justKept = r.k; return render() }
+  if (act === 'hist' && r) { S.open = S.open === r.k ? null : r.k; S.pop = null; return render() }
+  if (act === 'close') { S.pop = null; S.open = null; return render() }
+  if (act === 'unfold') { S.fold = false; return render() }
+  if (act === 'kept') { S.showKept = !S.showKept; return render() }
+  if (act === 'clear') { S.q = ''; return render() }
+  if (act === 'retry') return setState('loading')
+  if (act === 'send' && a.getAttribute('aria-disabled') !== 'true' && a.getAttribute('aria-busy') !== 'true') {
+    if (on('review-sheet')) { S.pop = 'sheet'; return render() }
+    return runSend()
+  }
+  if (act === 'confirm') { S.pop = null; return runSend() }
+})
+function runSend() { S.s = 'sending'; S.pop = null; S.open = null; writeHash(); render(); setTimeout(() => { S.s = 'sent'; for (const r of S.rows) if (r.tick) { r.tick = false; r.went = true } writeHash(); render() }, 2400) }
+document.addEventListener('input', (e) => {
+  const a = e.target
+  if (a.dataset.act === 'q') { S.q = a.value; const k = a.closest('.frame').dataset.w; render(); const el = frames.querySelector(`.frame[data-w="${k}"] input[data-act="q"]`); el.focus(); el.setSelectionRange(el.value.length, el.value.length); return }
+  if (a.dataset.act !== 'price') return
+  const r = S.rows.find((x) => x.k === a.closest('.row').dataset.k)
+  const proposed = goesAt({ ...r, typed: '' })
+  r.typed = a.value.trim() === '' || Number(a.value) === proposed ? '' : a.value.trim()
+  if (r.typed !== '') r.tick = true
+  render()
+})
+/* The history card opens on focus of a price field, and takes no focus (spec section 9c). */
+document.addEventListener('focusin', (e) => {
+  if (e.target.dataset?.act !== 'price') return
+  const k = e.target.closest('.row').dataset.k
+  if (S.open !== k) { S.open = k; S.pop = null; const fw = e.target.closest('.frame').dataset.w; render(); frames.querySelector(`.frame[data-w="${fw}"] .row[data-k="${k}"] input[data-act="price"]`)?.focus({ preventScroll: true }) }
+})
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (S.open || S.pop)) { S.open = null; S.pop = null; render() } })
+
+reset()
+if (!S.tags) document.body.classList.add('notags')
+render()
+addEventListener('hashchange', () => { if (location.hash !== lastHash) location.reload() })
+document.fonts?.ready.then(() => { for (const fr of frames.querySelectorAll('.frame')) place(fr) })
+</script>
+</body>
+</html>
