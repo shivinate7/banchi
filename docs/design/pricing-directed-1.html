@@ -1,0 +1,1642 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pricing, one question at a time</title>
+<!-- Fonts come from this checkout (no network). Tokens are app/src/tokens.css, inlined below. -->
+<link rel="stylesheet" href="../../app/src/fonts.css" />
+<style id="tokens">
+/* app/src/tokens.css, inlined at the time of drawing. */
+/* ============================================================================
+   BANCHI — design tokens
+   ----------------------------------------------------------------------------
+   番地 (banchi): a lot number — the address of a thing. Every card in the store has
+   one: box → section → card. The product is named after that idea, and the system
+   below is built around three registers that idea needs:
+
+     ink   — what you read
+     line  — what separates
+     brand — where to look (indigo for action, vermilion for what is live)
+
+   Two themes, one set of names. Light is the default; `[data-theme="dark"]` on <html>
+   switches every surface and ink together. Nothing in a component sheet may name a
+   colour — components paint from these tokens only.
+
+   LEGACY ALIASES are at the bottom, AND THEY ARE SPENT. The old sheet exported
+   --ink/--muted/--line/--s1…, and keeping the names live is what let every screen re-skin the
+   moment this file landed rather than being ported one by one. That migration is over:
+   measured 2026-09-07 across all 102 files under app/src, NOT ONE reads any of the twenty-four,
+   against 266 uses of var(--bn-ink) alone. This header claimed "40 stylesheets read them" until
+   that count was taken. They are kept rather than deleted — docs/DESIGN.md's call — and a new
+   rule may not read one.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* ---- neutrals ---------------------------------------------------------- */
+  --bn-bg: #f4f5f8;              /* the page */
+  --bn-surface: #ffffff;         /* raised: panels, rows, cards */
+  --bn-surface-2: #eceef2;       /* sunken: wells, code, inactive tracks */
+  --bn-surface-3: #f7f8fa;       /* an object that paints its own ground, lifted: see --bn-hover */
+  --bn-surface-glass: rgba(255, 255, 255, 0.72);
+
+  /* THE POINTER IS OVER THIS SURFACE (D110) — an alpha, so it rides the ground, exactly as the
+     three `--bn-line` tokens do and for the same reason. A hover painted as an OPAQUE
+     surface has to know what it is sitting on: `--bn-surface-3` was the hover everywhere,
+     and a sweep of every hover target on every screen found it landing on THREE grounds of
+     different lightness — the sidebar (`--bn-surface-2`), a panel (`--bn-surface`), and the
+     page — so one name produced three different steps: ΔL* 8.67, 4.00 and 7.70. The
+     sidebar's was more than double the product's own step and read as SELECTION rather
+     than hover, competing with the accent tint two rows below it. A dark-only override on
+     `.bn-nav-link` had been compensating for that ground by hand, and for that element
+     only, which is why the brand directly above it and the footer buttons directly below
+     it did not get the correction. An alpha composites against whatever is beneath it, so
+     the compensation is automatic and no element needs to know its ground. Measured over
+     those same three: 3.61 / 4.51 / 4.22, a spread of 0.90 ΔL* against 4.67.
+     ONLY FOR A SURFACE THAT RESTS TRANSPARENT. An element that paints its own ground —
+     a button, a chip, a card — lifts from its OWN colour and reads `--bn-btn-bg-hover`
+     or `--bn-surface-3`; an alpha there would replace the resting paint, not sit on it. */
+  --bn-hover: rgba(15, 18, 23, 0.03);
+
+  --bn-ink: #0f1217;             /* primary text, headings, money */
+  --bn-ink-2: #3b414b;           /* secondary text, values in a key/value row */
+  --bn-ink-3: #666c76;           /* metadata, captions, placeholders — 4.85:1 on --bn-bg,
+                                    4.55:1 on --bn-surface-2 (was #6b7280, 4.43:1 / 4.16:1,
+                                    failing this token's own documented job; measured 2026-09-20) */
+  --bn-ink-4: #7f8791;           /* NOT FOR TEXT (2026-09-23): icons, separators, rules, a field's edge.
+                                    3.33:1 on --bn-bg, 3.64:1 on --bn-surface, 3.13:1 on --bn-surface-2 —
+                                    the 3:1 a graphic needs, and a visible step below ink-3. A word is
+                                    ink-3 at the faintest (UX-047) */
+
+  --bn-line: rgba(15, 18, 23, 0.08);
+  --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-line-focus: rgba(61, 90, 241, 0.55);
+  /* THE EDGE OF A CONTROL YOU TYPE INTO OR TICK, at 3:1 on every ground (UX-094).
+     `--bn-line-strong` is 1.41:1 on a white field, which D50 set at 3.36:1 before the legacy
+     `--field` moved onto it. A name of its own, so every hairline that reads `--bn-line-strong`
+     keeps its weight. It is ink-4, because a field's edge is exactly ink-4's job: a graphic. */
+  --bn-field-edge: var(--bn-ink-4);
+
+  /* ---- brand ------------------------------------------------------------- */
+  --bn-accent: #3d5af1;          /* action. Buttons, links, selection, focus ring */
+  --bn-accent-hover: #2f4bd9;
+  --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10);
+  --bn-accent-tint-2: rgba(61, 90, 241, 0.18);
+  --bn-on-accent: #ffffff;
+
+  /* TWO COLOURS THAT ARE NOT PAINT, and they are tokens because the audit was right to ask.
+     `make docs-audit`'s `raw color` row says a hex literal in a stylesheet is a token nobody
+     wrote — and where the literal genuinely is not a colour the reader will see, the honest
+     answer is a named constant saying so rather than an exemption.
+       --bn-mask: the opaque end of a `mask-image` gradient. A mask carries ALPHA and no colour;
+         the paint underneath shows through unchanged, so this is black in both themes not by
+         choice but by definition, and theming it would be meaningless.
+       --bn-flash: the capture flash overlay, which stands in for a camera's own. It is white in
+         both themes for the same reason a shutter is: it reads as light rather than as a
+         surface, and a dark "flash" is not a flash. */
+  --bn-mask: #000000;
+  --bn-flash: #ffffff;
+
+  --bn-live: #d63d2b;            /* vermilion. The logo dot, a live camera, a capture — 4.6:1 as text */
+  --bn-live-tint: rgba(239, 75, 58, 0.12);
+
+  /* ---- semantic ---------------------------------------------------------- */
+  --bn-ok: #15803d;              /* 5.0:1 on white — the kit paints these as TEXT (pills, buttons) */
+  --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309;            /* 5.0:1 */
+  --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-danger: #b91c1c;          /* 6.5:1 */
+  --bn-danger-tint: rgba(220, 38, 38, 0.10);
+  --bn-money: #0f1217;
+
+  /* PILL INKS: a word in a tone, drawn on that tone's tint (UX-047). The tone inks above are
+     4.0-4.4:1 once the tint is under them, at 10-11px. These clear 4.5:1 on the tint over
+     --bn-bg, --bn-surface and --bn-surface-2. Dark keeps the tone ink itself, which already
+     clears 5:1 on its tint. */
+  --bn-pill-ink-accent: var(--bn-accent-hover);
+  --bn-pill-ink-ok: #11733a;
+  --bn-pill-ink-warn: #a14b09;
+  /* danger is crimson and live is vermilion, so the two pills read apart at a glance */
+  --bn-pill-ink-danger: #b3123e;
+  --bn-pill-ink-live: #a53f12;
+
+  /* ---- elevation --------------------------------------------------------- */
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18),
+    0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32),
+    0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-shadow-accent: 0 8px 24px -8px rgba(61, 90, 241, 0.55);
+
+  /* the default button's ground. A token rather than a rule so the dark theme can lift a
+     button off a panel that is the same colour as it, without a specificity fight */
+  --bn-btn-bg: var(--bn-surface);
+  --bn-btn-bg-hover: var(--bn-surface-3);
+  --bn-btn-shadow: var(--bn-shadow-1);
+
+  /* ---- type -------------------------------------------------------------- */
+  --bn-font-display: 'Manrope', 'Manrope Fallback', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', 'Inter Fallback', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* TYPE ROLES — aliases onto the scale below, never new sizes (UX-067, UX-115). A heading is
+     one of three steps; a sentence a person must read is at least 13px; a label (a caps word,
+     a pill, a keycap) is 10-11px and is never a sentence. */
+  --bn-fs-h1: var(--bn-fs-3xl);
+  --bn-fs-h2: var(--bn-fs-xl);
+  --bn-fs-h3: var(--bn-fs-lg);
+  --bn-fs-read: var(--bn-fs-md);
+  --bn-fs-label: var(--bn-fs-xs);
+
+  --bn-fs-2xs: 10px;
+  --bn-fs-xs: 11px;
+  --bn-fs-sm: 12px;
+  --bn-fs-md: 13px;
+  --bn-fs-base: 14px;
+  --bn-fs-lg: 16px;
+  --bn-fs-xl: 18px;
+  --bn-fs-2xl: 22px;
+  --bn-fs-3xl: 28px;
+  --bn-fs-4xl: 36px;
+  --bn-fs-5xl: 48px;
+
+  /* -015em and -02em were one intent written as two numbers: 36 raw uses of -0.02em sat
+     beside this token's own -0.015em (system review, 2026-09-20). Moved to -0.02em, the
+     value the larger group already carries, so a future sweep repoints fewer call sites to
+     reach one name than the other way round. */
+  --bn-tracking-caps: 0.06em;
+  --bn-tracking-tight: -0.02em;
+
+  /* Four line-heights, not the fifteen the shipped CSS was hand-typing beside a token'd
+     font-size (system review, 2026-09-20). Named by role, not by value, so a future re-tune
+     changes what "tight" means rather than a number nobody can place:
+       --bn-lh-tight    1, 1.05, 1.1, 1.15   — a hero figure or a headline set close
+       --bn-lh-snug     1.2, 1.25, 1.3       — UI labels, controls, table rows
+       --bn-lh-base     1.35, 1.4, 1.45      — body default
+       --bn-lh-relaxed  1.5, 1.55, 1.6       — long-form, wrapped sentences
+     One more value shipped, a bare `line-height: 22` with no unit — not traced to a file in
+     this pass (the review that found it could not place it either); confirm it is real
+     before mapping it to anything. Values only, no call sites moved here — that sweep is a
+     separate lane's, once these names exist to sweep onto. */
+  --bn-lh-tight: 1.1;
+  --bn-lh-snug: 1.25;
+  --bn-lh-base: 1.4;
+  --bn-lh-relaxed: 1.55;
+
+  /* ---- spacing ----------------------------------------------------------- */
+  --bn-1: 4px;
+  --bn-2: 8px;
+  --bn-3: 12px;
+  --bn-4: 16px;
+  --bn-5: 20px;
+  --bn-6: 24px;
+  --bn-7: 32px;
+  --bn-8: 40px;
+  --bn-9: 48px;
+  --bn-10: 64px;
+
+  /* Micro-spacing, below the 4px floor `--bn-1` sets (system review, 2026-09-20): 2px (68
+     uses) and 6px (77 uses) ship more often than several of the tokens above, re-invented
+     file by file because the scale had nowhere for them to live. Named as fractions of
+     `--bn-1` — a continuation of the same scale's own unit, not a second one — so
+     `--bn-0-5`/`--bn-0-75`/`--bn-1-5` read beside `--bn-1`..`--bn-10` rather than competing
+     with them. 3px (11 uses) is named alongside for the same reason, though less common. */
+  --bn-0-5: 2px;
+  --bn-0-75: 3px;
+  --bn-1-5: 6px;
+
+  /* ---- radius ------------------------------------------------------------ */
+  --bn-r-xs: 4px;
+  --bn-r-sm: 6px;
+  --bn-r: 8px;
+  --bn-r-lg: 12px;
+  --bn-r-xl: 16px;
+  /* One design decision made nine times independently (system review, 2026-09-20): 18px
+     splits the gap between `--bn-r-xl` (16) and `--bn-r-2xl` (22) at every one of its 9
+     call sites. Named rather than folded into either neighbour, since nine independent
+     agreements on the same value is itself the evidence it is a real step, not a rounding
+     error. */
+  --bn-r-2xl-sm: 18px;
+  --bn-r-2xl: 22px;
+  --bn-r-full: 999px;
+
+  /* ---- motion ------------------------------------------------------------ */
+  --bn-t-fast: 120ms;
+  --bn-t: 200ms;
+  --bn-t-slow: 280ms;
+  --bn-t-layout: 240ms;      /* a width or a column moving layout: the rail fold, a progress bar */
+  --bn-ease: cubic-bezier(0.2, 0, 0, 1);
+  --bn-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --bn-ease-in: cubic-bezier(0.4, 0, 1, 1);  /* leaving: it speeds up as it goes */
+  --bn-ease-spring: cubic-bezier(0.34, 1.4, 0.44, 1);
+  --bn-ease-loop: ease-in-out;   /* a loop that never ends: breathe, shimmer */
+  --bn-ease-linear: linear;      /* a pace the data sets: a drain, a spin, a scroll-driven fade */
+  --bn-rise: 6px;                /* the one enter distance */
+  /* one cadence for every list: row i waits min(i, cap) * stagger. `.bn-stagger` in kit.css
+     reads `--i` off each child so the arithmetic leaves the JSX */
+  --bn-stagger: 30ms;
+  --bn-stagger-cap: 12;
+  --bn-t-flash: 200ms;       /* the capture flash, one shot */
+  --bn-t-draw: 480ms;        /* a bar or a line drawing in */
+  --bn-t-pulse: 1.8s;        /* a live dot */
+  --bn-t-spin: 0.7s;         /* a busy ring */
+  --bn-t-shimmer: 1.4s;      /* a skeleton sweep, an indeterminate bar */
+  --bn-t-highlight: 700ms;   /* a cell that just changed, flashing once */
+  --bn-t-instant: 0.01ms;    /* the reduced-motion floor: long enough to fire the end events */
+  --bn-disabled: 0.45;       /* the one opacity a disabled pressable wears */
+
+
+  /* ---- stage: a dark ground in BOTH themes (viewfinder, photo heroes) ---------- */
+  --bn-stage-bg: #0c0e12;
+  --bn-stage-bg-2: #171b25;
+  --bn-stage-surface: #1b2029;
+  --bn-stage-ink: #eef0f4;
+  --bn-stage-accent: #7f90ff;
+  --bn-stage-accent-hover: #93a2ff;
+  --bn-stage-accent-press: #6b7dfa;
+  --bn-stage-on-accent: #0c0e12;
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+
+  /* ---- shell ------------------------------------------------------------- */
+  --bn-sidebar-w: 236px;
+  --bn-rail-w: 64px;
+  --bn-topbar-h: 52px;
+
+  /* HOW WIDE A SCREEN MAY EVER BE, and it is a CAP rather than a breakpoint on purpose.
+     `.bn-page` is border-box with a 32px inset, so `--bn-page-w` is 1536px of content and
+     nothing the shell can hand a screen exceeds it — at any monitor, at any browser zoom.
+     A cap is measured against the column the shell actually gave, so it is correct beside
+     the 236px sidebar, beside the 64px rail, and at 80% zoom, with no query to keep in
+     step. That is the whole argument for preferring one to a `@media` width above 1024.
+     `--bn-page-w-rows` is for a screen whose body is a LIST OF ROWS. Those rows are almost
+     all fixed tracks with one flexible identity cell, so every pixel the page gains lands
+     in that cell and nowhere else: at 1536 the pricing row's card name is 784px wide for a
+     string that is never past 44 characters, with the price it is deciding a screen away.
+     1280px of content is that row's fixed tracks plus ~44ch for the name.
+     A screen asks for one by setting `--bn-page-max` on its own root; the kit reads it with
+     `--bn-page-w` as the fallback. `--bn-page-max` is deliberately NOT declared here — it
+     is a screen's word, never the system's, which is why it is not in docs/DESIGN.md.
+     A CAP NARROWS THE PAGE, IT NEVER RECENTERS IT (`D197`). `.bn-page`'s
+     `margin` is `0`, not `0 auto` — a lower `--bn-page-max` gives up width on the RIGHT
+     only, so every screen's left edge sits against the shell's own inset and only the
+     width a screen asks for may differ. Centering a narrower cap inside the wider column
+     the shell handed every OTHER screen is what moved the left edge between routes by up
+     to 330px on the owner's own rig; `app/tests/page-edge.spec.ts` asserts the anchor. */
+  --bn-page-w: 1600px;
+  --bn-page-w-rows: 1344px;
+  /* ONE CAP FOR AN EMPTY OR LONE STATE (D309): `.bn-empty-frame` in kit.css reads it. */
+  --bn-empty-w: 960px;
+  /* ONE WIDTH AND ONE TOP GAP FOR EVERY PAGE BUILT ON `Page` (D272, amends D197).
+     A page drawn by `Page` carries `data-bn-page` and ignores `--bn-page-max`: the width is
+     `--bn-page-w` at every screen, fluid below it, and the title sits `--bn-page-top` below the
+     shell's own edge. `--bn-page-max` and `--bn-page-w-rows` stay for the screens that have not
+     moved onto `Page` yet, and go dead one screen at a time as they do. */
+  --bn-page-top: var(--bn-6);    /* 16px below 768: the phone's own page inset */
+
+  --bn-control-h: 34px;
+  --bn-control-h-lg: 40px;
+  --bn-control-h-sm: 28px;
+
+  /* A PILL'S OWN HEIGHT (D313). A line that may or may not hold a pill reserves it
+     (`min-block-size: var(--bn-pill-h)`), and `.bn-pill` reads the same token, so a pill
+     arriving never changes its line's height. `-sm` is the pill inside a button or a tab. */
+  --bn-pill-h: 22px;
+  --bn-pill-h-sm: 18px;
+
+  /* ---- what a palette may recolor beyond the neutrals -------------------------------
+     Each default reproduces today's rule, so light and dark paint exactly as before and only
+     a `data-palette` block below moves them. Nav slots 2-4 are the three labelled groups
+     (Workflow, Sell, Library) in `App.css`; Home keeps the primary accent. */
+  --bn-nav-label-2: var(--bn-ink-3);
+  --bn-nav-label-3: var(--bn-ink-3);
+  --bn-nav-label-4: var(--bn-ink-3);
+  --bn-nav-hover-2: var(--bn-ink);
+  --bn-nav-hover-3: var(--bn-ink);
+  --bn-nav-hover-4: var(--bn-ink);
+  --bn-nav-accent-2: var(--bn-accent);   /* the current page's ink and edge bar */
+  --bn-nav-accent-3: var(--bn-accent);
+  --bn-nav-accent-4: var(--bn-accent);
+  --bn-nav-tint-2: var(--bn-accent-tint);
+  --bn-nav-tint-3: var(--bn-accent-tint);
+  --bn-nav-tint-4: var(--bn-accent-tint);
+  --bn-seg-active-ink: var(--bn-ink);    /* the chosen tab of a segmented control */
+  --bn-seg-active-bg: var(--bn-surface);
+  --bn-seg-active-bg-2: var(--bn-surface);  /* the chosen tab when it is the second */
+  --bn-page-backdrop: none;              /* a gradient behind the page, fixed to the window */
+  --bn-row-stripe: transparent;          /* every second row of a table */
+
+  /* ======================================================================
+     LEGACY ALIASES — the names every existing stylesheet reads.
+     ====================================================================== */
+  --bg: var(--bn-bg);
+  --surface: var(--bn-surface);
+  --ink: var(--bn-ink);
+  --muted: var(--bn-ink-3);
+  --line: var(--bn-line);
+  --accent: var(--bn-accent);
+  --hover: var(--bn-surface-3);
+  --pressed: var(--bn-accent-press);
+  --on-accent: var(--bn-on-accent);
+  --field: var(--bn-line-strong);
+  --field-hover: var(--bn-ink-4);
+  --display: var(--bn-font-display);
+  --body: var(--bn-font-ui);
+  --util: var(--bn-font-mono);
+  --font-utility: var(--bn-font-mono);
+  --radius: var(--bn-r);
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+  --s8: 64px;
+  --r: var(--bn-r);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bn-bg: #0c0e12;
+  --bn-surface: #14171c;
+  --bn-surface-2: #090b0e;
+  --bn-surface-3: #1b1f26;
+  --bn-surface-glass: rgba(20, 23, 28, 0.72);
+  --bn-hover: rgba(255, 255, 255, 0.04);
+
+  --bn-ink: #eef0f4;
+  --bn-ink-2: #b9bfc9;
+  --bn-ink-3: #838b98;
+  --bn-ink-4: #707886;           /* not for text: 4.34:1 on the dark page, 3.71:1 on --bn-surface-3 */
+
+  --bn-line: rgba(255, 255, 255, 0.08);
+  --bn-line-strong: rgba(255, 255, 255, 0.16);
+  --bn-line-focus: rgba(129, 146, 255, 0.6);
+
+  --bn-accent: #7f90ff;
+  --bn-accent-hover: #93a2ff;
+  --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14);
+  --bn-accent-tint-2: rgba(127, 144, 255, 0.24);
+  --bn-on-accent: #0c0e12;
+
+  --bn-live: #ff6a58;
+  --bn-live-tint: rgba(255, 106, 88, 0.16);
+
+  --bn-ok: #3ddc84;
+  --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524;
+  --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-danger: #ff5c5c;
+  --bn-danger-tint: rgba(255, 92, 92, 0.14);
+  --bn-money: #eef0f4;
+
+  --bn-pill-ink-accent: var(--bn-accent-hover);  /* a pill on an accent-tinted row is two tints deep */
+  --bn-pill-ink-ok: var(--bn-ok);
+  --bn-pill-ink-warn: var(--bn-warn);
+  /* live is a light orange-vermilion and danger a deeper crimson-rose: apart in hue and in
+     lightness, each over 4.5:1 on its tint on every dark ground, INCLUDING a selected
+     (accent-tinted) row (kit-frame-2, 2026-09-24): a danger pill drawn on a selected row is a
+     second tint over a first one, and the review found it at 4.08:1 there against this token's
+     former #f7608a — lighter than the plain-row floor needed, so nobody had reason to raise it
+     until a row could tint under it. gallery.spec.ts now composites the row's own tint into the
+     ground it checks every pill against. */
+  --bn-pill-ink-danger: #f6799c;
+  --bn-pill-ink-live: #ffab70;
+
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(127, 144, 255, 0.55);
+
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #262b34;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* A thumb needs 40px. Every kit control reads these, so the floor is raised once — and it
+   follows the POINTER, not the width: an iPad in portrait is 820px wide and all thumb. */
+/* The gap above a page's title follows the page's own side inset: 16px on a phone. */
+@media (max-width: 767px) {
+  :root { --bn-page-top: var(--bn-4); }
+}
+
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  :root {
+    --bn-control-h-sm: 40px;
+    --bn-control-h: 42px;
+    --bn-control-h-lg: 46px;
+  }
+}
+
+/* Abyssal Bloom — A submersible viewport at crush depth: bioluminescent siphonophores, an anglerfish lure, and a bloom of jellyfish light in the black water. */
+:root[data-theme='dark'][data-palette='abyssal-bloom'] {
+  color-scheme: dark;
+
+  --bn-bg: #050d14;
+  --bn-surface: #0a1c2c;
+  --bn-surface-2: #040b12;
+  --bn-surface-3: #0f2740;
+  --bn-surface-glass: rgba(10, 28, 44, 0.72);
+  --bn-hover: rgba(234, 247, 255, 0.05);
+
+  --bn-ink: #eaf7ff;
+  --bn-ink-2: #bfe3ee;
+  --bn-ink-3: #8bb3c4;
+  --bn-ink-4: #6d95a8;
+
+  --bn-line: rgba(180, 230, 255, 0.10);
+  --bn-line-strong: rgba(180, 230, 255, 0.20);
+  --bn-line-focus: rgba(53, 228, 255, 0.6);
+
+  --bn-accent: #35e4ff;
+  --bn-accent-hover: #68ecff;
+  --bn-accent-press: #1fc2df;
+  --bn-accent-tint: rgba(53, 228, 255, 0.16);
+  --bn-accent-tint-2: rgba(53, 228, 255, 0.26);
+  --bn-on-accent: #031017;
+
+  --bn-live: #ff5a36;
+  --bn-live-tint: rgba(255, 90, 54, 0.18);
+
+  --bn-ok: #4dffb8;
+  --bn-ok-tint: rgba(77, 255, 184, 0.16);
+  --bn-warn: #ffb020;
+  --bn-warn-tint: rgba(255, 176, 32, 0.16);
+  --bn-danger: #ff2e6d;
+  --bn-danger-tint: rgba(255, 46, 109, 0.16);
+  --bn-money: #ffd76a;
+
+  --bn-pill-ink-accent: #68ecff;
+  --bn-pill-ink-ok: #4dffb8;
+  --bn-pill-ink-warn: #ffb020;
+  --bn-pill-ink-danger: #ff2e6d;
+  --bn-pill-ink-live: #ff5a36;
+
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(53, 228, 255, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(255, 90, 54, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(53, 228, 255, 0.65);
+
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #0f2740;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  /* the camera/photo stage keeps its own accent apart from the UI's, so the
+     capture screen clashes on purpose against the shell around it */
+  --bn-stage-accent: #59c7ff;
+  --bn-stage-accent-hover: rgba(89, 199, 255, 1);
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+  /* nav groups, segmented tabs, page ground and table stripe (were per-selector rules) */
+  --bn-nav-accent-2: #29ffb0;
+  --bn-nav-label-2: var(--bn-nav-accent-2);
+  --bn-nav-hover-2: var(--bn-nav-accent-2);
+  --bn-nav-tint-2: rgba(41, 255, 176, 0.14);
+  --bn-nav-accent-3: #ff6a2e;
+  --bn-nav-label-3: var(--bn-nav-accent-3);
+  --bn-nav-hover-3: var(--bn-nav-accent-3);
+  --bn-nav-tint-3: rgba(255, 106, 46, 0.14);
+  --bn-nav-accent-4: #ff2ec4;
+  --bn-nav-label-4: var(--bn-nav-accent-4);
+  --bn-nav-hover-4: var(--bn-nav-accent-4);
+  --bn-nav-tint-4: rgba(255, 46, 196, 0.14);
+  --bn-seg-active-ink: #031017;
+  --bn-seg-active-bg: #35e4ff;
+  --bn-seg-active-bg-2: #ff6a2e;
+  --bn-page-backdrop: radial-gradient(1200px 700px at 85% -10%, rgba(53,228,255,0.16), transparent 60%), radial-gradient(900px 600px at -10% 90%, rgba(255,46,196,0.14), transparent 55%), radial-gradient(700px 500px at 60% 60%, rgba(41,255,176,0.10), transparent 60%);
+  --bn-row-stripe: rgba(53, 228, 255, 0.045);
+}
+
+/* Carnival Midway — A traveling carnival after dark: big-top magenta stripes, ticket-booth gold, a funhouse mirror’s teal, cotton candy glowing under string lights. */
+:root[data-theme='dark'][data-palette='carnival-midway'] {
+  color-scheme: dark;
+
+  --bn-bg: #0f0817;
+  --bn-surface: #1c0f28;
+  --bn-surface-2: #0b0512;
+  --bn-surface-3: #291536;
+  --bn-surface-glass: rgba(28, 15, 40, 0.72);
+  --bn-hover: rgba(248, 241, 255, 0.05);
+
+  --bn-ink: #f8f1ff;
+  --bn-ink-2: #dcc8ee;
+  --bn-ink-3: #ad95c6;
+  --bn-ink-4: #8c76a8;
+
+  --bn-line: rgba(240, 210, 255, 0.10);
+  --bn-line-strong: rgba(240, 210, 255, 0.20);
+  --bn-line-focus: rgba(255, 204, 51, 0.6);
+
+  --bn-accent: #ffcc33;
+  --bn-accent-hover: #ffdb66;
+  --bn-accent-press: #e6b21c;
+  --bn-accent-tint: rgba(255, 204, 51, 0.16);
+  --bn-accent-tint-2: rgba(255, 204, 51, 0.26);
+  --bn-on-accent: #180f02;
+
+  --bn-live: #ff3b3b;
+  --bn-live-tint: rgba(255, 59, 59, 0.18);
+
+  --bn-ok: #4dff9e;
+  --bn-ok-tint: rgba(77, 255, 158, 0.16);
+  --bn-warn: #ffab2e;
+  --bn-warn-tint: rgba(255, 171, 46, 0.16);
+  --bn-danger: #ff1a63;
+  --bn-danger-tint: rgba(255, 26, 99, 0.16);
+  --bn-money: #ffe066;
+
+  --bn-pill-ink-accent: #ffdb66;
+  --bn-pill-ink-ok: #4dff9e;
+  --bn-pill-ink-warn: #ffab2e;
+  --bn-pill-ink-danger: #ff1a63;
+  --bn-pill-ink-live: #ff3b3b;
+
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(255, 204, 51, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(255, 59, 59, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(255, 204, 51, 0.65);
+
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #291536;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  /* the camera/photo stage keeps its own accent apart from the UI's, so the
+     capture screen clashes on purpose against the shell around it */
+  --bn-stage-accent: #4de8ff;
+  --bn-stage-accent-hover: rgba(77, 232, 255, 1);
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+  /* nav groups, segmented tabs, page ground and table stripe (were per-selector rules) */
+  --bn-nav-accent-2: #2de0d0;
+  --bn-nav-label-2: var(--bn-nav-accent-2);
+  --bn-nav-hover-2: var(--bn-nav-accent-2);
+  --bn-nav-tint-2: rgba(45, 224, 208, 0.14);
+  --bn-nav-accent-3: #ff2e7a;
+  --bn-nav-label-3: var(--bn-nav-accent-3);
+  --bn-nav-hover-3: var(--bn-nav-accent-3);
+  --bn-nav-tint-3: rgba(255, 46, 122, 0.14);
+  --bn-nav-accent-4: #c86bff;
+  --bn-nav-label-4: var(--bn-nav-accent-4);
+  --bn-nav-hover-4: var(--bn-nav-accent-4);
+  --bn-nav-tint-4: rgba(200, 107, 255, 0.14);
+  --bn-seg-active-ink: #180f02;
+  --bn-seg-active-bg: #ffcc33;
+  --bn-seg-active-bg-2: #ff2e7a;
+  --bn-page-backdrop: radial-gradient(1100px 650px at 10% -10%, rgba(255,204,51,0.14), transparent 55%), radial-gradient(1000px 700px at 100% 10%, rgba(255,46,122,0.16), transparent 55%), radial-gradient(800px 600px at 50% 100%, rgba(45,224,208,0.12), transparent 55%);
+  --bn-row-stripe: rgba(255, 46, 122, 0.05);
+}
+</style>
+<script>
+  /* Hash keys, joined by &:
+       s=<state>       q, hold, typed, nomarket, value, fall, batch, done, allwell, none, loading, failed,
+                       review, sending, sent, settings, notes, table, detail, filtered
+       q=<n>           which question (1-based), with s=q
+       w=1440 | w=820  frame width (default 1440)
+       t=light | dark | abyssal-bloom | carnival-midway   theme (default: prefers-color-scheme)
+       hide=a,b        options the owner culled (the strip at the top)
+       tags=off        hides the dashed Today and New tags */
+  const HASH = new Map(location.hash.slice(1).split('&').filter(Boolean).map((p) => { const [k, v = ''] = p.split('='); return [k, decodeURIComponent(v)] }))
+  ;(function theme() {
+    const t = HASH.get('t')
+    const dark = t ? t !== 'light' : matchMedia('(prefers-color-scheme: dark)').matches
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
+    if (t === 'abyssal-bloom' || t === 'carnival-midway') document.documentElement.setAttribute('data-palette', t)
+  })()
+</script>
+<style>
+  /* Mockup rules. Every colour is a --bn-* token. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: var(--bn-bg); }
+  body { background: var(--bn-bg); color: var(--bn-ink); font-family: var(--bn-font-ui); font-size: var(--bn-fs-base);
+         line-height: var(--bn-lh-base); -webkit-font-smoothing: antialiased; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; background: none; border: 0; }
+  :focus-visible { outline: 2px solid var(--bn-accent); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+  .money { font-family: var(--bn-font-mono); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-money); white-space: nowrap; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* ---------- mockup layer: sample banner, kind, state picker, cull strip, tags ---------- */
+  .mock { display: flex; flex-direction: column; gap: var(--bn-2); padding: var(--bn-3) var(--bn-6);
+          background: linear-gradient(var(--bn-warn-tint), var(--bn-warn-tint)), var(--bn-bg); border-bottom: 1px solid var(--bn-line); }
+  .mock-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2) var(--bn-3); font-size: var(--bn-fs-sm); }
+  .mock-flag { display: inline-flex; align-items: center; height: var(--bn-pill-h); padding: 0 var(--bn-2); border-radius: var(--bn-r-full);
+               background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn); font-weight: 700; font-size: var(--bn-fs-xs); }
+  .mock-says { font-weight: 600; }
+  .mock-kind { color: var(--bn-ink-2); }
+  .mock-kind b { color: var(--bn-ink); }
+  .mock-ctl { display: inline-flex; align-items: center; gap: var(--bn-1); }
+  .mock-ctl > span { color: var(--bn-ink-3); margin-right: var(--bn-1); }
+  .mbtn { height: 32px; padding: 0 var(--bn-2); border-radius: var(--bn-r-sm); background: var(--bn-surface); color: var(--bn-ink-2);
+          box-shadow: inset 0 0 0 1px var(--bn-line-strong); font-size: var(--bn-fs-sm); font-weight: 500; }
+  .mbtn[aria-pressed='true'] { background: var(--bn-accent-tint-2); color: var(--bn-pill-ink-accent); box-shadow: inset 0 0 0 1px var(--bn-accent); }
+  .mbtn.cut[aria-pressed='true'] { background: var(--bn-surface-2); color: var(--bn-ink-3); text-decoration: line-through; box-shadow: inset 0 0 0 1px var(--bn-line); }
+  .mock select { height: 32px; border-radius: var(--bn-r-sm); border: 0; box-shadow: inset 0 0 0 1px var(--bn-line-strong); background: var(--bn-surface); padding: 0 var(--bn-2); font-size: var(--bn-fs-sm); }
+  .tag { position: absolute; z-index: 4; top: -9px; right: var(--bn-3); padding: 0 var(--bn-1-5); font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs);
+         line-height: 16px; color: var(--bn-accent); background: var(--bn-bg); border: 1px dashed var(--bn-accent); border-radius: var(--bn-r-xs);
+         white-space: nowrap; pointer-events: none; }
+  .tag.new { color: var(--bn-pill-ink-warn); border-color: var(--bn-warn); }
+  body.notags .tag { display: none; }
+  .filters, .tfoot, .hold, .end, .sheet-body, .answers, .table { position: relative; }
+  .chart > .tag { top: -16px; }
+
+  .stage { padding: var(--bn-6); overflow-x: auto; }
+  .frame { margin: 0 auto; background: var(--bn-bg); box-shadow: 0 0 0 1px var(--bn-line); }
+  .frame[data-w='1440'] { width: 1440px; }
+  .frame[data-w='820'] { width: 820px; }
+
+  /* ---------- the shell ---------- */
+  .app { display: flex; align-items: stretch; min-height: 900px; }
+  .side { flex: none; width: 236px; background: var(--bn-surface); border-right: 1px solid var(--bn-line); padding: var(--bn-4) var(--bn-3);
+          display: flex; flex-direction: column; gap: var(--bn-1); }
+  .side-in { position: sticky; top: var(--bn-4); display: flex; flex-direction: column; gap: var(--bn-1); }
+  .brand { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-xl); padding: 0 var(--bn-2) var(--bn-4); }
+  .nav { height: 40px; display: flex; align-items: center; gap: var(--bn-3); padding: 0 var(--bn-2); border-radius: var(--bn-r);
+         color: var(--bn-ink-2); font-weight: 500; text-decoration: none; }
+  .nav svg { width: 18px; height: 18px; flex: none; }
+  .nav[aria-current='page'] { background: var(--bn-nav-tint-2); color: var(--bn-nav-accent-2); font-weight: 600; }
+  .frame[data-w='820'] .side { width: 64px; align-items: center; padding: var(--bn-4) var(--bn-3); }
+  .frame[data-w='820'] .brand { padding: 0 0 var(--bn-4); font-size: var(--bn-fs-lg); }
+  .frame[data-w='820'] .nav { width: 40px; justify-content: center; padding: 0; }
+  .frame[data-w='820'] .nav span { display: none; }
+  .main { flex: 1; min-width: 0; position: relative; }
+
+  /* ---------- the page head ---------- */
+  .pg { padding: var(--bn-6); display: flex; flex-direction: column; gap: var(--bn-4); }
+  .head { display: flex; align-items: center; gap: var(--bn-4); flex-wrap: wrap; }
+  .title { font-family: var(--bn-font-display); font-size: var(--bn-fs-h1); font-weight: 800; letter-spacing: var(--bn-tracking-tight); line-height: var(--bn-lh-tight); }
+  .seg { position: relative; display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--bn-r); background: var(--bn-surface-2); }
+  .seg button { height: 34px; padding: 0 var(--bn-3); border-radius: var(--bn-r-sm); color: var(--bn-ink-2); font-weight: 600; font-size: var(--bn-fs-md);
+                display: inline-flex; align-items: center; gap: var(--bn-2); }
+  .seg button[aria-pressed='true'] { background: var(--bn-seg-active-bg); color: var(--bn-seg-active-ink); box-shadow: var(--bn-shadow-1); }
+  .seg .n { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-weight: 500; }
+  .seg button[aria-pressed='true'] .n { color: var(--bn-ink-2); }
+  .head-end { margin-left: auto; display: flex; align-items: center; gap: var(--bn-2); position: relative; }
+  .asof { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; }
+  .btn { height: 40px; padding: 0 var(--bn-3); border-radius: var(--bn-r); display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-2);
+         font-weight: 600; font-size: var(--bn-fs-md); background: var(--bn-btn-bg); color: var(--bn-ink); box-shadow: var(--bn-btn-shadow); white-space: nowrap;
+         transition: background-color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease); }
+  .btn:hover { background: var(--bn-btn-bg-hover); }
+  .btn svg { width: 16px; height: 16px; flex: none; }
+  .btn.quiet { background: transparent; box-shadow: none; color: var(--bn-ink-2); }
+  .btn.quiet:hover { background: var(--bn-hover); }
+  .btn.primary { background: var(--bn-accent); color: var(--bn-on-accent); box-shadow: var(--bn-shadow-1); }
+  .btn.primary:hover { background: var(--bn-accent-hover); box-shadow: var(--bn-shadow-accent); }
+  .btn[aria-disabled='true'] { opacity: var(--bn-disabled); cursor: not-allowed; }
+  .btn.icon { width: 40px; padding: 0; }
+  .note-chip { height: 40px; padding: 0 var(--bn-3); border-radius: var(--bn-r); display: inline-flex; align-items: center; gap: var(--bn-2);
+               font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-pill-ink-warn); background: var(--bn-warn-tint); }
+  .note-chip.ok { color: var(--bn-pill-ink-ok); background: var(--bn-ok-tint); }
+  .dot { width: 8px; height: 8px; border-radius: var(--bn-r-full); background: currentColor; flex: none; }
+  .pop { position: absolute; z-index: 20; top: calc(100% + var(--bn-2)); right: 0; width: 380px; padding: var(--bn-4); border-radius: var(--bn-r-lg);
+         background: var(--bn-surface); box-shadow: var(--bn-shadow-2); display: flex; flex-direction: column; gap: var(--bn-3); font-size: var(--bn-fs-md); }
+  .pop h3 { font-family: var(--bn-font-display); font-size: var(--bn-fs-h3); font-weight: 800; }
+  .pop ul { list-style: none; display: flex; flex-direction: column; gap: var(--bn-3); }
+  .pop li { display: flex; flex-direction: column; gap: var(--bn-1); color: var(--bn-ink-2); line-height: var(--bn-lh-relaxed); }
+  .pop li b { color: var(--bn-ink); font-weight: 600; }
+  .linkb { color: var(--bn-accent); font-weight: 600; align-self: flex-start; min-height: 32px; text-decoration: underline; text-underline-offset: 3px; }
+
+  /* ---------- the send bar: one height and one press width from first paint ---------- */
+  .send { position: sticky; top: 0; z-index: 10; height: 72px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--bn-4);
+          padding: 0 var(--bn-3) 0 var(--bn-5); border-radius: var(--bn-r-xl); background: var(--bn-surface); box-shadow: var(--bn-shadow-2); }
+  .send-slot { min-width: 0; display: flex; flex-direction: column; gap: var(--bn-0-5); }
+  .send-head { display: flex; align-items: baseline; gap: var(--bn-2); font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 800;
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .send-head.ok { color: var(--bn-pill-ink-ok); }
+  .send-head.warn { color: var(--bn-pill-ink-warn); }
+  .send-parts { display: flex; gap: var(--bn-4); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; }
+  .send-parts b { color: var(--bn-ink-2); font-weight: 700; font-family: var(--bn-font-mono); }
+  .send-act { display: flex; align-items: center; gap: var(--bn-2); }
+  /* The press reserves the box of its longest label, so it never widens when the list lands (DEBT91). */
+  .send-press { height: 48px; min-width: 228px; font-size: var(--bn-fs-base); }
+  .send-press .money { color: inherit; }
+  .skel { display: inline-block; height: 12px; width: 64px; border-radius: var(--bn-r-xs); background: var(--bn-surface-2); vertical-align: middle; }
+  .skel.w2 { width: 180px; height: 16px; }
+  .ring { width: 16px; height: 16px; border-radius: var(--bn-r-full); border: 2px solid currentColor; border-right-color: transparent; animation: spin var(--bn-t-spin) linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .ring { animation: none; } * { transition-duration: var(--bn-t-instant) !important; } }
+
+  /* ---------- the question view ---------- */
+  .qview { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--bn-6); align-items: start; }
+  .qview.norail { grid-template-columns: minmax(0, 1fr); }
+  .q { position: relative; border-radius: var(--bn-r-2xl); background: var(--bn-surface); box-shadow: var(--bn-shadow-1); display: flex; flex-direction: column; }
+  .q-top { display: flex; align-items: center; gap: var(--bn-3); padding: var(--bn-4) var(--bn-6); border-bottom: 1px solid var(--bn-line); }
+  .q-step { font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2); white-space: nowrap; }
+  .q-step .money, .q-step b { font-family: var(--bn-font-mono); font-weight: 600; color: var(--bn-ink); }
+  .meter { flex: 1; height: 6px; border-radius: var(--bn-r-full); background: var(--bn-surface-2); overflow: hidden; display: flex; gap: 2px; }
+  .meter i { flex: 1; background: var(--bn-surface-2); }
+  .meter i.done { background: var(--bn-accent); }
+  .meter i.now { background: var(--bn-accent-tint-2); }
+  .meter i.skip { background: var(--bn-ink-4); }
+  .why { display: inline-flex; align-items: center; height: var(--bn-pill-h); padding: 0 var(--bn-2); border-radius: var(--bn-r-full); font-size: var(--bn-fs-xs);
+         font-weight: 700; white-space: nowrap; color: var(--bn-pill-ink-warn); background: var(--bn-warn-tint); }
+  .why.accent { color: var(--bn-pill-ink-accent); background: var(--bn-accent-tint); }
+
+  .q-body { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: var(--bn-6); padding: var(--bn-6); }
+  .photo { position: relative; width: 168px; aspect-ratio: 5 / 7; border-radius: var(--bn-r-lg); background: var(--bn-surface-3);
+           box-shadow: inset 0 0 0 1px var(--bn-line), var(--bn-shadow-1); display: flex; flex-direction: column; padding: var(--bn-2); gap: var(--bn-1-5); }
+  .photo .art { flex: 1; border-radius: var(--bn-r-sm); background: linear-gradient(160deg, var(--bn-accent-tint-2), var(--bn-surface-2) 70%); }
+  .photo .art.sealed { background: linear-gradient(160deg, var(--bn-warn-tint), var(--bn-surface-2) 70%); }
+  .photo .cap { font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); text-align: center; }
+  .photo .ln { height: 6px; border-radius: var(--bn-r-xs); background: var(--bn-line-strong); }
+  .photo .ln.s { width: 60%; }
+  .q-main { min-width: 0; display: flex; flex-direction: column; gap: var(--bn-4); }
+  .q-id { display: flex; flex-direction: column; gap: var(--bn-1); }
+  .q-name { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; line-height: var(--bn-lh-snug); }
+  .q-meta { display: flex; flex-wrap: wrap; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .q-meta > span + span::before { content: ''; display: inline-block; width: 3px; height: 3px; border-radius: var(--bn-r-full); background: var(--bn-ink-4); margin: 0 var(--bn-2); vertical-align: middle; }
+  /* The one bold thing on the page: the question, in the display face. */
+  .q-ask { font-family: var(--bn-font-display); font-size: var(--bn-fs-3xl); font-weight: 800; letter-spacing: var(--bn-tracking-tight); line-height: var(--bn-lh-tight); max-width: 22em; text-wrap: balance; }
+  .q-ask .money { font-size: inherit; font-weight: 700; letter-spacing: 0; }
+  .q-also { font-size: var(--bn-fs-md); color: var(--bn-ink-2); line-height: var(--bn-lh-relaxed); }
+  .facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--bn-3); }
+  .fact { display: flex; flex-direction: column; gap: var(--bn-0-5); padding: var(--bn-3); border-radius: var(--bn-r); background: var(--bn-surface-2); min-width: 0; }
+  .fact dt { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .fact dd { font-size: var(--bn-fs-lg); }
+  .fact dd small { display: block; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-family: var(--bn-font-ui); font-weight: 400; }
+  .fact dd .money { font-size: var(--bn-fs-lg); }
+  .fact.mine { background: transparent; box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+
+  .chart { position: relative; display: flex; flex-direction: column; gap: var(--bn-2); }
+  .chart-head { display: flex; align-items: center; gap: var(--bn-4); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .chart-head .key { display: inline-flex; align-items: center; gap: var(--bn-1-5); }
+  .chart-head .sw { width: 16px; height: 0; border-top: 2px solid var(--bn-accent); }
+  .chart-head .sw.ask { border-top: 2px dashed var(--bn-ink-2); }
+  .chart-head .sw.sug { width: 8px; height: 8px; border: 0; border-radius: var(--bn-r-full); background: var(--bn-accent); box-shadow: 0 0 0 2px var(--bn-surface), 0 0 0 3px var(--bn-accent); }
+  .chart-head .span { margin-left: auto; }
+  .chart svg { width: 100%; height: 132px; display: block; overflow: visible; }
+  .chart .grid { stroke: var(--bn-line); }
+  .chart .mkt { fill: none; stroke: var(--bn-accent); stroke-width: 2; }
+  .chart .area { fill: var(--bn-accent-tint); stroke: none; }
+  .chart .ask { fill: none; stroke: var(--bn-ink-2); stroke-width: 1.5; stroke-dasharray: 5 4; }
+  .chart .sug { fill: var(--bn-accent); stroke: var(--bn-surface); stroke-width: 3; }
+  .chart .ax { fill: var(--bn-ink-3); font-size: 11px; font-family: var(--bn-font-ui); }
+  .chart .none { fill: var(--bn-ink-3); font-size: 13px; font-family: var(--bn-font-ui); }
+
+  /* Answers: each is a price the owner can take in one press. */
+  .answers { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-5) var(--bn-6); border-top: 1px solid var(--bn-line); background: var(--bn-surface-3);
+             border-radius: 0 0 var(--bn-r-2xl) var(--bn-r-2xl); }
+  .ans-row { display: flex; flex-wrap: wrap; gap: var(--bn-2); align-items: stretch; }
+  .ans { position: relative; min-height: 64px; min-width: 132px; padding: var(--bn-2) var(--bn-8) var(--bn-2) var(--bn-3); border-radius: var(--bn-r-lg); display: flex; flex-direction: column;
+         align-items: flex-start; justify-content: center; gap: var(--bn-0-5); text-align: left; background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-line-strong);
+         transition: background-color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease); }
+  .ans:hover { background: var(--bn-hover); box-shadow: inset 0 0 0 1px var(--bn-ink-4); }
+  .ans .lbl { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-weight: 500; }
+  .ans .money { font-size: var(--bn-fs-xl); }
+  .ans .sub { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+  .ans .big { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; }
+  .ans.primary .big { color: var(--bn-on-accent); }
+  .ans.primary { background: var(--bn-accent); box-shadow: var(--bn-shadow-1); min-width: 176px; }
+  .ans.primary .lbl, .ans.primary .sub, .ans.primary .money { color: var(--bn-on-accent); }
+  .ans.primary:hover { background: var(--bn-accent-hover); box-shadow: var(--bn-shadow-accent); }
+  .ans.chosen { box-shadow: inset 0 0 0 2px var(--bn-ok); background: var(--bn-ok-tint); }
+  .ans.chosen .lbl, .ans.chosen .money, .ans.chosen .sub { color: var(--bn-pill-ink-ok); }
+  kbd { position: absolute; top: var(--bn-2); right: var(--bn-2); min-width: 20px; height: 20px; padding: 0 var(--bn-1); border-radius: var(--bn-r-xs);
+        font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs); line-height: 20px; text-align: center; color: var(--bn-ink-3); box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+  .ans.primary kbd { color: var(--bn-on-accent); box-shadow: inset 0 0 0 1px var(--bn-on-accent); opacity: .8; }
+  body.nokeys kbd { display: none; }
+  .ans-type { min-height: 64px; min-width: 176px; padding: var(--bn-2) var(--bn-3); border-radius: var(--bn-r-lg); display: flex; flex-direction: column; justify-content: center; gap: var(--bn-0-5);
+              background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-field-edge); position: relative; }
+  .ans-type:focus-within { box-shadow: inset 0 0 0 2px var(--bn-line-focus); }
+  .ans-type .lbl { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .ans-type .in { display: flex; align-items: center; gap: 2px; font-family: var(--bn-font-mono); font-size: var(--bn-fs-xl); font-weight: 600; }
+  .ans-type .in span { color: var(--bn-ink-3); }
+  .ans-type input { all: unset; width: 100%; min-width: 0; font-family: var(--bn-font-mono); font-weight: 600; color: var(--bn-money); }
+  .ans-type input::placeholder { color: var(--bn-ink-4); font-family: var(--bn-font-ui); font-size: var(--bn-fs-md); font-weight: 500; }
+  .ans-type.typed { box-shadow: inset 0 0 0 2px var(--bn-ok); background: var(--bn-ok-tint); }
+  .ans-type .hint { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+  .q-foot { display: flex; align-items: center; gap: var(--bn-2); min-height: 40px; }
+  .q-foot .said { flex: 1; min-width: 0; font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-pill-ink-ok); display: flex; align-items: center; gap: var(--bn-2); }
+  .q-foot .said svg { width: 16px; height: 16px; }
+  .q-foot .btn kbd { position: static; margin-left: var(--bn-1); }
+
+  /* The hold, inside the card where the answers were (today: HoldPanel). */
+  .hold { display: flex; flex-direction: column; gap: var(--bn-3); }
+  .hold-says { font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+  .hold-why { display: flex; flex-wrap: wrap; gap: var(--bn-2); }
+  .hold-why button { position: relative; height: 40px; padding: 0 var(--bn-8) 0 var(--bn-3); border-radius: var(--bn-r); background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-line-strong); font-weight: 600; font-size: var(--bn-fs-md); }
+  .hold-why button kbd { top: 10px; }
+  .hold-why button[aria-pressed='true'] { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 2px var(--bn-accent); color: var(--bn-pill-ink-accent); }
+  .hold-fields { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: var(--bn-3); }
+  .fld { display: flex; flex-direction: column; gap: var(--bn-1); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .fld input { height: 40px; padding: 0 var(--bn-3); border-radius: var(--bn-r); border: 0; background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-field-edge); color: var(--bn-ink); font-size: var(--bn-fs-base); }
+  .fld input.mono { font-family: var(--bn-font-mono); }
+  .fld input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--bn-line-focus); }
+  .hold-act { display: flex; gap: var(--bn-2); justify-content: flex-end; }
+
+  /* The batch question: the suggestions inside the limit, asked once. */
+  .batch-list { list-style: none; display: flex; flex-direction: column; border-radius: var(--bn-r); box-shadow: inset 0 0 0 1px var(--bn-line); }
+  .batch-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--bn-3); min-height: 48px; padding: var(--bn-2) var(--bn-3); font-size: var(--bn-fs-md); border-bottom: 1px solid var(--bn-line); }
+  .batch-list li:last-child { border-bottom: 0; }
+  .batch-list .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .batch-list .rs { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); white-space: nowrap; }
+  .batch-list .mv { display: flex; align-items: center; gap: var(--bn-1-5); justify-content: flex-end; min-width: 150px; }
+  .batch-list .mv .was { color: var(--bn-ink-3); font-weight: 500; }
+  .batch-list .more { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+  .up { color: var(--bn-pill-ink-ok); }
+  .down { color: var(--bn-pill-ink-warn); }
+
+  /* The end of the questions, and the screen's empty states (one sentence, one control). */
+  .end { border-radius: var(--bn-r-2xl); background: var(--bn-surface); box-shadow: var(--bn-shadow-1); padding: var(--bn-10) var(--bn-8); display: flex; flex-direction: column; align-items: flex-start; gap: var(--bn-4); min-height: 420px; justify-content: center; }
+  .end h2 { font-family: var(--bn-font-display); font-size: var(--bn-fs-3xl); font-weight: 800; letter-spacing: var(--bn-tracking-tight); line-height: var(--bn-lh-tight); max-width: 20em; }
+  .end p { font-size: var(--bn-fs-base); color: var(--bn-ink-2); max-width: 46em; line-height: var(--bn-lh-relaxed); }
+  .end .acts { display: flex; gap: var(--bn-2); flex-wrap: wrap; }
+  .end .mark-ok { width: 48px; height: 48px; border-radius: var(--bn-r-full); background: var(--bn-ok-tint); color: var(--bn-pill-ink-ok); display: flex; align-items: center; justify-content: center; }
+  .end .mark-ok.warn { background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn); }
+  .end .mark-ok svg { width: 24px; height: 24px; }
+  .loadbox { border-radius: var(--bn-r-2xl); background: var(--bn-surface); box-shadow: var(--bn-shadow-1); min-height: 620px; padding: var(--bn-6); display: flex; flex-direction: column; gap: var(--bn-4); }
+  .loadbox .skel { display: block; }
+
+  /* The queue rail: what comes next, and what was answered (each answer can be changed). */
+  .rail { position: sticky; top: 88px; display: flex; flex-direction: column; gap: var(--bn-5); }
+  .rail h3 { display: flex; align-items: baseline; gap: var(--bn-2); font-family: var(--bn-font-display); font-size: var(--bn-fs-h3); font-weight: 800; }
+  .rail h3 .n { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-weight: 500; }
+  .rail ol { list-style: none; display: flex; flex-direction: column; gap: var(--bn-1); }
+  .qi { width: 100%; min-height: 48px; padding: var(--bn-1-5) var(--bn-3); border-radius: var(--bn-r); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 var(--bn-3); text-align: left; align-items: center; }
+  .qi:hover { background: var(--bn-hover); }
+  .qi.now { background: var(--bn-accent-tint); }
+  .qi .nm { font-weight: 600; font-size: var(--bn-fs-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qi .rs { grid-column: 1; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qi .val { grid-row: 1 / 3; grid-column: 2; text-align: right; font-size: var(--bn-fs-sm); }
+  .qi .val small { display: block; font-family: var(--bn-font-ui); font-weight: 600; font-size: var(--bn-fs-xs); }
+  .qi.answered .val small { color: var(--bn-pill-ink-ok); }
+  .qi.held .val small { color: var(--bn-ink-3); }
+  .rail .empty-line { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); padding: 0 var(--bn-3); }
+  .keys { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); padding: var(--bn-3); border-radius: var(--bn-r); box-shadow: inset 0 0 0 1px var(--bn-line); display: grid; grid-template-columns: auto 1fr; gap: var(--bn-1) var(--bn-3); align-items: center; }
+  .keys kbd { position: static; justify-self: start; }
+
+  /* ---------- the table view (All prices) ---------- */
+  .filters { display: flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; }
+  .search { height: 40px; width: 280px; padding: 0 var(--bn-3); border-radius: var(--bn-r); border: 0; background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-field-edge); }
+  .search:focus { outline: none; box-shadow: inset 0 0 0 2px var(--bn-line-focus); }
+  .chip { height: 40px; padding: 0 var(--bn-3); border-radius: var(--bn-r-full); background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-line-strong); font-weight: 600; font-size: var(--bn-fs-md); display: inline-flex; align-items: center; gap: var(--bn-2); }
+  .chip .n { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-weight: 500; }
+  .chip[aria-pressed='true'] { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1px var(--bn-accent); color: var(--bn-pill-ink-accent); }
+  .filters .count { margin-left: auto; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .table { border-radius: var(--bn-r-xl); background: var(--bn-surface); box-shadow: var(--bn-shadow-1); overflow: hidden; }
+  .cols { display: grid; align-items: center; column-gap: var(--bn-3); padding: 0 var(--bn-4);
+          grid-template-columns: 40px 36px minmax(0, 1fr) 84px 112px 72px 196px 88px 40px 40px; }
+  .caption { height: 40px; font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); border-bottom: 1px solid var(--bn-line); background: var(--bn-surface-2); }
+  .caption .num { text-align: right; }
+  .grp { display: flex; align-items: center; gap: var(--bn-2); min-height: 48px; padding: 0 var(--bn-4); border-bottom: 1px solid var(--bn-line); background: var(--bn-surface-3); }
+  .grp h3 { font-family: var(--bn-font-display); font-size: var(--bn-fs-h3); font-weight: 800; }
+  .grp.needs h3 { color: var(--bn-pill-ink-warn); }
+  .grp .n { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .grp .lede { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .grp .end-act { margin-left: auto; }
+  .row { min-height: 64px; border-bottom: 1px solid var(--bn-line); }
+  .row:hover { background: var(--bn-hover); }
+  .tick { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+  .tick input { width: 18px; height: 18px; accent-color: var(--bn-accent); }
+  .thumb { width: 36px; aspect-ratio: 5 / 7; border-radius: var(--bn-r-xs); background: linear-gradient(160deg, var(--bn-accent-tint-2), var(--bn-surface-2)); box-shadow: inset 0 0 0 1px var(--bn-line); }
+  .item { min-width: 0; display: flex; flex-direction: column; }
+  .item .nm { min-height: 28px; display: flex; align-items: center; font-weight: 600; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 100%; }
+  .item .nm:hover { text-decoration: underline; }
+  .item .rs { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .rs.warn { color: var(--bn-pill-ink-warn); font-weight: 600; }
+  .num { text-align: right; font-size: var(--bn-fs-md); }
+  .num.dash { color: var(--bn-ink-4); }
+  .spark { display: flex; justify-content: flex-end; }
+  .spark svg { width: 64px; height: 20px; color: var(--bn-ink-3); }
+  .pricec { display: flex; align-items: center; justify-content: flex-end; gap: var(--bn-2); }
+  .pricec .was { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+  .pricec .was .money { color: var(--bn-ink-3); font-weight: 500; }
+  .field { display: inline-flex; align-items: center; gap: 2px; height: 40px; width: 104px; padding: 0 var(--bn-2); border-radius: var(--bn-r); background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-field-edge);
+           font-family: var(--bn-font-mono); font-weight: 600; }
+  .field span { color: var(--bn-ink-3); }
+  .field input { all: unset; width: 100%; min-width: 0; color: var(--bn-money); }
+  .field:focus-within { box-shadow: inset 0 0 0 2px var(--bn-line-focus); }
+  .row[data-src='Suggested'] .field { box-shadow: inset 0 0 0 1px var(--bn-accent); background: var(--bn-accent-tint); }
+  .row[data-src='You'] .field { box-shadow: inset 0 0 0 1px var(--bn-ok); background: var(--bn-ok-tint); }
+  .src { justify-self: start; display: inline-flex; align-items: center; height: var(--bn-pill-h-sm); padding: 0 var(--bn-2); border-radius: var(--bn-r-full); font-size: var(--bn-fs-xs); font-weight: 700; color: var(--bn-ink-2); box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+  .src[data-src='Suggested'] { color: var(--bn-pill-ink-accent); background: var(--bn-accent-tint); box-shadow: none; }
+  .src[data-src='You'] { color: var(--bn-pill-ink-ok); background: var(--bn-ok-tint); box-shadow: none; }
+  .src[data-src='Needs you'] { color: var(--bn-pill-ink-warn); background: var(--bn-warn-tint); box-shadow: none; }
+  .iconb { width: 40px; height: 40px; border-radius: var(--bn-r); display: flex; align-items: center; justify-content: center; color: var(--bn-ink-3); }
+  .iconb:hover { background: var(--bn-hover); color: var(--bn-ink); }
+  .iconb svg { width: 18px; height: 18px; }
+  .row .answer { height: 40px; }
+  .tfoot { display: flex; align-items: center; gap: var(--bn-3); min-height: 56px; padding: 0 var(--bn-4); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); border-bottom: 1px solid var(--bn-line); }
+  .tfoot:last-child { border-bottom: 0; }
+
+  /* ---------- sheets ---------- */
+  .scrim { position: absolute; inset: 0; z-index: 30; background: color-mix(in srgb, var(--bn-ink) 24%, transparent); }
+  .sheet { position: absolute; z-index: 31; top: 0; right: 0; bottom: 0; width: 560px; background: var(--bn-surface); box-shadow: var(--bn-shadow-3);
+           display: flex; flex-direction: column; animation: sheet-in var(--bn-t-slow) var(--bn-ease-out); }
+  .sheet.wide { width: 860px; }
+  @keyframes sheet-in { from { transform: translateX(var(--bn-8)); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+  .sheet-in { position: sticky; top: 0; display: flex; flex-direction: column; max-height: 100vh; }
+  .sheet-head { display: flex; align-items: center; gap: var(--bn-3); padding: var(--bn-5) var(--bn-6); border-bottom: 1px solid var(--bn-line); }
+  .sheet-head h2 { font-family: var(--bn-font-display); font-size: var(--bn-fs-h2); font-weight: 800; flex: 1; }
+  .sheet-body { flex: 1; overflow: auto; padding: var(--bn-5) var(--bn-6); display: flex; flex-direction: column; gap: var(--bn-5); }
+  .sheet-foot { display: flex; align-items: center; gap: var(--bn-2); justify-content: flex-end; padding: var(--bn-4) var(--bn-6); border-top: 1px solid var(--bn-line); }
+  .sheet-foot .said { margin-right: auto; font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+  .lede { font-size: var(--bn-fs-base); color: var(--bn-ink-2); line-height: var(--bn-lh-relaxed); }
+  .lede b { color: var(--bn-ink); }
+  .goes { list-style: none; display: flex; flex-direction: column; border-radius: var(--bn-r-lg); box-shadow: inset 0 0 0 1px var(--bn-line); }
+  .goes > li { border-bottom: 1px solid var(--bn-line); }
+  .goes > li:last-child { border-bottom: 0; }
+  .goes summary { list-style: none; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto; gap: var(--bn-3); align-items: center; min-height: 56px; padding: 0 var(--bn-4); cursor: pointer; }
+  .goes summary::-webkit-details-marker { display: none; }
+  .goes summary svg { width: 16px; height: 16px; color: var(--bn-ink-3); transition: transform var(--bn-t-fast) var(--bn-ease); }
+  .goes details[open] summary svg { transform: rotate(90deg); }
+  .goes .k { font-weight: 600; }
+  .goes .c { font-family: var(--bn-font-mono); color: var(--bn-ink-2); font-size: var(--bn-fs-md); text-align: right; min-width: 80px; }
+  .goes .m { text-align: right; min-width: 110px; }
+  .goes ul { list-style: none; padding: 0 var(--bn-4) var(--bn-3) calc(var(--bn-4) + 20px + var(--bn-3)); display: flex; flex-direction: column; gap: var(--bn-1-5); font-size: var(--bn-fs-md); }
+  .goes ul li { display: flex; justify-content: space-between; gap: var(--bn-3); color: var(--bn-ink-2); }
+  .goes.out .k { color: var(--bn-ink-2); }
+  .receipt { padding: var(--bn-4); border-radius: var(--bn-r-lg); background: var(--bn-ok-tint); color: var(--bn-ink); display: flex; flex-direction: column; gap: var(--bn-1); }
+  .receipt b { color: var(--bn-pill-ink-ok); font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); }
+  .set-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--bn-4); }
+  .set-grid .fld small { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+
+  /* ---------- 820: rail beside nothing; the queue folds under the card ---------- */
+  .frame[data-w='820'] .pg { padding: var(--bn-4); }
+  .frame[data-w='820'] .head-end { margin-left: 0; width: 100%; }
+  .frame[data-w='820'] .head-end .asof { margin-right: auto; }
+  .frame[data-w='820'] .pop { left: 0; right: auto; }
+  .frame[data-w='820'] .send { height: 72px; padding: 0 var(--bn-2) 0 var(--bn-4); gap: var(--bn-3); }
+  .frame[data-w='820'] .send-parts { gap: var(--bn-3); }
+  .frame[data-w='820'] .send-press { min-width: 188px; }
+  .frame[data-w='820'] .send .what { width: 40px; padding: 0; font-size: 0; gap: 0; }
+  .frame[data-w='820'] .qview { grid-template-columns: minmax(0, 1fr); }
+  .frame[data-w='820'] .rail { position: static; display: grid; grid-template-columns: 1fr 1fr; gap: var(--bn-4); }
+  .frame[data-w='820'] .rail .keys { display: none; }
+  .frame[data-w='820'] .q-top, .frame[data-w='820'] .answers { padding-left: var(--bn-4); padding-right: var(--bn-4); }
+  .frame[data-w='820'] .q-body { grid-template-columns: 112px minmax(0, 1fr); gap: var(--bn-4); padding: var(--bn-4); }
+  .frame[data-w='820'] .photo { width: 112px; }
+  .frame[data-w='820'] .q-ask { font-size: var(--bn-fs-2xl); }
+  .frame[data-w='820'] .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .frame[data-w='820'] .chart { grid-column: 1 / -1; }
+  .frame[data-w='820'] .ans { min-width: 0; flex: 1 1 140px; }
+  .frame[data-w='820'] .ans-type { flex: 1 1 100%; }
+  .frame[data-w='820'] .hold-fields { grid-template-columns: 1fr; }
+  .frame[data-w='820'] .cols { grid-template-columns: 40px 36px minmax(0, 1fr) 176px 40px; padding: 0 var(--bn-2); }
+  .frame[data-w='820'] .c-mkt, .frame[data-w='820'] .c-low, .frame[data-w='820'] .c-trend, .frame[data-w='820'] .c-src, .frame[data-w='820'] .c-lock { display: none; }
+  .frame[data-w='820'] .pricec { flex-direction: column; align-items: flex-end; gap: 0; }
+  .frame[data-w='820'] .row { padding-top: var(--bn-1); padding-bottom: var(--bn-1); }
+  .frame[data-w='820'] .search { width: 100%; }
+  .frame[data-w='820'] .filters .count { margin-left: 0; }
+  .frame[data-w='820'] .sheet, .frame[data-w='820'] .sheet.wide { width: 100%; }
+  .frame[data-w='820'] .end { padding: var(--bn-8) var(--bn-5); }
+</style>
+</head>
+<body>
+<div class="mock" id="mock">
+  <div class="mock-line">
+    <span class="mock-flag">Sample</span>
+    <span class="mock-says">No price, count, card or name on this page is real.</span>
+    <span class="mock-kind">Designer kind: <b>directed</b>. Direction: <b>one question at a time.</b> The screen opens on the next price that needs you, and the full table is a second view.</span>
+  </div>
+  <div class="mock-line">
+    <label class="mock-ctl"><span>State</span><select id="m-state" aria-label="State"></select></label>
+    <span class="mock-ctl"><span>Width</span><button class="mbtn" data-w="1440">1440</button><button class="mbtn" data-w="820">820</button></span>
+    <span class="mock-ctl"><span>Theme</span><button class="mbtn" data-t="light">Light</button><button class="mbtn" data-t="dark">Dark</button></span>
+    <span class="mock-ctl"><button class="mbtn" id="m-tags">Today and New tags</button></span>
+  </div>
+  <div class="mock-line" id="m-cull"><span class="mock-ctl"><span>Options (press to hide one)</span></span></div>
+</div>
+<div class="stage"><div class="frame" id="frame"></div></div>
+
+<script>
+/* ======================= sample data (made up) ======================= */
+const ICON = {
+  home: 'M4 11l8-7 8 7v9H4z', camera: 'M4 8h4l2-3h4l2 3h4v11H4z M12 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', review: 'M5 4h14v16H5z M9 12l2 2 4-4',
+  tag: 'M3 12V4h8l10 10-8 8z M8 8h.01', cart: 'M3 4h2l2 12h12l2-8H7 M9 20h.01 M18 20h.01', truck: 'M3 6h11v10H3z M14 10h4l3 3v3h-7',
+  dollar: 'M12 3v18 M16 7H10a2.5 2.5 0 0 0 0 5h4a2.5 2.5 0 0 1 0 5H8', box: 'M4 7h16v13H4z M4 7l2-3h12l2 3 M10 11h4',
+  send: 'M4 12l16-8-6 16-2.5-6.5z', download: 'M12 4v11 M7 10l5 5 5-5 M5 20h14', refresh: 'M20 11a8 8 0 1 0-2.3 5.7 M20 4v7h-7',
+  lock: 'M6 11h12v9H6z M8.5 11V7.5a3.5 3.5 0 0 1 7 0V11', history: 'M3 3v18h18 M7 15l4-4 3 3 6-6', check: 'M5 12.5l4.5 4.5L19 7',
+  x: 'M6 6l12 12 M18 6L6 18', chev: 'M9 6l6 6-6 6', back: 'M15 6l-6 6 6 6', skip: 'M5 6l7 6-7 6 M13 6l7 6-7 6', sliders: 'M4 7h10 M18 7h2 M4 17h4 M12 17h8 M14 5v4 M8 15v4',
+  alert: 'M12 4l9 16H3z M12 10v4 M12 17h.01', list: 'M8 6h12 M8 12h12 M8 18h12 M4 6h.01 M4 12h.01 M4 18h.01', q: 'M9 9a3 3 0 1 1 4 2.8c-.6.3-1 .9-1 1.6V14 M12 17h.01',
+}
+const svg = (n, s = 18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICON[n]}"/></svg>`
+const fmt = (v) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const $m = (v) => `<span class="money">${fmt(v)}</span>`
+const plural = (n, one, many) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+/* Rule: market plus 5.5%, floor $0.15 (today's RuleSheet wording). Limit 25% either way. Value line $25.00. */
+const SET = { rule: 5.5, floor: 0.15, limit: 25, value: 25 }
+
+/* The questions, biggest money at stake first. kind: value | fall | nomarket | raise | batch */
+const Q = [
+  { id: 'q1', kind: 'value', name: 'Hollow Crown Booster Box', set: 'Hollow Crown', num: 'Sealed', cond: 'New', qty: 1, live: null, mkt: 181.54, low: 169.99, sold: [6, 168.0, 189.95], sealed: true,
+    why: 'Worth $25.00 or more', ask: (q) => `Worth ${$m(q.mkt)} on the market. List it at ${$m(q.sug)}?`,
+    also: 'A new copy. Your rule prices it at market plus 5.5%. Cards at or above your value line wait for you before they go.', sug: 191.52, sugLbl: 'List at your rule', sugSub: 'Market plus 5.5%' },
+  { id: 'q2', kind: 'fall', name: 'Emberwing ex (Special Art)', set: 'Ashen Tides', num: '211/198', cond: 'Near Mint', qty: 1, live: 48.0, listed: 52, mkt: 29.8, low: 31.25, sold: [9, 27.5, 33.0],
+    why: 'Fell past your limit', ask: (q) => `Market fell 38% since you listed it. Lower it to ${$m(q.sug)}?`,
+    also: 'Your 25% limit stops a fall this deep from going on its own. Unsold 52 days.', sug: 31.44, sugLbl: 'Lower to your rule', sugSub: 'Down 34.5%' },
+  { id: 'q3', kind: 'nomarket', name: 'Tidecaller Vex', set: 'Glass Reef Promo', num: 'GR-014', cond: 'Near Mint', qty: 2, live: null, mkt: null, low: 6.49, sold: null,
+    why: 'No market price', ask: () => 'No market price yet. What should it list at?',
+    also: 'Two new copies. TCGplayer has no market reading for this card, so your rule has nothing to start from. Others list it from $6.49 with shipping.', sug: null },
+  { id: 'q4', kind: 'value', name: 'Starlit Courier (Gold)', set: 'Lantern Road', num: '247/230', cond: 'Lightly Played', qty: 1, live: null, mkt: 26.1, low: 24.99, sold: [11, 23.0, 28.75],
+    why: 'Worth $25.00 or more', ask: (q) => `Worth ${$m(q.mkt)}. List it at ${$m(q.sug)}?`,
+    also: 'A new copy, Lightly Played. Others list it from $24.99 with shipping.', sug: 27.54, sugLbl: 'List at your rule', sugSub: 'Market plus 5.5%' },
+  { id: 'q5', kind: 'fall', name: 'Ironbark Sentinel', set: 'Hollow Crown', num: '088/204', cond: 'Near Mint', qty: 2, live: 12.5, listed: 31, mkt: 8.4, low: 7.95, sold: [21, 7.1, 9.6],
+    why: 'Fell past your limit', ask: (q) => `Unsold 31 days, and ${$m(4.1)} above market. Lower it to ${$m(q.sug)}?`,
+    also: 'Others list it from $7.95 with shipping, 36% under yours. The fall is 29%, past your 25% limit.', sug: 8.86, sugLbl: 'Lower to your rule', sugSub: 'Down 29%' },
+  { id: 'q6', kind: 'raise', name: 'Moss Golem', set: 'Lantern Road', num: '019/230', cond: 'Near Mint', qty: 6, live: 0.99, listed: 44, mkt: 1.48, low: 1.35, sold: [64, 1.2, 1.65],
+    why: 'Rose past your limit', ask: (q) => `Market rose 49% since you listed it. Raise it to ${$m(q.sug)}?`,
+    also: '64 sold on TCGplayer in 30 days, from $1.20 to $1.65. A raise stops at your 25% limit.', sug: 1.24, sugLbl: 'Raise to your limit', sugSub: 'Up 25%' },
+  { id: 'q7', kind: 'nomarket', name: 'Glimmer Pup (Reverse Holo)', set: 'Glass Reef', num: '071/180', cond: 'Near Mint', qty: 3, live: null, mkt: null, low: null, sold: null,
+    why: 'No market price', ask: () => 'No market price, and no one else lists it. What should it list at?',
+    also: 'Three new copies. Nothing on TCGplayer to compare against. Type a price, or hold them back until a reading lands.', sug: null },
+  { id: 'q8', kind: 'raise', name: 'Cinder Drake', set: 'Ashen Tides', num: '034/198', cond: 'Near Mint', qty: 3, live: 3.0, listed: 52, mkt: 5.1, low: 4.75, sold: [18, 4.4, 5.6],
+    why: 'Rose past your limit', ask: (q) => `Market rose 70% since you listed it. Raise it to ${$m(q.sug)}?`,
+    also: '18 sold on TCGplayer in 30 days, from $4.40 to $5.60. A raise stops at your 25% limit.', sug: 3.75, sugLbl: 'Raise to your limit', sugSub: 'Up 25%' },
+  { id: 'q9', kind: 'batch', name: 'Suggested changes', why: 'Inside your limit' },
+]
+/* The suggestions inside the limit: ticked by default, so they are already in the send. */
+const BATCH = { listings: 24, rises: 15, riseUp: 2.9, falls: 31, fallDown: 8.48, rows: [
+  ['Saltmarsh Heron', 'Market up 18% since listed', 0.42, 0.49], ['Gearwright Mira', 'Market down 21% since listed', 2.4, 1.92],
+  ['Vale Lantern', 'Unsold 33 days, $0.31 above market', 1.15, 0.86], ['Copperback Toad', 'Market up 12% since listed', 0.25, 0.28],
+  ['Ninefold Gate', 'Others list from $3.49 shipped, under your $3.99', 3.99, 3.52], ['Ridge Courier', 'Market down 16% since listed', 0.8, 0.68],
+] }
+/* What is already in the send before any question is answered (copies). */
+const BASE = { newC: 11, newSum: 18.4, typedC: 7, typedSum: 7.89, kept: 28 }
+const TOTAL_ITEMS = 1110
+
+/* ======================= state ======================= */
+const OPTIONS = [['rail', 'Queue beside the card'], ['chart', 'History in the card'], ['batch', 'Suggestions as one question'], ['keys', 'Key caps'], ['what', 'What goes sheet'], ['skip', 'Skip for now']]
+const STATES = [
+  ['q', 'A question (open)'], ['fall', 'A fall past the limit'], ['nomarket', 'No market price'], ['value', 'Value line'], ['typed', 'A typed price'], ['hold', 'Holding one back'],
+  ['batch', 'The suggestions question'], ['done', 'Every question answered'], ['allwell', 'Nothing needs you'], ['none', 'No copies yet'], ['loading', 'Loading'], ['failed', 'List read failed'],
+  ['notes', 'Status notes open'], ['settings', 'Your rules'], ['review', 'What goes (send review)'], ['sending', 'Sending'], ['sent', 'Receipt'],
+  ['table', 'All prices'], ['detail', 'All prices, one row'], ['filtered', 'All prices, filter emptied'],
+]
+const S = {
+  w: HASH.get('w') === '820' ? 820 : 1440,
+  tags: HASH.get('tags') !== 'off',
+  hide: new Set((HASH.get('hide') || '').split(',').filter(Boolean)),
+  view: 'q', idx: 0, ans: {}, order: Q.map((_, i) => i), load: 'ok', sheet: null, pop: false, hold: false, holdWhy: 'bullish', typed: '',
+  send: 'idle', sentC: 0, flash: null, detail: null, filter: 'all', search: '', ruleOpen: false, batchOut: false, state: 'q',
+}
+
+function setupFromHash() {
+  const s = HASH.get('s') || 'q'
+  S.state = s
+  const at = (id) => Q.findIndex((q) => q.id === id)
+  const answerFirst = (n) => { for (let i = 0; i < n; i++) S.ans[Q[i].id] = autoAnswer(Q[i]) }
+  switch (s) {
+    case 'q': S.idx = Math.max(0, Math.min(Q.length - 1, (+HASH.get('q') || 1) - 1)); answerFirst(S.idx); break
+    case 'fall': answerFirst(1); S.idx = at('q2'); break
+    case 'nomarket': answerFirst(2); S.idx = at('q3'); break
+    case 'value': S.idx = 0; break
+    case 'typed': answerFirst(2); S.idx = at('q3'); S.typed = '7.25'; break
+    case 'hold': answerFirst(4); S.idx = at('q5'); S.hold = true; break
+    case 'batch': answerFirst(8); S.ans.q7 = { t: 'hold', why: 'next_batch' }; S.idx = at('q9'); break
+    case 'done': answerFirst(9); S.ans.q7 = { t: 'hold', why: 'next_batch' }; S.idx = Q.length; break
+    case 'allwell': answerFirst(9); S.idx = Q.length; S.allwell = true; break
+    case 'none': S.load = 'none'; break
+    case 'loading': S.load = 'loading'; break
+    case 'failed': S.load = 'failed'; break
+    case 'notes': S.pop = true; break
+    case 'settings': S.sheet = 'settings'; break
+    case 'review': answerFirst(9); S.idx = Q.length; S.sheet = 'review'; break
+    case 'sending': answerFirst(9); S.idx = Q.length; S.sheet = 'review'; S.send = 'sending'; break
+    case 'sent': answerFirst(9); S.idx = Q.length; S.sentC = totals().copies; S.sentAt = '9:14'; S.send = 'sent'; break
+    case 'table': S.view = 'table'; break
+    case 'detail': S.view = 'table'; S.sheet = 'detail'; S.detail = at('q6'); break
+    case 'filtered': S.view = 'table'; S.search = 'zzq'; break
+  }
+}
+function autoAnswer(q) {
+  if (q.kind === 'batch') return { t: 'keep' }
+  if (q.sug == null) return { t: 'typed', price: q.low ? +(q.low * 0.98).toFixed(2) : 4.0 }
+  return { t: 'sug', price: q.sug }
+}
+
+/* The one count, in one unit: copies. */
+function totals() {
+  let newC = BASE.newC, newSum = BASE.newSum, up = 0, upSum = 0, down = 0, downSum = 0, typedC = BASE.typedC, typedSum = BASE.typedSum, kept = BASE.kept
+  if (!S.batchOut) { up += BATCH.rises; upSum += BATCH.riseUp; down += BATCH.falls; downSum += BATCH.fallDown }
+  let open = 0
+  for (const q of Q) {
+    if (q.kind === 'batch') { if (!S.ans[q.id]) open++; continue }
+    const a = S.ans[q.id]
+    if (!a || a.t === 'skip') { open++; continue }
+    if (a.t === 'hold') { kept += q.qty; continue }
+    if (a.t === 'nochange') continue
+    const p = a.price
+    if (a.t === 'typed') { typedC += q.qty; typedSum += p * q.qty; continue }
+    if (q.live == null) { newC += q.qty; newSum += p * q.qty; continue }
+    if (p > q.live) { up += q.qty; upSum += (p - q.live) * q.qty } else if (p < q.live) { down += q.qty; downSum += (q.live - p) * q.qty }
+  }
+  if (S.send === 'sent') return { copies: 0, newC: 0, up: 0, down: 0, typedC: 0, newSum: 0, upSum: 0, downSum: 0, typedSum: 0, kept, open }
+  return { copies: newC + up + down + typedC, newC, newSum, up, upSum, down, downSum, typedC, typedSum, kept, open }
+}
+
+/* ======================= drawing ======================= */
+const NAV = [['home', 'Home'], ['camera', 'Capture'], ['review', 'Review'], ['tag', 'Pricing'], ['cart', 'Orders'], ['truck', 'Shipping'], ['dollar', 'Sales'], ['box', 'Inventory']]
+const opt = (k) => !S.hide.has(k)
+const tag = (t, isNew) => `<span class="tag${isNew ? ' new' : ''}">${isNew ? 'New' : 'Today'}: ${t}</span>`
+
+function render() {
+  const f = document.getElementById('frame')
+  f.dataset.w = S.w
+  document.body.classList.toggle('notags', !S.tags)
+  document.body.classList.toggle('nokeys', !opt('keys'))
+  f.innerHTML = `<div class="app">
+    <nav class="side" aria-label="Main"><div class="side-in"><div class="brand">${S.w === 820 ? '番' : '番地 Banchi'}</div>
+      ${NAV.map(([i, l]) => `<a class="nav" href="#" ${l === 'Pricing' ? 'aria-current="page"' : ''} title="${l}">${svg(i)}<span>${l}</span></a>`).join('')}</div></nav>
+    <div class="main"><main class="pg">${head()}${sendBar()}${S.view === 'q' ? qview() : tableView()}</main>${sheet()}</div></div>`
+  syncMock()
+  afterRender()
+}
+
+function head() {
+  const t = totals()
+  const nQ = S.load === 'ok' ? t.open : null
+  const notes = [
+    ['The daily price read has not run yet.', '12 live listings could not be compared with an earlier price. Refresh reads them now.'],
+    ['14 rows in 2 readings did not match a card.', 'They are left out of this list until they match.', 'Show the 14 rows'],
+  ]
+  return `<header class="head">
+    <h1 class="title">Pricing</h1>
+    <div class="seg" role="group" aria-label="View" id="view-switch">${tag('view switch', true)}
+      <button aria-pressed="${S.view === 'q'}" data-act="view-q">Questions <span class="n">${nQ == null ? '' : nQ}</span></button>
+      <button aria-pressed="${S.view === 'table'}" data-act="view-table">All prices <span class="n">${S.load === 'ok' ? TOTAL_ITEMS.toLocaleString('en-US') : ''}</span></button>
+    </div>
+    <div class="head-end">
+      ${S.load === 'loading' ? `<span class="asof">Reading prices</span>` : S.load === 'failed' ? `<span class="asof">Prices not read</span>` : `<span class="asof">Prices read today at 7:02</span>`}
+      <button class="btn quiet" data-act="refresh">${svg('refresh', 16)}Refresh</button>
+      ${S.load === 'ok' ? `<button class="note-chip" id="status-notes" data-act="pop" aria-expanded="${S.pop}" style="position:relative">${tag('PricesAsOf, PriceMovers and four status lines, folded', true)}<span class="dot"></span>2 notes</button>` : ''}
+      <button class="btn" data-act="rules">${svg('sliders', 16)}Your rules</button>
+      ${S.pop ? `<div class="pop" role="dialog" aria-label="Notes about these prices"><h3>2 notes</h3><ul>${notes.map(([b, s, l]) => `<li><b>${b}</b>${s}${l ? `<button class="linkb" data-act="unmatched">${l}</button>` : ''}</li>`).join('')}</ul>
+        <p style="font-size:var(--bn-fs-sm);color:var(--bn-ink-3)">With nothing to note, the chip reads "All is well."</p></div>` : ''}
+    </div>
+  </header>`
+}
+
+function sendBar() {
+  const t = totals()
+  let slot, press
+  const pressW = (inner, attrs = '') => `<button class="btn primary send-press" ${attrs}>${inner}</button>`
+  if (S.load === 'loading') {
+    slot = `<p class="send-head"><span class="skel w2"></span></p><p class="send-parts"><span class="skel"></span><span class="skel"></span><span class="skel"></span><span class="skel"></span></p>`
+    press = pressW(`${svg('send', 16)}Send`, 'aria-disabled="true" title="Waiting for the list to load"')
+  } else if (S.load === 'failed') {
+    slot = `<p class="send-head warn">Banchi could not read your list.</p><p class="send-parts">Nothing is sent until it loads.</p>`
+    press = `<button class="btn send-press" data-act="retry">${svg('refresh', 16)}Read it again</button>`
+  } else if (S.load === 'none') {
+    slot = `<p class="send-head">Nothing to send yet.</p><p class="send-parts">Copies you capture land here once they are identified.</p>`
+    press = pressW(`${svg('send', 16)}Send`, 'aria-disabled="true" title="No copies are priced yet"')
+  } else if (S.send === 'sending') {
+    slot = `<p class="send-head">Sending ${plural(S.sendingC, 'copy', 'copies')} to TCGplayer.</p><p class="send-parts">Started at 9:14. The answer shows here.</p>`
+    press = pressW(`<span class="ring"></span>Sending`, 'aria-disabled="true" title="A send is running"')
+  } else if (S.send === 'sent') {
+    slot = `<p class="send-head ok">${plural(S.sentC, 'copy', 'copies')} went live at ${S.sentAt}.</p><p class="send-parts"><span>Banchi checks TCGplayer again after 9:44.</span><span><b>${t.kept}</b> kept off</span></p>`
+    press = t.copies > 0 ? pressW(`${svg('send', 16)}Send ${plural(t.copies, 'copy', 'copies')}`, 'data-act="send"') : pressW(`${svg('check', 16)}All sent`, 'aria-disabled="true" title="Nothing new to send"')
+  } else {
+    slot = `<p class="send-head">${plural(t.copies, 'copy', 'copies')} ready</p>
+      <p class="send-parts"><span><b>${t.newC}</b> new</span><span><b>${t.up}</b> up</span><span><b>${t.down}</b> down</span><span><b>${t.typedC}</b> your price</span><span><b>${t.kept}</b> kept off</span></p>`
+    press = pressW(`${svg('send', 16)}Send ${plural(t.copies, 'copy', 'copies')}`, 'data-act="send"')
+  }
+  const ok = S.load === 'ok'
+  return `<aside class="send" id="send-bar" aria-label="Send to TCGplayer">${tag('SendCard. New: one height, one press width, one unit', false)}
+    <div class="send-slot" aria-live="polite">${slot}</div>
+    <div class="send-act">
+      ${opt('what') ? `<button class="btn quiet what" data-act="what" ${ok ? '' : 'aria-disabled="true" title="Nothing loaded yet"'}>${svg('list', 16)}What goes</button>` : ''}
+      <button class="btn icon quiet" data-act="download" aria-label="Download the file" title="Download the file" ${ok ? '' : 'aria-disabled="true"'}>${svg('download', 18)}</button>
+      ${press}
+    </div></aside>`
+}
+
+/* ---------- the question view ---------- */
+function qview() {
+  if (S.load === 'loading') return `<div class="qview ${opt('rail') ? '' : 'norail'}"><div class="loadbox" aria-busy="true"><span class="skel" style="width:40%"></span><span class="skel w2" style="width:70%;height:28px"></span><span class="skel" style="width:90%;height:132px"></span><span class="skel" style="width:60%;height:64px"></span></div>${opt('rail') ? `<div class="rail"><span class="skel" style="width:50%"></span><span class="skel" style="width:100%;height:220px"></span></div>` : ''}</div>`
+  if (S.load === 'failed') return endBox('warn', 'alert', 'Banchi could not read your list.', 'The server did not answer. Your prices and ticks are safe; nothing was sent.', [`<button class="btn primary" data-act="retry">${svg('refresh', 16)}Read it again</button>`], 'What the server said: <code>GET /pipeline/pricing 503</code>')
+  if (S.load === 'none') return endBox('', 'camera', 'No copies to price yet.', 'Copies land here once they are captured and identified.', [`<button class="btn primary" data-act="nop">${svg('camera', 16)}Go to Capture</button>`])
+  const rail = opt('rail') ? railHtml() : ''
+  return `<div class="qview ${opt('rail') ? '' : 'norail'}">${S.idx >= Q.length || (S.idx === Q.length - 1 && !opt('batch')) ? doneBox() : qcard(Q[S.idx])}${rail}</div>`
+}
+function endBox(tone, icon, h, p, acts, said) {
+  return `<section class="end"><span class="mark-ok ${tone}">${svg(icon, 24)}</span><h2>${h}</h2><p>${p}</p><div class="acts">${acts.join('')}</div>${said ? `<details style="font-size:var(--bn-fs-sm);color:var(--bn-ink-3)"><summary style="cursor:pointer;min-height:32px">What the server said</summary><p style="font-size:inherit">${said}</p></details>` : ''}</section>`
+}
+function doneBox() {
+  const t = totals()
+  const skipped = Q.filter((q) => S.ans[q.id]?.t === 'skip').length
+  if (S.send === 'sent') return endBox('', 'check', `${plural(S.sentC, 'copy', 'copies')} went live.`, `Nothing needs you now. New questions come when prices move or new copies land.`, [`<button class="btn" data-act="view-table">See all prices</button>`])
+  if (S.allwell) return endBox('', 'check', 'Nothing needs you.', `Every price follows your rules. ${plural(t.copies, 'copy is', 'copies are')} ready to send.`, [`<button class="btn primary" data-act="send">${svg('send', 16)}Send ${plural(t.copies, 'copy', 'copies')}</button>`, `<button class="btn" data-act="view-table">See all prices</button>`])
+  const held = Q.filter((q) => S.ans[q.id]?.t === 'hold').length
+  return `<section class="end" id="q-done">${tag('the end of the questions', true)}<span class="mark-ok">${svg('check', 24)}</span>
+    <h2>${skipped ? `${plural(Q.length - skipped - (opt('batch') ? 0 : 1), 'question', 'questions')} answered. ${skipped} skipped.` : `That is every question.`}</h2>
+    <p>${plural(t.copies, 'copy is', 'copies are')} ready to send${held ? `. ${plural(held, 'card stays', 'cards stay')} off TCGplayer until you release ${held === 1 ? 'it' : 'them'}` : ''}. Change any answer from the list beside this.</p>
+    <div class="acts"><button class="btn primary" data-act="send">${svg('send', 16)}Send ${plural(t.copies, 'copy', 'copies')}</button>${skipped ? `<button class="btn" data-act="toskipped">Answer the skipped</button>` : ''}<button class="btn" data-act="view-table">See all prices</button></div></section>`
+}
+
+function qcard(q, detail) {
+  if (q.kind === 'batch') return batchCard(q)
+  const a = S.ans[q.id]
+  const n = Q.length - (opt('batch') ? 0 : 1)
+  const meter = Q.slice(0, n).map((x, i) => `<i class="${i === S.idx && !detail ? 'now' : S.ans[x.id]?.t === 'skip' ? 'skip' : S.ans[x.id] ? 'done' : ''}"></i>`).join('')
+  const facts = [
+    q.live != null ? ['Your price now', $m(q.live), `Live ${q.listed} days`, true] : ['Your price now', '<span style="color:var(--bn-ink-3)">Not listed</span>', `${plural(q.qty, 'new copy', 'new copies')}`, true],
+    ['Market', q.mkt != null ? $m(q.mkt) : '<span style="color:var(--bn-ink-3)">None</span>', q.mkt != null ? 'TCGplayer, today' : 'No reading'],
+    ['Lowest, shipped', q.low != null ? $m(q.low) : '<span style="color:var(--bn-ink-3)">None</span>', q.low != null ? 'Others, with shipping' : 'No one lists it'],
+    ['Sold, 30 days', q.sold ? `<span class="money">${q.sold[0]}</span>` : '<span style="color:var(--bn-ink-3)">None</span>', q.sold ? `${fmt(q.sold[1])} to ${fmt(q.sold[2])}` : 'On TCGplayer'],
+  ]
+  const answers = []
+  if (q.sug != null) answers.push({ k: 'sug', key: 'Enter', lbl: q.sugLbl, price: q.sug, sub: q.sugSub, primary: true })
+  if (q.mkt != null && q.mkt !== q.sug) answers.push({ k: 'market', key: 'M', lbl: 'Market', price: q.mkt })
+  if (q.low != null) answers.push({ k: 'low', key: 'L', lbl: 'Lowest, shipped', price: q.low })
+  if (q.live != null) answers.push({ k: 'nochange', key: 'N', lbl: 'No change', price: q.live, sub: 'Leave it live' })
+  const chosen = a && a.t !== 'skip' ? a : null
+  const typedVal = S.typed && S.idx === Q.indexOf(q) ? S.typed : chosen?.t === 'typed' ? chosen.price.toFixed(2) : ''
+  const said = S.flash && S.flash.id === q.id ? S.flash.text : chosen ? answerWords(q, chosen) : ''
+  return `<article class="q" id="q-card" aria-labelledby="q-ask">${tag('the question card (one PricingRow, asked)', true)}
+    <header class="q-top">${detail ? `<span class="q-step">${esc(q.set)}</span>` : `<span class="q-step">Question <b>${S.idx + 1}</b> of <b>${n}</b></span><span class="meter" aria-hidden="true">${meter}</span>`}<span class="why">${q.why}</span></header>
+    <div class="q-body">
+      <figure class="photo" aria-label="Photo of ${esc(q.name)}">${tag('PricingThumb', false)}<span class="art ${q.sealed ? 'sealed' : ''}"></span><span class="ln"></span><span class="ln s"></span><figcaption class="cap">Your photo</figcaption></figure>
+      <div class="q-main">
+        <div class="q-id"><p class="q-name">${esc(q.name)}</p><p class="q-meta"><span>${esc(q.set)}</span><span>${esc(q.num)}</span><span>${esc(q.cond)}</span><span>${plural(q.qty, 'copy', 'copies')}</span></p></div>
+        <h2 class="q-ask" id="q-ask">${q.ask(q)}</h2>
+        <p class="q-also">${q.also}</p>
+        <dl class="facts">${facts.map(([dt, dd, sm, mine]) => `<div class="fact ${mine ? 'mine' : ''}"><dt>${dt}</dt><dd>${dd}<small>${sm}</small></dd></div>`).join('')}</dl>
+        ${opt('chart') ? chart(q) : ''}
+      </div>
+    </div>
+    <div class="answers" id="q-answers">
+      ${S.hold ? holdPanel(q) : `
+      <div class="ans-row" role="group" aria-label="Answers">
+        ${answers.map((x) => `<button class="ans ${x.primary ? 'primary' : ''} ${chosen && chosen.t === x.k ? 'chosen' : ''}" data-act="ans" data-k="${x.k}" data-p="${x.price}">
+          <span class="lbl">${x.lbl}</span>${$m(x.price)}${x.sub ? `<span class="sub">${x.sub}</span>` : ''}<kbd>${x.key === 'Enter' ? '↵' : x.key}</kbd></button>`).join('')}
+        <label class="ans-type ${typedVal ? 'typed' : ''}"><span class="lbl">${q.sug == null ? 'Your price' : 'Or type a price'}</span><span class="in"><span>$</span><input id="q-price" inputmode="decimal" placeholder="${q.sug == null ? 'Type, then Enter' : 'Any price'}" value="${typedVal}" aria-label="Your price for ${esc(q.name)}" /></span>
+          ${typedVal ? `<span class="hint">Enter uses ${fmt(+typedVal || 0)}</span>` : ''}</label>
+      </div>
+      <div class="q-foot">
+        <span class="said" aria-live="polite">${said ? `${svg('check', 16)}${said}` : ''}</span>
+        ${detail ? '' : `<button class="btn quiet" data-act="back" ${S.idx === 0 ? 'aria-disabled="true" title="This is the first question"' : ''}>${svg('back', 16)}Back<kbd>U</kbd></button>`}
+        <button class="btn quiet" data-act="hold">${svg('lock', 16)}Hold back<kbd>H</kbd></button>
+        ${detail || !opt('skip') ? '' : `<button class="btn quiet" data-act="skip">${svg('skip', 16)}Skip for now<kbd>S</kbd></button>`}
+      </div>`}
+    </div>
+  </article>`
+}
+function answerWords(q, a) {
+  if (a.t === 'hold') return `Kept off TCGplayer: ${HOLD[a.why]}.`
+  if (a.t === 'nochange') return `Left at ${fmt(q.live)}.`
+  if (a.t === 'keep') return 'They go with this send.'
+  const verb = q.live == null ? 'Lists at' : a.price > q.live ? 'Raised to' : 'Lowered to'
+  return `${verb} ${fmt(a.price)}${a.t === 'typed' ? ', your price' : ''}.`
+}
+const HOLD = { bullish: 'Bullish', keeping: 'Keep off TCGplayer', next_batch: 'A later batch' }
+const HOLD_KEY = { bullish: 'B', keeping: 'K', next_batch: 'X' }
+function holdPanel(q) {
+  return `<div class="hold" id="hold-panel" role="group" aria-label="Hold ${esc(q.name)}">${tag('HoldPanel, in the card', false)}
+    <p class="hold-says">${esc(q.name)} stays out of every send until you release it. Why?</p>
+    <div class="hold-why">${Object.keys(HOLD).map((k) => `<button aria-pressed="${S.holdWhy === k}" data-act="holdwhy" data-k="${k}">${HOLD[k]}<kbd>${HOLD_KEY[k]}</kbd></button>`).join('')}</div>
+    <div class="hold-fields"><label class="fld">Alert when market is above<input class="mono" inputmode="decimal" placeholder="Price, like 1.50" /></label><label class="fld">Note<input placeholder="Why, like a restock" /></label></div>
+    <div class="hold-act"><button class="btn quiet" data-act="holdcancel">Cancel</button><button class="btn primary" data-act="holdset">${svg('lock', 16)}Keep it off</button></div>
+  </div>`
+}
+function batchCard(q) {
+  const n = Q.length
+  const meter = Q.map((x, i) => `<i class="${i === S.idx ? 'now' : S.ans[x.id]?.t === 'skip' ? 'skip' : S.ans[x.id] ? 'done' : ''}"></i>`).join('')
+  const copies = BATCH.rises + BATCH.falls
+  const a = S.ans[q.id]
+  return `<article class="q" id="batch-q" aria-labelledby="q-ask">${tag('Suggested changes group, asked once', true)}
+    <header class="q-top"><span class="q-step">Question <b>${S.idx + 1}</b> of <b>${n}</b></span><span class="meter" aria-hidden="true">${meter}</span><span class="why accent">${q.why}</span></header>
+    <div class="q-body" style="grid-template-columns:1fr">
+      <div class="q-main">
+        <h2 class="q-ask" id="q-ask">${BATCH.listings} listings move inside your 25% limit. Send them with the rest?</h2>
+        <p class="q-also">${plural(BATCH.rises, 'copy goes', 'copies go')} up ${fmt(BATCH.riseUp)} in all, and ${plural(BATCH.falls, 'copy goes', 'copies go')} down ${fmt(BATCH.fallDown)} in all. They are ticked already. Each one says why.</p>
+        <ul class="batch-list">${BATCH.rows.map(([nm, rs, was, to]) => `<li><span><span class="nm">${nm}</span><br><span class="rs">${rs}</span></span><span></span><span class="mv"><span class="money was">${fmt(was)}</span>${svg('chev', 14)}<span class="money ${to > was ? 'up' : 'down'}">${fmt(to)}</span></span></li>`).join('')}
+          <li><span class="more">and ${BATCH.listings - BATCH.rows.length} more listings</span><span></span><span></span></li></ul>
+      </div>
+    </div>
+    <div class="answers"><div class="ans-row">
+      <button class="ans primary ${a?.t === 'keep' ? 'chosen' : ''}" data-act="batch" data-k="keep"><span class="lbl">Send them</span><span class="big">${plural(copies, 'copy', 'copies')}</span><span class="sub">With the rest of this send</span><kbd>↵</kbd></button>
+      <button class="ans" data-act="batch" data-k="each"><span class="lbl">Look at each one</span><span class="big">${BATCH.listings} rows</span><span class="sub">Opens All prices, Suggested</span><kbd>E</kbd></button>
+      <button class="ans ${a?.t === 'out' ? 'chosen' : ''}" data-act="batch" data-k="out"><span class="lbl">Leave them out</span><span class="big">0 copies</span><span class="sub">They wait for the next send</span><kbd>O</kbd></button>
+    </div>
+    <div class="q-foot"><span class="said" aria-live="polite">${a ? svg('check', 16) + (a.t === 'out' ? 'Left out of this send.' : 'They go with this send.') : ''}</span><button class="btn quiet" data-act="back">${svg('back', 16)}Back<kbd>U</kbd></button></div></div>
+  </article>`
+}
+
+/* A seeded 90-day market line, the owner's asking step line, and the suggestion dot. */
+function chart(q) {
+  const W = 600, H = 132, P = 8
+  if (q.mkt == null) return `<div class="chart" id="q-chart">${tag('HistoryFloat chart, inline', false)}<div class="chart-head"><span>Price history, 90 days</span></div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="No market history"><line class="grid" x1="0" x2="${W}" y1="${H - 20}" y2="${H - 20}"/><text class="none" x="${W / 2}" y="${H / 2}" text-anchor="middle">No market reading in 90 days.</text></svg></div>`
+  let seed = [...q.id].reduce((s, c) => s + c.charCodeAt(0), 7)
+  const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280)
+  const start = q.live != null ? (q.kind === 'fall' ? q.mkt / 0.62 : q.mkt / 1.55) : q.mkt * 0.92
+  const pts = []
+  for (let i = 0; i < 90; i++) { const tt = i / 89; pts.push(start + (q.mkt - start) * (tt * tt * (3 - 2 * tt)) + (rnd() - 0.5) * q.mkt * 0.05) }
+  pts[89] = q.mkt
+  const vals = pts.concat(q.live != null ? [q.live] : [], q.sug != null ? [q.sug] : [])
+  const lo = Math.min(...vals) * 0.94, hi = Math.max(...vals) * 1.04
+  const x = (i) => P + (i / 89) * (W - P * 2 - 12), y = (v) => P + (1 - (v - lo) / (hi - lo)) * (H - 20 - P * 2)
+  const line = pts.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('')
+  const area = `${line}L${x(89)},${H - 20}L${x(0)},${H - 20}Z`
+  const listedAt = q.listed ? 89 - q.listed : null
+  const ask = q.live != null ? `<path class="ask" d="M${x(listedAt)},${y(q.live)}H${x(89)}"/>` : ''
+  const sug = q.sug != null ? `<circle class="sug" cx="${x(89) + 6}" cy="${y(q.sug)}" r="6"/>` : ''
+  const labels = [[0, '90 days ago'], [44, '45 days'], [89, 'Today']].map(([i, l]) => `<text class="ax" x="${x(i)}" y="${H - 4}" text-anchor="${i === 0 ? 'start' : i === 89 ? 'end' : 'middle'}">${l}</text>`).join('')
+  return `<div class="chart" id="q-chart">${tag('HistoryFloat chart, inline', false)}
+    <div class="chart-head"><span class="key"><span class="sw"></span>Market</span>${q.live != null ? `<span class="key"><span class="sw ask"></span>Your price since listed</span>` : ''}${q.sug != null ? `<span class="key"><span class="sw sug"></span>Suggested</span>` : ''}<span class="span">90 days</span></div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Market over 90 days, from ${fmt(start)} to ${fmt(q.mkt)}">
+      <line class="grid" x1="0" x2="${W}" y1="${H - 20}" y2="${H - 20}"/><path class="area" d="${area}" opacity=".6"/><path class="mkt" d="${line}" vector-effect="non-scaling-stroke"/>${ask}${sug}${labels}</svg></div>`
+}
+
+function railHtml() {
+  const n = Q.length - (opt('batch') ? 0 : 1)
+  const list = Q.slice(0, n).map((q, i) => ({ q, i }))
+  const next = list.filter(({ q, i }) => !S.ans[q.id] || S.ans[q.id].t === 'skip').sort((a, b) => (S.ans[a.q.id]?.t === 'skip') - (S.ans[b.q.id]?.t === 'skip'))
+  const done = list.filter(({ q }) => S.ans[q.id] && S.ans[q.id].t !== 'skip')
+  const val = (q) => q.kind === 'batch' ? `<span class="money">${BATCH.listings}</span>` : q.live != null ? $m(q.live) : q.mkt != null ? $m(q.mkt) : '<span class="money" style="color:var(--bn-ink-3)">?</span>'
+  const item = ({ q, i }, kind) => {
+    const a = S.ans[q.id]
+    const small = kind === 'done' ? (a.t === 'hold' ? 'Kept off' : a.t === 'nochange' ? 'No change' : a.t === 'keep' ? 'In the send' : a.t === 'out' ? 'Left out' : fmt(a.price)) : a?.t === 'skip' ? 'Skipped' : ''
+    return `<li><button class="qi ${i === S.idx && S.view === 'q' ? 'now' : ''} ${kind === 'done' ? (a.t === 'hold' ? 'held' : 'answered') : ''}" data-act="goto" data-i="${i}">
+      <span class="nm">${esc(q.name)}</span><span class="val">${val(q)}${small ? `<small>${small}</small>` : ''}</span><span class="rs">${q.why}</span></button></li>`
+  }
+  return `<aside class="rail" id="queue-rail" aria-label="Questions">${tag('Needs you group, as a queue', true)}
+    <section><h3>Up next <span class="n">${next.length}</span></h3>${next.length ? `<ol>${next.map((x) => item(x, 'next')).join('')}</ol>` : `<p class="empty-line">No question left.</p>`}</section>
+    <section><h3>${S.send === 'sent' ? 'In the 9:14 send' : 'Answered'} <span class="n">${done.length}</span></h3>${done.length ? `<ol>${done.map((x) => item(x, 'done')).join('')}</ol>` : `<p class="empty-line">Your answers land here. Press one to change it.</p>`}</section>
+    ${opt('keys') ? `<div class="keys"><kbd>↵</kbd><span>Take the first answer</span><kbd>M</kbd><span>Market</span><kbd>L</kbd><span>Lowest, shipped</span><kbd>0-9</kbd><span>Type a price</span><kbd>H</kbd><span>Hold back</span><kbd>U</kbd><span>Back one</span></div>` : ''}
+  </aside>`
+}
+
+/* ---------- the table view: the signed-off one list, second ---------- */
+const RULE_ROWS = [
+  ['Saltmarsh Heron', 'Lantern Road', 'Market up 18% since listed', 0.41, 0.39, 0.42, 0.49, 'Suggested'],
+  ['Gearwright Mira', 'Glass Reef', 'Market down 21% since listed', 1.82, 1.75, 2.4, 1.92, 'Suggested'],
+  ['Vale Lantern', 'Hollow Crown', 'Unsold 33 days, $0.31 above market', 0.84, 0.8, 1.15, 0.86, 'Suggested'],
+  ['Copperback Toad', 'Ashen Tides', 'Market up 12% since listed', 0.27, 0.25, 0.25, 0.28, 'Suggested'],
+  ['Brindle Fox', 'Lantern Road', '', 0.62, 0.59, null, 0.65, 'Rule'],
+  ['Quarry Imp', 'Hollow Crown', '', 0.2, 0.15, null, 0.21, 'Rule'],
+  ['Larkspur Scout', 'Glass Reef', '', 3.1, 2.95, null, 3.25, 'You'],
+  ['Pale Warden', 'Ashen Tides', '', 0.13, 0.1, null, 0.15, 'Floor'],
+  ['Kettle Golem', 'Lantern Road', '', 0.55, 0.52, 0.58, 0.58, 'Live'],
+  ['Hearth Wyvern', 'Hollow Crown', '', 4.4, 4.1, 4.6, 4.6, 'Live'],
+]
+function sparkPath(seed, up) { let s = seed, d = ''; for (let i = 0; i < 12; i++) { s = (s * 9301 + 49297) % 233280; const yv = 10 + (up ? -i * 0.6 : i * 0.6) + ((s / 233280) - 0.5) * 6; d += `${i ? 'L' : 'M'}${(i * 64 / 11).toFixed(1)},${yv.toFixed(1)}` } return d }
+function tableView() {
+  if (S.load === 'loading') return `<div class="loadbox" aria-busy="true"><span class="skel" style="width:30%"></span><span class="skel" style="width:100%;height:480px"></span></div>`
+  if (S.load !== 'ok') return qview()
+  const t = totals()
+  const needs = Q.filter((q) => q.kind !== 'batch')
+  const match = (nm) => !S.search || nm.toLowerCase().includes(S.search.toLowerCase())
+  const nRows = needs.filter((q) => match(q.name)), rRows = RULE_ROWS.filter((r) => match(r[0]))
+  const showG = (g) => S.filter === 'all' || S.filter === g
+  const chips = [['all', 'All', TOTAL_ITEMS], ['needs', 'Needs you', t.open - (S.ans.q9 ? 0 : 1)], ['sugg', 'Suggested', BATCH.listings], ['rule', 'At the rule', TOTAL_ITEMS - 8 - BATCH.listings], ['kept', 'Kept off', t.kept]]
+  const caption = `<div class="cols caption" role="row"><span></span><span></span><span>Item</span><span class="num c-mkt">Market</span><span class="num c-low">Lowest, shipped</span><span class="num c-trend">30 days</span><span class="num">Price</span><span class="c-src">From</span><span></span><span class="c-lock"></span></div>`
+  const qrow = (q) => {
+    const a = S.ans[q.id]
+    const price = a && a.price ? a.price.toFixed(2) : q.sug != null ? q.sug.toFixed(2) : ''
+    const src = a ? (a.t === 'typed' ? 'You' : a.t === 'hold' ? 'Kept off' : 'Suggested') : q.sug != null ? 'Suggested' : 'No price'
+    return `<div class="cols row" data-src="${src}"><span class="tick"><input type="checkbox" ${a && a.t !== 'hold' && a.t !== 'skip' ? 'checked' : ''} aria-label="Send ${esc(q.name)}"></span><span class="thumb"></span>
+      <span class="item"><button class="nm" data-act="detail" data-i="${Q.indexOf(q)}">${esc(q.name)}</button><span class="rs warn">${q.why}</span></span>
+      <span class="num c-mkt">${q.mkt != null ? $m(q.mkt) : '<span class="dash">None</span>'}</span><span class="num c-low">${q.low != null ? $m(q.low) : '<span class="dash">None</span>'}</span>
+      <span class="spark c-trend"><svg viewBox="0 0 64 20"><path d="${sparkPath(q.qty * 31 + 7, q.kind === 'raise')}" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></span>
+      <span class="pricec">${q.live != null ? `<span class="was">Now ${$m(q.live)}</span>` : ''}<label class="field"><span>$</span><input value="${price}" aria-label="Price for ${esc(q.name)}"></label></span>
+      <span class="src c-src" data-src="${src}">${src}</span><button class="iconb" data-act="detail" data-i="${Q.indexOf(q)}" aria-label="Price history" title="Price history">${svg('history')}</button><button class="iconb c-lock" aria-label="Hold back" title="Hold back">${svg('lock')}</button></div>`
+  }
+  const rrow = ([nm, set, why, mkt, low, live, price, src], i) => `<div class="cols row" data-src="${src}"><span class="tick"><input type="checkbox" ${src === 'Live' ? 'disabled title="No change to send"' : 'checked'} aria-label="Send ${nm}"></span><span class="thumb"></span>
+      <span class="item"><button class="nm">${nm}</button><span class="rs">${why || set}</span></span>
+      <span class="num c-mkt">${$m(mkt)}</span><span class="num c-low">${$m(low)}</span><span class="spark c-trend"><svg viewBox="0 0 64 20"><path d="${sparkPath(i * 13 + 3, price > mkt)}" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></span>
+      <span class="pricec">${live != null && src !== 'Live' ? `<span class="was">Now ${$m(live)}</span>` : ''}<label class="field"><span>$</span><input value="${price.toFixed(2)}" aria-label="Price for ${nm}"></label></span>
+      <span class="src c-src" data-src="${src}">${src}</span><button class="iconb" aria-label="Price history" title="Price history">${svg('history')}</button><button class="iconb c-lock" aria-label="Hold back" title="Hold back">${svg('lock')}</button></div>`
+  const anyMatch = nRows.length + rRows.length > 0
+  return `<div class="filters" id="table-filters">${tag('FilterBar', false)}
+      <input class="search" type="search" placeholder="Name, set, number or SKU" aria-label="Search all prices" value="${esc(S.search)}" data-act="search">
+      ${chips.map(([k, l, n]) => `<button class="chip" aria-pressed="${S.filter === k}" data-act="filter" data-k="${k}">${l} <span class="n">${n.toLocaleString('en-US')}</span></button>`).join('')}
+      <span class="count">${anyMatch ? `${(S.search ? nRows.length + rRows.length : TOTAL_ITEMS).toLocaleString('en-US')} items` : '0 items'}</span></div>
+    ${!anyMatch ? `<section class="end" style="min-height:280px"><h2>Nothing matches "${esc(S.search)}".</h2><p>The search looks at name, set, number and SKU.</p><div class="acts"><button class="btn" data-act="clearsearch">Clear the search</button></div></section>` : `
+    <div class="table" id="price-table">${caption}
+      ${showG('needs') || showG('all') ? `<div class="grp needs"><h3>Needs you</h3><span class="n">${nRows.length}</span><span class="lede">Nothing here goes until you answer it.</span><button class="btn end-act" data-act="view-q">${svg('q', 16)}Answer one at a time</button></div>${nRows.map(qrow).join('')}` : ''}
+      ${showG('sugg') || showG('all') ? `<div class="grp"><h3>Suggested changes</h3><span class="n">${BATCH.listings}</span><span class="lede">Inside your 25% limit. Ticked.</span></div>${rRows.filter((r) => r[7] === 'Suggested').map(rrow).join('')}<div class="tfoot">and ${BATCH.listings - 4} more <button class="btn quiet" data-act="nop">Show the next 50</button></div>` : ''}
+      ${showG('rule') || showG('all') ? `<div class="grp"><h3>Going at the rule</h3><span class="n">${(TOTAL_ITEMS - 8 - BATCH.listings).toLocaleString('en-US')}</span><span class="lede">Each row says where its price comes from.</span></div>${rRows.filter((r) => r[7] !== 'Suggested').map((r, i) => rrow(r, i + 4)).join('')}<div class="tfoot">${tag('page of 50, not 1,078 rows at once', true)}Showing 6 of 1,078 <button class="btn quiet" data-act="nop">Show the next 50</button></div>` : ''}
+      ${S.filter === 'kept' ? `<div class="grp"><h3>Kept off TCGplayer</h3><span class="n">${t.kept}</span><span class="lede">Not in any send until you release them.</span></div><div class="tfoot">Each kept row carries its reason and a Release press.</div>` : ''}
+    </div>`}`
+}
+
+/* ---------- sheets ---------- */
+function sheet() {
+  if (!S.sheet) return ''
+  const close = `<button class="btn icon quiet" data-act="close" aria-label="Close">${svg('x', 18)}</button>`
+  if (S.sheet === 'detail') {
+    const q = Q[S.detail]
+    return `<div class="scrim" data-act="close"></div><section class="sheet wide" role="dialog" aria-label="${esc(q.name)}"><div class="sheet-in"><div class="sheet-head"><h2>Price and history</h2>${close}</div>
+      <div class="sheet-body">${tag('the same question card, from a row', true)}${qcard(q, true)}</div></div></section>`
+  }
+  if (S.sheet === 'settings') {
+    return `<div class="scrim" data-act="close"></div><section class="sheet" role="dialog" aria-label="Your rules"><div class="sheet-in"><div class="sheet-head"><h2>Your rules</h2>${close}</div>
+      <div class="sheet-body">${tag('RuleSheet, with the limit and value line', false)}<p class="lede">These decide which prices go on their own and which ones ask you first.</p>
+        <div class="set-grid">
+          <label class="fld">New copies list at market plus<input class="mono" value="5.5%"><small>Live listings follow the same rule.</small></label>
+          <label class="fld">Floor<input class="mono" value="$0.15"><small>Nothing lists for less.</small></label>
+          <label class="fld">Suggestion limit, either way<input class="mono" value="25%"><small>A bigger move asks you first.</small></label>
+          <label class="fld">Value line<input class="mono" value="$25.00"><small>A card worth this or more asks you first.</small></label>
+        </div></div>
+      <div class="sheet-foot"><span class="said">Changing a rule may change which questions you see.</span><button class="btn quiet" data-act="close">Cancel</button><button class="btn primary" data-act="close">Save rules</button></div></div></section>`
+  }
+  const t = totals()
+  const skipped = Q.filter((q) => !S.ans[q.id] || S.ans[q.id].t === 'skip').length
+  const sending = S.send === 'sending'
+  const list = (rows) => `<ul>${rows.map(([n, v]) => `<li><span>${n}</span>${v}</li>`).join('')}</ul>`
+  const ans = (pred) => Q.filter((q) => q.kind !== 'batch' && S.ans[q.id] && pred(q, S.ans[q.id]))
+  const newL = ans((q, a) => q.live == null && a.t === 'sug').map((q) => [esc(q.name), $m(q.sug)]).concat([['and 9 more new copies at the rule', '']])
+  const upL = ans((q, a) => q.live != null && a.price > q.live && a.t !== 'typed').map((q) => [esc(q.name), `<span>${fmt(q.live)} to ${$m(S.ans[q.id].price)}</span>`])
+  const downL = ans((q, a) => q.live != null && a.price < q.live && a.t !== 'typed').map((q) => [esc(q.name), `<span>${fmt(q.live)} to ${$m(S.ans[q.id].price)}</span>`])
+  return `<div class="scrim" data-act="close"></div><section class="sheet" id="review-sheet" role="dialog" aria-label="What goes"><div class="sheet-in">
+    <div class="sheet-head"><h2>What goes to TCGplayer</h2>${close}</div>
+    <div class="sheet-body">${tag('Show 92 Live Copies fold, as a sheet', false)}
+      <p class="lede"><b>${plural(t.copies, 'copy', 'copies')}</b> go in this send. Every count here is copies, as on the bar above.</p>
+      <ul class="goes">
+        <li><details><summary>${svg('chev', 16)}<span class="k">New listings</span><span class="c">${t.newC}</span><span class="m">${$m(t.newSum)}</span></summary>${list(newL)}</details></li>
+        <li><details ${upL.length ? 'open' : ''}><summary>${svg('chev', 16)}<span class="k">Prices up</span><span class="c">${t.up}</span><span class="m"><span class="money up">+${fmt(t.upSum)}</span></span></summary>${list(upL.concat([[`and ${BATCH.rises} suggested rises`, '']]))}</details></li>
+        <li><details><summary>${svg('chev', 16)}<span class="k">Prices down</span><span class="c">${t.down}</span><span class="m"><span class="money down">−${fmt(t.downSum)}</span></span></summary>${list(downL.concat([[`and ${BATCH.falls} suggested falls`, '']]))}</details></li>
+        <li><details><summary>${svg('chev', 16)}<span class="k">Your typed prices</span><span class="c">${t.typedC}</span><span class="m">${$m(t.typedSum)}</span></summary>${list([['Larkspur Scout', $m(3.25)], ['and 6 more', '']])}</details></li>
+      </ul>
+      <ul class="goes out">
+        <li><details><summary>${svg('chev', 16)}<span class="k">Kept off TCGplayer</span><span class="c">${t.kept}</span><span class="m"></span></summary>${list([['Not in this send, or any, until you release them.', '']])}</details></li>
+        ${skipped ? `<li><details><summary>${svg('chev', 16)}<span class="k">Questions not answered</span><span class="c">${skipped}</span><span class="m"></span></summary>${list([['They wait for you. Nothing unanswered goes.', '']])}</details></li>` : ''}
+      </ul>
+      ${sending ? `<p class="lede" aria-live="polite">Sending to TCGplayer. Started at 9:14. You can close this; the bar keeps the answer.</p>` : ''}
+    </div>
+    <div class="sheet-foot"><button class="btn quiet" data-act="close">Close</button><button class="btn primary send-press" data-act="${sending ? '' : 'go'}" ${sending ? 'aria-disabled="true"' : ''}>${sending ? '<span class="ring"></span>Sending' : `${svg('send', 16)}Send ${plural(t.copies, 'copy', 'copies')}`}</button></div>
+  </div></section>`
+}
+
+/* ======================= behaviour ======================= */
+function stateName() {
+  if (S.load === 'loading') return 'loading'
+  if (S.load === 'failed') return 'failed'
+  if (S.load === 'none') return 'none'
+  if (S.sheet === 'review') return S.send === 'sending' ? 'sending' : 'review'
+  if (S.send === 'sent') return 'sent'
+  if (S.sheet === 'settings') return 'settings'
+  if (S.sheet === 'detail') return 'detail'
+  if (S.view === 'table') return S.search ? 'filtered' : 'table'
+  if (S.pop) return 'notes'
+  if (S.hold) return 'hold'
+  if (S.idx >= Q.length) return S.allwell ? 'allwell' : 'done'
+  if (Q[S.idx].kind === 'batch') return 'batch'
+  return 'q'
+}
+function writeHash() {
+  const s = stateName()
+  const parts = [`s=${s}`]
+  if (s === 'q' && S.idx > 0) parts.push(`q=${S.idx + 1}`)
+  if (S.w === 820) parts.push('w=820')
+  if (HASH.get('t')) parts.push(`t=${HASH.get('t')}`)
+  if (S.hide.size) parts.push(`hide=${[...S.hide].join(',')}`)
+  if (!S.tags) parts.push('tags=off')
+  history.replaceState(null, '', '#' + parts.join('&'))
+}
+function syncMock() {
+  document.querySelectorAll('[data-w]').forEach((b) => { if (b.classList.contains('mbtn')) b.setAttribute('aria-pressed', String(+b.dataset.w === S.w)) })
+  document.querySelectorAll('[data-t]').forEach((b) => b.setAttribute('aria-pressed', String(document.documentElement.dataset.theme === b.dataset.t)))
+  document.getElementById('m-tags').setAttribute('aria-pressed', String(S.tags))
+  document.querySelectorAll('[data-cut]').forEach((b) => b.setAttribute('aria-pressed', String(S.hide.has(b.dataset.cut))))
+  const sel = document.getElementById('m-state')
+  const s = stateName()
+  sel.value = STATES.some(([k]) => k === s) ? s : 'q'
+  writeHash()
+}
+function nextOpen(from) {
+  const n = Q.length - (opt('batch') ? 0 : 1)
+  for (let i = from + 1; i < n; i++) if (!S.ans[Q[i].id]) return i
+  for (let i = 0; i < n; i++) if (!S.ans[Q[i].id] || S.ans[Q[i].id].t === 'skip') { if (i !== S.idx || !S.ans[Q[i].id]) return i }
+  return Q.length
+}
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
+function answer(q, a) {
+  S.ans[q.id] = a
+  S.typed = ''
+  S.hold = false
+  S.flash = { id: q.id, text: answerWords(q, a) }
+  render()
+  setTimeout(() => { S.flash = null; if (S.view === 'q' && Q[S.idx] === q) { S.idx = nextOpen(S.idx); render() } }, reduced ? 250 : 650)
+}
+function act(name, el) {
+  const q = S.sheet === 'detail' ? Q[S.detail] : Q[S.idx]
+  switch (name) {
+    case 'view-q': S.view = 'q'; S.sheet = null; S.search = ''; S.filter = 'all'; break
+    case 'view-table': S.view = 'table'; S.pop = false; break
+    case 'pop': S.pop = !S.pop; break
+    case 'rules': S.sheet = 'settings'; S.pop = false; break
+    case 'refresh': case 'retry': S.load = 'loading'; render(); setTimeout(() => { S.load = 'ok'; render() }, 900); return
+    case 'what': if (S.load === 'ok') S.sheet = 'review'; break
+    case 'send': if (S.load !== 'ok') return; if (totals().copies === 0) return; if (opt('what') && el.closest('.send')) { doSend(); return } doSend(); return
+    case 'go': doSend(); return
+    case 'close': S.sheet = null; break
+    case 'ans': {
+      const k = el.dataset.k
+      answer(q, k === 'nochange' ? { t: 'nochange' } : { t: k, price: +el.dataset.p }); return
+    }
+    case 'hold': S.hold = true; break
+    case 'holdwhy': S.holdWhy = el.dataset.k; break
+    case 'holdcancel': S.hold = false; break
+    case 'holdset': answer(q, { t: 'hold', why: S.holdWhy }); return
+    case 'skip': S.ans[q.id] = { t: 'skip' }; S.idx = nextOpen(S.idx); S.typed = ''; break
+    case 'back': if (S.idx > 0) { S.idx = Math.min(S.idx, Q.length) - 1; S.hold = false } break
+    case 'goto': S.idx = +el.dataset.i; S.hold = false; S.view = 'q'; break
+    case 'toskipped': S.idx = Q.findIndex((x) => S.ans[x.id]?.t === 'skip'); break
+    case 'batch': {
+      const k = el.dataset.k
+      if (k === 'each') { S.view = 'table'; S.filter = 'sugg'; break }
+      S.batchOut = k === 'out'
+      answer(q, { t: k === 'out' ? 'out' : 'keep' }); return
+    }
+    case 'detail': S.detail = +el.dataset.i; S.sheet = 'detail'; break
+    case 'filter': S.filter = el.dataset.k; break
+    case 'clearsearch': S.search = ''; break
+    case 'unmatched': S.pop = false; break
+    default: return
+  }
+  render()
+}
+function doSend() {
+  const t = totals()
+  S.sendingC = t.copies
+  S.send = 'sending'
+  if (!S.sheet) S.sheet = null
+  render()
+  setTimeout(() => { S.send = 'sent'; S.sentC = S.sendingC; S.sentAt = '9:14'; S.sheet = null; S.idx = Q.length; S.allwell = false; render() }, 1600)
+}
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]')
+  if (!el || el.tagName === 'INPUT') return
+  if (el.getAttribute('aria-disabled') === 'true') return
+  e.preventDefault()
+  act(el.dataset.act, el)
+})
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'q-price') { S.typed = e.target.value.replace(/[^0-9.]/g, ''); const lab = e.target.closest('.ans-type'); lab.classList.toggle('typed', !!S.typed) }
+  if (e.target.dataset.act === 'search') { S.search = e.target.value; const pos = e.target.selectionStart; render(); const s = document.querySelector('.search'); if (s) { s.focus(); s.setSelectionRange(pos, pos) } }
+})
+document.addEventListener('keydown', (e) => {
+  if (S.view !== 'q' || S.sheet || S.load !== 'ok' || e.metaKey || e.ctrlKey || e.altKey) return
+  const q = Q[S.idx]
+  if (!q) return
+  const inPrice = e.target.id === 'q-price'
+  const typing = e.target.tagName === 'INPUT' && !inPrice
+  if (typing) return
+  if (S.hold) {
+    const hit = Object.keys(HOLD_KEY).find((k) => HOLD_KEY[k].toLowerCase() === e.key.toLowerCase())
+    if (hit) { e.preventDefault(); S.holdWhy = hit; render(); return }
+    if (e.key === 'Enter') { e.preventDefault(); act('holdset'); return }
+    if (e.key === 'Escape') { e.preventDefault(); act('holdcancel'); return }
+    return
+  }
+  if (inPrice) {
+    if (e.key === 'Enter' && S.typed) { e.preventDefault(); answer(q, { t: 'typed', price: +S.typed }); return }
+    if (e.key === 'Escape') { e.preventDefault(); S.typed = ''; render(); return }
+    if (/^[0-9.]$/.test(e.key) || e.key === 'Backspace' || e.key.startsWith('Arrow') || e.key === 'Tab') return
+  }
+  const k = e.key.toLowerCase()
+  const press = (sel) => { const b = document.querySelector(sel); if (b) { e.preventDefault(); b.click() } }
+  if (/^[0-9]$/.test(e.key) && !inPrice) { const p = document.getElementById('q-price'); if (p) { e.preventDefault(); p.focus(); p.value = e.key; S.typed = e.key; p.closest('.ans-type').classList.add('typed') } return }
+  if (q.kind === 'batch') { if (k === 'enter') press('[data-act="batch"][data-k="keep"]'); if (k === 'e') press('[data-k="each"]'); if (k === 'o') press('[data-k="out"]'); if (k === 'u') act('back'); return }
+  if (k === 'enter' && !inPrice) press('.ans.primary')
+  else if (k === 'm') press('[data-k="market"]')
+  else if (k === 'l') press('[data-k="low"]')
+  else if (k === 'n') press('[data-k="nochange"]')
+  else if (k === 'h') { e.preventDefault(); act('hold') }
+  else if (k === 's' && opt('skip')) { e.preventDefault(); act('skip') }
+  else if (k === 'u') { e.preventDefault(); act('back') }
+})
+function afterRender() {
+  if (S.hold) document.querySelector('.hold-why [aria-pressed="true"]')?.focus({ preventScroll: true })
+}
+
+/* ---------- mock controls ---------- */
+const sel = document.getElementById('m-state')
+sel.innerHTML = STATES.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')
+sel.addEventListener('change', () => { HASH.set('s', sel.value); HASH.delete('q'); location.hash = [...HASH].map(([k, v]) => v === '' ? k : `${k}=${v}`).join('&') })
+document.querySelectorAll('.mbtn[data-w]').forEach((b) => b.addEventListener('click', () => { S.w = +b.dataset.w; render() }))
+document.querySelectorAll('.mbtn[data-t]').forEach((b) => b.addEventListener('click', () => { document.documentElement.dataset.theme = b.dataset.t; document.documentElement.removeAttribute('data-palette'); HASH.set('t', b.dataset.t); render() }))
+document.getElementById('m-tags').addEventListener('click', () => { S.tags = !S.tags; render() })
+const cull = document.getElementById('m-cull')
+OPTIONS.forEach(([k, l]) => { const b = document.createElement('button'); b.className = 'mbtn cut'; b.dataset.cut = k; b.textContent = l; b.addEventListener('click', () => { S.hide.has(k) ? S.hide.delete(k) : S.hide.add(k); render() }); cull.appendChild(b) })
+window.addEventListener('hashchange', () => location.reload())
+
+setupFromHash()
+render()
+</script>
+</body>
+</html>
