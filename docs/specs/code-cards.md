@@ -79,9 +79,8 @@ each**. It refuses the rest. Ablation against eleven transforms shows three case
 unrecoverable: a QR under about 40 px, a 3.5 px defocus, and glare that clips the symbol to
 white.
 
-**The decoder is pinned, and the pin is load-bearing.** `codes/qr.py` uses `zxing-cpp==2.3.0`.
-Plain `pip install zxing-cpp` fails on this repo's Python 3.9. Install from `requirements.txt`.
-Never install freehand.
+**The decoder is pinned.** `codes/qr.py` uses `zxing-cpp==3.1.1`, the newest release that passes T8.
+Install from `requirements.txt`. Never install freehand.
 
 **C2's OCR half is not built, and should not be.** C2 specified a SKU crop taken off the QR as a
 fiducial. Then Tesseract, with an `A-Z0-9` whitelist. Three findings retire it:
@@ -586,9 +585,8 @@ about 40 px, a 3.5 px defocus, and glare that clips the symbol to white. All thr
    A GitHub code search for the two examples in the fork's own notes returns zero hits. C2's "build the
    table empirically" would build the only copy in existence. Nobody would keep it honest.
 
-**The decoder is `zxing-cpp==2.3.0`, and the pin is load-bearing.** This repo's venv is Python 3.9.6. The 3.x
-line dropped cp39 wheels. An unpinned install resolves 3.1.1, finds no wheel, falls back to source, and dies
-in CMake. An unpinned requirement here is a broken clone.
+**The decoder is `zxing-cpp==3.1.1`, pinned to the newest release that passes T8.** The venv is Python 3.12,
+which every 3.x wheel supports. The pin is a gate: raise it only after T8 passes on the new release.
 
 **OpenCV was declined twice. The first refusal stands.** A first pass tested opencv's two QR detectors on a
 benchmark whose frames were at most 1600 px wide. That is not this rig. Re-measured at 3840x2160, opencv scored

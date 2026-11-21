@@ -38,8 +38,13 @@ cost is not spent.
 
 THE VERSION IS PINNED, AND THE PIN IS A GATE, NOT A WORKAROUND. `requirements.txt` holds
 `zxing-cpp` at the newest release that passes T8. The venv is Python 3.12, which every 3.x
-wheel supports, so a plain install works. Raising the pin means re-running T8 and
-re-measuring the hit rates below first.
+wheel supports, so a plain install works. Raising the pin means re-running T8 first.
+
+THE TABLE BELOW WAS MEASURED ON zxing-cpp 2.3.0 AND WAS NOT RE-MEASURED ON 3.1.1. A smaller
+comparison matched: 28 degraded frames gave 24 hits, 4 refusals (half glare) and 0 wrong
+reads on both versions. Blank, noise and 1x1 frames returned nothing on both, and rotations
+of 0, 90 and 180 degrees gave the same text, orientation and corners. Re-measure the full
+table before you rely on a number in it for the current pin.
 
 MEASURED HIT RATES OF THIS MODULE AS SHIPPED, over 17 degradation cases x 10 codes = 170
 frames at 3840x2160. Synthetic deliberately: no real code-card photograph exists in this repo

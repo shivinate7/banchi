@@ -40,8 +40,8 @@ numpy>=1.21
 #
 # Pinned to the newest release that passes T8 (3.1.1 on the Python 3.12 venv). The pin keeps
 # a clone from taking a newer release unchecked: re-run T8 and re-measure codes/qr.py before
-# you raise it. 3.1.1 carries the fix for a Version-1 QR detection regression that 3.1.0
-# introduced, and Version 1 is the symbol size a 1 cm code produces.
+# you raise it. The 3.1.1 notes list a better Version-1 QR detection rate and, separately, a fix
+# for a detection regression in 3.1.0. Version 1 is the symbol size a 1 cm code produces.
 zxing-cpp==3.1.1
 
 # onnxruntime  the app's ONE model runtime (owner's ruling). geometry/card_box.py runs the
