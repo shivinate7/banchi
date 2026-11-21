@@ -115,13 +115,14 @@
   .mock-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2) var(--bn-3); padding: var(--bn-2) var(--bn-6); font-size: var(--bn-fs-sm); }
   .mock-row + .mock-row { border-top: 1px dashed var(--bn-line-strong); }
   .mock-say { font-weight: 600; margin-right: auto; }
-  .mock-k { color: var(--bn-ink-3); font-weight: 600; }
+  .mock-k { color: var(--bn-ink-2); font-weight: 600; }
+  .mock .pill.warn { background: var(--bn-surface); }
   .mock .seg button { height: 28px; font-size: var(--bn-fs-sm); padding: 0 var(--bn-2); }
   .cull button { height: 28px; padding: 0 var(--bn-2); font-size: var(--bn-fs-sm); }
-  .cull button[aria-pressed='true'] { text-decoration: line-through; color: var(--bn-ink-3); }
+  .cull button[aria-pressed='true'] { text-decoration: line-through; color: var(--bn-ink-2); }
   .mk { position: relative; }
   .tag { position: absolute; z-index: 3; top: -9px; right: var(--bn-3); padding: 0 var(--bn-1-5); font-family: var(--bn-font-mono);
-         font-size: var(--bn-fs-2xs); line-height: 16px; color: var(--bn-accent); background: var(--bn-bg);
+         font-size: var(--bn-fs-xs); line-height: 16px; color: var(--bn-accent); background: var(--bn-bg);
          border: 1px dashed var(--bn-accent); border-radius: var(--bn-r-xs); white-space: nowrap; pointer-events: none; }
   .tag.new { color: var(--bn-pill-ink-warn); border-color: var(--bn-warn); }
   body.nonotes .tag { display: none; }
@@ -374,7 +375,7 @@
         <div class="strip-head">
           <h2 class="h2" id="stripTitle">Next 8 Weeks</h2>
           <div class="legend" aria-hidden="true">
-            <span><i class="sw act"></i>Your orders</span>
+            <span><i class="sw act"></i>Your orders a day</span>
             <span><i class="sw band"></i>Normal range</span>
             <span><i class="sw ev"></i>Expected range</span>
           </div>
@@ -610,7 +611,7 @@ const VERDICT = {
 const FF = {
   'quiet':      { busy: false, lines: [['Normal week. Nothing to prepare.']] },
   'week-out':   { busy: true, lines: [
-    ['Busy days ahead: Friday Nov 27 to Sunday Nov 29, then quieter until Sunday Dec 6.'],
+    ['Busy days ahead: Friday Nov 27 to Sunday Nov 29. Busier than usual until Sunday Dec 6.'],
     ['Be ready for up to 24 orders a day.'],
     ['Have 72 mailers, 240 sleeves and 2 rolls of tape ready by Thursday.', 'supplies'],
     ['Most cards will come from boxes 3 and 5.', 'boxes'],
@@ -790,7 +791,7 @@ function drawLead() {
   lead.classList.toggle('warn', sk === 'spike' && selected == null)
   if (selected && !(sk === 'overlap' && (selected === 'hollowmere' || selected === 'emberOver')) && selected !== STATES[sk].lead) lead.innerHTML = farCard(selected)
   else lead.innerHTML = ({ 'quiet': quietCard, 'week-out': prepCard, 'first-kind': nohistCard, 'spike': spikeCard, 'after': afterCard, 'overlap': overlapCard })[sk]()
-  lead.insertAdjacentHTML('afterbegin', `<span class="tag new">New: the ${sk === 'after' ? 'after-event score' : sk === 'spike' ? 'spike question' : 'prep card'}</span>`)
+  lead.insertAdjacentHTML('afterbegin', `<span class="tag new">New: the ${sk === 'after' ? 'after-event score' : sk === 'spike' ? 'spike question' : sk === 'quiet' ? 'quiet-weeks card' : 'prep card'}</span>`)
   drawAfter(); applyHide(); wireLead()
 }
 function wireLead() {
