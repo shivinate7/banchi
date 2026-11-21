@@ -38,13 +38,11 @@ numpy>=1.21
 #            deterministic, local and free — no model call for the one field that must be
 #            exactly right, because it is the thing being sold.
 #
-# THE PIN WAS LOAD-BEARING ON 3.9. That venv was Python 3.9.6, and the 3.x line dropped cp39
-# wheels, so plain `pip install zxing-cpp` fell back to the sdist and died in CMake configure.
-# The venv is Python 3.12 since 2026-09-28, so that reason no longer holds. 2.3.0 stays:
-# T8 passes on 3.12 in CI, and the code-card feature is dormant. Revisit the pin when code
-# cards wake, and re-measure codes/qr.py if you do: 3.1.x claims a materially better
-# Version-1 detection rate, which is exactly the symbol size a 1 cm code produces.
-zxing-cpp==2.3.0
+# Pinned to the newest release that passes T8 (3.1.1 on the Python 3.12 venv). The pin keeps
+# a clone from taking a newer release unchecked: re-run T8 and re-measure codes/qr.py before
+# you raise it. 3.1.1 carries the fix for a Version-1 QR detection regression that 3.1.0
+# introduced, and Version 1 is the symbol size a 1 cm code produces.
+zxing-cpp==3.1.1
 
 # onnxruntime  the app's ONE model runtime (owner's ruling). geometry/card_box.py runs the
 #              fine-tuned D-FINE-N card finder on it (D125). It is optional at runtime: with
