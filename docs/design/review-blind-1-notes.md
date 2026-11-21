@@ -43,7 +43,8 @@ Examples: `#c=table&s=eight&w=820&t=dark`, `#c=bench&s=read-cost`.
 5. **One key sends the answer** (Bench and Sorting table). 1 to 8 picks a printing, 0 is none of
    these, H is can't tell yet, U is undo. The pressed printing flashes "Chosen" and the last answer
    shows under the buttons with Undo. Gain: one key per card, for hours. Loss: a slip sends a wrong
-   answer until undone. Pick: one key. The other option, **Confirm with Enter** (Bench), arms a
+   answer until undone. Pick: one key. In the Sorting table, N opens the next pile (not Tab,
+   which stays with focus moves). The other option, **Confirm with Enter** (Bench), arms a
    printing with its number and sends it with Enter. Hide: "Parts to cull", Confirm with Enter
    (off by default).
 6. **Can't tell yet holds the card, never drops it.** A held card stays in the list, striped in the
@@ -89,8 +90,11 @@ Examples: `#c=table&s=eight&w=820&t=dark`, `#c=bench&s=read-cost`.
     both themes, so spend is never mistaken for a plain action.
 16. **A printing's name is unique.** Set and number, then each mark that is not the plain default
     ("First Tide 012/098, foil"). Two printings never share a label in a receipt or the Answered
-    list.
-17. **At 820 with touch.** Bench: the photo on top, the printings as a two-column grid of large
+    list. On a printing's own tile or bin the title is set and number only, because its chips
+    show the marks.
+17. **Forced colours.** The sitting strip's answered and held cells use system colours and a dotted
+    border in a contrast theme, because a stripe gradient is removed there.
+18. **At 820 with touch.** Bench: the photo on top, the printings as a two-column grid of large
     targets below. Sorting table: the rail folds behind "Piles and boxes"; the photo comes first,
     the bins below as a compact grid. Key hints are hidden at 820. Each button is at least 44 px tall; the strip cells are smaller, and
     the arrow buttons beside them are the touch path.

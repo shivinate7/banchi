@@ -173,7 +173,12 @@ details.machine code { display: block; margin-block-start: var(--space-1); paddi
 .b-cands-head { padding: var(--space-5) var(--space-6) var(--space-3); display: flex; flex-direction: column; gap: var(--space-1); }
 .b-cands-head h2 { font-size: var(--text-lg); }
 .b-cands { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
-.b-cands[data-many="true"] .cand { grid-template-columns: auto 3rem minmax(0, 1fr) auto; }
+.b-cands[data-many="true"] { display: grid; grid-template-columns: 1fr 1fr; align-content: start; }
+.b-cands[data-many="true"] .cand { grid-template-columns: auto 2.75rem minmax(0, 1fr); height: 100%; align-items: start; }
+.b-cands[data-many="true"] .cand .price { grid-column: 3; text-align: start; }
+.b-cands[data-many="true"] .chip.quiet { display: none; }
+.b-cands[data-many="true"] .cand { padding: var(--space-2); gap: var(--space-2); }
+.b-cands[data-many="true"] .cand .name { font-size: var(--text-sm); }
 .cand { width: 100%; text-align: start; display: grid; grid-template-columns: auto 4.5rem minmax(0, 1fr) auto; gap: var(--space-3); align-items: center; padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .cand:hover { border-color: var(--accent); }
 .cand .thumb { aspect-ratio: 63 / 88; }
@@ -196,6 +201,11 @@ details.machine code { display: block; margin-block-start: var(--space-1); paddi
 .b-cells button[data-s="held"] { background: repeating-linear-gradient(45deg, var(--held) 0 3px, var(--held-soft) 3px 6px); border-color: var(--held); }
 .b-cells button[data-s="new"] { border-style: dashed; }
 .b-cells button[aria-current="true"] { outline: 2px solid var(--text); outline-offset: 1px; }
+@media (forced-colors: active) {
+  .b-cells button[data-s="answered"] { background: CanvasText; }
+  .b-cells button[data-s="held"] { background: Canvas; border: 3px dotted CanvasText; }
+  .bar > i { background: Highlight; }
+}
 .keys { display: flex; gap: var(--space-3); font-size: var(--text-xs); color: var(--text-muted); align-items: center; flex-wrap: wrap; }
 .touch .keys { display: none; }
 .b-page { flex: 1; min-height: 0; overflow: auto; padding: var(--space-8) var(--space-6); display: flex; flex-direction: column; gap: var(--space-6); }
@@ -277,8 +287,10 @@ table.ledger { border-collapse: collapse; width: 100%; font-size: var(--text-sm)
 .t-head .sub { color: var(--text-muted); }
 .t-head .statusline { margin-inline-start: auto; }
 .bins { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: var(--space-3); }
-.bin { position: relative; display: grid; grid-template-rows: auto auto 1fr; gap: var(--space-2); padding: var(--space-3); border: 2px solid var(--line); border-radius: var(--radius); background: var(--surface-raised); text-align: start; }
-.bin:hover { border-color: var(--accent); }
+.bin { position: relative; display: grid; grid-template-rows: 1fr auto; gap: var(--space-2); padding: var(--space-3); border: 2px solid var(--line); border-radius: var(--radius); background: var(--surface-raised); }
+.bin:has(.bin-drop:hover:not(:disabled)) { border-color: var(--accent); }
+.bin-drop { border: 0; background: none; padding: 0; text-align: start; display: block; width: 100%; border-radius: 4px; }
+.bin-drop:disabled { cursor: default; }
 .bin .refrow { display: grid; grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr); gap: var(--space-3); align-items: start; }
 .bins[data-n-big="true"] .bin .refrow { grid-template-columns: 1fr; }
 .bin .ref { height: 9rem; display: flex; justify-content: center; }
@@ -410,8 +422,11 @@ const BOXES_DONE = [
 ];
 const BOXES_NEW = [{ box: 15, photos: 612 }, { box: 16, photos: 545 }];
 const money = (n) => "$" + n.toFixed(2);
+const RATE = "$" + PRICE_PER_PHOTO.toFixed(3);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 /* A label names one printing only: set and number, then each mark that is not the plain default. */
+/* On a printing's own tile the chips carry its marks, so the title is set and number only. */
+function shortLabel(p) { return SETS[p.set].name + " " + p.num; }
 function printingLabel(p) {
   const marks = [p.stamp !== "none" ? p.stamp : "", p.finish !== "plain" ? p.finish : "", p.border === "light" ? "light border" : "", p.art === "alternate" ? "alternate art" : "", p.lang !== "English" ? p.lang : ""].filter(Boolean);
   return SETS[p.set].name + " " + p.num + (marks.length ? ", " + marks.join(", ") : "");
@@ -665,7 +680,7 @@ function benchQueue(m) {
 </section>
 <section class="b-cands-pane" aria-label="Printings">
 <div class="b-cands-head"><h2>Which printing is this?</h2><p class="muted">${cands.length} printings match the name ${esc(FAM[ph.fam].name)}.${a && a !== "held" ? " Answered. Press another to change it." : a === "held" ? " Held: you said you can't tell yet." : ""}</p></div>
-<ol class="b-cands" data-many="${many}"${nl(opt("diff") ? "only what differs" : "printing list")}>${cands.map((c, i) => { const p = P[c]; const st = a === c ? "picked" : m.armed === c ? "armed" : ""; return `<li><button class="cand" data-act="answer" data-v="${c}" data-state="${st}" aria-keyshortcuts="${i + 1}"><kbd>${i + 1}</kbd><span class="thumb">${cardSVG(c)}</span><span class="info"><span class="name">${esc(printingLabel(p))}${st === "picked" ? ` <span class="tick">Chosen</span>` : ""}</span>${chipsFor(c, cands, opt("diff"))}</span><span class="price">${money(p.price)}</span></button></li>`; }).join("")}</ol>
+<ol class="b-cands" data-many="${many}"${nl(opt("diff") ? "only what differs" : "printing list")}>${cands.map((c, i) => { const p = P[c]; const st = a === c ? "picked" : m.armed === c ? "armed" : ""; return `<li><button class="cand" data-act="answer" data-v="${c}" data-state="${st}" aria-keyshortcuts="${i + 1}"><kbd>${i + 1}</kbd><span class="thumb">${cardSVG(c)}</span><span class="info"><span class="name">${esc(shortLabel(p))}${st === "picked" ? ` <span class="tick">Chosen</span>` : ""}</span>${chipsFor(c, cands, opt("diff"))}</span><span class="price">${money(p.price)}</span></button></li>`; }).join("")}</ol>
 <div class="b-alt"><button class="btn none" data-act="answer" data-v="none" data-state="${a === "none" ? "picked" : ""}" aria-keyshortcuts="0">None of these <kbd>0</kbd></button><button class="btn" data-act="answer" data-v="held" data-state="${a === "held" ? "picked" : ""}" aria-keyshortcuts="h" title="The card stays in the list and comes back at the end of the sitting.">Can't tell yet <kbd>H</kbd></button></div>
 <p class="b-last" aria-live="polite">${m.last ? `Card ${m.last.pos}: ${esc(m.last.label)}. <button class="linkbtn" data-act="undo">Undo</button> <kbd>U</kbd>` : ""}</p>
 </section></div>
@@ -695,9 +710,9 @@ function benchSheet(m) {
   const cost = box ? box.photos * PRICE_PER_PHOTO : 0;
   let body = "", foot = "", title = "Start a paid read";
   if (sh.step === "pick" || sh.step === "cost" || sh.step === "costing") {
-    body = `<p>Pick the box to read. Each photo costs <span class="money">${money(PRICE_PER_PHOTO)}</span>.</p>
+    body = `<p>Pick the box to read. Each photo costs <span class="money">${RATE}</span>.</p>
 <div class="boxpick" role="radiogroup" aria-label="Boxes not read yet">${m.unread.map((b) => `<label><input type="radio" name="box" data-act="pick-box" value="${b.box}" ${sh.step !== "pick" && sh.box === b.box ? "checked" : ""}><span><strong>Box ${b.box}</strong><br><span class="muted">${b.photos} photos, none read</span></span></label>`).join("")}</div>`;
-    if (sh.step !== "pick") body += `<div class="costblock" aria-live="polite"${nl("cost before spend")}>${sh.step === "costing" ? `<p class="working">Working out the cost of Box ${sh.box}.</p>` : `<span class="muted">Most this read can cost</span><span class="big">${money(cost)}</span><span>${box.photos} photos at ${money(PRICE_PER_PHOTO)} each. You pay only for photos read, and you can stop at any time.</span>`}</div>`;
+    if (sh.step !== "pick") body += `<div class="costblock" aria-live="polite"${nl("cost before spend")}>${sh.step === "costing" ? `<p class="working">Working out the cost of Box ${sh.box}.</p>` : `<span class="muted">Most this read can cost</span><span class="big">${money(cost)}</span><span>${box.photos} photos at ${RATE} each. You pay only for photos read, and you can stop at any time.</span>`}</div>`;
     foot = sh.step === "cost" ? `<button class="btn btn-spend" data-act="spend">Spend up to ${money(cost)}</button><button class="btn btn-quiet" data-act="close-sheet">Cancel</button>` : `<button class="btn btn-quiet" data-act="close-sheet">Cancel</button>`;
   }
   if (sh.step === "running") {
@@ -812,7 +827,7 @@ function boxCard(m, b) {
   let inner = "";
   if (b.state === "idle") inner = `<div class="acts"><button class="btn" data-act="read-box" data-v="${b.box}">Read this box</button></div>`;
   if (b.state === "costing") inner = `<p class="muted" aria-live="polite">Working out the cost.</p>`;
-  if (b.state === "cost") inner = `<p aria-live="polite">Up to <span class="money">${money(cost)}</span>: ${b.photos} photos at ${money(PRICE_PER_PHOTO)} each. You pay only for photos read.</p><div class="acts"><button class="btn btn-spend" data-act="spend-box" data-v="${b.box}">Spend up to ${money(cost)}</button><button class="btn btn-quiet" data-act="cancel-box" data-v="${b.box}">Cancel</button></div>`;
+  if (b.state === "cost") inner = `<p aria-live="polite">Up to <span class="money">${money(cost)}</span>: ${b.photos} photos at ${RATE} each. You pay only for photos read.</p><div class="acts"><button class="btn btn-spend" data-act="spend-box" data-v="${b.box}">Spend up to ${money(cost)}</button><button class="btn btn-quiet" data-act="cancel-box" data-v="${b.box}">Cancel</button></div>`;
   if (b.state === "running") inner = `<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="${b.photos}" aria-valuenow="${b.read}" style="--p:${(b.read / b.photos * 100).toFixed(1)}%"><i></i></div><p class="num">${b.read} of ${b.photos} read, <span class="money">${money(b.read * PRICE_PER_PHOTO)}</span> spent.</p><div class="acts"><button class="btn btn-danger" data-act="stop-box" data-v="${b.box}">Stop reading</button></div>`;
   if (b.state === "silent") inner = `<p>${b.read} of ${b.photos} read when it last reported. How many are doubtful is not known yet.</p><div class="acts"><button class="btn" data-act="check-box" data-v="${b.box}">Check again</button></div>`;
   if (b.state === "done") inner = `<dl class="receipt"><dt>Cost</dt><dd class="money">${money(b.receipt.cost)}</dd><dt>Named</dt><dd>${b.receipt.named}</dd><dt>Doubtful</dt><dd>${b.receipt.doubtful}</dd></dl><p class="muted">The doubtful photos are new piles at the end of the list.</p>`;
@@ -825,7 +840,7 @@ function tableStatus(m) {
   if (m.load === "error") return `<p class="statusline" data-tone="warn" role="status"><span class="dot"></span>The piles could not be loaded.</p>`;
   if (busy) return `<p class="statusline" data-tone="busy" role="status"><span class="dot"></span>Reading Box ${busy.box}: ${busy.read} of ${busy.photos}.</p>`;
   if (bad) return `<p class="statusline" data-tone="warn" role="status"><span class="dot"></span>The read of Box ${bad.box} stopped early.</p>`;
-  if (silent) return `<p class="statusline" data-tone="unknown" role="status"><span class="dot"></span>Box ${silent.box} has not reported back.</p>`;
+  if (silent) return `<p class="statusline" data-tone="unknown" role="status"><span class="dot"></span>Box ${silent.box} has not reported back. <button class="linkbtn" data-act="check-box" data-v="${silent.box}">Check again</button></p>`;
   return `<p class="statusline" role="status"><span class="dot"></span>All is well.</p>`;
 }
 function renderTable(m) {
@@ -853,7 +868,7 @@ function tableMain(m, pl) {
   const top = open[0] || null;
   const sorted = pl.photos.length - open.length - held.length;
   const big = cands.length > 4;
-  const bins = `<div class="bins" style="--n:${cands.length}" data-n-big="${big}" role="group" aria-label="Printings: drop the photo into one"${nl("bins that stay put while photos change")}>${cands.map((c, i) => { const p = P[c]; const inBin = pl.photos.filter((x) => m.ans[x.id] === c); return `<button class="bin" data-act="drop" data-v="${c}" data-bin="${c}" aria-keyshortcuts="${i + 1}" ${top ? "" : "disabled"}><span class="refrow"><span class="ref">${cardSVG(c)}</span><span class="info"><span class="set">${esc(printingLabel(p))}</span>${chipsFor(c, cands, opt("diff"))}<span class="price">${money(p.price)}</span></span></span><span class="tray"><span class="cnt">${inBin.length}</span>${opt("trays") ? inBin.slice(-8).map((x) => `<span class="mini" role="img" aria-label="A photo in this bin">${cardSVG(x.truth, { photo: true })}</span>`).join("") : ""}<kbd>${i + 1}</kbd></span></button>`; }).join("")}</div>`;
+  const bins = `<div class="bins" style="--n:${cands.length}" data-n-big="${big}" role="group" aria-label="Printings: drop the photo into one"${nl("bins that stay put while photos change")}>${cands.map((c, i) => { const p = P[c]; const inBin = pl.photos.filter((x) => m.ans[x.id] === c); return `<div class="bin" data-bin="${c}"><button class="bin-drop" data-act="drop" data-v="${c}" aria-keyshortcuts="${i + 1}" ${top ? "" : "disabled"}><span class="refrow"><span class="ref">${cardSVG(c)}</span><span class="info"><span class="set">${esc(shortLabel(p))}</span>${chipsFor(c, cands, opt("diff"))}<span class="price">${money(p.price)}</span></span></span></button><span class="tray"><span class="cnt" aria-label="${inBin.length} photos in this bin">${inBin.length}</span>${opt("trays") ? inBin.slice(-8).map((x) => `<button class="mini" data-act="unbin" data-v="${x.id}" aria-label="Take back photo ${x.shot}" title="Take this photo back to the pile">${cardSVG(x.truth, { photo: true })}</button>`).join("") : ""}<kbd>${i + 1}</kbd></span></div>`; }).join("")}</div>`;
   let pile;
   if (top) {
     const under = opt("fan") ? open.slice(1, 3).reverse().map((p, k) => `<div class="layer under" style="transform:translate(${(2 - k) * 14}px, ${(2 - k) * -8}px) rotate(${(2 - k) * 3}deg)">${cardSVG(p.truth, { photo: true })}</div>`).join("") : "";
@@ -862,7 +877,7 @@ function tableMain(m, pl) {
 <button class="btn" data-act="drop" data-v="none" data-bin="none" aria-keyshortcuts="0">None of these <kbd>0</kbd></button>
 <button class="btn" data-act="drop" data-v="held" data-bin="held" data-held aria-keyshortcuts="h" title="The photo stays in this pile, after the others.">Can't tell yet <kbd>H</kbd></button>
 <p class="last" aria-live="polite">${m.last ? `Last photo: ${esc(m.last.label)}. <button class="linkbtn" data-act="undo">Undo</button> <kbd>U</kbd>` : ""}</p>
-${H.w === "820" ? "" : `<div class="keys"><span><kbd>1</kbd>–<kbd>${cands.length}</kbd> drop in a bin</span><span><kbd>Tab</kbd> next pile</span></div>`}</div></div>`;
+${H.w === "820" ? "" : `<div class="keys"><span><kbd>1</kbd>–<kbd>${cands.length}</kbd> drop in a bin</span><span><kbd>N</kbd> next pile</span><span><kbd>U</kbd> undo</span></div>`}</div></div>`;
   } else {
     const per = cands.map((c) => [c, pl.photos.filter((x) => m.ans[x.id] === c).length]).filter(([, k]) => k);
     const none = pl.photos.filter((x) => m.ans[x.id] === "none").length;
@@ -871,7 +886,7 @@ ${H.w === "820" ? "" : `<div class="keys"><span><kbd>1</kbd>–<kbd>${cands.leng
 <div class="cluster">${held.length ? `<button class="btn" data-act="reopen-held">Look at the ${held.length} held again</button>` : ""}${nextI >= 0 ? `<button class="btn btn-primary" data-act="pile" data-v="${nextI}">Next pile: ${esc(FAM[m.piles[nextI].fam].name)}</button>` : ""}</div></div>
 <div class="t-side"><p class="last" aria-live="polite">${m.last ? `Last photo: ${esc(m.last.label)}. <button class="linkbtn" data-act="undo">Undo</button>` : ""}</p></div></div>`;
   }
-  return `<div class="t-main"><header class="t-head"><div><h1>${esc(FAM[pl.fam].name)}</h1><p class="sub">${open.length} of ${pl.photos.length} photos left${held.length ? `, ${held.length} held` : ""}. Which printing is each one?</p></div>${tableStatus(m)}</header>${bins}${pile}</div>`;
+  return `<div class="t-main"><header class="t-head"><div><h1>${esc(FAM[pl.fam].name)}</h1><p class="sub">${open.length} of ${pl.photos.length} photos left${held.length ? `, ${held.length} held` : ""}. Drop each photo on its printing.</p></div>${tableStatus(m)}</header>${bins}${pile}</div>`;
 }
 
 /* ---------- Sorting table acts ---------- */
@@ -882,6 +897,7 @@ function tableAct(m, act, v, el) {
   else if (act === "drop") return tableDrop(m, v);
   else if (act === "zoom") m.zoom = !m.zoom;
   else if (act === "undo") { if (m.last) { delete m.ans[m.last.id]; if (m.last.prev) m.ans[m.last.id] = m.last.prev; const p = pl.photos.find((x) => x.id === m.last.id); if (p) { pl.photos = [p].concat(pl.photos.filter((x) => x !== p)); } m.last = null; } }
+  else if (act === "unbin") { const p = pl.photos.find((x) => x.id === v); if (p) { delete m.ans[p.id]; pl.photos = [p].concat(pl.photos.filter((x) => x !== p)); m.last = null; } }
   else if (act === "reopen-held") { pl.photos.forEach((p) => { if (m.ans[p.id] === "held") delete m.ans[p.id]; }); }
   else if (act === "filter") { m.filter = v; const i = m.piles.findIndex((p) => !v || p.fam === v); if (i >= 0) m.cur = i; }
   else if (act === "clear-filter") m.filter = "";
@@ -976,7 +992,7 @@ document.addEventListener("keydown", (e) => {
     else if (k === "h") r = tableDrop(M, "held");
     else if (k === "z" && opt("look")) M.zoom = !M.zoom;
     else if (k === "u") tableAct(M, "undo");
-    else if (k === "tab" && !e.shiftKey && document.activeElement === document.body) { const n = M.piles.findIndex((p, i) => i > M.cur && (pileOpen(M, p).length || pileHeld(M, p).length)); if (n < 0) return; M.cur = n; M.last = null; M.zoom = false; }
+    else if (k === "n") { const n = M.piles.findIndex((p, i) => i > M.cur && (pileOpen(M, p).length || pileHeld(M, p).length)); if (n < 0) return; M.cur = n; M.last = null; M.zoom = false; }
     else return;
     e.preventDefault(); if (r !== "rendered") render();
   }
