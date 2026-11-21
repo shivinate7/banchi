@@ -62,6 +62,7 @@
   --home-h: 34px;  /* home indicator area, placeholder */
   --screen-r: 48px;
   --font: -apple-system, system-ui, sans-serif;
+  --pv-pass: var(--bn-surface-2);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -78,6 +79,7 @@
     --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
     --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
     --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    --pv-pass: var(--bn-surface-3);
   }
 }
 :root[data-theme="dark"] {
@@ -94,6 +96,7 @@
   --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
   --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
   --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --pv-pass: var(--bn-surface-3);
 }
 
 * { box-sizing: border-box; }
@@ -248,7 +251,8 @@ button.pill { border: 0; cursor: pointer; min-height: var(--ios-target); }
 .binder .cardart::before { flex-basis: 5px; }
 .binder .cardart.done { outline: 2px solid var(--bn-stage-ok); outline-offset: 1px; }
 .binder .cardart.unk { outline: 2px dashed var(--bn-stage-warn); outline-offset: 1px; }
-.cam-hint { position: absolute; z-index: 2; bottom: 14px; left: 0; right: 0; text-align: center; font-size: var(--ios-footnote); color: rgba(238,240,244,.8); }
+.cam-hint { position: absolute; z-index: 2; bottom: 10px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: var(--ios-footnote); color: rgba(238,240,244,.85); }
+.cam-hint.note { border: 1.5px dashed rgba(238,240,244,.6); border-radius: var(--bn-r); padding: 2px 8px; }
 
 /* Sample tray: mockup-only control for choosing which card the camera "sees". */
 .tray { display: flex; flex-direction: column; gap: var(--bn-2); padding: var(--bn-3); border: 1.5px dashed var(--bn-ink-4); border-radius: var(--bn-r-lg); background: var(--bn-surface); }
@@ -264,7 +268,7 @@ button.pill { border: 0; cursor: pointer; min-height: var(--ios-target); }
 }
 .field.buy { background: var(--bn-ok); color: var(--bn-surface); }
 .field.toomany { background: var(--bn-warn); color: var(--bn-surface); }
-.field.pass { background: var(--bn-surface-2); color: var(--bn-ink); }
+.field.pass { background: var(--pv-pass); color: var(--bn-ink); }
 .field.none { background: var(--bn-surface); color: var(--bn-ink); box-shadow: inset 0 0 0 3px var(--bn-ink-4); }
 .field.work { background: var(--bn-surface); color: var(--bn-ink); }
 .grab { align-self: center; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: var(--ios-caption1); opacity: .85; min-height: 20px; }
@@ -535,7 +539,7 @@ button.row { cursor: pointer; }
   }
   function camera(h, inner, hint, flexFill) {
     return '<div class="cam" style="' + (flexFill ? 'flex:1' : 'height:' + h + 'px') + '">' + camTop() + '<div class="aim">' + inner + reticle() + '</div>' +
-      (hint ? '<div class="cam-hint">' + hint + '</div>' : '') + '</div>';
+      (hint ? '<div class="cam-hint' + (/^(New|Sample):/.test(hint) ? ' note' : '') + '">' + hint + '</div>' : '') + '</div>';
   }
   function who(c, extra) {
     return '<div class="who"><span class="n">' + c.name + (extra || "") + '</span><span class="s">' + c.set + ', ' + c.code + '</span></div>';
@@ -577,7 +581,7 @@ button.row { cursor: pointer; }
       cls = "none";
       h = '<div class="vstack"><span class="mid">Not recognised</span></div>' +
         '<p class="why" style="margin:0">No set or number could be read, so no price is shown. Type them in, or keep a photo and Banchi names and prices it at home.</p>';
-      act = '<div class="acts"><button class="btn plain" data-go="snapped">Snap for Later</button><button class="btn primary" data-go="typein">Type Set and Number</button></div>';
+      act = '<div class="acts"><button class="btn plain" data-go="snapped">Snap for Later</button><button class="btn primary" data-go="typein">Type It In</button></div>';
     } else if (st === "slab") {
       c = CARDS.velvet; cls = "buy";
       grab = '<div class="grab">Swipe up to log a buy</div>';
@@ -618,7 +622,7 @@ button.row { cursor: pointer; }
 
   function scanScreen(st, pose) {
     var dark = true, body;
-    var hint = { buy: "One firm tap", pass: "Soft double tap", toomany: "Soft double tap", slab: "One firm tap", lot: "Tap the camera to read the next card (sample)" }[st] || "";
+    var hint = { buy: "New: haptic, one firm tap", pass: "New: haptic, soft double tap", toomany: "New: haptic, soft double tap", slab: "New: haptic, one firm tap", lot: "Sample: tap the camera to read the next card" }[st] || "";
     if (st === "scan" || st === "snapped") {
       var toast = st === "snapped" ? '<div class="toast" role="status"><span class="done-mark" style="width:36px;height:36px">' + ICON.check + '</span><span><b>Saved for home.</b><br>Banchi names and prices it there. ' + S.snapped + ' waiting.</span></div>' : "";
       body = camera(0, art(CARDS.gloamwing), "Hold one card inside the corners", true) + toast +
