@@ -346,7 +346,7 @@ fi
 # stdin is closed deliberately. Nothing in this block may prompt: `git commit` run from an
 # agent session has no tty, and a hook that waits for input there hangs the session
 # instead of failing it. See cli/__main__.py for the same rule stated for the pipeline.
-hook_py="${hook_py:-$(hook_python)}"
+hook_py="$(hook_python)"
 if [ "${BANCHI_DOCS:-}" != "off" ] && [ -f scripts/docs-audit.py ] && [ -n "$hook_py" ]; then
   audit_out="$("$hook_py" scripts/docs-audit.py --staged --commit </dev/null 2>&1)"
   audit_status=$?
