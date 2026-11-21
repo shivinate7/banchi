@@ -46,6 +46,34 @@ rlog() {
   return 0
 }
 
+# THE INTERPRETER THE PYTHON CHECKS RUN WITH (the QR scan and the docs audit). The system
+# `python3` can be a release with no Pillow and no zxing-cpp wheel, which refused every staged
+# PNG as "could not be checked". The repo's own venv carries both, so it goes first: this
+# checkout's `.venv`, then the main checkout's (a worktree whose own `.venv` is missing), then
+# whatever `python3` is on PATH. Prints nothing when there is none; the caller refuses then.
+# Only the interpreter is chosen here: the scan's verdict, messages and bypass are unchanged.
+hook_python() {
+  local top common main_top cand
+  top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  if [ -n "$top" ] && [ -x "$top/.venv/bin/python3" ]; then
+    printf '%s\n' "$top/.venv/bin/python3"
+    return 0
+  fi
+  common="$(git rev-parse --git-common-dir 2>/dev/null || true)"
+  if [ -n "$common" ]; then
+    common="$(cd "$common" 2>/dev/null && pwd -P || true)"
+    if [ -n "$common" ]; then
+      main_top="$(dirname "$common")"
+      cand="$main_top/.venv/bin/python3"
+      if [ -x "$cand" ]; then
+        printf '%s\n' "$cand"
+        return 0
+      fi
+    fi
+  fi
+  command -v python3 2>/dev/null || true
+}
+
 fail() {
   local rule
   case "$1" in
@@ -252,8 +280,9 @@ done <<< "$staged"
 #
 # Bypass:  BANCHI_QR=off git commit ...
 if [ "${#image_paths[@]}" -gt 0 ] && [ "${BANCHI_QR:-}" != "off" ]; then
-  if command -v python3 >/dev/null 2>&1; then
-    qr_out="$(python3 scripts/qr-clear-check.py "${image_paths[@]}" </dev/null 2>&1)"
+  hook_py="$(hook_python)"
+  if [ -n "$hook_py" ]; then
+    qr_out="$("$hook_py" scripts/qr-clear-check.py "${image_paths[@]}" </dev/null 2>&1)"
     qr_status=$?
     if [ "$qr_status" -ne 0 ]; then
       echo "$qr_out" >&2
@@ -317,8 +346,9 @@ fi
 # stdin is closed deliberately. Nothing in this block may prompt: `git commit` run from an
 # agent session has no tty, and a hook that waits for input there hangs the session
 # instead of failing it. See cli/__main__.py for the same rule stated for the pipeline.
-if [ "${BANCHI_DOCS:-}" != "off" ] && [ -f scripts/docs-audit.py ] && command -v python3 >/dev/null 2>&1; then
-  audit_out="$(python3 scripts/docs-audit.py --staged --commit </dev/null 2>&1)"
+hook_py="$(hook_python)"
+if [ "${BANCHI_DOCS:-}" != "off" ] && [ -f scripts/docs-audit.py ] && [ -n "$hook_py" ]; then
+  audit_out="$("$hook_py" scripts/docs-audit.py --staged --commit </dev/null 2>&1)"
   audit_status=$?
   case "$audit_status" in
     0) ;;
