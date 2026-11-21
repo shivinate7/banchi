@@ -1,0 +1,1016 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Doubtful Cards Concepts</title>
+<style>
+/* Tokens. Space is a 4 px step, radius 8 px, colours by role (house tokens). Hues are this designer's own. */
+:root {
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px;
+  --radius: 8px;
+  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-base: 1rem; --text-lg: 1.25rem;
+  --text-xl: 1.5rem; --text-2xl: 2rem;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --canvas: #d9dee4;
+  --surface: #f4f6f8;
+  --surface-raised: #ffffff;
+  --surface-sunk: #e7ebef;
+  --mat: #c3cad2;
+  --text: #19202a;
+  --text-muted: #525d6b;
+  --line: #c6cdd6;
+  --accent: #1d5c8c;
+  --accent-text: #ffffff;
+  --accent-soft: #dbe8f3;
+  --money: #7d5200;
+  --money-soft: #f5e9cf;
+  --ok: #276238;
+  --ok-soft: #dcefe1;
+  --held: #6a4a8c;
+  --held-soft: #ebe3f4;
+  --danger: #a32e29;
+  --danger-soft: #f7dfdd;
+  --scrim: rgba(25, 32, 42, 0.42);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #0d1013; --surface: #161a1f; --surface-raised: #1f252c; --surface-sunk: #11151a;
+    --mat: #2a3138; --text: #e5e9ee; --text-muted: #9ca6b3; --line: #313a44;
+    --accent: #7ab5e6; --accent-text: #0d1013; --accent-soft: #1d3247;
+    --money: #e2b35c; --money-soft: #372c18; --ok: #7fc595; --ok-soft: #1c3124;
+    --held: #c3a6e6; --held-soft: #2d2440; --danger: #f08a84; --danger-soft: #3c1f1f;
+    --scrim: rgba(0, 0, 0, 0.55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --canvas: #0d1013; --surface: #161a1f; --surface-raised: #1f252c; --surface-sunk: #11151a;
+  --mat: #2a3138; --text: #e5e9ee; --text-muted: #9ca6b3; --line: #313a44;
+  --accent: #7ab5e6; --accent-text: #0d1013; --accent-soft: #1d3247;
+  --money: #e2b35c; --money-soft: #372c18; --ok: #7fc595; --ok-soft: #1c3124;
+  --held: #c3a6e6; --held-soft: #2d2440; --danger: #f08a84; --danger-soft: #3c1f1f;
+  --scrim: rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--canvas); color: var(--text); font-family: var(--font); font-size: var(--text-base); line-height: 1.45; }
+button, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+h1, h2, h3, p, ol, ul, dl, dd { margin: 0; }
+ol, ul { padding: 0; list-style: none; }
+kbd { font: inherit; font-size: var(--text-xs); font-weight: 600; display: inline-grid; place-items: center; min-width: 1.5rem; height: 1.5rem; padding: 0 var(--space-1); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--surface-raised); color: var(--text-muted); }
+.num { font-variant-numeric: tabular-nums; }
+.money { color: var(--money); font-weight: 600; font-variant-numeric: tabular-nums; }
+.muted { color: var(--text-muted); }
+.cluster { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Mockup chrome: not part of any concept. */
+.banner { background: var(--money-soft); color: var(--text); padding: var(--space-2) var(--space-4); font-size: var(--text-sm); display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); align-items: center; border-bottom: 1px solid var(--line); }
+.banner strong { color: var(--money); }
+.mockbar { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6); align-items: center; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--line); background: var(--surface-sunk); font-size: var(--text-sm); }
+.mockbar fieldset { border: 0; margin: 0; padding: 0; display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.mockbar legend { float: left; color: var(--text-muted); padding-inline-end: var(--space-1); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.seg button { border: 0; background: var(--surface-raised); padding: var(--space-1) var(--space-3); min-height: 2rem; }
+.seg button + button { border-inline-start: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); }
+.concept-pick { display: inline-flex; gap: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.concept-pick button { border: 0; background: var(--surface-raised); padding: var(--space-1) var(--space-3); min-height: 2rem; }
+.concept-pick .hide { border-inline-start: 1px solid var(--line); color: var(--text-muted); }
+.concept-pick[data-active="true"] .go { background: var(--accent); color: var(--accent-text); }
+.concept-pick[data-hidden="true"] .go { text-decoration: line-through; color: var(--text-muted); }
+.mockbar select { padding: var(--space-1) var(--space-2); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-raised); min-height: 2rem; }
+.opts { position: relative; }
+.opts > button { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-raised); padding: var(--space-1) var(--space-3); min-height: 2rem; }
+.opts-panel { position: absolute; z-index: 50; inset-block-start: calc(100% + var(--space-1)); inset-inline-start: 0; width: 22rem; background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.opts-panel label { display: flex; gap: var(--space-2); align-items: flex-start; }
+.opts-panel p { color: var(--text-muted); font-size: var(--text-xs); }
+.stage { padding: var(--space-6) var(--space-4) var(--space-12); display: flex; justify-content: center; }
+.frame-shell { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
+.frame-cap { font-size: var(--text-sm); color: var(--text-muted); }
+.frame { container: app / inline-size; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; position: relative; }
+.frame[data-w="1440"] { width: 1440px; height: 900px; }
+.frame[data-w="820"] { width: 820px; height: 1180px; }
+.hidden-note { padding: var(--space-12); display: flex; flex-direction: column; gap: var(--space-3); align-items: flex-start; }
+.newlabel { outline: 2px dashed var(--money); outline-offset: 3px; position: relative; }
+.newlabel::before { content: "New: " attr(data-new); position: absolute; z-index: 5; inset-block-start: -1.4rem; inset-inline-start: 0; background: var(--money-soft); color: var(--money); font-size: var(--text-xs); font-weight: 600; padding: 0 var(--space-1); border-radius: 4px; white-space: nowrap; }
+
+/* Shared app parts. */
+.app { height: 100%; display: flex; flex-direction: column; position: relative; }
+.btn { border: 1px solid var(--line); background: var(--surface-raised); border-radius: var(--radius); padding: var(--space-2) var(--space-4); min-height: 2.5rem; display: inline-flex; align-items: center; gap: var(--space-2); }
+.btn:hover { border-color: var(--text-muted); }
+.btn-primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+.btn-spend { background: var(--money); color: var(--surface-raised); border-color: var(--money); font-weight: 600; }
+:root[data-theme="dark"] .btn-spend { color: #1a1406; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn-spend { color: #1a1406; } }
+.btn-quiet { border-color: transparent; background: transparent; }
+.btn-danger { color: var(--danger); border-color: var(--danger); }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; font-weight: 600; min-height: 1.5rem; }
+.touch .btn, .touch .linkbtn { min-height: 2.75rem; }
+.touch kbd { display: none; }
+.statusline { font-size: var(--text-sm); display: flex; gap: var(--space-2); align-items: center; color: var(--text-muted); }
+.statusline[data-tone="warn"] { color: var(--danger); }
+.statusline[data-tone="busy"] { color: var(--money); }
+.dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--ok); flex: none; }
+.statusline[data-tone="warn"] .dot { background: var(--danger); }
+.statusline[data-tone="busy"] .dot { background: var(--money); }
+.statusline[data-tone="unknown"] .dot { background: var(--text-muted); }
+.photo { background: var(--mat); border-radius: var(--radius); display: grid; place-items: center; overflow: hidden; position: relative; }
+.photo .cardsvg { transform: rotate(var(--rot, -1.2deg)) scale(var(--zoom, 1)); transform-origin: var(--zo, 50% 50%); transition: transform 180ms ease-out; filter: drop-shadow(0 6px 10px rgba(0,0,0,.28)); }
+.cardsvg { display: block; height: 100%; width: auto; max-width: 100%; }
+.thumb, .mini { display: block; }
+.thumb .cardsvg, .mini .cardsvg { width: 100%; height: auto; }
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.chip { font-size: var(--text-xs); padding: 2px var(--space-2); border-radius: 4px; background: var(--surface-sunk); color: var(--text); border: 1px solid var(--line); }
+.chip b { font-weight: 600; }
+.chip.strong { background: var(--accent-soft); border-color: var(--accent); }
+.chip.quiet { background: none; border-color: transparent; color: var(--text-muted); padding-inline: 0; }
+.chip.quiet b { font-weight: 400; }
+.panel-msg { display: flex; flex-direction: column; gap: var(--space-3); align-items: flex-start; max-width: 34rem; }
+.panel-msg h2 { font-size: var(--text-xl); }
+details.machine { font-size: var(--text-sm); color: var(--text-muted); }
+details.machine summary { cursor: pointer; min-height: 1.75rem; }
+details.machine code { display: block; margin-block-start: var(--space-1); padding: var(--space-2); background: var(--surface-sunk); border-radius: 4px; font-size: var(--text-xs); }
+.skel { background: var(--surface-sunk); border-radius: var(--radius); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .55; } }
+.bar { height: 0.5rem; background: var(--surface-sunk); border-radius: 999px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--money); width: var(--p, 0%); transition: width 200ms linear; }
+.receipt { display: grid; grid-template-columns: auto auto; gap: var(--space-1) var(--space-6); font-size: var(--text-sm); justify-content: start; }
+.receipt dt { color: var(--text-muted); }
+.receipt dd { font-variant-numeric: tabular-nums; font-weight: 600; text-align: end; }
+.pop { animation: pop 300ms ease-out; }
+@keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.04); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .pop, .skel { animation: none; } .photo .cardsvg, .bar > i { transition: none; } }
+
+/* ===== Bench: one card at a time ===== */
+.b-top { display: flex; align-items: center; gap: var(--space-6); padding: var(--space-3) var(--space-6); border-bottom: 1px solid var(--line); background: var(--surface-raised); }
+.b-tabs { display: flex; gap: var(--space-1); }
+.b-tabs button { border: 0; background: none; padding: var(--space-2) var(--space-3); border-radius: var(--radius); min-height: 2.5rem; color: var(--text-muted); font-weight: 600; display: inline-flex; gap: var(--space-2); align-items: center; }
+.b-tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--text); }
+.b-tabs .count { font-variant-numeric: tabular-nums; font-weight: 400; }
+.b-top .statusline { margin-inline-start: auto; }
+.b-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.b-queue { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 30rem; }
+.b-photo-pane { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6); min-height: 0; }
+.b-photo-head { display: flex; gap: var(--space-4); align-items: center; }
+.b-photo-head .pos { font-weight: 600; }
+.b-photo-head .src { color: var(--text-muted); font-size: var(--text-sm); }
+.b-photo-head select { margin-inline-start: auto; }
+.filter { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.filter select { padding: var(--space-1) var(--space-2); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-raised); min-height: 2.25rem; }
+.b-photo { flex: 1; min-height: 0; padding: var(--space-6); }
+.b-reason { display: flex; gap: var(--space-4); align-items: center; padding: var(--space-3) var(--space-4); background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius); }
+.b-reason p { flex: 1; }
+.b-cands-pane { border-inline-start: 1px solid var(--line); background: var(--surface-raised); display: flex; flex-direction: column; min-height: 0; }
+.b-cands-head { padding: var(--space-5) var(--space-6) var(--space-3); display: flex; flex-direction: column; gap: var(--space-1); }
+.b-cands-head h2 { font-size: var(--text-lg); }
+.b-cands { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
+.b-cands[data-many="true"] { display: grid; grid-template-columns: 1fr 1fr; align-content: start; }
+.b-cands[data-many="true"] .cand { grid-template-columns: auto 2.75rem minmax(0, 1fr); height: 100%; align-items: start; }
+.b-cands[data-many="true"] .cand .price { grid-column: 3; text-align: start; }
+.b-cands[data-many="true"] .chip.quiet { display: none; }
+.b-cands[data-many="true"] .cand { padding: var(--space-2); gap: var(--space-2); }
+.b-cands[data-many="true"] .cand .name { font-size: var(--text-sm); }
+.cand { width: 100%; text-align: start; display: grid; grid-template-columns: auto 4.5rem minmax(0, 1fr) auto; gap: var(--space-3); align-items: center; padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.cand:hover { border-color: var(--accent); }
+.cand .thumb { aspect-ratio: 63 / 88; }
+.cand .name { font-weight: 600; }
+.cand .meta { font-size: var(--text-sm); color: var(--text-muted); }
+.cand .info { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.cand .price { font-variant-numeric: tabular-nums; font-weight: 600; text-align: end; }
+.cand[data-state="picked"] { border-color: var(--accent); background: var(--accent-soft); outline: 2px solid var(--accent); outline-offset: -1px; }
+.cand[data-state="armed"] { border-color: var(--accent); outline: 2px dashed var(--accent); outline-offset: -1px; }
+.cand .tick { font-size: var(--text-xs); font-weight: 700; color: var(--accent); }
+.b-alt { display: flex; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--line); flex-wrap: wrap; }
+.b-alt .btn { flex: 1 1 10rem; justify-content: space-between; }
+.b-alt .btn[data-state="picked"] { border-color: var(--held); background: var(--held-soft); }
+.b-alt .btn.none[data-state="picked"] { border-color: var(--accent); background: var(--accent-soft); }
+.b-last { padding: 0 var(--space-4) var(--space-4); font-size: var(--text-sm); color: var(--text-muted); min-height: 2.5rem; display: flex; align-items: center; gap: var(--space-2); }
+.b-strip { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-3) var(--space-6); border-top: 1px solid var(--line); background: var(--surface-raised); }
+.b-cells { display: flex; gap: 3px; flex: 1; min-width: 0; }
+.b-cells button { flex: 1 1 0; min-width: 6px; max-width: 1.5rem; height: 1.75rem; border: 1px solid var(--line); background: var(--surface); border-radius: 3px; padding: 0; }
+.b-cells button[data-s="answered"] { background: var(--accent); border-color: var(--accent); }
+.b-cells button[data-s="held"] { background: repeating-linear-gradient(45deg, var(--held) 0 3px, var(--held-soft) 3px 6px); border-color: var(--held); }
+.b-cells button[data-s="new"] { border-style: dashed; }
+.b-cells button[aria-current="true"] { outline: 2px solid var(--text); outline-offset: 1px; }
+@media (forced-colors: active) {
+  .b-cells button[data-s="answered"] { background: CanvasText; }
+  .b-cells button[data-s="held"] { background: Canvas; border: 3px dotted CanvasText; }
+  .bar > i { background: Highlight; }
+  .b-tabs button[aria-selected="true"], .seg button[aria-pressed="true"], .concept-pick[data-active="true"] .go { outline: 3px solid Highlight; outline-offset: -3px; }
+  .pilebtn { border-color: Canvas; }
+  .pilebtn[aria-current="true"] { border: 3px solid Highlight; }
+  .chip.quiet { border-color: Canvas; }
+  .bin.flash { outline: 3px solid Highlight; }
+  .cand[data-state="picked"] { outline: 3px solid Highlight; }
+}
+.touch .b-tabs button, .touch .filter select, .touch .boxcard .acts .btn, .touch details summary { min-height: 2.75rem; }
+.touch details summary { display: flex; align-items: center; }
+.touch .bin .tray .mini { width: 2rem; }
+.keys { display: flex; gap: var(--space-3); font-size: var(--text-xs); color: var(--text-muted); align-items: center; flex-wrap: wrap; }
+.touch .keys { display: none; }
+.b-page { flex: 1; min-height: 0; overflow: auto; padding: var(--space-8) var(--space-6); display: flex; flex-direction: column; gap: var(--space-6); }
+.b-page-head { display: flex; align-items: flex-end; gap: var(--space-4); }
+.b-page-head h1 { font-size: var(--text-xl); }
+.b-page-head .btn { margin-inline-start: auto; }
+table.ledger { border-collapse: collapse; width: 100%; font-size: var(--text-sm); }
+.ledger th, .ledger td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); text-align: end; font-variant-numeric: tabular-nums; }
+.ledger th { color: var(--text-muted); font-weight: 600; }
+.ledger th:first-child, .ledger td:first-child { text-align: start; }
+.ledger tr[data-fresh="true"] td { background: var(--money-soft); }
+.answ-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-raised); }
+.answ-row { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr) auto auto; gap: var(--space-4); align-items: center; padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--line); }
+.answ-row:last-child { border-bottom: 0; }
+.answ-row .thumb { aspect-ratio: 63 / 88; }
+.sheet-scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 20; }
+.sheet { position: absolute; z-index: 21; inset-block: 0; inset-inline-end: 0; width: 28rem; background: var(--surface-raised); border-inline-start: 1px solid var(--line); display: flex; flex-direction: column; }
+.sheet-head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-5) var(--space-6); border-bottom: 1px solid var(--line); }
+.sheet-head h2 { font-size: var(--text-lg); flex: 1; }
+.sheet-body { flex: 1; overflow: auto; padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-5); }
+.sheet-foot { padding: var(--space-4) var(--space-6); border-top: 1px solid var(--line); display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.boxpick { display: flex; flex-direction: column; gap: var(--space-2); }
+.boxpick label { display: flex; gap: var(--space-3); align-items: center; padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius); min-height: 3rem; cursor: pointer; }
+.boxpick label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.costblock { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius); background: var(--money-soft); }
+.costblock .big { font-size: var(--text-2xl); font-weight: 700; color: var(--money); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.costblock .working { min-height: 4.5rem; display: flex; align-items: center; color: var(--text-muted); }
+
+/* Bench at 820, touch. */
+@container app (max-width: 900px) {
+  .b-top { flex-wrap: wrap; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-4); }
+  .b-top .statusline { margin-inline-start: 0; flex-basis: 100%; }
+  .b-queue { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
+  .b-photo-pane { padding: var(--space-4); gap: var(--space-3); }
+  .b-photo { padding: var(--space-3); }
+  .b-cands-pane { border-inline-start: 0; border-top: 1px solid var(--line); }
+  .b-cands { display: grid; grid-template-columns: 1fr 1fr; overflow: visible; }
+  .b-cands[data-many="true"] .cand, .cand { grid-template-columns: 3.5rem minmax(0, 1fr); min-height: 5.5rem; }
+  .cand kbd { display: none; }
+  .cand .price { grid-column: 2; text-align: start; }
+  .b-alt .btn { min-height: 3rem; }
+  .b-strip { padding: var(--space-3) var(--space-4); }
+  .b-strip .btn { min-width: 3rem; justify-content: center; }
+  .sheet { inset-block: auto 0; inset-inline: 0; width: auto; max-height: 85%; border-inline-start: 0; border-top: 1px solid var(--line); border-radius: var(--radius) var(--radius) 0 0; }
+  .b-page { padding: var(--space-6) var(--space-4); }
+}
+
+/* ===== Sorting table: one pile, the printings stay put ===== */
+.t-wrap { flex: 1; min-height: 0; display: grid; grid-template-columns: 19rem minmax(0, 1fr); }
+.t-rail { border-inline-end: 1px solid var(--line); background: var(--surface-raised); display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+.t-rail section { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4); }
+.t-rail section + section { border-top: 1px solid var(--line); }
+.t-rail h2 { font-size: var(--text-sm); color: var(--text-muted); font-weight: 600; }
+.boxcard { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); background: var(--surface); font-size: var(--text-sm); }
+.boxcard .row { display: flex; gap: var(--space-2); align-items: baseline; }
+.boxcard .row .name { font-weight: 600; font-size: var(--text-base); }
+.boxcard .row .end { margin-inline-start: auto; }
+.boxcard[data-state="cost"], .boxcard[data-state="costing"], .boxcard[data-state="running"] { border-color: var(--money); background: var(--money-soft); }
+.boxcard[data-state="failed"] { border-color: var(--danger); }
+.boxcard .acts { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.boxcard .acts .btn { min-height: 2.25rem; padding: var(--space-1) var(--space-3); }
+.boxcard .receipt { font-size: var(--text-xs); }
+.older summary { font-size: var(--text-sm); color: var(--accent); cursor: pointer; font-weight: 600; min-height: 1.75rem; }
+.older ul { display: flex; flex-direction: column; gap: var(--space-1); padding-block-start: var(--space-2); font-size: var(--text-xs); }
+.older li { display: grid; grid-template-columns: 4rem 1fr auto; gap: var(--space-2); }
+.t-rail .filter select { flex: 1; min-width: 0; }
+.pilelist { display: flex; flex-direction: column; gap: var(--space-1); }
+.pilebtn { width: 100%; display: grid; grid-template-columns: 2.25rem minmax(0, 1fr) auto; gap: var(--space-3); align-items: center; text-align: start; padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius); background: none; }
+.pilebtn:hover { background: var(--surface-sunk); }
+.pilebtn[aria-current="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.pilebtn .thumb { aspect-ratio: 63 / 88; }
+.pilebtn .t1 { font-weight: 600; display: block; }
+.pilebtn .t2 { font-size: var(--text-xs); color: var(--text-muted); display: block; }
+.pilebtn .left { font-variant-numeric: tabular-nums; font-weight: 700; }
+.pilebtn[data-done="true"] .left { color: var(--ok); font-size: var(--text-xs); }
+.t-main { display: flex; flex-direction: column; min-height: 0; padding: var(--space-5) var(--space-6) var(--space-4); gap: var(--space-4); }
+.t-head { display: flex; gap: var(--space-4); align-items: flex-start; }
+.t-head h1 { font-size: var(--text-xl); }
+.t-head .sub { color: var(--text-muted); }
+.t-head .statusline { margin-inline-start: auto; }
+.bins { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: var(--space-3); }
+.bin { position: relative; display: grid; grid-template-rows: 1fr auto; gap: var(--space-2); padding: var(--space-3); border: 2px solid var(--line); border-radius: var(--radius); background: var(--surface-raised); }
+.bin:has(.bin-drop:hover:not([aria-disabled="true"])) { border-color: var(--accent); }
+.bin-drop { border: 0; background: none; padding: 0; text-align: start; display: block; width: 100%; border-radius: 4px; }
+.bin-drop[aria-disabled="true"] { cursor: default; }
+.bin .refrow { display: grid; grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr); gap: var(--space-3); align-items: start; }
+.bins[data-n-big="true"] .bin .refrow { grid-template-columns: 1fr; }
+.bin .ref { height: 9rem; display: flex; justify-content: center; }
+.bins[data-n-big="true"] .bin .ref { height: 7rem; }
+.bins[data-n-big="true"] .chip.quiet { display: none; }
+.bin .ref .cardsvg { height: 100%; width: auto; }
+.bin .info { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.bin .set { font-weight: 600; }
+.bin .meta { font-size: var(--text-sm); color: var(--text-muted); }
+.bin .price { font-weight: 700; font-variant-numeric: tabular-nums; }
+.bin .tray kbd { margin-inline-start: auto; align-self: center; }
+.bin .tray { display: flex; gap: 2px; align-items: flex-end; min-height: 2.75rem; padding-block-start: var(--space-2); border-top: 1px dashed var(--line); flex-wrap: wrap; }
+.bin .tray .cnt { font-weight: 700; font-variant-numeric: tabular-nums; margin-inline-end: var(--space-2); align-self: center; }
+.bin .tray .mini { width: 1.6rem; aspect-ratio: 63/88; border: 0; padding: 0; background: none; border-radius: 2px; }
+.bin .tray .mini:hover { outline: 2px solid var(--danger); }
+.bin.flash { border-color: var(--accent); background: var(--accent-soft); }
+.t-pile { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 17rem; gap: var(--space-5); }
+.t-stack { position: relative; background: var(--mat); border-radius: var(--radius); min-height: 0; display: grid; place-items: center; overflow: hidden; }
+.t-stack .layer { position: absolute; height: 82%; display: grid; place-items: center; }
+.t-stack .layer .cardsvg { height: 100%; filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); }
+.t-stack .top .cardsvg { transform: rotate(var(--rot, -1deg)) scale(var(--zoom, 1)); transform-origin: var(--zo, 50% 50%); transition: transform 180ms ease-out; }
+.t-stack .under { opacity: .55; }
+.t-stack .posline { position: absolute; inset-block-start: var(--space-3); inset-inline-start: var(--space-3); background: var(--surface-raised); padding: var(--space-1) var(--space-2); border-radius: 4px; font-size: var(--text-sm); font-weight: 600; }
+.t-side { display: flex; flex-direction: column; gap: var(--space-3); }
+.t-side .reason { padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-raised); display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--text-sm); }
+.t-side .btn { justify-content: space-between; }
+.t-side .btn[data-held] { border-color: var(--held); }
+.t-side .last { font-size: var(--text-sm); color: var(--text-muted); min-height: 3rem; }
+.t-done { display: flex; flex-direction: column; gap: var(--space-3); align-items: flex-start; padding: var(--space-6); background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius); }
+.t-done h2 { font-size: var(--text-lg); }
+.t-done ul { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); }
+.fly { position: fixed; z-index: 100; pointer-events: none; transition: transform 240ms cubic-bezier(.3,.7,.2,1), opacity 240ms; }
+.t-pilepick { display: none; }
+
+@container app (max-width: 900px) {
+  .t-wrap { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .t-rail { border-inline-end: 0; border-bottom: 1px solid var(--line); max-height: none; overflow: visible; }
+  .t-rail[data-open="false"] section { display: none; }
+  .t-rail[data-open="false"] .t-pilepick { display: flex; }
+  .t-pilepick { display: flex; gap: var(--space-3); align-items: center; padding: var(--space-3) var(--space-4); }
+  .t-pilepick .btn { min-height: 2.75rem; }
+  .t-rail[data-open="true"] { position: absolute; z-index: 30; inset: 0 0 auto 0; max-height: 80%; overflow: auto; box-shadow: 0 12px 32px rgba(0,0,0,.25); }
+  .t-rail[data-open="true"] .t-pilepick { display: flex; }
+  .t-main { padding: var(--space-4); }
+  .t-head { flex-wrap: wrap; }
+  .t-head .statusline { margin-inline-start: 0; flex-basis: 100%; }
+  .t-pile { order: 1; flex: none; height: 24rem; grid-template-columns: minmax(0, 1fr) 15rem; }
+  .bins { order: 2; grid-template-columns: repeat(min(var(--n), 4), minmax(0, 1fr)); }
+  .bins .bin .refrow, .bins[data-n-big="true"] .bin .refrow { grid-template-columns: 3.5rem minmax(0, 1fr); }
+  .bins .bin .ref, .bins[data-n-big="true"] .bin .ref { height: 5rem; }
+  .bin .tray { min-height: 2.75rem; }
+  .t-side .btn { min-height: 3rem; }
+}
+</style>
+</head>
+<body>
+<div class="banner" role="note"><strong>Sample</strong><span>No card, name, price, box or figure on this page is real. Every press works on made-up data.</span><span>Designer kind: blind. Designer: review-blind-1.</span></div>
+<div class="mockbar" id="mockbar"></div>
+<main class="stage"><div class="frame-shell"><p class="frame-cap" id="frame-cap"></p><div class="frame" id="frame"></div></div></main>
+
+<script>
+"use strict";
+/* ---------- Made-up data ---------- */
+const PRICE_PER_PHOTO = 0.012;
+const FAM = {
+  drake: { name: "Ember Drake", hue: 14, shape: "tri" },
+  lynx:  { name: "Static Lynx", hue: 262, shape: "diamond" },
+  heron: { name: "Tidewing Heron", hue: 200, shape: "circle" },
+  moth:  { name: "Glass Moth", hue: 172, shape: "circle" },
+  golem: { name: "Moss Golem", hue: 105, shape: "square" },
+  ox:    { name: "Quarry Ox", hue: 34, shape: "square" }
+};
+const SETS = {
+  ash: { name: "Ashfall", sym: "tri" }, ashr: { name: "Ashfall Reprint", sym: "tri2" },
+  cin: { name: "Cinder Promos", sym: "star" }, tide: { name: "First Tide", sym: "wave" },
+  grove: { name: "Hollow Grove", sym: "leaf" }, glg: { name: "Grove League", sym: "star" },
+  gdeck: { name: "Grove Starter Deck", sym: "leaf2" }, storm: { name: "Stormglass", sym: "bolt" },
+  stormr: { name: "Stormglass Reprint", sym: "bolt2" }, mirror: { name: "Mirror Lake", sym: "ring" },
+  quarry: { name: "Deep Quarry", sym: "square" }
+};
+const P = {};
+function pr(id, fam, set, num, price, o) { P[id] = Object.assign({ id, fam, set, num, price, stamp: "none", finish: "plain", border: "dark", art: "standard", lang: "English" }, o || {}); }
+pr("d1","drake","ash","041/120",3.10); pr("d2","drake","ash","041/120",11.40,{stamp:"1st edition"});
+pr("d3","drake","ashr","041/150",0.85,{border:"light"}); pr("d4","drake","cin","P07",6.20,{stamp:"promo",finish:"foil"});
+pr("l1","lynx","storm","033/110",1.20); pr("l2","lynx","stormr","033/110",0.30);
+pr("h1","heron","tide","012/098",0.40); pr("h2","heron","tide","012/098",2.75,{finish:"foil"});
+pr("m1","moth","mirror","058/101",0.95); pr("m2","moth","mirror","058/101",0.60,{lang:"French",cardName:"Mite de Verre"});
+pr("m3","moth","mirror","058/101",0.70,{lang:"German",cardName:"Glasfalter"});
+pr("g1","golem","grove","077/140",0.55); pr("g2","golem","grove","077/140",1.10,{finish:"reverse foil"});
+pr("g3","golem","grove","077/140",4.80,{stamp:"1st edition"}); pr("g4","golem","glg","L12",3.30,{stamp:"promo"});
+pr("g5","golem","gdeck","05/30",0.25); pr("g6","golem","gdeck","05/30",0.90,{finish:"foil"});
+pr("g7","golem","grove","141/140",18.50,{art:"alternate",finish:"foil"}); pr("g8","golem","grove","077/140",0.70,{border:"light"});
+pr("o1","ox","quarry","090/100",0.20); pr("o2","ox","quarry","096/100",2.40);
+const CANDS = { drake:["d1","d2","d3","d4"], lynx:["l1","l2"], heron:["h1","h2"], moth:["m1","m2","m3"], golem:["g1","g2","g3","g4","g5","g6","g7","g8"], ox:["o1","o2"] };
+/* About 19 reason kinds exist; each family here carries one. Region is in card units (63 x 88). */
+const REASON_KINDS = ["Two printings look the same","Set symbol is unreadable","Card number is hidden by glare","Edition stamp may be missing","Foil pattern is unclear in the photo","Language could not be read","Promo stamp is unclear","Photo is blurred","Card is partly out of frame","Two cards overlap in the photo","Border colour is unclear","Art matches no printing","Number matches no printing","Set total is unreadable","Card is upside down","Sleeve hides the corner","Name could not be read","Candidates differ a lot in price","Reader gave two answers with equal confidence"];
+const REASON = {
+  drake: { text: REASON_KINDS[3], look: "Look at the left edge, under the text box.", region: { x: 3, y: 68, w: 13, h: 12 }, mark: "blur" },
+  lynx:  { text: REASON_KINDS[0], look: "The set symbol in the lower right is the only difference.", region: { x: 47, y: 73, w: 14, h: 13 }, mark: "none" },
+  heron: { text: REASON_KINDS[4], look: "Look at the art for diagonal shine.", region: { x: 5, y: 13, w: 53, h: 33 }, mark: "glare" },
+  moth:  { text: REASON_KINDS[5], look: "Look at the name across the top.", region: { x: 3, y: 3, w: 44, h: 9 }, mark: "blur" },
+  golem: { text: REASON_KINDS[1], look: "Look at the lower right corner.", region: { x: 47, y: 73, w: 14, h: 13 }, mark: "blur" },
+  ox:    { text: REASON_KINDS[2], look: "Look at the number in the lower left.", region: { x: 3, y: 77, w: 24, h: 9 }, mark: "glare" }
+};
+let seed = 7;
+function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+function pick(a) { return a[Math.floor(rnd() * a.length)]; }
+/* Box 14 gave 38 doubtful photos, in the order they were shot. */
+const ORDER = "dldhdlmdgdldholdmdhldgldhdmldhdlgdomhd".split("");
+const LET = { d: "drake", l: "lynx", h: "heron", m: "moth", g: "golem", o: "ox" };
+function makePhotos(box, letters, start) {
+  return letters.map((c, i) => { const fam = LET[c]; return { id: box + "-" + (start + i * 17), box, shot: start + i * 17, fam, truth: pick(CANDS[fam]), rot: (rnd() * 3 - 1.5).toFixed(2) }; });
+}
+const BOXES_DONE = [
+  { box: 14, photos: 732, cost: 8.78, named: 690, doubtful: 38, ago: "2 days ago" },
+  { box: 13, photos: 688, cost: 8.26, named: 655, doubtful: 33, ago: "6 days ago" },
+  { box: 12, photos: 545, cost: 6.54, named: 517, doubtful: 28, ago: "9 days ago" },
+  { box: 11, photos: 701, cost: 8.41, named: 662, doubtful: 39, ago: "2 weeks ago" },
+  { box: 10, photos: 610, cost: 7.32, named: 584, doubtful: 26, ago: "2 weeks ago" },
+  { box: 9, photos: 597, cost: 7.16, named: 566, doubtful: 31, ago: "3 weeks ago" },
+  { box: 8, photos: 655, cost: 7.86, named: 621, doubtful: 34, ago: "3 weeks ago" },
+  { box: 7, photos: 589, cost: 7.07, named: 560, doubtful: 29, ago: "4 weeks ago" },
+  { box: 6, photos: 720, cost: 8.64, named: 681, doubtful: 39, ago: "5 weeks ago" },
+  { box: 5, photos: 563, cost: 6.76, named: 540, doubtful: 23, ago: "6 weeks ago" },
+  { box: 4, photos: 640, cost: 7.68, named: 608, doubtful: 32, ago: "7 weeks ago" },
+  { box: 3, photos: 702, cost: 8.42, named: 669, doubtful: 33, ago: "8 weeks ago" },
+  { box: 2, photos: 571, cost: 6.85, named: 541, doubtful: 30, ago: "9 weeks ago" },
+  { box: 1, photos: 618, cost: 7.42, named: 580, doubtful: 38, ago: "10 weeks ago" }
+];
+const BOXES_NEW = [{ box: 15, photos: 612 }, { box: 16, photos: 545 }];
+const money = (n) => "$" + n.toFixed(2);
+const RATE = "$" + PRICE_PER_PHOTO.toFixed(3);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+/* A label names one printing only: set and number, then each mark that is not the plain default. */
+/* On a printing's own tile the chips carry its marks, so the title is set and number only. */
+function shortLabel(p) { return SETS[p.set].name + " " + p.num; }
+function printingLabel(p) {
+  const marks = [p.stamp !== "none" ? p.stamp : "", p.finish !== "plain" ? p.finish : "", p.border === "light" ? "light border" : "", p.art === "alternate" ? "alternate art" : "", p.lang !== "English" ? p.lang : ""].filter(Boolean);
+  return SETS[p.set].name + " " + p.num + (marks.length ? ", " + marks.join(", ") : "");
+}
+
+/* ---------- Made-up card drawings ---------- */
+let UID = 0;
+function symPath(sym, x, y) {
+  const s = 3.2;
+  switch (sym) {
+    case "tri": return `<path d="M${x} ${y - s}L${x + s} ${y + s}H${x - s}Z"/>`;
+    case "tri2": return `<path d="M${x} ${y - s}L${x + s} ${y + s}H${x - s}Z"/><circle cx="${x}" cy="${y + 1}" r=".9" fill="#fff"/>`;
+    case "star": return `<path d="M${x} ${y - s}l.9 2.3 2.4.1-1.9 1.5.7 2.4-2.1-1.4-2.1 1.4.7-2.4-1.9-1.5 2.4-.1z"/>`;
+    case "wave": return `<path d="M${x - s} ${y}q${s / 2} -2 ${s} 0t${s} 0t${s} 0v1.6h-${s * 2}z"/>`;
+    case "leaf": return `<path d="M${x - s} ${y + s}Q${x - s} ${y - s} ${x + s} ${y - s}Q${x + s} ${y + s} ${x - s} ${y + s}Z"/>`;
+    case "leaf2": return `<path d="M${x - s} ${y + s}Q${x - s} ${y - s} ${x + s} ${y - s}Q${x + s} ${y + s} ${x - s} ${y + s}Z"/><path d="M${x - s} ${y + s}L${x + s} ${y - s}" stroke="#fff" stroke-width=".6"/>`;
+    case "bolt": return `<path d="M${x + .6} ${y - s}L${x - 1.8} ${y + .4}H${x}L${x - .6} ${y + s}L${x + 1.8} ${y - .4}H${x}Z"/>`;
+    case "bolt2": return `<path d="M${x + .6} ${y - s}L${x - 1.8} ${y + .4}H${x}L${x - .6} ${y + s}L${x + 1.8} ${y - .4}H${x}Z"/><rect x="${x + 1.6}" y="${y + 1.8}" width="1.1" height="1.1"/>`;
+    case "ring": return `<circle cx="${x}" cy="${y}" r="${s}" fill="none" stroke="currentColor" stroke-width="1.2"/>`;
+    default: return `<rect x="${x - s + .5}" y="${y - s + .5}" width="${s * 2 - 1}" height="${s * 2 - 1}"/>`;
+  }
+}
+function creature(shape, alt, ink) {
+  const x = alt ? 24 : 38, y = alt ? 27 : 31;
+  if (shape === "tri") return `<path d="M${x} ${y - 11}L${x + 11} ${y + 9}H${x - 11}Z" fill="${ink}"/>`;
+  if (shape === "diamond") return `<path d="M${x} ${y - 12}L${x + 9} ${y}L${x} ${y + 12}L${x - 9} ${y}Z" fill="${ink}"/>`;
+  if (shape === "square") return `<rect x="${x - 9}" y="${y - 9}" width="18" height="18" rx="2" fill="${ink}"/>`;
+  return `<circle cx="${x}" cy="${y}" r="10" fill="${ink}"/>`;
+}
+/* Draw one printing. opts.photo marks the reader's doubt region the way a real photo would hide it. */
+function cardSVG(pid, opts) {
+  const o = opts || {}; const p = P[pid]; const f = FAM[p.fam]; const id = "u" + (++UID);
+  const border = p.border === "light" ? "#d8d2c4" : "#2c2c33";
+  const body = `hsl(${f.hue} 38% 87%)`, art = `hsl(${f.hue} 52% ${p.art === "alternate" ? 40 : 58}%)`, ink = `hsl(${f.hue} 55% 22%)`;
+  const name = p.cardName || f.name;
+  let s = `<svg viewBox="0 0 63 88" class="cardsvg" aria-hidden="true" focusable="false" style="color:${ink}">
+<defs><pattern id="${id}f" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><rect width="1.3" height="3" fill="#fff" opacity=".5"/></pattern>
+<filter id="${id}b" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.3"/></filter>
+<radialGradient id="${id}g"><stop offset="0" stop-color="#fff" stop-opacity=".97"/><stop offset=".6" stop-color="#fff" stop-opacity=".8"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
+<rect width="63" height="88" rx="3.5" fill="${border}"/><rect x="3" y="3" width="57" height="82" rx="2" fill="${body}"/>
+<text x="6" y="9.6" font-size="${name.length > 12 ? 3.9 : 4.4}" font-weight="700" fill="${ink}" font-family="system-ui,sans-serif">${esc(name)}</text>
+<rect x="5.5" y="13" width="52" height="33" rx="1" fill="${art}"/>${creature(f.shape, p.art === "alternate", ink)}`;
+  if (p.art === "alternate") s += `<circle cx="44" cy="22" r="5" fill="#fff" opacity=".5"/>`;
+  if (p.finish === "foil") s += `<rect x="5.5" y="13" width="52" height="33" fill="url(#${id}f)"/>`;
+  if (p.finish === "reverse foil") s += `<rect x="3" y="47" width="57" height="38" fill="url(#${id}f)"/>`;
+  s += `<rect x="6" y="51" width="50" height="2" fill="${ink}" opacity=".28"/><rect x="6" y="56" width="44" height="2" fill="${ink}" opacity=".28"/><rect x="6" y="61" width="48" height="2" fill="${ink}" opacity=".28"/><rect x="18" y="68" width="30" height="2" fill="${ink}" opacity=".2"/>`;
+  if (p.stamp === "1st edition") s += `<circle cx="9.5" cy="74" r="3.3" fill="none" stroke="${ink}" stroke-width=".8"/><text x="9.5" y="75.5" font-size="4" text-anchor="middle" font-weight="700" fill="${ink}" font-family="system-ui,sans-serif">1</text>`;
+  if (p.stamp === "promo") s += `<g fill="${ink}">${symPath("star", 9.5, 74)}</g>`;
+  s += `<text x="6" y="82.6" font-size="3.4" fill="${ink}" font-family="system-ui,sans-serif">${p.num}</text><g fill="${ink}">${symPath(SETS[p.set].sym, 54, 80)}</g>`;
+  if (o.photo) {
+    const r = REASON[p.fam].region;
+    if (REASON[p.fam].mark === "blur") s += `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${body}" filter="url(#${id}b)" opacity=".96"/>`;
+    if (REASON[p.fam].mark === "glare") s += `<ellipse cx="${r.x + r.w / 2}" cy="${r.y + r.h / 2}" rx="${r.w / 1.6}" ry="${r.h / 1.3}" fill="url(#${id}g)"/>`;
+  }
+  return s + "</svg>";
+}
+function zoomVars(fam, on) {
+  const r = REASON[fam].region;
+  const zo = ((r.x + r.w / 2) / 63 * 100).toFixed(1) + "% " + ((r.y + r.h / 2) / 88 * 100).toFixed(1) + "%";
+  return `--zoom:${on ? 2.6 : 1};--zo:${zo}`;
+}
+function differs(cands) {
+  const keys = [["set", "Set", (p) => SETS[p.set].name], ["num", "Number", (p) => p.num], ["stamp", "Stamp", (p) => p.stamp], ["finish", "Finish", (p) => p.finish], ["border", "Border", (p) => p.border], ["art", "Art", (p) => p.art], ["lang", "Language", (p) => p.lang]];
+  return keys.filter(([k, , g]) => new Set(cands.map((c) => g(P[c]))).size > 1);
+}
+/* Differences only: set and number are already in the title, so chips show the other keys that differ.
+   A value most printings share is quiet; a value that sets this printing apart is strong. */
+function chipsFor(pid, cands, onlyDiff) {
+  const all = [["stamp", "Stamp", (p) => p.stamp], ["finish", "Finish", (p) => p.finish], ["border", "Border", (p) => p.border], ["art", "Art", (p) => p.art], ["lang", "Language", (p) => p.lang]];
+  const ks = onlyDiff ? differs(cands).filter(([k]) => k !== "set" && k !== "num") : all;
+  return `<span class="chips">${ks.map(([k, l, g]) => {
+    const counts = {}; cands.forEach((c) => { const v = g(P[c]); counts[v] = (counts[v] || 0) + 1; });
+    const top = Math.max(...Object.values(counts)); const modes = Object.keys(counts).filter((v) => counts[v] === top);
+    const v = g(P[pid]); const strong = onlyDiff && !(modes.length === 1 && modes[0] === v);
+    return `<span class="chip${strong ? " strong" : onlyDiff ? " quiet" : ""}">${l} <b>${esc(v)}</b></span>`;
+  }).join("")}</span>`;
+}
+
+/* ---------- Mockup frame state, read from the hash ---------- */
+const CONCEPTS = [["bench", "Bench"], ["table", "Sorting table"]];
+const STATES = {
+  bench: [["queue", "Card with 4 printings"], ["two", "Card with 2 printings"], ["eight", "Card with 8 printings"], ["loading", "Loading"], ["error", "Failed to load"], ["unknown", "Count not known"], ["empty", "Every card answered"], ["filtered-empty", "A filter emptied the list"], ["answered", "Answered tab"], ["reads", "Paid reads tab"], ["read-pick", "Paid read: pick a box"], ["read-cost", "Paid read: cost shown"], ["read-running", "Paid read: running"], ["read-done", "Paid read: receipt"], ["read-stopped", "Paid read: stopped"], ["read-failed", "Paid read: failed"]],
+  table: [["queue", "Pile with 4 printings"], ["two", "Pile with 2 printings"], ["eight", "Pile with 8 printings"], ["pile-done", "Pile just finished"], ["loading", "Loading"], ["error", "Failed to load"], ["unknown", "Count not known"], ["empty", "Every pile sorted"], ["filtered-empty", "A filter emptied the list"], ["read-cost", "Paid read: cost shown"], ["read-running", "Paid read: running"], ["read-done", "Paid read: receipt"], ["read-stopped", "Paid read: stopped"], ["read-failed", "Paid read: failed"]]
+};
+const OPTS = {
+  bench: [["diff", "Differences only", "Each printing shows only what sets it apart from the others.", true], ["look", "Look there", "A press zooms the photo to the spot the reader doubted.", true], ["strip", "Sitting strip", "A row of cells, one per card in the sitting, with its state.", true], ["confirm", "Confirm with Enter", "A number key marks a printing; Enter sends it. Off: one key sends.", false]],
+  table: [["diff", "Differences only", "Each bin shows only what sets its printing apart.", true], ["look", "Look there", "A press zooms the top photo to the spot the reader doubted.", true], ["trays", "Bin trays", "Each bin keeps a thumbnail of every photo dropped in it; a press takes one back.", true], ["fan", "Fanned pile", "The next photos show behind the top one.", true]]
+};
+const H = { c: "bench", s: "queue", t: "", w: "1440", hide: [], newl: false, opt: {} };
+function readHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  H.c = CONCEPTS.some(([k]) => k === q.get("c")) ? q.get("c") : "bench";
+  H.s = q.get("s") || "queue"; if (!STATES[H.c].some(([k]) => k === H.s)) H.s = "queue";
+  H.t = q.get("t") === "dark" || q.get("t") === "light" ? q.get("t") : "";
+  H.w = q.get("w") === "820" ? "820" : "1440";
+  H.hide = (q.get("hide") || "").split(",").filter(Boolean);
+  H.newl = q.get("new") === "1";
+  H.opt = {};
+  for (const c of Object.keys(OPTS)) for (const [k, , , d] of OPTS[c]) H.opt[c + "." + k] = d;
+  for (const k of (q.get("off") || "").split(",").filter(Boolean)) H.opt[k] = false;
+  for (const k of (q.get("on") || "").split(",").filter(Boolean)) H.opt[k] = true;
+}
+function writeHash(patch) {
+  Object.assign(H, patch || {});
+  const q = new URLSearchParams(); q.set("c", H.c); q.set("s", H.s);
+  if (H.t) q.set("t", H.t); if (H.w !== "1440") q.set("w", H.w);
+  if (H.hide.length) q.set("hide", H.hide.join(",")); if (H.newl) q.set("new", "1");
+  const off = [], on = [];
+  for (const c of Object.keys(OPTS)) for (const [k, , , d] of OPTS[c]) { const v = H.opt[c + "." + k]; if (v !== d) (v ? on : off).push(c + "." + k); }
+  if (off.length) q.set("off", off.join(",")); if (on.length) q.set("on", on.join(","));
+  const next = "#" + q.toString().replace(/%2C/g, ",");
+  if (location.hash !== next) history.replaceState(null, "", next);
+}
+const opt = (k) => H.opt[H.c + "." + k];
+
+/* ---------- Mock bar ---------- */
+let optsOpen = false;
+function renderMockbar() {
+  const bar = document.getElementById("mockbar");
+  const theme = H.t || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  bar.innerHTML = `
+<fieldset><legend>Concept</legend>${CONCEPTS.map(([k, n]) => `<span class="concept-pick" data-active="${H.c === k}" data-hidden="${H.hide.includes(k)}"><button class="go" data-mock="concept" data-v="${k}" aria-pressed="${H.c === k}">${n}</button><button class="hide" data-mock="hide" data-v="${k}" aria-label="${H.hide.includes(k) ? "Show" : "Hide"} ${n}">${H.hide.includes(k) ? "Show" : "Hide"}</button></span>`).join("")}</fieldset>
+<label>State <select data-mock="state">${STATES[H.c].map(([k, n]) => `<option value="${k}" ${k === H.s ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+<fieldset><legend>Width</legend><span class="seg">${["1440", "820"].map((w) => `<button data-mock="w" data-v="${w}" aria-pressed="${H.w === w}">${w}${w === "820" ? ", touch" : ", pointer"}</button>`).join("")}</span></fieldset>
+<fieldset><legend>Theme</legend><span class="seg">${["light", "dark"].map((t) => `<button data-mock="t" data-v="${t}" aria-pressed="${theme === t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</span></fieldset>
+<div class="opts"><button data-mock="opts" aria-expanded="${optsOpen}">Parts to cull (${OPTS[H.c].filter(([k]) => opt(k)).length} of ${OPTS[H.c].length} on)</button>${optsOpen ? `<div class="opts-panel">${OPTS[H.c].map(([k, n, d]) => `<label><input type="checkbox" data-mock="opt" data-v="${k}" ${opt(k) ? "checked" : ""}><span><strong>${n}</strong><p>${d}</p></span></label>`).join("")}</div>` : ""}</div>
+<label><input type="checkbox" data-mock="new" ${H.newl ? "checked" : ""}> Show "New:" outlines</label>`;
+}
+document.getElementById("mockbar").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-mock]"); if (!b || b.tagName === "SELECT") return;
+  const k = b.dataset.mock, v = b.dataset.v;
+  if (k === "concept") { writeHash({ c: v, s: "queue" }); boot(); }
+  else if (k === "hide") { const h = H.hide.includes(v) ? H.hide.filter((x) => x !== v) : H.hide.concat(v); writeHash({ hide: h }); boot(); }
+  else if (k === "w") { writeHash({ w: v }); boot(); }
+  else if (k === "t") { writeHash({ t: v }); applyTheme(); renderMockbar(); }
+  else if (k === "opts") { optsOpen = !optsOpen; renderMockbar(); }
+  else if (k === "opt") { H.opt[H.c + "." + v] = b.checked; writeHash(); renderMockbar(); render(); }
+  else if (k === "new") { writeHash({ newl: b.checked }); render(); }
+});
+document.getElementById("mockbar").addEventListener("change", (e) => { if (e.target.dataset.mock === "state") { writeHash({ s: e.target.value }); boot(); } });
+function applyTheme() { if (H.t) document.documentElement.dataset.theme = H.t; else delete document.documentElement.dataset.theme; }
+function nl(name) { return H.newl ? ` class-new data-new="${esc(name)}"` : ""; }
+function fixNew(root) { root.querySelectorAll("[class-new]").forEach((el) => { el.classList.add("newlabel"); el.removeAttribute("class-new"); }); }
+
+/* ---------- Bench model ---------- */
+let M = null, timers = [];
+function clearTimers() { timers.forEach((t) => clearTimeout(t) || clearInterval(t)); timers = []; }
+function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+function benchModel(s) {
+  seed = 7;
+  const photos = makePhotos(14, ORDER, 104);
+  const m = { kind: "bench", photos, ans: {}, idx: 11, view: "queue", filter: "", load: "ok", last: null, armed: null, zoom: false, sheet: null, readState: null, reads: BOXES_DONE.map((b) => Object.assign({}, b)), unread: BOXES_NEW.map((b) => Object.assign({}, b)), showOlder: false, freshFrom: photos.length };
+  for (let i = 0; i < 11; i++) m.ans[photos[i].id] = i === 6 ? "held" : pick(CANDS[photos[i].fam]);
+  const jump = (fam) => { const i = photos.findIndex((p, j) => j >= 11 && p.fam === fam); m.idx = i; };
+  if (s === "two") jump("heron");
+  if (s === "eight") jump("golem");
+  if (s === "loading") m.load = "loading";
+  if (s === "error") m.load = "error";
+  if (s === "unknown") { m.load = "unknown"; m.readState = { box: 15, step: "silent", read: 388, total: 612 }; }
+  if (s === "empty") { photos.forEach((p) => { if (!m.ans[p.id]) m.ans[p.id] = p.truth; }); m.ans[photos[6].id] = photos[6].truth; }
+  if (s === "filtered-empty") { photos.forEach((p) => { if (p.fam === "ox") m.ans[p.id] = p.truth; }); m.filter = "ox"; }
+  if (s === "answered") m.view = "answered";
+  if (s === "reads") m.view = "reads";
+  if (s.startsWith("read-")) {
+    m.view = "reads";
+    const step = s.slice(5);
+    m.sheet = { step: step === "pick" ? "pick" : step, box: 15 };
+    if (step === "cost") m.sheet.costKnown = true;
+    if (step === "running") startRun(m, 214);
+    if (step === "done") finishRun(m, 612);
+    if (step === "stopped") { m.sheet.read = 214; m.sheet.step = "stopped"; }
+    if (step === "failed") { m.sheet.read = 388; m.sheet.step = "failed"; m.readState = { box: 15, step: "failed", read: 388, total: 612 }; }
+  }
+  return m;
+}
+function openCount(m) { return m.photos.filter((p) => !m.ans[p.id] || m.ans[p.id] === "held").length; }
+function startRun(m, from) {
+  const box = m.unread.find((b) => b.box === m.sheet.box);
+  m.sheet.step = "running"; m.sheet.read = from || 0; m.readState = { box: box.box, step: "running", read: m.sheet.read, total: box.photos };
+  const tick = () => {
+    if (M !== m || !m.readState || m.readState.step !== "running") return;
+    m.readState.read = Math.min(box.photos, m.readState.read + 23);
+    if (m.sheet) m.sheet.read = m.readState.read;
+    if (m.readState.read >= box.photos) { finishRun(m, box.photos); render(); return; }
+    render(); later(tick, 160);
+  };
+  later(tick, 400);
+}
+function finishRun(m, n) {
+  const boxNo = m.readState ? m.readState.box : m.sheet ? m.sheet.box : 15;
+  const box = m.unread.find((b) => b.box === boxNo);
+  const doubtful = Math.round(n * 0.067), named = n - doubtful;
+  m.reads.unshift({ box: box.box, photos: n, cost: +(n * PRICE_PER_PHOTO).toFixed(2), named, doubtful, ago: "just now", fresh: true });
+  m.unread = m.unread.filter((b) => b.box !== box.box);
+  if (m.kind === "bench") {
+    seed = 99; const letters = Array.from({ length: doubtful }, (_, i) => "dlhmgo"[i % 6]);
+    m.photos = m.photos.concat(makePhotos(box.box, letters, 21));
+  }
+  m.readState = null;
+  if (m.sheet) { m.sheet.step = "done"; m.sheet.read = n; m.sheet.receipt = m.reads[0]; }
+}
+
+/* ---------- Bench render ---------- */
+function benchStatus(m) {
+  const r = m.readState;
+  if (r && r.step === "running") return `<p class="statusline" data-tone="busy" role="status"><span class="dot"></span>Reading Box ${r.box}: <span class="num">${r.read} of ${r.total}</span>, <span class="money">${money(r.read * PRICE_PER_PHOTO)}</span> spent.${m.sheet ? "" : ` <button class="linkbtn" data-act="open-run">Open</button>`}</p>`;
+  if (r && r.step === "failed") return `<p class="statusline" data-tone="warn" role="status"><span class="dot"></span>The read of Box ${r.box} stopped at ${r.read} of ${r.total}.${m.sheet ? "" : ` <button class="linkbtn" data-act="open-run">Open</button>`}</p>`;
+  if (r && r.step === "silent") return `<p class="statusline" data-tone="unknown" role="status"><span class="dot"></span>Box ${r.box} has not reported back, so its doubtful count is not known. <button class="linkbtn" data-act="check-again">Check again</button></p>`;
+  if (m.load === "error") return `<p class="statusline" data-tone="warn" role="status"><span class="dot"></span>The doubtful cards could not be loaded.</p>`;
+  return `<p class="statusline" role="status"><span class="dot"></span>All is well.</p>`;
+}
+function renderBench(m) {
+  const n = m.load === "loading" || m.load === "error" ? "" : openCount(m) + (m.load === "unknown" ? " + ?" : "");
+  let body = "";
+  if (m.view === "queue") body = benchQueue(m);
+  if (m.view === "answered") body = benchAnswered(m);
+  if (m.view === "reads") body = benchReads(m);
+  return `<div class="app bench${H.w === "820" ? " touch" : ""}" id="bench">
+<header class="b-top"><nav class="b-tabs" role="tablist" aria-label="Doubtful cards">
+<button role="tab" aria-selected="${m.view === "queue"}" data-act="view" data-v="queue">To answer <span class="count">${n}</span></button>
+<button role="tab" aria-selected="${m.view === "answered"}" data-act="view" data-v="answered">Answered</button>
+<button role="tab" aria-selected="${m.view === "reads"}" data-act="view" data-v="reads"${nl("ledger of paid reads")}>Paid reads</button></nav>
+${benchStatus(m)}</header>
+<div class="b-body">${body}</div>${m.sheet ? benchSheet(m) : ""}</div>`;
+}
+function visibleList(m) { return m.photos.map((p, i) => i).filter((i) => !m.filter || m.photos[i].fam === m.filter); }
+function reasonFilter(m) {
+  const fams = [...new Set(m.photos.map((p) => p.fam))];
+  const open = (f) => m.photos.filter((p) => p.fam === f && (!m.ans[p.id] || m.ans[p.id] === "held")).length;
+  return `<label class="filter">Reason <select data-act="filter"><option value="">Every reason (${openCount(m)})</option>${fams.map((f) => `<option value="${f}" ${m.filter === f ? "selected" : ""}>${esc(REASON[f].text)} (${open(f)})</option>`).join("")}</select></label>`;
+}
+function benchQueue(m) {
+  if (m.load === "loading") return `<div class="b-queue" aria-busy="true"><div class="b-photo-pane"><p class="sr" role="status">Loading the doubtful cards.</p><div class="skel" style="height:2rem;width:40%"></div><div class="skel" style="flex:1"></div><div class="skel" style="height:3.5rem"></div></div><div class="b-cands-pane"><div class="b-cands" style="padding-top:var(--space-6)">${"<div class='skel' style='height:6.5rem'></div>".repeat(4)}</div></div></div>`;
+  if (m.load === "error") return `<div class="b-page"><div class="panel-msg"><h2>The doubtful cards could not be loaded.</h2><p>Your answers so far are saved. Nothing was lost.</p><button class="btn btn-primary" data-act="retry">Try again</button><details class="machine"><summary>What the server said</summary><code>queue read timed out after 30 seconds</code></details></div></div>`;
+  const openIdx = m.photos.map((p, i) => i).filter((i) => !m.ans[m.photos[i].id] || m.ans[m.photos[i].id] === "held");
+  if (!openIdx.length) return `<div class="b-page"><div class="panel-msg"><h2>Every doubtful card has an answer.</h2><p>New doubtful cards come from a paid read of a box.</p><button class="btn btn-primary" data-act="start-read">Start a paid read</button></div></div>`;
+  const vis = visibleList(m);
+  const visOpen = vis.filter((i) => openIdx.includes(i));
+  if (m.filter && !visOpen.length) return `<div class="b-queue"><div class="b-photo-pane"><div class="b-photo-head">${reasonFilter(m)}</div><div class="panel-msg"><h2>No open cards have this reason.</h2><button class="btn btn-primary" data-act="clear-filter">Show every reason</button></div></div><div class="b-cands-pane"></div></div>`;
+  if (!vis.includes(m.idx)) m.idx = visOpen[0];
+  const ph = m.photos[m.idx]; const cands = CANDS[ph.fam]; const a = m.ans[ph.id];
+  const posInSit = m.idx + 1, total = m.photos.length;
+  const many = cands.length > 5;
+  const keys = H.w === "820" ? "" : `<div class="keys"><span><kbd>1</kbd>–<kbd>${cands.length}</kbd> printing</span><span><kbd>←</kbd><kbd>→</kbd> move</span><span><kbd>U</kbd> undo</span>${opt("confirm") ? `<span><kbd>Enter</kbd> send</span>` : ""}</div>`;
+  const cells = opt("strip") ? `<div class="b-cells" role="list" aria-label="Cards in this sitting"${nl("sitting strip")}>${m.photos.map((p, i) => { const st = m.ans[p.id] === "held" ? "held" : m.ans[p.id] ? "answered" : i >= m.freshFrom ? "new" : "open"; const hide = m.filter && p.fam !== m.filter; return hide ? "" : `<button role="listitem" data-act="go" data-v="${i}" data-s="${st}" aria-current="${i === m.idx}" aria-label="Card ${i + 1}, ${st}" title="Card ${i + 1}: ${st}"></button>`; }).join("")}</div>` : `<span style="flex:1"></span>`;
+  return `<div class="b-queue">
+<section class="b-photo-pane" aria-label="Photo">
+<div class="b-photo-head"><p class="pos">Card ${posInSit} of ${total}</p><p class="src">Box ${ph.box}, photo ${ph.shot}</p>${reasonFilter(m)}</div>
+<div class="photo b-photo" style="--rot:${ph.rot}deg;${zoomVars(ph.fam, m.zoom)}">${cardSVG(ph.truth, { photo: true })}</div>
+<div class="b-reason"><p><strong>${esc(REASON[ph.fam].text)}.</strong> ${esc(REASON[ph.fam].look)}</p>${opt("look") ? `<button class="btn" data-act="zoom" aria-pressed="${m.zoom}"${nl("zoom to the doubted spot")}>${m.zoom ? "Whole card" : "Look there"} <kbd>Z</kbd></button>` : ""}</div>
+</section>
+<section class="b-cands-pane" aria-label="Printings">
+<div class="b-cands-head"><h2>Which printing is this?</h2><p class="muted">${cands.length} printings match the name ${esc(FAM[ph.fam].name)}.${a && a !== "held" ? " Answered. Press another to change it." : a === "held" ? " Held: you said you can't tell yet." : ""}</p></div>
+<ol class="b-cands" data-many="${many}"${nl(opt("diff") ? "only what differs" : "printing list")}>${cands.map((c, i) => { const p = P[c]; const st = a === c ? "picked" : m.armed === c ? "armed" : ""; return `<li><button class="cand" data-act="answer" data-v="${c}" data-state="${st}" aria-keyshortcuts="${i + 1}"><kbd>${i + 1}</kbd><span class="thumb">${cardSVG(c)}</span><span class="info"><span class="name">${esc(shortLabel(p))}${st === "picked" ? ` <span class="tick">Chosen</span>` : ""}</span>${chipsFor(c, cands, opt("diff"))}</span><span class="price">${money(p.price)}</span></button></li>`; }).join("")}</ol>
+<div class="b-alt"><button class="btn none" data-act="answer" data-v="none" data-state="${a === "none" ? "picked" : ""}" aria-keyshortcuts="0">None of these <kbd>0</kbd></button><button class="btn" data-act="answer" data-v="held" data-state="${a === "held" ? "picked" : ""}" aria-keyshortcuts="h" title="The card stays in the list and comes back at the end of the sitting.">Can't tell yet <kbd>H</kbd></button></div>
+<p class="b-last" aria-live="polite">${m.last ? `Card ${m.last.pos}: ${esc(m.last.label)}. <button class="linkbtn" data-act="undo">Undo</button> <kbd>U</kbd>` : ""}</p>
+</section></div>
+<footer class="b-strip"><button class="btn" data-act="prev" aria-label="Previous card">←</button>${cells}<button class="btn" data-act="next" aria-label="Next card">→</button>${keys}</footer>`;
+}
+function benchAnswered(m) {
+  const done = m.photos.filter((p) => m.ans[p.id]);
+  const rows = done.map((p) => { const i = m.photos.indexOf(p); const a = m.ans[p.id]; const lab = a === "held" ? `<span style="color:var(--held)">Held, can't tell yet</span>` : a === "none" ? "None of these printings" : esc(printingLabel(P[a])); return `<li class="answ-row"><span class="thumb">${cardSVG(a !== "held" && a !== "none" ? a : p.truth)}</span><span><strong>${esc(FAM[p.fam].name)}</strong><br><span class="muted">${lab}</span></span><span class="num">${a !== "held" && a !== "none" ? money(P[a].price) : ""}</span><button class="btn" data-act="change" data-v="${i}">Change</button></li>`; }).join("");
+  const sits = Array.from({ length: 46 }, (_, i) => { const k = 46 - i; seed = k * 31; return { k, cards: 1 + Math.floor(rnd() * 100), mins: 10 + Math.floor(rnd() * 150) }; });
+  const shown = m.showOlder ? sits : sits.slice(0, 5);
+  return `<div class="b-page"><div class="b-page-head"><div><h1>This sitting</h1><p class="muted">${done.length} answered. A change goes back into the list in its old place.</p></div></div>
+<ol class="answ-list">${rows || `<li class="answ-row"><span></span><span>Nothing answered in this sitting yet.</span></li>`}</ol>
+<div class="b-page-head"><div><h1>Earlier sittings</h1><p class="muted">46 on record.</p></div></div>
+<table class="ledger"><thead><tr><th>Sitting</th><th>Cards answered</th><th>Time</th></tr></thead><tbody>${shown.map((s) => `<tr><td>Sitting ${s.k}</td><td>${s.cards}</td><td>${Math.floor(s.mins / 60) ? Math.floor(s.mins / 60) + " h " : ""}${s.mins % 60} min</td></tr>`).join("")}</tbody></table>
+${m.showOlder ? "" : `<button class="linkbtn" data-act="older">Show the other 41 sittings</button>`}</div>`;
+}
+function benchReads(m) {
+  const shown = m.showOlder ? m.reads : m.reads.slice(0, 6);
+  return `<div class="b-page"><div class="b-page-head"><div><h1>Paid reads</h1><p class="muted">What each read of a box cost and what it found.</p></div>${m.unread.length ? `<button class="btn btn-primary" data-act="start-read">Start a paid read</button>` : ""}</div>
+<table class="ledger"><thead><tr><th>Box</th><th>Photos</th><th>Cost</th><th>Named</th><th>Doubtful</th><th>When</th></tr></thead><tbody>${shown.map((r) => `<tr data-fresh="${!!r.fresh}"><td>Box ${r.box}</td><td>${r.photos}</td><td class="money">${money(r.cost)}</td><td>${r.named}</td><td>${r.doubtful}</td><td>${r.ago}</td></tr>`).join("")}</tbody>
+<tfoot><tr><th>All ${m.reads.length} reads</th><th>${m.reads.reduce((s, r) => s + r.photos, 0)}</th><th class="money">${money(m.reads.reduce((s, r) => s + r.cost, 0))}</th><th>${m.reads.reduce((s, r) => s + r.named, 0)}</th><th>${m.reads.reduce((s, r) => s + r.doubtful, 0)}</th><th></th></tr></tfoot></table>
+${m.showOlder || m.reads.length <= 6 ? "" : `<button class="linkbtn" data-act="older">Show the other ${m.reads.length - 6} reads</button>`}
+<p class="muted">Not read yet: ${m.unread.map((b) => `Box ${b.box} (${b.photos} photos)`).join(", ") || "none"}.</p></div>`;
+}
+function benchSheet(m) {
+  const sh = m.sheet; const box = BOXES_NEW.find((b) => b.box === sh.box);
+  const cost = box ? box.photos * PRICE_PER_PHOTO : 0;
+  let body = "", foot = "", title = "Start a paid read";
+  if (sh.step === "pick" || sh.step === "cost" || sh.step === "costing") {
+    body = `<p>Pick the box to read. Each photo costs <span class="money">${RATE}</span>.</p>
+<div class="boxpick" role="radiogroup" aria-label="Boxes not read yet">${m.unread.map((b) => `<label><input type="radio" name="box" data-act="pick-box" value="${b.box}" ${sh.step !== "pick" && sh.box === b.box ? "checked" : ""}><span><strong>Box ${b.box}</strong><br><span class="muted">${b.photos} photos, none read</span></span></label>`).join("")}</div>`;
+    if (sh.step !== "pick") body += `<div class="costblock" aria-live="polite"${nl("cost before spend")}>${sh.step === "costing" ? `<p class="working">Working out the cost of Box ${sh.box}.</p>` : `<span class="muted">Most this read can cost</span><span class="big">${money(cost)}</span><span>${box.photos} photos at ${RATE} each. You pay only for photos read, and you can stop at any time.</span>`}</div>`;
+    foot = sh.step === "cost" ? `<button class="btn btn-spend" data-act="spend">Spend up to ${money(cost)}</button><button class="btn btn-quiet" data-act="close-sheet">Cancel</button>` : `<button class="btn btn-quiet" data-act="close-sheet">Cancel</button>`;
+  }
+  if (sh.step === "running") {
+    title = `Reading Box ${sh.box}`;
+    const pct = (sh.read / box.photos * 100).toFixed(1);
+    body = `<div class="costblock"${nl("live spend with stop")}><span class="muted">Spent so far</span><span class="big">${money(sh.read * PRICE_PER_PHOTO)}</span><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="${box.photos}" aria-valuenow="${sh.read}" style="--p:${pct}%"><i></i></div><span class="num">${sh.read} of ${box.photos} photos read. At most ${money(cost)}.</span></div><p class="muted">You can close this panel. The read goes on, and the line at the top shows it.</p>`;
+    foot = `<button class="btn btn-danger" data-act="stop">Stop reading</button><button class="btn btn-quiet" data-act="close-sheet">Close panel</button>`;
+  }
+  if (sh.step === "done") {
+    const r = sh.receipt; title = `Box ${r.box} is read`;
+    body = `<dl class="receipt"${nl("receipt")}><dt>Photos read</dt><dd>${r.photos}</dd><dt>Cost</dt><dd class="money">${money(r.cost)}</dd><dt>Named</dt><dd>${r.named}</dd><dt>Doubtful</dt><dd>${r.doubtful}</dd></dl><p>The ${r.doubtful} doubtful cards are at the end of the list to answer, after the ones already there.</p>`;
+    foot = `<button class="btn btn-primary" data-act="go-new">Answer the ${r.doubtful} new cards</button><button class="btn btn-quiet" data-act="close-sheet">Close</button>`;
+  }
+  if (sh.step === "stopped" || sh.step === "failed") {
+    title = sh.step === "stopped" ? `You stopped the read of Box ${sh.box}` : `The read of Box ${sh.box} stopped early`;
+    const left = box.photos - sh.read;
+    body = `${sh.step === "failed" ? `<p>The reader stopped answering after ${sh.read} photos.</p>` : ""}<dl class="receipt"><dt>Photos read</dt><dd>${sh.read} of ${box.photos}</dd><dt>Cost</dt><dd class="money">${money(sh.read * PRICE_PER_PHOTO)}</dd><dt>Not read, not charged</dt><dd>${left}</dd></dl><p>The ${sh.read} photos read are kept. Their doubtful cards join the list when the box is done.</p>${sh.step === "failed" ? `<details class="machine"><summary>What the server said</summary><code>reader returned 503 three times in a row</code></details>` : ""}`;
+    foot = `<button class="btn btn-spend" data-act="resume">Read the other ${left}, up to ${money(left * PRICE_PER_PHOTO)}</button><button class="btn btn-quiet" data-act="close-sheet">Close</button>`;
+  }
+  return `<div class="sheet-scrim" data-act="close-sheet"></div><aside class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}"><header class="sheet-head"><h2>${esc(title)}</h2><button class="btn btn-quiet" data-act="close-sheet" aria-label="Close">✕</button></header><div class="sheet-body">${body}</div><footer class="sheet-foot">${foot}</footer></aside>`;
+}
+
+/* ---------- Bench acts ---------- */
+function benchAct(m, act, v, el) {
+  if (act === "view") { m.view = v; m.showOlder = false; }
+  else if (act === "answer") benchAnswer(m, v, el);
+  else if (act === "go") { m.idx = +v; m.zoom = false; m.armed = null; }
+  else if (act === "prev" || act === "next") benchMove(m, act === "prev" ? -1 : 1);
+  else if (act === "zoom") m.zoom = !m.zoom;
+  else if (act === "undo") { if (m.last) { delete m.ans[m.last.id]; if (m.last.prev) m.ans[m.last.id] = m.last.prev; m.idx = m.last.i; m.last = null; } }
+  else if (act === "filter") { m.filter = v; const vis = visibleList(m).filter((i) => !m.ans[m.photos[i].id] || m.ans[m.photos[i].id] === "held"); if (vis.length) m.idx = vis[0]; }
+  else if (act === "clear-filter") m.filter = "";
+  else if (act === "retry" || act === "check-again") { m.load = "loading"; m.readState = null; later(() => { m.load = "ok"; render(); }, 700); }
+  else if (act === "change") { m.view = "queue"; m.idx = +v; m.filter = ""; }
+  else if (act === "older") m.showOlder = true;
+  else if (act === "start-read") { m.view = "reads"; m.sheet = { step: "pick", box: m.unread[0] ? m.unread[0].box : 15 }; }
+  else if (act === "pick-box") { m.sheet = { step: "costing", box: +v }; later(() => { if (m.sheet && m.sheet.step === "costing") { m.sheet.step = "cost"; render(); } }, 700); }
+  else if (act === "spend") startRun(m, 0);
+  else if (act === "stop") { m.readState.step = "stopped"; m.sheet.step = "stopped"; m.readState = null; }
+  else if (act === "resume") { const r = m.sheet.read; startRun(m, r); }
+  else if (act === "close-sheet") { if (m.sheet && (m.sheet.step === "stopped" || m.sheet.step === "done")) m.readState = m.readState && m.readState.step === "running" ? m.readState : null; m.sheet = null; }
+  else if (act === "open-run") m.sheet = { step: m.readState.step === "failed" ? "failed" : "running", box: m.readState.box, read: m.readState.read };
+  else if (act === "go-new") { m.sheet = null; m.view = "queue"; m.filter = ""; m.idx = m.freshFrom; }
+}
+function benchAnswer(m, v, el) {
+  const ph = m.photos[m.idx];
+  if (opt("confirm") && v !== "held" && v !== "none" && m.armed !== v) { m.armed = v; return; }
+  const prev = m.ans[ph.id];
+  m.ans[ph.id] = v; m.armed = null; m.zoom = false;
+  const label = v === "held" ? "held, comes back at the end" : v === "none" ? "none of these printings" : printingLabel(P[v]);
+  m.last = { id: ph.id, i: m.idx, pos: m.idx + 1, label, prev };
+  render();
+  const btn = document.querySelector(`[data-act="answer"][data-v="${v}"]`); if (btn) btn.classList.add("pop");
+  m.lock = true;
+  later(() => { m.lock = false; benchMove(m, 1, true); render(); }, 260);
+  return "rendered";
+}
+function benchMove(m, d, openOnly) {
+  const vis = visibleList(m); let k = vis.indexOf(m.idx);
+  for (let step = 0; step < vis.length; step++) {
+    k += d; if (k < 0 || k >= vis.length) { if (!openOnly) return; k = d > 0 ? 0 : vis.length - 1; }
+    const a = m.ans[m.photos[vis[k]].id];
+    if (!openOnly || !a) { m.idx = vis[k]; m.zoom = false; m.armed = null; return; }
+  }
+  const held = vis.find((i) => m.ans[m.photos[i].id] === "held"); if (held !== undefined) m.idx = held;
+}
+
+/* ---------- Sorting table model ---------- */
+function tableModel(s) {
+  seed = 7;
+  const photos = makePhotos(14, ORDER, 104);
+  const fams = ["drake", "lynx", "heron", "moth", "golem", "ox"];
+  const piles = fams.map((f) => ({ fam: f, box: 14, photos: photos.filter((p) => p.fam === f) }));
+  const m = { kind: "table", piles, ans: {}, cur: 0, filter: "", load: "ok", zoom: false, last: null, railOpen: false, boxes: BOXES_NEW.map((b) => ({ box: b.box, photos: b.photos, state: "idle" })), reads: BOXES_DONE.map((b) => Object.assign({}, b)), readState: null };
+  m.unread = m.boxes;
+  piles[0].photos.slice(0, 5).forEach((p, i) => { m.ans[p.id] = ["d1", "d2", "d1", "d3", "d1"][i]; });
+  if (s === "two") m.cur = 1;
+  if (s === "eight") m.cur = 4;
+  if (s === "pile-done") { m.cur = 2; piles[2].photos.forEach((p, i) => { m.ans[p.id] = i === 3 ? "held" : p.truth; }); m.last = { id: piles[2].photos[5].id, label: printingLabel(P[piles[2].photos[5].truth]) }; }
+  if (s === "loading") m.load = "loading";
+  if (s === "error") m.load = "error";
+  if (s === "unknown") { m.load = "unknown"; m.boxes[0].state = "silent"; m.boxes[0].read = 388; }
+  if (s === "empty") piles.forEach((pl) => pl.photos.forEach((p) => { m.ans[p.id] = p.truth; }));
+  if (s === "filtered-empty") { piles[5].photos.forEach((p) => { m.ans[p.id] = p.truth; }); m.filter = "ox"; m.cur = 5; }
+  const b = m.boxes[0];
+  if (s === "read-cost") b.state = "cost";
+  if (s === "read-running") { b.state = "running"; b.read = 214; tableRun(m, b); }
+  if (s === "read-done") tableFinish(m, b, 612);
+  if (s === "read-stopped") { b.state = "stopped"; b.read = 214; }
+  if (s === "read-failed") { b.state = "failed"; b.read = 388; }
+  if (s.startsWith("read-") && H.w === "820") m.railOpen = true;
+  return m;
+}
+function pileOpen(m, pl) { return pl.photos.filter((p) => !m.ans[p.id]); }
+function pileHeld(m, pl) { return pl.photos.filter((p) => m.ans[p.id] === "held"); }
+function tableRun(m, b) {
+  b.state = "running"; b.read = b.read || 0;
+  const tick = () => { if (M !== m || b.state !== "running") return; b.read = Math.min(b.photos, b.read + 23); if (b.read >= b.photos) { tableFinish(m, b, b.photos); render(); return; } render(); later(tick, 160); };
+  later(tick, 400);
+}
+function tableFinish(m, b, n) {
+  const doubtful = Math.round(n * 0.067);
+  b.state = "done"; b.read = n; b.receipt = { photos: n, cost: +(n * PRICE_PER_PHOTO).toFixed(2), named: n - doubtful, doubtful };
+  seed = 99;
+  const split = { heron: 18, moth: 12, ox: doubtful - 30 };
+  for (const f of Object.keys(split)) m.piles.push({ fam: f, box: b.box, fresh: true, photos: makePhotos(b.box, Array(split[f]).fill(Object.keys(LET).find((k) => LET[k] === f)), 31 + f.length) });
+}
+
+/* ---------- Sorting table render ---------- */
+function boxCard(m, b) {
+  const cost = b.photos * PRICE_PER_PHOTO;
+  let inner = "";
+  if (b.state === "idle") inner = `<div class="acts"><button class="btn" data-act="read-box" data-v="${b.box}">Read this box</button></div>`;
+  if (b.state === "costing") inner = `<p class="muted" aria-live="polite">Working out the cost.</p>`;
+  if (b.state === "cost") inner = `<p aria-live="polite">Up to <span class="money">${money(cost)}</span>: ${b.photos} photos at ${RATE} each. You pay only for photos read.</p><div class="acts"><button class="btn btn-spend" data-act="spend-box" data-v="${b.box}">Spend up to ${money(cost)}</button><button class="btn btn-quiet" data-act="cancel-box" data-v="${b.box}">Cancel</button></div>`;
+  if (b.state === "running") inner = `<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="${b.photos}" aria-valuenow="${b.read}" style="--p:${(b.read / b.photos * 100).toFixed(1)}%"><i></i></div><p class="num">${b.read} of ${b.photos} read, <span class="money">${money(b.read * PRICE_PER_PHOTO)}</span> spent.</p><div class="acts"><button class="btn btn-danger" data-act="stop-box" data-v="${b.box}">Stop reading</button></div>`;
+  if (b.state === "silent") inner = `<p>${b.read} of ${b.photos} read when it last reported. How many are doubtful is not known yet.</p><div class="acts"><button class="btn" data-act="check-box" data-v="${b.box}">Check again</button></div>`;
+  if (b.state === "done") inner = `<dl class="receipt"><dt>Cost</dt><dd class="money">${money(b.receipt.cost)}</dd><dt>Named</dt><dd>${b.receipt.named}</dd><dt>Doubtful</dt><dd>${b.receipt.doubtful}</dd></dl><p class="muted">The doubtful photos are new piles at the end of the list.</p>`;
+  if (b.state === "stopped" || b.state === "failed") inner = `<p>${b.state === "failed" ? "The reader stopped answering. " : "You stopped it. "}${b.read} of ${b.photos} read for <span class="money">${money(b.read * PRICE_PER_PHOTO)}</span>. The other ${b.photos - b.read} cost nothing.</p><div class="acts"><button class="btn btn-spend" data-act="resume-box" data-v="${b.box}">Read the other ${b.photos - b.read}, up to ${money((b.photos - b.read) * PRICE_PER_PHOTO)}</button></div>${b.state === "failed" ? `<details class="machine"><summary>What the server said</summary><code>reader returned 503 three times in a row</code></details>` : ""}`;
+  /* An unread box says so by its Read button, so its label stays empty (one label per screen). */
+  const head = b.state === "done" ? "Read" : b.state === "running" ? "Reading" : b.state === "silent" ? "No word yet" : b.state === "stopped" || b.state === "failed" ? "Part read" : "";
+  return `<li class="boxcard" data-state="${b.state}"${b.state === "cost" ? nl("cost shown in the box before spend") : ""}><div class="row"><span class="name">Box ${b.box}</span><span class="muted">${b.photos} photos</span><span class="end muted">${head}</span></div>${inner}</li>`;
+}
+function tableStatus(m) {
+  const busy = m.boxes.find((b) => b.state === "running"), bad = m.boxes.find((b) => b.state === "failed"), silent = m.boxes.find((b) => b.state === "silent");
+  if (m.load === "error") return `<p class="statusline" data-tone="warn" role="status"><span class="dot"></span>The piles could not be loaded.</p>`;
+  if (busy) return `<p class="statusline" data-tone="busy" role="status"><span class="dot"></span>Reading Box ${busy.box}: ${busy.read} of ${busy.photos}.</p>`;
+  if (bad) return `<p class="statusline" data-tone="warn" role="status"><span class="dot"></span>The read of Box ${bad.box} stopped early.</p>`;
+  if (silent) return `<p class="statusline" data-tone="unknown" role="status"><span class="dot"></span>Box ${silent.box} has not reported back. <button class="linkbtn" data-act="check-box" data-v="${silent.box}">Check again</button></p>`;
+  return `<p class="statusline" role="status"><span class="dot"></span>All is well.</p>`;
+}
+function renderTable(m) {
+  const piles = m.piles.map((pl, i) => [pl, i]).filter(([pl]) => !m.filter || pl.fam === m.filter);
+  const fams = [...new Set(m.piles.map((p) => p.fam))];
+  const totalOpen = m.piles.reduce((s, pl) => s + pileOpen(m, pl).length + pileHeld(m, pl).length, 0);
+  const pl = m.piles[m.cur];
+  const rail = `<aside class="t-rail" data-open="${m.railOpen}" aria-label="Boxes and piles">
+<div class="t-pilepick"><button class="btn" data-act="rail" aria-expanded="${m.railOpen}">${m.railOpen ? "Close" : "Piles and boxes"}</button><span class="muted">${pl ? `${esc(FAM[pl.fam].name)}, pile ${m.cur + 1} of ${m.piles.length}` : ""}</span></div>
+<section aria-label="Boxes"><h2>Boxes</h2><ul class="pilelist" style="gap:var(--space-2)">${m.boxes.map((b) => boxCard(m, b)).join("")}<li class="boxcard"><div class="row"><span class="name">Box ${m.reads[0].box}</span><span class="muted">${m.reads[0].photos} photos</span><span class="end muted">Read</span></div><dl class="receipt"><dt>Cost</dt><dd class="money">${money(m.reads[0].cost)}</dd><dt>Named</dt><dd>${m.reads[0].named}</dd><dt>Doubtful</dt><dd>${m.reads[0].doubtful}</dd></dl></li></ul>
+<details class="older"><summary>${m.reads.length - 1} earlier boxes, ${money(m.reads.slice(1).reduce((s, r) => s + r.cost, 0))} in all</summary><ul>${m.reads.slice(1).map((r) => `<li><span>Box ${r.box}</span><span class="muted">${r.named} named, ${r.doubtful} doubtful</span><span class="money">${money(r.cost)}</span></li>`).join("")}</ul></details></section>
+<section aria-label="Piles"${nl("piles: photos grouped by the printings they could be")}><h2>Piles to sort, ${m.load === "unknown" ? totalOpen + " photos and more to come" : totalOpen + " photos"}</h2>
+${m.load === "ok" || m.load === "unknown" ? `<label class="filter">Reason <select data-act="filter"><option value="">Every reason</option>${fams.map((f) => `<option value="${f}" ${m.filter === f ? "selected" : ""}>${esc(REASON[f].text)}</option>`).join("")}</select></label>` : ""}
+<ul class="pilelist">${m.load === "loading" ? "<li class='skel' style='height:3rem'></li>".repeat(5) : m.load === "error" ? "" : piles.map(([p, i]) => { const open = pileOpen(m, p).length, held = pileHeld(m, p).length; const done = !open && !held; return `<li><button class="pilebtn" data-act="pile" data-v="${i}" aria-current="${i === m.cur}" data-done="${done}"><span class="thumb">${cardSVG(CANDS[p.fam][0])}</span><span><span class="t1">${esc(FAM[p.fam].name)}${p.fresh ? ` <span class="muted">Box ${p.box}</span>` : ""}</span><span class="t2">${CANDS[p.fam].length} printings${held ? `, ${held} held` : ""}</span></span><span class="left">${done ? "Sorted" : open + held}</span></button></li>`; }).join("")}</ul></section></aside>`;
+  let main = "";
+  if (m.load === "loading") main = `<div class="t-main" aria-busy="true"><p class="sr" role="status">Loading the piles.</p><div class="skel" style="height:2.5rem;width:30%"></div><div class="bins" style="--n:4">${"<div class='skel' style='height:13rem'></div>".repeat(4)}</div><div class="skel" style="flex:1"></div></div>`;
+  else if (m.load === "error") main = `<div class="t-main"><div class="t-head">${tableStatus(m)}</div><div class="panel-msg"><h2>The piles could not be loaded.</h2><p>Every photo you sorted is saved.</p><button class="btn btn-primary" data-act="retry">Try again</button><details class="machine"><summary>What the server said</summary><code>queue read timed out after 30 seconds</code></details></div></div>`;
+  else if (!totalOpen) main = `<div class="t-main"><div class="t-head">${tableStatus(m)}</div><div class="panel-msg"><h2>Every pile is sorted.</h2><p>New piles come from a paid read of a box.</p>${m.boxes.some((b) => b.state === "idle") ? `<button class="btn btn-primary" data-act="read-box" data-v="${m.boxes.find((b) => b.state === "idle").box}">Read Box ${m.boxes.find((b) => b.state === "idle").box}</button>` : ""}</div></div>`;
+  else if (m.filter && !piles.some(([p]) => pileOpen(m, p).length + pileHeld(m, p).length)) main = `<div class="t-main"><div class="t-head">${tableStatus(m)}</div><div class="panel-msg"><h2>No open photos have this reason.</h2><button class="btn btn-primary" data-act="clear-filter">Show every reason</button></div></div>`;
+  else main = tableMain(m, pl);
+  return `<div class="app table${H.w === "820" ? " touch" : ""}" id="table"><div class="t-wrap">${rail}${main}</div></div>`;
+}
+function tableMain(m, pl) {
+  const cands = CANDS[pl.fam]; const open = pileOpen(m, pl); const held = pileHeld(m, pl);
+  const top = open[0] || null;
+  const sorted = pl.photos.length - open.length - held.length;
+  const big = cands.length > 4;
+  const bins = `<div class="bins" style="--n:${cands.length}" data-n-big="${big}" role="group" aria-label="Printings: drop the photo into one"${nl("bins that stay put while photos change")}>${cands.map((c, i) => { const p = P[c]; const inBin = pl.photos.filter((x) => m.ans[x.id] === c); return `<div class="bin" data-bin="${c}"><button class="bin-drop" data-act="drop" data-v="${c}" aria-keyshortcuts="${i + 1}" ${top ? "" : `aria-disabled="true" title="No photo is left on this pile to drop."`}><span class="refrow"><span class="ref">${cardSVG(c)}</span><span class="info"><span class="set">${esc(shortLabel(p))}</span>${chipsFor(c, cands, opt("diff"))}<span class="price">${money(p.price)}</span></span></span></button><span class="tray"><span class="cnt" aria-label="${inBin.length} photos in this bin">${inBin.length}</span>${opt("trays") ? inBin.slice(-8).map((x) => `<button class="mini" data-act="unbin" data-v="${x.id}" aria-label="Take back photo ${x.shot}" title="Take this photo back to the pile">${cardSVG(x.truth, { photo: true })}</button>`).join("") : ""}<kbd>${i + 1}</kbd></span></div>`; }).join("")}</div>`;
+  let pile;
+  if (top) {
+    const under = opt("fan") ? open.slice(1, 3).reverse().map((p, k) => `<div class="layer under" style="transform:translate(${(2 - k) * 14}px, ${(2 - k) * -8}px) rotate(${(2 - k) * 3}deg)">${cardSVG(p.truth, { photo: true })}</div>`).join("") : "";
+    pile = `<div class="t-pile"><div class="t-stack" id="stack">${under}<div class="layer top" style="--rot:${top.rot}deg;${zoomVars(pl.fam, m.zoom)}">${cardSVG(top.truth, { photo: true })}</div><p class="posline">Photo ${sorted + held.length + 1} of ${pl.photos.length}, Box ${top.box} photo ${top.shot}</p></div>
+<div class="t-side"><div class="reason"><p><strong>${esc(REASON[pl.fam].text)}.</strong> ${esc(REASON[pl.fam].look)}</p>${opt("look") ? `<button class="btn" data-act="zoom" aria-pressed="${m.zoom}">${m.zoom ? "Whole card" : "Look there"} <kbd>Z</kbd></button>` : ""}</div>
+<button class="btn" data-act="drop" data-v="none" data-bin="none" aria-keyshortcuts="0">None of these <kbd>0</kbd></button>
+<button class="btn" data-act="drop" data-v="held" data-bin="held" data-held aria-keyshortcuts="h" title="The photo stays in this pile, after the others.">Can't tell yet <kbd>H</kbd></button>
+<p class="last" aria-live="polite">${m.last ? `Last photo: ${esc(m.last.label)}. <button class="linkbtn" data-act="undo">Undo</button> <kbd>U</kbd>` : ""}</p>
+${H.w === "820" ? "" : `<div class="keys"><span><kbd>1</kbd>–<kbd>${cands.length}</kbd> drop in a bin</span><span><kbd>N</kbd> next pile</span><span><kbd>U</kbd> undo</span></div>`}</div></div>`;
+  } else {
+    const per = cands.map((c) => [c, pl.photos.filter((x) => m.ans[x.id] === c).length]).filter(([, k]) => k);
+    const none = pl.photos.filter((x) => m.ans[x.id] === "none").length;
+    const nextI = m.piles.findIndex((p, i) => i !== m.cur && (pileOpen(m, p).length || pileHeld(m, p).length));
+    pile = `<div class="t-pile"><div class="t-done" role="status"><h2>${held.length ? `Every photo but ${held.length} has an answer.` : "Every photo in this pile has an answer."}</h2><ul>${per.map(([c, k]) => `<li>${k} to ${esc(printingLabel(P[c]))}</li>`).join("")}${none ? `<li>${none} to none of these</li>` : ""}${held.length ? `<li style="color:var(--held)">${held.length} held: you could not tell yet</li>` : ""}</ul>
+<div class="cluster">${held.length ? `<button class="btn" data-act="reopen-held">Look at the ${held.length} held again</button>` : ""}${nextI >= 0 ? `<button class="btn btn-primary" data-act="pile" data-v="${nextI}">Next pile: ${esc(FAM[m.piles[nextI].fam].name)}</button>` : ""}</div></div>
+<div class="t-side"><p class="last" aria-live="polite">${m.last ? `Last photo: ${esc(m.last.label)}. <button class="linkbtn" data-act="undo">Undo</button>` : ""}</p></div></div>`;
+  }
+  return `<div class="t-main"><header class="t-head"><div><h1>${esc(FAM[pl.fam].name)}</h1><p class="sub">${open.length} of ${pl.photos.length} photos left${held.length ? `, ${held.length} held` : ""}. Drop each photo on its printing.</p></div>${tableStatus(m)}</header>${bins}${pile}</div>`;
+}
+
+/* ---------- Sorting table acts ---------- */
+function tableAct(m, act, v, el) {
+  const pl = m.piles[m.cur];
+  if (act === "pile") { m.cur = +v; m.zoom = false; m.last = null; m.railOpen = false; }
+  else if (act === "rail") m.railOpen = !m.railOpen;
+  else if (act === "drop") return tableDrop(m, v);
+  else if (act === "zoom") m.zoom = !m.zoom;
+  else if (act === "undo") { if (m.last) { delete m.ans[m.last.id]; if (m.last.prev) m.ans[m.last.id] = m.last.prev; const p = pl.photos.find((x) => x.id === m.last.id); if (p) { pl.photos = [p].concat(pl.photos.filter((x) => x !== p)); } m.last = null; } }
+  else if (act === "unbin") { const p = pl.photos.find((x) => x.id === v); if (p) { delete m.ans[p.id]; pl.photos = [p].concat(pl.photos.filter((x) => x !== p)); m.last = null; } }
+  else if (act === "reopen-held") { pl.photos.forEach((p) => { if (m.ans[p.id] === "held") delete m.ans[p.id]; }); }
+  else if (act === "filter") { m.filter = v; const i = m.piles.findIndex((p) => !v || p.fam === v); if (i >= 0) m.cur = i; }
+  else if (act === "clear-filter") m.filter = "";
+  else if (act === "retry") { m.load = "loading"; later(() => { m.load = "ok"; render(); }, 700); }
+  else if (act === "read-box") { const b = m.boxes.find((x) => x.box === +v); b.state = "costing"; if (H.w === "820") m.railOpen = true; later(() => { if (b.state === "costing") { b.state = "cost"; render(); } }, 700); }
+  else if (act === "cancel-box") m.boxes.find((x) => x.box === +v).state = "idle";
+  else if (act === "spend-box" || act === "resume-box") tableRun(m, m.boxes.find((x) => x.box === +v));
+  else if (act === "stop-box") m.boxes.find((x) => x.box === +v).state = "stopped";
+  else if (act === "check-box") { const b = m.boxes.find((x) => x.box === +v); m.load = "loading"; later(() => { m.load = "ok"; tableFinish(m, b, 612); render(); }, 700); }
+}
+function tableDrop(m, v) {
+  const pl = m.piles[m.cur]; const top = pileOpen(m, pl)[0]; if (!top || m.lock) return;
+  const prev = m.ans[top.id];
+  const label = v === "held" ? "held, it waits at the end of the pile" : v === "none" ? "none of these printings" : printingLabel(P[v]);
+  const src = document.querySelector("#stack .top"), dst = document.querySelector(`[data-bin="${v}"]`);
+  const commit = () => { m.ans[top.id] = v; if (v === "held") { pl.photos = pl.photos.filter((x) => x !== top).concat(top); } m.last = { id: top.id, label, prev }; m.zoom = false; m.lock = false; render(); const b = document.querySelector(`[data-bin="${v}"]`); if (b) { b.classList.add("flash"); later(() => b.classList.remove("flash"), 350); } };
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (src && dst && !still) {
+    const a = src.getBoundingClientRect(), b = dst.getBoundingClientRect();
+    const fly = src.cloneNode(true); fly.classList.add("fly");
+    Object.assign(fly.style, { left: a.left + "px", top: a.top + "px", width: a.width + "px", height: a.height + "px" });
+    document.body.appendChild(fly); m.lock = true;
+    requestAnimationFrame(() => { const s = Math.min(0.25, b.height / a.height); fly.style.transformOrigin = "0 0"; fly.style.transform = `translate(${b.left + b.width / 2 - a.left - a.width * s / 2}px, ${b.top + b.height / 2 - a.top - a.height * s / 2}px) scale(${s})`; fly.style.opacity = ".4"; });
+    later(() => { fly.remove(); commit(); }, 250);
+  } else commit();
+  return "rendered";
+}
+
+/* ---------- Wiring ---------- */
+function render() {
+  const frame = document.getElementById("frame");
+  if (H.hide.includes(H.c)) {
+    const other = CONCEPTS.find(([k]) => !H.hide.includes(k));
+    frame.innerHTML = `<div class="hidden-note"><h2>${CONCEPTS.find(([k]) => k === H.c)[1]} is hidden.</h2><p>Its notes stay in the notes file.</p><div class="cluster">${other ? `<button class="btn btn-primary" data-mock-in="concept" data-v="${other[0]}">Open ${other[1]}</button>` : ""}<button class="btn" data-mock-in="show">Show it again</button></div></div>`;
+    return;
+  }
+  const active = document.activeElement && document.activeElement.closest("#frame") ? document.activeElement.dataset.act + "|" + (document.activeElement.dataset.v || "") : null;
+  frame.innerHTML = M.kind === "bench" ? renderBench(M) : renderTable(M);
+  fixNew(frame);
+  if (active) { const [a, v] = active.split("|"); const el = frame.querySelector(`[data-act="${a}"]${v ? `[data-v="${v}"]` : ""}`); if (el) el.focus({ preventScroll: true }); }
+}
+function fit() {
+  const frame = document.getElementById("frame"); const w = +H.w;
+  const avail = document.querySelector(".stage").clientWidth - 32;
+  frame.style.zoom = String(Math.min(1, avail / w));
+  document.getElementById("frame-cap").textContent = `${H.w} wide, ${H.w === "820" ? "touch" : "pointer"}, ${H.t || "theme follows the system"}. Deep link: this page's address.`;
+}
+function boot() {
+  clearTimers(); readHash(); applyTheme();
+  document.getElementById("frame").dataset.w = H.w;
+  M = H.c === "bench" ? benchModel(H.s) : tableModel(H.s);
+  renderMockbar(); render(); fit();
+}
+document.getElementById("frame").addEventListener("click", (e) => {
+  const mi = e.target.closest("[data-mock-in]");
+  if (mi) { if (mi.dataset.mockIn === "concept") writeHash({ c: mi.dataset.v, s: "queue" }); else writeHash({ hide: H.hide.filter((x) => x !== H.c) }); boot(); return; }
+  const el = e.target.closest("[data-act]"); if (!el || el.tagName === "SELECT" || el.tagName === "INPUT") return;
+  if (el.disabled || M.lock) return;
+  const r = M.kind === "bench" ? benchAct(M, el.dataset.act, el.dataset.v, el) : tableAct(M, el.dataset.act, el.dataset.v, el);
+  if (r !== "rendered") render();
+});
+document.getElementById("frame").addEventListener("change", (e) => {
+  const el = e.target.closest("[data-act]"); if (!el) return;
+  if (M.kind === "bench") benchAct(M, el.dataset.act, el.value, el); else tableAct(M, el.dataset.act, el.value, el);
+  render();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey || !M || H.hide.includes(H.c)) return;
+  if (e.target.closest && e.target.closest("select, input, .mockbar")) return;
+  const k = e.key.toLowerCase();
+  if (k === "escape") { if (M.sheet) { M.sheet = null; render(); } else if (M.railOpen) { M.railOpen = false; render(); } return; }
+  if (M.lock || M.sheet || M.load !== "ok" && M.load !== "unknown") return;
+  if (M.kind === "bench") {
+    if (M.view !== "queue") return;
+    const ph = M.photos[M.idx]; if (!ph) return; const cands = CANDS[ph.fam];
+    let r;
+    if (/^[1-8]$/.test(k) && +k <= cands.length) r = benchAnswer(M, cands[+k - 1]);
+    else if (k === "0") r = benchAnswer(M, "none");
+    else if (k === "h") r = benchAnswer(M, "held");
+    else if (k === "enter" && M.armed) r = benchAnswer(M, M.armed);
+    else if (k === "z" && opt("look")) M.zoom = !M.zoom;
+    else if (k === "u") benchAct(M, "undo");
+    else if (k === "arrowleft") benchMove(M, -1);
+    else if (k === "arrowright") benchMove(M, 1);
+    else return;
+    e.preventDefault(); if (r !== "rendered") render();
+  } else {
+    const pl = M.piles[M.cur]; if (!pl) return; const cands = CANDS[pl.fam];
+    let r;
+    if (/^[1-8]$/.test(k) && +k <= cands.length) r = tableDrop(M, cands[+k - 1]);
+    else if (k === "0") r = tableDrop(M, "none");
+    else if (k === "h") r = tableDrop(M, "held");
+    else if (k === "z" && opt("look")) M.zoom = !M.zoom;
+    else if (k === "u") tableAct(M, "undo");
+    else if (k === "n") { const n = M.piles.findIndex((p, i) => i > M.cur && (pileOpen(M, p).length || pileHeld(M, p).length)); if (n < 0) return; M.cur = n; M.last = null; M.zoom = false; }
+    else return;
+    e.preventDefault(); if (r !== "rendered") render();
+  }
+});
+addEventListener("hashchange", boot);
+addEventListener("resize", fit);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { renderMockbar(); fit(); });
+boot();
+</script>
+</body>
+</html>
