@@ -47,11 +47,12 @@ Examples: `#c=table&s=eight&w=820&t=dark`, `#c=bench&s=read-cost`.
    which stays with focus moves). The other option, **Confirm with Enter** (Bench), arms a
    printing with its number and sends it with Enter. Hide: "Parts to cull", Confirm with Enter
    (off by default).
-6. **Can't tell yet holds the card, never drops it.** A held card stays in the list, striped in the
-   sitting strip, and comes back after the open ones (Bench); a held photo goes to the bottom of its
-   pile, and a finished pile says how many are held (Sorting table). "Every card answered" shows
-   only when no card is held. Gain: nothing is guessed and nothing is lost. Loss: none seen. Pick:
-   keep in both.
+6. **Can't tell yet holds the card, never drops it.** Bench: a held card stays in the list,
+   striped in the sitting strip, and comes back after the open ones. Sorting table: a held photo
+   leaves the top of the pile; the finished pile says how many are held and offers "Look at the N
+   held again", which puts them back on the pile. "Every card answered" shows only when no card is
+   held. Gain: nothing is guessed and nothing is lost. Loss (table): held photos wait for a press.
+   Pick: keep in both.
 7. **Sitting strip** (Bench). One cell per card in the sitting: open, answered, held, or new from a
    fresh read. A press on a cell opens that card. Gain: the owner sees where they are in a long
    sitting. Loss: past 100 cells the cells get thin. Pick: on. Hide: "Parts to cull", Sitting
@@ -78,26 +79,37 @@ Examples: `#c=table&s=eight&w=820&t=dark`, `#c=bench&s=read-cost`.
     pile.
 12. **New doubtful cards join the end.** After a read, its doubtful cards go after the ones already
     open (Bench: dashed cells in the strip; Sorting table: new piles at the end of the rail, marked
-    with their box). Nothing already in the list moves.
+    with their box). Gain: nothing already in the list moves. Loss: the newest box waits its turn.
+    Pick: keep (house guidance `ux-order-holds-still`).
 13. **One status line.** It names only what is not normal: a read running, a read that stopped, a
-    box that has not reported back. Otherwise it says "All is well."
+    box that has not reported back. Otherwise it says "All is well." Gain: one place to glance.
+    Loss: none seen. Pick: keep (house rule `ux-all-is-well`).
 14. **Loading, failed, unknown, empty and filter-emptied are each their own state.** Failed says
     answers are saved, offers Try again, and keeps the server's words in a closed "What the server
     said". Unknown says which box has not reported back and offers Check again. Empty is one
     sentence and one control (start a paid read). A filter that empties the list keeps the filter and
-    offers "Show every reason".
+    offers "Show every reason". Gain: no state reads as zero or done when it is not. Loss: five
+    more drawings to keep. Pick: keep (house rules `ux-unknown-is-not-empty`, `ux-no-dead-end`).
 15. **Money has its own colour role.** Every cost and every spend control uses one ochre role, in
-    both themes, so spend is never mistaken for a plain action.
+    both themes. Gain: spend is never mistaken for a plain action. Loss: one more colour to hold in
+    the token set. Pick: keep.
 16. **A printing's name is unique.** Set and number, then each mark that is not the plain default
-    ("First Tide 012/098, foil"). Two printings never share a label in a receipt or the Answered
-    list. On a printing's own tile or bin the title is set and number only, because its chips
-    show the marks.
-17. **Forced colours.** The sitting strip's answered and held cells use system colours and a dotted
-    border in a contrast theme, because a stripe gradient is removed there.
+    ("First Tide 012/098, foil"). On a printing's own tile or bin the title is set and number only,
+    because its chips show the marks. Gain: two printings never share a label in a receipt or the
+    Answered list. Loss: long names on rare printings. Pick: keep.
+17. **Forced colours.** In a contrast theme the strip's answered and held cells, the chosen tab, the
+    current pile and the chosen printing keep a system-colour fill, border or outline. Gain: no
+    state is lost when gradients and fills are removed. Loss: none seen. Pick: keep (house rule
+    `ux-forced-colors-hold`).
 18. **At 820 with touch.** Bench: the photo on top, the printings as a two-column grid of large
     targets below. Sorting table: the rail folds behind "Piles and boxes"; the photo comes first,
-    the bins below as a compact grid. Key hints are hidden at 820. Each button is at least 44 px tall; the strip cells are smaller, and
-    the arrow buttons beside them are the touch path.
+    the bins below as a compact grid. Key hints are hidden at 820. Each button, select and
+    disclosure is at least 44 px tall, measured; the strip cells are 28 px, and the arrow buttons
+    beside them are the touch path. Gain: one hand on a tablet reaches each act. Loss: the 820
+    frame shows fewer bins at once. Pick: keep.
+19. **One key legend, no repeats.** The legend lists only keys no button shows (printings, arrows,
+    undo, next pile); 0, H and Z sit on their own buttons. Gain: each label shows once. Loss: a
+    new user reads keys from two places. Pick: keep (house rule `ux-label-once`).
 
 ## Limits of a blind designer
 

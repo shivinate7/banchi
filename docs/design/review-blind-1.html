@@ -205,7 +205,16 @@ details.machine code { display: block; margin-block-start: var(--space-1); paddi
   .b-cells button[data-s="answered"] { background: CanvasText; }
   .b-cells button[data-s="held"] { background: Canvas; border: 3px dotted CanvasText; }
   .bar > i { background: Highlight; }
+  .b-tabs button[aria-selected="true"], .seg button[aria-pressed="true"], .concept-pick[data-active="true"] .go { outline: 3px solid Highlight; outline-offset: -3px; }
+  .pilebtn { border-color: Canvas; }
+  .pilebtn[aria-current="true"] { border: 3px solid Highlight; }
+  .chip.quiet { border-color: Canvas; }
+  .bin.flash { outline: 3px solid Highlight; }
+  .cand[data-state="picked"] { outline: 3px solid Highlight; }
 }
+.touch .b-tabs button, .touch .filter select, .touch .boxcard .acts .btn, .touch details summary { min-height: 2.75rem; }
+.touch details summary { display: flex; align-items: center; }
+.touch .bin .tray .mini { width: 2rem; }
 .keys { display: flex; gap: var(--space-3); font-size: var(--text-xs); color: var(--text-muted); align-items: center; flex-wrap: wrap; }
 .touch .keys { display: none; }
 .b-page { flex: 1; min-height: 0; overflow: auto; padding: var(--space-8) var(--space-6); display: flex; flex-direction: column; gap: var(--space-6); }
@@ -288,9 +297,9 @@ table.ledger { border-collapse: collapse; width: 100%; font-size: var(--text-sm)
 .t-head .statusline { margin-inline-start: auto; }
 .bins { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: var(--space-3); }
 .bin { position: relative; display: grid; grid-template-rows: 1fr auto; gap: var(--space-2); padding: var(--space-3); border: 2px solid var(--line); border-radius: var(--radius); background: var(--surface-raised); }
-.bin:has(.bin-drop:hover:not(:disabled)) { border-color: var(--accent); }
+.bin:has(.bin-drop:hover:not([aria-disabled="true"])) { border-color: var(--accent); }
 .bin-drop { border: 0; background: none; padding: 0; text-align: start; display: block; width: 100%; border-radius: 4px; }
-.bin-drop:disabled { cursor: default; }
+.bin-drop[aria-disabled="true"] { cursor: default; }
 .bin .refrow { display: grid; grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr); gap: var(--space-3); align-items: start; }
 .bins[data-n-big="true"] .bin .refrow { grid-template-columns: 1fr; }
 .bin .ref { height: 9rem; display: flex; justify-content: center; }
@@ -670,7 +679,7 @@ function benchQueue(m) {
   const ph = m.photos[m.idx]; const cands = CANDS[ph.fam]; const a = m.ans[ph.id];
   const posInSit = m.idx + 1, total = m.photos.length;
   const many = cands.length > 5;
-  const keys = H.w === "820" ? "" : `<div class="keys"><span><kbd>1</kbd>–<kbd>${cands.length}</kbd> printing</span><span><kbd>0</kbd> none of these</span><span><kbd>H</kbd> can't tell yet</span>${opt("look") ? `<span><kbd>Z</kbd> look there</span>` : ""}<span><kbd>←</kbd><kbd>→</kbd> move</span><span><kbd>U</kbd> undo</span>${opt("confirm") ? `<span><kbd>Enter</kbd> send</span>` : ""}</div>`;
+  const keys = H.w === "820" ? "" : `<div class="keys"><span><kbd>1</kbd>–<kbd>${cands.length}</kbd> printing</span><span><kbd>←</kbd><kbd>→</kbd> move</span><span><kbd>U</kbd> undo</span>${opt("confirm") ? `<span><kbd>Enter</kbd> send</span>` : ""}</div>`;
   const cells = opt("strip") ? `<div class="b-cells" role="list" aria-label="Cards in this sitting"${nl("sitting strip")}>${m.photos.map((p, i) => { const st = m.ans[p.id] === "held" ? "held" : m.ans[p.id] ? "answered" : i >= m.freshFrom ? "new" : "open"; const hide = m.filter && p.fam !== m.filter; return hide ? "" : `<button role="listitem" data-act="go" data-v="${i}" data-s="${st}" aria-current="${i === m.idx}" aria-label="Card ${i + 1}, ${st}" title="Card ${i + 1}: ${st}"></button>`; }).join("")}</div>` : `<span style="flex:1"></span>`;
   return `<div class="b-queue">
 <section class="b-photo-pane" aria-label="Photo">
@@ -832,7 +841,8 @@ function boxCard(m, b) {
   if (b.state === "silent") inner = `<p>${b.read} of ${b.photos} read when it last reported. How many are doubtful is not known yet.</p><div class="acts"><button class="btn" data-act="check-box" data-v="${b.box}">Check again</button></div>`;
   if (b.state === "done") inner = `<dl class="receipt"><dt>Cost</dt><dd class="money">${money(b.receipt.cost)}</dd><dt>Named</dt><dd>${b.receipt.named}</dd><dt>Doubtful</dt><dd>${b.receipt.doubtful}</dd></dl><p class="muted">The doubtful photos are new piles at the end of the list.</p>`;
   if (b.state === "stopped" || b.state === "failed") inner = `<p>${b.state === "failed" ? "The reader stopped answering. " : "You stopped it. "}${b.read} of ${b.photos} read for <span class="money">${money(b.read * PRICE_PER_PHOTO)}</span>. The other ${b.photos - b.read} cost nothing.</p><div class="acts"><button class="btn btn-spend" data-act="resume-box" data-v="${b.box}">Read the other ${b.photos - b.read}, up to ${money((b.photos - b.read) * PRICE_PER_PHOTO)}</button></div>${b.state === "failed" ? `<details class="machine"><summary>What the server said</summary><code>reader returned 503 three times in a row</code></details>` : ""}`;
-  const head = b.state === "done" ? "Read" : b.state === "idle" ? "Not read" : b.state === "running" ? "Reading" : b.state === "costing" || b.state === "cost" ? "Not read" : b.state === "silent" ? "No word yet" : "Part read";
+  /* An unread box says so by its Read button, so its label stays empty (one label per screen). */
+  const head = b.state === "done" ? "Read" : b.state === "running" ? "Reading" : b.state === "silent" ? "No word yet" : b.state === "stopped" || b.state === "failed" ? "Part read" : "";
   return `<li class="boxcard" data-state="${b.state}"${b.state === "cost" ? nl("cost shown in the box before spend") : ""}><div class="row"><span class="name">Box ${b.box}</span><span class="muted">${b.photos} photos</span><span class="end muted">${head}</span></div>${inner}</li>`;
 }
 function tableStatus(m) {
@@ -868,7 +878,7 @@ function tableMain(m, pl) {
   const top = open[0] || null;
   const sorted = pl.photos.length - open.length - held.length;
   const big = cands.length > 4;
-  const bins = `<div class="bins" style="--n:${cands.length}" data-n-big="${big}" role="group" aria-label="Printings: drop the photo into one"${nl("bins that stay put while photos change")}>${cands.map((c, i) => { const p = P[c]; const inBin = pl.photos.filter((x) => m.ans[x.id] === c); return `<div class="bin" data-bin="${c}"><button class="bin-drop" data-act="drop" data-v="${c}" aria-keyshortcuts="${i + 1}" ${top ? "" : "disabled"}><span class="refrow"><span class="ref">${cardSVG(c)}</span><span class="info"><span class="set">${esc(shortLabel(p))}</span>${chipsFor(c, cands, opt("diff"))}<span class="price">${money(p.price)}</span></span></span></button><span class="tray"><span class="cnt" aria-label="${inBin.length} photos in this bin">${inBin.length}</span>${opt("trays") ? inBin.slice(-8).map((x) => `<button class="mini" data-act="unbin" data-v="${x.id}" aria-label="Take back photo ${x.shot}" title="Take this photo back to the pile">${cardSVG(x.truth, { photo: true })}</button>`).join("") : ""}<kbd>${i + 1}</kbd></span></div>`; }).join("")}</div>`;
+  const bins = `<div class="bins" style="--n:${cands.length}" data-n-big="${big}" role="group" aria-label="Printings: drop the photo into one"${nl("bins that stay put while photos change")}>${cands.map((c, i) => { const p = P[c]; const inBin = pl.photos.filter((x) => m.ans[x.id] === c); return `<div class="bin" data-bin="${c}"><button class="bin-drop" data-act="drop" data-v="${c}" aria-keyshortcuts="${i + 1}" ${top ? "" : `aria-disabled="true" title="No photo is left on this pile to drop."`}><span class="refrow"><span class="ref">${cardSVG(c)}</span><span class="info"><span class="set">${esc(shortLabel(p))}</span>${chipsFor(c, cands, opt("diff"))}<span class="price">${money(p.price)}</span></span></span></button><span class="tray"><span class="cnt" aria-label="${inBin.length} photos in this bin">${inBin.length}</span>${opt("trays") ? inBin.slice(-8).map((x) => `<button class="mini" data-act="unbin" data-v="${x.id}" aria-label="Take back photo ${x.shot}" title="Take this photo back to the pile">${cardSVG(x.truth, { photo: true })}</button>`).join("") : ""}<kbd>${i + 1}</kbd></span></div>`; }).join("")}</div>`;
   let pile;
   if (top) {
     const under = opt("fan") ? open.slice(1, 3).reverse().map((p, k) => `<div class="layer under" style="transform:translate(${(2 - k) * 14}px, ${(2 - k) * -8}px) rotate(${(2 - k) * 3}deg)">${cardSVG(p.truth, { photo: true })}</div>`).join("") : "";
