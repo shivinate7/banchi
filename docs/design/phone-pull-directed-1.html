@@ -85,7 +85,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 3px s
 .opt button { min-height: 32px; padding: 0 10px; border-radius: 6px; background: var(--bn-surface-2); font-size: var(--ts-footnote); }
 .opt.is-hidden { opacity: .5; border-style: dotted; }
 .stage-row { display: flex; flex-wrap: wrap; gap: var(--bn-7); align-items: flex-start; }
-.frame-wrap { display: flex; flex-direction: column; gap: var(--bn-2); }
+.frame-wrap { display: flex; flex-direction: column; gap: var(--bn-2); width: min-content; }
 .frame-wrap > span { font-size: var(--ts-footnote); color: var(--bn-ink-3); }
 .legend { font-size: var(--ts-footnote); color: var(--bn-ink-3); display: flex; gap: var(--bn-4); flex-wrap: wrap; }
 .legend i { font-style: normal; border: 1px dashed currentColor; padding: 1px 6px; border-radius: 4px; }
@@ -228,6 +228,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 3px s
 .live-pill { position: absolute; top: var(--bn-3); left: var(--bn-3); display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: rgba(12,14,18,.6); font-size: var(--ts-footnote); font-weight: 600; }
 .live-pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--bn-stage-live); box-shadow: 0 0 0 4px rgba(255,106,88,.25); }
 .ghost-photo { position: absolute; top: var(--bn-3); right: var(--bn-3); width: 22%; display: flex; flex-direction: column; gap: 4px; align-items: center; font-size: var(--ts-caption1); font-weight: 600; color: var(--bn-stage-ink); }
+.ghost-photo .art-host { width: 100%; }
 .ghost-photo .art { width: 100%; box-shadow: 0 0 0 2px rgba(255,255,255,.7), inset 0 0 0 3px #15171c; }
 .cam-panel { margin: var(--bn-3) var(--bn-3) 0; min-height: 188px; display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4); border-radius: 28px; background: var(--bn-stage-surface); }
 .cam-panel .cp-say { font-size: var(--ts-title3); line-height: 1.3; }
@@ -308,9 +309,12 @@ body.no-tags .tag-new::after, body.no-tags .tag-today::after { display: none; }
 .pair .reticle { width: 74%; }
 .pair .reticle.snap, .pair .reticle.bad { width: 68%; }
 .split .cam-panel { margin: 0; background: var(--bn-stage-surface); color: var(--bn-stage-ink); }
-.d-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--bn-4); }
+.d-head { display: flex; flex-direction: column; gap: var(--bn-1); }
 .d-head .place { padding: 0; }
 
+.copy-row svg, .icon-btn svg, .sf svg, .env-line svg { width: 22px; height: 22px; flex: none; vertical-align: -4px; }
+.split.full { grid-template-columns: 0 1fr; }
+.split.full > .pane:first-child { visibility: hidden; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 [hidden] { display: none !important; }
 </style>
@@ -386,11 +390,12 @@ const SLABS = [
 ];
 const byId = Object.fromEntries(CARDS.map(c => [c.id, c]));
 const placeOf = c => `${c.box}, Section ${c.sec}, Card ${c.card}`;
+const secOf = c => `Section ${c.sec}, Card ${c.card}`;
 
 /* ---------------- states ---------------- */
 const STATES = [
   ['Pull', [['pull', 'List by Box'], ['envelopes', 'List by Envelope'], ['card', 'One Card'], ['loading', 'Loading'], ['empty', 'Nothing to Pull']]],
-  ['Camera', [['camera', 'Looking'], ['match', 'Match'], ['sold', 'Sold, Undo'], ['wrong', 'Wrong Card'], ['unread', 'Can\'t Read'], ['eye', 'By Eye']]],
+  ['Camera', [['camera', 'Looking'], ['match', 'Match'], ['sold', 'Sold, Undo'], ['wrong', 'Wrong Card'], ['unread', 'Can\'t Read'], ['eye', 'By Eye'], ['eye-ok', 'By Eye, Pulled']]],
   ['Problems', [['short', 'Not in a Box'], ['offline', 'Mac out of Reach'], ['offline-match', 'Match, Mac Away']]],
   ['Find', [['find', 'Find a Card'], ['find-scan', 'Find by Camera'], ['copy', 'One Copy'], ['move', 'Move a Copy']]],
   ['Slabs', [['slabs', 'Slab List'], ['slab-scan', 'Scan Cert'], ['slab-found', 'Slab Found'], ['slab-miss', 'Not Found']]],
@@ -403,10 +408,15 @@ const OPTIONS = [
   { key: 'hold', label: 'Hold Sales While Away', focus: 'opt-hold', state: 'offline-match' },
   { key: 'findscan', label: 'Find by Camera', focus: 'opt-findscan', state: 'find-scan' },
 ];
-const params = () => new URLSearchParams(location.hash.replace(/^#/, ''));
+/* The state lives here and is mirrored to the URL hash, so a page opened where the hash
+   cannot be written (an embedded preview) still clicks through. */
+let cur = new URLSearchParams(location.hash.replace(/^#/, ''));
+const params = () => new URLSearchParams(cur);
 let hidden = new Set((params().get('hide') || '').split(',').filter(Boolean));
-function go(s) { const p = params(); p.set('s', s); location.hash = p.toString(); }
-function setParam(k, v) { const p = params(); if (v === null) p.delete(k); else p.set(k, v); location.hash = p.toString(); }
+function commit(p) { cur = p; try { history.replaceState(null, '', '#' + p.toString()); } catch (e) { /* no hash here */ } render(); }
+function go(s) { const p = params(); p.set('s', s); commit(p); }
+function setParam(k, v) { const p = params(); if (v === null) p.delete(k); else p.set(k, v); commit(p); }
+window.mockState = q => commit(new URLSearchParams(q));
 const on = k => !hidden.has(k);
 
 /* ---------------- icons (SF Symbol stand-ins) ---------------- */
@@ -429,7 +439,6 @@ const sb = stage => `<div class="statusbar${stage ? ' on-stage' : ''}"><span>9:4
 const home = stage => `<div class="home-ind${stage ? ' on-stage' : ''}"></div>`;
 
 const art = (c, cls = '') => `<div class="art-host ${cls}"><div class="art${c.fin === 'Foil' ? ' foil' : ''}" style="--h:${c.h}" role="img" aria-label="Stored photo of ${c.name}"><span class="a-cost">${c.cost || 2}</span><span class="a-name">${c.name}</span><span class="a-text"></span><span class="a-num">${c.num}</span></div></div>`;
-const tag = (kind, label) => ` class-tag="${kind}" data-tag="${kind === 'new' ? 'New' : 'Today'}: ${label}"`;
 const tg = (kind, label) => `tag-${kind}" data-tag="${kind === 'new' ? 'New' : 'Today'}: ${label}`;
 
 /* ---------------- counts: one number everywhere ---------------- */
@@ -456,7 +465,7 @@ function pullHeader(state) {
 function cardRow(c, opts = {}) {
   const n = opts.n ?? c.copies.length;
   const done = opts.done;
-  const sub = opts.sub ?? placeOf(c.copies[0]);
+  const sub = opts.sub ?? secOf(c.copies[0]);
   return `<button class="row${done ? ' done' : ''}" type="button" data-go="${opts.go || 'card'}" ${opts.current ? 'aria-current="true"' : ''}>
     <div class="thumb">${art(c)}</div>
     <div class="r-main"><span class="r-name">${c.name}</span><span class="r-sub">${sub}</span></div>
@@ -485,7 +494,7 @@ function pullList(state, current) {
     const cs = CARDS.filter(c => c.copies[0].box === bx);
     const n = cs.reduce((a, c) => a + c.copies.length, 0) - (sold && bx === 'Box 4' ? 1 : 0);
     return `<div class="group"><div class="group-head"><span>${bx}</span><span class="gh-right">${n} to pull</span></div><div class="group-body">
-      ${cs.map(c => (sold && c.id === 'vael') ? cardRow(c, { n: 1, sub: placeOf(c.copies[1]), current: current === c.id }) : cardRow(c, { current: current === c.id })).join('')}
+      ${cs.map(c => (sold && c.id === 'vael') ? cardRow(c, { n: 1, sub: secOf(c.copies[1]), current: current === c.id }) : cardRow(c, { current: current === c.id })).join('')}
     </div></div>`;
   }).join('') + shortRows();
 }
@@ -528,9 +537,8 @@ function cardDetail(c, doneN, compact) {
     <div class="card-body">
       <div class="facts"><span class="f-name">${c.name}</span><span class="f-about"><span>${c.cond}</span><span>${c.fin}</span><span>${c.num}</span></span></div>
       <div class="env-line">${I.env} Pull <b>${c.copies.length}</b>. This one goes in <b>${BUYERS[c.env[doneN]].name}</b>'s envelope.</div>
-      ${compact ? '' : art(c, 'card-photo')}
       ${copiesList(c, doneN)}
-      ${compact ? art(c, 'card-photo') : ''}
+      ${art(c, 'card-photo')}
     </div>`;
 }
 function cardScreen(state) {
@@ -577,11 +585,21 @@ function cameraScreen(kind) {
     ${kind === 'offline' ? `<div class="banner" style="margin-top:4px">${I.wifiOff}<div class="b-text"><b>Can't reach the Mac</b></div><button type="button" data-go="match">Try Again</button></div>` : ''}
     ${viewfinder(vk, c, held)}${camPanel(kind, c)}</div>`;
 }
-function eyeScreen() {
+function eyeScreen(state) {
   const c = byId.vael;
-  return `<div class="cam"><div class="navbar"><button class="nav-btn glass" type="button" data-go="camera">Back</button><span class="nav-title">Compare by Eye</span><span style="width:72px"></span></div>
-    <div class="eye"><div>${art(c)}<span>Your photo</span></div><div>${viewfinder('find', c)}<span>Camera</span></div></div>
-    <div class="cam-panel"><div class="cp-say" style="font-size:var(--ts-title3)">Same card, same finish (${c.fin})?</div><button class="secondary ${tg('today', 'Pull, Then Mark Sold')}" type="button" data-go="match">It Matches</button><div class="why">Mark It Sold shows below once you say so.</div></div></div>`;
+  return `<div class="screen" style="background:var(--bn-bg)"><div class="navbar"><button class="nav-btn" type="button" data-go="camera">${I.back}Camera</button><span class="nav-title">Compare by Eye</span><span style="width:72px"></span></div>
+    <div class="scroll"><div class="card-body" style="padding-top:4px;padding-bottom:260px">${eyeBody(state)}</div></div>
+    <div class="dock no-tabs">${eyeActions(state)}</div></div>`;
+}
+function eyeBody() {
+  const c = byId.vael;
+  return `<div class="facts"><span class="f-name">${c.name}</span><span class="f-about"><span>${c.cond}</span><span>${c.fin}</span><span>${c.num}</span></span></div>${art(c, 'card-photo')}`;
+}
+/* Today's two steps: the first press becomes a sentence, and the sale arrives below it. */
+function eyeActions(state) {
+  return state === 'eye-ok'
+    ? `<p class="${tg('today', 'Pulled, Then Mark Sold')}" style="margin:0;min-height:52px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:var(--ts-title3);font-weight:600;color:var(--bn-ok)">${I.check}Pulled.</p><button class="primary" type="button" data-go="sold">Mark It Sold</button>`
+    : `<button class="secondary ${tg('today', 'Pull')}" type="button" data-go="eye-ok" style="min-height:52px">It Matches</button><div style="min-height:64px" class="why">Same card, same finish (${byId.vael.fin})? The sale shows here after.</div>`;
 }
 
 /* ---------------- Not in a box ---------------- */
@@ -678,7 +696,7 @@ function todayScreen() { return `<div class="screen"><div class="scroll">${today
 
 /* ---------------- Folded: one layout per state ---------------- */
 function folded(state) {
-  const stage = ['camera', 'match', 'wrong', 'unread', 'eye', 'offline-match', 'find-scan', 'slab-scan'].includes(state);
+  const stage = ['camera', 'match', 'wrong', 'unread', 'offline-match', 'find-scan', 'slab-scan'].includes(state);
   let body;
   switch (state) {
     case 'pull': case 'envelopes': case 'loading': case 'empty': case 'offline': body = pullScreen(state, { compact: true }); break;
@@ -688,7 +706,7 @@ function folded(state) {
     case 'wrong': body = cameraScreen('wrong'); break;
     case 'unread': body = cameraScreen('unread'); break;
     case 'offline-match': body = cameraScreen('offline'); break;
-    case 'eye': body = eyeScreen(); break;
+    case 'eye': case 'eye-ok': body = eyeScreen(state); break;
     case 'short': body = shortScreen(); break;
     case 'find': case 'copy': case 'move': body = findScreen(state); break;
     case 'find-scan': body = findScanScreen(); break;
@@ -705,22 +723,29 @@ function uDetailCard(state) {
   const c = byId.vael;
   const doneN = state === 'sold' ? 1 : 0;
   const cp = c.copies[doneN];
-  const kind = { camera: 'look', match: 'match', wrong: 'wrong', unread: 'unread', 'offline-match': 'offline', eye: 'unread' }[state] || null;
-  const head = `<div class="d-head"><div class="place"><span class="p-box">${cp.box}</span><span class="p-label">Section ${cp.sec}, Card ${cp.card}</span></div><div class="facts" style="text-align:right"><span class="f-name" style="font-size:var(--ts-title3)">${c.name}</span><span style="color:var(--bn-ink-2);font-size:var(--ts-subhead)">${c.cond}, ${c.fin}, ${c.num}</span></div></div>`;
+  const kind = { camera: 'look', match: 'match', wrong: 'wrong', unread: 'unread', 'offline-match': 'offline' }[state] || null;
+  const head = `<div class="d-head"><div class="place"><span class="p-box">${cp.box}</span><span class="p-label">Section ${cp.sec}, Card ${cp.card}</span></div><div class="facts"><span class="f-name" style="font-size:var(--ts-title3)">${c.name}</span><span style="color:var(--bn-ink-2);font-size:var(--ts-subhead)">${c.cond}, ${c.fin}, ${c.num}</span></div></div>`;
+  if (state.startsWith('eye')) {
+    return `<div class="navbar" style="padding:0"><button class="nav-btn" type="button" data-go="camera">${I.back}Camera</button><span class="nav-title">Compare by Eye</span><span style="width:72px"></span></div>${head}
+      <div class="pair" style="align-items:end;grid-template-columns:320px 1fr"><div>${art(c)}<span>Your photo</span></div><div style="gap:8px">${eyeActions(state)}</div></div>`;
+  }
   if (!kind) {
     return `${state === 'offline' ? banner(false).replace('class="banner"', 'class="banner" style="margin:0"') : ''}${head}${ruler(cp).replace('class="ruler', 'style="margin:0" class="ruler')}
-      <div class="pair"><div>${art(c)}<span>Your photo</span></div><div style="gap:12px"><div class="env-line">${I.env} Pull <b>${c.copies.length}</b>. This one goes in <b>${BUYERS[c.env[doneN]].name}</b>'s envelope.</div>${copiesList(c, doneN)}<div style="flex:1"></div>${state === 'sold' ? receipt() : ''}<button class="primary ${tg('new', 'Check Card')}" type="button" data-go="camera">${I.camera}Check Card</button></div></div>`;
+      <div class="env-line">${I.env} Pull <b>${c.copies.length}</b>. This one goes in <b>${BUYERS[c.env[doneN]].name}</b>'s envelope.</div>
+      ${copiesList(c, doneN)}
+      <div style="width:320px;align-self:center">${art(c)}</div>
+      <div style="position:sticky;bottom:0;display:flex;flex-direction:column;gap:8px">${state === 'sold' ? receipt() : ''}<button class="primary ${tg('new', 'Check Card')}" type="button" data-go="camera">${I.camera}Check Card</button></div>`;
   }
   const held = kind === 'wrong' ? byId.corvin : c;
   const vk = kind === 'offline' ? 'match' : kind;
   return `${kind === 'offline' ? banner(false).replace('class="banner"', 'class="banner" style="margin:0"') : ''}${head}
     <div class="pair" style="flex:1"><div>${art(c)}<span>Your photo</span></div><div>${viewfinder(vk, c, held).replace('class="ghost-photo"', 'hidden class="ghost-photo"')}<span>Camera</span></div></div>
-    ${state === 'eye' ? `<div class="cam-panel"><div class="cp-say" style="font-size:var(--ts-title3)">Same card, same finish (${c.fin})?</div><button class="secondary" type="button" data-go="match">It Matches</button></div>` : camPanel(kind, c).replace('<div class="cam-panel"', '<div class="cam-panel" style="min-height:0"')}
+    ${camPanel(kind, c).replace('<div class="cam-panel"', '<div class="cam-panel" style="min-height:0"')}
     <div style="display:flex;justify-content:flex-end"><button class="nav-btn" type="button" data-go="card">Close Camera</button></div>`;
 }
 function unfolded(state) {
   let left, right;
-  const pullStates = ['pull', 'envelopes', 'card', 'camera', 'match', 'wrong', 'unread', 'eye', 'sold', 'offline', 'offline-match'];
+  const pullStates = ['pull', 'envelopes', 'card', 'camera', 'match', 'wrong', 'unread', 'eye', 'eye-ok', 'sold', 'offline', 'offline-match'];
   if (pullStates.includes(state)) {
     const listState = state === 'envelopes' ? 'envelopes' : state === 'offline' || state === 'offline-match' ? 'pull' : state;
     left = `<div class="scroll">${pullHeader(listState)}<div class="list-wrap">${pullList(listState === 'sold' ? 'sold' : listState, 'vael')}</div></div>${tabbar('pull')}`;
@@ -748,7 +773,7 @@ function unfolded(state) {
     left = `<div class="scroll">${todayBody()}</div>${tabbar('today')}`;
     right = `<div class="detail"><div class="tile"><span class="t-head">Shipping lanes</span><div class="lane"><span>Letter, stamp</span><span>3 envelopes</span></div><div class="lane"><span>Tracked</span><span>1 envelope</span></div></div><div class="tile"><span class="t-head">Sales</span><div class="lane"><span>Today</span><span>$58.25</span></div><div class="lane"><span>This week</span><span>$412.50</span></div></div><div class="why" style="text-align:left">Read only. Pricing and sending stay on the Mac.</div></div>`;
   }
-  return sb(false) + `<div class="split"><div class="pane">${left}</div><div class="pane">${right}</div></div>` + home(false);
+  return sb(false) + `<div class="split${state.startsWith('eye') ? ' full' : ''}"><div class="pane">${left}</div><div class="pane">${right}</div></div>` + home(false);
 }
 
 /* ---------------- render and wiring ---------------- */
@@ -780,7 +805,9 @@ document.addEventListener('click', e => {
   const h = e.target.closest('[data-hide]');
   if (h) { const k = h.dataset.hide; hidden.has(k) ? hidden.delete(k) : hidden.add(k); setParam('hide', hidden.size ? [...hidden].join(',') : null); }
 });
-window.addEventListener('hashchange', render);
+window.addEventListener('hashchange', () => { cur = new URLSearchParams(location.hash.replace(/^#/, '')); render(); });
+document.getElementById('stateNav').addEventListener('click', e => { const a = e.target.closest('a[href^="#"]'); if (a) { e.preventDefault(); commit(new URLSearchParams(a.getAttribute('href').slice(1))); } });
+document.getElementById('optBar').addEventListener('click', e => { const a = e.target.closest('a[href^="#"]'); if (a) { e.preventDefault(); commit(new URLSearchParams(a.getAttribute('href').slice(1))); } });
 render();
 })();
 </script>
