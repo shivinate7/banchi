@@ -277,7 +277,7 @@ button { font: inherit; color: inherit; }
   background: var(--bn-surface-glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); box-shadow: 0 0 0 1px var(--bn-line), var(--bn-shadow-3); }
 .search-tab[aria-selected="true"] { color: var(--bn-accent); }
 /* regular width: the tab bar floats at the top, centred */
-.device[data-device="iphone-duo-unfolded"] .tabbar { top: calc(var(--drawn-top) + env(safe-area-inset-top, 0px) - 6px); bottom: auto; left: 50%; right: auto; transform: translateX(-50%); }
+.device[data-device="iphone-duo-unfolded"] .tabbar { top: calc(var(--drawn-top) + env(safe-area-inset-top, 0px) - 6px); bottom: auto; left: 25%; right: auto; transform: translateX(-50%); }
 .device[data-device="iphone-duo-unfolded"] .tabs { grid-auto-columns: auto; }
 .device[data-device="iphone-duo-unfolded"] .tab { flex-direction: row; gap: 6px; min-height: 40px; padding: 0 14px; font-size: var(--ty-subhead); }
 .device[data-device="iphone-duo-unfolded"] .tab .badge { position: static; }
@@ -343,7 +343,9 @@ button { font: inherit; color: inherit; }
   display: flex; flex-direction: column; gap: var(--bn-3); padding: 6px var(--bn-4) calc(var(--drawn-bottom) + env(safe-area-inset-bottom, 0px));
   max-height: calc(100% - 70px);
 }
-.device[data-device="iphone-duo-unfolded"] .sheet { left: 50%; right: auto; width: 540px; transform: translateX(-50%); bottom: auto; top: 90px; border-radius: 30px; padding-bottom: var(--bn-5); }
+/* unfolded: a sheet stays inside one half, never across the hinge */
+.device[data-device="iphone-duo-unfolded"] .sheet { left: calc(50% + 12px); right: 12px; bottom: auto; top: 64px; border-radius: 30px; padding-bottom: var(--bn-5); }
+.next-copy { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,.55); color: #fff; border-color: rgba(255,255,255,.2); }
 .grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--bn-line-strong); align-self: center; margin-top: 4px; }
 .sheet-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-2); min-height: 44px; position: relative; }
 .sheet-bar h3 { margin: 0; font-size: var(--ty-body); font-weight: 600; position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; }
@@ -413,7 +415,8 @@ button { font: inherit; color: inherit; }
 .refusal { display: flex; gap: var(--bn-3); align-items: flex-start; padding: var(--bn-3) var(--bn-4); background: var(--bn-warn-tint); border-radius: var(--bn-r-xl); font-size: var(--ty-body); color: var(--bn-ink); }
 
 /* Today / New tags: dashed outlines that say what exists in the web app and what this adds */
-body.tags [data-tag] { outline: 1.5px dashed var(--bn-ink-4); outline-offset: 2px; position: relative; }
+body.tags [data-tag] { outline: 1.5px dashed var(--bn-ink-4); outline-offset: 2px; }
+:where(body.tags [data-tag]) { position: relative; } /* zero specificity: a part placed absolutely keeps its place */
 body.tags [data-tag^="New"] { outline-color: var(--bn-accent); }
 body.tags [data-tag]::after {
   content: attr(data-tag); position: absolute; z-index: 60; top: -9px; left: 8px; pointer-events: none;
@@ -626,7 +629,7 @@ function tabBar(active, pose) {
   const t = (id, label, icon, badge, tag) =>
     `<button class="tab" role="tab" aria-selected="${active === id}" data-go="${{ pull: 'pull', slabs: 'slabs', today: 'today' }[id]}"${tag ? ` data-tag="${tag}"` : ''}>${icon}<span>${label}</span>${badge ? `<span class="badge num">${badge}</span>` : ''}</button>`;
   return `<nav class="tabbar" aria-label="Sections"><div class="tabs" role="tablist">
-      ${t('pull', 'Pull', I.tray, TO_PULL, 'Today: Cards to Pull')}${t('slabs', 'Slabs', I.slab, 0, 'Today: Slabs')}${t('today', 'Today', I.sun, 0, 'New: Glance')}
+      ${t('pull', 'Pull', I.tray, 0, 'Today: Cards to Pull')}${t('slabs', 'Slabs', I.slab, 0, 'Today: Slabs')}${t('today', 'Today', I.sun, 0, 'New: Glance')}
     </div><button class="search-tab" role="tab" aria-selected="${active === 'find'}" aria-label="Find" data-go="find" data-tag="Today: Inventory Search">${I.search}</button></nav>`;
 }
 function countLine() {
@@ -661,8 +664,8 @@ function pullRows(opts = {}) {
         const progress = opts.soldOne && c.id === 'gale';
         return `<button class="row ${done ? 'done' : ''}" data-go="card" ${cur ? 'aria-current="true"' : ''}>
           ${art(c.h, 'thumb')}
-          <span class="row-main"><span class="row-name">${c.name}</span><span class="row-sub num">${here.includes(',') ? 'Cards' : 'Card'} ${here}</span>${marks(c.for, progress ? (i) => (i === 0 ? 'got' : '') : done ? () => 'got' : null)}</span>
-          <span class="row-end">${done ? `<span class="need ok">${I.check}</span>` : progress ? need('1 More') : need(c.for.length)}</span>
+          <span class="row-main"><span class="row-name">${c.name}</span><span class="row-sub num">${here.includes(',') ? 'Cards' : 'Card'} ${here}</span></span>
+          <span class="row-end">${done ? `<span class="need ok">${I.check}</span>` : progress ? need('1 More') : need(c.for.length)}${marks(c.for, progress ? (i) => (i === 0 ? 'got' : '') : done ? () => 'got' : null)}</span>
         </button>`;
       }).join('')}</div></div>`).join('') +
     (on('unloc') && !opts.noUnloc ? `<div class="group"><div class="group-head"><h2>Not in a Box</h2><span class="num">${NOT_IN_BOX} owed</span></div>
@@ -733,12 +736,12 @@ function cardScreen(pose, phase) {
     low = `<p class="slot-note waits" data-tag="New: Wait for the Mac">${I.wifioff}<span>Mark It Sold waits for the Mac.</span></p>`;
   } else {
     const hold = phase === 'sold-hold';
-    top = `<p class="said" role="status"${hold ? ' data-tag="New: Kept on This Phone"' : ''}>${I.check}<span>${hold ? 'Kept on this phone.' : 'Sold to ' + BUYERS[who].name.split(' ')[0] + '.'}</span><button class="glass-btn tint undo" data-go="card" data-tag="Today: Undo">${I.undo} Undo</button></p>`;
+    top = `<p class="said" role="status"${hold ? ' data-tag="New: Kept on This Phone"' : ''}>${I.check}<span>${hold ? 'Kept on phone.' : 'Sold to ' + BUYERS[who].name.split(' ')[0] + '.'}</span><button class="glass-btn tint undo" data-go="card" data-tag="Today: Undo">${I.undo} Undo</button></p>`;
     low = `<button class="big-btn quiet" data-go="card"><span>Next Copy: <span class="num">Card 25</span></span></button>`;
   }
   const steps = `<div class="steps" data-tag="Today: Two Steps, Both Slots Kept">${top}${low}</div>`;
   const end = `<button class="glass-btn" data-go="nothere" data-tag="New: Not Here">Not Here</button>`;
-  const photo = (cls) => `<span style="position:relative;display:block">${art(c.h, cls, c.name)}<span class="photo-tag">Sample photo</span><span class="photo-tag left num">Copy 1 of ${c.copies.length}</span></span>`;
+  const photo = (cls) => `<span style="position:relative;display:block">${art(c.h, cls, c.name)}<span class="photo-tag">Sample photo</span><span class="photo-tag left num">Copy 1 of ${c.copies.length}</span><button class="glass-btn next-copy" data-go="card" aria-label="Next copy: ${c.copies[1].at}" data-tag="New: Next Copy">${I.chev}</button></span>`;
 
   if (pose === 'folded') {
     return `<div class="screen">${status()}${navInline(c.box + ', ' + c.sec, 'pull', 'Pull', end)}
