@@ -121,9 +121,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .field.sm { width: 92px; }
 
 /* ---- mockup-only layer: the sample ribbon, the state bar, the cull strip, the Today:/New: tags ---- */
-.mock { position: sticky; top: 0; z-index: 20; background: var(--bn-bg); box-shadow: 0 1px 0 var(--bn-line); }
+.mock { position: relative; z-index: 20; background: var(--bn-bg); box-shadow: 0 1px 0 var(--bn-line); }
 .ribbon { display: flex; align-items: center; gap: var(--bn-3); min-height: 40px; padding: 0 var(--bn-6);
   background: var(--bn-warn-tint); font-size: var(--bn-fs-sm); font-weight: 600; }
+.ribbon-pill { background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-warn); }
 .states, .cull { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1-5); padding: var(--bn-2) var(--bn-6);
   font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .cull { border-top: 1px dashed var(--bn-line-strong); }
@@ -134,10 +135,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .states .theme { margin-left: auto; }
 .mark { position: relative; }
 .tag { position: absolute; z-index: 3; top: -9px; right: var(--bn-2); padding: 0 var(--bn-1-5); font-family: var(--bn-font-mono);
-  font-size: var(--bn-fs-2xs); line-height: 16px; color: var(--bn-accent); background: var(--bn-bg); border: 1px dashed var(--bn-accent);
+  font-size: var(--bn-fs-xs); line-height: 16px; color: var(--bn-accent); background: var(--bn-bg); border: 1px dashed var(--bn-accent);
   border-radius: var(--bn-r-xs); white-space: nowrap; pointer-events: none; }
 .tag.new { color: var(--bn-warn); border-color: var(--bn-warn); }
 body.nonotes .tag { display: none; }
+#rows > .tag { top: auto; bottom: -9px; }
+.ff > .tag { top: var(--bn-2); }
 [hidden] { display: none !important; }
 
 /* ---- the shell: sidebar at 1024 and up, the 64px rail below ---- */
@@ -192,7 +195,7 @@ button.tile:hover { background: var(--bn-surface-3); box-shadow: inset 0 0 0 1px
 .list-lede { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-left: var(--bn-2); }
 .rows { display: flex; flex-direction: column; border-top: 1px solid var(--bn-line); }
 .row { display: grid; column-gap: var(--bn-4); row-gap: var(--bn-1-5); padding: var(--bn-3) 0; border-bottom: 1px solid var(--bn-line);
-  grid-template-columns: 48px minmax(0, 1fr) 232px 172px 300px;
+  grid-template-columns: 48px minmax(0, 1fr) 224px 204px 284px;
   grid-template-areas: 'thumb item ruler ev act' 'thumb why why why act' 'thumb step step step step'; align-items: center; }
 .row:hover { background: var(--bn-hover); }
 .row > .thumb { grid-area: thumb; align-self: start; }
@@ -214,7 +217,7 @@ button.tile:hover { background: var(--bn-surface-3); box-shadow: inset 0 0 0 1px
 /* The address, drawn as Banchi draws it: a tracked key, a mono figure, no interpuncts (D41). */
 .addr { display: flex; flex-wrap: wrap; gap: 0 var(--bn-3); margin-top: var(--bn-1); font-size: var(--bn-fs-sm); }
 .addr > span { display: inline-flex; align-items: baseline; gap: var(--bn-1); }
-.addr .k { font-size: var(--bn-fs-2xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); }
+.addr .k { font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); }
 .addr .v { font-family: var(--bn-font-mono); font-weight: 600; color: var(--bn-ink); }
 .addr.vault .v { color: var(--bn-pill-ink-warn); }
 .ev { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); display: flex; flex-direction: column; gap: 2px; }
@@ -243,13 +246,13 @@ button.tile:hover { background: var(--bn-surface-3); box-shadow: inset 0 0 0 1px
 .scale .track { position: absolute; left: 0; right: 0; top: 16px; height: 4px; border-radius: var(--bn-r-full); background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-line); }
 .scale .gap { position: absolute; top: 12px; height: 12px; background: var(--bn-warn-tint); border-radius: 2px; }
 .scale .entry { position: absolute; top: 8px; width: 2px; height: 20px; margin-left: -1px; background: var(--bn-warn); }
-.scale .entry-lab { position: absolute; top: -4px; transform: translateX(-50%); font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs); font-weight: 600; color: var(--bn-pill-ink-warn); white-space: nowrap; }
+.scale .entry-lab { position: absolute; top: -4px; transform: translateX(-50%); font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-pill-ink-warn); white-space: nowrap; }
 .scale .move { position: absolute; top: 17px; height: 2px; background: var(--bn-ink-3); }
 .scale .dot { position: absolute; top: 12px; width: 12px; height: 12px; margin-left: -6px; border-radius: var(--bn-r-full); }
 .scale .dot.old { background: var(--bn-surface); box-shadow: inset 0 0 0 2px var(--bn-ink-3); }
 .scale .dot.new { background: var(--bn-ink); box-shadow: 0 0 0 2px var(--bn-surface); }
 .scale .dot.new[data-tone='down'] { background: var(--bn-ink-3); }
-.scale .ends { position: absolute; left: 0; right: 0; top: 24px; display: flex; justify-content: space-between; font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); }
+.scale .ends { position: absolute; left: 0; right: 0; top: 24px; display: flex; justify-content: space-between; font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .rul-plain { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 body.hide-ruler .rul .scale { display: none; }
 body:not(.hide-ruler) .rul-plain { display: none; }
@@ -265,7 +268,7 @@ body:not(.hide-ruler) .rul-plain { display: none; }
 .calm .legend i { display: inline-block; width: 10px; height: 10px; border-radius: var(--bn-r-full); margin-right: var(--bn-1-5); vertical-align: -1px; }
 
 /* ---- the line panel, a sheet over the right of the page ---- */
-.sheet { position: fixed; z-index: 15; top: 132px; right: var(--bn-4); bottom: var(--bn-4); width: 460px; overflow: auto;
+.sheet { position: absolute; z-index: 15; top: var(--bn-4); right: var(--bn-4); width: 460px;
   background: var(--bn-surface); border-radius: var(--bn-r-xl); box-shadow: var(--bn-shadow-3); padding: var(--bn-5); display: flex; flex-direction: column; gap: var(--bn-5); }
 .sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--bn-3); }
 .sheet-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; }
@@ -283,8 +286,8 @@ body:not(.hide-ruler) .rul-plain { display: none; }
 .chart .seg.real { background: var(--bn-accent); }
 .chart .seg.noise { background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-ink-4); }
 .chart .budget { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--bn-warn); }
-.chart .budget span { position: absolute; right: 0; top: -16px; font-size: var(--bn-fs-2xs); color: var(--bn-pill-ink-warn); font-weight: 600; background: var(--bn-surface); padding-left: var(--bn-1); }
-.chart-axis { display: flex; justify-content: space-between; font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); font-family: var(--bn-font-mono); margin-top: var(--bn-1); }
+.chart .budget span { position: absolute; right: 0; top: -16px; font-size: var(--bn-fs-xs); color: var(--bn-pill-ink-warn); font-weight: 600; background: var(--bn-surface); padding-left: var(--bn-1); }
+.chart-axis { display: flex; justify-content: space-between; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-family: var(--bn-font-mono); margin-top: var(--bn-1); }
 .chart-key { display: flex; gap: var(--bn-4); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .chart-key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: var(--bn-1-5); vertical-align: -1px; }
 .bt-list { display: flex; flex-direction: column; font-size: var(--bn-fs-sm); }
@@ -311,9 +314,8 @@ body.hide-backtest .backtest { display: none; }
 .pick.gold .photo { background: var(--bn-surface); }
 .pick-body { display: flex; flex-direction: column; gap: var(--bn-5); min-width: 0; }
 .gold-flag { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--bn-3); min-height: 44px; padding: 0 var(--bn-4) 0 var(--bn-3);
-  border-radius: var(--bn-r-full); background: var(--bn-warn); color: var(--bn-surface); font-weight: 800; font-size: 20px; }
-:root[data-theme='dark'] .gold-flag { color: var(--bn-bg); }
-.gold-flag .star { width: 22px; height: 22px; background: currentColor; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+  border-radius: var(--bn-r-full); background: var(--bn-surface); color: var(--bn-ink); box-shadow: inset 0 0 0 2px var(--bn-warn); font-weight: 800; font-size: 20px; }
+.gold-flag .star { width: 22px; height: 22px; background: var(--bn-warn); clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
 .place { font-family: var(--bn-font-mono); font-size: 40px; font-weight: 700; line-height: 1.15; letter-spacing: 0; }
 .place-sub { font-size: 20px; color: var(--bn-ink-2); margin-top: var(--bn-1); }
 .cardname { font-size: 26px; font-weight: 700; }
@@ -351,8 +353,12 @@ body.hide-packing .pack-wrap { display: none; }
   .sheet { left: calc(var(--bn-rail-w) + var(--bn-4)); width: auto; }
   .notice { grid-template-columns: 1fr; }
   .notice-act { justify-content: flex-start; }
-  .pick { grid-template-columns: 1fr; }
-  .pick .photo { max-width: 400px; }
+  /* 820 is an iPad in portrait: the photo keeps its 320px short edge beside the place, so the
+     gold flag and the slot sit in the first screen rather than under the photo. */
+  .pick { grid-template-columns: 320px minmax(0, 1fr); gap: var(--bn-6); padding: var(--bn-5); }
+  .place { font-size: 34px; }
+  .pick.plain .place { font-size: 32px; }
+  .pack { grid-template-columns: 1fr; }
   .ff-search { width: 220px; }
   .list-lede { display: block; margin: 0; width: 100%; }
   .list-head { flex-wrap: wrap; }
@@ -364,7 +370,7 @@ body.hide-packing .pack-wrap { display: none; }
 </head>
 <body>
 <div class="mock">
-  <div class="ribbon"><span class="bn-pill bn-pill-warn">Sample</span>Every card, set, price, box and order on this page is made up. No figure is real.</div>
+  <div class="ribbon"><span class="bn-pill bn-pill-warn ribbon-pill">Sample</span>Every card, set, price, box and order on this page is made up. No figure is real.</div>
   <nav class="states" aria-label="States" id="states"><span>State</span></nav>
   <div class="cull" id="cull"><span>Options to judge. One press hides one.</span></div>
 </div>
@@ -413,8 +419,8 @@ body.hide-packing .pack-wrap { display: none; }
         </button>
         <div class="tile">
           <span class="bn-label">Highest in Bulk</span>
-          <span class="tile-val"><span class="bn-money">$14.80</span></span>
-          <span class="tile-says">Glimmerfang Lynx, box 6</span>
+          <span class="tile-val"><span class="bn-money" data-v="high">$14.80</span></span>
+          <span class="tile-says" data-v="highwho">Glimmerfang Lynx, box 6</span>
         </div>
       </section>
 
@@ -462,7 +468,7 @@ const vaultAddr = (slot) => `<span class="addr vault"><span><span class="k">Vaul
 
 /* A price ruler: the gap between exit and entry, the entry line, the old price (ring) and the new (dot). */
 function scale(old, now, max, line = LINE.in, out = LINE.out) {
-  const top = max || Math.max(old, now, line) * 1.18
+  const top = max || Math.ceil(Math.max(old, now, line) * 1.15 / 5) * 5
   const p = (v) => Math.min(100, Math.max(0, (v / top) * 100))
   const lo = Math.min(p(old), p(now)), hi = Math.max(p(old), p(now))
   return `<div class="scale" role="img" aria-label="Listed ${$(old)}, now ${$(now)}, line ${$(line)}, exit ${$(out)}">
@@ -473,7 +479,7 @@ function scale(old, now, max, line = LINE.in, out = LINE.out) {
     <span class="entry-lab" style="left:${p(line)}%">${$(line)}</span>
     <span class="dot old" style="left:${p(old)}%"></span>
     <span class="dot new" data-tone="${now < old ? 'down' : 'up'}" style="left:${p(now)}%"></span>
-    <span class="ends"><span>$0</span><span>${$(top)}</span></span>
+    <span class="ends"><span>$0</span><span>$${top}</span></span>
   </div>`
 }
 
@@ -488,7 +494,7 @@ const CARDS = {
     ev: '6 sold in 7 days, $22.50 to $27.00', kind: 'confirmed', slot: 'V-14',
     why: ['warn', 'Second read agrees: $24.80, then $25.30.', 'Held since yesterday. Move it to the vault.'] },
   kit: { name: 'Starlit Kitsune', set: 'Moonlit Tide', no: '077/201', cond: 'Near Mint', h: 1, vault: 'V-09', home: [3, 7, 58], old: 22.00, now: 12.90,
-    ev: 'Under $15.00 two reads: $13.20, $12.90', kind: 'down',
+    ev: 'Under $15.00 for two reads: $13.20, then $12.90', kind: 'down',
     why: ['ok', 'Under your $15.00 exit for two reads.', 'Its vault price comes off. It goes back to bulk at the rule.'] },
   rip: { name: 'Riptide Serpent', set: 'Moonlit Tide', no: '150/201', cond: 'Near Mint', h: 3, at: [1, 4, 9], old: 40.00, now: 3.00,
     ev: 'Was 1 sale at $40.00, now 9 sold at $2.80 to $3.20', kind: 'reversed',
@@ -590,7 +596,7 @@ const VIEWS = {
   'too-late': { rows: ['thorn'], lede: 'Prices read at 7:10. 1 card sold before a read could hold it.', stale: true },
   'upload-refused': { rows: ['ember', 'moth', 'moss'], lede: 'Building today’s upload. Held cards are left out.', notice: 'upload-refused' },
   'upload-hard': { rows: ['ember', 'moth', 'moss'], lede: 'Building today’s upload. Held cards are left out.', notice: 'upload-hard' },
-  budget: { rows: 'budget', lede: 'Prices read at 7:10. 3,600 checked against an $8.00 line.', notice: 'budget' },
+  budget: { rows: 'budget', lede: 'Prices read at 7:10. 3,600 checked against an $8.00 line.', notice: 'budget', line: [8, 6, 7.95, 'Mirefen Toad, box 2'] },
   line: { rows: ['ember', 'moth', 'moss', 'kit', 'rip', 'thorn'], lede: 'Prices read at 7:10. 3,600 checked.', panel: true },
 }
 
@@ -678,7 +684,7 @@ function calm() {
     <div><p class="calm-head">Nothing crossed. 3,600 checked at 7:10.</p>
       <p class="calm-body">Your line is $20.00. The highest card still in bulk is $14.80, Glimmerfang Lynx in box 6. Every upload is checked against the line before it is built.</p></div>
     <div>${scale(14.80, 14.80, 25).replace('aria-label="Listed $14.80, now $14.80', 'aria-label="Highest in bulk $14.80')}
-      <div class="legend"><span><i style="background:var(--bn-ink)"></i>Highest in bulk, $14.80</span><span><i style="background:var(--bn-warn)"></i>Line, $20.00</span><span><i style="background:var(--bn-warn-tint)"></i>Exit gap, $15.00 to $20.00</span></div></div></div>`
+      <div class="legend"><span><i style="background:var(--bn-ink)"></i>Highest in bulk, $14.80</span><span><i style="background:var(--bn-warn)"></i>Line, $20.00</span><span><i style="background:var(--bn-warn-tint);box-shadow:inset 0 0 0 1px var(--bn-warn)"></i>Exit gap, $15.00 to $20.00</span></div></div></div>`
 }
 
 /* ---- state, hash, render ---- */
@@ -712,6 +718,11 @@ function render() {
     : 'Stale-price sales this month: <b>0</b>, <b>$0.00</b> lost. The target is zero.'
   document.getElementById('m-stale').className = v.stale || state === 'mixed' || state === 'line' ? 'bad' : ''
   document.getElementById('notices').innerHTML = v.notice ? NOTICES[v.notice] : ''
+  const L = v.line || [LINE.in, LINE.out, 14.80, 'Glimmerfang Lynx, box 6']
+  document.querySelector('[data-v="in"]').textContent = $(L[0])
+  document.querySelector('[data-v="out"]').textContent = $(L[1])
+  document.querySelector('[data-v="high"]').textContent = $(L[2])
+  document.querySelector('[data-v="highwho"]').textContent = L[3]
 
   const rowsEl = document.getElementById('rows')
   const tag = rowsEl.querySelector('.tag').outerHTML
