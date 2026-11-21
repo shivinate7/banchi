@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pricing concepts</title>
+<style>
+/* Tokens: house 4 px step, 8 px radius, colour by role. Colours are this designer's own. */
+:root {
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px;
+  --radius: 8px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-doc: ui-serif, "New York", Georgia, serif;
+  --fs-1: .75rem; --fs-2: .8125rem; --fs-3: .9375rem; --fs-4: 1.125rem;
+  --fs-5: 1.5rem; --fs-6: 2.25rem; --fs-7: 3.25rem;
+  --hit: 32px;
+
+  --bg: #eef1f5; --surface: #ffffff; --surface-2: #f6f8fb; --sunk: #e4e9f0;
+  --line: #d3dae4; --line-strong: #aab5c3;
+  --text: #16202c; --text-muted: #556274;
+  --accent: #4a37c0; --accent-text: #ffffff; --accent-soft: #ebe8fb;
+  --up: #17734a; --up-soft: #e1f2e9;
+  --down: #a8345a; --down-soft: #f7e3ea;
+  --eye: #94560a; --eye-soft: #fbefd9; --eye-ring: #d58a1d;
+  --held: #5d6380; --held-soft: #e7e9f1;
+  --band: rgba(74, 55, 192, .09);
+  --scrim: rgba(18, 24, 33, .42);
+  --focus: #4a37c0;
+  --sample: #fff4c2; --sample-text: #4b3a00;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1318; --surface: #171c23; --surface-2: #1d232c; --sunk: #12171d;
+    --line: #2b3440; --line-strong: #46525f;
+    --text: #e6eaf0; --text-muted: #9aa6b4;
+    --accent: #a597ff; --accent-text: #120d33; --accent-soft: #262044;
+    --up: #5bcf95; --up-soft: #15291f; --down: #f2819f; --down-soft: #2e1820;
+    --eye: #f2b65a; --eye-soft: #2d2412; --eye-ring: #f2b65a;
+    --held: #a5abc4; --held-soft: #232733;
+    --band: rgba(165, 151, 255, .10); --scrim: rgba(0, 0, 0, .6); --focus: #a597ff;
+    --sample: #3a3210; --sample-text: #f5e7a6;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1318; --surface: #171c23; --surface-2: #1d232c; --sunk: #12171d;
+  --line: #2b3440; --line-strong: #46525f;
+  --text: #e6eaf0; --text-muted: #9aa6b4;
+  --accent: #a597ff; --accent-text: #120d33; --accent-soft: #262044;
+  --up: #5bcf95; --up-soft: #15291f; --down: #f2819f; --down-soft: #2e1820;
+  --eye: #f2b65a; --eye-soft: #2d2412; --eye-ring: #f2b65a;
+  --held: #a5abc4; --held-soft: #232733;
+  --band: rgba(165, 151, 255, .10); --scrim: rgba(0, 0, 0, .6); --focus: #a597ff;
+  --sample: #3a3210; --sample-text: #f5e7a6;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 400 var(--fs-3)/1.45 var(--font); }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--text-muted); }
+.up { color: var(--up); } .down { color: var(--down); }
+.stack { display: flex; flex-direction: column; gap: var(--space-3); }
+.cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+h1, h2, h3, p { margin: 0; }
+
+/* ---------- Mockup chrome (not part of any concept) ---------- */
+.sample { background: var(--sample); color: var(--sample-text); padding: var(--space-2) var(--space-4); font-weight: 600; }
+.mock-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--line); background: var(--surface); }
+.mock-group { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.mock-group > span { color: var(--text-muted); font-size: var(--fs-2); }
+.chip { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 32px; padding: 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.chip-x { border: 0; background: none; cursor: pointer; padding: 0 var(--space-1); color: inherit; opacity: .75; }
+.concept-tab { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
+.concept-tab .chip { border: 0; background: none; }
+.concept-tab[data-on="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.concept-tab[data-on="true"] .chip { color: var(--accent-text); }
+.mock-note { padding: var(--space-2) var(--space-4); color: var(--text-muted); font-size: var(--fs-2); }
+.stage { overflow-x: auto; padding: var(--space-4); }
+
+/* ---------- Frame: one app window at the chosen width ---------- */
+.frame { container: frame / inline-size; position: relative; margin-inline: auto; background: var(--bg); border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
+.frame[data-w="1440"] { width: 1440px; height: 900px; }
+.frame[data-w="820"] { width: 820px; height: 1180px; --hit: 44px; }
+.app-head { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-3) var(--space-6); background: var(--surface); border-bottom: 1px solid var(--line); min-height: 60px; }
+.app-head h1 { font-size: var(--fs-4); font-weight: 650; }
+.app-head .grow { flex: 1; }
+.app-body { flex: 1; min-height: 0; display: flex; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: var(--hit); padding: 0 var(--space-4); border-radius: var(--radius); border: 1px solid var(--line-strong); background: var(--surface); cursor: pointer; font-weight: 550; white-space: nowrap; }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.quiet { border-color: transparent; background: none; }
+.btn.quiet:hover { background: var(--sunk); }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+.btn.big { min-height: 48px; padding: 0 var(--space-6); font-size: var(--fs-4); }
+kbd { font: 600 var(--fs-1)/1 var(--font); padding: 2px 6px; border-radius: 4px; border: 1px solid currentColor; opacity: .7; }
+.frame[data-w="820"] kbd { display: none; }
+.field { min-height: var(--hit); padding: 0 var(--space-3); border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); }
+.price-in { width: 7.5rem; font-variant-numeric: tabular-nums; }
+.pill { display: inline-flex; align-items: center; gap: var(--space-1); padding: 2px var(--space-2); border-radius: 999px; font-size: var(--fs-2); font-weight: 600; white-space: nowrap; }
+.pill.up { background: var(--up-soft); } .pill.down { background: var(--down-soft); }
+.pill.eye { background: var(--eye-soft); color: var(--eye); } .pill.held { background: var(--held-soft); color: var(--held); }
+.pill.same { background: var(--sunk); color: var(--text-muted); }
+.note-line { font-size: var(--fs-2); color: var(--text-muted); }
+.answer { min-height: 24px; font-size: var(--fs-2); }
+.answer .cluster { gap: var(--space-2); }
+.linkish { border: 0; background: none; padding: 0; color: var(--accent); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+details.server { font-size: var(--fs-2); color: var(--text-muted); }
+details.server summary { cursor: pointer; }
+
+/* table */
+.tbl { width: 100%; border-collapse: collapse; }
+.tbl th { text-align: left; font-size: var(--fs-2); font-weight: 600; color: var(--text-muted); padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); }
+.tbl td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); vertical-align: middle; }
+.tbl td.r, .tbl th.r { text-align: right; }
+.tbl tr:hover td { background: var(--surface-2); }
+.card-name { font-weight: 600; }
+.card-sub { font-size: var(--fs-2); color: var(--text-muted); }
+
+/* state panels */
+.panel-state { margin: auto; max-width: 30rem; text-align: center; padding: var(--space-10) var(--space-6); display: flex; flex-direction: column; align-items: center; gap: var(--space-4); }
+.panel-state h2 { font-size: var(--fs-5); }
+.skel { background: var(--sunk); border-radius: var(--radius); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+
+/* sheet (inside the frame) */
+.scrim { position: absolute; inset: 0; background: var(--scrim); display: flex; justify-content: flex-end; z-index: 20; }
+.sheet { width: 560px; max-width: 100%; height: 100%; background: var(--surface); border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+@container frame (max-width: 1000px) {
+  .scrim { align-items: flex-end; }
+  .sheet { width: 100%; height: 86%; border-left: 0; border-top: 1px solid var(--line); border-radius: var(--radius) var(--radius) 0 0; }
+}
+.sheet-head { padding: var(--space-5) var(--space-6); border-bottom: 1px solid var(--line); display: flex; align-items: flex-start; gap: var(--space-4); }
+.sheet-head h2 { font-size: var(--fs-5); flex: 1; }
+.sheet-body { flex: 1; overflow: auto; padding: var(--space-5) var(--space-6); display: flex; flex-direction: column; gap: var(--space-5); }
+.sheet-foot { padding: var(--space-4) var(--space-6); border-top: 1px solid var(--line); display: flex; gap: var(--space-3); justify-content: flex-end; align-items: center; }
+.sheet-foot .grow { flex: 1; }
+.effect { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2) var(--space-4); padding: var(--space-4); background: var(--surface-2); border-radius: var(--radius); }
+.effect dt { color: var(--text-muted); } .effect dd { margin: 0; text-align: right; font-weight: 600; }
+.bar { height: 12px; background: var(--sunk); border-radius: 999px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--accent); }
+.change-list { display: flex; flex-direction: column; }
+.change-row { display: grid; grid-template-columns: 1fr auto auto; gap: var(--space-4); align-items: baseline; padding: var(--space-2) 0; border-bottom: 1px solid var(--line); }
+
+/* part labels toggle */
+.labels [data-new] { outline: 2px dashed var(--eye-ring); outline-offset: -2px; position: relative; }
+.labels [data-new]::before { content: "New: " attr(data-new); position: absolute; top: 4px; right: 4px; z-index: 5; font-size: var(--fs-1); font-weight: 600; padding: 2px 6px; border: 1px dashed var(--eye-ring); border-radius: 4px; background: var(--surface); color: var(--eye); pointer-events: none; }
+
+/* ================= Concept: Desk ================= */
+.desk { display: grid; grid-template-columns: 272px 1fr 320px; width: 100%; min-height: 0; }
+.desk-rail { border-right: 1px solid var(--line); background: var(--surface); padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-1); overflow: auto; }
+.pile { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: var(--space-2); width: 100%; min-height: 44px; padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius); background: none; cursor: pointer; text-align: left; }
+.pile:hover { background: var(--surface-2); }
+.pile[aria-current="page"] { background: var(--accent-soft); }
+.pile .count { font-weight: 650; font-variant-numeric: tabular-nums; }
+.pile .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: var(--space-2); vertical-align: 0; }
+.rail-gap { height: var(--space-4); }
+.desk-main { overflow: auto; padding: var(--space-6) var(--space-8); display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
+.desk-main h2 { font-size: var(--fs-5); }
+.focus-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-5); }
+.focus-top { display: flex; gap: var(--space-4); align-items: flex-start; justify-content: space-between; }
+.focus-name { font-size: var(--fs-5); font-weight: 650; }
+.trio { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.trio > div { padding: var(--space-4) var(--space-5); display: flex; flex-direction: column; gap: var(--space-1); }
+.trio > div + div { border-left: 1px solid var(--line); }
+.trio .lab { font-size: var(--fs-2); color: var(--text-muted); }
+.trio .val { font-size: var(--fs-6); font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.trio .val.none { font-size: var(--fs-4); font-weight: 500; color: var(--text-muted); line-height: 2.3; }
+.trio .pick { background: var(--accent-soft); }
+.reason { display: flex; gap: var(--space-2); align-items: center; padding: var(--space-3) var(--space-4); border-radius: var(--radius); background: var(--eye-soft); color: var(--eye); font-weight: 600; }
+.reason::before { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--eye-ring); flex: none; }
+.acts { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.acts .sep { width: 1px; align-self: stretch; background: var(--line); }
+.queue-list { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.queue-row { display: grid; grid-template-columns: 1fr auto auto; gap: var(--space-4); align-items: center; width: 100%; min-height: 44px; padding: var(--space-2) var(--space-4); border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; cursor: pointer; }
+.queue-row:last-child { border-bottom: 0; }
+.queue-row:hover { background: var(--surface-2); }
+.queue-row[aria-current="true"] { background: var(--accent-soft); }
+.desk-tray { border-left: 1px solid var(--line); background: var(--surface); padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-5); overflow: auto; }
+.tray-figure { font-size: var(--fs-7); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.tray-lines { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2) var(--space-4); font-size: var(--fs-3); }
+.tray-lines dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tray-lines dt { color: var(--text-muted); }
+.tray-recent { display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--fs-2); }
+.tray-recent > div { display: flex; justify-content: space-between; gap: var(--space-2); }
+.desk-bottom { display: none; }
+@container frame (max-width: 1000px) {
+  .desk { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; }
+  .desk-rail { flex-direction: row; border-right: 0; border-bottom: 1px solid var(--line); padding: var(--space-2) var(--space-4); overflow-x: auto; }
+  .desk-rail .rail-gap, .desk-rail .rail-title { display: none; }
+  .pile { width: auto; flex: none; grid-template-columns: auto auto; }
+  .desk-tray { display: none; }
+  .desk-main { padding: var(--space-5); }
+  .trio .val { font-size: var(--fs-5); }
+  .desk-bottom { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-3) var(--space-5); border-top: 1px solid var(--line); background: var(--surface); }
+  .desk-bottom .grow { flex: 1; }
+}
+
+/* ================= Concept: Band ================= */
+.band { display: grid; grid-template-columns: 1fr 340px; width: 100%; min-height: 0; }
+.band-main { overflow: auto; padding: var(--space-6) var(--space-8); display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
+.band-say { font-size: var(--fs-5); font-weight: 600; line-height: 1.3; max-width: 46rem; }
+.band-say b { font-variant-numeric: tabular-nums; }
+.band-say .lo, .band-say .hi { color: var(--accent); }
+.band-figs { display: flex; flex-wrap: wrap; gap: var(--space-6); }
+.band-fig { display: flex; flex-direction: column; }
+.band-fig .n { font-size: var(--fs-6); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.band-fig .l { font-size: var(--fs-2); color: var(--text-muted); }
+.chart-wrap { display: grid; grid-template-columns: 72px 1fr; gap: var(--space-4); }
+.gutter { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: var(--space-2); }
+.gutter-dots { display: flex; flex-wrap: wrap-reverse; justify-content: center; gap: 4px; width: 44px; }
+.gutter .l { font-size: var(--fs-1); color: var(--text-muted); text-align: center; line-height: 1.25; }
+.chart { position: relative; height: 300px; border-bottom: 2px solid var(--line-strong); }
+.chart .zone { position: absolute; top: 0; bottom: 0; background: var(--band); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); }
+.chart .zero { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed var(--line-strong); }
+.dot { position: absolute; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; }
+.dot.in.up, .gdot.in.up { background: var(--up); }
+.dot.in.down, .gdot.in.down { background: var(--down); }
+.dot.out, .gdot.out { background: var(--surface); box-shadow: inset 0 0 0 3px var(--eye-ring); border: 0; }
+.dot.mine { background: var(--accent); }
+.dot.sel, .gdot.sel, .hdot.sel { outline: 3px solid var(--text); outline-offset: 2px; }
+.gdot { width: 14px; height: 14px; border-radius: 3px; border: 0; padding: 0; cursor: pointer; }
+.gdot.mine { background: var(--accent); box-shadow: none; }
+.axis { position: relative; height: 22px; font-size: var(--fs-1); color: var(--text-muted); }
+.axis span { position: absolute; transform: translateX(-50%); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.axis span:first-child { transform: none; }
+.axis span:last-child { transform: translateX(-100%); }
+.chart-col { --thumb: 22px; }
+.frame[data-w="820"] .chart-col { --thumb: 30px; }
+.plot { padding-inline: calc(var(--thumb) / 2); }
+.handles { position: relative; height: 32px; }
+.handles input[type=range] { position: absolute; inset: 0; width: 100%; margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; height: 32px; }
+.handles input[type=range]::-webkit-slider-runnable-track { background: none; height: 32px; }
+.handles input[type=range]::-moz-range-track { background: none; }
+.handles input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: 22px; height: 32px; border-radius: 6px; background: var(--accent); border: 2px solid var(--surface); cursor: ew-resize; }
+.handles input[type=range]::-moz-range-thumb { pointer-events: auto; width: 20px; height: 30px; border-radius: 6px; background: var(--accent); border: 2px solid var(--surface); cursor: ew-resize; }
+.frame[data-w="820"] .handles, .frame[data-w="820"] .handles input[type=range], .frame[data-w="820"] .handles input[type=range]::-webkit-slider-runnable-track { height: 44px; }
+.frame[data-w="820"] .handles input[type=range]::-webkit-slider-thumb { width: 30px; height: 44px; }
+.shelf { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.shelf-dots { display: flex; flex-wrap: wrap; gap: 6px; }
+.hdot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--held); background: var(--held-soft); padding: 0; cursor: pointer; }
+.legend { display: flex; flex-wrap: wrap; gap: var(--space-4); font-size: var(--fs-2); color: var(--text-muted); }
+.legend span { display: inline-flex; align-items: center; gap: var(--space-2); }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+.band-side { border-left: 1px solid var(--line); background: var(--surface); padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-5); overflow: auto; }
+.band-side .trio { grid-template-columns: 1fr; }
+.band-side .trio > div + div { border-left: 0; border-top: 1px solid var(--line); }
+.band-side .trio > div { flex-direction: row; justify-content: space-between; align-items: baseline; padding: var(--space-3) var(--space-4); }
+.band-side .trio .val { font-size: var(--fs-5); }
+@container frame (max-width: 1000px) {
+  .band { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .band-main { padding: var(--space-5); }
+  .band-side { border-left: 0; border-top: 1px solid var(--line); max-height: 420px; padding: var(--space-5); }
+  .chart { height: 320px; }
+  .dot { width: 20px; height: 20px; margin-left: -10px; }
+  .gdot, .hdot { width: 20px; height: 20px; }
+  .gutter-dots { width: 48px; }
+}
+
+/* ================= Concept: Manifest ================= */
+.man { display: grid; grid-template-columns: 260px 1fr; width: 100%; min-height: 0; }
+.man-rail { border-right: 1px solid var(--line); background: var(--surface); padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-1); overflow: auto; }
+.man-rail .rail-title { font-size: var(--fs-2); color: var(--text-muted); padding: var(--space-3) var(--space-3) var(--space-1); }
+.mf { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 44px; padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius); background: none; text-align: left; cursor: pointer; }
+.mf:hover { background: var(--surface-2); }
+.mf[aria-current="page"] { background: var(--accent-soft); }
+.mf small { color: var(--text-muted); font-size: var(--fs-2); }
+.man-main { overflow: auto; display: flex; flex-direction: column; min-width: 0; background: var(--surface); }
+.doc { width: 100%; max-width: 820px; margin-inline: auto; padding: var(--space-8) var(--space-8) var(--space-12); display: flex; flex-direction: column; gap: var(--space-8); }
+.doc-head { display: flex; flex-direction: column; gap: var(--space-3); }
+.doc-head h2 { font: 600 var(--fs-6)/1.15 var(--font-doc); }
+.doc-lead { font: 400 var(--fs-4)/1.55 var(--font-doc); max-width: 40rem; }
+.doc-sec { display: flex; flex-direction: column; gap: var(--space-2); }
+.doc-sec > header { display: flex; align-items: baseline; gap: var(--space-3); padding-bottom: var(--space-2); border-bottom: 2px solid var(--text); }
+.doc-sec > header h3 { font: 600 var(--fs-4)/1.3 var(--font-doc); flex: 1; }
+.doc-sec > header .num { font-weight: 600; }
+.mline { display: grid; grid-template-columns: minmax(0, 1fr) 3.5rem 6rem 1.5rem 6rem 5rem auto; gap: var(--space-3); align-items: center; padding: var(--space-2) 0; border-bottom: 1px dotted var(--line-strong); min-height: 48px; }
+.mline .arrow { color: var(--text-muted); text-align: center; }
+.mline .r { text-align: right; font-variant-numeric: tabular-nums; }
+.mline.blank { grid-template-columns: minmax(0, 1fr) auto; }
+.blank-fill { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: flex-end; }
+.blank-fill .price-in { border-style: dashed; border-color: var(--eye-ring); }
+.mline .why { font-size: var(--fs-2); color: var(--eye); }
+.foldbtn { border: 0; background: none; cursor: pointer; color: var(--accent); font-weight: 600; padding: 0; min-height: var(--hit); }
+.doc-foot { position: sticky; bottom: 0; background: var(--surface); border-top: 2px solid var(--text); padding: var(--space-4) var(--space-8); display: flex; align-items: center; gap: var(--space-6); }
+.doc-foot .sum { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.doc-foot .sum b { font-size: var(--fs-4); }
+.man-top { display: none; }
+@container frame (max-width: 1000px) {
+  .man { grid-template-columns: 1fr; }
+  .man-rail { display: none; }
+  .man-rail.open { display: flex; position: absolute; z-index: 15; top: 120px; left: var(--space-4); width: 300px; max-height: 70%; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 12px 32px rgba(0,0,0,.2); }
+  .man-top { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-5); border-bottom: 1px solid var(--line); background: var(--surface); }
+  .doc { padding: var(--space-6) var(--space-5) var(--space-10); }
+  .mline { grid-template-columns: minmax(0, 1fr) 5rem 1rem 5rem 4.5rem; }
+  .mline .cp, .mline .act { display: none; }
+  .mline.blank { grid-template-columns: 1fr; }
+  .blank-fill { justify-content: flex-start; }
+  .doc-foot { padding: var(--space-4) var(--space-5); }
+}
+.mline.tap { cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="sample" role="note">Sample: every card, name, price and send on this page is made up. No figure is real.</div>
+<div class="mock-bar" id="mockbar"></div>
+<div class="mock-note" id="mocknote"></div>
+<div class="stage"><div class="frame" id="frame"></div></div>
+
+<script>
+(() => {
+'use strict';
+// ---------- Deterministic sample data ----------
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const SETS = [['Hollow Crown', 180], ['Saltglass Tide', 165], ['Neon Orchard', 198], ['Ironbloom', 172], ['Ashen Choir', 150], ['Lantern Moor', 210]];
+const A = ['Ember', 'Tide', 'Moss', 'Glass', 'Cinder', 'Quill', 'Hollow', 'Storm', 'Lumen', 'Bramble', 'Frost', 'Vesper', 'Rook', 'Saffron', 'Marrow', 'Tallow', 'Wisp', 'Copper', 'Gale', 'Thistle', 'Umber', 'Juniper'];
+const B = ['Wyrmling', 'Caller', 'Warden', 'Oracle', 'Kitling', 'Herald', 'Golem', 'Siren', 'Drake', 'Shepherd', 'Archivist', 'Moth', 'Sentinel', 'Weaver', 'Courier', 'Hound', 'Pilgrim', 'Lark'];
+const CONDS = ['Near Mint', 'Near Mint', 'Near Mint', 'Lightly Played', 'Moderately Played'];
+const HOLD_NOTES = ['Keeping it for the trade night', 'Price set by hand on purpose', 'Waiting on a grading return', 'Bundle price, sold as a set', 'Not listing below this', ''];
+const FLOOR = 0.25, TOTAL = 1100;
+const r2 = v => Math.round(v * 100) / 100;
+
+let items = [], history = [];
+function build() {
+  const R = rng(7), used = new Set();
+  const pick = arr => arr[Math.floor(R() * arr.length)];
+  let id = 0;
+  function card(kind, t, copies, base) {
+    let name; do { name = pick(A) + ' ' + pick(B); } while (used.has(name)); used.add(name);
+    const [set, size] = pick(SETS);
+    let current = r2(Math.exp(Math.log(0.4) + R() * (Math.log(140) - Math.log(0.4))));
+    if (base === 'floor') current = r2(0.3 + R() * 0.25);
+    const it = { id: 'c' + (++id), name, set, num: String(1 + Math.floor(R() * size)).padStart(3, '0') + '/' + size, cond: pick(CONDS), copies, current, market: null, suggested: null, base: base || null, decision: null, own: null, note: '', kind };
+    if (kind !== 'nomarket') {
+      if (base === 'floor') { it.market = r2(0.12 + R() * 0.1); it.suggested = FLOOR; }
+      else { it.suggested = Math.max(FLOOR, r2(current * (1 + t))); it.market = r2(it.suggested / 0.98); }
+    }
+    if (kind === 'held') { it.decision = 'hold'; it.note = pick(HOLD_NOTES); }
+    return it;
+  }
+  const list = [];
+  for (let i = 0; i < 9; i++) list.push(card('nomarket', 0, 1 + Math.floor(R() * 3)));
+  for (let i = 0; i < 17; i++) { const s = R() < .55 ? 1 : -1; const m = s > 0 ? .25 + R() * 1.1 : .2 + R() * .45; list.push(card('big', s * m, 1 + Math.floor(R() * 2))); }
+  for (let i = 0; i < 5; i++) list.push(card('floor', 0, 1 + Math.floor(R() * 4), 'floor'));
+  for (let i = 0; i < 3; i++) list.push(card('thin', (R() < .5 ? 1 : -1) * (.18 + R() * .1), 1, 'thin'));
+  for (let i = 0; i < 48; i++) { const up = i % 8 < 5; const t = up ? .01 + R() * .13 : -(.01 + R() * .10); list.push(card('ready', t, i < 12 ? 2 : 1)); }
+  for (let i = 0; i < 17; i++) list.push(card('held', (R() < .5 ? 1 : -1) * (.03 + R() * .35), 1 + Math.floor(R() * 2)));
+  for (let i = 0; i < 13; i++) list.push(card('held', 0, 1));
+  // fix ready moves to be non-zero after rounding
+  list.forEach(it => { if (it.kind === 'ready' && it.suggested === it.current) it.suggested = r2(it.current + 0.01); });
+  // shuffle once so piles are not grouped by kind; order is then fixed
+  for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+  items = list;
+  history = [
+    mkHist('h3', '3 days ago', 41, R, used, pick),
+    mkHist('h2', '1 week ago', 73, R, used, pick),
+    mkHist('h1', '2 weeks ago', 18, R, used, pick)
+  ];
+}
+function mkHist(id, when, copies, R, used, pick) {
+  const lines = []; let left = copies;
+  while (left > 0) {
+    let name; do { name = pick(A) + ' ' + pick(B); } while (used.has(name)); used.add(name);
+    const c = Math.min(left, R() < .8 ? 1 : 2); left -= c;
+    const from = r2(Math.exp(Math.log(0.4) + R() * 5.8)); const to = Math.max(FLOOR, r2(from * (1 + (R() - .45) * .3)));
+    lines.push({ name, set: pick(SETS)[0], copies: c, from, to });
+  }
+  return { id, when, copies, lines, undoable: false };
+}
+
+// ---------- Derived state ----------
+const S = { c: 'desk', s: 'loaded', t: null, w: 1440, hide: [], pile: 'eye', focus: null, sel: null, lo: -12, hi: 15, q: '', labels: false, sheet: null, answer: null, hist: null, rail: false, open: { held: false, same: false }, last: [] };
+const newPrice = it => it.decision === 'own' ? it.own : it.suggested;
+const pct = it => (newPrice(it) == null) ? null : newPrice(it) / it.current - 1;
+function reason(it) {
+  if (it.market == null) return 'No market price. Price it by hand.';
+  if (it.base === 'floor') return 'Market is under your floor of $0.25.';
+  if (it.base === 'thin') return 'Market price rests on 1 sale.';
+  const p = pct(it);
+  if (p * 100 < S.lo || p * 100 > S.hi) return (p > 0 ? 'Up ' : 'Down ') + fmtPct(Math.abs(p)) + ' in one step.';
+  return null;
+}
+function status(it) {
+  if (it.decision === 'hold') return 'held';
+  if (it.decision === 'use' || it.decision === 'own') return newPrice(it) === it.current ? 'same' : 'ready';
+  if (it.market != null && it.suggested === it.current && !it.base) return 'same';
+  return reason(it) ? 'eye' : 'ready';
+}
+const by = st => items.filter(it => status(it) === st);
+function totals() {
+  const ready = by('ready');
+  let copies = 0, up = 0, down = 0, nUp = 0, nDown = 0;
+  ready.forEach(it => { copies += it.copies; const d = (newPrice(it) - it.current) * it.copies; if (d > 0) { up += d; nUp++; } else { down += d; nDown++; } });
+  const same = TOTAL - items.length + by('same').length;
+  const moves = items.filter(it => it.suggested != null && it.suggested !== it.current).length;
+  return { ready, copies, up, down, nUp, nDown, eye: by('eye'), held: by('held'), same, moves };
+}
+const money = v => (v < 0 ? '−' : '') + '$' + Math.abs(v).toFixed(2);
+const signed = v => (v >= 0 ? '+' : '−') + '$' + Math.abs(v).toFixed(2);
+const fmtPct = p => Math.round(p * 100) + '%';
+const pctTag = it => { const p = pct(it); if (p == null) return '<span class="pill same">No price yet</span>'; if (Math.abs(p) < 0.005) return '<span class="pill same">No change</span>'; return `<span class="pill ${p > 0 ? 'up' : 'down'} num">${p > 0 ? '+' : '−'}${fmtPct(Math.abs(p))}</span>`; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const match = it => !S.q || (it.name + ' ' + it.set).toLowerCase().includes(S.q.toLowerCase());
+const plural = (n, a, b) => n === 1 ? a : (b || a + 's');
+const byId = id => items.find(it => it.id === id);
+
+// ---------- Acts ----------
+function act(kind, id, val) {
+  const it = byId(id); if (!it) return;
+  const before = { decision: it.decision, own: it.own, note: it.note };
+  if (kind === 'use') { it.decision = 'use'; it.own = null; }
+  if (kind === 'own') { const v = parseFloat(String(val).replace(/[^0-9.]/g, '')); if (!(v > 0)) { S.answer = { id, text: 'Type a price above $0.00 first.', bad: true }; return; } it.decision = 'own'; it.own = r2(v); }
+  if (kind === 'hold') { it.decision = 'hold'; it.note = val || 'Held from the pricing screen'; }
+  if (kind === 'release') { it.decision = null; it.own = null; it.note = ''; }
+  if (kind === 'undo') { Object.assign(it, S.answer.before); S.answer = null; if (status(it) === 'eye') S.focus = it.id; return; }
+  const st = status(it);
+  const words = st === 'ready' ? `Ready to send at ${money(newPrice(it))}.` : st === 'held' ? 'Held back. It keeps ' + money(it.current) + '.' : st === 'eye' ? 'Back in Needs your eye.' : 'No change. It keeps ' + money(it.current) + '.';
+  S.answer = { id, name: it.name, text: words, before };
+  S.last = [id].concat(S.last.filter(x => x !== id)).slice(0, 5);
+}
+
+// ---------- Shared parts ----------
+function trio(it, cls) {
+  const sug = it.market == null ? '<div><span class="lab">Suggested</span><span class="val none">None</span></div>' : `<div class="${it.decision === 'own' ? '' : 'pick'}"><span class="lab">Suggested</span><span class="val">${money(it.suggested)}</span></div>`;
+  return `<div class="trio ${cls || ''}"><div><span class="lab">Live now</span><span class="val">${money(it.current)}</span></div><div><span class="lab">Market</span>${it.market == null ? '<span class="val none">None found</span>' : `<span class="val">${money(it.market)}</span>`}</div>${sug}</div>`;
+}
+function actions(it, keys) {
+  const st = status(it), k = t => keys ? ` <kbd>${t}</kbd>` : '';
+  if (st === 'held') return `<div class="acts"><button class="btn primary" data-act="release" data-id="${it.id}">Release hold${k('R')}</button></div>`;
+  const use = it.suggested != null ? `<button class="btn primary" data-act="use" data-id="${it.id}">Use ${money(it.suggested)}${k('Enter')}</button>` : '';
+  return `<div class="acts">${use}
+    <span class="cluster"><input class="field price-in" id="own-${it.id}" inputmode="decimal" placeholder="Your price" aria-label="Your price for ${esc(it.name)}" value="${it.decision === 'own' ? it.own.toFixed(2) : ''}"><button class="btn" data-act="own" data-id="${it.id}">Set my price${k('P')}</button></span>
+    <span class="sep" aria-hidden="true"></span>
+    <button class="btn" data-act="hold" data-id="${it.id}">Hold back${k('H')}</button></div>`;
+}
+function answerLine(id) {
+  const a = S.answer; if (!a || a.id !== id) return '<div class="answer" aria-live="polite"></div>';
+  return `<div class="answer" aria-live="polite"><span class="cluster"><span class="${a.bad ? 'down' : ''}"><b>${esc(a.name || '')}</b> ${a.text}</span>${a.bad ? '' : '<button class="linkish" data-act="undo" data-id="' + id + '">Undo</button>'}</span></div>`;
+}
+function answerAny() { const a = S.answer; if (!a || a.bad) return '<div class="answer" aria-live="polite"></div>'; return `<div class="answer" aria-live="polite"><span class="cluster"><span><b>${esc(a.name)}</b> ${a.text}</span><button class="linkish" data-act="undo" data-id="${a.id}">Undo</button></span></div>`; }
+function stateSlot() {
+  if (S.s === 'loading') return `<div class="stack" style="padding:var(--space-6);width:100%" aria-busy="true"><p class="muted">Loading market prices for 1,100 cards.</p>${'<div class="skel" style="height:56px"></div>'.repeat(6)}</div>`;
+  if (S.s === 'error') return `<div class="panel-state" role="alert"><h2>Market prices did not load.</h2><p>Your live prices have not changed. Nothing was sent.</p><button class="btn primary" data-act="retry">Try again</button><details class="server"><summary>What the server said</summary><p>price source: request timed out after 30 s</p></details></div>`;
+  return null;
+}
+function sendBtn(t, big, label) {
+  label = label || 'Review send';
+  if (S.s !== 'loaded' && S.s !== 'empty') return `<button class="btn primary ${big ? 'big' : ''}" disabled title="Market prices are not loaded yet, so nothing can be sent.">${label}</button>`;
+  if (!t.copies) return `<button class="btn primary ${big ? 'big' : ''}" disabled title="No price is ready to send. Use a suggestion or set your own first.">${label}</button>`;
+  return `<button class="btn primary ${big ? 'big' : ''}" data-act="review">${label}</button>`;
+}
+
+// ---------- Send sheet ----------
+function sheet() {
+  if (!S.sheet) return '';
+  const t = totals(), sh = S.sheet;
+  let head = '', body = '', foot = '';
+  if (sh.mode === 'review') {
+    const rows = t.ready.map(it => `<div class="change-row"><span><span class="card-name">${esc(it.name)}</span> <span class="card-sub">${it.copies > 1 ? it.copies + ' copies' : ''}</span>${Math.abs(pct(it)) > 0.5 ? ' <span class="pill eye">Over half its price</span>' : ''}</span><span class="num muted">${money(it.current)} to <b class="${newPrice(it) > it.current ? 'up' : 'down'}">${money(newPrice(it))}</b></span>${pctTag(it)}</div>`).join('');
+    head = `<h2>Send ${t.copies} ${plural(t.copies, 'copy', 'copies')}?</h2>`;
+    body = `<p>Buyers see these prices as soon as the send ends. You can undo the send afterwards.</p>
+      <dl class="effect num"><dt>Cards that change price</dt><dd>${t.ready.length}</dd><dt>Going up</dt><dd class="up">${t.nUp} cards, ${signed(t.up)}</dd><dt>Going down</dt><dd class="down">${t.nDown} cards, ${signed(t.down)}</dd><dt>Held back on purpose</dt><dd>${t.held.length} keep their price</dd><dt>Still need your eye</dt><dd>${t.eye.length} keep their price</dd></dl>
+      <div class="change-list" data-new="Every change listed before send">${rows}</div>`;
+    foot = `<button class="btn quiet" data-act="close">Not yet</button><button class="btn primary big" data-act="send">Send ${t.copies} ${plural(t.copies, 'copy', 'copies')}</button>`;
+  } else if (sh.mode === 'sending') {
+    const done = sh.done, all = sh.total;
+    head = `<h2>Sending</h2>`;
+    body = `<p class="num" aria-live="polite"><b>${done} of ${all}</b> copies have their new price.</p><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="${all}" aria-valuenow="${done}"><i style="width:${(done / all * 100).toFixed(1)}%"></i></div><p class="muted">Stop leaves the sent copies at their new price and the rest at their old price.</p>`;
+    foot = `<button class="btn big" data-act="stop">Stop</button>`;
+  } else if (sh.mode === 'stopped') {
+    head = `<h2>Stopped</h2>`;
+    body = `<p class="num"><b>${sh.done} copies</b> have their new price. <b>${sh.total - sh.done}</b> were not sent and keep their old price.</p>`;
+    foot = `<button class="btn quiet" data-act="close">Close</button><button class="btn primary" data-act="send">Send the other ${sh.total - sh.done}</button>`;
+  } else if (sh.mode === 'sent') {
+    const h = history[0];
+    head = `<h2>Sent</h2>`;
+    body = `<p class="num"><b>${h.copies} copies</b> now show their new price to buyers.</p><div class="change-list">${h.lines.slice(0, 12).map(l => `<div class="change-row"><span class="card-name">${esc(l.name)}</span><span class="num muted">${money(l.from)} to <b>${money(l.to)}</b></span><span></span></div>`).join('')}</div>${h.lines.length > 12 ? `<p class="muted">and ${h.lines.length - 12} more cards.</p>` : ''}`;
+    foot = `<button class="btn" data-act="undosend" data-h="${h.id}">Undo send</button><span class="grow"></span><button class="btn primary" data-act="seesent" data-h="${h.id}">See what went out</button>`;
+  } else if (sh.mode === 'undo') {
+    const h = history.find(x => x.id === sh.h);
+    head = `<h2>Undo this send?</h2>`;
+    body = `<p class="num">${h.copies} copies go back to the price they had before. Buyers see the old prices at once.</p>`;
+    foot = `<button class="btn quiet" data-act="close">Keep the send</button><button class="btn primary" data-act="undoconfirm" data-h="${h.id}">Put back ${h.copies} old prices</button>`;
+  } else if (sh.mode === 'history') {
+    const h = history.find(x => x.id === sh.h) || history[0];
+    head = `<h2>Sent ${h.when}</h2>`;
+    body = histBody(h);
+    foot = h.undoable ? `<button class="btn" data-act="undosend" data-h="${h.id}">Undo send</button><span class="grow"></span><button class="btn primary" data-act="close">Close</button>` : `<button class="btn primary" data-act="close">Close</button>`;
+  }
+  return `<div class="scrim" data-act="scrim"><section class="sheet" role="dialog" aria-modal="true" aria-label="Send" data-new="Send sheet"><div class="sheet-head">${head}<button class="btn quiet" data-act="close" aria-label="Close">Close</button></div><div class="sheet-body">${body}</div><div class="sheet-foot">${foot}</div></section></div>`;
+}
+function histBody(h) {
+  return `<p class="num">${h.copies} copies changed price on ${h.lines.length} cards.</p><div class="change-list">${h.lines.map(l => `<div class="change-row"><span><span class="card-name">${esc(l.name)}</span> <span class="card-sub">${esc(l.set)}${l.copies > 1 ? ', ' + l.copies + ' copies' : ''}</span></span><span class="num muted">${money(l.from)} to <b class="${l.to > l.from ? 'up' : 'down'}">${money(l.to)}</b></span><span></span></div>`).join('')}</div>`;
+}
+let timer = null;
+function startSend(resumeFrom) {
+  const t = totals();
+  const ids = t.ready.map(it => it.id);
+  S.sheet = { mode: 'sending', ids, total: t.copies, done: resumeFrom || 0, committed: 0 };
+  tick();
+}
+function tick() {
+  clearInterval(timer);
+  timer = setInterval(() => {
+    const sh = S.sheet; if (!sh || sh.mode !== 'sending') { clearInterval(timer); return; }
+    sh.done = Math.min(sh.total, sh.done + 1);
+    if (sh.done >= sh.total) { clearInterval(timer); commit(sh.ids, sh.total); S.sheet = { mode: 'sent' }; }
+    render();
+  }, 90);
+}
+function commit(ids, copiesDone) {
+  let n = 0; const lines = [];
+  for (const id of ids) {
+    const it = byId(id); if (!it || status(it) !== 'ready') continue;
+    if (n + it.copies > copiesDone) break;
+    n += it.copies;
+    lines.push({ id, name: it.name, set: it.set, copies: it.copies, from: it.current, to: newPrice(it), prev: { decision: it.decision, own: it.own, base: it.base, suggested: it.suggested } });
+    it.current = newPrice(it); it.decision = null; it.own = null; it.base = null; it.sent = true;
+    if (it.market == null) { it.market = null; it.suggested = it.current; }
+  }
+  history.forEach(h => h.undoable = false);
+  history.unshift({ id: 'h' + (history.length + 10), when: 'just now', copies: n, lines, undoable: true });
+  S.answer = null; S.last = [];
+  return n;
+}
+function undoSend(hid) {
+  const h = history.find(x => x.id === hid); if (!h) return;
+  // Old prices go back live; each card returns to the pick it had before the send.
+  h.lines.forEach(l => { const it = byId(l.id); if (it) { it.current = l.from; Object.assign(it, l.prev); it.sent = false; } });
+  history = history.filter(x => x !== h);
+}
+
+// ================= Concept: Desk =================
+function desk() {
+  const t = totals();
+  const piles = [['eye', 'Needs your eye', t.eye.length, 'var(--eye-ring)'], ['ready', 'Ready to send', t.copies + ' ' + plural(t.copies, 'copy', 'copies'), 'var(--accent)'], ['held', 'Held back', t.held.length, 'var(--held)'], ['sent', 'Sent', history.length + ' ' + plural(history.length, 'send'), 'var(--line-strong)']];
+  const known = S.s !== 'loading' && S.s !== 'error';
+  const rail = `<nav class="desk-rail" aria-label="Piles" data-new="Piles">${piles.map(([k, l, n, c]) => `<button class="pile" data-act="pile" data-pile="${k}" ${S.pile === k ? 'aria-current="page"' : ''}><span><span class="sw" style="background:${c}"></span>${l}</span>${known || k === 'sent' ? `<span class="count">${n}</span>` : '<span class="count muted" title="Not known until market prices load">—</span>'}</button>`).join('')}<div class="rail-gap"></div><p class="note-line rail-title num">${t.same.toLocaleString()} cards keep their price and need nothing.</p></nav>`;
+  const slot = stateSlot();
+  let main;
+  if (slot) main = slot;
+  else if (S.pile === 'eye') main = deskEye(t);
+  else if (S.pile === 'ready') main = deskTable(t.ready, 'Ready to send', 'ready');
+  else if (S.pile === 'held') main = deskTable(t.held, 'Held back', 'held');
+  else main = deskSent();
+  const tray = `<aside class="desk-tray" aria-label="This send" data-new="Send tray">
+    <h2 style="font-size:var(--fs-4)">This send</h2>
+    ${S.s === 'loaded' || S.s === 'empty' ? `<div><div class="tray-figure">${t.copies}</div><div class="muted">${plural(t.copies, 'copy', 'copies')} get a new price</div></div>
+    <dl class="tray-lines"><dt>Prices that would move</dt><dd>${t.moves}</dd><dt>Cards in this send</dt><dd>${t.ready.length}</dd><dt>Going up</dt><dd class="up">${t.nUp}, ${signed(t.up)}</dd><dt>Going down</dt><dd class="down">${t.nDown}, ${signed(t.down)}</dd><dt>Kept by you</dt><dd>${t.held.length}</dd><dt>Not yet looked at</dt><dd>${t.eye.length}</dd></dl>
+    ${sendBtn(t, true)}
+    ${S.last.length ? `<div class="tray-recent"><span class="muted">Your last picks</span>${S.last.map(id => { const it = byId(id); return `<div><span>${esc(it.name)}</span><span class="num">${status(it) === 'held' ? 'held' : status(it) === 'ready' ? money(newPrice(it)) : 'no change'}</span></div>`; }).join('')}</div>` : ''}` : `<p class="muted">The send waits until market prices load.</p>${sendBtn(t, true)}`}
+  </aside>`;
+  const bottom = `<div class="desk-bottom" data-new="Send bar"><span class="num">${known ? `<b>${t.copies}</b> ${plural(t.copies, 'copy', 'copies')} ready. ${t.eye.length} not yet looked at.` : 'The send waits until market prices load.'}</span><span class="grow"></span>${sendBtn(t)}</div>`;
+  return `<header class="app-head"><h1>Pricing</h1><span class="grow"></span><input class="field" type="search" placeholder="Find a card" aria-label="Find a card" value="${esc(S.q)}" data-in="q" style="width:16rem"></header>
+  <div class="app-body"><div class="desk">${rail}<main class="desk-main" id="desk-focus">${main}</main>${tray}${bottom}</div></div>`;
+}
+function deskEye(t) {
+  const list = t.eye.filter(match);
+  if (!t.eye.length) return `<div class="panel-state"><h2>All is well.</h2><p>Nothing needs your eye. ${t.copies} ${plural(t.copies, 'copy', 'copies')} are ready to send.</p>${sendBtn(t)}</div>`;
+  if (!list.length) return `<h2>Needs your eye</h2><div class="panel-state"><p>No card that needs your eye matches “${esc(S.q)}”.</p><button class="btn" data-act="clearq">Clear search</button></div>`;
+  let it = byId(S.focus); if (!it || status(it) !== 'eye' || !match(it)) it = list[0];
+  S.focus = it.id;
+  const idx = list.indexOf(it);
+  const answer = S.answer && S.answer.id !== it.id ? answerAny() : answerLine(it.id);
+  return `<div class="cluster" style="justify-content:space-between"><h2>Needs your eye</h2><span class="muted num">${idx + 1} of ${list.length}</span></div>
+  <article class="focus-card" data-new="One card at a time">
+    <div class="focus-top"><div><div class="focus-name">${esc(it.name)}</div><div class="card-sub">${esc(it.set)} ${it.num}, ${it.cond}, ${it.copies} ${plural(it.copies, 'copy', 'copies')}</div></div>
+    <div class="cluster"><button class="btn quiet" data-act="prev" ${idx === 0 ? 'disabled title="This is the first card."' : ''}>Previous <kbd>K</kbd></button><button class="btn quiet" data-act="next" ${idx === list.length - 1 ? 'disabled title="This is the last card."' : ''}>Skip <kbd>J</kbd></button></div></div>
+    <div class="reason">${reason(it)}</div>
+    ${trio(it)}
+    ${actions(it, true)}
+    ${answer}
+  </article>
+  <section class="stack"><h3 style="font-size:var(--fs-3)" class="muted">Next in this pile</h3>
+  <div class="queue-list">${list.slice(idx + 1, idx + 9).map(x => `<button class="queue-row" data-act="focus" data-id="${x.id}"><span><span class="card-name">${esc(x.name)}</span> <span class="card-sub">${esc(x.set)}</span></span><span class="note-line">${reason(x)}</span><span class="num">${money(x.current)}</span></button>`).join('') || '<p style="padding:var(--space-4)" class="muted">This is the last card in the pile.</p>'}</div></section>`;
+}
+function deskTable(rows, title, kind) {
+  const list = rows.filter(match);
+  if (!rows.length) return `<h2>${title}</h2><div class="panel-state"><p>${kind === 'ready' ? 'No price is ready yet. Pick one in Needs your eye.' : 'You hold nothing back.'}</p>${kind === 'ready' ? '<button class="btn" data-act="pile" data-pile="eye">Open Needs your eye</button>' : ''}</div>`;
+  if (!list.length) return `<h2>${title}</h2><div class="panel-state"><p>No card here matches “${esc(S.q)}”.</p><button class="btn" data-act="clearq">Clear search</button></div>`;
+  return `<div class="cluster" style="justify-content:space-between"><h2>${title}</h2>${answerAny()}</div><div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:auto"><table class="tbl num"><thead><tr><th>Card</th><th class="r">Copies</th><th class="r">Live now</th><th class="r">${kind === 'held' ? 'Would be' : 'New price'}</th><th class="r">Change</th>${kind === 'held' ? '<th>Why</th>' : ''}<th></th></tr></thead><tbody>${list.map(it => `<tr><td><div class="card-name">${esc(it.name)}</div><div class="card-sub">${esc(it.set)} ${it.num}</div></td><td class="r">${it.copies}</td><td class="r">${money(it.current)}</td><td class="r">${newPrice(it) == null ? '<span class="muted">None</span>' : money(newPrice(it))}</td><td class="r">${pctTag(it)}</td>${kind === 'held' ? `<td class="note-line">${esc(it.note || 'No reason given')}</td>` : ''}<td class="r">${kind === 'held' ? `<button class="btn" data-act="release" data-id="${it.id}">Release</button>` : `<button class="btn" data-act="hold" data-id="${it.id}">Hold back</button>`}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function deskSent() {
+  const h = history.find(x => x.id === S.hist) || history[0];
+  return `<h2>Sent</h2><div class="cluster">${history.map(x => `<button class="chip" aria-pressed="${x === h}" data-act="hist" data-h="${x.id}">${x.when}, ${x.copies} copies</button>`).join('')}</div>
+  <div class="focus-card" data-new="What went out">${histBody(h)}${h.undoable ? `<div><button class="btn" data-act="undosend" data-h="${h.id}">Undo send</button></div>` : '<p class="note-line">Only the latest send can be undone.</p>'}</div>`;
+}
+
+// ================= Concept: Band =================
+const XMIN = -60, XMAX = 60, BIN = 3;
+const xpos = p => { const v = Math.max(XMIN, Math.min(XMAX, p)); return (v - XMIN) / (XMAX - XMIN) * 100; };
+function band() {
+  const t = totals();
+  const slot = stateSlot();
+  const marketItems = items.filter(it => it.market != null && status(it) !== 'held' && status(it) !== 'same');
+  const noMarket = items.filter(it => it.market == null && status(it) !== 'held');
+  const bins = {};
+  // Touch at 820: wider bins and bigger dots, so each dot is a fair target.
+  const touch = S.w === 820, BINW = touch ? 5 : BIN, STEP = touch ? 24 : 18;
+  marketItems.sort((x, y) => pct(x) - pct(y));
+  const rove = (S.sel && marketItems.some(x => x.id === S.sel)) ? S.sel : (marketItems[0] && marketItems[0].id);
+  const dots = marketItems.map(it => {
+    const p = pct(it) * 100; const b = Math.round(Math.max(XMIN, Math.min(XMAX, p)) / BINW);
+    bins[b] = (bins[b] || 0) + 1; const stack = bins[b] - 1;
+    const inBand = status(it) === 'ready';
+    const mine = it.decision === 'use' || it.decision === 'own';
+    const cls = mine ? 'mine' : inBand ? 'in ' + (p > 0 ? 'up' : 'down') : 'out';
+    const word = mine ? 'priced by you' : inBand ? 'sends with the band' : 'needs your eye';
+    return `<button class="dot ${cls} ${S.sel === it.id ? 'sel' : ''}" id="dot-${it.id}" tabindex="${it.id === rove ? 0 : -1}" style="left:${xpos(b * BINW)}%;bottom:${4 + stack * STEP}px" data-act="sel" data-id="${it.id}" aria-label="${esc(it.name)}, ${p > 0 ? 'up' : 'down'} ${Math.abs(Math.round(p))}%, ${word}" title="${esc(it.name)}: ${p > 0 ? '+' : '−'}${Math.abs(Math.round(p))}%"></button>`;
+  }).join('');
+  const gdots = noMarket.map(it => { const mine = status(it) === 'ready'; return `<button class="gdot ${mine ? 'mine' : 'out'} ${S.sel === it.id ? 'sel' : ''}" data-act="sel" data-id="${it.id}" aria-label="${esc(it.name)}, no market price${mine ? ', priced by you' : ''}" title="${esc(it.name)}"></button>`; }).join('');
+  const hdots = t.held.map(it => `<button class="hdot ${S.sel === it.id ? 'sel' : ''}" data-act="sel" data-id="${it.id}" aria-label="${esc(it.name)}, held back" title="${esc(it.name)}"></button>`).join('');
+  const ticks = [-60, -40, -20, 0, 20, 40, 60].map(v => `<span style="left:${xpos(v)}%">${v === 60 ? '≥ ' : v === -60 ? '≤ ' : ''}${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v)}%</span>`).join('');
+  const outCount = t.eye.filter(it => it.market != null).length, nmCount = t.eye.filter(it => it.market == null).length;
+  const main = slot || `
+    <p class="band-say" data-new="The band as a sentence">Price moves between <b class="lo">${S.lo > 0 ? '+' : S.lo < 0 ? '−' : ''}${Math.abs(S.lo)}%</b> and <b class="hi">+${S.hi}%</b> send without a look. You look at the rest.</p>
+    <div class="band-figs num">
+      <div class="band-fig"><span class="n">${t.copies}</span><span class="l">${plural(t.copies, 'copy', 'copies')} send</span></div>
+      <div class="band-fig"><span class="n" style="color:var(--eye)">${outCount}</span><span class="l">outside the band</span></div>
+      <div class="band-fig"><span class="n" style="color:var(--eye)">${nmCount}</span><span class="l">have no market price</span></div>
+      <div class="band-fig"><span class="n" style="color:var(--held)">${t.held.length}</span><span class="l">held back by you</span></div>
+    </div>
+    <div class="chart-wrap" id="band-chart" data-new="Price-move field">
+      <div class="gutter"><div class="gutter-dots">${gdots}</div><span class="l">No market price</span></div>
+      <div class="stack chart-col" style="gap:0"><div class="plot">
+        <div class="chart" role="group" aria-label="Every proposed price move, from down 60% to up 60%. Use the arrow keys to move between cards."><div class="zone" style="left:${xpos(S.lo)}%;width:${xpos(S.hi) - xpos(S.lo)}%"></div><div class="zero" style="left:${xpos(0)}%"></div>${dots}</div>
+        <div class="axis">${ticks}</div></div>
+        <div class="handles" data-new="Band edges"><input type="range" min="${XMIN}" max="${XMAX}" step="1" value="${S.lo}" data-in="lo" aria-label="Lower edge of the band, percent" aria-valuetext="${S.lo}%"><input type="range" min="${XMIN}" max="${XMAX}" step="1" value="${S.hi}" data-in="hi" aria-label="Upper edge of the band, percent" aria-valuetext="${S.hi}%"></div>
+      </div>
+    </div>
+    <div class="legend"><span><i style="background:var(--up)"></i>Up, inside the band</span><span><i style="background:var(--down)"></i>Down, inside the band</span><span><i style="box-shadow:inset 0 0 0 3px var(--eye-ring)"></i>Needs your eye</span><span><i style="background:var(--accent)"></i>Priced by you</span></div>
+    <section class="shelf" data-new="Held shelf"><span><b>Held back</b> <span class="muted num">${t.held.length} cards keep their price until you release them.</span></span><div class="shelf-dots">${hdots || '<span class="muted">You hold nothing back.</span>'}</div></section>
+    <p class="note-line num">${t.moves} prices would move. ${t.same.toLocaleString()} cards keep their price and are not drawn.</p>`;
+  let side;
+  const it = byId(S.sel);
+  if (slot) side = `<p class="muted">The band waits for market prices.</p>`;
+  else if (it) {
+    const st = status(it);
+    side = `<div class="cluster" style="justify-content:space-between"><span class="pill ${st}">${{ eye: 'Needs your eye', ready: 'Sends', held: 'Held back', same: 'No change' }[st]}</span><button class="btn quiet" data-act="sel" data-id="">Close</button></div>
+      <div><div class="focus-name" style="font-size:var(--fs-4)">${esc(it.name)}</div><div class="card-sub">${esc(it.set)} ${it.num}, ${it.cond}, ${it.copies} ${plural(it.copies, 'copy', 'copies')}</div></div>
+      ${st === 'eye' ? `<div class="reason">${reason(it)}</div>` : st === 'held' ? `<p class="note-line">${esc(it.note || 'No reason given')}</p>` : ''}
+      ${trio(it)}
+      ${actions(it, false)}
+      ${answerLine(it.id)}`;
+  } else {
+    side = `<h2 style="font-size:var(--fs-4)">This send</h2><p class="muted">Press a dot to see one card. Drag the band edges to choose which moves send without a look.</p>
+      <dl class="tray-lines num"><dt>Going up</dt><dd class="up">${t.nUp}, ${signed(t.up)}</dd><dt>Going down</dt><dd class="down">${t.nDown}, ${signed(t.down)}</dd><dt>Cards</dt><dd>${t.ready.length}</dd></dl>
+      ${!t.eye.length && S.s !== 'loading' ? '<p><b>All is well.</b> Every move sits inside your band.</p>' : ''}
+      ${sendBtn(t, true)}`;
+  }
+  return `<header class="app-head"><h1>Pricing</h1><span class="grow"></span><button class="btn" data-act="history">What went out before</button></header>
+  <div class="app-body"><div class="band"><main class="band-main">${main}</main><aside class="band-side" aria-label="Selected card" data-new="Card inspector">${side}</aside></div></div>`;
+}
+
+// ================= Concept: Manifest =================
+function manifest() {
+  const t = totals();
+  const viewing = history.find(h => h.id === S.hist);
+  const rail = `<nav class="man-rail ${S.rail ? 'open' : ''}" aria-label="Sends" data-new="Sends list"><span class="rail-title">Next send</span><button class="mf" data-act="mf" data-h="" ${!viewing ? 'aria-current="page"' : ''}><b>Draft</b><small class="num">${S.s === 'loading' || S.s === 'error' ? 'Waits for market prices' : `${t.copies} ${plural(t.copies, 'copy', 'copies')}, not sent`}</small></button><span class="rail-title">Sent</span>${history.map(h => `<button class="mf" data-act="mf" data-h="${h.id}" ${viewing === h ? 'aria-current="page"' : ''}><b>${h.when[0].toUpperCase() + h.when.slice(1)}</b><small class="num">${h.copies} copies changed</small></button>`).join('')}</nav>`;
+  const top = `<div class="man-top"><button class="btn" data-act="rail" aria-expanded="${S.rail}">${viewing ? 'Sent ' + viewing.when : 'Draft send'} <span aria-hidden="true">▾</span></button></div>`;
+  const slot = stateSlot();
+  let doc, foot = '';
+  if (slot) doc = slot;
+  else if (viewing) {
+    doc = `<article class="doc" id="manifest-doc" data-new="A sent manifest"><div class="doc-head"><h2>Sent ${viewing.when}</h2><p class="doc-lead">${viewing.copies} copies changed price on ${viewing.lines.length} cards. This is the whole send, line by line.</p></div>
+      <section class="doc-sec"><header><h3>Price changes</h3><span class="num">${viewing.lines.length}</span></header>${viewing.lines.map(l => `<div class="mline" style="grid-template-columns:minmax(0,1fr) 3.5rem 6rem 1.5rem 6rem"><span><span class="card-name">${esc(l.name)}</span> <span class="card-sub">${esc(l.set)}</span></span><span class="r cp">${l.copies}x</span><span class="r">${money(l.from)}</span><span class="arrow">to</span><span class="r"><b class="${l.to > l.from ? 'up' : 'down'}">${money(l.to)}</b></span></div>`).join('')}</section>
+      ${viewing.undoable ? `<div><button class="btn" data-act="undosend" data-h="${viewing.id}">Undo this send</button></div>` : '<p class="note-line">Only the latest send can be undone.</p>'}</article>`;
+  } else {
+    const blanks = t.eye;
+    const ups = t.ready.filter(it => newPrice(it) > it.current), downs = t.ready.filter(it => newPrice(it) < it.current);
+    const line = it => `<div class="mline"><span><span class="card-name">${esc(it.name)}</span> <span class="card-sub">${esc(it.set)}${it.decision ? ', priced by you' : ''}</span></span><span class="r cp">${it.copies}x</span><span class="r muted">${money(it.current)}</span><span class="arrow">to</span><span class="r"><b>${money(newPrice(it))}</b></span><span class="r">${pctTag(it)}</span><span class="act"><button class="btn quiet" data-act="hold" data-id="${it.id}">Leave out</button></span></div>`;
+    const blankLine = it => `<div class="mline blank"><span><span class="card-name">${esc(it.name)}</span> <span class="card-sub">${esc(it.set)}, ${it.copies}x, live at ${money(it.current)}${it.market != null ? ', market ' + money(it.market) : ''}</span><br><span class="why">${reason(it)}</span></span><span class="blank-fill">${it.suggested != null ? `<button class="btn" data-act="use" data-id="${it.id}">Use ${money(it.suggested)}</button>` : ''}<input class="field price-in" id="own-${it.id}" inputmode="decimal" placeholder="$ ____" aria-label="Your price for ${esc(it.name)}"><button class="btn" data-act="own" data-id="${it.id}">Set</button><button class="btn quiet" data-act="hold" data-id="${it.id}">Hold back</button></span></div>`;
+    const sec = (title, n, body, extra) => `<section class="doc-sec"><header><h3>${title}</h3><span class="num">${n}</span>${extra || ''}</header>${body}</section>`;
+    doc = `<article class="doc" id="manifest-doc" data-new="The send as a document">
+      <div class="doc-head"><h2>Draft send</h2><p class="doc-lead num">If you send now, <b>${t.copies} ${plural(t.copies, 'copy', 'copies')}</b> of ${t.ready.length} cards change price, and buyers see it at once. ${blanks.length ? `${blanks.length} cards wait for a price from you; until then they keep their live price.` : 'Every card has a price. All is well.'}</p>${answerAny()}</div>
+      ${blanks.length ? sec('Waiting for your price', blanks.length, blanks.map(blankLine).join(''), '') : ''}
+      ${sec('Going up', ups.length, ups.map(line).join('') || '<p class="muted">No price goes up in this send.</p>')}
+      ${sec('Going down', downs.length, downs.map(line).join('') || '<p class="muted">No price goes down in this send.</p>')}
+      ${sec('Held back on purpose', t.held.length, S.open.held ? t.held.map(it => `<div class="mline" style="grid-template-columns:minmax(0,1fr) auto auto"><span><span class="card-name">${esc(it.name)}</span> <span class="card-sub">${esc(it.note || 'No reason given')}</span></span><span class="r num">${money(it.current)}</span><span><button class="btn quiet" data-act="release" data-id="${it.id}">Release</button></span></div>`).join('') : '', `<button class="foldbtn" data-act="fold" data-k="held" aria-expanded="${S.open.held}">${S.open.held ? 'Fold' : 'Show'}</button>`)}
+      ${sec('Not changing', t.same.toLocaleString(), '<p class="note-line">These cards keep their live price. Nothing about them is in this send.</p>')}
+    </article>`;
+    foot = `<footer class="doc-foot num" data-new="Send line"><div class="sum"><b>${t.copies} ${plural(t.copies, 'copy', 'copies')} change price</b><span class="muted">Up ${money(t.up)} on ${t.nUp} cards. Down ${money(-t.down)} on ${t.nDown}. ${t.held.length} held. ${t.eye.length} wait for you.</span></div>${sendBtn(t, true, 'Send ' + t.copies + ' ' + plural(t.copies, 'copy', 'copies'))}</footer>`;
+  }
+  return `<header class="app-head"><h1>Pricing</h1><span class="grow"></span><span class="muted num">${TOTAL.toLocaleString()} cards for sale</span></header>
+  <div class="app-body"><div class="man">${rail}<main class="man-main">${top}${doc}${foot}</main></div></div>`;
+}
+
+// ---------- Mockup chrome ----------
+const CONCEPTS = [['desk', 'Desk', 'desk-focus'], ['band', 'Band', 'band-chart'], ['manifest', 'Manifest', 'manifest-doc']];
+const STATES = [['loaded', 'Loaded'], ['loading', 'Loading'], ['error', 'Prices failed'], ['empty', 'Nothing needs your eye'], ['sending', 'Sending'], ['sent', 'Sent']];
+const NOTES = { desk: 'Desk: piles on the left, one card at a time in the middle, the send always visible on the right. Keys: Enter, P, H, J, K.', band: 'Band: you set a rule, not 2,000 prices. Every proposed move is a dot. Drag the band edges; what sits inside sends.', manifest: 'Manifest: the first screen is the send itself, written out line by line. Blanks are cards that wait for your price.' };
+function bar() {
+  const vis = CONCEPTS.filter(c => !S.hide.includes(c[0]));
+  return `<div class="mock-group"><span>Concept</span>${vis.map(([k, l]) => `<span class="concept-tab" data-on="${S.c === k}"><button class="chip" data-act="c" data-k="${k}" aria-pressed="${S.c === k}">${l}</button><button class="chip-x" data-act="hide" data-k="${k}" aria-label="Hide the ${l} concept" title="Hide ${l}">×</button></span>`).join('')}${S.hide.length ? `<button class="chip" data-act="unhide">Show hidden (${S.hide.length})</button>` : ''}</div>
+  <div class="mock-group"><span>State</span><select class="field" data-in="s" aria-label="State">${STATES.map(([k, l]) => `<option value="${k}" ${S.s === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+  <div class="mock-group"><span>Width</span>${[1440, 820].map(w => `<button class="chip" data-act="w" data-k="${w}" aria-pressed="${S.w === w}">${w}${w === 820 ? ', touch' : ''}</button>`).join('')}</div>
+  <div class="mock-group"><span>Theme</span>${['light', 'dark'].map(v => `<button class="chip" data-act="t" data-k="${v}" aria-pressed="${theme() === v}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}</div>
+  <div class="mock-group"><button class="chip" data-act="labels" aria-pressed="${S.labels}">Part labels</button><button class="chip" data-act="reset">Reset sample</button></div>`;
+}
+const theme = () => S.t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+
+// ---------- Hash and state ----------
+function readHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get('c') && CONCEPTS.some(c => c[0] === h.get('c'))) S.c = h.get('c');
+  if (h.get('s') && STATES.some(s => s[0] === h.get('s'))) S.s = h.get('s');
+  if (h.get('t') === 'dark' || h.get('t') === 'light') S.t = h.get('t');
+  if (h.get('w') === '820' || h.get('w') === '1440') S.w = +h.get('w');
+  S.pile = ['eye', 'ready', 'held', 'sent'].includes(h.get('p')) ? h.get('p') : 'eye';
+  S.hide = (h.get('h') || '').split(',').filter(k => CONCEPTS.some(c => c[0] === k));
+  S.labels = h.get('labels') === '1';
+}
+function writeHash() {
+  const p = new URLSearchParams(); p.set('c', S.c); p.set('s', S.s); if (S.t) p.set('t', S.t); p.set('w', S.w);
+  if (S.c === 'desk' && S.pile !== 'eye') p.set('p', S.pile);
+  if (S.hide.length) p.set('h', S.hide.join(',')); if (S.labels) p.set('labels', '1');
+  history_replace('#' + p.toString());
+}
+function history_replace(h) { try { window.history.replaceState(null, '', h); } catch (e) { location.hash = h; } }
+function applyState() {
+  clearInterval(timer);
+  build(); S.sheet = null; S.answer = null; S.sel = null; S.focus = null; S.hist = null; S.last = []; S.lo = -12; S.hi = 15;
+  if (S.s === 'empty') items.forEach(it => { if (status(it) === 'eye') { if (it.suggested != null) it.decision = 'use'; else { it.decision = 'own'; it.own = r2(it.current * 1.05); } } });
+  if (S.s === 'sending') { const t = totals(); S.sheet = { mode: 'sending', ids: t.ready.map(i => i.id), total: t.copies, done: Math.round(t.copies * .38) }; }
+  if (S.s === 'sent') { const t = totals(); commit(t.ready.map(i => i.id), t.copies); S.sheet = { mode: 'sent' }; }
+}
+
+// ---------- Render ----------
+const frame = document.getElementById('frame');
+function render() {
+  if (S.t) document.documentElement.setAttribute('data-theme', S.t); else document.documentElement.removeAttribute('data-theme');
+  if (S.hide.includes(S.c)) S.c = (CONCEPTS.find(c => !S.hide.includes(c[0])) || CONCEPTS[0])[0];
+  document.getElementById('mockbar').innerHTML = bar();
+  document.getElementById('mocknote').textContent = NOTES[S.c] + (S.w === 820 ? ' At 820 the frame is a touch tablet: hit areas are 44 px and keys are hidden.' : '');
+  const active = document.activeElement, aid = active && active.id, adata = active && active.dataset && active.dataset.in;
+  frame.dataset.w = S.w; frame.classList.toggle('labels', S.labels);
+  frame.innerHTML = (S.c === 'desk' ? desk() : S.c === 'band' ? band() : manifest()) + sheet();
+  if (aid) { const el = document.getElementById(aid); if (el) el.focus(); }
+  else if (adata && adata !== 's') { const el = frame.querySelector(`[data-in="${adata}"]`); if (el) { el.focus(); if (el.type === 'search') el.setSelectionRange(el.value.length, el.value.length); } }
+  writeHash();
+}
+
+// ---------- Events ----------
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const a = el.dataset.act, id = el.dataset.id, k = el.dataset.k;
+  if (a === 'scrim' && e.target !== el) return;
+  switch (a) {
+    case 'c': S.c = k; S.sheet = null; S.rail = false; break;
+    case 'hide': if (CONCEPTS.length - S.hide.length > 1) S.hide.push(k); break;
+    case 'unhide': S.hide = []; break;
+    case 'w': S.w = +k; break;
+    case 't': S.t = k; break;
+    case 'labels': S.labels = !S.labels; break;
+    case 'reset': S.s = 'loaded'; applyState(); break;
+    case 'pile': S.pile = el.dataset.pile; S.answer = null; break;
+    case 'focus': S.focus = id; S.answer = null; break;
+    case 'next': case 'prev': { const l = by('eye').filter(match); const i = l.findIndex(x => x.id === S.focus); const j = i + (a === 'next' ? 1 : -1); if (l[j]) S.focus = l[j].id; S.answer = null; break; }
+    case 'use': case 'hold': case 'release': act(a, id); if (S.c === 'desk' && S.pile === 'eye') S.focus = null; break;
+    case 'own': { const inp = document.getElementById('own-' + id); act('own', id, inp ? inp.value : ''); if (S.c === 'desk' && S.pile === 'eye' && !(S.answer && S.answer.bad)) S.focus = null; break; }
+    case 'undo': if (S.answer) { act('undo', S.answer.id); } break;
+    case 'clearq': S.q = ''; break;
+    case 'retry': S.s = 'loaded'; applyState(); break;
+    case 'review': S.sheet = { mode: 'review' }; break;
+    case 'send': if (S.sheet && S.sheet.mode === 'stopped') { startSend(0); } else startSend(0); break;
+    case 'stop': { clearInterval(timer); const sh = S.sheet; const n = commit(sh.ids, sh.done); S.sheet = { mode: 'stopped', done: n, total: sh.total }; break; }
+    case 'close': S.sheet = null; break;
+    case 'scrim': if (S.sheet && S.sheet.mode !== 'sending') S.sheet = null; break;
+    case 'undosend': S.sheet = { mode: 'undo', h: el.dataset.h }; break;
+    case 'undoconfirm': undoSend(el.dataset.h); S.sheet = null; S.hist = null; break;
+    case 'seesent': S.sheet = null; if (S.c === 'desk') { S.pile = 'sent'; S.hist = el.dataset.h; } else if (S.c === 'manifest') S.hist = el.dataset.h; else S.sheet = { mode: 'history', h: el.dataset.h }; break;
+    case 'history': S.sheet = { mode: 'history', h: history[0] && history[0].id }; break;
+    case 'hist': S.hist = el.dataset.h; break;
+    case 'sel': S.sel = id || null; S.answer = null; break;
+    case 'mf': S.hist = el.dataset.h || null; S.rail = false; S.answer = null; break;
+    case 'rail': S.rail = !S.rail; break;
+    case 'fold': S.open[k] = !S.open[k]; break;
+    default: return;
+  }
+  render();
+});
+document.addEventListener('input', e => {
+  const d = e.target.dataset.in; if (!d) return;
+  if (d === 'q') { S.q = e.target.value; render(); }
+  if (d === 'lo' || d === 'hi') {
+    if (d === 'lo') { S.lo = Math.min(+e.target.value, S.hi - 1); if (+e.target.value !== S.lo) e.target.value = S.lo; }
+    else { S.hi = Math.max(+e.target.value, S.lo + 1); if (+e.target.value !== S.hi) e.target.value = S.hi; }
+    e.target.setAttribute('aria-valuetext', e.target.value + '%');
+    // Patch the parts the band changes, so the dragged handle stays in the page.
+    const tmp = document.createElement('div'); tmp.innerHTML = band();
+    ['.band-say', '.band-figs', '.chart', '.band-side', '.shelf', '.band-main > .note-line'].forEach(sel => { const a = frame.querySelector(sel), b = tmp.querySelector(sel); if (a && b) a.replaceWith(b); });
+  }
+});
+document.addEventListener('change', e => { if (e.target.dataset.in === 's') { S.s = e.target.value; applyState(); render(); } });
+document.addEventListener('keydown', e => {
+  // Band chart: one tab stop; arrow keys walk the dots from the biggest drop to the biggest rise.
+  if (e.target.classList && e.target.classList.contains('dot') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    const all = [...frame.querySelectorAll('.dot')]; const i = all.indexOf(e.target); const n = all[i + (e.key === 'ArrowRight' ? 1 : -1)];
+    if (n) { e.preventDefault(); e.target.tabIndex = -1; n.tabIndex = 0; n.focus(); }
+    return;
+  }
+  if (e.key === 'Escape' && S.sheet && S.sheet.mode !== 'sending') { S.sheet = null; render(); return; }
+  if (e.target.matches('input, select, textarea') ) { if (e.key === 'Enter' && e.target.id && e.target.id.startsWith('own-')) { const id = e.target.id.slice(4); act('own', id, e.target.value); if (S.c === 'desk' && !(S.answer && S.answer.bad)) S.focus = null; render(); } return; }
+  if (S.c !== 'desk' || S.pile !== 'eye' || S.sheet || S.s !== 'loaded' || e.metaKey || e.ctrlKey || e.altKey) return;
+  const it = byId(S.focus); if (!it) return;
+  const k = e.key.toLowerCase();
+  if (k === 'enter' && it.suggested != null && !e.target.closest('button')) { act('use', it.id); S.focus = null; }
+  else if (k === 'h') { act('hold', it.id); S.focus = null; }
+  else if (k === 'j' || k === 'k') { const l = by('eye').filter(match); const i = l.indexOf(it); const j = l[i + (k === 'j' ? 1 : -1)]; if (j) S.focus = j.id; S.answer = null; }
+  else if (k === 'p') { e.preventDefault(); const inp = document.getElementById('own-' + it.id); if (inp) inp.focus(); return; }
+  else return;
+  render();
+});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (!S.t) render(); });
+window.addEventListener('hashchange', () => { const before = S.s; readHash(); if (S.s !== before) applyState(); render(); });
+
+readHash(); applyState(); render();
+if (S.s === 'sending') tick();
+})();
+</script>
+</body>
+</html>
