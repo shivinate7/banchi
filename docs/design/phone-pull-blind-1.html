@@ -1,0 +1,956 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phone pull concepts</title>
+<style>
+/* House tokens: 4 px step, 8 px radius, colour by role, light and dark sets.
+   Type sizes are the iOS Dynamic Type styles at the default (Large) size. */
+:root {
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px;
+  --radius: 8px;
+
+  --t-large: 700 34px/41px -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --t-title1: 700 28px/34px -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --t-title2: 700 22px/28px -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --t-title3: 600 20px/25px -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --t-headline: 600 17px/22px -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --t-body: 400 17px/22px -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --t-callout: 400 16px/21px -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --t-subhead: 400 15px/20px -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --t-footnote: 400 13px/18px -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --t-caption1: 400 12px/16px -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --t-caption2: 400 11px/13px -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", sans-serif;
+
+  --c-page: #E7EAF0;
+  --c-surface: #F6F7F9;
+  --c-raised: #FFFFFF;
+  --c-text: #141826;
+  --c-text-2: #555C70;
+  --c-line: #D5D9E1;
+  --c-act: #2E3FB8;
+  --c-on-act: #FFFFFF;
+  --c-act-soft: #E2E5FA;
+  --c-envelope: #EFD58E;
+  --c-envelope-ink: #3E300A;
+  --c-done: #1B7347;
+  --c-done-soft: #DCF0E4;
+  --c-warn: #9C410C;
+  --c-warn-soft: #FBE6D7;
+  --c-find: #A61F6F;
+  --c-sample: #FFF1BF;
+  --c-sample-ink: #3E300A;
+  --c-bezel: #1B1E27;
+  --c-scrim: rgba(20, 24, 38, .38);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --c-page: #06080F; --c-surface: #10131F; --c-raised: #1A1E2D; --c-text: #ECEEF5;
+    --c-text-2: #A6ACBF; --c-line: #2C3145; --c-act: #8E9CFF; --c-on-act: #0C0F2E;
+    --c-act-soft: #242B57; --c-envelope: #CFAF5B; --c-envelope-ink: #1E1604;
+    --c-done: #5CCB8F; --c-done-soft: #15321F; --c-warn: #F29B63; --c-warn-soft: #3B2214;
+    --c-find: #F26DB5; --c-sample: #3A3110; --c-sample-ink: #F5E3A8; --c-bezel: #2A2E3B;
+    --c-scrim: rgba(0, 0, 0, .55); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --c-page: #06080F; --c-surface: #10131F; --c-raised: #1A1E2D; --c-text: #ECEEF5;
+  --c-text-2: #A6ACBF; --c-line: #2C3145; --c-act: #8E9CFF; --c-on-act: #0C0F2E;
+  --c-act-soft: #242B57; --c-envelope: #CFAF5B; --c-envelope-ink: #1E1604;
+  --c-done: #5CCB8F; --c-done-soft: #15321F; --c-warn: #F29B63; --c-warn-soft: #3B2214;
+  --c-find: #F26DB5; --c-sample: #3A3110; --c-sample-ink: #F5E3A8; --c-bezel: #2A2E3B;
+  --c-scrim: rgba(0, 0, 0, .55); color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--c-page); color: var(--c-text); font: var(--t-body); }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid var(--c-act); outline-offset: 2px; }
+a { color: var(--c-act); }
+
+/* ---------- page chrome around the devices ---------- */
+.sample { position: sticky; top: 0; z-index: 10; background: var(--c-sample); color: var(--c-sample-ink);
+  border-bottom: 1px solid var(--c-line); padding: var(--space-2) var(--space-4); font: var(--t-subhead); text-align: center; }
+.page { max-width: 1340px; margin-inline: auto; padding: var(--space-6) var(--space-4) var(--space-12);
+  display: flex; flex-direction: column; gap: var(--space-10); }
+.intro { display: flex; flex-direction: column; gap: var(--space-3); max-width: 70ch; }
+.intro h1 { font: var(--t-large); margin: 0; }
+.intro p { margin: 0; color: var(--c-text-2); }
+.cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.pill { min-height: 44px; padding: 0 var(--space-4); border-radius: var(--radius); border: 1px solid var(--c-line);
+  background: var(--c-raised); font: var(--t-subhead); display: inline-flex; align-items: center; text-decoration: none; color: var(--c-text); }
+.pill[aria-pressed="true"] { background: var(--c-act); color: var(--c-on-act); border-color: var(--c-act); }
+.concept { display: flex; flex-direction: column; gap: var(--space-4); scroll-margin-top: var(--space-12); }
+.concept[hidden] { display: none; }
+.concept-head { display: flex; flex-direction: column; gap: var(--space-2); }
+.concept-head h2 { font: var(--t-title1); margin: 0; }
+.concept-head p { margin: 0; max-width: 70ch; color: var(--c-text-2); }
+.new-tag { align-self: flex-start; border: 2px dashed var(--c-act); color: var(--c-act); border-radius: var(--radius);
+  padding: var(--space-1) var(--space-2); font: var(--t-footnote); }
+.states { font: var(--t-footnote); }
+.states a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 var(--space-2); }
+.poses { display: flex; flex-wrap: wrap; gap: var(--space-8); align-items: flex-start; }
+figure { margin: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+figcaption { font: var(--t-footnote); color: var(--c-text-2); max-width: 402px; }
+.fit { zoom: var(--fit, 1); padding: 10px; }
+
+/* ---------- the device ---------- */
+.device {
+  --inset-top: 54px; --inset-bottom: 34px;
+  position: relative; width: 402px; height: 874px; border-radius: 54px; overflow: hidden;
+  outline: 10px solid var(--c-bezel); border: 1px solid var(--c-bezel); background: var(--c-surface); color: var(--c-text);
+  font: var(--t-body); display: flex; flex-direction: column;
+  padding-top: max(env(safe-area-inset-top), var(--inset-top));
+  padding-bottom: max(env(safe-area-inset-bottom), var(--inset-bottom));
+  padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right);
+}
+.device[data-device="iphone-duo-unfolded"] { width: 780px; border-radius: 40px; }
+.statusbar { position: absolute; top: 0; left: 0; right: 0; height: var(--inset-top); display: flex; align-items: center;
+  justify-content: space-between; padding: 0 var(--space-8); font: var(--t-headline); pointer-events: none; }
+.statusbar i { display: inline-block; width: 18px; height: 10px; border-radius: 3px; background: var(--c-text); opacity: .8; }
+.homebar { position: absolute; bottom: var(--space-2); left: 50%; translate: -50% 0; width: 136px; height: 5px;
+  border-radius: 3px; background: var(--c-text); opacity: .7; pointer-events: none; }
+.screen { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+
+.nav { display: flex; flex-direction: column; gap: var(--space-1); padding: 0 var(--space-4) var(--space-2); }
+.nav-row { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.nav-row .mid { font: var(--t-headline); text-align: center; flex: 1; }
+.nav-btn { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; gap: var(--space-1); color: var(--c-act); font: var(--t-body); }
+.nav-btn.warn { color: var(--c-warn); }
+.large { font: var(--t-large); margin: 0; }
+.scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
+.stack { display: flex; flex-direction: column; gap: var(--space-3); }
+.stack-1 { display: flex; flex-direction: column; gap: var(--space-1); }
+.row { display: flex; align-items: center; gap: var(--space-3); }
+.grow { flex: 1; min-width: 0; }
+.muted { color: var(--c-text-2); }
+.foot { font: var(--t-footnote); }
+.sub { font: var(--t-subhead); }
+.head { font: var(--t-headline); }
+.t3 { font: var(--t-title3); }
+.t2 { font: var(--t-title2); }
+.t1 { font: var(--t-title1); }
+.ellip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.dock { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4) var(--space-2);
+  border-top: 1px solid var(--c-line); background: var(--c-surface); }
+.btn { min-height: 50px; border-radius: var(--radius); padding: 0 var(--space-4); font: var(--t-headline);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); }
+.btn.primary { background: var(--c-act); color: var(--c-on-act); }
+.btn.second { background: var(--c-act-soft); color: var(--c-act); }
+.btn.quiet { color: var(--c-act); min-height: 44px; }
+.btn.small { min-height: 44px; font: var(--t-subhead); font-weight: 600; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.btn-row { display: flex; gap: var(--space-2); }
+.btn-row > .btn { flex: 1; }
+.reason { font: var(--t-footnote); color: var(--c-text-2); text-align: center; }
+.toast { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 44px;
+  padding: 0 var(--space-3); border-radius: var(--radius); background: var(--c-done-soft); color: var(--c-text); font: var(--t-subhead); }
+.toast .btn { min-height: 44px; padding: 0 var(--space-2); }
+
+.tabbar { margin: 0 var(--space-4) var(--space-1); display: flex; gap: var(--space-1); padding: var(--space-1);
+  border-radius: 32px; background: var(--c-raised); border: 1px solid var(--c-line); align-self: center; min-width: 260px; }
+.tab { flex: 1; min-height: 52px; min-width: 72px; border-radius: 26px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 2px; font: var(--t-caption2); font-weight: 600; color: var(--c-text-2); }
+.tab[aria-current="page"] { background: var(--c-act-soft); color: var(--c-act); }
+.tab svg { width: 24px; height: 24px; }
+svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+.banner { margin: 0 var(--space-4) var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius);
+  background: var(--c-warn-soft); color: var(--c-text); font: var(--t-subhead); display: flex; gap: var(--space-2); align-items: center; }
+.banner .btn { min-height: 44px; padding: 0 var(--space-2); }
+
+/* the spot readout: the one big thing on a pull */
+.spot { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-6); align-items: end; }
+.spot .k { font: var(--t-subhead); color: var(--c-text-2); }
+.spot .v { font: var(--t-large); }
+.spot .wide { grid-column: 1 / -1; }
+.spot.compact .v { font: var(--t-title2); }
+
+/* the drawn photo of a stored copy */
+.photo { --h: 200; position: relative; aspect-ratio: 63 / 88; border-radius: 6px; flex: none; overflow: hidden;
+  background: hsl(var(--h) 38% 82%); border: 1px solid var(--c-line); display: block; padding: 0; }
+.photo .art { position: absolute; inset: 14% 8% 42% 8%; border-radius: 3px;
+  background: radial-gradient(circle at var(--x, 40%) var(--y, 45%), hsl(var(--h) 70% 62%), hsl(var(--h) 45% 30%) 70%); }
+.photo .nm { position: absolute; top: 3%; left: 8%; right: 8%; font: 600 9px/11px -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", sans-serif; color: hsl(var(--h) 40% 18%);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.photo .tx { position: absolute; left: 8%; right: 8%; top: 62%; bottom: 8%; border-radius: 2px;
+  background: repeating-linear-gradient(hsl(var(--h) 25% 70%) 0 2px, transparent 2px 7px); opacity: .9; }
+.photo .badge { position: absolute; right: 4px; bottom: 4px; font: 600 9px/11px -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", sans-serif; background: rgba(0,0,0,.55);
+  color: #fff; padding: 1px 4px; border-radius: 3px; }
+.photo.sm .nm { display: none; }
+.photo.lg .nm { font-size: 15px; line-height: 18px; }
+.photo.xl .nm { font-size: 20px; line-height: 24px; }
+
+.chip { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 28px; padding: 0 var(--space-2);
+  border-radius: var(--radius); font: var(--t-footnote); font-weight: 600; }
+.chip.env { background: var(--c-envelope); color: var(--c-envelope-ink); }
+.chip.done { background: var(--c-done-soft); color: var(--c-done); }
+.chip.warn { background: var(--c-warn-soft); color: var(--c-warn); }
+button.chip { min-height: 44px; }
+
+.list { display: flex; flex-direction: column; border-radius: var(--radius); background: var(--c-raised); border: 1px solid var(--c-line); overflow: hidden; }
+.li { min-height: 56px; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3);
+  text-align: left; width: 100%; border-top: 1px solid var(--c-line); }
+.li:first-child { border-top: 0; }
+.li[aria-current="true"] { background: var(--c-act-soft); }
+.li .chev { color: var(--c-text-2); }
+.li.dim { opacity: .55; }
+.sec-h { font: var(--t-footnote); color: var(--c-text-2); padding: 0 var(--space-3); }
+
+.rail { display: flex; gap: var(--space-1); }
+.rail i { flex: 1; height: 6px; border-radius: 3px; background: var(--c-line); }
+.rail i.took { background: var(--c-done); }
+.rail i.miss { background: var(--c-warn); }
+.rail i.now { background: var(--c-act); }
+
+.envtile { border-radius: var(--radius); background: var(--c-envelope); color: var(--c-envelope-ink); padding: var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-1); text-align: left; position: relative; min-height: 96px; }
+.envtile::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 40%;
+  background: linear-gradient(to bottom right, transparent 49.5%, rgba(0,0,0,.08) 50%) left / 50% 100% no-repeat,
+              linear-gradient(to bottom left, transparent 49.5%, rgba(0,0,0,.08) 50%) right / 50% 100% no-repeat; pointer-events: none; }
+.envtile.lit { outline: 4px solid var(--c-act); outline-offset: 2px; }
+.envtile.sealed { opacity: .6; }
+
+.center-msg { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-4);
+  text-align: center; padding: var(--space-6); }
+.center-msg p { margin: 0; max-width: 30ch; }
+.spinner { width: 36px; height: 36px; border-radius: 50%; border: 4px solid var(--c-line); border-top-color: var(--c-act); animation: spin 1s linear infinite; }
+@keyframes spin { to { rotate: 1turn; } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+details { font: var(--t-footnote); color: var(--c-text-2); }
+summary { min-height: 44px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
+.search { display: flex; align-items: center; gap: var(--space-2); min-height: 44px; padding: 0 var(--space-3);
+  border-radius: var(--radius); background: var(--c-act-soft); }
+.search input { flex: 1; min-width: 0; border: 0; background: transparent; font: var(--t-body); color: var(--c-text); min-height: 44px; }
+.search input::placeholder { color: var(--c-text-2); }
+.search input:focus-visible { outline: none; }
+.search:focus-within { outline: 3px solid var(--c-act); outline-offset: 1px; }
+
+/* sheets */
+.scrim { position: absolute; inset: 0; background: var(--c-scrim); z-index: 5; display: flex; align-items: flex-end; justify-content: center; }
+.sheet { width: 100%; max-height: 90%; background: var(--c-raised); border-radius: 16px 16px 0 0; display: flex; flex-direction: column;
+  padding-bottom: max(env(safe-area-inset-bottom), var(--inset-bottom)); border-top: 1px solid var(--c-line); }
+.device[data-device="iphone-duo-unfolded"] .scrim { align-items: center; }
+.device[data-device="iphone-duo-unfolded"] .sheet { width: 500px; border-radius: 16px; border: 1px solid var(--c-line); padding-bottom: var(--space-4); }
+.sheet-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; min-height: 52px; padding: 0 var(--space-3); }
+.sheet-bar .mid { font: var(--t-headline); text-align: center; }
+.sheet-bar .end { justify-self: end; }
+.sheet-body { overflow: auto; padding: 0 var(--space-4) var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
+.grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--c-line); align-self: center; margin-top: var(--space-2); }
+
+.seg { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--space-1); padding: var(--space-1); border-radius: var(--radius); background: var(--c-act-soft); }
+.seg button { min-height: 44px; border-radius: 6px; font: var(--t-headline); color: var(--c-act); }
+.seg button[aria-pressed="true"] { background: var(--c-raised); color: var(--c-text); border: 1px solid var(--c-line); }
+.stepper { display: flex; align-items: center; gap: var(--space-3); }
+.stepper button { width: 44px; height: 44px; border-radius: var(--radius); background: var(--c-act-soft); color: var(--c-act); font: var(--t-title2); }
+.stepper output { font: var(--t-title1); min-width: 3ch; text-align: center; }
+
+/* split for the unfolded pose */
+.split { flex: 1; min-height: 0; display: flex; }
+.split > .side { width: 300px; flex: none; border-right: 1px solid var(--c-line); display: flex; flex-direction: column; min-height: 0; }
+.split > .main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+
+/* shelf map */
+.map { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--space-2); }
+.mapcol { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.mapcol .bx { font: var(--t-footnote); font-weight: 600; text-align: center; color: var(--c-text-2); }
+.mapcol .bx.has { color: var(--c-text); }
+.boxbar { position: relative; border-radius: 6px; border: 1px solid var(--c-line); background: var(--c-raised); }
+.divd { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--c-line); }
+.divd span { position: absolute; left: 3px; top: 1px; font: var(--t-caption2); color: var(--c-text-2); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 6px); }
+.dot { position: absolute; left: 50%; width: 44px; height: 44px; translate: -50% -50%; display: grid; place-items: center; z-index: 1; }
+.map.labelled .dot { left: calc(100% - 18px); }
+.dot.alt { left: 72%; }
+.map:not(.labelled) .dot:not(.alt) { left: 30%; }
+.map:not(.labelled) .dot:only-of-type { left: 50%; }
+.map.labelled .dot.alt { left: calc(100% - 44px); }
+.dot::before { content: ""; width: 14px; height: 14px; border-radius: 50%; background: var(--c-act); border: 2px solid var(--c-raised); }
+.dot.took::before { background: var(--c-done); }
+.dot.miss::before { background: var(--c-warn); border-radius: 2px; }
+.dot.find::before { background: var(--c-find); border-radius: 2px; rotate: 45deg; }
+.dot.sel::after { content: ""; position: absolute; width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--c-text); }
+.legend { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); font: var(--t-caption1); color: var(--c-text-2); }
+.legend b { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: var(--space-1); vertical-align: middle; }
+
+.grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); }
+.cardtile { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius);
+  background: var(--c-raised); border: 1px solid var(--c-line); }
+.cardtile.done { opacity: .6; }
+</style>
+</head>
+<body>
+<div class="sample" role="note">Sample: every name, card, count and spot on this page is made up. No figure here is real.</div>
+<main class="page">
+  <header class="intro">
+    <h1>Filling today's orders on the phone</h1>
+    <p>Designer kind: blind. Designer: phone-pull-blind-1. Three ways to answer one job: take the owed cards off the shelf, check each against its photo, put it in its buyer's envelope, mark it sold, and name what could not be found. Every button works. Each concept is drawn folded (one hand, at the shelf) and unfolded (on the packing table); a tap in either pose moves both.</p>
+    <div class="cluster" role="group" aria-label="Theme">
+      <button class="pill" data-theme-set="system" aria-pressed="true">System theme</button>
+      <button class="pill" data-theme-set="light" aria-pressed="false">Light</button>
+      <button class="pill" data-theme-set="dark" aria-pressed="false">Dark</button>
+    </div>
+    <div class="cluster" role="group" aria-label="Concepts" id="concept-toggles"></div>
+  </header>
+  <section class="concept" id="concept-walk" data-c="walk">
+    <div class="concept-head"></div>
+    <div class="poses">
+      <figure><div class="fit"><div class="device" data-device="iphone-duo-folded" data-pose="folded" aria-label="Walk, iPhone Duo folded"></div></div><figcaption>iPhone Duo, folded. Drawn at 402 x 874 pt, my choice: no size is written for this device. One hand, at the shelf.</figcaption></figure>
+      <figure><div class="fit"><div class="device" data-device="iphone-duo-unfolded" data-pose="unfolded" aria-label="Walk, iPhone Duo unfolded"></div></div><figcaption>iPhone Duo, unfolded. Drawn at 780 x 874 pt, my choice: no size is written. On the packing table.</figcaption></figure>
+    </div>
+  </section>
+  <section class="concept" id="concept-envelopes" data-c="envelopes">
+    <div class="concept-head"></div>
+    <div class="poses">
+      <figure><div class="fit"><div class="device" data-device="iphone-duo-folded" data-pose="folded" aria-label="Envelopes, iPhone Duo folded"></div></div><figcaption>iPhone Duo, folded. Drawn at 402 x 874 pt, my choice: no size is written for this device. One hand, at the shelf.</figcaption></figure>
+      <figure><div class="fit"><div class="device" data-device="iphone-duo-unfolded" data-pose="unfolded" aria-label="Envelopes, iPhone Duo unfolded"></div></div><figcaption>iPhone Duo, unfolded. Drawn at 780 x 874 pt, my choice: no size is written. On the packing table.</figcaption></figure>
+    </div>
+  </section>
+  <section class="concept" id="concept-shelf" data-c="shelf">
+    <div class="concept-head"></div>
+    <div class="poses">
+      <figure><div class="fit"><div class="device" data-device="iphone-duo-folded" data-pose="folded" aria-label="Shelf map, iPhone Duo folded"></div></div><figcaption>iPhone Duo, folded. Drawn at 402 x 874 pt, my choice: no size is written for this device. One hand, at the shelf.</figcaption></figure>
+      <figure><div class="fit"><div class="device" data-device="iphone-duo-unfolded" data-pose="unfolded" aria-label="Shelf map, iPhone Duo unfolded"></div></div><figcaption>iPhone Duo, unfolded. Drawn at 780 x 874 pt, my choice: no size is written. On the packing table.</figcaption></figure>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+/* ---------------- sample data (made up) ---------------- */
+const BOXES = [
+  { n: 1, secs: [["Ashfall",48],["Brightwater",41],["Hollow Tide",66],["Iron Coast",52],["Lumen",38],["Moonrise",57],["Old Roads",44],["Quarry",61],["Riverbend",49],["Saltmarsh",55],["Thistle",46],["Vale",55]] },
+  { n: 2, secs: [["Coral Deep",71],["Ember Reach",64],["Fenwick",80],["Glassmoor",58],["Harrow",77],["Kestrel",69],["Marrow",73],["Nettle",62],["Wren",78]] },
+  { n: 3, secs: [["Amberlight",40],["Brackish",38],["Cinderfall",45],["Ember Reach",52],["Foxglove",36],["Gloam",41],["Hollow Tide",47],["Ivory",39],["Juniper",44],["Larkspur",35],["Mire",42],["Northwind",48],["Pale Sun",37],["Rook",43],["Sable",46]] },
+  { n: 4, secs: [["Aster",38],["Bramble",35],["Cobalt",41],["Drift",33],["Elm",40],["Frostfen",36],["Gilded",39],["Hollow Tide",44],["Inkwell",34],["Jasper",37],["Knoll",42],["Lantern Row",35],["Night Market",45],["Onyx",38],["Pinecrest",36],["Quill",40],["Russet",39],["Starling",41]] },
+  { n: 5, secs: [["Bluff",56],["Corsair",61],["Dunmore",52],["Ember Reach",70],["Firth",58],["Greywater",49],["Heath",63],["Isle",55],["Mossgate",60],["Tern",21]] },
+  { n: 6, secs: [["Arbor",30],["Basalt",34],["Canyon",36],["Delta",31],["Ember Reach",33],["Fable",35],["Grove",32],["Hearth",37],["Iris",29],["Jade",34],["Kiln",36],["Loom",30],["Mesa",33],["Nimbus",35],["Orchard",32],["Prairie",34],["Quartz",31],["Ridge",36],["Skyward",40],["Tundra",33],["Umber",35],["Wisp",26]] }
+];
+const boxOf = n => BOXES[n - 1];
+const boxTotal = n => boxOf(n).secs.reduce((a, s) => a + s[1], 0);
+const secStart = (n, sec) => { let o = 0; for (const [nm, c] of boxOf(n).secs) { if (nm === sec) return o; o += c; } return 0; };
+const secCount = (n, sec) => (boxOf(n).secs.find(s => s[0] === sec) || [0, 1])[1];
+
+const CARDS = {
+  ember: { name: "Ember Wyrm", set: "Hollow Tide", no: "041/180", hue: 14 },
+  tide:  { name: "Tidecaller Nix", set: "Hollow Tide", no: "077/180", hue: 198 },
+  moss:  { name: "Mossback Golem", set: "Ember Reach", no: "112/204", hue: 104 },
+  iron:  { name: "Ironbark Sentinel", set: "Ember Reach", no: "150/204", hue: 32 },
+  dusk:  { name: "Duskwing Owl", set: "Night Market", no: "063/150", hue: 268 },
+  gale:  { name: "Gale Sprite", set: "Skyward", no: "009/096", hue: 172 },
+  frost: { name: "Frost Lantern", set: "Night Market", no: "101/150", hue: 222 }
+};
+const COPIES0 = {
+  c1: { card: "ember", box: 1, sec: "Hollow Tide", spot: 14, seed: 1 },
+  c9: { card: "ember", box: 4, sec: "Hollow Tide", spot: 9, seed: 2 },
+  c2: { card: "tide", box: 1, sec: "Hollow Tide", spot: 52, seed: 3 },
+  c3: { card: "moss", box: 2, sec: "Ember Reach", spot: 8, seed: 4 },
+  c6: { card: "moss", box: 5, sec: "Ember Reach", spot: 40, seed: 5 },
+  c7: { card: "moss", box: 6, sec: "Ember Reach", spot: 3, seed: 6 },
+  c4: { card: "iron", box: 3, sec: "Ember Reach", spot: 31, seed: 7 },
+  c5: { card: "dusk", box: 4, sec: "Night Market", spot: 22, seed: 8 },
+  c8: { card: "gale", box: 6, sec: "Skyward", spot: 5, seed: 9 },
+  c10: { card: "frost", box: null, sec: null, spot: null, seed: 10 }
+};
+const ORDERS = { o1: "Maya O.", o2: "Theo R.", o3: "June P.", o4: "Sam K." };
+const ORDER_IDS = ["o1", "o2", "o3", "o4"];
+const PULLS0 = [["c1","o1"],["c2","o3"],["c3","o2"],["c4","o3"],["c5","o4"],["c6","o2"],["c8","o2"]];
+const SPARE = { c1: "c9", c3: "c7", c6: "c7" };
+const NOSPOT = [{ card: "frost", order: "o4", copy: "c10" }];
+
+/* ---------------- state ---------------- */
+const clone = o => JSON.parse(JSON.stringify(o));
+function fresh(screen) {
+  return {
+    screen, pulls: PULLS0.map(([copy, order]) => ({ copy, order, st: "todo", packed: false })),
+    copies: clone(COPIES0), owner: NOSPOT.map(x => ({ card: x.card, order: x.order, why: "No known spot" })),
+    sheet: null, toast: null, net: "ok", load: "ok", q: "", sel: null, selCopy: null, env: null,
+    sealed: {}, sold: {}, packSel: null, usedSpare: {}, undo: null
+  };
+}
+const S = {};
+const cp = (st, id) => st.copies[id];
+const cardOf = (st, id) => CARDS[cp(st, id).card];
+const key = c => c.box == null ? 1e9 : c.box * 1e5 + (secStart(c.box, c.sec) + c.spot);
+const route = st => st.pulls.map((p, i) => i).sort((a, b) => key(cp(st, st.pulls[a].copy)) - key(cp(st, st.pulls[b].copy)));
+const nextTodo = st => route(st).find(i => st.pulls[i].st === "todo");
+const spotText = c => c.box == null ? "No known spot" : `Box ${c.box}, ${c.sec}, spot ${c.spot}`;
+const orderPulls = (st, o) => st.pulls.map((p, i) => i).filter(i => st.pulls[i].order === o);
+const orderNoSpot = o => NOSPOT.filter(x => x.order === o);
+const orderReady = (st, o) => orderPulls(st, o).every(i => st.pulls[i].packed || st.pulls[i].st === "missing");
+const stack = st => route(st).filter(i => st.pulls[i].st === "took" && !st.pulls[i].packed);
+const countSt = (st, s) => st.pulls.filter(p => p.st === s).length;
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+function listJoin(a) { return a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1]; }
+
+/* ---------------- shared drawing ---------------- */
+const ICON = {
+  pull: '<path d="M4 11h16v9H4z"/><path d="M12 15V4M8 8l4-4 4 4"/>',
+  env: '<path d="M3 6h18v12H3z"/><path d="M3 6l9 7 9-7"/>',
+  find: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
+  shelf: '<path d="M5 4v15M10 4v15M15 4v15M20 4v15M3 20h18"/>',
+  table: '<path d="M3 9h18M6 9v10M18 9v10M7 5h10"/>',
+  chev: '<path d="M9 5l7 7-7 7"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>',
+  check: '<path d="M5 12l5 5 9-10"/>',
+  warn: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>'
+};
+const icon = (n, label) => `<svg class="i" viewBox="0 0 24 24" ${label ? `role="img" aria-label="${label}"` : 'aria-hidden="true"'}>${ICON[n]}</svg>`;
+const status = () => `<div class="statusbar" aria-hidden="true"><span>9:41</span><span class="row" style="gap:6px"><i></i><i></i><i style="width:26px"></i></span></div><div class="homebar" aria-hidden="true"></div>`;
+
+function photo(st, copyId, w, opts = {}) {
+  const c = cp(st, copyId), k = CARDS[c.card];
+  const x = 30 + (c.seed * 17) % 40, y = 35 + (c.seed * 11) % 25;
+  const cls = w >= 200 ? "xl" : w >= 120 ? "lg" : w < 60 ? "sm" : "";
+  const inner = `<span class="art" style="--x:${x}%;--y:${y}%"></span><span class="nm">${k.name}</span><span class="tx"></span>${opts.badge ? `<span class="badge">${opts.badge}</span>` : ""}`;
+  const style = `--h:${k.hue};width:${w}px`;
+  return opts.tap
+    ? `<button class="photo ${cls}" style="${style}" data-act="photo" data-arg="${copyId}" aria-label="Photo of this copy of ${k.name}. Tap to enlarge.">${inner}</button>`
+    : `<span class="photo ${cls}" style="${style}" role="img" aria-label="Photo of this copy of ${k.name}">${inner}</span>`;
+}
+function spotBlock(c, compact) {
+  return `<div class="spot${compact ? " compact" : ""}">
+    <div><div class="k">Box</div><div class="v">${c.box}</div></div>
+    <div><div class="k">Spot</div><div class="v">${c.spot}</div></div>
+    <div class="wide"><div class="k">Section</div><div class="v">${c.sec}</div></div></div>`;
+}
+function tabbar(tabs, cur) {
+  return `<nav class="tabbar" aria-label="Sections">${tabs.map(([id, label, ic]) =>
+    `<button class="tab" data-act="tab" data-arg="${id}" ${cur === id ? 'aria-current="page"' : ""}><svg viewBox="0 0 24 24" class="i" aria-hidden="true">${ICON[ic]}</svg>${label}</button>`).join("")}</nav>`;
+}
+function nav({ title, lead = "", trail = "", large = true, mid = "" }) {
+  return `<div class="nav"><div class="nav-row"><span>${lead}</span><span class="mid">${large ? "" : mid || title}</span><span>${trail}</span></div>${large ? `<h2 class="large">${title}</h2>` : ""}</div>`;
+}
+function ownerBtn(st) {
+  const n = st.owner.length;
+  return n ? `<button class="nav-btn warn" data-act="owner">${icon("warn")}${n} for the owner</button>` : "";
+}
+function toastHtml(st, where) {
+  if (!st.toast || st.toast.at !== where) return "";
+  return `<div class="toast" role="status"><span>${st.toast.text}</span>${st.undo ? `<button class="btn quiet" data-act="undo">Undo</button>` : ""}</div>`;
+}
+function netBanner(st) {
+  if (st.net === "offline") return `<div class="banner" role="status">${icon("warn")}<span class="grow">Not reaching the home Mac. Your ticks stay on this phone and go home when it answers.</span><button class="btn quiet" data-act="net-ok">Try now</button></div>`;
+  if (st.net === "hold") return `<div class="banner" role="status">${icon("warn")}<span class="grow">Not reaching the home Mac. Ticks wait until it answers.</span><button class="btn quiet" data-act="net-ok">Try now</button></div>`;
+  return "";
+}
+function gate(st) {
+  if (st.load === "loading") return `<div class="center-msg"><div class="spinner" role="img" aria-label="Loading"></div><p>Getting today's orders from the home Mac.</p><button class="btn second" data-act="stop">Stop</button></div>`;
+  if (st.load === "failed") return `<div class="center-msg">${icon("warn")}<p class="t3">Can't reach the home Mac.</p><p class="muted">Join the home Wi-Fi, then try again.</p><button class="btn primary" data-act="retry">Try again</button><details><summary>What the phone saw</summary>No answer from the home Mac after 10 seconds.</details></div>`;
+  if (st.load === "empty") return `<div class="center-msg"><p class="t3">No orders to fill.</p><p class="muted">New orders show here when buyers pay.</p><button class="btn primary" data-act="retry">Check again</button></div>`;
+  return "";
+}
+function sheetFrame(title, lead, trail, body) {
+  return `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}" data-stop="1">
+    <div class="grabber" aria-hidden="true"></div>
+    <div class="sheet-bar"><span>${lead}</span><span class="mid">${title}</span><span class="end">${trail}</span></div>
+    <div class="sheet-body">${body}</div></div></div>`;
+}
+const cancelBtn = (label = "Cancel") => `<button class="nav-btn" data-act="close">${label}</button>`;
+
+function sheets(st, pose) {
+  const s = st.sheet; if (!s) return "";
+  if (s.kind === "photo") {
+    const c = cp(st, s.copy);
+    return sheetFrame("Photo", cancelBtn("Close"), "", `<div class="row" style="justify-content:center">${photo(st, s.copy, pose === "folded" ? 260 : 300)}</div>
+      <p class="sub muted" style="margin:0;text-align:center">${CARDS[c.card].name}, ${CARDS[c.card].set} ${CARDS[c.card].no}. This is the exact copy to take.</p>`);
+  }
+  if (s.kind === "missing") {
+    const p = st.pulls[s.idx], c = cp(st, p.copy), k = CARDS[c.card], spare = SPARE[p.copy];
+    const sp = spare && !st.usedSpare[spare] && !st.sold[spare] ? cp(st, spare) : null;
+    return sheetFrame("Can't find it", cancelBtn(), "", `
+      <p style="margin:0">Look again in ${c.sec}, spots ${Math.max(1, c.spot - 2)} to ${c.spot + 2}. A card often slips one or two spots.</p>
+      ${sp ? `<div class="list"><div class="li">${photo(st, spare, 56)}<div class="grow stack-1"><span class="head">Another copy is on the shelf</span><span class="sub muted">${spotText(sp)}</span></div></div></div>
+      <button class="btn primary" data-act="spare" data-arg="${s.idx}">Take the other copy</button>` : ""}
+      <button class="btn ${sp ? "second" : "primary"}" data-act="to-owner" data-arg="${s.idx}">Add to the owner's list</button>
+      <p class="foot muted" style="margin:0">${sp ? "" : "No other copy of " + k.name + " is on the shelf. "}${ORDERS[p.order]} still waits for this card. The owner decides what happens next.</p>`);
+  }
+  if (s.kind === "owner") {
+    return sheetFrame("For the owner", cancelBtn("Close"), "", st.owner.length ? `<div class="list">${st.owner.map(o =>
+      `<div class="li"><span style="color:var(--c-warn)">${icon("warn")}</span><div class="grow stack-1"><span class="head">${CARDS[o.card].name}</span><span class="sub muted">${o.why}. For ${ORDERS[o.order]}</span></div></div>`).join("")}</div>
+      <p class="foot muted" style="margin:0">The owner sees this list on the home Mac.</p>` : `<p style="margin:0">All is well.</p>`);
+  }
+  if (s.kind === "copy") {
+    const c = cp(st, s.copy), k = CARDS[c.card], sold = st.sold[s.copy];
+    const owed = st.pulls.find(p => p.copy === s.copy);
+    return sheetFrame(k.name, cancelBtn("Close"), "", `<div class="row" style="align-items:flex-start">${photo(st, s.copy, 120)}
+      <div class="grow stack">${c.box ? spotBlock(c, true) : `<p class="head" style="margin:0">No known spot</p>`}</div></div>
+      ${owed ? `<p class="sub muted" style="margin:0">Owed to ${ORDERS[owed.order]} today.</p>` : ""}
+      ${toastHtml(st, "copy")}
+      ${sold ? `<p class="head" style="margin:0">Sold.</p>` : `<div class="btn-row"><button class="btn second" data-act="move" data-arg="${s.copy}" ${c.box ? "" : "disabled"}>Move</button><button class="btn primary" data-act="sell" data-arg="${s.copy}">Sell one</button></div>
+      ${c.box ? "" : `<p class="reason">Move needs a known spot first.</p>`}`}`);
+  }
+  if (s.kind === "sell") {
+    const k = cardOf(st, s.copy);
+    return sheetFrame("Sell one", cancelBtn(), "", `<p style="margin:0">Mark this copy of ${k.name} sold? It comes off the shelf.</p>
+      <button class="btn primary" data-act="sold" data-arg="${s.copy}">Mark sold</button>`);
+  }
+  if (s.kind === "move") {
+    const secs = boxOf(s.box).secs;
+    return sheetFrame("Move", cancelBtn(), `<button class="nav-btn" data-act="mv-save" style="font-weight:600">Move</button>`, `
+      <div class="stack-1"><span class="sub muted">Box</span><div class="seg" role="group" aria-label="Box">${BOXES.map(b => `<button data-act="mv-box" data-arg="${b.n}" aria-pressed="${b.n === s.box}">${b.n}</button>`).join("")}</div></div>
+      <div class="stack-1"><span class="sub muted">Section</span><div class="list" style="max-height:220px;overflow:auto">${secs.map(([nm]) => `<button class="li" data-act="mv-sec" data-arg="${esc(nm)}" ${nm === s.sec ? 'aria-current="true"' : ""}><span class="grow">${nm}</span>${nm === s.sec ? `<span style="color:var(--c-act)">${icon("check", "Chosen")}</span>` : ""}</button>`).join("")}</div></div>
+      <div class="stack-1"><span class="sub muted">Spot</span><div class="stepper"><button data-act="mv-spot" data-arg="-1" aria-label="One spot lower">−</button><output>${s.spot}</output><button data-act="mv-spot" data-arg="1" aria-label="One spot higher">+</button><span class="foot muted">of ${secCount(s.box, s.sec)}</span></div></div>`);
+  }
+  if (s.kind === "stack") {
+    const rest = stack(st);
+    return sheetFrame("Which card is on top?", cancelBtn(), "", `<div class="list">${rest.map(i => {
+      const p = st.pulls[i], k = cardOf(st, p.copy);
+      return `<button class="li" data-act="pack-pick" data-arg="${i}">${photo(st, p.copy, 40)}<span class="grow stack-1"><span class="head">${k.name}</span><span class="sub muted">For ${ORDERS[p.order]}</span></span>${icon("chev")}</button>`; }).join("")}</div>`);
+  }
+  if (s.kind === "check") {
+    const p = st.pulls[s.idx], c = cp(st, p.copy), k = CARDS[c.card];
+    return sheetFrame(k.name, cancelBtn(), "", `${spotBlock(c, true)}
+      <div class="row" style="justify-content:center">${photo(st, p.copy, pose === "folded" ? 170 : 200)}</div>
+      <p class="sub" style="margin:0;text-align:center">Check it matches the photo, then put it in ${ORDERS[p.order]}'s envelope.</p>
+      ${actBtns(st, s.idx, "In envelope", "in-env")}`);
+  }
+  return "";
+}
+function actBtns(st, idx, label, act) {
+  const hold = st.net === "hold";
+  return `<div class="btn-row"><button class="btn second" data-act="missing" data-arg="${idx}">Can't find it</button><button class="btn primary" data-act="${act}" data-arg="${idx}" ${hold ? 'disabled aria-describedby="why-hold"' : ""}>${label}</button></div>
+    ${hold ? `<p class="reason" id="why-hold">Waiting for the home Mac, so this can't be saved yet.</p>` : ""}`;
+}
+
+/* shared Find screen for Walk and Envelopes */
+function findResults(st) {
+  const q = st.q.trim().toLowerCase();
+  if (!q) return { hint: true, groups: [] };
+  const groups = Object.entries(CARDS).filter(([, k]) => k.name.toLowerCase().includes(q))
+    .map(([id, k]) => ({ id, k, copies: Object.keys(st.copies).filter(c => st.copies[c].card === id).sort((a, b) => key(cp(st, a)) - key(cp(st, b))) }));
+  return { hint: false, groups };
+}
+function copyStatus(st, id) {
+  if (st.sold[id]) return `<span class="chip done">Sold</span>`;
+  const p = st.pulls.find(x => x.copy === id);
+  if (p) return `<span class="chip env">${ORDERS[p.order]}</span>`;
+  return "";
+}
+function findBody(st, pose) {
+  const r = findResults(st);
+  const chips = `<div class="cluster">${["Mossback", "Ember", "Frost"].map(w => `<button class="chip env" data-act="q-set" data-arg="${w}">${w}</button>`).join("")}</div>`;
+  let body;
+  if (r.hint) body = `<p class="muted" style="margin:0">Type a card name to see every copy and its spot.</p>${chips}`;
+  else if (!r.groups.length) body = `<p style="margin:0">No card called “${esc(st.q)}”.</p><button class="btn second" data-act="q-clear">Clear search</button>`;
+  else body = r.groups.map(g => `<div class="stack-1"><span class="sec-h">${g.k.name}, ${g.copies.length} ${g.copies.length === 1 ? "copy" : "copies"}</span><div class="list">${g.copies.map(id =>
+    `<button class="li" data-act="${pose === "unfolded" ? "selc" : "copy"}" data-arg="${id}" ${st.selCopy === id && pose === "unfolded" ? 'aria-current="true"' : ""}>${photo(st, id, 40)}<span class="grow sub">${spotText(cp(st, id))}</span>${copyStatus(st, id)}${icon("chev")}</button>`).join("")}</div></div>`).join("");
+  return `<label class="search">${icon("find")}<input type="search" data-input="q" value="${esc(st.q)}" placeholder="Card name" aria-label="Find a card by name">${st.q ? `<button class="nav-btn" data-act="q-clear" aria-label="Clear search">${icon("x")}</button>` : ""}</label>${body}`;
+}
+function findDetail(st) {
+  const id = st.selCopy;
+  if (!id) return `<div class="center-msg"><p class="muted">Pick a copy to see its photo, sell it or move it.</p></div>`;
+  const c = cp(st, id), k = CARDS[c.card], sold = st.sold[id], owed = st.pulls.find(p => p.copy === id);
+  return `<div class="scroll" style="padding-top:var(--space-2)"><div class="row" style="align-items:flex-start;gap:var(--space-6)">${photo(st, id, 200, { tap: true })}
+    <div class="grow stack"><h3 class="t2" style="margin:0">${k.name}</h3><span class="sub muted">${k.set} ${k.no}</span>${c.box ? spotBlock(c, true) : `<p class="head" style="margin:0">No known spot</p>`}
+    ${owed ? `<p class="sub muted" style="margin:0">Owed to ${ORDERS[owed.order]} today.</p>` : ""}</div></div>
+    ${toastHtml(st, "copy")}
+    ${sold ? `<p class="head" style="margin:0">Sold.</p>` : `<div class="btn-row" style="max-width:420px"><button class="btn second" data-act="move" data-arg="${id}" ${c.box ? "" : "disabled"}>Move</button><button class="btn primary" data-act="sell" data-arg="${id}">Sell one</button></div>${c.box ? "" : `<p class="reason" style="text-align:left">Move needs a known spot first.</p>`}`}</div>`;
+}
+function ownerSection(st) {
+  return st.owner.length ? `<div class="stack-1"><span class="sec-h">For the owner</span><div class="list">${st.owner.map(o =>
+    `<div class="li"><span style="color:var(--c-warn)">${icon("warn")}</span><div class="grow stack-1"><span class="head">${CARDS[o.card].name}</span><span class="sub muted">${o.why}. For ${ORDERS[o.order]}</span></div></div>`).join("")}</div><span class="foot muted" style="padding:0 var(--space-3)">The owner sees this list on the home Mac.</span></div>` : `<p style="margin:0">All is well.</p>`;
+}
+
+/* ================= Concept: Walk ================= */
+const WALK_TABS = [["pull", "Pull", "pull"], ["pack", "Pack", "env"], ["find", "Find", "find"]];
+function walkPull(st, pose) {
+  const i = nextTodo(st);
+  const rail = `<div class="rail" aria-hidden="true">${route(st).map(j => `<i class="${st.pulls[j].st === "took" ? "took" : st.pulls[j].st === "missing" ? "miss" : j === i ? "now" : ""}"></i>`).join("")}</div>`;
+  const done = st.pulls.length - countSt(st, "todo");
+  if (i === undefined) {
+    const miss = countSt(st, "missing");
+    return `${nav({ title: "Pull", trail: ownerBtn(st) })}${netBanner(st)}<div class="center-msg"><span style="color:var(--c-done)">${icon("check")}</span>
+      <p class="t2">${countSt(st, "took")} cards pulled.</p>${miss ? `<p class="muted">${miss} ${miss === 1 ? "is" : "are"} on the owner's list.</p>` : ""}
+      <p class="muted">Take the stack to the packing table. Keep it in the order you pulled it.</p>
+      <button class="btn primary" data-act="tab" data-arg="pack">Go to Pack</button></div>`;
+  }
+  const p = st.pulls[i], c = cp(st, p.copy), k = CARDS[c.card];
+  const same = st.pulls.filter(x => cp(st, x.copy).card === c.card);
+  const twin = same.length > 1 ? `<p class="sub muted" style="margin:0">${ORDERS[p.order]} wants ${same.length} of this card. This is copy ${same.indexOf(p) + 1}; the other is in Box ${cp(st, same.find(x => x !== p).copy).box}.</p>` : "";
+  const progress = `<div class="stack-1"><span class="foot muted">Card ${done + 1} of ${st.pulls.length}</span>${rail}</div>`;
+  if (pose === "folded") {
+    return `${nav({ title: "Pull", trail: ownerBtn(st) })}${netBanner(st)}
+      <div class="scroll">${progress}${spotBlock(c)}
+        <div class="row" style="align-items:flex-start">${photo(st, p.copy, 150, { tap: true })}
+          <div class="grow stack-1"><span class="t3">${k.name}</span><span class="foot muted">${k.set} ${k.no}</span><span class="sub">Take 1. Check it matches the photo.</span><span><span class="chip env">${ORDERS[p.order]}</span></span></div></div>${twin}</div>
+      <div class="dock">${toastHtml(st, "dock")}${actBtns(st, i, "Took it", "took")}</div>`;
+  }
+  const side = `<div class="side"><div class="nav"><div class="nav-row"><span class="head">Route</span>${ownerBtn(st)}</div>${progress}</div><div class="scroll">${
+    BOXES.map(b => { const here = route(st).filter(j => cp(st, st.pulls[j].copy).box === b.n); if (!here.length) return "";
+      return `<div class="stack-1"><span class="sec-h">Box ${b.n}</span><div class="list">${here.map(j => { const q = st.pulls[j], qc = cp(st, q.copy);
+        return `<div class="li ${q.st !== "todo" ? "dim" : ""}" ${j === i ? 'aria-current="true"' : ""}><span class="grow stack-1"><span class="head ellip">${CARDS[qc.card].name}</span><span class="sub muted">${qc.sec}, spot ${qc.spot}</span></span>${q.st === "took" ? `<span style="color:var(--c-done)">${icon("check", "Took")}</span>` : q.st === "missing" ? `<span style="color:var(--c-warn)">${icon("warn", "On the owner's list")}</span>` : ""}</div>`; }).join("")}</div></div>`; }).join("")}</div></div>`;
+  return `${netBanner(st)}<div class="split">${side}<div class="main"><div class="scroll" style="padding-top:var(--space-4)">
+    <div class="row" style="align-items:flex-start;gap:var(--space-6)">${photo(st, p.copy, 190, { tap: true })}<div class="grow stack">${spotBlock(c)}</div></div>
+    <div class="stack-1"><span class="t2">${k.name}</span><span class="foot muted">${k.set} ${k.no}</span><span class="sub">Take 1. Check it matches the photo.</span><span><span class="chip env">${ORDERS[p.order]}</span></span></div>${twin}</div>
+    <div class="dock">${toastHtml(st, "dock")}${actBtns(st, i, "Took it", "took")}</div></div></div>`;
+}
+function walkPack(st, pose) {
+  const rest = stack(st);
+  const all = st.pulls.every(p => p.packed || p.st === "missing");
+  if (all) {
+    return `${nav({ title: "Pack" })}${netBanner(st)}<div class="scroll"><div class="stack"><span style="color:var(--c-done)">${icon("check")}</span><p class="t2" style="margin:0">Every card you found is in its envelope.</p><p class="muted" style="margin:0">Each one is marked sold.</p></div>${ownerSection(st)}
+      <button class="btn second" data-act="tab" data-arg="find">Find a card</button></div>`;
+  }
+  if (!rest.length) {
+    return `${nav({ title: "Pack" })}<div class="center-msg"><p>Cards you pull show here, in the order you pulled them.</p><button class="btn primary" data-act="tab" data-arg="pull">Go to Pull</button></div>`;
+  }
+  const i = st.packSel != null && rest.includes(st.packSel) ? st.packSel : rest[0];
+  const p = st.pulls[i], k = cardOf(st, p.copy);
+  const inOrder = orderPulls(st, p.order), n = inOrder.length, have = inOrder.filter(j => st.pulls[j].packed).length;
+  const tile = (o, lit) => { const ps = orderPulls(st, o), h = ps.filter(j => st.pulls[j].packed).length;
+    return `<div class="envtile ${lit ? "lit" : ""} ${orderReady(st, o) && h ? "sealed" : ""}"><span class="${lit ? "t1" : "t3"}">${ORDERS[o]}</span><span class="sub">${h} of ${ps.length + orderNoSpot(o).length} in</span></div>`; };
+  const hold = st.net === "hold";
+  const btns = `<button class="btn primary" data-act="pack" data-arg="${i}" ${hold ? 'disabled aria-describedby="why-hold"' : ""}>In envelope</button>${hold ? `<p class="reason" id="why-hold">Waiting for the home Mac, so this can't be saved yet.</p>` : ""}
+    <button class="btn quiet" data-act="stack-sheet">Top card is a different one</button>`;
+  if (pose === "folded") {
+    return `${nav({ title: "Pack", trail: ownerBtn(st) })}${netBanner(st)}<div class="scroll">
+      <span class="foot muted">${rest.length} ${rest.length === 1 ? "card" : "cards"} left in your stack</span>
+      <div class="stack-1"><span class="sub muted">Top card of your stack</span><div class="row">${photo(st, p.copy, 72, { tap: true })}<div class="grow stack-1"><span class="t3">${k.name}</span><span class="foot muted">${k.set} ${k.no}</span></div></div></div>
+      <div class="stack-1"><span class="sub muted">Goes in</span>${tile(p.order, true)}<span class="foot muted">${have} of ${n + orderNoSpot(p.order).length} cards in so far.</span></div></div>
+      <div class="dock">${toastHtml(st, "dock")}${btns}</div>`;
+  }
+  return `${netBanner(st)}<div class="split"><div class="side"><div class="nav"><div class="nav-row"><span class="head">Your stack, top first</span></div></div><div class="scroll"><div class="list">${rest.map(j =>
+    `<button class="li" data-act="pack-pick" data-arg="${j}" ${j === i ? 'aria-current="true"' : ""}>${photo(st, st.pulls[j].copy, 36)}<span class="grow stack-1"><span class="head ellip">${cardOf(st, st.pulls[j].copy).name}</span><span class="sub muted">${ORDERS[st.pulls[j].order]}</span></span></button>`).join("")}</div></div></div>
+    <div class="main"><div class="scroll" style="padding-top:var(--space-4)"><div class="row" style="gap:var(--space-6);align-items:flex-start">${photo(st, p.copy, 150, { tap: true })}<div class="stack-1 grow"><span class="sub muted">Top card</span><span class="t2">${k.name}</span><span class="foot muted">${k.set} ${k.no}</span></div></div>
+      <div class="grid2">${ORDER_IDS.map(o => tile(o, o === p.order)).join("")}</div></div>
+      <div class="dock" style="flex-direction:column">${toastHtml(st, "dock")}${btns}</div></div></div>`;
+}
+function walkFind(st, pose) {
+  if (pose === "folded") return `${nav({ title: "Find" })}<div class="scroll">${findBody(st, pose)}</div>`;
+  return `<div class="split"><div class="side"><div class="nav"><h2 class="large">Find</h2></div><div class="scroll">${findBody(st, pose)}</div></div><div class="main">${findDetail(st)}</div></div>`;
+}
+const WALK = {
+  id: "walk", name: "Walk", tabs: WALK_TABS,
+  idea: "The phone merges every order into one walk along the shelf, in shelf order, and shows one stop at a time: a huge box, section and spot, the photo, and two buttons under the thumb. At the table the stack comes off in the same order, and each card names its envelope.",
+  render(st, pose) {
+    const g = gate(st); if (g) return g;
+    const body = st.screen === "pack" ? walkPack(st, pose) : st.screen === "find" ? walkFind(st, pose) : walkPull(st, pose);
+    return body + tabbar(WALK_TABS, st.screen) + sheets(st, pose);
+  },
+  states: {
+    pull: st => {}, photo: st => { st.sheet = { kind: "photo", copy: "c1" }; },
+    "pull-twin": st => { took(st, 0); took(st, 1); st.toast = null; },
+    missing: st => { took(st, 0); took(st, 1); st.toast = null; st.sheet = { kind: "missing", idx: 2 }; },
+    owner: st => { st.sheet = { kind: "owner" }; },
+    offline: st => { took(st, 0); st.toast = null; st.net = "offline"; },
+    "offline-hold": st => { took(st, 0); st.toast = null; st.net = "hold"; },
+    pulled: st => { [0, 1, 2, 3, 4, 6].forEach(i => took(st, i)); toOwner(st, 5); st.toast = null; },
+    pack: st => { [0, 1, 2, 3, 4, 6].forEach(i => took(st, i)); toOwner(st, 5); st.toast = null; st.screen = "pack"; },
+    "pack-empty": st => { st.screen = "pack"; },
+    done: st => { [0, 1, 2, 3, 4, 6].forEach(i => { took(st, i); st.pulls[i].packed = true; st.sold[st.pulls[i].copy] = true; }); toOwner(st, 5); st.toast = null; st.screen = "pack"; },
+    find: st => { st.screen = "find"; st.q = "Mossback"; st.selCopy = "c3"; },
+    "find-none": st => { st.screen = "find"; st.q = "Zephyr"; },
+    copy: st => { st.screen = "find"; st.q = "Mossback"; st.selCopy = "c7"; st.sheet = { kind: "copy", copy: "c7" }; },
+    move: st => { st.screen = "find"; st.q = "Mossback"; st.selCopy = "c7"; st.sheet = { kind: "move", copy: "c7", box: 6, sec: "Ember Reach", spot: 3 }; },
+    loading: st => { st.load = "loading"; }, failed: st => { st.load = "failed"; }, empty: st => { st.load = "empty"; }
+  }
+};
+
+/* ================= Concept: Envelopes ================= */
+const ENV_TABS = [["list", "Envelopes", "env"], ["find", "Find", "find"]];
+function envRowsFor(st, o) { return orderPulls(st, o).sort((a, b) => key(cp(st, st.pulls[a].copy)) - key(cp(st, st.pulls[b].copy))); }
+function envSummary(st, o) {
+  const ps = orderPulls(st, o), n = ps.length + orderNoSpot(o).length, h = ps.filter(i => st.pulls[i].packed).length;
+  const boxes = [...new Set(envRowsFor(st, o).filter(i => st.pulls[i].st === "todo").map(i => cp(st, st.pulls[i].copy).box))];
+  return { n, h, boxes };
+}
+function envList(st, pose) {
+  const allSealed = ORDER_IDS.every(o => st.sealed[o]);
+  return `${allSealed ? `<div class="toast" style="margin:0 0 var(--space-2)">Every envelope is sealed.</div>` : ""}<div class="list">${ORDER_IDS.map(o => {
+    const { n, h, boxes } = envSummary(st, o);
+    const right = st.sealed[o] ? `<span class="chip done">${icon("check")}Sealed</span>` : h ? `<span class="chip env">${h} of ${n} in</span>` : "";
+    return `<button class="li" data-act="open-env" data-arg="${o}" ${pose === "unfolded" && st.env === o ? 'aria-current="true"' : ""}><span class="envtile" style="min-height:44px;width:44px;padding:0" aria-hidden="true"></span>
+      <span class="grow stack-1"><span class="head">${ORDERS[o]}</span><span class="sub muted">${n} ${n === 1 ? "card" : "cards"}${boxes.length && !st.sealed[o] ? `, Box ${listJoin(boxes.map(String))}` : ""}</span></span>${right}${icon("chev")}</button>`; }).join("")}</div>
+    ${st.owner.length ? `<div class="list"><button class="li" data-act="owner"><span style="color:var(--c-warn)">${icon("warn")}</span><span class="grow stack-1"><span class="head">For the owner</span><span class="sub muted">${st.owner.length} ${st.owner.length === 1 ? "card" : "cards"} to sort out</span></span>${icon("chev")}</button></div>` : ""}`;
+}
+function envDetail(st, pose) {
+  const o = st.env, rows = envRowsFor(st, o), ready = orderReady(st, o) && !st.sealed[o];
+  const left = rows.filter(i => !st.pulls[i].packed && st.pulls[i].st !== "missing").length;
+  const ns = orderNoSpot(o).map(x => `<div class="li"><span style="color:var(--c-warn)">${icon("warn")}</span><span class="grow stack-1"><span class="head">${CARDS[x.card].name}</span><span class="sub muted">No known spot. On the owner's list.</span></span></div>`).join("");
+  const seal = st.sealed[o] ? `<p class="head" style="margin:0;text-align:center">Sealed.</p>`
+    : `<button class="btn primary" data-act="seal" data-arg="${o}" ${ready ? "" : 'disabled aria-describedby="why-seal"'}>Seal envelope</button>${ready ? "" : `<p class="reason" id="why-seal">${left} ${left === 1 ? "card" : "cards"} still to go in.</p>`}`;
+  if (pose === "folded") {
+    const list = `<div class="list">${rows.map(i => { const p = st.pulls[i], c = cp(st, p.copy), k = CARDS[c.card];
+      const tail = p.packed ? `<span class="chip done">${icon("check")}In</span>` : p.st === "missing" ? `<span class="chip warn">Owner's list</span>` : icon("chev");
+      return `<button class="li" data-act="check" data-arg="${i}" ${p.packed || p.st === "missing" ? "disabled" : ""}>${photo(st, p.copy, 44)}<span class="grow stack-1"><span class="head">${k.name}</span><span class="sub muted">${spotText(c)}</span></span>${tail}</button>`; }).join("")}${ns}</div>`;
+    return `${nav({ title: ORDERS[o], lead: `<button class="nav-btn" data-act="back">${icon("back")}Envelopes</button>` })}${netBanner(st)}
+      <div class="scroll"><span class="sub muted">In shelf order. Tap a card at its spot.</span>${list}</div><div class="dock">${toastHtml(st, "dock")}${seal}</div>`;
+  }
+  const tiles = rows.map(i => { const p = st.pulls[i], c = cp(st, p.copy), k = CARDS[c.card];
+    return `<div class="cardtile ${p.packed || p.st === "missing" ? "done" : ""}"><div class="row" style="align-items:flex-start;gap:var(--space-4)">${photo(st, p.copy, 96, { tap: true })}<div class="grow stack-1"><span class="head">${k.name}</span><span class="foot muted">${k.set} ${k.no}</span>${c.box ? spotBlock(c, true) : ""}</div></div>
+      ${p.packed ? `<span class="chip done">${icon("check")}In the envelope</span>` : p.st === "missing" ? `<span class="chip warn">On the owner's list</span>` : actBtns(st, i, "In envelope", "in-env")}</div>`; }).join("");
+  return `<div class="nav"><h2 class="large">${ORDERS[o]}</h2></div>${netBanner(st)}<div class="scroll"><span class="sub muted">In shelf order. Check each card against its photo.</span><div class="stack">${tiles}</div>${ns ? `<div class="list">${ns}</div>` : ""}</div><div class="dock">${toastHtml(st, "dock")}${seal}</div>`;
+}
+const ENV = {
+  id: "envelopes", name: "Envelopes", tabs: ENV_TABS,
+  idea: "One envelope at a time. The first screen is today's envelopes, one per buyer. Open one, and its cards are listed in shelf order with their spots; each card's photo check puts it straight in the envelope and marks it sold. Seal it, then take the next.",
+  render(st, pose) {
+    const g = gate(st); if (g) return g;
+    let body;
+    if (st.screen === "find") body = walkFind(st, pose);
+    else if (pose === "folded") body = st.env ? envDetail(st, pose) : `${nav({ title: "Envelopes" })}${netBanner(st)}<div class="scroll">${envList(st, pose)}</div>`;
+    else body = `<div class="split"><div class="side"><div class="nav"><h2 class="large">Envelopes</h2></div><div class="scroll">${envList(st, pose)}</div></div><div class="main">${st.env ? envDetail(st, pose) : `<div class="center-msg"><p class="muted">Pick an envelope to fill.</p></div>`}</div></div>`;
+    return body + tabbar(ENV_TABS, st.screen === "find" ? "find" : "list") + sheets(st, pose);
+  },
+  states: {
+    list: st => {}, envelope: st => { st.env = "o2"; },
+    check: st => { st.env = "o2"; st.sheet = { kind: "check", idx: 2 }; },
+    missing: st => { st.env = "o2"; st.sheet = { kind: "missing", idx: 5 }; },
+    owner: st => { st.sheet = { kind: "owner" }; },
+    ready: st => { st.env = "o1"; packNow(st, 0); st.toast = null; },
+    sealed: st => { packNow(st, 0); st.sealed.o1 = true; st.toast = null; },
+    offline: st => { st.env = "o2"; st.net = "offline"; }, "offline-hold": st => { st.env = "o2"; st.net = "hold"; },
+    done: st => { [0, 1, 2, 3, 4, 6].forEach(i => packNow(st, i)); toOwner(st, 5); ORDER_IDS.forEach(o => st.sealed[o] = true); st.toast = null; },
+    find: st => { st.screen = "find"; st.q = "Mossback"; st.selCopy = "c3"; },
+    copy: st => { st.screen = "find"; st.q = "Mossback"; st.selCopy = "c7"; st.sheet = { kind: "copy", copy: "c7" }; },
+    move: st => { st.screen = "find"; st.q = "Mossback"; st.selCopy = "c7"; st.sheet = { kind: "move", copy: "c7", box: 6, sec: "Ember Reach", spot: 3 }; },
+    loading: st => { st.load = "loading"; }, failed: st => { st.load = "failed"; }, empty: st => { st.load = "empty"; }
+  }
+};
+
+/* ================= Concept: Shelf map (bold) ================= */
+const SHELF_TABS = [["shelf", "Shelf", "shelf"], ["table", "Table", "table"]];
+function mapHtml(st, H, labels) {
+  const q = st.q.trim().toLowerCase();
+  const cur = st.sel != null && st.pulls[st.sel].st === "todo" ? st.sel : nextTodo(st);
+  const found = q ? Object.keys(st.copies).filter(id => CARDS[st.copies[id].card].name.toLowerCase().includes(q) && st.copies[id].box) : [];
+  return `<div class="map${labels ? " labelled" : ""}" role="group" aria-label="The shelf, seen from above. Six boxes, front at the top.">${BOXES.map(b => {
+    const tot = boxTotal(b.n); let off = 0;
+    const divs = b.secs.map(([nm, c]) => { const y = off / tot * H; off += c; const tall = c / tot * H >= 15;
+      return `<span class="divd" style="top:${y}px">${labels && tall ? `<span>${nm}</span>` : ""}</span>`; }).join("");
+    const dots = [];
+    if (q) found.filter(id => st.copies[id].box === b.n).forEach(id => { const c = st.copies[id];
+      dots.push(`<button class="dot find ${st.selCopy === id ? "sel" : ""}" style="top:${(secStart(b.n, c.sec) + c.spot - .5) / tot * H}px" data-act="selc" data-arg="${id}" aria-label="${CARDS[c.card].name}, ${spotText(c)}"></button>`); });
+    else st.pulls.forEach((p, i) => { const c = cp(st, p.copy); if (c.box !== b.n) return;
+      const cls = p.st === "took" ? "took" : p.st === "missing" ? "miss" : "";
+      dots.push(`<button class="dot ${cls} ${cur === i ? "sel" : ""}" style="top:${(secStart(b.n, c.sec) + c.spot - .5) / tot * H}px" data-act="sel" data-arg="${i}" aria-label="${CARDS[c.card].name}, ${spotText(c)}${p.st === "took" ? ", taken" : ""}"></button>`); });
+    const has = dots.length > 0;
+    let lastY = -99, side = 0;
+    for (let d = 0; d < dots.length; d++) { const y = parseFloat(dots[d].match(/top:([\d.]+)px/)[1]);
+      side = y - lastY < 44 ? 1 - side : 0; lastY = y;
+      if (side) dots[d] = dots[d].replace('class="dot', 'class="dot alt'); }
+    return `<div class="mapcol"><span class="bx ${has ? "has" : ""}">Box ${b.n}</span><div class="boxbar" style="height:${H}px">${divs}${dots.join("")}</div></div>`; }).join("")}</div>
+    <div class="legend" aria-hidden="true">${q ? `<span><b style="background:var(--c-find);border-radius:2px"></b>Matches</span>` : `<span><b style="background:var(--c-act)"></b>To take</span><span><b style="background:var(--c-done)"></b>Taken</span><span><b style="background:var(--c-warn);border-radius:2px"></b>Owner's list</span>`}<span>Front of each box at the top</span></div>`;
+}
+function shelfDock(st, pose) {
+  const big = pose === "unfolded";
+  const q = st.q.trim().toLowerCase();
+  if (q && !st.selCopy) {
+    const r = findResults(st);
+    if (!r.groups.length) return `<div class="dock"><p style="margin:0">No card called “${esc(st.q)}”.</p><button class="btn second" data-act="q-clear">Clear search</button></div>`;
+    return `<div class="dock"><span class="foot muted">Lit on the map. Tap one.</span><div class="list" style="max-height:${big ? 420 : 168}px;overflow:auto">${r.groups.flatMap(g => g.copies.map(id =>
+      `<button class="li" data-act="selc" data-arg="${id}">${photo(st, id, 32)}<span class="grow stack-1"><span class="head ellip">${g.k.name}</span><span class="sub muted">${spotText(cp(st, id))}</span></span>${copyStatus(st, id)}</button>`)).join("")}</div></div>`;
+  }
+  if (st.selCopy) {
+    const id = st.selCopy, c = cp(st, id), k = CARDS[c.card], sold = st.sold[id];
+    return `<div class="dock"><div class="row" style="align-items:flex-start">${photo(st, id, big ? 140 : 64, { tap: true })}<div class="grow stack-1"><span class="${big ? "t2" : "t3"}">${c.box ? `Box ${c.box}, spot ${c.spot}` : "No known spot"}</span><span class="sub">${c.sec || ""}</span><span class="sub muted">${k.name}</span></div>
+      <button class="nav-btn" data-act="desel" aria-label="Back to results">${icon("x")}</button></div>${toastHtml(st, "copy")}
+      ${sold ? `<p class="head" style="margin:0">Sold.</p>` : `<div class="btn-row"><button class="btn second" data-act="move" data-arg="${id}" ${c.box ? "" : "disabled"}>Move</button><button class="btn primary" data-act="sell" data-arg="${id}">Sell one</button></div>`}</div>`;
+  }
+  const i = st.sel != null && st.pulls[st.sel].st === "todo" ? st.sel : nextTodo(st);
+  if (i === undefined) {
+    const miss = countSt(st, "missing");
+    return `<div class="dock">${toastHtml(st, "dock")}<p class="head" style="margin:0">All ${countSt(st, "took")} taken${miss ? `; ${miss} on the owner's list` : ""}.</p><button class="btn primary" data-act="tab" data-arg="table">Go to the table</button></div>`;
+  }
+  const p = st.pulls[i], c = cp(st, p.copy), k = CARDS[c.card];
+  const r = route(st).filter(j => st.pulls[j].st === "todo"), pos = r.indexOf(i);
+  return `<div class="dock">${toastHtml(st, "dock")}<div class="row" style="align-items:flex-start">${photo(st, p.copy, big ? 140 : 64, { tap: true })}
+      <div class="grow stack-1"><span class="${big ? "t1" : "t2"}">Box ${c.box}, spot ${c.spot}</span><span class="head">${c.sec}</span><span class="sub muted">${k.name}, for <span class="chip env">${ORDERS[p.order]}</span></span></div></div>
+    <div class="row"><button class="nav-btn" data-act="step" data-arg="-1" aria-label="Previous card" ${pos <= 0 ? "disabled" : ""}>${icon("back")}</button><span class="foot muted grow" style="text-align:center">${r.length} left to take. Check it matches the photo.</span><button class="nav-btn" data-act="step" data-arg="1" aria-label="Next card" ${pos >= r.length - 1 ? "disabled" : ""}>${icon("chev")}</button></div>
+    ${actBtns(st, i, "Took it", "took")}</div>`;
+}
+function searchField(st) {
+  return `<label class="search">${icon("find")}<input type="search" data-input="q" value="${esc(st.q)}" placeholder="Find a card" aria-label="Find a card by name">${st.q ? `<button class="nav-btn" data-act="q-clear" aria-label="Clear search">${icon("x")}</button>` : ""}</label>`;
+}
+function shelfScreen(st, pose) {
+  const ownerChip = st.owner.length && !st.q ? `<button class="chip warn" data-act="owner">${icon("warn")}${st.owner.length} for the owner</button>` : "";
+  if (pose === "folded") {
+    return `<div class="nav"><div class="nav-row"><span class="head">Shelf</span>${ownerChip}</div>${searchField(st)}</div>${netBanner(st)}
+      <div class="scroll" style="gap:var(--space-2)">${mapHtml(st, st.q ? 300 : 292, false)}</div>${shelfDock(st, pose)}`;
+  }
+  return `<div class="nav"><div class="nav-row"><span class="large" style="font:var(--t-title1)">Shelf</span>${ownerChip}</div></div>${netBanner(st)}
+    <div class="split"><div class="main" style="flex:1.4"><div class="scroll">${mapHtml(st, 560, true)}</div></div>
+    <div class="side" style="width:310px;border-right:0;border-left:1px solid var(--c-line)"><div style="padding:0 var(--space-4) var(--space-2)">${searchField(st)}</div>${shelfDock(st, pose)}</div></div>`;
+}
+function tableScreen(st, pose) {
+  const rest = stack(st), packedIdx = route(st).filter(i => st.pulls[i].packed);
+  const all = st.pulls.every(p => p.packed || p.st === "missing");
+  if (all) return `${nav({ title: "Table" })}<div class="scroll"><span style="color:var(--c-done)">${icon("check")}</span><p class="t2" style="margin:0">Every card you found is in its envelope.</p><p class="muted" style="margin:0">Each one is marked sold.</p>${ownerSection(st)}</div>`;
+  if (!rest.length && !packedIdx.length) return `${nav({ title: "Table" })}<div class="center-msg"><p>Cards you take show here.</p><button class="btn primary" data-act="tab" data-arg="shelf">Go to the shelf</button></div>`;
+  const sel = st.packSel != null && rest.includes(st.packSel) ? st.packSel : rest[0];
+  const hold = st.net === "hold";
+  const tray = `<div class="stack-1"><span class="sec-h">In your hand (${rest.length})</span><div class="list">${rest.map(i => { const p = st.pulls[i], k = cardOf(st, p.copy);
+      return pose === "folded"
+        ? `<div class="li">${photo(st, p.copy, 40, { tap: true })}<span class="grow stack-1"><span class="head ellip">${k.name}</span><span><span class="chip env">${ORDERS[p.order]}</span></span></span><button class="btn second small" data-act="pack" data-arg="${i}" ${hold ? "disabled" : ""}>In envelope</button></div>`
+        : `<button class="li" data-act="pack-pick" data-arg="${i}" ${i === sel ? 'aria-current="true"' : ""}>${photo(st, p.copy, 40)}<span class="grow stack-1"><span class="head ellip">${k.name}</span><span class="sub muted">${ORDERS[p.order]}</span></span></button>`; }).join("") || `<div class="li muted">Nothing in your hand.</div>`}</div>${hold ? `<p class="reason">Waiting for the home Mac, so envelopes can't be saved yet.</p>` : ""}</div>`;
+  const inEnv = packedIdx.length ? `<div class="stack-1"><span class="sec-h">In envelopes (${packedIdx.length})</span><div class="list">${packedIdx.map(i =>
+    `<div class="li dim">${photo(st, st.pulls[i].copy, 28)}<span class="grow sub">${cardOf(st, st.pulls[i].copy).name}</span><span class="chip done">${ORDERS[st.pulls[i].order]}</span></div>`).join("")}</div></div>` : "";
+  if (pose === "folded") return `${nav({ title: "Table", trail: ownerBtn(st) })}${netBanner(st)}<div class="scroll">${toastHtml(st, "dock")}${tray}${inEnv}</div>`;
+  const p = sel != null ? st.pulls[sel] : null;
+  const envs = ORDER_IDS.map(o => { const ps = orderPulls(st, o), h = ps.filter(j => st.pulls[j].packed).length, n = ps.length + orderNoSpot(o).length, lit = p && p.order === o;
+    return `<button class="envtile ${lit ? "lit" : ""}" data-act="${lit ? "pack" : "noop"}" data-arg="${sel}" ${lit && !hold ? "" : 'aria-disabled="true"'}><span class="t3">${ORDERS[o]}</span><span class="sub">${h} of ${n} in</span>${lit ? `<span class="head">Tap to put ${cardOf(st, p.copy).name} in</span>` : ""}</button>`; }).join("");
+  return `${nav({ title: "Table", large: false, mid: "Table", trail: ownerBtn(st) })}${netBanner(st)}<div class="split"><div class="side"><div class="scroll">${tray}${inEnv}</div></div>
+    <div class="main"><div class="scroll">${toastHtml(st, "dock")}${p ? `<div class="row" style="gap:var(--space-4)">${photo(st, p.copy, 110, { tap: true })}<span class="stack-1"><span class="sub muted">In your hand</span><span class="t2">${cardOf(st, p.copy).name}</span><span class="sub">Tap the lit envelope: ${ORDERS[p.order]}</span></span></div>` : ""}<div class="grid2">${envs}</div></div></div></div>`;
+}
+const SHELF = {
+  id: "shelf", name: "Shelf map", tabs: SHELF_TABS, bold: true,
+  idea: "Bold: the screen is the shelf. Six columns are the six boxes seen from above, divider lines are the sections, lit dots are the cards to take. The same map answers \"where is this card?\": type a name and its copies light up. No list of orders anywhere; the packing table is its own tab.",
+  render(st, pose) {
+    const g = gate(st); if (g) return g;
+    const body = st.screen === "table" ? tableScreen(st, pose) : shelfScreen(st, pose);
+    return body + tabbar(SHELF_TABS, st.screen) + sheets(st, pose);
+  },
+  states: {
+    shelf: st => {}, selected: st => { st.sel = 5; },
+    missing: st => { took(st, 0); took(st, 1); st.toast = null; st.sheet = { kind: "missing", idx: 2 }; },
+    owner: st => { st.sheet = { kind: "owner" }; },
+    find: st => { st.q = "Mossback"; },
+    copy: st => { st.q = "Mossback"; st.selCopy = "c7"; },
+    move: st => { st.q = "Mossback"; st.selCopy = "c7"; st.sheet = { kind: "move", copy: "c7", box: 6, sec: "Ember Reach", spot: 3 }; },
+    "find-none": st => { st.q = "Zephyr"; },
+    offline: st => { took(st, 0); st.toast = null; st.net = "offline"; }, "offline-hold": st => { took(st, 0); st.toast = null; st.net = "hold"; },
+    taken: st => { [0, 1, 2, 3, 4, 6].forEach(i => took(st, i)); toOwner(st, 5); st.toast = null; },
+    table: st => { [0, 1, 2, 3, 4, 6].forEach(i => took(st, i)); toOwner(st, 5); st.pulls[0].packed = true; st.toast = null; st.screen = "table"; },
+    "table-empty": st => { st.screen = "table"; },
+    done: st => { [0, 1, 2, 3, 4, 6].forEach(i => packNow(st, i)); toOwner(st, 5); st.toast = null; st.screen = "table"; },
+    loading: st => { st.load = "loading"; }, failed: st => { st.load = "failed"; }, empty: st => { st.load = "empty"; }
+  }
+};
+
+const CONCEPTS = [WALK, ENV, SHELF];
+const DEFAULT_SCREEN = { walk: "pull", envelopes: "list", shelf: "shelf" };
+
+/* ---------------- acts ---------------- */
+function took(st, i) { st.pulls[i].st = "took"; st.toast = { text: `Took ${cardOf(st, st.pulls[i].copy).name}.`, at: "dock" }; }
+function packNow(st, i) { st.pulls[i].st = "took"; st.pulls[i].packed = true; st.sold[st.pulls[i].copy] = true; }
+function toOwner(st, i) { const p = st.pulls[i], c = cp(st, p.copy); p.st = "missing"; st.owner.push({ card: c.card, order: p.order, why: `Not found at ${spotText(c)}` }); }
+const SNAP = new Set(["took", "pack", "in-env", "to-owner", "spare", "sold", "mv-save", "seal"]);
+let timers = {};
+function act(cid, name, arg) {
+  const st = S[cid];
+  if (SNAP.has(name)) { const keep = clone(st); delete keep.undo; st.undo = keep; } else if (name !== "undo") { st.undo = null; }
+  if (name !== "undo") st.toast = null;
+  const n = arg != null && arg !== "" && !isNaN(arg) ? Number(arg) : arg;
+  switch (name) {
+    case "tab": st.screen = arg; st.sheet = null; if (cid === "envelopes" && arg === "list") st.env = st.env; break;
+    case "took": took(st, n); st.sel = null; break;
+    case "missing": st.sheet = { kind: "missing", idx: n }; break;
+    case "spare": { const p = st.pulls[n], sp = SPARE[p.copy]; st.usedSpare[sp] = true; p.copy = sp; st.sheet = null; st.sel = n;
+      st.toast = { text: `Now take the copy in ${spotText(cp(st, sp))}.`, at: "dock" }; break; }
+    case "to-owner": toOwner(st, n); st.sheet = null; st.toast = { text: `${cardOf(st, st.pulls[n].copy).name} is on the owner's list.`, at: "dock" }; break;
+    case "photo": st.sheet = { kind: "photo", copy: arg }; break;
+    case "close": case "scrim": st.sheet = null; break;
+    case "owner": st.sheet = { kind: "owner" }; break;
+    case "pack": { if (st.net === "hold") break; const p = st.pulls[n]; p.packed = true; st.sold[p.copy] = true; st.packSel = null;
+      st.toast = { text: orderReady(st, p.order) ? `${ORDERS[p.order]}'s envelope is full. Seal it.` : `In ${ORDERS[p.order]}'s envelope. Marked sold.`, at: "dock" }; break; }
+    case "pack-pick": st.packSel = n; st.sheet = null; break;
+    case "stack-sheet": st.sheet = { kind: "stack" }; break;
+    case "check": st.sheet = { kind: "check", idx: n }; break;
+    case "in-env": { packNow(st, n); st.sheet = null; const p = st.pulls[n];
+      st.toast = { text: orderReady(st, p.order) ? `All in. Seal ${ORDERS[p.order]}'s envelope.` : `${cardOf(st, p.copy).name} is in. Marked sold.`, at: "dock" }; break; }
+    case "open-env": st.env = arg; break;
+    case "back": st.env = null; break;
+    case "seal": st.sealed[arg] = true; st.toast = { text: `Sealed ${ORDERS[arg]}'s envelope.`, at: "dock" }; break;
+    case "copy": st.selCopy = arg; st.sheet = { kind: "copy", copy: arg }; break;
+    case "selc": st.selCopy = arg; break;
+    case "desel": st.selCopy = null; break;
+    case "sel": st.sel = n; st.selCopy = null; break;
+    case "step": { const r = route(st).filter(j => st.pulls[j].st === "todo"); const cur = st.sel != null && st.pulls[st.sel].st === "todo" ? st.sel : r[0];
+      const k = Math.min(r.length - 1, Math.max(0, r.indexOf(cur) + n)); st.sel = r[k]; break; }
+    case "sell": st.sheet = { kind: "sell", copy: arg }; break;
+    case "sold": st.sold[arg] = true; st.sheet = (cid === "shelf" || isUnfoldedFind(st)) ? null : { kind: "copy", copy: arg };
+      st.toast = { text: `Marked ${cardOf(st, arg).name} sold.`, at: "copy" }; break;
+    case "move": { const c = cp(st, arg); st.sheet = { kind: "move", copy: arg, box: c.box, sec: c.sec, spot: c.spot }; break; }
+    case "mv-box": st.sheet.box = n; st.sheet.sec = boxOf(n).secs[0][0]; st.sheet.spot = 1; break;
+    case "mv-sec": st.sheet.sec = arg; st.sheet.spot = 1; break;
+    case "mv-spot": st.sheet.spot = Math.min(secCount(st.sheet.box, st.sheet.sec), Math.max(1, st.sheet.spot + n)); break;
+    case "mv-save": { const s = st.sheet; Object.assign(st.copies[s.copy], { box: s.box, sec: s.sec, spot: s.spot });
+      st.sheet = cid === "shelf" || isUnfoldedFind(st) ? null : { kind: "copy", copy: s.copy };
+      st.toast = { text: `Moved to ${spotText(st.copies[s.copy])}.`, at: "copy" }; break; }
+    case "undo": if (st.undo) { const u = st.undo; Object.keys(st).forEach(k => delete st[k]); Object.assign(st, u); st.undo = null; st.toast = null; } break;
+    case "q-set": st.q = arg; st.selCopy = null; break;
+    case "q-clear": st.q = ""; st.selCopy = null; break;
+    case "net-ok": st.net = "ok"; break;
+    case "retry": st.load = "loading"; clearTimeout(timers[cid]); timers[cid] = setTimeout(() => { S[cid].load = "ok"; draw(cid); }, 1500); break;
+    case "stop": clearTimeout(timers[cid]); st.load = "failed"; break;
+  }
+  draw(cid);
+}
+function isUnfoldedFind() { return false; }
+
+/* ---------------- page ---------------- */
+const toggles = document.getElementById("concept-toggles");
+CONCEPTS.forEach(C => {
+  S[C.id] = fresh(DEFAULT_SCREEN[C.id]);
+  const sec = document.getElementById("concept-" + C.id);
+  sec.querySelector(".concept-head").innerHTML = `<h2>${C.name}</h2><span class="new-tag">New: the whole flow${C.bold ? " (the bold concept)" : ""}</span><p>${C.idea}</p>
+    <nav class="states cluster" aria-label="${C.name} states">States: ${Object.keys(C.states).map(s => `<a href="#c=${C.id}&s=${s}">${s}</a>`).join("")}<a href="#c=${C.id}&s=${Object.keys(C.states)[0]}&t=dark">dark</a></nav>`;
+  const b = document.createElement("button");
+  b.className = "pill"; b.dataset.hide = C.id; b.setAttribute("aria-pressed", "false"); b.textContent = "Hide " + C.name;
+  toggles.appendChild(b);
+});
+const showAll = document.createElement("button");
+showAll.className = "pill"; showAll.textContent = "Show all concepts"; showAll.dataset.showall = "1"; toggles.appendChild(showAll);
+
+function draw(cid) {
+  const C = CONCEPTS.find(x => x.id === cid), st = S[cid];
+  const sec = document.getElementById("concept-" + cid);
+  const active = document.activeElement, focusPose = active && active.dataset && active.dataset.input && sec.contains(active) ? active.closest(".device").dataset.pose : null;
+  const caret = focusPose ? active.selectionStart : 0;
+  const scrolls = {};
+  sec.querySelectorAll(".device").forEach(d => { scrolls[d.dataset.pose] = [...d.querySelectorAll(".scroll")].map(s => s.scrollTop); });
+  sec.querySelectorAll(".device").forEach(d => {
+    d.innerHTML = status() + `<div class="screen">${C.render(st, d.dataset.pose)}</div>`;
+    const sc = d.querySelectorAll(".scroll"); (scrolls[d.dataset.pose] || []).forEach((t, k) => { if (sc[k]) sc[k].scrollTop = t; });
+  });
+  sec.querySelectorAll('.sheet .list [aria-current="true"]').forEach(li => { const l = li.parentElement; if (!l.scrollTop) l.scrollTop = li.offsetTop - l.offsetTop - 44; });
+  if (focusPose) { const inp = sec.querySelector(`.device[data-pose="${focusPose}"] [data-input]`); if (inp) { inp.focus(); inp.setSelectionRange(caret, caret); } }
+}
+document.addEventListener("click", e => {
+  const th = e.target.closest("[data-theme-set]");
+  if (th) { setTheme(th.dataset.themeSet); return; }
+  const hide = e.target.closest("[data-hide]");
+  if (hide) { const sec = document.getElementById("concept-" + hide.dataset.hide); sec.hidden = !sec.hidden; hide.setAttribute("aria-pressed", String(sec.hidden)); return; }
+  if (e.target.closest("[data-showall]")) { document.querySelectorAll(".concept").forEach(s => s.hidden = false); document.querySelectorAll("[data-hide]").forEach(b => b.setAttribute("aria-pressed", "false")); return; }
+  const a = e.target.closest("[data-act]");
+  if (!a || a.disabled || a.getAttribute("aria-disabled") === "true") return;
+  if (a.dataset.act === "scrim" && e.target.closest("[data-stop]")) return;
+  const sec = a.closest(".concept"); if (!sec) return;
+  if (a.dataset.act === "noop") return;
+  act(sec.dataset.c, a.dataset.act, a.dataset.arg);
+});
+document.addEventListener("input", e => {
+  const inp = e.target.closest("[data-input]"); if (!inp) return;
+  const cid = inp.closest(".concept").dataset.c; S[cid].q = inp.value; S[cid].selCopy = null; S[cid].toast = null; draw(cid);
+});
+function setTheme(t) {
+  if (t === "system") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme = t;
+  document.querySelectorAll("[data-theme-set]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.themeSet === t)));
+}
+function fit() {
+  document.querySelectorAll(".fit").forEach(f => {
+    const w = (f.firstElementChild.offsetWidth || 402) + 20;
+    f.style.setProperty("--fit", Math.min(1, (window.innerWidth - 32) / w).toFixed(3));
+  });
+}
+function fromHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get("t")) setTheme(h.get("t") === "dark" ? "dark" : h.get("t") === "light" ? "light" : "system");
+  const cid = h.get("c"), s = h.get("s");
+  CONCEPTS.forEach(C => { if (!cid || C.id === cid) { S[C.id] = fresh(DEFAULT_SCREEN[C.id]); if (C.id === cid && s && C.states[s]) C.states[s](S[C.id]); } draw(C.id); });
+  if (cid) { const el = document.getElementById("concept-" + cid); if (el) { el.hidden = false; el.scrollIntoView(); } }
+}
+window.addEventListener("hashchange", fromHash);
+window.addEventListener("resize", fit);
+fromHash(); fit();
+</script>
+</body>
+</html>

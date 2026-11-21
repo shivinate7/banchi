@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phone Pull, Camera Check</title>
+<style>
+/* Banchi --bn-* tokens (docs/DESIGN.md, Tokens) mapped onto a native iPhone look.
+   Light is the default; prefers-color-scheme picks dark; data-theme on the root wins. */
+:root {
+  --bn-bg: #f4f5f8; --bn-surface: #ffffff; --bn-surface-2: #eceef2; --bn-surface-3: #f7f8fa;
+  --bn-ink: #0f1217; --bn-ink-2: #3b414b; --bn-ink-3: #666c76; --bn-ink-4: #7f8791;
+  --bn-line: rgba(15,18,23,.08); --bn-line-strong: rgba(15,18,23,.16);
+  --bn-accent: #3d5af1; --bn-accent-hover: #2f4bd9; --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61,90,241,.10); --bn-on-accent: #ffffff;
+  --bn-live: #d63d2b; --bn-ok: #15803d; --bn-warn: #b45309; --bn-danger: #b91c1c;
+  --bn-ok-tint: rgba(21,128,61,.12); --bn-warn-tint: rgba(180,83,9,.12); --bn-danger-tint: rgba(185,28,28,.10);
+  --bn-pill-ink-ok: #11733a; --bn-pill-ink-warn: #a14b09;
+  --bn-surface-glass: rgba(255,255,255,.72);
+  --fill-primary: var(--bn-accent-press);
+  --bn-stage-bg: #0c0e12; --bn-stage-bg-2: #171b25; --bn-stage-surface: #1b2029; --bn-stage-ink: #eef0f4;
+  --bn-stage-accent: #7f90ff; --bn-stage-ok: #3ddc84; --bn-stage-warn: #f5a524; --bn-stage-danger: #ff5c5c; --bn-stage-live: #ff6a58;
+  --bn-1: 4px; --bn-2: 8px; --bn-3: 12px; --bn-4: 16px; --bn-5: 20px; --bn-6: 24px; --bn-7: 32px; --bn-8: 40px;
+  --bn-r: 8px; --bn-r-lg: 12px; --bn-r-xl: 16px; --bn-r-2xl: 22px;
+  /* Apple text styles, Large (default) size: typography page, read 2026-11-21. */
+  --ts-large-title: 34px; --ts-title1: 28px; --ts-title2: 22px; --ts-title3: 20px; --ts-headline: 17px;
+  --ts-body: 17px; --ts-callout: 16px; --ts-subhead: 15px; --ts-footnote: 13px; --ts-caption1: 12px; --ts-caption2: 11px;
+  /* Stand-ins: no Apple page gives the Duo's insets or sizes (see notes item 14). */
+  --sim-top: 54px; --sim-bottom: 34px;
+  --target: 44px;          /* accessibility page: default control size 44x44 pt */
+  --pull-h: 64px;          /* DESIGN.md, The pull-confirm: min-height 64px */
+  color-scheme: light dark;
+  font-family: -apple-system, system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+    --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+    --bn-line: rgba(255,255,255,.08); --bn-line-strong: rgba(255,255,255,.16);
+    --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+    --bn-accent-tint: rgba(127,144,255,.14); --bn-on-accent: #0c0e12;
+    --bn-live: #ff6a58; --bn-ok: #3ddc84; --bn-warn: #f5a524; --bn-danger: #ff5c5c;
+    --bn-ok-tint: rgba(61,220,132,.16); --bn-warn-tint: rgba(245,165,36,.16); --bn-danger-tint: rgba(255,92,92,.16);
+    --bn-pill-ink-ok: #3ddc84; --bn-pill-ink-warn: #f5a524;
+    --bn-surface-glass: rgba(20,23,28,.72);
+    --fill-primary: var(--bn-accent-hover);
+  }
+}
+:root[data-theme="dark"] {
+  --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+  --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+  --bn-line: rgba(255,255,255,.08); --bn-line-strong: rgba(255,255,255,.16);
+  --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127,144,255,.14); --bn-on-accent: #0c0e12;
+  --bn-live: #ff6a58; --bn-ok: #3ddc84; --bn-warn: #f5a524; --bn-danger: #ff5c5c;
+  --bn-ok-tint: rgba(61,220,132,.16); --bn-warn-tint: rgba(245,165,36,.16); --bn-danger-tint: rgba(255,92,92,.16);
+  --bn-pill-ink-ok: #3ddc84; --bn-pill-ink-warn: #f5a524;
+  --bn-surface-glass: rgba(20,23,28,.72);
+  --fill-primary: var(--bn-accent-hover);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bn-surface-2); color: var(--bn-ink); font-family: -apple-system, system-ui, sans-serif; font-size: var(--ts-body); line-height: 1.3; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--bn-accent); outline-offset: 2px; }
+
+/* ---------- page chrome around the devices (not part of the app) ---------- */
+.page { display: flex; flex-direction: column; gap: var(--bn-5); padding: var(--bn-5) var(--bn-4) var(--bn-8); max-width: 1320px; margin-inline: auto; }
+.sample { background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn); border: 1px dashed var(--bn-warn); border-radius: var(--bn-r); padding: var(--bn-2) var(--bn-3); font-size: var(--ts-subhead); font-weight: 600; }
+.intro { display: flex; flex-wrap: wrap; gap: var(--bn-4) var(--bn-7); align-items: flex-end; justify-content: space-between; }
+.intro h1 { margin: 0; font-size: var(--ts-title1); letter-spacing: -0.02em; }
+.intro p { margin: 0; color: var(--bn-ink-2); font-size: var(--ts-subhead); max-width: 62ch; }
+.kind { display: flex; flex-direction: column; gap: var(--bn-1); }
+.theme-switch { display: flex; gap: var(--bn-1); background: var(--bn-surface); padding: var(--bn-1); border-radius: 999px; border: 1px solid var(--bn-line); }
+.theme-switch button { min-height: 36px; padding: 0 var(--bn-4); border-radius: 999px; font-size: var(--ts-subhead); color: var(--bn-ink-2); }
+.theme-switch button[aria-pressed="true"] { background: var(--bn-ink); color: var(--bn-surface); }
+.states { display: flex; flex-direction: column; gap: var(--bn-2); }
+.states-row { display: flex; flex-wrap: wrap; gap: var(--bn-2); align-items: center; }
+.states-row strong { font-size: var(--ts-footnote); color: var(--bn-ink-3); font-weight: 600; min-width: 72px; }
+.states a { font-size: var(--ts-footnote); text-decoration: none; color: var(--bn-ink-2); background: var(--bn-surface); border: 1px solid var(--bn-line); border-radius: 999px; padding: 6px 12px; }
+.states a[aria-current="true"] { background: var(--bn-accent-tint); color: var(--bn-accent-hover); border-color: var(--bn-accent); font-weight: 600; }
+.options { display: flex; flex-wrap: wrap; gap: var(--bn-2); }
+.opt { display: flex; align-items: center; gap: var(--bn-2); background: var(--bn-surface); border: 1px dashed var(--bn-accent); border-radius: var(--bn-r); padding: 4px 4px 4px 12px; font-size: var(--ts-footnote); }
+.opt button { min-height: 32px; padding: 0 10px; border-radius: 6px; background: var(--bn-surface-2); font-size: var(--ts-footnote); }
+.opt.is-hidden { opacity: .5; border-style: dotted; }
+.stage-row { display: flex; flex-wrap: wrap; gap: var(--bn-7); align-items: flex-start; }
+.frame-wrap { display: flex; flex-direction: column; gap: var(--bn-2); width: min-content; }
+.frame-wrap > span { font-size: var(--ts-footnote); color: var(--bn-ink-3); }
+.legend { font-size: var(--ts-footnote); color: var(--bn-ink-3); display: flex; gap: var(--bn-4); flex-wrap: wrap; }
+.legend i { font-style: normal; border: 1px dashed currentColor; padding: 1px 6px; border-radius: 4px; }
+
+/* ---------- device ---------- */
+.device { position: relative; overflow: hidden; background: var(--bn-bg); border-radius: 44px; box-shadow: 0 0 0 10px #1b1f26, 0 0 0 11px #2a2f3a, 0 24px 60px rgba(0,0,0,.25); }
+.device[data-device="iphone-duo-folded"] { width: 375px; height: 812px; }
+.device[data-device="iphone-duo-unfolded"] { width: 820px; height: 812px; border-radius: 36px; }
+.statusbar { position: absolute; inset: 0 0 auto 0; height: max(env(safe-area-inset-top), var(--sim-top)); display: flex; align-items: center; justify-content: space-between; padding: 6px 32px 0; font-size: var(--ts-subhead); font-weight: 600; z-index: 30; pointer-events: none; color: var(--bn-ink); }
+.statusbar.on-stage { color: var(--bn-stage-ink); }
+.statusbar .sb-icons { display: flex; gap: 6px; align-items: center; }
+.home-ind { position: absolute; left: 50%; bottom: 8px; width: 134px; height: 5px; margin-left: -67px; border-radius: 3px; background: var(--bn-ink); opacity: .9; z-index: 40; pointer-events: none; }
+.home-ind.on-stage { background: var(--bn-stage-ink); }
+
+/* A screen fills the device and keeps its content inside the safe area. */
+.screen { position: absolute; inset: 0; display: flex; flex-direction: column; padding-top: max(env(safe-area-inset-top), var(--sim-top)); padding-bottom: max(env(safe-area-inset-bottom), var(--sim-bottom)); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.scroll { flex: 1; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; overscroll-behavior: contain; }
+.scroll::-webkit-scrollbar { display: none; }
+
+/* Navigation bar */
+.navbar { display: flex; align-items: center; justify-content: space-between; min-height: var(--target); padding: 0 var(--bn-2); gap: var(--bn-2); }
+.nav-btn { min-height: var(--target); min-width: var(--target); padding: 0 var(--bn-2); display: inline-flex; align-items: center; gap: 2px; color: var(--bn-accent); font-size: var(--ts-body); }
+.nav-btn.glass { background: var(--bn-surface-glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 999px; padding: 0 var(--bn-3); box-shadow: 0 0 0 1px var(--bn-line); }
+.nav-title { font-size: var(--ts-headline); font-weight: 600; text-align: center; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.large-title { font-size: var(--ts-large-title); font-weight: 700; letter-spacing: -0.02em; margin: 0; padding: 0 var(--bn-4); line-height: 1.2; }
+.subtitle { padding: 2px var(--bn-4) 0; color: var(--bn-ink-2); font-size: var(--ts-title3); }
+.subtitle b { color: var(--bn-ink); font-variant-numeric: tabular-nums; }
+
+/* Segmented control */
+.seg { margin: var(--bn-3) var(--bn-4) 0; display: grid; grid-template-columns: 1fr 1fr; background: var(--bn-surface-2); border-radius: 999px; padding: 3px; gap: 2px; }
+.seg button { min-height: 38px; border-radius: 999px; font-size: var(--ts-subhead); font-weight: 600; color: var(--bn-ink-2); }
+.seg button[aria-pressed="true"] { background: var(--bn-surface); color: var(--bn-ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+
+/* Inset grouped list */
+.list-wrap { display: flex; flex-direction: column; gap: var(--bn-6); padding: var(--bn-4) var(--bn-4) 120px; }
+.group { display: flex; flex-direction: column; gap: 6px; }
+.group-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0 var(--bn-4); font-size: var(--ts-footnote); color: var(--bn-ink-3); font-weight: 600; }
+.group-head .gh-right { font-variant-numeric: tabular-nums; font-weight: 400; }
+.group-body { background: var(--bn-surface); border-radius: var(--bn-r-xl); overflow: hidden; }
+.row { display: flex; align-items: center; gap: var(--bn-3); min-height: 72px; padding: var(--bn-2) var(--bn-4); width: 100%; text-align: left; position: relative; }
+.row + .row::before { content: ""; position: absolute; top: 0; right: 0; left: 76px; height: 1px; background: var(--bn-line); }
+.row[aria-current="true"] { background: var(--bn-accent-tint); }
+.row .r-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.row .r-name { font-size: var(--ts-title3); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .r-sub { font-size: var(--ts-subhead); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+.row .chev { color: var(--bn-ink-4); flex: none; }
+.row.done .r-name { color: var(--bn-ink-3); text-decoration: line-through; text-decoration-thickness: 1px; }
+.qty { flex: none; min-width: 52px; text-align: center; font-weight: 700; font-size: var(--ts-subhead); padding: 4px 10px; border-radius: 999px; background: var(--bn-accent-tint); color: var(--bn-accent-hover); font-variant-numeric: tabular-nums; }
+.qty.warn { background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn); }
+.qty.ok { background: var(--bn-ok-tint); color: var(--bn-pill-ink-ok); }
+.thumb { width: 44px; height: 61px; flex: none; border-radius: 4px; }
+.thumb.ghost { background: var(--bn-surface-2); border: 1px dashed var(--bn-ink-4); display: grid; place-items: center; color: var(--bn-ink-3); }
+.env-dot { width: 44px; height: 44px; flex: none; border-radius: 999px; display: grid; place-items: center; font-weight: 700; font-size: var(--ts-subhead); background: var(--bn-surface-2); color: var(--bn-ink-2); }
+
+/* The card art: a drawn stand-in for a stored photograph. No real card is drawn. */
+.art { position: relative; aspect-ratio: 63 / 88; border-radius: 4.5% / 3.2%; background: linear-gradient(160deg, hsl(var(--h) 55% 46%), hsl(calc(var(--h) + 40) 50% 22%)); box-shadow: inset 0 0 0 5px #15171c, inset 0 0 0 7px hsl(var(--h) 40% 70% / .6); overflow: hidden; color: #fff; }
+.art::before { content: ""; position: absolute; left: 9%; right: 9%; top: 11%; height: 46%; border-radius: 3px; background: radial-gradient(circle at 35% 40%, hsl(calc(var(--h) + 20) 80% 75% / .9), transparent 45%), radial-gradient(circle at 70% 70%, hsl(calc(var(--h) - 30) 70% 40%), hsl(var(--h) 30% 15%)); }
+.art .a-cost { position: absolute; left: 7%; top: 4.5%; width: 15%; aspect-ratio: 1; border-radius: 50%; background: #f1f1f1; color: #222; display: grid; place-items: center; font-weight: 800; font-size: clamp(6px, 4.5cqi, 20px); }
+.art .a-name { position: absolute; left: 9%; right: 9%; top: 60%; background: rgba(0,0,0,.55); padding: 3% 4%; border-radius: 2px; font-weight: 700; font-size: clamp(5px, 6cqi, 22px); line-height: 1.1; }
+.art .a-text { position: absolute; left: 9%; right: 9%; top: 74%; height: 14%; background: rgba(255,255,255,.12); border-radius: 2px; }
+.art .a-num { position: absolute; left: 8%; bottom: 3.2%; font-size: clamp(4px, 3.6cqi, 14px); font-weight: 600; opacity: .9; font-variant-numeric: tabular-nums; }
+.art.foil::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.28) 45%, rgba(160,255,240,.18) 52%, transparent 65%); }
+.art-host { container-type: inline-size; }
+
+/* Card screen */
+.place { padding: var(--bn-2) var(--bn-4) 0; display: flex; flex-direction: column; gap: 2px; }
+.place .p-box { font-size: var(--ts-title3); color: var(--bn-ink-2); font-weight: 600; }
+.place .p-label { font-size: var(--ts-large-title); font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.ruler { margin: var(--bn-3) var(--bn-4) 0; display: flex; flex-direction: column; gap: 4px; }
+.ruler-track { position: relative; height: 28px; border-radius: 8px; background: var(--bn-surface-2); }
+.ruler-pin { position: absolute; top: -4px; bottom: -4px; width: 6px; margin-left: -3px; border-radius: 3px; background: var(--bn-accent); }
+.ruler-ends { display: flex; justify-content: space-between; font-size: var(--ts-subhead); color: var(--bn-ink-2); }
+.card-body { display: flex; flex-direction: column; gap: var(--bn-4); padding: var(--bn-4) var(--bn-4) 200px; }
+.card-photo { width: 100%; max-width: 343px; align-self: center; }
+.facts { display: flex; flex-direction: column; gap: 4px; }
+.facts .f-name { font-size: var(--ts-title2); font-weight: 700; }
+.facts .f-about { font-size: var(--ts-title3); color: var(--bn-ink-2); display: flex; flex-wrap: wrap; gap: 0 12px; }
+.copies { display: flex; flex-direction: column; background: var(--bn-surface); border-radius: var(--bn-r-xl); overflow: hidden; }
+.copy-row { display: flex; align-items: center; gap: var(--bn-3); min-height: 56px; padding: var(--bn-2) var(--bn-4); font-size: var(--ts-title3); font-variant-numeric: tabular-nums; position: relative; }
+.copy-row + .copy-row::before { content: ""; position: absolute; top: 0; left: var(--bn-4); right: 0; height: 1px; background: var(--bn-line); }
+.copy-row .c-step { width: 28px; height: 28px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: var(--ts-subhead); font-weight: 700; background: var(--bn-surface-2); color: var(--bn-ink-2); }
+.copy-row.now .c-step { background: var(--bn-accent); color: var(--bn-on-accent); }
+.copy-row.done { color: var(--bn-ink-3); }
+.copy-row.done .c-step { background: var(--bn-ok-tint); color: var(--bn-pill-ink-ok); }
+.env-line { font-size: var(--ts-title3); color: var(--bn-ink-2); }
+.env-line b { color: var(--bn-ink); }
+
+/* The bottom action dock: the main action sits in the thumb's reach, above the tab bar. */
+.dock { position: absolute; left: var(--bn-4); right: var(--bn-4); bottom: calc(max(env(safe-area-inset-bottom), var(--sim-bottom)) + 70px); display: flex; flex-direction: column; gap: var(--bn-2); z-index: 15; }
+.dock.no-tabs { bottom: max(env(safe-area-inset-bottom), var(--sim-bottom)); }
+.primary { min-height: var(--pull-h); width: 100%; border-radius: 999px; background: var(--fill-primary); color: var(--bn-on-accent); font-size: 22px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: var(--bn-3); box-shadow: 0 8px 24px rgba(37,64,194,.28); }
+.primary:active { transform: translateY(1px) scale(.985); filter: brightness(.92); }
+.primary[aria-disabled="true"] { opacity: .45; box-shadow: none; }
+.secondary { min-height: 52px; width: 100%; border-radius: 999px; background: var(--bn-surface); color: var(--bn-accent-hover); font-size: var(--ts-title3); font-weight: 600; display: flex; align-items: center; justify-content: center; gap: var(--bn-2); box-shadow: 0 0 0 1px var(--bn-line-strong); }
+.why { font-size: var(--ts-subhead); color: var(--bn-ink-2); text-align: center; }
+
+/* Tab bar: floats above the content (tab-bars page). */
+.tabbar { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(env(safe-area-inset-bottom), var(--sim-bottom)); display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--bn-surface-glass); backdrop-filter: blur(20px) saturate(1.6); -webkit-backdrop-filter: blur(20px) saturate(1.6); box-shadow: 0 0 0 1px var(--bn-line), 0 8px 24px rgba(0,0,0,.14); z-index: 20; }
+.tab { min-width: 76px; min-height: 54px; border-radius: 999px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: var(--ts-caption2); font-weight: 600; color: var(--bn-ink-2); }
+.tab[aria-current="page"] { color: var(--bn-accent-hover); background: var(--bn-accent-tint); }
+.tab svg { width: 24px; height: 24px; }
+
+/* Banner: the Mac is out of reach. It floats and moves nothing. */
+.banner { margin: var(--bn-2) var(--bn-4) 0; display: flex; align-items: center; gap: var(--bn-3); padding: var(--bn-3) var(--bn-3) var(--bn-3) var(--bn-4); border-radius: var(--bn-r-xl); background: var(--bn-warn-tint); color: var(--bn-ink); font-size: var(--ts-subhead); }
+.banner .b-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.banner .b-text b { font-size: var(--ts-headline); }
+.banner button { min-height: var(--target); padding: 0 var(--bn-4); border-radius: 999px; background: var(--bn-surface); font-weight: 600; color: var(--bn-accent-hover); flex: none; }
+
+/* Receipt: the answer to Mark It Sold, with Undo, standing until a newer sale replaces it. */
+.receipt { display: flex; align-items: center; gap: var(--bn-3); padding: var(--bn-3) var(--bn-3) var(--bn-3) var(--bn-4); border-radius: var(--bn-r-2xl); background: var(--bn-ink); color: var(--bn-surface); box-shadow: 0 12px 32px rgba(0,0,0,.24); }
+.receipt .rc-text { flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: var(--ts-subhead); }
+.receipt .rc-text b { font-size: var(--ts-title3); }
+.receipt button { min-height: var(--target); padding: 0 var(--bn-4); border-radius: 999px; background: rgba(127,144,255,.22); color: var(--bn-surface); font-weight: 700; flex: none; }
+:root[data-theme="dark"] .receipt button { color: var(--bn-surface); }
+
+/* ---------- the camera: a stage, dark in both themes ---------- */
+.cam { position: absolute; inset: 0; background: var(--bn-stage-bg); color: var(--bn-stage-ink); display: flex; flex-direction: column; padding-top: max(env(safe-area-inset-top), var(--sim-top)); padding-bottom: max(env(safe-area-inset-bottom), var(--sim-bottom)); z-index: 25; }
+.cam .navbar .nav-btn { color: var(--bn-stage-ink); }
+.cam .nav-btn.glass { background: rgba(255,255,255,.14); box-shadow: none; }
+.cam .nav-title { color: var(--bn-stage-ink); }
+.view { position: relative; flex: 1; margin: var(--bn-2) var(--bn-3) 0; border-radius: 28px; overflow: hidden; background: radial-gradient(ellipse at 50% 60%, #3a3226 0%, #201c17 45%, #0f0d0b 100%); container-type: inline-size; }
+.view .table-grain { position: absolute; inset: 0; background: repeating-linear-gradient(95deg, rgba(255,255,255,.025) 0 2px, transparent 2px 9px); }
+.hand-card { position: absolute; left: 50%; top: 47%; width: 54%; transform: translate(-50%, -50%) rotate(-4deg); filter: drop-shadow(0 18px 24px rgba(0,0,0,.5)); }
+.hand { position: absolute; left: 50%; top: 47%; width: 40%; height: 40%; transform: translate(-6%, 22%) rotate(-18deg); border-radius: 46% 40% 30% 50%; background: linear-gradient(140deg, #b98a6a, #8a5d43); opacity: .95; }
+.reticle { position: absolute; left: 50%; top: 47%; width: 62%; aspect-ratio: 63 / 88; transform: translate(-50%, -50%); --rc: rgba(255,255,255,.85); }
+.reticle i { position: absolute; width: 28px; height: 28px; border: 4px solid var(--rc); }
+.reticle i:nth-child(1) { left: 0; top: 0; border-right: 0; border-bottom: 0; border-radius: 14px 0 0 0; }
+.reticle i:nth-child(2) { right: 0; top: 0; border-left: 0; border-bottom: 0; border-radius: 0 14px 0 0; }
+.reticle i:nth-child(3) { left: 0; bottom: 0; border-right: 0; border-top: 0; border-radius: 0 0 0 14px; }
+.reticle i:nth-child(4) { right: 0; bottom: 0; border-left: 0; border-top: 0; border-radius: 0 0 14px 0; }
+.reticle.snap { width: 56%; transform: translate(-50%, -50%) rotate(-4deg); --rc: var(--bn-stage-ok); transition: all 240ms cubic-bezier(.34,1.4,.44,1); }
+.reticle.snap::after { content: ""; position: absolute; inset: 0; border: 3px solid var(--bn-stage-ok); border-radius: 10px; box-shadow: 0 0 0 2000px rgba(12,14,18,.35); }
+.reticle.bad { width: 56%; transform: translate(-50%, -50%) rotate(-4deg); --rc: var(--bn-stage-danger); }
+.reticle.bad::after { content: ""; position: absolute; inset: 0; border: 3px dashed var(--bn-stage-danger); border-radius: 10px; }
+.reticle.unsure { --rc: var(--bn-stage-warn); }
+/* Read marks: what the camera read, pinned where it read it on the card. */
+.mark { position: absolute; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: var(--ts-subhead); font-weight: 700; background: var(--bn-stage-ok); color: #0c0e12; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mark.bad { background: var(--bn-stage-danger); }
+.mark.warn { background: var(--bn-stage-warn); }
+.live-pill { position: absolute; top: var(--bn-3); left: var(--bn-3); display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: rgba(12,14,18,.6); font-size: var(--ts-footnote); font-weight: 600; }
+.live-pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--bn-stage-live); box-shadow: 0 0 0 4px rgba(255,106,88,.25); }
+.ghost-photo { position: absolute; top: var(--bn-3); right: var(--bn-3); width: 22%; display: flex; flex-direction: column; gap: 4px; align-items: center; font-size: var(--ts-caption1); font-weight: 600; color: var(--bn-stage-ink); }
+.ghost-photo .art-host { width: 100%; }
+.ghost-photo .art { width: 100%; box-shadow: 0 0 0 2px rgba(255,255,255,.7), inset 0 0 0 3px #15171c; }
+.cam-panel { margin: var(--bn-3) var(--bn-3) 0; min-height: 188px; display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4); border-radius: 28px; background: var(--bn-stage-surface); }
+.cam-panel .cp-say { font-size: var(--ts-title3); line-height: 1.3; }
+.cam-panel .cp-say b { display: block; font-size: var(--ts-title2); margin-bottom: 2px; }
+.cam-panel .cp-sub { font-size: var(--ts-subhead); color: #b9bfc9; }
+.cam-panel .primary { background: var(--bn-stage-accent); color: #0c0e12; box-shadow: none; }
+.cam .banner { background: rgba(245,165,36,.2); color: var(--bn-stage-ink); }
+.cam .banner svg { color: var(--bn-stage-warn); flex: none; }
+.cam-panel .secondary { background: transparent; color: var(--bn-stage-ink); box-shadow: 0 0 0 1px rgba(255,255,255,.24); }
+.cam-panel .why { color: #b9bfc9; }
+.checks { display: flex; flex-direction: column; gap: 6px; font-size: var(--ts-callout); }
+.checks div { display: flex; gap: var(--bn-2); align-items: center; }
+.checks .ok { color: var(--bn-stage-ok); }
+.checks .warn { color: var(--bn-stage-warn); }
+.checks span { color: var(--bn-stage-ink); }
+
+/* By-eye: the stored photo and the live view, side by side. */
+.eye { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: var(--bn-2); margin: var(--bn-2) var(--bn-3) 0; }
+.eye > div { display: flex; flex-direction: column; gap: 6px; align-items: center; font-size: var(--ts-footnote); font-weight: 600; }
+.eye .art-host { width: 100%; }
+.eye .view { margin: 0; width: 100%; flex: 1; border-radius: 16px; }
+.eye .view .hand-card { width: 82%; }
+
+/* Sheets */
+.scrim { position: absolute; inset: 0; background: rgba(0,0,0,.32); z-index: 26; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 27; background: var(--bn-surface); border-radius: 28px 28px 0 0; display: flex; flex-direction: column; padding-bottom: max(env(safe-area-inset-bottom), var(--sim-bottom)); box-shadow: 0 -8px 32px rgba(0,0,0,.2); }
+.sheet .grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--bn-ink-4); opacity: .5; align-self: center; margin-top: 6px; }
+.sheet .sh-body { display: flex; flex-direction: column; gap: var(--bn-4); padding: var(--bn-2) var(--bn-4) var(--bn-4); }
+.sheet .sh-row { display: flex; gap: var(--bn-4); align-items: flex-start; }
+.sheet .sh-row .art-host { width: 104px; flex: none; }
+.kv { display: flex; flex-direction: column; background: var(--bn-surface-3); border-radius: var(--bn-r-xl); }
+.kv div { display: flex; justify-content: space-between; gap: var(--bn-3); min-height: 48px; align-items: center; padding: 0 var(--bn-4); font-size: var(--ts-body); position: relative; }
+.kv div + div::before { content: ""; position: absolute; top: 0; left: var(--bn-4); right: 0; height: 1px; background: var(--bn-line); }
+.kv span:last-child { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+.stepper { display: inline-flex; background: var(--bn-surface-2); border-radius: 999px; }
+.stepper button { width: 48px; min-height: var(--target); font-size: 22px; font-weight: 600; color: var(--bn-accent-hover); }
+
+/* Search field */
+.search { margin: var(--bn-2) var(--bn-4) 0; display: flex; gap: var(--bn-2); align-items: center; }
+.search .sf { flex: 1; min-height: var(--target); border-radius: 999px; background: var(--bn-surface); box-shadow: 0 0 0 1px var(--bn-line); display: flex; align-items: center; gap: var(--bn-2); padding: 0 var(--bn-4); color: var(--bn-ink-3); font-size: var(--ts-body); }
+.search .sf b { color: var(--bn-ink); font-weight: 400; }
+.icon-btn { width: var(--target); height: var(--target); flex: none; border-radius: 999px; display: grid; place-items: center; background: var(--bn-surface); box-shadow: 0 0 0 1px var(--bn-line); color: var(--bn-accent-hover); }
+
+/* Glance tiles (read only) */
+.glance { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4) var(--bn-4) 120px; }
+.tile { background: var(--bn-surface); border-radius: var(--bn-r-xl); padding: var(--bn-4); display: flex; flex-direction: column; gap: 4px; }
+.tile .t-head { font-size: var(--ts-subhead); color: var(--bn-ink-2); font-weight: 600; }
+.tile .t-fig { font-size: var(--ts-title1); font-weight: 700; font-variant-numeric: tabular-nums; }
+.tile .t-note { font-size: var(--ts-subhead); color: var(--bn-ink-2); }
+.tile.warn { box-shadow: inset 4px 0 0 var(--bn-warn); }
+.lane { display: flex; justify-content: space-between; font-size: var(--ts-body); padding: 6px 0; border-top: 1px solid var(--bn-line); font-variant-numeric: tabular-nums; }
+
+/* Empty, loading */
+.empty { flex: 1; display: flex; flex-direction: column; gap: var(--bn-4); align-items: center; justify-content: center; text-align: center; padding: 0 var(--bn-7) 120px; font-size: var(--ts-title3); color: var(--bn-ink-2); }
+.skel { background: linear-gradient(90deg, var(--bn-surface-2), var(--bn-surface-3), var(--bn-surface-2)); background-size: 200% 100%; border-radius: 6px; animation: sh 1.4s ease-in-out infinite; }
+@keyframes sh { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } .reticle.snap { transition: none; } }
+
+/* Today / New labels for the owner */
+.tag-new, .tag-today { position: relative; outline: 2px dashed var(--bn-accent); outline-offset: 3px; border-radius: inherit; }
+.tag-today { outline-color: var(--bn-ink-4); }
+.tag-new::after, .tag-today::after { content: attr(data-tag); position: absolute; top: -12px; right: 6px; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: var(--bn-accent); color: var(--bn-on-accent); z-index: 5; pointer-events: none; white-space: nowrap; }
+.tag-today::after { background: var(--bn-ink-3); color: var(--bn-surface); }
+body.no-tags .tag-new, body.no-tags .tag-today { outline: 0; }
+body.no-tags .tag-new::after, body.no-tags .tag-today::after { display: none; }
+
+/* Unfolded: a list beside its detail. */
+.split { position: absolute; inset: 0; display: grid; grid-template-columns: 340px 1fr; padding-top: max(env(safe-area-inset-top), var(--sim-top)); padding-bottom: max(env(safe-area-inset-bottom), var(--sim-bottom)); }
+.split > .pane { position: relative; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.split > .pane + .pane { border-left: 1px solid var(--bn-line); background: var(--bn-surface-3); }
+.split .tabbar { left: 170px; }
+.split .list-wrap { padding-left: var(--bn-3); padding-right: var(--bn-3); }
+.detail { flex: 1; overflow-y: auto; scrollbar-width: none; padding: var(--bn-2) var(--bn-5) var(--bn-5); display: flex; flex-direction: column; gap: var(--bn-4); }
+.detail::-webkit-scrollbar { display: none; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--bn-4); align-items: stretch; }
+.pair > div { display: flex; flex-direction: column; gap: 6px; font-size: var(--ts-footnote); font-weight: 600; color: var(--bn-ink-2); }
+.pair .view { margin: 0; flex: 1; min-height: 300px; border-radius: 20px; }
+.pair .view .hand-card { width: 66%; }
+.pair .reticle { width: 74%; }
+.pair .reticle.snap, .pair .reticle.bad { width: 68%; }
+.split .cam-panel { margin: 0; background: var(--bn-stage-surface); color: var(--bn-stage-ink); }
+.d-head { display: flex; flex-direction: column; gap: var(--bn-1); }
+.d-head .place { padding: 0; }
+
+.copy-row svg, .icon-btn svg, .sf svg, .env-line svg { width: 22px; height: 22px; flex: none; vertical-align: -4px; }
+.split.full { grid-template-columns: 0 1fr; }
+.split.full > .pane:first-child { visibility: hidden; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="sample" role="note">Sample: every name, card, buyer, price and count on this page is made up. No figure here is real.</div>
+
+  <div class="intro">
+    <div class="kind">
+      <h1>Phone Pull</h1>
+      <p><b>Designer kind:</b> directed. <b>Direction:</b> camera check: the phone confirms the card in hand by pointing at it.</p>
+      <p>Tap anything inside a phone. Each state has its own link. The folded and unfolded phones always show the same state.</p>
+    </div>
+    <div class="theme-switch" role="group" aria-label="Theme">
+      <button type="button" data-theme-set="auto">Auto</button>
+      <button type="button" data-theme-set="light">Light</button>
+      <button type="button" data-theme-set="dark">Dark</button>
+      <button type="button" id="tagToggle" aria-pressed="true">Today / New Labels</button>
+    </div>
+  </div>
+
+  <nav class="states" aria-label="States" id="stateNav"></nav>
+
+  <div>
+    <div class="legend" style="margin-bottom:8px"><span>Options. Each Hide button removes one option from both phones.</span><span><i style="color:var(--bn-ink-3)">Today: part</i> exists in the web app now</span><span><i style="color:var(--bn-accent)">New: part</i> this option adds</span></div>
+    <div class="options" id="optBar"></div>
+  </div>
+
+  <div class="stage-row">
+    <div class="frame-wrap">
+      <span>iPhone Duo, folded. Drawn at 375 x 812 pt (the brief's width; no Duo size is written).</span>
+      <div class="device" data-device="iphone-duo-folded" id="folded"></div>
+    </div>
+    <div class="frame-wrap">
+      <span>iPhone Duo, unfolded. Drawn at 820 x 812 pt (a stand-in; no Duo size is written).</span>
+      <div class="device" data-device="iphone-duo-unfolded" id="unfolded"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+/* ---------------- data: made-up cards, buyers and boxes ---------------- */
+const BUYERS = {
+  mara: { name: 'Mara Quill', init: 'MQ' },
+  theo: { name: 'Theo Brandt', init: 'TB' },
+  jun:  { name: 'Jun Okafor', init: 'JO' },
+  lise: { name: 'Lise Varga', init: 'LV' },
+};
+// One entry per owed card (WalkPlanTake: wanted, refs, copies). Copies are in walk order.
+const CARDS = [
+  { id: 'vael', name: 'Vael, Ashen Herald', num: '176/221', cond: 'Near Mint', fin: 'Foil', cost: 3, h: 14,
+    copies: [{ box: 'Box 4', sec: 1, card: 1, of: 40 }, { box: 'Box 4', sec: 3, card: 22, of: 40 }], env: ['mara', 'theo'] },
+  { id: 'corvin', name: 'Corvin, Tide-Bound', num: '041/221', cond: 'Near Mint', fin: 'Normal', cost: 2, h: 200,
+    copies: [{ box: 'Box 4', sec: 2, card: 18, of: 54 }], env: ['mara'] },
+  { id: 'lantern', name: 'Hollow Lantern', num: '112/221', cond: 'Lightly Played', fin: 'Normal', cost: 1, h: 48,
+    copies: [{ box: 'Box 7', sec: 1, card: 5, of: 38 }], env: ['jun'] },
+  { id: 'squire', name: 'Brightsteel Squire', num: '019/221', cond: 'Near Mint', fin: 'Normal', cost: 2, h: 220,
+    copies: [{ box: 'Box 7', sec: 2, card: 9, of: 38 }, { box: 'Box 7', sec: 2, card: 11, of: 38 }, { box: 'Box 7', sec: 4, card: 30, of: 38 }], env: ['jun', 'lise', 'theo'] },
+  { id: 'wisp', name: 'Mirelight Wisp', num: '203/221', cond: 'Near Mint', fin: 'Foil', cost: 4, h: 280,
+    copies: [{ box: 'Box 9', sec: 1, card: 14, of: 50 }], env: ['lise'] },
+];
+// The walk plan's shortfall: owed, but no copy is in a box.
+const SHORT = [
+  { id: 'gravemoss', name: 'Gravemoss Titan', num: '088/221', cond: 'Near Mint', fin: 'Normal', env: 'theo', h: 110 },
+  { id: 'saltglass', name: 'Saltglass Oracle', num: '150/221', cond: 'Near Mint', fin: 'Normal', env: 'mara', h: 180 },
+];
+const SLABS = [
+  { name: 'Vael, Ashen Herald', grade: 'PSA 10', value: '$148.00' },
+  { name: 'Mirelight Wisp', grade: 'BGS 9.5', value: '$61.50' },
+  { name: 'Corvin, Tide-Bound', grade: 'CGC 9', value: '$22.00' },
+];
+const byId = Object.fromEntries(CARDS.map(c => [c.id, c]));
+const placeOf = c => `${c.box}, Section ${c.sec}, Card ${c.card}`;
+const secOf = c => `Section ${c.sec}, Card ${c.card}`;
+
+/* ---------------- states ---------------- */
+const STATES = [
+  ['Pull', [['pull', 'List by Box'], ['envelopes', 'List by Envelope'], ['card', 'One Card'], ['loading', 'Loading'], ['empty', 'Nothing to Pull']]],
+  ['Camera', [['camera', 'Looking'], ['match', 'Match'], ['sold', 'Sold, Undo'], ['wrong', 'Wrong Card'], ['unread', 'Can\'t Read'], ['eye', 'By Eye'], ['eye-ok', 'By Eye, Pulled']]],
+  ['Problems', [['short', 'Not in a Box'], ['offline', 'Mac out of Reach'], ['offline-match', 'Match, Mac Away']]],
+  ['Find', [['find', 'Find a Card'], ['find-scan', 'Find by Camera'], ['copy', 'One Copy'], ['move', 'Move a Copy']]],
+  ['Slabs', [['slabs', 'Slab List'], ['slab-scan', 'Scan Cert'], ['slab-found', 'Slab Found'], ['slab-miss', 'Not Found']]],
+  ['Today', [['today', 'Glance']]],
+];
+const OPTIONS = [
+  { key: 'envelope', label: 'List by Envelope', focus: 'opt-envelope', state: 'envelopes' },
+  { key: 'swap', label: 'Wrong Card: Pull This One', focus: 'opt-swap', state: 'wrong' },
+  { key: 'short', label: 'Short Card Actions', focus: 'opt-short', state: 'short' },
+  { key: 'hold', label: 'Hold Sales While Away', focus: 'opt-hold', state: 'offline-match' },
+  { key: 'findscan', label: 'Find by Camera', focus: 'opt-findscan', state: 'find-scan' },
+];
+/* The state lives here and is mirrored to the URL hash, so a page opened where the hash
+   cannot be written (an embedded preview) still clicks through. */
+let cur = new URLSearchParams(location.hash.replace(/^#/, ''));
+const params = () => new URLSearchParams(cur);
+let hidden = new Set((params().get('hide') || '').split(',').filter(Boolean));
+function commit(p) { cur = p; try { history.replaceState(null, '', '#' + p.toString()); } catch (e) { /* no hash here */ } render(); }
+function go(s) { const p = params(); p.set('s', s); commit(p); }
+function setParam(k, v) { const p = params(); if (v === null) p.delete(k); else p.set(k, v); commit(p); }
+window.mockState = q => commit(new URLSearchParams(q));
+const on = k => !hidden.has(k);
+
+/* ---------------- icons (SF Symbol stand-ins) ---------------- */
+const I = {
+  camera: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.6"/></svg>',
+  viewfinder: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V5h4M16 5h4v4M20 15v4h-4M8 19H4v-4"/><rect x="9" y="8" width="6" height="8" rx="1"/></svg>',
+  hand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V6a1.5 1.5 0 0 1 3 0v5M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V6a1.5 1.5 0 0 1 3 0v7c0 4-2.5 7-6 7-2.5 0-4-1.5-5.5-4L4 13.5a1.5 1.5 0 0 1 2.5-1.5L8 14"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 20 20"/></svg>',
+  slab: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="5" y="2.5" width="14" height="19" rx="2"/><path d="M5 7.5h14"/><rect x="8" y="10" width="8" height="9" rx="1"/></svg>',
+  today: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4" stroke-linecap="round"/></svg>',
+  chev: '<svg class="chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg>',
+  back: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>',
+  check: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
+  x: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  warn: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 3.5 21.5 20h-19z"/><path d="M12 10v4.5M12 17.2v.3" stroke-linecap="round"/></svg>',
+  wifiOff: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 9a14 14 0 0 1 18 0M6.5 12.5a9 9 0 0 1 11 0M10 16a4 4 0 0 1 4 0M3 3l18 18"/></svg>',
+  env: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>',
+};
+const sb = stage => `<div class="statusbar${stage ? ' on-stage' : ''}"><span>9:41</span><span class="sb-icons"><svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg width="26" height="12" viewBox="0 0 26 12"><rect x="0.5" y="0.5" width="22" height="11" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="16" height="8" rx="1.5" fill="currentColor"/></svg></span></div>`;
+const home = stage => `<div class="home-ind${stage ? ' on-stage' : ''}"></div>`;
+
+const art = (c, cls = '') => `<div class="art-host ${cls}"><div class="art${c.fin === 'Foil' ? ' foil' : ''}" style="--h:${c.h}" role="img" aria-label="Stored photo of ${c.name}"><span class="a-cost">${c.cost || 2}</span><span class="a-name">${c.name}</span><span class="a-text"></span><span class="a-num">${c.num}</span></div></div>`;
+const tg = (kind, label) => `tag-${kind}" data-tag="${kind === 'new' ? 'New' : 'Today'}: ${label}`;
+
+/* ---------------- counts: one number everywhere ---------------- */
+function counts(state) {
+  const sold = state === 'sold' ? 1 : 0;
+  const inBoxes = CARDS.reduce((n, c) => n + c.copies.length, 0) - sold;
+  return { left: inBoxes, short: SHORT.length, boxes: new Set(CARDS.map(c => c.copies[0].box)).size, envs: Object.keys(BUYERS).length };
+}
+
+/* ---------------- tab bar ---------------- */
+function tabbar(tab) {
+  const t = (id, label, icon, s) => `<button class="tab" type="button" data-go="${s}" ${tab === id ? 'aria-current="page"' : ''}>${icon}<span>${label}</span></button>`;
+  return `<nav class="tabbar" aria-label="Sections">${t('pull', 'Pull', I.hand, 'pull')}${t('find', 'Find', I.search, 'find')}${t('slabs', 'Slabs', I.slab, 'slabs')}${t('today', 'Today', I.today, 'today')}</nav>`;
+}
+
+/* ---------------- Pull list ---------------- */
+function pullHeader(state) {
+  const k = counts(state);
+  const byEnv = state === 'envelopes';
+  return `<h1 class="large-title">Pull</h1>
+  <div class="subtitle ${tg('new', 'One Count')}"><b>${k.left} cards</b> left for ${k.envs} envelopes</div>
+  ${on('envelope') ? `<div class="seg ${tg('new', 'By Envelope')}" id="opt-envelope" role="group" aria-label="Order"><button type="button" data-go="pull" aria-pressed="${!byEnv}">By Box</button><button type="button" data-go="envelopes" aria-pressed="${byEnv}">By Envelope</button></div>` : ''}`;
+}
+function cardRow(c, opts = {}) {
+  const n = opts.n ?? c.copies.length;
+  const done = opts.done;
+  const sub = opts.sub ?? secOf(c.copies[0]);
+  return `<button class="row${done ? ' done' : ''}" type="button" data-go="${opts.go || 'card'}" ${opts.current ? 'aria-current="true"' : ''}>
+    <div class="thumb">${art(c)}</div>
+    <div class="r-main"><span class="r-name">${c.name}</span><span class="r-sub">${sub}</span></div>
+    ${done ? `<span class="qty ok">${I.check}</span>` : `<span class="qty" aria-label="Pull ${n}">×${n}</span>`}${I.chev}</button>`;
+}
+function shortRows() {
+  return `<div class="group"><div class="group-head"><span>Not in a Box</span><span class="gh-right">${SHORT.length}</span></div><div class="group-body">
+    ${SHORT.map(s => `<button class="row" type="button" data-go="short"><div class="thumb ghost">${I.warn}</div><div class="r-main"><span class="r-name">${s.name}</span><span class="r-sub">For ${BUYERS[s.env].name}</span></div><span class="qty warn">×1</span>${I.chev}</button>`).join('')}
+  </div></div>`;
+}
+function pullList(state, current) {
+  const sold = state === 'sold';
+  if (state === 'envelopes') {
+    return Object.entries(BUYERS).map(([k, b]) => {
+      const mine = CARDS.filter(c => c.env.includes(k));
+      const short = SHORT.filter(s => s.env === k);
+      const total = mine.length + short.length;
+      return `<div class="group"><div class="group-head"><span>${b.name}</span><span class="gh-right">${total} cards${short.length ? `, ${short.length} not in a box` : ''}</span></div><div class="group-body">
+        ${mine.map(c => cardRow(c, { n: 1, sub: placeOf(c.copies[Math.max(0, c.env.indexOf(k))] || c.copies[0]) })).join('')}
+        ${short.map(s => `<button class="row" type="button" data-go="short"><div class="thumb ghost">${I.warn}</div><div class="r-main"><span class="r-name">${s.name}</span><span class="r-sub">Not in a box</span></div><span class="qty warn">×1</span>${I.chev}</button>`).join('')}
+      </div></div>`;
+    }).join('');
+  }
+  const boxes = [...new Set(CARDS.map(c => c.copies[0].box))];
+  return boxes.map(bx => {
+    const cs = CARDS.filter(c => c.copies[0].box === bx);
+    const n = cs.reduce((a, c) => a + c.copies.length, 0) - (sold && bx === 'Box 4' ? 1 : 0);
+    return `<div class="group"><div class="group-head"><span>${bx}</span><span class="gh-right">${n} to pull</span></div><div class="group-body">
+      ${cs.map(c => (sold && c.id === 'vael') ? cardRow(c, { n: 1, sub: secOf(c.copies[1]), current: current === c.id }) : cardRow(c, { current: current === c.id })).join('')}
+    </div></div>`;
+  }).join('') + shortRows();
+}
+function banner(compact) {
+  return `<div class="banner" role="status"><span style="color:var(--bn-warn)">${I.wifiOff}</span><div class="b-text"><b>Can't reach the Mac</b><span>${compact ? 'List from 9:12.' : 'Showing the list from 9:12. Sales can\'t be saved until the Mac answers.'}</span></div><button type="button" data-go="pull">Try Again</button></div>`;
+}
+function pullScreen(state, opts = {}) {
+  const offline = state === 'offline';
+  if (state === 'loading') {
+    return `<div class="screen">${pullHeaderLoading()}<div class="scroll"><div class="list-wrap">${[0, 1].map(() => `<div class="group"><div class="group-head"><span class="skel" style="width:80px;height:14px"></span></div><div class="group-body">${[0, 1, 2].map(() => `<div class="row"><div class="thumb skel"></div><div class="r-main"><span class="skel" style="width:70%;height:20px"></span><span class="skel" style="width:50%;height:14px"></span></div></div>`).join('')}</div></div>`).join('')}</div></div>${opts.tabs !== false ? tabbar('pull') : ''}</div>`;
+  }
+  if (state === 'empty') {
+    return `<div class="screen"><h1 class="large-title">Pull</h1><div class="subtitle"><b>0 cards</b> left</div><div class="empty"><span>Nothing to pull. Cards for new orders show here once the Mac reads them.</span><button class="secondary" type="button" data-go="pull" style="max-width:240px">Check Again</button></div>${opts.tabs !== false ? tabbar('pull') : ''}</div>`;
+  }
+  return `<div class="screen">${offline ? banner(opts.compact) : ''}${pullHeader(state)}<div class="scroll"><div class="list-wrap">${pullList(state, opts.current)}</div></div>${opts.tabs !== false ? tabbar('pull') : ''}${state === 'sold' && !opts.noReceipt ? `<div class="dock">${receipt()}</div>` : ''}</div>`;
+}
+function pullHeaderLoading() {
+  return `<h1 class="large-title">Pull</h1><div class="subtitle"><span class="skel" style="display:inline-block;width:72px;height:18px;vertical-align:middle"></span> left</div>${on('envelope') ? `<div class="seg" role="group" aria-label="Order"><button type="button" aria-pressed="true">By Box</button><button type="button" aria-pressed="false">By Envelope</button></div>` : ''}`;
+}
+function receipt() {
+  return `<div class="receipt" role="status" aria-live="polite"><div class="rc-text"><b>Sold Vael, Ashen Herald</b><span>Into Mara Quill's envelope.</span></div><button type="button" data-go="match">Undo</button></div>`;
+}
+
+/* ---------------- One card ---------------- */
+function ruler(cp) {
+  const pct = ((cp.card - 0.5) / cp.of) * 100;
+  return `<div class="ruler ${tg('today', 'Position Bar')}"><div class="ruler-track"><span class="ruler-pin" style="left:${pct}%"></span></div><div class="ruler-ends"><span>Back</span><span>Section ${cp.sec}, card ${cp.card} of ${cp.of}</span><span>Front</span></div></div>`;
+}
+function copiesList(c, doneN) {
+  return `<div class="copies ${tg('new', 'Pull Count')}" aria-label="Pull ${c.copies.length}">${c.copies.map((cp, i) => {
+    const st = i < doneN ? 'done' : i === doneN ? 'now' : '';
+    const who = BUYERS[c.env[i]]?.name || '';
+    return `<div class="copy-row ${st}"><span class="c-step">${i < doneN ? I.check : i + 1}</span><span style="flex:1">${placeOf(cp)}</span><span style="font-size:var(--ts-subhead);color:var(--bn-ink-3)">${who}</span></div>`;
+  }).join('')}</div>`;
+}
+function cardDetail(c, doneN, compact) {
+  const cp = c.copies[doneN] || c.copies[0];
+  return `<div class="place"><span class="p-box">${cp.box}</span><span class="p-label">Section ${cp.sec}, Card ${cp.card}</span></div>
+    ${ruler(cp)}
+    <div class="card-body">
+      <div class="facts"><span class="f-name">${c.name}</span><span class="f-about"><span>${c.cond}</span><span>${c.fin}</span><span>${c.num}</span></span></div>
+      <div class="env-line">${I.env} Pull <b>${c.copies.length}</b>. This one goes in <b>${BUYERS[c.env[doneN]].name}</b>'s envelope.</div>
+      ${copiesList(c, doneN)}
+      ${art(c, 'card-photo')}
+    </div>`;
+}
+function cardScreen(state) {
+  const c = byId.vael;
+  const doneN = state === 'sold' ? 1 : 0;
+  return `<div class="screen"><div class="navbar"><button class="nav-btn" type="button" data-go="pull">${I.back}Pull</button><span class="nav-title">1 of ${counts(state).left}</span><span style="width:72px"></span></div>
+    <div class="scroll">${cardDetail(c, doneN)}</div>
+    <div class="dock">${state === 'sold' ? receipt() : ''}<button class="primary ${tg('new', 'Check Card')}" type="button" data-go="camera" id="checkBtn">${I.camera}Check Card</button></div>
+    ${tabbar('pull')}</div>`;
+}
+
+/* ---------------- Camera ---------------- */
+function viewfinder(kind, c, held) {
+  // kind: look | match | wrong | unread | slab | find
+  const hc = held || c;
+  const ret = kind === 'match' ? 'snap' : kind === 'wrong' ? 'bad' : kind === 'unread' ? 'unsure' : '';
+  let marks = '';
+  if (kind === 'match') marks = `<span class="mark" style="left:21%;top:64%">${I.check}${hc.name.split(',')[0]}</span><span class="mark" style="left:20%;top:80%">${I.check}${hc.num}</span>`;
+  if (kind === 'wrong') marks = `<span class="mark bad" style="left:21%;top:64%">${I.x}${hc.name.split(',')[0]}</span><span class="mark bad" style="left:20%;top:80%">${I.x}${hc.num}</span>`;
+  if (kind === 'unread') marks = `<span class="mark warn" style="left:24%;top:72%">Glare on the card</span>`;
+  const handCard = kind === 'slab'
+    ? `<div class="hand-card" style="width:58%"><div style="background:#e9ecef;border-radius:10px;padding:8px;box-shadow:inset 0 0 0 2px #c8ccd2"><div style="background:#c2272d;color:#fff;border-radius:4px;padding:6px 8px;font-size:11px;font-weight:700;display:flex;justify-content:space-between"><span>GRADED 10</span><span style="letter-spacing:1px">|||| ||| ||||</span></div><div style="margin-top:8px">${art(hc)}</div></div></div>`
+    : `<div class="hand-card">${art(hc)}</div>`;
+  return `<div class="view" aria-label="Camera view"><div class="table-grain"></div>${kind === 'slab' ? '' : '<div class="hand"></div>'}${handCard}<div class="reticle ${ret}"><i></i><i></i><i></i><i></i></div>${marks}<span class="live-pill">Camera on</span>${kind === 'slab' || kind === 'find' ? '' : `<div class="ghost-photo">${art(c)}<span>Your photo</span></div>`}</div>`;
+}
+function camPanel(kind, c) {
+  const who = BUYERS[c.env[0]].name;
+  if (kind === 'look') return `<div class="cam-panel" aria-live="polite"><div class="cp-say"><b>Looking for ${c.num}</b>Hold the card flat, face up, inside the corners.</div><div class="cp-sub">The camera reads the name and the number. Nothing to press.</div></div>`;
+  if (kind === 'match') return `<div class="cam-panel" aria-live="polite"><div class="checks"><div class="ok">${I.check}<span>Name: ${c.name}</span></div><div class="ok">${I.check}<span>Number: ${c.num}</span></div><div class="warn ${tg('new', 'Eye Check')}" style="border-radius:6px">${I.warn}<span>Check by eye: ${c.fin}, ${c.cond}</span></div></div><button class="primary" type="button" data-go="sold" id="sellBtn">Mark It Sold</button><div class="why">Goes in ${who}'s envelope.</div></div>`;
+  if (kind === 'wrong') {
+    const other = byId.corvin;
+    return `<div class="cam-panel" aria-live="polite"><div class="cp-say"><b>That is ${other.name}</b>It belongs at ${placeOf(other.copies[0])}.</div>${on('swap') ? `<button class="secondary ${tg('new', 'Pull This One')}" type="button" id="opt-swap" data-go="match">Pull ${other.name.split(',')[0]} Instead</button>` : ''}<div class="cp-sub">Or put it back and hold up ${c.name.split(',')[0]}.</div></div>`;
+  }
+  if (kind === 'unread') return `<div class="cam-panel" aria-live="polite"><div class="cp-say"><b>Can't read the number</b>Tilt the card out of the glare, or take it out of its sleeve.</div><button class="secondary" type="button" data-go="eye">Compare by Eye</button></div>`;
+  if (kind === 'offline') return `<div class="cam-panel" aria-live="polite"><div class="checks"><div class="ok">${I.check}<span>Name and number match</span></div><div class="warn">${I.warn}<span>Check by eye: ${c.fin}, ${c.cond}</span></div></div>
+    ${on('hold') ? `<button class="primary ${tg('new', 'Hold Until Back')}" type="button" id="opt-hold" data-go="offline">Set Aside, Save Later</button><div class="why">Saved as sold when the Mac answers. Keep the card apart till then.</div>` : `<button class="primary" type="button" aria-disabled="true" aria-describedby="offWhy">Mark It Sold</button><div class="why" id="offWhy">Can't save while the Mac is out of reach. <button type="button" data-go="match" style="color:var(--bn-stage-accent);font-weight:700;min-height:44px">Try Again</button></div>`}</div>`;
+  return '';
+}
+function cameraScreen(kind) {
+  const c = byId.vael;
+  const held = kind === 'wrong' ? byId.corvin : c;
+  const vk = kind === 'offline' ? 'match' : kind;
+  return `<div class="cam"><div class="navbar"><button class="nav-btn glass" type="button" data-go="card">Close</button><span class="nav-title">${c.name}</span><button class="nav-btn glass" type="button" data-go="eye">By Eye</button></div>
+    ${kind === 'offline' ? `<div class="banner" style="margin-top:4px">${I.wifiOff}<div class="b-text"><b>Can't reach the Mac</b></div><button type="button" data-go="match">Try Again</button></div>` : ''}
+    ${viewfinder(vk, c, held)}${camPanel(kind, c)}</div>`;
+}
+function eyeScreen(state) {
+  const c = byId.vael;
+  return `<div class="screen" style="background:var(--bn-bg)"><div class="navbar"><button class="nav-btn" type="button" data-go="camera">${I.back}Camera</button><span class="nav-title">Compare by Eye</span><span style="width:72px"></span></div>
+    <div class="scroll"><div class="card-body" style="padding-top:4px;padding-bottom:260px">${eyeBody(state)}</div></div>
+    <div class="dock no-tabs">${eyeActions(state)}</div></div>`;
+}
+function eyeBody() {
+  const c = byId.vael;
+  return `<div class="facts"><span class="f-name">${c.name}</span><span class="f-about"><span>${c.cond}</span><span>${c.fin}</span><span>${c.num}</span></span></div>${art(c, 'card-photo')}`;
+}
+/* Today's two steps: the first press becomes a sentence, and the sale arrives below it. */
+function eyeActions(state) {
+  return state === 'eye-ok'
+    ? `<p class="${tg('today', 'Pulled, Then Mark Sold')}" style="margin:0;min-height:52px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:var(--ts-title3);font-weight:600;color:var(--bn-ok)">${I.check}Pulled.</p><button class="primary" type="button" data-go="sold">Mark It Sold</button>`
+    : `<button class="secondary ${tg('today', 'Pull')}" type="button" data-go="eye-ok" style="min-height:52px">It Matches</button><div style="min-height:64px" class="why">Same card, same finish (${byId.vael.fin})? The sale shows here after.</div>`;
+}
+
+/* ---------------- Not in a box ---------------- */
+function shortScreen() {
+  const s = SHORT[0];
+  return `<div class="screen"><div class="navbar"><button class="nav-btn" type="button" data-go="pull">${I.back}Pull</button><span class="nav-title">Not in a Box</span><span style="width:72px"></span></div>
+    <div class="scroll"><div class="card-body" style="padding-top:8px">
+      <div class="facts"><span class="f-name">${s.name}</span><span class="f-about"><span>${s.cond}</span><span>${s.fin}</span><span>${s.num}</span></span></div>
+      <div class="env-line">${I.env} ${BUYERS[s.env].name} is waiting on it. No copy is in a box.</div>
+      <p class="${tg('today', 'Warning Only')}" style="margin:0;font-size:var(--ts-title3);color:var(--bn-ink-2);border-radius:8px">Ask for help finding it.</p>
+      ${on('short') ? `<div class="copies ${tg('new', 'Short Actions')}" id="opt-short">
+        <button class="copy-row" type="button" data-go="find-scan" style="width:100%;text-align:left;color:var(--bn-accent-hover)">${I.viewfinder}<span style="flex:1">Scan a Loose Copy</span>${I.chev}</button>
+        <button class="copy-row" type="button" data-go="find" style="width:100%;text-align:left;color:var(--bn-accent-hover)">${I.search}<span style="flex:1">Search Every Box</span>${I.chev}</button>
+        <button class="copy-row" type="button" data-go="pull" style="width:100%;text-align:left;color:var(--bn-warn)">${I.env}<span style="flex:1">Ship ${BUYERS[s.env].name.split(' ')[0]}'s Envelope Short</span>${I.chev}</button>
+      </div><div style="font-size:var(--ts-subhead);color:var(--bn-ink-3)">Ship Short tells the Mac, so the order shows as short there.</div>` : ''}
+    </div></div>${tabbar('pull')}</div>`;
+}
+
+/* ---------------- Find ---------------- */
+function findBody(state) {
+  const typed = state !== 'find-empty';
+  const c = byId.vael;
+  return `<h1 class="large-title">Find</h1>
+    <div class="search"><div class="sf" role="searchbox" aria-label="Card name or number">${I.search}${typed ? '<b>vael</b>' : 'Card name or number'}</div>${on('findscan') ? `<button class="icon-btn ${tg('new', 'Scan')}" type="button" id="opt-findscan" data-go="find-scan" aria-label="Find by camera">${I.viewfinder}</button>` : ''}</div>
+    <div class="list-wrap" style="padding-top:20px">
+      <div class="group"><div class="group-head"><span>${c.name}</span><span class="gh-right">2 copies</span></div><div class="group-body">
+        ${c.copies.map((cp, i) => `<button class="row" type="button" data-go="copy" ${state === 'copy' && i === 0 ? 'aria-current="true"' : ''}><div class="thumb">${art(c)}</div><div class="r-main"><span class="r-name" style="font-size:var(--ts-body)">${placeOf(cp)}</span><span class="r-sub">${c.cond}, ${c.fin}</span></div>${I.chev}</button>`).join('')}
+      </div></div>
+    </div>`;
+}
+function findScreen(state) {
+  return `<div class="screen"><div class="scroll">${findBody(state)}</div>${tabbar('find')}${state === 'copy' ? copySheet() : state === 'move' ? moveSheet() : ''}</div>`;
+}
+function findScanScreen() {
+  const c = byId.vael;
+  return `<div class="cam"><div class="navbar"><button class="nav-btn glass" type="button" data-go="find">Close</button><span class="nav-title">Find by Camera</span><span style="width:72px"></span></div>${viewfinder('match', c).replace('class="ghost-photo"', 'hidden class="ghost-photo"')}
+    <div class="cam-panel"><div class="cp-say"><b>${c.name}, ${c.num}</b>2 copies in Box 4.</div><button class="primary" type="button" data-go="find">Show Copies</button></div></div>`;
+}
+function copySheet() {
+  const c = byId.vael, cp = c.copies[0];
+  return `<div class="scrim"></div><div class="sheet" role="dialog" aria-label="One copy"><span class="grabber"></span>
+    <div class="navbar"><button class="nav-btn" type="button" data-go="find">Close</button><span class="nav-title">One Copy</span><span style="width:60px"></span></div>
+    <div class="sh-body"><div class="sh-row">${art(c)}<div class="facts"><span class="f-name" style="font-size:var(--ts-title3)">${c.name}</span><span style="font-size:var(--ts-subhead);color:var(--bn-ink-2)">${c.cond}, ${c.fin}, ${c.num}</span><span style="font-size:var(--ts-title3);font-weight:700;margin-top:6px">${placeOf(cp)}</span></div></div>
+    <button class="secondary" type="button" data-go="move">Move Copy</button>
+    <button class="primary ${tg('today', 'Mark Sold')}" type="button" data-go="find">Mark It Sold</button></div></div>`;
+}
+function moveSheet() {
+  return `<div class="scrim"></div><div class="sheet" role="dialog" aria-label="Move copy"><span class="grabber"></span>
+    <div class="navbar"><button class="nav-btn" type="button" data-go="copy">${I.back}Back</button><span class="nav-title">Move Copy</span><button class="nav-btn" type="button" data-go="find" style="font-weight:600">Done</button></div>
+    <div class="sh-body"><div class="kv"><div><span>From</span><span>Box 4, Section 1, Card 1</span></div><div><span>To box</span><span>Box 9 ${I.chev}</span></div><div><span>Section</span><span class="stepper" role="group" aria-label="Section"><button type="button" aria-label="Fewer">−</button><button type="button" aria-label="More">+</button></span><span style="min-width:20px;text-align:right">2</span></div></div>
+    <div class="why" style="text-align:left">It goes to the back of Section 2.</div></div></div>`;
+}
+
+/* ---------------- Slabs ---------------- */
+function slabList() {
+  return `<h1 class="large-title">Slabs</h1><div class="list-wrap" style="padding-top:12px"><div class="group"><div class="group-head"><span>Graded</span><span class="gh-right">${SLABS.length}</span></div><div class="group-body">
+    ${SLABS.map(s => `<div class="row" style="min-height:60px"><div class="r-main"><span class="r-name" style="font-size:var(--ts-body)">${s.name}</span><span class="r-sub">${s.grade}</span></div><span style="font-variant-numeric:tabular-nums;font-weight:600">${s.value}</span></div>`).join('')}
+  </div></div></div>`;
+}
+function slabsScreen(state) {
+  return `<div class="screen"><div class="scroll">${slabList()}</div>
+    <div class="dock"><button class="primary ${tg('new', 'Scan Cert')}" type="button" data-go="slab-scan">${I.viewfinder}Scan a Slab</button></div>${tabbar('slabs')}
+    ${state === 'slab-found' ? slabFound() : state === 'slab-miss' ? slabMiss() : ''}</div>`;
+}
+function slabScanScreen() {
+  return `<div class="cam"><div class="navbar"><button class="nav-btn glass" type="button" data-go="slabs">Cancel</button><span class="nav-title">Scan a Slab</span><span style="width:72px"></span></div>${viewfinder('slab', byId.vael)}
+    <div class="cam-panel"><div class="cp-say"><b>Point at the label</b>The code on the slab's label names the grader and the slab.</div><div class="cp-sub">Nothing to press.</div><button class="secondary" type="button" data-go="slab-found">Simulate: Label Read</button></div></div>`;
+}
+function slabFound() {
+  const c = byId.vael;
+  return `<div class="scrim"></div><div class="sheet" role="dialog" aria-label="Slab found"><span class="grabber"></span>
+    <div class="navbar"><button class="nav-btn" type="button" data-go="slabs">Cancel</button><span class="nav-title">Add Slab</span><span style="width:60px"></span></div>
+    <div class="sh-body"><div class="sh-row">${art(c)}<div class="facts"><span class="f-name" style="font-size:var(--ts-title3)">${c.name}</span><span style="font-size:var(--ts-title2);font-weight:700">PSA 10</span><span style="font-size:var(--ts-subhead);color:var(--bn-ink-2)">Card Ladder found it from the label.</span></div></div>
+    <button class="primary" type="button" data-go="slabs">Add Slab</button></div></div>`;
+}
+function slabMiss() {
+  return `<div class="scrim"></div><div class="sheet" role="dialog" aria-label="Slab not found"><span class="grabber"></span>
+    <div class="navbar"><button class="nav-btn" type="button" data-go="slabs">Cancel</button><span class="nav-title">Add Slab</span><span style="width:60px"></span></div>
+    <div class="sh-body"><div class="cp-say" style="font-size:var(--ts-title3)">Card Ladder has no slab with that cert number for PSA.</div>
+    <button class="secondary" type="button" data-go="slab-scan">Scan Again</button><button class="secondary" type="button" data-go="slabs">Type the Cert Number</button></div></div>`;
+}
+
+/* ---------------- Today (read only) ---------------- */
+function todayBody(wide) {
+  const k = counts('pull');
+  return `<h1 class="large-title">Today</h1><div class="glance">
+    <div class="tile warn"><span class="t-head">Needs you</span><span class="t-note" style="color:var(--bn-ink)">${k.short} cards are not in a box.</span><button class="secondary" type="button" data-go="short" style="margin-top:8px">Show Them</button></div>
+    <button class="tile" type="button" data-go="pull" style="text-align:left"><span class="t-head">Pull</span><span class="t-fig ${tg('new', 'Same Count')}" style="border-radius:6px">${k.left} cards left</span><span class="t-note">For ${k.envs} envelopes</span></button>
+    ${wide ? "" : `<div class="tile"><span class="t-head">Shipping</span><div class="lane"><span>Letter, stamp</span><span>3 envelopes</span></div><div class="lane"><span>Tracked</span><span>1 envelope</span></div></div>`}
+    ${wide ? "" : `<div class="tile"><span class="t-head">Sales this week</span><span class="t-fig">$412.50</span><span class="t-note">31 cards</span></div>`}
+  </div>`;
+}
+function todayScreen() { return `<div class="screen"><div class="scroll">${todayBody()}</div>${tabbar('today')}</div>`; }
+
+/* ---------------- Folded: one layout per state ---------------- */
+function folded(state) {
+  const stage = ['camera', 'match', 'wrong', 'unread', 'offline-match', 'find-scan', 'slab-scan'].includes(state);
+  let body;
+  switch (state) {
+    case 'pull': case 'envelopes': case 'loading': case 'empty': case 'offline': body = pullScreen(state, { compact: true }); break;
+    case 'card': case 'sold': body = cardScreen(state); break;
+    case 'camera': body = cameraScreen('look'); break;
+    case 'match': body = cameraScreen('match'); break;
+    case 'wrong': body = cameraScreen('wrong'); break;
+    case 'unread': body = cameraScreen('unread'); break;
+    case 'offline-match': body = cameraScreen('offline'); break;
+    case 'eye': case 'eye-ok': body = eyeScreen(state); break;
+    case 'short': body = shortScreen(); break;
+    case 'find': case 'copy': case 'move': body = findScreen(state); break;
+    case 'find-scan': body = findScanScreen(); break;
+    case 'slabs': case 'slab-found': case 'slab-miss': body = slabsScreen(state); break;
+    case 'slab-scan': body = slabScanScreen(); break;
+    case 'today': body = todayScreen(); break;
+    default: body = pullScreen('pull');
+  }
+  return sb(stage) + body + home(stage);
+}
+
+/* ---------------- Unfolded: list beside detail; the photo beside the live camera ---------------- */
+function uDetailCard(state) {
+  const c = byId.vael;
+  const doneN = state === 'sold' ? 1 : 0;
+  const cp = c.copies[doneN];
+  const kind = { camera: 'look', match: 'match', wrong: 'wrong', unread: 'unread', 'offline-match': 'offline' }[state] || null;
+  const head = `<div class="d-head"><div class="place"><span class="p-box">${cp.box}</span><span class="p-label">Section ${cp.sec}, Card ${cp.card}</span></div><div class="facts"><span class="f-name" style="font-size:var(--ts-title3)">${c.name}</span><span style="color:var(--bn-ink-2);font-size:var(--ts-subhead)">${c.cond}, ${c.fin}, ${c.num}</span></div></div>`;
+  if (state.startsWith('eye')) {
+    return `<div class="navbar" style="padding:0"><button class="nav-btn" type="button" data-go="camera">${I.back}Camera</button><span class="nav-title">Compare by Eye</span><span style="width:72px"></span></div>${head}
+      <div class="pair" style="align-items:end;grid-template-columns:320px 1fr"><div>${art(c)}<span>Your photo</span></div><div style="gap:8px">${eyeActions(state)}</div></div>`;
+  }
+  if (!kind) {
+    return `${state === 'offline' ? banner(false).replace('class="banner"', 'class="banner" style="margin:0"') : ''}${head}${ruler(cp).replace('class="ruler', 'style="margin:0" class="ruler')}
+      <div class="env-line">${I.env} Pull <b>${c.copies.length}</b>. This one goes in <b>${BUYERS[c.env[doneN]].name}</b>'s envelope.</div>
+      ${copiesList(c, doneN)}
+      <div style="width:320px;align-self:center">${art(c)}</div>
+      <div style="position:sticky;bottom:0;display:flex;flex-direction:column;gap:8px">${state === 'sold' ? receipt() : ''}<button class="primary ${tg('new', 'Check Card')}" type="button" data-go="camera">${I.camera}Check Card</button></div>`;
+  }
+  const held = kind === 'wrong' ? byId.corvin : c;
+  const vk = kind === 'offline' ? 'match' : kind;
+  return `${kind === 'offline' ? banner(false).replace('class="banner"', 'class="banner" style="margin:0"') : ''}${head}
+    <div class="pair" style="flex:1"><div>${art(c)}<span>Your photo</span></div><div>${viewfinder(vk, c, held).replace('class="ghost-photo"', 'hidden class="ghost-photo"')}<span>Camera</span></div></div>
+    ${camPanel(kind, c).replace('<div class="cam-panel"', '<div class="cam-panel" style="min-height:0"')}
+    <div style="display:flex;justify-content:flex-end"><button class="nav-btn" type="button" data-go="card">Close Camera</button></div>`;
+}
+function unfolded(state) {
+  let left, right;
+  const pullStates = ['pull', 'envelopes', 'card', 'camera', 'match', 'wrong', 'unread', 'eye', 'eye-ok', 'sold', 'offline', 'offline-match'];
+  if (pullStates.includes(state)) {
+    const listState = state === 'envelopes' ? 'envelopes' : state === 'offline' || state === 'offline-match' ? 'pull' : state;
+    left = `<div class="scroll">${pullHeader(listState)}<div class="list-wrap">${pullList(listState === 'sold' ? 'sold' : listState, 'vael')}</div></div>${tabbar('pull')}`;
+    right = `<div class="detail">${uDetailCard(state)}</div>`;
+  } else if (state === 'loading' || state === 'empty') {
+    left = pullScreen(state).replace('<div class="screen">', '<div class="screen" style="position:relative;padding:0">');
+    right = state === 'loading' ? `<div class="detail"><div class="skel" style="height:40px;width:60%"></div><div class="pair"><div class="skel" style="aspect-ratio:63/88"></div><div class="skel"></div></div></div>` : `<div class="empty" style="padding-bottom:40px">A card you pick shows here.</div>`;
+  } else if (state === 'short') {
+    left = `<div class="scroll">${pullHeader('pull')}<div class="list-wrap">${pullList('pull')}</div></div>${tabbar('pull')}`;
+    right = shortScreen().replace('<div class="screen">', '<div class="screen" style="position:relative;padding:0;height:100%">').replace(tabbar('pull'), '').replace(/<div class="navbar">.*?<\/div>/s, '');
+  } else if (['find', 'copy', 'move', 'find-scan'].includes(state)) {
+    left = `<div class="scroll">${findBody(state === 'find-scan' ? 'find' : state)}</div>${tabbar('find')}`;
+    const c = byId.vael;
+    right = state === 'find-scan'
+      ? `<div class="detail"><div class="pair" style="flex:1"><div>${viewfinder('match', c).replace('class="ghost-photo"', 'hidden class="ghost-photo"')}<span>Camera</span></div><div><div class="cam-panel"><div class="cp-say"><b>${c.name}, ${c.num}</b>2 copies in Box 4.</div><button class="primary" type="button" data-go="find">Show Copies</button></div></div></div></div>`
+      : `<div class="detail" style="position:relative">${state === 'move' ? moveSheet().replace('<div class="scrim"></div>', '').replace('class="sheet"', 'class="sheet" style="position:static;border-radius:20px;box-shadow:none"') : copySheet().replace('<div class="scrim"></div>', '').replace('class="sheet"', 'class="sheet" style="position:static;border-radius:20px;box-shadow:none"')}</div>`;
+  } else if (['slabs', 'slab-scan', 'slab-found', 'slab-miss'].includes(state)) {
+    left = `<div class="scroll">${slabList()}</div>${tabbar('slabs')}`;
+    const inner = state === 'slab-found' ? slabFound() : state === 'slab-miss' ? slabMiss() : '';
+    right = state === 'slab-scan'
+      ? `<div class="detail"><div class="pair" style="flex:1"><div>${viewfinder('slab', byId.vael)}<span>Camera</span></div><div><div class="cam-panel"><div class="cp-say"><b>Point at the label</b>The code on the label names the grader and the slab.</div><button class="secondary" type="button" data-go="slab-found">Simulate: Label Read</button></div><button class="nav-btn" type="button" data-go="slabs">Cancel</button></div></div></div>`
+      : inner ? `<div class="detail">${inner.replace('<div class="scrim"></div>', '').replace('class="sheet"', 'class="sheet" style="position:static;border-radius:20px;box-shadow:none"')}</div>`
+      : `<div class="detail" style="justify-content:center;align-items:center;gap:16px"><span style="color:var(--bn-ink-2);font-size:var(--ts-title3);text-align:center">Scan a slab's label to add it.</span><button class="primary ${tg('new', 'Scan Cert')}" type="button" data-go="slab-scan" style="max-width:320px">${I.viewfinder}Scan a Slab</button></div>`;
+  } else {
+    left = `<div class="scroll">${todayBody(true)}</div>${tabbar('today')}`;
+    right = `<div class="detail"><div class="tile"><span class="t-head">Shipping lanes</span><div class="lane"><span>Letter, stamp</span><span>3 envelopes</span></div><div class="lane"><span>Tracked</span><span>1 envelope</span></div></div><div class="tile"><span class="t-head">Sales</span><div class="lane"><span>Today</span><span>$58.25</span></div><div class="lane"><span>This week</span><span>$412.50</span></div></div><div class="why" style="text-align:left">Read only. Pricing and sending stay on the Mac.</div></div>`;
+  }
+  return sb(false) + `<div class="split${state.startsWith('eye') ? ' full' : ''}"><div class="pane">${left}</div><div class="pane">${right}</div></div>` + home(false);
+}
+
+/* ---------------- render and wiring ---------------- */
+const ALL = STATES.flatMap(g => g[1].map(x => x[0]));
+function render() {
+  const p = params();
+  let s = p.get('s') || 'pull';
+  if (!ALL.includes(s)) s = 'pull';
+  hidden = new Set((p.get('hide') || '').split(',').filter(Boolean));
+  // A hidden option's own state falls back to the state it extends.
+  const opt = OPTIONS.find(o => o.state === s && hidden.has(o.key));
+  if (opt) s = { envelopes: 'pull', wrong: 'camera', short: 'short', 'offline-match': 'offline-match', 'find-scan': 'find' }[s];
+  const t = p.get('t');
+  if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); else document.documentElement.removeAttribute('data-theme');
+  document.querySelectorAll('[data-theme-set]').forEach(b => b.setAttribute('aria-pressed', String((t || 'auto') === b.dataset.themeSet)));
+  document.body.classList.toggle('no-tags', p.get('tags') === 'off');
+  document.getElementById('tagToggle').setAttribute('aria-pressed', String(p.get('tags') !== 'off'));
+  document.getElementById('folded').innerHTML = folded(s);
+  document.getElementById('unfolded').innerHTML = unfolded(s);
+  document.getElementById('stateNav').innerHTML = STATES.map(([g, items]) => `<div class="states-row"><strong>${g}</strong>${items.map(([id, label]) => { const q = new URLSearchParams(p); q.set('s', id); return `<a href="#${q}" ${id === s ? 'aria-current="true"' : ''}>${label}</a>`; }).join('')}</div>`).join('');
+  document.getElementById('optBar').innerHTML = OPTIONS.map(o => { const q = new URLSearchParams(p); q.set('s', o.state); return `<span class="opt${hidden.has(o.key) ? ' is-hidden' : ''}"><a href="#${q}" style="color:inherit;text-decoration:none">${o.label}</a><button type="button" data-hide="${o.key}">${hidden.has(o.key) ? 'Show' : 'Hide'}</button></span>`; }).join('');
+}
+document.addEventListener('click', e => {
+  const g = e.target.closest('[data-go]');
+  if (g && g.closest('.device')) { e.preventDefault(); if (g.getAttribute('aria-disabled') !== 'true') go(g.dataset.go); return; }
+  const th = e.target.closest('[data-theme-set]');
+  if (th) { setParam('t', th.dataset.themeSet === 'auto' ? null : th.dataset.themeSet); return; }
+  if (e.target.closest('#tagToggle')) { setParam('tags', params().get('tags') === 'off' ? null : 'off'); return; }
+  const h = e.target.closest('[data-hide]');
+  if (h) { const k = h.dataset.hide; hidden.has(k) ? hidden.delete(k) : hidden.add(k); setParam('hide', hidden.size ? [...hidden].join(',') : null); }
+});
+window.addEventListener('hashchange', () => { cur = new URLSearchParams(location.hash.replace(/^#/, '')); render(); });
+document.getElementById('stateNav').addEventListener('click', e => { const a = e.target.closest('a[href^="#"]'); if (a) { e.preventDefault(); commit(new URLSearchParams(a.getAttribute('href').slice(1))); } });
+document.getElementById('optBar').addEventListener('click', e => { const a = e.target.closest('a[href^="#"]'); if (a) { e.preventDefault(); commit(new URLSearchParams(a.getAttribute('href').slice(1))); } });
+render();
+})();
+</script>
+</body>
+</html>
