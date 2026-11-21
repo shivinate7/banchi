@@ -924,6 +924,10 @@
   .press .l2 { font-size: var(--bn-fs-xs); font-weight: 500; opacity: 0.86; }
   .press svg { width: 18px; height: 18px; }
   .press[aria-busy='true'] { cursor: progress; }
+  /* Off, the press keeps its box and its reason stays legible: a quiet ground, not a faded accent (ux-control-earns-place). */
+  .press[aria-disabled='true'] { opacity: 1; color: var(--bn-ink-2); background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-line); cursor: default; }
+  .press[aria-disabled='true']:hover { background: var(--bn-surface-2); }
+  .press[aria-disabled='true'] .l2 { opacity: 1; color: var(--bn-ink-3); }
   .frame[data-w='820'] .sl { padding: 0 var(--bn-2) 0 var(--bn-4); gap: var(--bn-3); }
   .frame[data-w='820'] .press { width: 252px; padding: 0 var(--bn-3); }
   .frame[data-w='820'] .press .l1 { font-size: var(--bn-fs-md); }
@@ -1093,7 +1097,7 @@
 </style>
 </head>
 <body>
-<div class="mock-ribbon" role="note"><span class="bn-pill bn-pill-warn">Sample</span>No figure, card or name on this page is real. Pricing (route #/pricing), one send line.<span class="kind">Designer kind: informed, pricing-informed-1</span></div>
+<div class="mock-ribbon" role="note"><span class="bn-pill" style="background:var(--bn-surface);color:var(--bn-pill-ink-warn)">Sample</span>No figure, card or name on this page is real. Pricing (route #/pricing), one send line.<span class="kind">Designer kind: informed, pricing-informed-1</span></div>
 
 <section class="walk" aria-label="Mockup controls">
   <p class="walk-lede">The idea: every state the send bar can be in fills one line of one fixed height. The press keeps one box from its first paint, and the five tallies, the refresh block, the movers, the two "no read" lines, the rule and the value line fold into that line, a rule chip and a status chip. Row 1 sits under them. Every press below works; each state has its own link.</p>
@@ -1267,7 +1271,7 @@ function ledgerHTML(f, w) {
     ${cell('down', 'fall', c('down'), `down ${money(Math.abs(f.down.usd))} in all`, !c('down'))}
     ${cell('typed', 'typed', c('typed'), `listing for ${money(f.typed.usd)}`, !c('typed'))}
   </div>
-  <button class="bn-btn bn-btn-ghost goes" type="button" data-pop="goes" aria-expanded="${S.pop === 'goes'}" aria-label="What goes">${svg('chev')}<span class="word">What goes</span></button>`
+  <button class="bn-btn bn-btn-ghost goes" type="button" data-pop="goes" aria-expanded="${S.pop === 'goes'}" aria-label="What goes" title="What goes">${svg('chev')}<span class="word">What goes</span></button>`
 }
 function waitLedger() {
   const c = () => `<div class="lg"><span class="lg-n"><span class="wait" style="width:28px;height:18px"></span><span class="wait" style="width:36px;height:10px"></span></span><span class="lg-m"><span class="wait" style="width:84px;height:10px"></span></span></div>`
