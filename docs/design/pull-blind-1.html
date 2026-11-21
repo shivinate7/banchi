@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Order pull concepts</title>
+<style>
+/* Tokens. House step 4px (--space-N = N x 4px), radius 8px, colours by role. */
+:root {
+  color-scheme: light;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+  --radius: 8px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+
+  --c-page: #E4E8EC;
+  --c-surface: #F7F9FA;
+  --c-raised: #FFFFFF;
+  --c-sunk: #ECEFF2;
+  --c-ink: #17202A;
+  --c-ink-2: #4B5664;
+  --c-line: #CDD4DB;
+  --c-line-strong: #8E99A6;
+  --c-focus: #1C5FD0;
+  --c-hi: #FFD94A;        /* the place to reach: a marker-pen highlight */
+  --c-hi-ink: #1D1A05;
+  --c-hi-edge: #C9A400;
+  --c-go: #136B48;        /* put in envelope */
+  --c-go-ink: #FFFFFF;
+  --c-go-soft: #DDF0E7;
+  --c-short: #B2391B;     /* short: a card the owner must hear about */
+  --c-short-soft: #FBE6DF;
+  --c-box: #FFFFFF;
+  --c-box-alt: #F1F3F5;
+  --c-scrim: rgba(23, 32, 42, 0.45);
+  --c-on-env: #FFFFFF;
+  --env-1: #2F67D6; --env-2: #7A3FD0; --env-3: #B35A00; --env-4: #0D8460;
+  --env-5: #BE2E68; --env-6: #0D7A8C; --env-7: #85563A; --env-8: #535E6A;
+  --shadow-sheet: 0 12px 40px rgba(23, 32, 42, 0.22);
+
+  --frame-w: 1440px;
+  --frame-h: 900px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --c-page: #0B0F13; --c-surface: #131920; --c-raised: #1B232C; --c-sunk: #10151B;
+    --c-ink: #E7ECF1; --c-ink-2: #A4B0BD; --c-line: #2D3945; --c-line-strong: #5E6C7A;
+    --c-focus: #7FB0FF; --c-hi: #F2CB3A; --c-hi-ink: #1D1A05; --c-hi-edge: #F7DC74;
+    --c-go: #33B07F; --c-go-ink: #06130D; --c-go-soft: #14301F;
+    --c-short: #FF8D6E; --c-short-soft: #3A1E16;
+    --c-box: #1B232C; --c-box-alt: #212B35; --c-scrim: rgba(0, 0, 0, 0.6);
+    --shadow-sheet: 0 12px 40px rgba(0, 0, 0, 0.5);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --c-page: #0B0F13; --c-surface: #131920; --c-raised: #1B232C; --c-sunk: #10151B;
+  --c-ink: #E7ECF1; --c-ink-2: #A4B0BD; --c-line: #2D3945; --c-line-strong: #5E6C7A;
+  --c-focus: #7FB0FF; --c-hi: #F2CB3A; --c-hi-ink: #1D1A05; --c-hi-edge: #F7DC74;
+  --c-go: #33B07F; --c-go-ink: #06130D; --c-go-soft: #14301F;
+  --c-short: #FF8D6E; --c-short-soft: #3A1E16;
+  --c-box: #1B232C; --c-box-alt: #212B35; --c-scrim: rgba(0, 0, 0, 0.6);
+  --shadow-sheet: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--c-page); color: var(--c-ink); font-family: var(--font); font-size: 1rem; line-height: 1.4; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--c-focus); outline-offset: 2px; }
+h1, h2, h3, p, ul, ol, figure { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+
+/* ---------- Mockup chrome (not part of the screen) ---------- */
+.mock-chrome { position: sticky; top: 0; z-index: 20; background: var(--c-surface); border-bottom: 1px solid var(--c-line); }
+.sample { background: var(--c-hi); color: var(--c-hi-ink); padding: var(--space-2) var(--space-4); font-size: 0.9375rem; }
+.mock-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-6); padding: var(--space-3) var(--space-4); }
+.mock-group { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.mock-k { font-size: 0.8125rem; color: var(--c-ink-2); }
+.kind { font-size: 0.875rem; font-weight: 600; }
+.seg { display: inline-flex; border: 1px solid var(--c-line-strong); border-radius: var(--radius); overflow: hidden; }
+.seg button { border: 0; background: var(--c-raised); padding: var(--space-1) var(--space-3); min-height: 2rem; cursor: pointer; font-size: 0.875rem; }
+.seg button + button { border-inline-start: 1px solid var(--c-line); }
+.seg button[aria-pressed="true"] { background: var(--c-ink); color: var(--c-surface); }
+.opt { display: inline-flex; align-items: stretch; border: 1px solid var(--c-line-strong); border-radius: var(--radius); overflow: hidden; }
+.opt button { border: 0; background: var(--c-raised); cursor: pointer; padding: var(--space-1) var(--space-3); min-height: 2.25rem; }
+.opt .opt-name { font-weight: 600; }
+.opt .opt-hide { border-inline-start: 1px solid var(--c-line); font-size: 0.8125rem; color: var(--c-ink-2); }
+.opt[data-on="true"] .opt-name { background: var(--c-ink); color: var(--c-surface); }
+.mock-select { font: inherit; font-size: 0.875rem; min-height: 2rem; border-radius: var(--radius); border: 1px solid var(--c-line-strong); background: var(--c-raised); color: var(--c-ink); padding: 0 var(--space-2); }
+.mock-btn { border: 1px solid var(--c-line-strong); background: var(--c-raised); border-radius: var(--radius); min-height: 2rem; padding: 0 var(--space-3); cursor: pointer; font-size: 0.875rem; }
+.mock-caption { padding: 0 var(--space-4) var(--space-3); font-size: 0.9375rem; color: var(--c-ink-2); max-width: 70rem; }
+.stage { padding: var(--space-6) var(--space-4) var(--space-16); }
+.device-wrap { margin-inline: auto; position: relative; }
+.device { position: absolute; top: 0; left: 0; transform-origin: 0 0; width: var(--frame-w); height: var(--frame-h);
+  background: var(--c-surface); border: 1px solid var(--c-line-strong); border-radius: var(--radius); overflow: hidden;
+  container-type: inline-size; container-name: app; }
+
+/* "New:" tags. Dashed, so they read as notes on the drawing. */
+.labels-on [data-new] { outline: 2px dashed var(--c-ink-2); outline-offset: 3px; position: relative; }
+.labels-on [data-new]::before { content: "New: " attr(data-new); position: absolute; top: -0.75rem; left: var(--space-2); z-index: 4;
+  font-size: 0.6875rem; font-weight: 600; line-height: 1; padding: 2px var(--space-1); background: var(--c-raised); color: var(--c-ink-2);
+  border: 1px dashed var(--c-ink-2); border-radius: 4px; white-space: nowrap; pointer-events: none; }
+
+/* ---------- Shared screen parts ---------- */
+.app { height: 100%; display: flex; flex-direction: column; position: relative; }
+.app-top { display: flex; align-items: center; gap: var(--space-6); padding: var(--space-4) var(--space-6); background: var(--c-raised); border-bottom: 1px solid var(--c-line); min-height: 4.5rem; }
+.app-title { font-size: 1.25rem; font-weight: 700; }
+.app-sub { font-size: 0.9375rem; color: var(--c-ink-2); }
+.progress { margin-inline-start: auto; display: flex; align-items: center; gap: var(--space-3); font-size: 0.9375rem; }
+.meter { width: 10rem; height: 0.625rem; background: var(--c-sunk); border: 1px solid var(--c-line-strong); border-radius: 999px; overflow: hidden; }
+.meter > i { display: block; height: 100%; background: var(--c-go); }
+.short-count { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--c-short); font-weight: 600; border: 2px dashed var(--c-short); border-radius: var(--radius); padding: 0 var(--space-2); }
+.app-body { flex: 1; min-height: 0; overflow: auto; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: 3rem; padding: 0 var(--space-5);
+  border-radius: var(--radius); border: 2px solid var(--c-line-strong); background: var(--c-raised); color: var(--c-ink);
+  font-weight: 600; font-size: 1.0625rem; cursor: pointer; text-align: center; }
+.btn:hover { border-color: var(--c-ink); }
+.btn-go { background: var(--c-go); color: var(--c-go-ink); border-color: var(--c-go); }
+.btn-go:hover { border-color: var(--c-ink); }
+.btn-big { min-height: 4.5rem; font-size: 1.375rem; padding: 0 var(--space-8); }
+.btn-quiet { border-color: transparent; background: transparent; text-decoration: underline; min-height: 3rem; padding: 0 var(--space-3); }
+.btn svg { width: 1.375rem; height: 1.375rem; flex: none; }
+
+.stack { display: flex; flex-direction: column; gap: var(--space-3); }
+.stack-4 { display: flex; flex-direction: column; gap: var(--space-4); }
+.stack-6 { display: flex; flex-direction: column; gap: var(--space-6); }
+.cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.cluster-3 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.h2 { font-size: 1.125rem; font-weight: 700; }
+.muted { color: var(--c-ink-2); }
+.small { font-size: 0.875rem; }
+
+/* The place: Box / Tab / Card on a highlighter band. */
+.loc { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-4) var(--space-8); background: var(--c-hi); color: var(--c-hi-ink);
+  border: 2px solid var(--c-hi-edge); border-radius: var(--radius); padding: var(--space-4) var(--space-6); }
+.loc-part { display: flex; flex-direction: column; gap: var(--space-1); }
+.loc-k { font-size: 1rem; font-weight: 600; }
+.loc-v { font-size: 4.5rem; font-weight: 800; line-height: 0.9; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.loc-md .loc-v { font-size: 3rem; }
+.loc-md { padding: var(--space-3) var(--space-5); gap: var(--space-3) var(--space-6); }
+.loc-sm { padding: var(--space-2) var(--space-3); gap: var(--space-2) var(--space-4); }
+.loc-sm .loc-v { font-size: 1.75rem; }
+.loc-sm .loc-k { font-size: 0.8125rem; }
+.loc .depth { flex: 1 1 14rem; min-width: 12rem; }
+.loc-back { flex-basis: 100%; font-weight: 700; display: flex; align-items: center; gap: var(--space-2); }
+.depth { display: flex; flex-direction: column; gap: var(--space-2); font-size: 0.9375rem; }
+.depth-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--space-2); font-size: 0.8125rem; font-weight: 600; }
+.depth-bar { position: relative; height: 0.875rem; border: 2px solid currentColor; border-radius: 999px; }
+.depth-bar i { position: absolute; top: 50%; width: 1.25rem; height: 1.25rem; transform: translate(-50%, -50%); background: currentColor; border: 3px solid var(--c-hi); border-radius: 50%; }
+
+/* A photo of the exact copy. The card art is drawn, never a real card. */
+.photo { container-type: inline-size; width: var(--pw, 20rem); aspect-ratio: 63 / 88; flex: none; background: #D9DDE1; border-radius: var(--radius);
+  padding: 5%; display: grid; place-items: center; border: 1px solid var(--c-line); position: relative; }
+button.photo { cursor: zoom-in; }
+.tcg { width: 100%; height: 100%; border-radius: 4.5cqi; background: hsl(var(--h) 38% 42%); padding: 4cqi; display: flex; flex-direction: column; gap: 3cqi;
+  transform: rotate(var(--rot, 0deg)); color: #111; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.tcg-name { background: hsl(var(--h) 45% 88%); border-radius: 2cqi; padding: 1.5cqi 3cqi; font-weight: 700; font-size: 8.5cqi; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: start; }
+.tcg-art { flex: 1; border-radius: 2cqi; background: linear-gradient(160deg, hsl(var(--h) 70% 82%), hsl(calc(var(--h) + 40) 55% 62%)); display: grid; place-items: center; }
+.tcg-art svg { width: 52%; height: auto; color: hsl(var(--h) 55% 28%); }
+.tcg-type { background: hsl(var(--h) 45% 88%); border-radius: 2cqi; padding: 1cqi 3cqi; font-size: 6cqi; text-align: start; }
+.tcg-text { height: 18%; background: hsl(var(--h) 30% 92%); border-radius: 2cqi; }
+.tcg-foot { font-size: 5.5cqi; color: #f4f4f4; display: flex; justify-content: space-between; }
+.nick { position: absolute; top: -1cqi; right: 10cqi; width: 9cqi; height: 5cqi; background: #D9DDE1; border-radius: 0 0 50% 50%; }
+.photo-xs { --pw: 3.25rem; padding: 4%; }
+.photo-sm { --pw: 6rem; }
+.photo-md { --pw: 12rem; }
+.photo-lg { --pw: 20rem; }
+
+/* Envelope chip: number disc in the envelope's colour, then the name. */
+.env { display: inline-flex; align-items: center; gap: var(--space-2); font-weight: 600; }
+.env-n { width: 2rem; height: 2rem; border-radius: 50%; background: var(--env); color: var(--c-on-env); display: inline-grid; place-items: center; font-weight: 800; font-size: 0.9375rem; flex: none; font-variant-numeric: tabular-nums; }
+.env-big .env-n { width: 4rem; height: 4rem; font-size: 1.75rem; }
+.env-big { font-size: 2rem; gap: var(--space-4); }
+.goes { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--env); border-inline-start-width: 8px; border-radius: var(--radius); background: var(--c-raised); }
+.goes .env { font-size: 1.25rem; }
+
+.take { font-size: 1.375rem; font-weight: 700; }
+.card-name { font-size: 1.75rem; font-weight: 750; line-height: 1.15; }
+.card-meta { color: var(--c-ink-2); }
+
+/* Receipt that shows at the press. */
+.receipt { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius); border: 2px solid var(--c-go); background: var(--c-go-soft); font-weight: 600; min-height: 3.5rem; }
+.receipt.is-short { border-color: var(--c-short); border-style: dashed; background: var(--c-short-soft); }
+.receipt-t { display: flex; align-items: flex-start; gap: var(--space-2); }
+
+/* Pips: one per owed card. Filled = in, hollow = still to take, cross = short. */
+.pips { display: inline-flex; flex-wrap: wrap; gap: 3px; }
+.pip { width: 0.75rem; height: 0.75rem; border: 2px solid var(--c-ink-2); border-radius: 2px; }
+.pip.in { background: var(--c-go); border-color: var(--c-go); }
+.pip.short { border-color: var(--c-short); border-style: dashed; position: relative; }
+.pip.short::after { content: ""; position: absolute; inset: 1px; background: linear-gradient(45deg, transparent 42%, var(--c-short) 42% 58%, transparent 58%); }
+
+/* Owner list */
+.owner { border: 2px dashed var(--c-short); border-radius: var(--radius); padding: var(--space-4); background: var(--c-raised); }
+.owner-row { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-3); align-items: start; padding-block: var(--space-2); border-top: 1px solid var(--c-line); }
+.owner-row:first-child { border-top: 0; }
+.wellbox { border: 2px solid var(--c-go); background: var(--c-go-soft); border-radius: var(--radius); padding: var(--space-6); font-size: 1.75rem; font-weight: 750; display: flex; align-items: center; gap: var(--space-3); }
+.wellbox svg { width: 2rem; height: 2rem; color: var(--c-go); }
+
+.envgrid { display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr)); }
+.envtile { display: flex; align-items: center; gap: var(--space-3); min-height: 3.25rem; padding: var(--space-2) var(--space-3); border: 2px solid var(--c-line); border-radius: var(--radius); background: var(--c-raised); text-align: start; }
+.envtile .pips, .envtile .frac { margin-inline-start: auto; }
+.envtile.full { border-color: var(--c-go); }
+.envtile.short { border-color: var(--c-short); border-style: dashed; }
+button.envtile { cursor: pointer; }
+.frac { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 0.9375rem; }
+
+/* Zoom: the photo, as large as the frame allows. */
+.overlay { position: absolute; inset: 0; background: var(--c-scrim); z-index: 30; display: grid; place-items: center; padding: var(--space-8); }
+.zoom { background: var(--c-raised); border-radius: var(--radius); padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-4); align-items: center; max-height: 100%; border: 1px solid var(--c-line-strong); }
+.zoom .photo { --pw: 18rem; }
+.zoom .zoom-acts { display: flex; flex-direction: column; gap: var(--space-3); width: 100%; }
+.zoom .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+
+/* State screens */
+.state { margin: auto; max-width: 34rem; padding: var(--space-12) var(--space-6); display: flex; flex-direction: column; gap: var(--space-4); align-items: flex-start; }
+.state-title { font-size: 1.5rem; font-weight: 700; }
+details.why summary { cursor: pointer; color: var(--c-ink-2); padding-block: var(--space-2); }
+details.why pre { background: var(--c-sunk); border-radius: var(--radius); padding: var(--space-3); font-size: 0.8125rem; white-space: pre-wrap; margin: 0; }
+.skel { background: var(--c-sunk); border-radius: var(--radius); border: 1px solid var(--c-line); }
+.skel-wrap { padding: var(--space-6); display: grid; gap: var(--space-4); }
+
+.icon { width: 1.25rem; height: 1.25rem; flex: none; }
+
+/* ---------- Concept: Shelf walk ---------- */
+.walk { display: grid; grid-template-columns: minmax(0, 1fr) 24rem; height: 100%; min-height: 0; }
+.walk-main { padding: var(--space-6); overflow: auto; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto 1fr;
+  grid-template-areas: "loc loc" "photo info" "photo acts"; gap: var(--space-5) var(--space-8); align-content: start; align-items: start; }
+.walk-main > .loc { grid-area: loc; }
+.walk-main > .photo { grid-area: photo; }
+.walk-info { grid-area: info; display: flex; flex-direction: column; gap: var(--space-4); }
+.walk-actions { grid-area: acts; }
+.walk-actions { display: flex; flex-direction: column; gap: var(--space-3); }
+.walk-actions .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.walk-side { border-inline-start: 1px solid var(--c-line); background: var(--c-sunk); overflow: auto; padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-6); }
+.nextlist { display: flex; flex-direction: column; gap: var(--space-4); }
+.nextbox { display: flex; flex-direction: column; gap: var(--space-1); }
+.nextbox-h { font-weight: 700; font-size: 0.9375rem; display: flex; align-items: center; gap: var(--space-2); padding-block-end: var(--space-1); }
+.nextrow { display: grid; grid-template-columns: 3.75rem 1fr auto; gap: var(--space-3); align-items: center; padding: var(--space-2); border-radius: var(--radius); background: var(--c-raised); border: 1px solid var(--c-line); }
+.nextrow .spot { font-weight: 800; font-variant-numeric: tabular-nums; font-size: 1.0625rem; }
+.nextrow .env-n { width: 1.75rem; height: 1.75rem; font-size: 0.8125rem; }
+.prep { padding: var(--space-8); display: flex; flex-direction: column; gap: var(--space-6); max-width: 64rem; }
+.prep-title { font-size: 2.25rem; font-weight: 800; line-height: 1.1; }
+.prep-list { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fill, minmax(min(17rem, 100%), 1fr)); counter-reset: none; }
+.prep-env { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--env); border-inline-start-width: 8px; border-radius: var(--radius); background: var(--c-raised); }
+.prep-env .count { margin-inline-start: auto; color: var(--c-ink-2); font-size: 0.9375rem; }
+.route { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.route-stop { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 2px solid var(--c-line-strong); border-radius: var(--radius); background: var(--c-raised); font-weight: 600; }
+.end { padding: var(--space-8); display: flex; flex-direction: column; gap: var(--space-6); max-width: 64rem; }
+.end-title { font-size: 2.25rem; font-weight: 800; }
+
+@container app (max-width: 60rem) {
+  .walk { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
+  .walk-main { overflow: visible; padding: var(--space-5); grid-template-areas: "loc loc" "photo info" "acts acts"; gap: var(--space-5); }
+  .walk-main > .photo { --pw: 13rem; }
+  .walk-actions { position: sticky; bottom: 0; z-index: 3; background: var(--c-surface); padding: var(--space-4) var(--space-5); margin-inline: calc(-1 * var(--space-5)); margin-block-end: calc(-1 * var(--space-5)); border-top: 2px solid var(--c-line-strong); }
+  .walk-side { border-inline-start: 0; border-top: 1px solid var(--c-line); overflow: visible; }
+  .walk-layout-body { overflow: auto; }
+  .prep, .end { padding: var(--space-6); }
+  .loc-v { font-size: 3.75rem; }
+}
+
+/* ---------- Concept: Shelf map ---------- */
+.map { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; min-height: 0; }
+.map-hint { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4); padding: var(--space-2) var(--space-6); border-bottom: 1px solid var(--c-line); background: var(--c-raised); font-size: 1.0625rem; min-height: 4.25rem; }
+.map-hint .btn { margin-inline-start: auto; }
+.shelf { padding: var(--space-5) var(--space-6); display: flex; flex-direction: column; gap: var(--space-6); overflow: auto; }
+.boxrow { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: var(--space-4); align-items: center; }
+.boxlabel { display: flex; flex-direction: column; gap: 0; }
+.boxlabel b { font-size: 1.5rem; line-height: 1.1; }
+.boxlabel span { font-size: 0.875rem; color: var(--c-ink-2); }
+.boxbar { position: relative; height: 4rem; display: flex; border: 2px solid var(--c-line-strong); border-radius: var(--radius); background: var(--c-box); }
+.boxbar::before { content: "Front"; position: absolute; left: var(--space-1); bottom: calc(-1 * var(--space-5)); font-size: 0.75rem; color: var(--c-ink-2); }
+.boxbar::after { content: "Back"; position: absolute; right: var(--space-1); bottom: calc(-1 * var(--space-5)); font-size: 0.75rem; color: var(--c-ink-2); }
+.tab { position: relative; border-inline-end: 1px solid var(--c-line); flex: var(--n) 1 0; min-width: 0; }
+.tab:last-child { border-inline-end: 0; }
+.tab:nth-child(even) { background: var(--c-box-alt); }
+.tab-l { position: absolute; top: 2px; left: 3px; font-size: 0.75rem; color: var(--c-ink-2); font-weight: 600; }
+.dot { position: absolute; top: 58%; transform: translate(-50%, -50%); width: 2.75rem; height: 2.75rem; border-radius: 50%; background: var(--env, var(--c-ink));
+  color: var(--c-on-env); border: 3px solid var(--c-box); display: grid; place-items: center; font-weight: 800; font-size: 1rem; cursor: pointer; z-index: 2; padding: 0; font-variant-numeric: tabular-nums; }
+.dot.multi { background: var(--c-ink); color: var(--c-surface); border: 4px double var(--c-box); border-radius: var(--radius); }
+.dot.multi.is-in { border: 4px double var(--c-go); }
+.dot.multi.is-short { border: 3px dashed var(--c-short); }
+.dot.is-in { background: var(--c-raised); color: var(--c-go); border: 3px solid var(--c-go); }
+.dot.is-short { background: var(--c-short-soft); color: var(--c-short); border: 3px dashed var(--c-short); }
+.dot svg { width: 1.25rem; height: 1.25rem; }
+.dot.next { outline: 4px solid var(--c-ink); outline-offset: 3px; z-index: 3; animation: ring 1.6s ease-in-out infinite; }
+.dot.dim { opacity: 0.22; }
+@keyframes ring { 50% { outline-offset: 7px; } }
+@media (prefers-reduced-motion: reduce) { .dot.next { animation: none; } }
+.tray { border-top: 2px solid var(--c-line-strong); background: var(--c-raised); padding: var(--space-3) var(--space-6) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
+.tray-h { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); font-weight: 700; }
+.tray-list { display: flex; flex-wrap: wrap; gap: var(--space-2); max-height: 9.5rem; overflow: auto; padding: 2px; }
+.tray-list .envtile { min-height: 3rem; }
+.envtile[aria-pressed="true"] { outline: 3px solid var(--c-ink); outline-offset: 1px; }
+.envtile.owner-tile { border: 2px dashed var(--c-short); color: var(--c-short); font-weight: 700; }
+.sheet-scrim { position: absolute; inset: 0; background: var(--c-scrim); z-index: 20; }
+.sheet { position: absolute; top: 0; right: 0; bottom: 0; width: 32rem; background: var(--c-raised); border-inline-start: 2px solid var(--c-line-strong);
+  box-shadow: var(--shadow-sheet); z-index: 21; display: flex; flex-direction: column; }
+.sheet-h { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--c-line); }
+.sheet-h .btn { margin-inline-start: auto; }
+.sheet-b { flex: 1; overflow: auto; padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-4); }
+.sheet-f { padding: var(--space-4) var(--space-5); border-top: 1px solid var(--c-line); display: flex; flex-direction: column; gap: var(--space-3); }
+.sheet-f .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.sheet-card { display: grid; grid-template-columns: auto 1fr; gap: var(--space-5); align-items: start; }
+.spotlist { display: flex; flex-direction: column; gap: var(--space-2); }
+.spotrow { display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-3); align-items: center; padding: var(--space-3); border: 2px solid var(--c-line); border-radius: var(--radius); background: var(--c-surface); text-align: start; cursor: pointer; min-height: 4rem; }
+@container app (max-width: 60rem) {
+  .boxrow { grid-template-columns: 1fr; gap: var(--space-2); }
+  .boxlabel { flex-direction: row; align-items: baseline; gap: var(--space-2); }
+  .boxlabel b { font-size: 1.25rem; }
+  .shelf { gap: var(--space-6); padding: var(--space-5); }
+  .sheet { top: auto; left: 0; width: auto; max-height: 88%; border-inline-start: 0; border-top: 2px solid var(--c-line-strong); border-radius: var(--radius) var(--radius) 0 0; }
+  .tray-list { max-height: 7.25rem; }
+  .tray-list .envtile { min-width: 0; flex: 1 1 11rem; }
+}
+
+/* ---------- Concept: Envelope stack ---------- */
+.estack { display: grid; grid-template-columns: 21rem minmax(0, 1fr); height: 100%; min-height: 0; }
+.pile { background: var(--c-sunk); border-inline-end: 1px solid var(--c-line); padding: var(--space-5); overflow: auto; display: flex; flex-direction: column; gap: var(--space-5); }
+.pile-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.pile-list .envtile { width: 100%; }
+.envtile.is-open { border: 3px solid var(--c-ink); }
+.opened { overflow: auto; padding: var(--space-6) var(--space-8); display: flex; flex-direction: column; gap: var(--space-5); }
+.env-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-6); padding-block-end: var(--space-4); border-bottom: 2px solid var(--env); }
+.env-head .pips { margin-inline-start: auto; }
+.env-head .pip { width: 1rem; height: 1rem; }
+.rows { display: flex; flex-direction: column; gap: var(--space-2); }
+.rowbox-h { font-weight: 700; font-size: 0.9375rem; color: var(--c-ink-2); padding-block-start: var(--space-2); }
+.crow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-4); align-items: center; padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--c-line); border-radius: var(--radius); background: var(--c-raised); text-align: start; min-height: 4.5rem; }
+button.crow { cursor: pointer; width: 100%; }
+.crow.is-in { background: transparent; border-color: var(--c-go); }
+.crow.is-short { background: transparent; border-color: var(--c-short); border-style: dashed; }
+.crow .where { font-weight: 700; font-variant-numeric: tabular-nums; }
+.crow .state-mark { display: inline-flex; align-items: center; gap: var(--space-1); font-weight: 600; }
+.crow .state-mark.in { color: var(--c-go); }
+.crow .state-mark.short { color: var(--c-short); }
+.crow-open { border: 3px solid var(--c-ink); border-radius: var(--radius); background: var(--c-raised); padding: var(--space-5); display: grid; grid-template-columns: auto minmax(0, 1fr) 18rem;
+  grid-template-areas: "photo info acts"; gap: var(--space-5); align-items: start; }
+.crow-open > .photo-md { --pw: 10rem; }
+.crow-open > .photo { grid-area: photo; }
+.crow-open > .info { grid-area: info; }
+.crow-open .acts { grid-area: acts; display: flex; flex-direction: column; gap: var(--space-3); }
+.crow-open .row2 { display: grid; grid-template-columns: 1fr; gap: var(--space-3); }
+.env-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius); background: var(--c-raised); border: 2px solid var(--c-line-strong); }
+.env-foot .btn { margin-inline-start: auto; }
+@container app (max-width: 60rem) {
+  .estack { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .pile { border-inline-end: 0; border-bottom: 1px solid var(--c-line); padding: var(--space-3) var(--space-5); gap: var(--space-2); }
+  .pile .pile-more { display: none; }
+  .pile-list { flex-direction: row; flex-wrap: wrap; gap: var(--space-2); max-height: 7.5rem; overflow: auto; padding: 2px; }
+  .pile-list .envtile { width: auto; min-height: 3rem; padding: var(--space-1) var(--space-2); }
+  .pile-list .envtile .env-name, .pile-list .envtile .pips, .pile-list .envtile .frac { display: none; }
+  .opened { padding: var(--space-5); }
+  .crow-open { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "photo info" "acts acts"; gap: var(--space-4); }
+  .crow-open .row2 { grid-template-columns: 1fr 1fr; }
+  .crow-open .photo { --pw: 10rem; }
+  .env-big { font-size: 1.625rem; }
+}
+
+@media (forced-colors: active) {
+  .meter > i, .env-n, .pip.in { forced-color-adjust: none; }
+  .dot { border: 3px solid CanvasText; }
+  .dot.next { outline: 4px solid Highlight; }
+}
+</style>
+</head>
+<body>
+<header class="mock-chrome">
+  <p class="sample" role="note"><strong>Sample.</strong> No figure on this page is real. Every buyer, card, count, box and photo is made up.</p>
+  <div class="mock-bar">
+    <p class="kind">Designer kind: blind. Designer pull-blind-1.</p>
+    <div class="mock-group" id="opts" aria-label="Concepts"></div>
+    <div class="mock-group"><span class="mock-k">State</span><select class="mock-select" id="stateSel" aria-label="State"></select></div>
+    <div class="mock-group"><span class="mock-k">Day</span><div class="seg" id="daySeg"></div></div>
+    <div class="mock-group"><span class="mock-k">Width</span><div class="seg" id="wSeg"></div></div>
+    <div class="mock-group"><span class="mock-k">Theme</span><div class="seg" id="tSeg"></div></div>
+    <div class="mock-group"><button class="mock-btn" id="labelsBtn" aria-pressed="true">Hide New: tags</button><button class="mock-btn" id="resetBtn">Reset this state</button></div>
+  </div>
+  <p class="mock-caption" id="caption"></p>
+</header>
+<main class="stage" id="stage">
+  <div class="device-wrap" id="wrap"><div class="device labels-on" id="device"></div></div>
+</main>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------------- Sample data (made up) ---------------- */
+function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUV';
+const BOXES = [[1, 12, 612], [2, 9, 545], [3, 22, 732], [4, 15, 688], [5, 11, 590], [6, 18, 701]].map(([n, tabs, total]) => {
+  const r = rng(n * 97 + 3); const w = []; for (let i = 0; i < tabs; i++) w.push(0.65 + r() * 0.7);
+  const sum = w.reduce((a, b) => a + b, 0); const sizes = w.map(x => Math.max(18, Math.round(x / sum * total)));
+  sizes[tabs - 1] += total - sizes.reduce((a, b) => a + b, 0);
+  let start = 0; const t = sizes.map((s, i) => { const o = { l: LETTERS[i], i, n: s, start }; start += s; return o; });
+  return { n, total, tabs: t };
+});
+const GLYPHS = [
+  '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor"/></svg>',
+  '<svg viewBox="0 0 24 24"><path d="M12 2 22 21H2z" fill="currentColor"/></svg>',
+  '<svg viewBox="0 0 24 24"><path d="M12 1 23 12 12 23 1 12z" fill="currentColor"/></svg>',
+  '<svg viewBox="0 0 24 24"><path d="m12 1 3.2 7 7.6.8-5.7 5.1 1.6 7.6L12 17.6 5.3 21.5l1.6-7.6L1.2 8.8 8.8 8z" fill="currentColor"/></svg>',
+  '<svg viewBox="0 0 24 24"><path d="M12 1.5 21.5 7v10L12 22.5 2.5 17V7z" fill="currentColor"/></svg>',
+  '<svg viewBox="0 0 24 24"><path d="M2 14c3-6 6-6 10 0s7 6 10 0v8H2z" fill="currentColor"/></svg>'
+];
+function hash(s) { let h = 7; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; }
+function mkCard(name, set, num) {
+  const h = hash(name); const noun = name.split(' ').pop();
+  return { name, set, num, h: h % 360, g: h % GLYPHS.length, type: 'Creature, ' + noun };
+}
+let copySeq = 0;
+function mkCopy(code, extra) {
+  const m = /^(\d)([A-V])(\d+)$/.exec(code); const box = +m[1]; const B = BOXES[box - 1];
+  const tab = B.tabs.find(t => t.l === m[2]) || B.tabs[B.tabs.length - 1];
+  const pos = Math.min(+m[3], tab.n);
+  const r = rng(hash(code));
+  return Object.assign({ id: 'c' + (++copySeq), box, tab: tab.l, ti: tab.i, pos, cond: 'Near mint', rot: (r() * 2.4 - 1.2).toFixed(2), mark: '' }, extra || {});
+}
+const BUSY = [
+  ['Mara Quill', [['Ember Fox', 'Northwind', '014/120', 1, ['1C14']], ['Tidal Moth', 'Low Tide', '052/098', 1, ['3K22']], ['Granite Owl', 'Ashfall', '007/110', 1, ['4B7']]]],
+  ['Otto Lind', [['Lantern Eel', 'Low Tide', '061/098', 2, ['2F37', '5C21', '5C22']]]],
+  ['Ines Varga', [['Briar Stag', 'Northwind', '040/120', 1, ['1H40']]]],
+  ['Sam Keel', [['Static Wren', 'Ashfall', '088/110', 1, []], ['Moss Golem', 'Northwind', '009/120', 1, ['6M9']]]],
+  ['June Arbor', [['Cinder Hare', 'Ashfall', '003/110', 1, ['3D3']], ['Frost Newt', 'Low Tide', '033/098', 1, ['2A51']], ['Velvet Bat', 'Northwind', '030/120', 1, ['6Q30']], ['Quartz Crab', 'Ashfall', '018/110', 1, ['4J18']]]],
+  ['Rhea Moss', [['Dusk Heron', 'Low Tide', '044/098', 1, ['5H44']]]],
+  ['Tomas Reyl', [['Pollen Imp', 'Northwind', '029/120', 1, ['1C29', '3S5']]]]
+];
+const QUIET = [BUSY[2], BUSY[5], BUSY[1]];
+function fromSpec(spec) {
+  copySeq = 0; const buyers = []; const lines = [];
+  spec.forEach(([name, ls], bi) => {
+    buyers.push({ i: bi, n: bi + 1, name, ci: (bi % 8) + 1 });
+    ls.forEach(([cn, set, num, owed, codes]) => {
+      const copies = codes.map((c) => mkCopy(c, c === '5C22' ? { cond: 'Lightly played', mark: 'small corner nick' } : null));
+      lines.push({ id: 'l' + lines.length, b: bi, card: mkCard(cn, set, num), owed, copies });
+    });
+  });
+  return { buyers, lines };
+}
+function peakSpec() {
+  const r = rng(77);
+  const F = ['Ada', 'Bram', 'Cleo', 'Dara', 'Eli', 'Fern', 'Gus', 'Hana', 'Ivo', 'Jade', 'Kit', 'Lior', 'Mina', 'Noor', 'Oren', 'Pia', 'Quin', 'Rosa', 'Teo', 'Uma'];
+  const L = ['Ashby', 'Brook', 'Crane', 'Dell', 'Ewart', 'Frey', 'Gale', 'Holt', 'Irwin', 'Jory', 'Kemp', 'Lowe', 'Marsh', 'Nyle', 'Orme', 'Pike', 'Rook', 'Shaw', 'Thorne', 'Vale'];
+  const A = ['Ember', 'Tidal', 'Granite', 'Lantern', 'Briar', 'Static', 'Moss', 'Cinder', 'Frost', 'Velvet', 'Quartz', 'Dusk', 'Pollen', 'Rust', 'Gale', 'Ink'];
+  const N = ['Fox', 'Moth', 'Owl', 'Eel', 'Stag', 'Wren', 'Golem', 'Hare', 'Newt', 'Bat', 'Crab', 'Heron', 'Imp', 'Beetle', 'Kite', 'Squid'];
+  const sets = ['Northwind', 'Low Tide', 'Ashfall'];
+  const code = () => { const b = BOXES[Math.floor(r() * 6)]; const t = b.tabs[Math.floor(r() * b.tabs.length)]; return b.n + t.l + (1 + Math.floor(r() * t.n)); };
+  const spec = []; let lineNo = 0;
+  for (let i = 0; i < 39; i++) {
+    const name = F[i % 20] + ' ' + L[(i * 7 + Math.floor(i / 20) * 3) % 20];
+    const count = i === 0 ? 43 : 1 + Math.floor(r() * r() * 4);
+    const ls = [];
+    for (let k = 0; k < count; k++) {
+      lineNo++;
+      const owed = i > 0 && r() < 0.08 ? 2 : 1;
+      const nCopies = lineNo === 17 || lineNo === 58 ? 0 : owed === 2 ? 3 : (r() < 0.15 ? 2 : 1);
+      const codes = []; for (let c = 0; c < nCopies; c++) codes.push(code());
+      ls.push([A[Math.floor(r() * 16)] + ' ' + N[Math.floor(r() * 16)], sets[Math.floor(r() * 3)], String(1 + Math.floor(r() * 120)).padStart(3, '0') + '/120', owed, codes]);
+    }
+    spec.push([name, ls]);
+  }
+  return spec;
+}
+const DAYS = { quiet: () => fromSpec(QUIET), busy: () => fromSpec(BUSY), peak: () => fromSpec(peakSpec()) };
+
+/* ---------------- Engine: one home for take, can't find, spare and undo ---------------- */
+let S;
+const keyOf = c => c.box * 1e6 + c.ti * 1e3 + c.pos;
+const byKey = (a, b) => keyOf(a) - keyOf(b);
+function load(day) { const d = DAYS[day](); S = { day, buyers: d.buyers, lines: d.lines, cs: {}, reported: false, ready: false, cursor: -1, hist: [], last: null };
+  d.lines.forEach(l => l.copies.forEach(c => { S.cs[c.id] = 'idle'; })); }
+const inCount = l => l.copies.filter(c => S.cs[c.id] === 'in').length;
+function planned(l) { const need = l.owed - inCount(l); return need <= 0 ? [] : l.copies.filter(c => S.cs[c.id] === 'idle').sort(byKey).slice(0, need); }
+const shortOf = l => l.owed - inCount(l) - planned(l).length;
+function queue() {
+  const all = []; S.lines.forEach(l => planned(l).forEach(c => all.push({ c, l }))); all.sort((a, b) => byKey(a.c, b.c));
+  return all.filter(x => keyOf(x.c) >= S.cursor).concat(all.filter(x => keyOf(x.c) < S.cursor));
+}
+const isSpare = (l, c) => l.copies.slice().sort(byKey).indexOf(c) >= l.owed;
+function findCopy(id) { for (const l of S.lines) for (const c of l.copies) if (c.id === id) return { c, l }; return null; }
+function snap() { return { cs: Object.assign({}, S.cs), reported: S.reported, cursor: S.cursor, last: S.last }; }
+function act(id, kind) {
+  const x = findCopy(id); if (!x || S.cs[id] !== 'idle') return;
+  S.hist.push(snap());
+  const before = planned(x.l).map(c => c.id);
+  S.cs[id] = kind; S.cursor = keyOf(x.c);
+  const spare = planned(x.l).find(c => !before.includes(c.id)) || null;
+  S.last = { id, kind, spare: spare && spare.id };
+}
+function undo() { const h = S.hist.pop(); if (!h) return; Object.assign(S, { cs: h.cs, reported: h.reported, cursor: h.cursor, last: null }); }
+function revert(id) { if (!S.cs[id] || S.cs[id] === 'idle') return; S.hist.push(snap()); S.cs[id] = 'idle'; S.last = null; }
+function send() { S.hist.push(snap()); S.reported = true; S.last = { kind: 'send' }; }
+function totals() { let owed = 0, inn = 0, short = 0; S.lines.forEach(l => { owed += l.owed; inn += inCount(l); short += shortOf(l); }); return { owed, inn, short, open: owed - inn - short }; }
+function shortLines() { return S.lines.filter(l => shortOf(l) > 0); }
+function whyShort(l) {
+  if (!l.copies.length) return 'No known spot.';
+  return l.copies.filter(c => S.cs[c.id] === 'cant' || S.cs[c.id] === 'nomatch')
+    .map(c => (S.cs[c.id] === 'cant' ? 'Not at ' : 'Wrong card at ') + place(c) + '.').join(' ');
+}
+const place = c => `Box ${c.box}, tab ${c.tab}, card ${c.pos}`;
+function buyerUnits(b) {
+  const u = []; S.lines.filter(l => l.b === b.i).forEach(l => { for (let k = 0; k < inCount(l); k++) u.push('in'); for (let k = 0; k < planned(l).length; k++) u.push('open'); for (let k = 0; k < shortOf(l); k++) u.push('short'); });
+  return u;
+}
+function buyerState(b) { const u = buyerUnits(b); if (u.includes('open')) return 'open'; return u.includes('short') ? 'short' : 'full'; }
+
+/* ---------------- UI state and hash ---------------- */
+const CONCEPTS = [
+  { id: 'walk', name: 'Shelf walk', cap: 'One card at a time, in the order the boxes sit on the shelf. Envelopes are laid out first; each card says which envelope it goes in.' },
+  { id: 'map', name: 'Shelf map', cap: 'The bold one. The screen is a drawing of the shelf. Each dot is a card to take, placed where it sits in its box. There is no list.' },
+  { id: 'stack', name: 'Envelope stack', cap: 'One buyer at a time. Open an envelope, fill it from the shelf, move to the next.' }
+];
+const STATES = [['start', 'First screen'], ['mid', 'Part way'], ['check', 'Photo check open'], ['spare', 'Can\'t find it, spare found'], ['end', 'Walk done, cards short'], ['done', 'Sent to the owner'], ['allwell', 'All is well (quiet day)'], ['loading', 'Loading'], ['failed', 'Could not load'], ['empty', 'No orders']];
+const ui = { c: 'walk', s: 'start', t: '', w: 1440, d: 'busy', h: [], labels: true, screen: 'app', zoom: null, sheet: null, filter: null, stackB: null, stackRow: null, checked: false };
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (CONCEPTS.some(c => c.id === p.get('c'))) ui.c = p.get('c');
+  if (STATES.some(s => s[0] === p.get('s'))) ui.s = p.get('s');
+  ui.t = ['light', 'dark'].includes(p.get('t')) ? p.get('t') : '';
+  ui.w = p.get('w') === '820' ? 820 : 1440;
+  if (DAYS[p.get('d')]) ui.d = p.get('d');
+  ui.h = (p.get('h') || '').split(',').filter(x => CONCEPTS.some(c => c.id === x));
+  ui.labels = p.get('tags') !== 'off';
+}
+function writeHash() {
+  const p = new URLSearchParams(); p.set('c', ui.c); p.set('s', ui.s); if (ui.t) p.set('t', ui.t); p.set('w', ui.w); p.set('d', ui.d);
+  if (ui.h.length) p.set('h', ui.h.join(',')); if (!ui.labels) p.set('tags', 'off');
+  history.replaceState(null, '', '#' + p.toString());
+}
+function applyPreset() {
+  const s = ui.s; ui.zoom = null; ui.sheet = null; ui.filter = null; ui.stackB = null; ui.stackRow = null; ui.checked = false;
+  if (s === 'allwell') ui.d = 'quiet';
+  load(ui.d);
+  if (['loading', 'failed', 'empty'].includes(s)) { ui.screen = s; return; }
+  ui.screen = 'app'; S.ready = s !== 'start';
+  if (['mid', 'check', 'spare'].includes(s)) {
+    const q = queue(); const k = Math.max(1, Math.ceil(q.length * 0.35));
+    q.slice(0, k).forEach(x => { S.cs[x.c.id] = 'in'; }); S.cursor = keyOf(q[k - 1].c);
+  }
+  if (s === 'spare') {
+    const x = queue().find(y => y.l.copies.filter(c => S.cs[c.id] === 'idle').length > planned(y.l).length);
+    if (x) { act(x.c.id, 'cant'); S.hist = []; if (ui.c === 'stack') ui.stackB = x.l.b; }
+  }
+  if (['end', 'done'].includes(s)) {
+    const q0 = queue(); const target = q0.find((x, i) => i >= q0.length * 0.5 && x.l.copies.length === 1 && x.l.owed === 1) || q0[q0.length - 1];
+    let q; while ((q = queue()).length) { const x = q[0]; S.cs[x.c.id] = x.c === target.c ? 'cant' : 'in'; S.cursor = keyOf(x.c); }
+    if (s === 'done') S.reported = true;
+  }
+  if (s === 'allwell') { let q; while ((q = queue()).length) { S.cs[q[0].c.id] = 'in'; S.cursor = keyOf(q[0].c); } }
+  if (s === 'check') {
+    const x = queue()[0];
+    if (x) {
+      if (ui.c === 'map') ui.sheet = { type: 'copy', id: x.c.id };
+      else if (ui.c === 'stack') { const b = S.buyers.find(y => buyerState(y) === 'open'); const r = b && rowsFor(b).find(y => y.st === 'open'); if (r) ui.zoom = r.c.id; }
+      else ui.zoom = x.c.id;
+    }
+  }
+  if (s === 'mid' && ui.c === 'map') ui.filter = null;
+}
+
+/* ---------------- Small renderers ---------------- */
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+const ICON = {
+  check: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5 9.5 18 20 6.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  cross: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>',
+  back: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  env: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="m3 6 9 7 9-7" fill="none" stroke="currentColor" stroke-width="2"/></svg>'
+};
+function photo(l, c, size, zoomable) {
+  const card = l.card; const tag = zoomable ? 'button' : 'figure';
+  const attrs = zoomable ? ` type="button" data-act="zoom" data-copy="${c.id}" aria-label="Show the photo of ${esc(card.name)} larger"` : ` aria-label="Photo of ${esc(card.name)}, taken when it was filed"`;
+  return `<${tag} class="photo photo-${size}"${attrs} style="--h:${card.h};--rot:${c.rot}deg"><div class="tcg"><div class="tcg-name">${esc(card.name)}</div><div class="tcg-art">${GLYPHS[card.g]}</div><div class="tcg-type">${esc(card.type)}</div><div class="tcg-text"></div><div class="tcg-foot"><span>${esc(card.num)}</span><span>${esc(card.set)}</span></div>${c.mark ? '<span class="nick"></span>' : ''}</div></${tag}>`;
+}
+function depth(c) {
+  const t = BOXES[c.box - 1].tabs[c.ti]; const f = c.pos / t.n;
+  const words = f < 0.25 ? 'near the front' : f < 0.5 ? 'in the front half' : f < 0.75 ? 'in the back half' : 'near the back';
+  return `<div class="depth"><div>${c.pos} of ${t.n} in this tab, ${words}.</div><div class="depth-row" aria-hidden="true"><span>Front</span><div class="depth-bar"><i style="left:${(f * 100).toFixed(1)}%"></i></div><span>Back</span></div></div>`;
+}
+function loc(c, size, opts) {
+  opts = opts || {};
+  const behind = opts.behind ? `<div class="loc-back">${ICON.back} Back to Box ${c.box} for this one.</div>` : '';
+  return `<div class="loc loc-${size}"${opts.tag ? ` data-new="${opts.tag}"` : ''}>${behind}<div class="loc-part"><span class="loc-k">Box</span><span class="loc-v">${c.box}</span></div><div class="loc-part"><span class="loc-k">Tab</span><span class="loc-v">${c.tab}</span></div><div class="loc-part"><span class="loc-k">Card</span><span class="loc-v">${c.pos}</span></div>${size === 'sm' ? '' : depth(c)}</div>`;
+}
+const envChip = (b, cls) => `<span class="env ${cls || ''}" style="--env:var(--env-${b.ci})"><b class="env-n">${b.n}</b><span class="env-name">${esc(b.name)}</span></span>`;
+function pips(b) {
+  const u = buyerUnits(b);
+  if (u.length > 8) { const i = u.filter(x => x === 'in').length; const s = u.filter(x => x === 'short').length; return `<span class="frac">${i} of ${u.length}${s ? ` <span class="pip short" title="${s} short" style="display:inline-block;vertical-align:middle"></span>${s}` : ''}</span>`; }
+  return `<span class="pips" aria-label="${u.filter(x => x === 'in').length} of ${u.length} in">${u.map(x => `<span class="pip ${x}"></span>`).join('')}</span>`;
+}
+function copyNote(l, c) {
+  if (l.owed < 2) return '';
+  const others = planned(l).filter(o => o !== c); const got = inCount(l);
+  let s = `${esc(S.buyers[l.b].name.split(' ')[0])} needs ${l.owed} of this card.`;
+  if (got) s += ` ${got} is already in.`;
+  if (others.length) s += ` The other is at ${place(others[0])}.`;
+  return `<p class="muted">${s}</p>`;
+}
+function actions(c, big) {
+  return `<button class="btn btn-go ${big ? 'btn-big' : ''}" data-act="in" data-copy="${c.id}">${ICON.env} Put in envelope</button>
+  <div class="row2"><button class="btn" data-act="cant" data-copy="${c.id}">Can't find it</button><button class="btn" data-act="nomatch" data-copy="${c.id}">Not the card in the photo</button></div>`;
+}
+function receipt() {
+  const L = S.last; if (!L) return '';
+  if (L.kind === 'send') return '';
+  const x = findCopy(L.id); if (!x) return '';
+  const b = S.buyers[x.l.b];
+  if (L.kind === 'in') return `<div class="receipt" role="status"><span class="receipt-t">${ICON.check}<span>${esc(x.l.card.name)} is in envelope ${b.n}, ${esc(b.name)}. Marked sold.</span></span><button class="btn btn-quiet" data-act="undo">Undo</button></div>`;
+  const what = L.kind === 'cant' ? `${esc(x.l.card.name)} not at ${place(x.c)}.` : `Wrong card at ${place(x.c)}.`;
+  const then = L.spare ? ` Spare added: ${place(findCopy(L.spare).c)}.` : ' Added to the missing list.';
+  return `<div class="receipt is-short" role="status"><span class="receipt-t">${ICON.cross}<span>${what}${then}</span></span><button class="btn btn-quiet" data-act="undo">Undo</button></div>`;
+}
+function ownerBlock(opts) {
+  opts = opts || {};
+  const ls = shortLines(); const t = totals();
+  if (!ls.length) {
+    if (t.open) return '';
+    return `<div class="wellbox" role="status">${ICON.check.replace('class="icon"', '')} All is well.</div>`;
+  }
+  const rows = ls.map(l => { const b = S.buyers[l.b]; const n = shortOf(l);
+    return `<li class="owner-row">${envChip(b)}<div><b>${esc(l.card.name)}</b>${n > 1 || l.owed > 1 ? `, ${n} of ${l.owed} short` : ''}. <span class="muted">${whyShort(l)}</span></div></li>`; }).join('');
+  const sent = S.reported
+    ? `<div class="receipt" role="status"><span class="receipt-t">${ICON.check}<span>Sent to the owner.</span></span><button class="btn btn-quiet" data-act="undo">Undo</button></div>`
+    : (t.open ? `<p class="muted small">You can send this now or when the rest is done.</p><button class="btn" data-act="send">Send to owner</button>` : `<button class="btn btn-go" data-act="send">Send to owner</button>`);
+  return `<section class="owner stack" ${opts.tag ? `data-new="${opts.tag}"` : ''}><h2 class="h2">Missing: ${ls.reduce((a, l) => a + shortOf(l), 0)} card${ls.reduce((a, l) => a + shortOf(l), 0) > 1 ? 's' : ''}</h2><ul>${rows}</ul>${sent}</section>`;
+}
+function envGrid(clickable) {
+  return `<div class="envgrid">${S.buyers.map(b => { const st = buyerState(b);
+    const tag = clickable ? 'button' : 'div';
+    return `<${tag} class="envtile ${st === 'open' ? '' : st}" ${clickable ? `data-act="${clickable}" data-b="${b.i}"` : ''}>${envChip(b)}${pips(b)}</${tag}>`; }).join('')}</div>`;
+}
+function top(title, extra) {
+  const t = totals(); const pct = t.owed ? Math.round(t.inn / t.owed * 100) : 0;
+  return `<header class="app-top"><div class="stack" style="gap:0"><h1 class="app-title">${title}</h1><p class="app-sub">${S.buyers.length} buyers, ${t.owed} cards</p></div>${extra || ''}
+  <div class="progress" data-new="Progress"><span>${t.inn} of ${t.owed} in envelopes</span><span class="meter" aria-hidden="true"><i style="width:${pct}%"></i></span>${t.short ? `<span class="short-count" title="Cards not found">${ICON.cross}${t.short}</span>` : ''}</div></header>`;
+}
+function stateScreen(title) {
+  const head = `<header class="app-top"><h1 class="app-title">${title}</h1></header>`;
+  if (ui.screen === 'loading') return head + `<div class="app-body" aria-busy="true"><div class="skel-wrap"><p class="muted">Loading the orders to fill…</p><div class="skel" style="height:8rem"></div><div class="skel" style="height:22rem"></div><div class="skel" style="height:5rem"></div></div></div>`;
+  if (ui.screen === 'failed') return head + `<div class="app-body"><div class="state"><h2 class="state-title">Couldn't load the orders.</h2><p>Nothing has changed. Your cards and envelopes are as you left them.</p><button class="btn btn-go" data-act="retry">Try again</button><details class="why"><summary>What the server said</summary><pre>GET /orders/open timed out after 20 s (sample text)</pre></details></div></div>`;
+  return head + `<div class="app-body"><div class="state"><h2 class="state-title">No orders to fill.</h2><p>New orders show here when buyers pay.${ui.checked ? ' Checked again just now.' : ''}</p><button class="btn" data-act="recheck">Check again</button></div></div>`;
+}
+function zoomOverlay() {
+  if (!ui.zoom) return ''; const x = findCopy(ui.zoom); if (!x) return '';
+  return `<div class="overlay" data-act="close-zoom"><div class="zoom" role="dialog" aria-label="Photo of ${esc(x.l.card.name)}" data-stop="1">${photo(x.l, x.c, 'lg', false)}<p><b>${esc(x.l.card.name)}</b>, ${esc(x.l.card.num)} ${esc(x.l.card.set)}. ${esc(x.c.cond)}${x.c.mark ? ', ' + esc(x.c.mark) : ''}.</p><p class="muted">Photo taken when this copy was filed.</p>${S.cs[x.c.id] === 'idle' ? `<div class="zoom-acts">${actions(x.c, false)}</div>` : ''}<button class="btn" data-act="close-zoom">Close</button></div></div>`;
+}
+
+/* ---------------- Concept: Shelf walk ---------------- */
+function renderWalk() {
+  const title = 'Shelf walk';
+  if (ui.screen !== 'app') return stateScreen(title);
+  if (!S.ready) {
+    const byBox = {}; queue().forEach(x => { byBox[x.c.box] = (byBox[x.c.box] || 0) + 1; });
+    const counts = S.buyers.map(b => S.lines.filter(l => l.b === b.i).reduce((a, l) => a + l.owed, 0));
+    return top(title) + `<div class="app-body"><div class="prep">
+      <h2 class="prep-title">${totals().owed} cards for ${S.buyers.length} buyers.</h2>
+      <section class="stack-4" data-new="Envelopes first"><h3 class="h2">1. Write a number and a name on each envelope. Lay them out in this order.</h3>
+      <ol class="prep-list">${S.buyers.map((b, i) => `<li class="prep-env" style="--env:var(--env-${b.ci})">${envChip(b)}<span class="count">${counts[i]} card${counts[i] > 1 ? 's' : ''}</span></li>`).join('')}</ol></section>
+      <section class="stack-4"><h3 class="h2">2. Walk the shelf from Box 1 to Box 6.</h3>
+      <div class="route">${Object.keys(byBox).sort().map(n => `<span class="route-stop">Box ${n}<span class="muted">${byBox[n]} card${byBox[n] > 1 ? 's' : ''}</span></span>`).join('')}</div></section>
+      ${shortLines().length ? ownerBlock() : ''}
+      <div><button class="btn btn-go btn-big" data-act="ready">Envelopes ready. Start</button></div></div></div>`;
+  }
+  const q = queue();
+  if (!q.length) {
+    return top(title) + `<div class="app-body"><div class="end">
+      <h2 class="end-title">Walk done.</h2>${receipt()}${ownerBlock({ tag: 'Short cards, one list' })}
+      <section class="stack-4"><h3 class="h2">Envelopes</h3>${envGrid()}</section></div></div>`;
+  }
+  const cur = q[0]; const b = S.buyers[cur.l.b]; const behind = keyOf(cur.c) < S.cursor;
+  const spareNote = isSpare(cur.l, cur.c) ? `<p class="muted">This is a spare copy. The first one was not found.</p>` : '';
+  const rest = q.slice(1); const groups = [];
+  rest.forEach(x => { const g = groups[groups.length - 1]; if (g && g.box === x.c.box) g.items.push(x); else groups.push({ box: x.c.box, items: [x] }); });
+  const next = groups.map(g => `<div class="nextbox"><div class="nextbox-h">Box ${g.box}</div>${g.items.map(x => { const bb = S.buyers[x.l.b];
+    return `<div class="nextrow"><span class="spot">${x.c.tab} ${x.c.pos}</span><span>${esc(x.l.card.name)}</span><span class="env" style="--env:var(--env-${bb.ci})" title="Envelope ${bb.n}, ${esc(bb.name)}"><b class="env-n">${bb.n}</b></span></div>`; }).join('')}</div>`).join('');
+  return top(title) + `<div class="app-body walk-layout-body"><div class="walk">
+    <section class="walk-main" aria-label="This card">
+      ${loc(cur.c, 'lg', { behind, tag: 'Where to reach' })}
+      ${photo(cur.l, cur.c, 'lg', true)}
+        <div class="walk-info">
+          <div class="stack" style="gap:var(--space-1)"><h2 class="card-name">${esc(cur.l.card.name)}</h2><p class="card-meta">${esc(cur.l.card.num)} ${esc(cur.l.card.set)}. ${esc(cur.c.cond)}${cur.c.mark ? ', ' + esc(cur.c.mark) : ''}.</p></div>
+          <p class="take">Take this one.</p>${copyNote(cur.l, cur.c)}${spareNote}
+          <div class="goes" style="--env:var(--env-${b.ci})" data-new="Which envelope">${ICON.env}${envChip(b)}</div>
+          <p class="muted small">Check it against the photo. Press the photo to see it larger.</p>
+        </div>
+      <div class="walk-actions" data-new="One press each">${receipt()}${actions(cur.c, true)}</div>
+    </section>
+    <aside class="walk-side" aria-label="After this">
+      <section class="nextlist"><h2 class="h2">After this: ${rest.length}</h2>${next || '<p class="muted">This is the last one.</p>'}</section>
+      ${shortLines().length ? ownerBlock() : ''}
+    </aside></div></div>` + zoomOverlay();
+}
+
+/* ---------------- Concept: Shelf map ---------------- */
+function mapMarks() {
+  const marks = [];
+  S.lines.forEach(l => {
+    const p = planned(l).map(c => c.id);
+    l.copies.forEach(c => { const st = S.cs[c.id]; if (st !== 'idle' || p.includes(c.id)) marks.push({ c, l, st: st === 'idle' ? 'open' : st === 'in' ? 'in' : 'short' }); });
+  });
+  return marks;
+}
+function renderMap() {
+  const title = 'Shelf map';
+  if (ui.screen !== 'app') return stateScreen(title);
+  const q = queue(); const nextId = q.length ? q[0].c.id : null; const t = totals();
+  const barPx = ui.w === 1440 ? 1440 - 48 - 88 - 16 : 820 - 40; const thr = 54 / barPx;
+  const marks = mapMarks();
+  const rows = BOXES.map(B => {
+    const ms = marks.filter(m => m.c.box === B.n).map(m => Object.assign(m, { x: (B.tabs[m.c.ti].start + m.c.pos - 0.5) / B.total })).sort((a, b) => a.x - b.x);
+    let groups = ms.map(m => ({ items: [m] }));
+    const mean = g => g.items.reduce((acc, m) => acc + m.x, 0) / g.items.length;
+    for (let merged = true; merged;) { merged = false; for (let i = 0; i + 1 < groups.length; i++) { if (mean(groups[i + 1]) - mean(groups[i]) < thr) { groups[i].items.push(...groups[i + 1].items); groups.splice(i + 1, 1); merged = true; break; } } }
+    const openN = ms.filter(m => m.st === 'open').length;
+    const dots = groups.map(g => {
+      const x = Math.min(1 - 26 / barPx, Math.max(26 / barPx, g.items.reduce((a, m) => a + m.x, 0) / g.items.length));
+      const ids = g.items.map(m => m.c.id); const isNext = ids.includes(nextId);
+      const dim = ui.filter != null && !g.items.some(m => m.l.b === ui.filter);
+      const open = g.items.filter(m => m.st === 'open');
+      if (g.items.length === 1) {
+        const m = g.items[0]; const b = S.buyers[m.l.b];
+        const inner = m.st === 'in' ? ICON.check : m.st === 'short' ? ICON.cross : b.n;
+        const lab = `${m.l.card.name}, ${place(m.c)}, envelope ${b.n}` + (m.st === 'in' ? ', in' : m.st === 'short' ? ', not found' : '');
+        return `<button class="dot ${m.st === 'open' ? '' : 'is-' + m.st}${isNext ? ' next' : ''}${dim ? ' dim' : ''}" style="left:${(x * 100).toFixed(2)}%;--env:var(--env-${b.ci})" data-act="spot" data-ids="${ids.join(',')}" aria-label="${esc(lab)}">${inner}</button>`;
+      }
+      const allIn = !open.length && g.items.every(m => m.st === 'in');
+      const inner = open.length ? open.length : allIn ? ICON.check : ICON.cross;
+      return `<button class="dot multi ${!open.length ? (allIn ? 'is-in' : 'is-short') : ''}${isNext ? ' next' : ''}${dim ? ' dim' : ''}" style="left:${(x * 100).toFixed(2)}%" data-act="spot" data-ids="${ids.join(',')}" aria-label="${g.items.length} cards close together in Box ${B.n}">${inner}</button>`;
+    }).join('');
+    return `<div class="boxrow"><div class="boxlabel"><b>Box ${B.n}</b>${openN ? `<span>${openN} to take</span>` : ms.length ? `<span style="color:var(--c-go)" aria-label="Nothing left in this box">${ICON.check}</span>` : `<span aria-label="Nothing to take from this box">–</span>`}</div>
+      <div class="boxbar" role="group" aria-label="Box ${B.n}, front to back">${B.tabs.map(tb => `<div class="tab" style="--n:${tb.n}"><span class="tab-l">${tb.l}</span></div>`).join('')}${dots}</div></div>`;
+  }).join('');
+  let hint;
+  if (!q.length) hint = `<span><b>Every dot is done.</b> ${t.short ? `${t.short} card${t.short > 1 ? 's' : ''} for the owner.` : 'All is well.'}</span>${t.short ? `<button class="btn ${S.reported ? '' : 'btn-go'}" data-act="owner">${S.reported ? 'Sent. See the list' : 'Send to owner'}</button>` : ''}`;
+  else if (!S.ready) hint = `<span>Each dot is a card to take. Its number is the envelope it goes in. A square holds a few cards close together. Start at the ringed one.</span><button class="btn btn-go" data-act="next-dot">Open the ringed dot</button>`;
+  else hint = `<span>${q.length} dot${q.length > 1 ? 's' : ''} left. The ringed one is next.</span><button class="btn btn-go" data-act="next-dot">Open the ringed dot</button>`;
+  const noSpot = S.lines.filter(l => !l.copies.length).length;
+  const filtered = (ui.filter != null ? `<button class="btn btn-quiet" data-act="filter" data-b="${ui.filter}">Show every envelope</button>` : '')
+    + (shortLines().length ? `<button class="envtile owner-tile" data-act="owner" style="margin-inline-start:auto">${ICON.cross} Missing: ${t.short}</button>` : '');
+  const tray = `<section class="tray" data-new="Envelope tray"><div class="tray-h">Envelopes <span class="muted small" style="font-weight:400">Press one to light only its cards.${noSpot ? ` ${noSpot > 1 ? `${noSpot} cards have no known spot, so they have` : '1 card has no known spot, so it has'} no dot.` : ''}</span>${filtered}</div>
+    <div class="tray-list">${S.buyers.map(b => { const st = buyerState(b);
+      return `<button class="envtile ${st === 'open' ? '' : st}" data-act="filter" data-b="${b.i}" aria-pressed="${ui.filter === b.i}">${envChip(b)}${pips(b)}</button>`; }).join('')}</div></section>`;
+  return top(title) + `<div class="map" style="min-height:0;flex:1"><div class="map-hint" data-new="One line of help">${hint}</div>
+    <div class="shelf" aria-label="The shelf, seen from above">${rows}</div>${tray}</div>` + mapSheet() + zoomOverlay();
+}
+function mapSheet() {
+  const sh = ui.sheet; if (!sh) return '';
+  let head = '', body = '', foot = '';
+  if (sh.type === 'spot') {
+    const items = sh.ids.map(findCopy);
+    head = `<h2 class="h2">${items.length} cards close together</h2>`;
+    body = `<p class="muted">Pick the one in front of you.</p><div class="spotlist">${items.sort((a, b) => byKey(a.c, b.c)).map(x => { const b = S.buyers[x.l.b]; const st = S.cs[x.c.id];
+      return `<button class="spotrow" data-act="open-copy" data-copy="${x.c.id}">${envChip(b).replace('<span class="env-name">' + esc(b.name) + '</span>', '')}<span><b>${esc(x.l.card.name)}</b><br><span class="muted">Tab ${x.c.tab}, card ${x.c.pos}</span></span>${st === 'in' ? `<span style="color:var(--c-go)">${ICON.check}</span>` : st === 'idle' ? '' : `<span style="color:var(--c-short)">${ICON.cross}</span>`}</button>`; }).join('')}</div>`;
+  } else if (sh.type === 'owner') {
+    head = `<h2 class="h2">Cards not found</h2>`;
+    body = ownerBlock() || '<p>Nothing is short.</p>';
+  } else {
+    const x = findCopy(sh.id); const b = S.buyers[x.l.b]; const st = S.cs[x.c.id];
+    head = `<h2 class="h2">${esc(x.l.card.name)}</h2>`;
+    body = `${loc(x.c, 'md')}<div class="sheet-card">${photo(x.l, x.c, 'md', true)}<div class="stack"><p class="card-meta">${esc(x.l.card.num)} ${esc(x.l.card.set)}. ${esc(x.c.cond)}${x.c.mark ? ', ' + esc(x.c.mark) : ''}.</p>
+      <p class="take">${st === 'idle' ? 'Take this one.' : ''}</p>${st === 'idle' ? copyNote(x.l, x.c) : ''}${isSpare(x.l, x.c) && st === 'idle' ? '<p class="muted">This is a spare copy. The first one was not found.</p>' : ''}
+      <div class="goes" style="--env:var(--env-${b.ci})">${ICON.env}${envChip(b)}</div></div></div>`;
+    if (st === 'idle') foot = actions(x.c, true);
+    else { const q = queue(); foot = (S.last && S.last.id === x.c.id ? receipt() : `<div class="receipt ${st === 'in' ? '' : 'is-short'}"><span class="receipt-t">${st === 'in' ? ICON.check + '<span>In envelope ' + b.n + '. Marked sold.</span>' : ICON.cross + '<span>Not found here.</span>'}</span><button class="btn btn-quiet" data-act="revert" data-copy="${x.c.id}">Undo</button></div>`) + (q.length ? `<button class="btn btn-go btn-big" data-act="next-dot">Next dot</button>` : `<button class="btn btn-big" data-act="close-sheet">Back to the shelf</button>`); }
+  }
+  return `<div class="sheet-scrim" data-act="close-sheet"></div><aside class="sheet" role="dialog" aria-label="Card" data-new="Card sheet"><div class="sheet-h">${head}<button class="btn" data-act="close-sheet">Close</button></div><div class="sheet-b">${body}</div>${foot ? `<div class="sheet-f">${foot}</div>` : ''}</aside>`;
+}
+
+/* ---------------- Concept: Envelope stack ---------------- */
+function rowsFor(b) {
+  const rows = [];
+  S.lines.filter(l => l.b === b.i).forEach(l => {
+    const p = planned(l);
+    l.copies.forEach(c => { const st = S.cs[c.id]; if (st === 'in') rows.push({ l, c, st: 'in' }); else if (st !== 'idle') rows.push({ l, c, st: 'short' }); else if (p.includes(c)) rows.push({ l, c, st: 'open' }); });
+    if (!l.copies.length) for (let k = 0; k < l.owed; k++) rows.push({ l, c: null, st: 'short' });
+  });
+  return rows.sort((a, b) => (a.c ? keyOf(a.c) : 9e9) - (b.c ? keyOf(b.c) : 9e9));
+}
+function renderStack() {
+  const title = 'Envelope stack';
+  if (ui.screen !== 'app') return stateScreen(title);
+  const t = totals();
+  let curB = ui.stackB != null ? S.buyers[ui.stackB] : S.buyers.find(b => buyerState(b) === 'open');
+  const pileTiles = S.buyers.map(b => { const st = buyerState(b); const isOpen = curB && b.i === curB.i;
+    return `<button class="envtile ${st === 'open' ? '' : st}${isOpen ? ' is-open' : ''}" data-act="open-env" data-b="${b.i}" aria-current="${isOpen}">${envChip(b)}${pips(b)}</button>`; }).join('');
+  const pile = `<aside class="pile" aria-label="Envelopes"><h2 class="h2">Envelopes</h2><div class="pile-list" data-new="The pile">${pileTiles}</div>
+    <p class="muted small pile-more">Fill the open envelope, then go to the next. You can open any envelope out of order.</p></aside>`;
+  let main;
+  if (!curB) {
+    main = `<section class="opened"><h2 class="end-title">Every envelope is done.</h2>${receipt()}${ownerBlock({ tag: 'Short cards, one list' })}</section>`;
+  } else {
+    const rows = rowsFor(curB); const openRows = rows.filter(r => r.st === 'open');
+    const expanded = rows.find(r => r.c && r.c.id === ui.stackRow) || openRows[0];
+    const units = buyerUnits(curB).length;
+    let lastBox = null; const many = rows.length > 6;
+    const list = rows.map(r => {
+      let h = '';
+      if (many && r.c && r.c.box !== lastBox) { lastBox = r.c.box; h = `<div class="rowbox-h">Box ${r.c.box}</div>`; }
+      if (many && !r.c && lastBox !== 'none') { lastBox = 'none'; h = `<div class="rowbox-h">No known spot</div>`; }
+      if (r === expanded && r.st !== 'open') {
+        const msg = r.st === 'in' ? `${ICON.check}<span>In envelope ${curB.n}. Marked sold.</span>` : `${ICON.cross}<span>${S.cs[r.c.id] === 'cant' ? 'Not at ' : 'Wrong card at '}${place(r.c)}.</span>`;
+        return h + `<div class="crow-open">${photo(r.l, r.c, 'sm', false)}<div class="stack info"><h3 class="card-name">${esc(r.l.card.name)}</h3><p class="card-meta">${place(r.c)}</p></div>
+          <div class="acts"><div class="receipt ${r.st === 'in' ? '' : 'is-short'}" role="status"><span class="receipt-t">${msg}</span><button class="btn btn-quiet" data-act="revert" data-copy="${r.c.id}">Undo</button></div></div></div>`;
+      }
+      if (r === expanded) {
+        return h + `<div class="crow-open" data-new="The card to take">${photo(r.l, r.c, 'md', true)}<div class="stack-4 info">${loc(r.c, 'md')}
+          <div class="stack" style="gap:var(--space-1)"><h3 class="card-name">${esc(r.l.card.name)}</h3><p class="card-meta">${esc(r.l.card.num)} ${esc(r.l.card.set)}. ${esc(r.c.cond)}${r.c.mark ? ', ' + esc(r.c.mark) : ''}.</p></div>${copyNote(r.l, r.c)}${isSpare(r.l, r.c) ? '<p class="muted">This is a spare copy. The first one was not found.</p>' : ''}</div>
+          <div class="acts">${S.last && S.last.id && findCopy(S.last.id).l.b === curB.i ? receipt() : ''}${actions(r.c, true)}</div></div>`;
+      }
+      if (r.st === 'open') return h + `<button class="crow" data-act="row" data-copy="${r.c.id}">${photo(r.l, r.c, 'xs', false)}<span><b>${esc(r.l.card.name)}</b><br><span class="where">Box ${r.c.box}, tab ${r.c.tab}, card ${r.c.pos}</span></span><span></span></button>`;
+      if (r.st === 'in') return h + `<button class="crow is-in" data-act="row" data-copy="${r.c.id}" aria-label="${esc(r.l.card.name)}, in the envelope. Press to undo.">${photo(r.l, r.c, 'xs', false)}<span><b>${esc(r.l.card.name)}</b><br><span class="muted">${place(r.c)}</span></span><span class="state-mark in">${ICON.check}</span></button>`;
+      const shortInner = `${r.c ? photo(r.l, r.c, 'xs', false) : '<span style="width:3.25rem"></span>'}<span><b>${esc(r.l.card.name)}</b><br><span class="muted">${r.c ? (S.cs[r.c.id] === 'cant' ? 'Not at ' : 'Wrong card at ') + place(r.c) + '.' : 'No known spot.'}</span></span><span class="state-mark short">${ICON.cross}</span>`;
+      return h + (r.c ? `<button class="crow is-short" data-act="row" data-copy="${r.c.id}">${shortInner}</button>` : `<div class="crow is-short">${shortInner}</div>`);
+    }).join('');
+    const nextB = S.buyers.find(b => b.i !== curB.i && buyerState(b) === 'open');
+    const st = buyerState(curB);
+    const foot = st === 'open' ? '' : `<div class="env-foot" role="status" data-new="Envelope finished">${st === 'full' ? `${ICON.check} Envelope ${curB.n} is full. Close it.` : `${ICON.cross} Envelope ${curB.n} is short. Close it as it is; the owner gets the list.`}
+      ${(!openRows.length && S.last && S.last.id && findCopy(S.last.id).l.b === curB.i) ? receipt() : ''}
+      ${nextB ? `<button class="btn btn-go btn-big" data-act="open-env" data-b="${nextB.i}">Next envelope</button>` : `<button class="btn btn-go btn-big" data-act="finish">See what is short</button>`}</div>`;
+    main = `<section class="opened" aria-label="Open envelope"><div class="env-head" style="--env:var(--env-${curB.ci})">${envChip(curB, 'env-big')}<span class="muted">${units} card${units > 1 ? 's' : ''}</span>${pips(curB)}</div>
+      ${foot}<div class="rows">${list}</div></section>`;
+  }
+  return top(title) + `<div class="estack" style="flex:1;min-height:0">${pile}${main}</div>` + zoomOverlay();
+}
+
+/* ---------------- Chrome and frame ---------------- */
+const $ = id => document.getElementById(id);
+function renderChrome() {
+  const vis = CONCEPTS.filter(c => !ui.h.includes(c.id));
+  $('opts').innerHTML = vis.map(c => `<span class="opt" data-on="${c.id === ui.c}"><button class="opt-name" data-chrome="concept" data-v="${c.id}" aria-pressed="${c.id === ui.c}">${c.name}</button><button class="opt-hide" data-chrome="hide" data-v="${c.id}" aria-label="Hide ${c.name}">Hide</button></span>`).join('')
+    + (ui.h.length ? `<button class="mock-btn" data-chrome="showall">Show hidden (${ui.h.length})</button>` : '');
+  $('stateSel').innerHTML = STATES.map(([k, v]) => `<option value="${k}" ${k === ui.s ? 'selected' : ''}>${v}</option>`).join('');
+  const seg = (el, key, opts) => { $(el).innerHTML = opts.map(([v, lab]) => `<button data-chrome="${key}" data-v="${v}" aria-pressed="${String(ui[key]) === String(v)}">${lab}</button>`).join(''); };
+  seg('daySeg', 'd', [['quiet', 'Quiet (3)'], ['busy', 'Busy (7)'], ['peak', 'Peak (39)']]);
+  seg('wSeg', 'w', [[1440, '1440'], [820, '820']]);
+  const themeNow = ui.t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  $('tSeg').innerHTML = [['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<button data-chrome="t" data-v="${v}" aria-pressed="${themeNow === v}">${l}</button>`).join('');
+  $('labelsBtn').textContent = ui.labels ? 'Hide New: tags' : 'Show New: tags';
+  $('labelsBtn').setAttribute('aria-pressed', ui.labels);
+  const c = CONCEPTS.find(x => x.id === ui.c); $('caption').textContent = c ? `${c.name}. ${c.cap}` : 'Every concept is hidden.';
+}
+function render() {
+  if (ui.t) document.documentElement.setAttribute('data-theme', ui.t); else document.documentElement.removeAttribute('data-theme');
+  const dev = $('device');
+  document.documentElement.style.setProperty('--frame-w', ui.w + 'px');
+  document.documentElement.style.setProperty('--frame-h', (ui.w === 1440 ? 900 : 1180) + 'px');
+  dev.classList.toggle('labels-on', ui.labels);
+  const vis = CONCEPTS.filter(c => !ui.h.includes(c.id));
+  if (!vis.length) dev.innerHTML = `<div class="state"><p>Every concept is hidden.</p><button class="btn" data-chrome="showall">Show them again</button></div>`;
+  else {
+    const html = ui.c === 'map' ? renderMap() : ui.c === 'stack' ? renderStack() : renderWalk();
+    dev.innerHTML = `<div class="app" id="concept-${ui.c}" data-concept="${ui.c}">${html}</div>`;
+  }
+  renderChrome(); writeHash(); fit();
+}
+function fit() {
+  const fw = ui.w, fh = ui.w === 1440 ? 900 : 1180;
+  const avail = $('stage').clientWidth - 32; const s = Math.min(1, avail / fw);
+  $('device').style.transform = `scale(${s})`; $('wrap').style.width = fw * s + 'px'; $('wrap').style.height = fh * s + 'px';
+}
+
+/* ---------------- Events ---------------- */
+document.addEventListener('click', e => {
+  const ch = e.target.closest('[data-chrome]');
+  if (ch) {
+    const k = ch.dataset.chrome, v = ch.dataset.v;
+    if (k === 'concept') { ui.c = v; applyPreset(); }
+    if (k === 'hide') { ui.h.push(v); if (ui.c === v) { const n = CONCEPTS.find(c => !ui.h.includes(c.id)); if (n) { ui.c = n.id; applyPreset(); } } }
+    if (k === 'showall') ui.h = [];
+    if (k === 'd') { ui.d = v; if (ui.s === 'allwell' && v !== 'quiet') ui.s = 'start'; applyPreset(); }
+    if (k === 'w') ui.w = +v;
+    if (k === 't') ui.t = v;
+    render(); return;
+  }
+  const a = e.target.closest('[data-act]'); if (!a) return;
+  if (a.dataset.stop && a !== e.target.closest('[data-act]')) return;
+  const act_ = a.dataset.act; const id = a.dataset.copy;
+  switch (act_) {
+    case 'in': case 'cant': case 'nomatch':
+      act(id, act_); S.ready = true; ui.zoom = null;
+      if (ui.c === 'map') ui.sheet = { type: 'copy', id };
+      if (ui.c === 'stack') { ui.stackRow = null; ui.stackB = findCopy(id).l.b; }
+      break;
+    case 'undo': { const L = S.last; undo(); if (ui.c === 'map' && L && L.id) ui.sheet = { type: 'copy', id: L.id }; if (ui.c === 'map' && L && L.kind === 'send') ui.sheet = { type: 'owner' }; break; }
+    case 'ready': S.ready = true; break;
+    case 'revert': revert(id); if (ui.c === 'stack') ui.stackRow = id; break;
+    case 'zoom': ui.zoom = id; break;
+    case 'close-zoom': if (e.target.closest('.zoom') && !e.target.closest('button[data-act="close-zoom"]')) return; ui.zoom = null; break;
+    case 'spot': { const ids = a.dataset.ids.split(','); ui.sheet = ids.length === 1 ? { type: 'copy', id: ids[0] } : { type: 'spot', ids }; S.ready = true; break; }
+    case 'open-copy': ui.sheet = { type: 'copy', id }; break;
+    case 'next-dot': { const q = queue(); S.ready = true; S.last = null; ui.sheet = q.length ? { type: 'copy', id: q[0].c.id } : null; break; }
+    case 'close-sheet': ui.sheet = null; S.last = null; break;
+    case 'filter': { const b = +a.dataset.b; ui.filter = ui.filter === b ? null : b; break; }
+    case 'owner': ui.sheet = { type: 'owner' }; break;
+    case 'send': send(); break;
+    case 'open-env': ui.stackB = +a.dataset.b; ui.stackRow = null; S.last = null; break;
+    case 'row': ui.stackRow = id; break;
+    case 'finish': ui.stackB = null; S.last = null; break;
+    case 'retry': ui.screen = 'loading'; render(); setTimeout(() => { ui.screen = 'app'; S.ready = false; render(); }, 900); return;
+    case 'recheck': ui.screen = 'loading'; render(); setTimeout(() => { ui.screen = 'empty'; ui.checked = true; render(); }, 900); return;
+  }
+  render();
+});
+$('stateSel').addEventListener('change', e => { ui.s = e.target.value; applyPreset(); render(); });
+$('labelsBtn').addEventListener('click', () => { ui.labels = !ui.labels; render(); });
+$('resetBtn').addEventListener('click', () => { applyPreset(); render(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && (ui.zoom || ui.sheet)) { ui.zoom = null; ui.sheet = null; render(); } });
+window.addEventListener('resize', fit);
+window.addEventListener('hashchange', () => { const prev = JSON.stringify([ui.c, ui.s, ui.d]); readHash(); if (JSON.stringify([ui.c, ui.s, ui.d]) !== prev) applyPreset(); render(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+
+readHash(); applyPreset(); render();
+})();
+</script>
+</body>
+</html>
