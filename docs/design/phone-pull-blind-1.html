@@ -267,6 +267,10 @@ summary { min-height: 44px; display: flex; align-items: center; justify-content:
   overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 6px); }
 .dot { position: absolute; left: 50%; width: 44px; height: 44px; translate: -50% -50%; display: grid; place-items: center; z-index: 1; }
 .map.labelled .dot { left: calc(100% - 18px); }
+.dot.alt { left: 72%; }
+.map:not(.labelled) .dot:not(.alt) { left: 30%; }
+.map:not(.labelled) .dot:only-of-type { left: 50%; }
+.map.labelled .dot.alt { left: calc(100% - 44px); }
 .dot::before { content: ""; width: 14px; height: 14px; border-radius: 50%; background: var(--c-act); border: 2px solid var(--c-raised); }
 .dot.took::before { background: var(--c-done); }
 .dot.miss::before { background: var(--c-warn); border-radius: 2px; }
@@ -729,6 +733,10 @@ function mapHtml(st, H, labels) {
       const cls = p.st === "took" ? "took" : p.st === "missing" ? "miss" : "";
       dots.push(`<button class="dot ${cls} ${cur === i ? "sel" : ""}" style="top:${(secStart(b.n, c.sec) + c.spot - .5) / tot * H}px" data-act="sel" data-arg="${i}" aria-label="${CARDS[c.card].name}, ${spotText(c)}${p.st === "took" ? ", taken" : ""}"></button>`); });
     const has = dots.length > 0;
+    let lastY = -99, side = 0;
+    for (let d = 0; d < dots.length; d++) { const y = parseFloat(dots[d].match(/top:([\d.]+)px/)[1]);
+      side = y - lastY < 44 ? 1 - side : 0; lastY = y;
+      if (side) dots[d] = dots[d].replace('class="dot', 'class="dot alt'); }
     return `<div class="mapcol"><span class="bx ${has ? "has" : ""}">Box ${b.n}</span><div class="boxbar" style="height:${H}px">${divs}${dots.join("")}</div></div>`; }).join("")}</div>
     <div class="legend" aria-hidden="true">${q ? `<span><b style="background:var(--c-find);border-radius:2px"></b>Matches</span>` : `<span><b style="background:var(--c-act)"></b>To take</span><span><b style="background:var(--c-done)"></b>Taken</span><span><b style="background:var(--c-warn);border-radius:2px"></b>Owner's list</span>`}<span>Front of each box at the top</span></div>`;
 }
@@ -770,7 +778,7 @@ function shelfScreen(st, pose) {
   }
   return `<div class="nav"><div class="nav-row"><span class="large" style="font:var(--t-title1)">Shelf</span>${ownerChip}</div></div>${netBanner(st)}
     <div class="split"><div class="main" style="flex:1.4"><div class="scroll">${mapHtml(st, 560, true)}</div></div>
-    <div class="side" style="width:310px;border-right:0;border-left:1px solid var(--c-line)"><div style="padding:0 var(--space-4) var(--space-2)">${searchField(st)}</div><div style="flex:1"></div>${shelfDock(st, pose)}</div></div>`;
+    <div class="side" style="width:310px;border-right:0;border-left:1px solid var(--c-line)"><div style="padding:0 var(--space-4) var(--space-2)">${searchField(st)}</div>${shelfDock(st, pose)}</div></div>`;
 }
 function tableScreen(st, pose) {
   const rest = stack(st), packedIdx = route(st).filter(i => st.pulls[i].packed);
