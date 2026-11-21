@@ -1,0 +1,853 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Divider close-out</title>
+<style>
+/* Tokens: copied from app/src/tokens.css (light, dark, stage). No other colour is typed below. */
+:root {
+  color-scheme: light;
+  --bn-bg: #f4f5f8; --bn-surface: #ffffff; --bn-surface-2: #eceef2; --bn-surface-3: #f7f8fa;
+  --bn-hover: rgba(15, 18, 23, 0.03);
+  --bn-ink: #0f1217; --bn-ink-2: #3b414b; --bn-ink-3: #666c76; --bn-ink-4: #7f8791;
+  --bn-line: rgba(15, 18, 23, 0.08); --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-line-focus: rgba(61, 90, 241, 0.55);
+  --bn-accent: #3d5af1; --bn-accent-hover: #2f4bd9; --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10); --bn-on-accent: #ffffff;
+  --bn-live: #d63d2b; --bn-live-tint: rgba(239, 75, 58, 0.12);
+  --bn-ok: #15803d; --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309; --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-danger: #b91c1c; --bn-danger-tint: rgba(220, 38, 38, 0.10);
+  --bn-pill-ink-ok: #11733a; --bn-pill-ink-warn: #a14b09; --bn-pill-ink-danger: #b3123e;
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32), 0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-btn-bg: var(--bn-surface); --bn-btn-bg-hover: var(--bn-surface-3); --bn-btn-shadow: var(--bn-shadow-1);
+  --bn-font-display: 'Manrope', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --bn-fs-2xs: 10px; --bn-fs-xs: 11px; --bn-fs-sm: 12px; --bn-fs-md: 13px; --bn-fs-base: 14px;
+  --bn-fs-lg: 16px; --bn-fs-xl: 18px; --bn-fs-2xl: 22px; --bn-fs-3xl: 28px; --bn-fs-4xl: 36px; --bn-fs-5xl: 48px;
+  --bn-tracking-caps: 0.06em; --bn-tracking-tight: -0.02em;
+  --bn-lh-tight: 1.1; --bn-lh-snug: 1.25; --bn-lh-base: 1.4;
+  --bn-0-5: 2px; --bn-1: 4px; --bn-1-5: 6px; --bn-2: 8px; --bn-3: 12px; --bn-4: 16px; --bn-5: 20px;
+  --bn-6: 24px; --bn-7: 32px; --bn-8: 40px; --bn-9: 48px; --bn-10: 64px;
+  --bn-r-xs: 4px; --bn-r-sm: 6px; --bn-r: 8px; --bn-r-lg: 12px; --bn-r-xl: 16px; --bn-r-full: 999px;
+  --bn-t-fast: 120ms; --bn-t: 200ms; --bn-t-slow: 280ms; --bn-t-pulse: 1.8s;
+  --bn-ease: cubic-bezier(0.2, 0, 0, 1); --bn-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --bn-control-h: 34px; --bn-control-h-lg: 40px; --bn-pill-h: 22px;
+  --bn-sidebar-w: 236px; --bn-rail-w: 64px;
+  --bn-stage-bg: #0c0e12; --bn-stage-bg-2: #171b25; --bn-stage-surface: #1b2029; --bn-stage-ink: #eef0f4;
+  --bn-stage-accent: #7f90ff; --bn-stage-on-accent: #0c0e12;
+  --bn-stage-ok: #3ddc84; --bn-stage-warn: #f5a524; --bn-stage-danger: #ff5c5c; --bn-stage-live: #ff6a58;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+  --bn-hover: rgba(255, 255, 255, 0.04);
+  --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+  --bn-line: rgba(255, 255, 255, 0.08); --bn-line-strong: rgba(255, 255, 255, 0.16);
+  --bn-line-focus: rgba(129, 146, 255, 0.6);
+  --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14); --bn-on-accent: #0c0e12;
+  --bn-live: #ff6a58; --bn-live-tint: rgba(255, 106, 88, 0.16);
+  --bn-ok: #3ddc84; --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524; --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-danger: #ff5c5c; --bn-danger-tint: rgba(255, 92, 92, 0.14);
+  --bn-pill-ink-ok: var(--bn-ok); --bn-pill-ink-warn: var(--bn-warn); --bn-pill-ink-danger: #f6799c;
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-btn-bg: var(--bn-surface-3); --bn-btn-bg-hover: #262b34;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+    --bn-hover: rgba(255, 255, 255, 0.04);
+    --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+    --bn-line: rgba(255, 255, 255, 0.08); --bn-line-strong: rgba(255, 255, 255, 0.16);
+    --bn-line-focus: rgba(129, 146, 255, 0.6);
+    --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+    --bn-accent-tint: rgba(127, 144, 255, 0.14); --bn-on-accent: #0c0e12;
+    --bn-live: #ff6a58; --bn-live-tint: rgba(255, 106, 88, 0.16);
+    --bn-ok: #3ddc84; --bn-ok-tint: rgba(61, 220, 132, 0.14);
+    --bn-warn: #f5a524; --bn-warn-tint: rgba(245, 165, 36, 0.14);
+    --bn-danger: #ff5c5c; --bn-danger-tint: rgba(255, 92, 92, 0.14);
+    --bn-pill-ink-ok: var(--bn-ok); --bn-pill-ink-warn: var(--bn-warn); --bn-pill-ink-danger: #f6799c;
+    --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+    --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    --bn-btn-bg: var(--bn-surface-3); --bn-btn-bg-hover: #262b34;
+    --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bn-bg);
+  color: var(--bn-ink);
+  font: 400 var(--bn-fs-base)/var(--bn-lh-base) var(--bn-font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--bn-accent); outline-offset: 2px; }
+
+/* ---- mockup chrome (not product) ---------------------------------------------------------- */
+.sample {
+  display: flex; gap: var(--bn-2); align-items: baseline; flex-wrap: wrap;
+  padding: var(--bn-2) var(--bn-6);
+  background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn);
+  font-size: var(--bn-fs-md); border-bottom: 1px solid var(--bn-line);
+}
+.sample b { font-weight: 700; }
+.proposal { padding: var(--bn-4) var(--bn-6) var(--bn-3); display: grid; gap: var(--bn-3); }
+.proposal-head { display: flex; align-items: baseline; gap: var(--bn-3); flex-wrap: wrap; }
+.proposal-head h1 {
+  margin: 0; font: 700 var(--bn-fs-xl)/var(--bn-lh-snug) var(--bn-font-display);
+  letter-spacing: var(--bn-tracking-tight);
+}
+.proposal-head p { margin: 0; color: var(--bn-ink-3); font-size: var(--bn-fs-md); }
+.controls { display: flex; flex-wrap: wrap; gap: var(--bn-2) var(--bn-4); align-items: center; }
+.seg {
+  display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px;
+  background: var(--bn-surface-2); border-radius: var(--bn-r);
+}
+.seg button {
+  border: 0; background: transparent; border-radius: var(--bn-r-sm);
+  height: 30px; padding: 0 var(--bn-3); font-size: var(--bn-fs-md); color: var(--bn-ink-2); cursor: pointer;
+}
+.seg button:hover { color: var(--bn-ink); }
+.seg button[aria-pressed='true'] { background: var(--bn-surface); color: var(--bn-ink); box-shadow: var(--bn-shadow-1); font-weight: 600; }
+.ctl-label { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-right: var(--bn-1); }
+details.choices { font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+details.choices summary { cursor: pointer; color: var(--bn-ink-2); }
+details.choices ul { list-style: none; margin: var(--bn-2) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-4); }
+details.choices label { display: inline-flex; gap: var(--bn-1-5); align-items: center; cursor: pointer; }
+
+/* Today / New annotations: dashed outline with a tag. */
+.anno { position: relative; outline: 1.5px dashed var(--bn-ink-4); outline-offset: 3px; }
+.anno-new { outline-color: var(--bn-accent); }
+.anno::after {
+  content: attr(data-anno); position: absolute; top: -10px; right: 8px; z-index: 5;
+  padding: 0 var(--bn-1-5); font: 600 var(--bn-fs-2xs)/16px var(--bn-font-ui);
+  background: var(--bn-bg); color: var(--bn-ink-3); border: 1px dashed var(--bn-ink-4); border-radius: var(--bn-r-xs);
+}
+.anno-new::after { color: var(--bn-accent); border-color: var(--bn-accent); }
+.no-anno .anno { outline: none; }
+.no-anno .anno::after { display: none; }
+
+/* ---- the app frame ------------------------------------------------------------------------ */
+.frame-wrap { padding: 0 var(--bn-6) var(--bn-6); }
+.frame {
+  position: relative; display: grid; grid-template-columns: var(--bn-sidebar-w) minmax(0, 1fr);
+  min-height: 820px; border-radius: var(--bn-r-xl); overflow: hidden;
+  background: var(--bn-bg); box-shadow: var(--bn-shadow-3);
+}
+/* The edge: the whole screen border carries the verdict, read from the side. Theme-invariant
+   stage colours, like the viewfinder, because it is a signal light and not a surface. */
+#edge {
+  position: absolute; inset: 0; z-index: 40; pointer-events: none;
+  border: 14px solid transparent; border-radius: inherit;
+  transition: border-color var(--bn-t) var(--bn-ease);
+}
+#edge[data-edge='warn'] { border-color: var(--bn-stage-warn); }
+#edge[data-edge='danger'] { border-color: var(--bn-stage-danger); }
+#edge[data-edge='ok'] { animation: edge-ok 1100ms var(--bn-ease-out) both; }
+@keyframes edge-ok { 0%, 35% { border-color: var(--bn-stage-ok); } 100% { border-color: transparent; } }
+@media (prefers-reduced-motion: reduce) {
+  #edge[data-edge='ok'] { animation: edge-ok-step 1000ms steps(1, end) both; }
+  @keyframes edge-ok-step { 0% { border-color: var(--bn-stage-ok); } 100% { border-color: transparent; } }
+}
+.hide-edge #edge { display: none; }
+
+.side {
+  background: var(--bn-surface-2); border-right: 1px solid var(--bn-line);
+  padding: var(--bn-5) var(--bn-3); display: flex; flex-direction: column; gap: 2px;
+}
+.brand { display: flex; align-items: center; gap: var(--bn-2); padding: 0 var(--bn-2) var(--bn-4); font: 800 var(--bn-fs-lg)/1 var(--bn-font-display); }
+.brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bn-live); }
+.nav { display: flex; align-items: center; gap: var(--bn-2); height: 32px; padding: 0 var(--bn-2); border-radius: var(--bn-r); color: var(--bn-ink-3); font-size: var(--bn-fs-md); }
+.nav i { width: 16px; height: 16px; border-radius: var(--bn-r-xs); border: 1.5px solid currentColor; opacity: .7; flex: none; }
+.nav.is-here { background: var(--bn-accent-tint); color: var(--bn-accent); font-weight: 600; }
+
+.page { padding: var(--bn-6) var(--bn-7) var(--bn-7); min-width: 0; display: flex; flex-direction: column; gap: var(--bn-4); }
+.page-head { display: flex; align-items: flex-end; gap: var(--bn-6); flex-wrap: wrap; }
+.page-head h2 { margin: 0; font: 700 var(--bn-fs-3xl)/var(--bn-lh-tight) var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.odo { display: flex; gap: var(--bn-5); }
+.stat { display: grid; }
+.stat b { font: 700 var(--bn-fs-xl)/1.2 var(--bn-font-display); font-variant-numeric: tabular-nums; }
+.stat span { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.sound {
+  margin-left: auto; display: inline-flex; align-items: center; gap: var(--bn-2);
+  padding: var(--bn-1-5) var(--bn-3); border-radius: var(--bn-r-full);
+  background: var(--bn-surface); box-shadow: var(--bn-shadow-1); font-size: var(--bn-fs-md); color: var(--bn-ink-2);
+}
+.sound-note { font-size: var(--bn-fs-lg); color: var(--bn-accent); }
+.hide-spoken .spoken { display: none; }
+
+.shell { display: grid; grid-template-columns: 296px minmax(0, 1fr); gap: var(--bn-4); align-items: start; flex: 1; }
+.rail { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
+.card { background: var(--bn-surface); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-1); padding: var(--bn-3); }
+.card h3 { margin: 0 0 var(--bn-2); font: 600 var(--bn-fs-sm)/1.2 var(--bn-font-ui); color: var(--bn-ink-3); }
+.row { display: grid; grid-template-columns: 72px 1fr; gap: var(--bn-2); align-items: baseline; padding: var(--bn-1-5) 0; border-top: 1px solid var(--bn-line); font-size: var(--bn-fs-md); }
+.row:first-of-type { border-top: 0; }
+.row span { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.row b { font-weight: 600; }
+.row small { display: block; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+
+.secs { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.sec {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: var(--bn-2);
+  padding: var(--bn-1-5) var(--bn-2) var(--bn-1-5) var(--bn-3); border-radius: var(--bn-r-sm);
+  font-size: var(--bn-fs-md); position: relative; font-variant-numeric: tabular-nums;
+}
+.sec::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; border-radius: 2px; background: var(--bn-line-strong); }
+.sec[data-v='ok']::before { background: var(--bn-ok); }
+.sec[data-v='warn']::before { background: var(--bn-warn); }
+.sec[data-v='danger']::before { background: var(--bn-danger); }
+.sec[data-v='now'] { background: var(--bn-accent-tint); }
+.sec[data-v='now']::before { background: var(--bn-accent); }
+.sec em { font-style: normal; font-size: var(--bn-fs-sm); font-weight: 600; }
+.sec[data-v='ok'] em { color: var(--bn-pill-ink-ok); }
+.sec[data-v='warn'] em { color: var(--bn-pill-ink-warn); }
+.sec[data-v='danger'] em { color: var(--bn-pill-ink-danger); }
+.sec[data-v='now'] em, .sec[data-v=''] em { color: var(--bn-ink-3); font-weight: 400; }
+.hide-ticks .sec::before { display: none; }
+.hide-ticks .sec em { visibility: hidden; }
+
+.recent { display: grid; gap: var(--bn-1); }
+.recent-row { display: grid; grid-template-columns: 28px 1fr auto; gap: var(--bn-2); align-items: center; font-size: var(--bn-fs-md); }
+.recent-row .thumb { width: 28px; height: 39px; }
+.recent-row small { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-1-5);
+  height: var(--bn-control-h); padding: 0 var(--bn-3); border: 0; border-radius: var(--bn-r);
+  background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow); font-size: var(--bn-fs-md); font-weight: 600; cursor: pointer;
+}
+.btn:hover { background: var(--bn-btn-bg-hover); }
+.btn-sm { height: 26px; font-size: var(--bn-fs-sm); padding: 0 var(--bn-2); }
+.chip { display: inline-flex; align-items: center; height: var(--bn-pill-h); padding: 0 var(--bn-2); border-radius: var(--bn-r-full); font-size: var(--bn-fs-xs); font-weight: 600; background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn); }
+
+/* Card art: flat placeholder blocks, never a picture. */
+.thumb { border-radius: 3px; background: var(--bn-surface-3); box-shadow: inset 0 0 0 1px var(--bn-line-strong); position: relative; overflow: hidden; }
+.thumb::after { content: ''; position: absolute; left: 12%; right: 12%; top: 10%; height: 42%; border-radius: 2px; background: var(--bn-line-strong); }
+.thumb.back { background: var(--bn-accent-tint); }
+.thumb.back::after { inset: 18%; height: auto; border-radius: 50%; background: transparent; box-shadow: inset 0 0 0 3px var(--bn-accent); opacity: .6; }
+.thumb.blur::after { filter: blur(5px); }
+.thumb.blur { filter: blur(1.5px); }
+.thumb.empty { background: transparent; box-shadow: inset 0 0 0 1px var(--bn-line); }
+.thumb.empty::after { display: none; }
+
+/* ---- the work area: stage + last capture, and the verdict that covers them ----------------- */
+.work { position: relative; min-width: 0; min-height: 640px; display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: var(--bn-4); }
+.work > .stage { grid-area: 1 / 1; }
+.work > .last { grid-area: 1 / 2; }
+/* The verdict shares the stage's grid cell and covers stage and last capture, like today's halt. */
+.work:has(.verdict.on) > .stage::after { display: none; }
+.stage, .verdict {
+  --s-ink: var(--bn-stage-ink);
+  --s-ink-2: color-mix(in srgb, var(--bn-stage-ink) 72%, transparent);
+  --s-ink-3: color-mix(in srgb, var(--bn-stage-ink) 56%, transparent);
+  --s-line: color-mix(in srgb, var(--bn-stage-ink) 12%, transparent);
+  --s-raise: color-mix(in srgb, var(--bn-stage-ink) 7%, transparent);
+  color: var(--s-ink);
+  border-radius: var(--bn-r-xl);
+  background: radial-gradient(120% 70% at 50% -10%, var(--bn-stage-bg-2), var(--bn-stage-bg) 75%);
+  box-shadow: 0 0 0 1px var(--s-line), var(--bn-shadow-3);
+}
+.stage { display: grid; grid-template-rows: auto 1fr auto; padding: var(--bn-4); min-height: 640px; }
+.stage-head, .stage-foot { display: flex; justify-content: space-between; align-items: center; font-size: var(--bn-fs-md); color: var(--s-ink-2); }
+.live { display: inline-flex; align-items: center; gap: var(--bn-1-5); font-weight: 600; color: var(--s-ink); }
+.live::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--bn-stage-live); animation: pulse var(--bn-t-pulse) ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+.vf { display: grid; place-items: center; }
+.vf-card { width: 200px; aspect-ratio: 63 / 88; border-radius: 8px; background: var(--bn-stage-surface); box-shadow: inset 0 0 0 1px var(--s-line); position: relative; }
+.vf-card::after { content: ''; position: absolute; left: 12%; right: 12%; top: 10%; height: 42%; border-radius: 4px; background: var(--s-raise); }
+.last { background: var(--bn-surface); border-radius: var(--bn-r-xl); box-shadow: var(--bn-shadow-1); padding: var(--bn-3); display: flex; flex-direction: column; gap: var(--bn-2); align-self: start; }
+.last .thumb { width: 100%; aspect-ratio: 63 / 88; }
+.last b { font: 700 var(--bn-fs-2xl)/1.1 var(--bn-font-display); }
+.last small { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+
+.verdict {
+  grid-area: 1 / 1 / 2 / -1; z-index: 10; display: none; min-height: 640px;
+  grid-template-rows: auto 1fr auto; gap: var(--bn-4); padding: var(--bn-6);
+}
+.verdict.on { display: grid; animation: rise var(--bn-t-slow) var(--bn-ease-out) backwards; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .verdict.on { animation: none; } }
+.v-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--bn-4); flex-wrap: wrap; }
+.v-title { margin: 0; font: 800 var(--bn-fs-5xl)/1 var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.v-title .tone-warn { color: var(--bn-stage-warn); }
+.v-title .tone-danger { color: var(--bn-stage-danger); }
+.v-title .tone-ok { color: var(--bn-stage-ok); }
+.v-sub { margin: var(--bn-2) 0 0; font-size: var(--bn-fs-lg); color: var(--s-ink-2); max-width: 60ch; }
+.feeder {
+  display: inline-flex; align-items: center; gap: var(--bn-2); height: 32px; padding: 0 var(--bn-3);
+  border-radius: var(--bn-r-full); font-size: var(--bn-fs-md); font-weight: 600; background: var(--s-raise); white-space: nowrap;
+}
+.feeder::before { content: ''; width: 10px; height: 10px; border-radius: 2px; background: var(--bn-stage-warn); }
+.feeder[data-f='run']::before { border-radius: 50%; background: var(--bn-stage-ok); }
+.feeder[data-f='paused']::before { background: var(--bn-stage-danger); }
+.v-body { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--bn-6); align-items: start; min-height: 0; }
+.v-foot { font-size: var(--bn-fs-md); color: var(--s-ink-3); }
+
+/* The tray, seen from the side: one bar per card, top of the tray at the top. */
+.tray { display: grid; grid-template-columns: 64px auto; gap: var(--bn-2); align-items: start; }
+.tray-cap { grid-column: 1 / -1; font-size: var(--bn-fs-sm); color: var(--s-ink-3); }
+.tray-stack { display: flex; flex-direction: column; gap: 1px; width: 64px; padding: var(--bn-1); border-radius: var(--bn-r-sm); background: var(--s-raise); }
+.tray-stack i { display: block; height: 4px; border-radius: 1px; background: color-mix(in srgb, var(--bn-stage-ink) 26%, transparent); }
+.tray-stack i.f { background: var(--bn-stage-warn); height: 6px; }
+.tray-stack i.f.done { background: var(--bn-stage-ok); }
+.tray-stack i.d { background: var(--bn-stage-danger); height: 6px; }
+.tray-stack i.u { background: repeating-linear-gradient(90deg, var(--bn-stage-danger) 0 3px, transparent 3px 6px); }
+.tray-stack i.b { background: color-mix(in srgb, var(--bn-stage-accent) 55%, transparent); }
+.tray-stack i.cut { background: var(--bn-stage-warn); height: 6px; }
+.tray-stack.dense i { height: 2px; }
+.tray-marks { position: relative; width: 84px; }
+.tray-marks span { position: absolute; left: 0; transform: translateY(-50%); font-size: var(--bn-fs-sm); font-weight: 600; white-space: nowrap; }
+.tray-marks span::before { content: ''; display: inline-block; width: 10px; height: 1px; margin-right: 4px; vertical-align: middle; background: currentColor; }
+.hide-stack .tray { display: none; }
+.hide-stack .v-body { grid-template-columns: minmax(0, 1fr); }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--bn-4); align-content: start; }
+.tile {
+  display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: var(--bn-4);
+  padding: var(--bn-4); border-radius: var(--bn-r-lg); background: var(--s-raise);
+  box-shadow: inset 0 0 0 1px var(--s-line), inset 4px 0 0 var(--bn-stage-warn);
+}
+.tile[data-tone='danger'] { box-shadow: inset 0 0 0 1px var(--s-line), inset 4px 0 0 var(--bn-stage-danger); }
+.tile[data-done] { box-shadow: inset 0 0 0 1px var(--s-line), inset 4px 0 0 var(--bn-stage-ok); }
+.tile[data-done] .tile-photo, .tile[data-done] .tile-pos { opacity: .45; }
+.tile-photo { width: 112px; aspect-ratio: 63 / 88; border-radius: 6px; background: var(--bn-stage-surface); box-shadow: inset 0 0 0 1px var(--s-line); position: relative; overflow: hidden; }
+.tile-photo::after { content: ''; position: absolute; left: 12%; right: 12%; top: 10%; height: 42%; border-radius: 3px; background: color-mix(in srgb, var(--bn-stage-ink) 14%, transparent); }
+.tile-photo.back { background: color-mix(in srgb, var(--bn-stage-accent) 22%, var(--bn-stage-surface)); }
+.tile-photo.back::after { inset: 20%; height: auto; border-radius: 50%; background: transparent; box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--bn-stage-accent) 70%, transparent); }
+.tile-photo.blur { filter: blur(3px); }
+.tile-photo.two::before { content: ''; position: absolute; left: 8%; right: -6%; top: 6%; bottom: -4%; border-radius: 6px; box-shadow: inset 0 0 0 2px var(--bn-stage-danger); }
+.tile-problem { margin: 0; font: 700 var(--bn-fs-2xl)/1.15 var(--bn-font-display); }
+.tile-pos { margin: var(--bn-2) 0 0; display: flex; align-items: baseline; gap: var(--bn-2); flex-wrap: wrap; }
+.tile-pos b { font: 800 var(--bn-fs-5xl)/1 var(--bn-font-display); font-variant-numeric: tabular-nums; letter-spacing: var(--bn-tracking-tight); }
+.tile-pos span { font-size: var(--bn-fs-lg); color: var(--s-ink-2); }
+.place { margin: var(--bn-2) 0 0; font-size: var(--bn-fs-md); color: var(--s-ink-3); }
+.place b { color: var(--s-ink); font-weight: 600; }
+.tile p.say { margin: var(--bn-2) 0 0; font-size: var(--bn-fs-base); color: var(--s-ink-2); max-width: 46ch; }
+.tile-acts { display: flex; flex-wrap: wrap; gap: var(--bn-2); margin-top: var(--bn-3); }
+.sbtn {
+  height: var(--bn-control-h-lg); padding: 0 var(--bn-4); border: 0; border-radius: var(--bn-r);
+  background: color-mix(in srgb, var(--bn-stage-ink) 12%, transparent); color: var(--s-ink);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bn-stage-ink) 18%, transparent);
+  font-size: var(--bn-fs-base); font-weight: 600; cursor: pointer;
+}
+.sbtn:hover { background: color-mix(in srgb, var(--bn-stage-ink) 18%, transparent); }
+.sbtn.primary { background: var(--bn-stage-accent); color: var(--bn-stage-on-accent); box-shadow: none; }
+.sbtn:focus-visible { outline: 2px solid var(--bn-stage-accent); outline-offset: 2px; }
+.done-note { margin-top: var(--bn-3); font-weight: 600; color: var(--bn-stage-ok); font-size: var(--bn-fs-base); }
+.hide-carry .btn-carry { display: none; }
+
+.sum { display: grid; gap: var(--bn-6); align-content: start; }
+.sum-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--bn-4); }
+.sum-figs div { display: grid; gap: var(--bn-1); }
+.sum-figs b { font: 800 var(--bn-fs-4xl)/1 var(--bn-font-display); font-variant-numeric: tabular-nums; }
+.sum-figs span { font-size: var(--bn-fs-md); color: var(--s-ink-3); }
+.sum-strip { display: flex; gap: 3px; }
+.sum-strip i { flex: 1; height: 28px; border-radius: 3px; background: var(--bn-stage-ok); opacity: .75; }
+.sum-strip i.w { background: var(--bn-stage-danger); opacity: 1; }
+.sum-strip-cap { display: flex; justify-content: space-between; font-size: var(--bn-fs-sm); color: var(--s-ink-3); margin-top: var(--bn-1-5); }
+
+/* ---- 820 and below: icon rail, rail cards above the work area ------------------------------ */
+@media (max-width: 1100px) {
+  .frame { grid-template-columns: var(--bn-rail-w) minmax(0, 1fr); }
+  .side { padding: var(--bn-4) var(--bn-2); align-items: center; }
+  .brand span, .nav span { display: none; }
+  .nav { width: 40px; justify-content: center; padding: 0; }
+  .page { padding: var(--bn-5) var(--bn-5) var(--bn-6); }
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .rail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .rail .recent-card { display: none; }
+  .work { grid-template-columns: minmax(0, 1fr) 168px; }
+  .verdict { padding: var(--bn-5); }
+  .v-title { font-size: var(--bn-fs-4xl); }
+  .v-body { gap: var(--bn-4); }
+  .tiles { grid-template-columns: minmax(0, 1fr); }
+  .tile { grid-template-columns: 88px minmax(0, 1fr); }
+  .tile-photo { width: 88px; }
+  .sum-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sound { margin-left: 0; }
+}
+@media (max-width: 700px) {
+  .sample, .proposal, .frame-wrap { padding-left: var(--bn-4); padding-right: var(--bn-4); }
+  .rail { grid-template-columns: minmax(0, 1fr); }
+  .work { grid-template-columns: minmax(0, 1fr); }
+  .last { display: none; }
+  .v-body { grid-template-columns: minmax(0, 1fr); }
+}
+</style>
+</head>
+<body>
+<div class="sample" role="note"><b>Sample.</b> No card, set, box, count or sound on this page is real. Card art is flat blocks.</div>
+
+<section class="proposal" aria-label="Mockup controls">
+  <div class="proposal-head">
+    <h1>Section Close-Out at Each Divider</h1>
+    <p>A proposal for the Capture screen. Nothing here ships.</p>
+  </div>
+  <div class="controls">
+    <span class="ctl-label">State</span>
+    <div class="seg" id="states" role="group" aria-label="State"></div>
+  </div>
+  <div class="controls">
+    <span class="ctl-label">Theme</span>
+    <div class="seg" role="group" aria-label="Theme">
+      <button type="button" data-theme-set="light">Light</button>
+      <button type="button" data-theme-set="dark">Dark</button>
+    </div>
+    <span class="ctl-label">First card fed lands</span>
+    <div class="seg" role="group" aria-label="First card fed lands">
+      <button type="button" data-tray="bottom">At the Bottom</button>
+      <button type="button" data-tray="top">On Top</button>
+    </div>
+    <span class="ctl-label">An open flag</span>
+    <div class="seg" role="group" aria-label="An open flag">
+      <button type="button" data-stop="on">Holds the Feeder</button>
+      <button type="button" data-stop="off">Only Chimes</button>
+    </div>
+    <span class="ctl-label">Labels</span>
+    <div class="seg" role="group" aria-label="Today and New labels">
+      <button type="button" data-anno="on">Show</button>
+      <button type="button" data-anno="off">Hide</button>
+    </div>
+  </div>
+  <details class="choices">
+    <summary>Choices on this page (untick one to remove it)</summary>
+    <ul>
+      <li><label><input type="checkbox" data-hide="edge" checked> 1. Edge colour</label></li>
+      <li><label><input type="checkbox" data-hide="stack" checked> 2. Tray picture</label></li>
+      <li><label><input type="checkbox" data-hide="spoken" checked> 3. Spoken count</label></li>
+      <li><label><input type="checkbox" data-hide="ticks" checked> 4. Section list marks</label></li>
+      <li><label><input type="checkbox" data-hide="carry" checked> 5. Carry button</label></li>
+    </ul>
+  </details>
+</section>
+
+<div class="frame-wrap">
+  <div class="frame" id="frame">
+    <div id="edge" data-edge="none" aria-hidden="true"></div>
+    <nav class="side" aria-label="Sample navigation">
+      <div class="brand"><i class="brand-dot"></i><span>banchi</span></div>
+      <div class="nav"><i></i><span>Home</span></div>
+      <div class="nav is-here"><i></i><span>Capture</span></div>
+      <div class="nav"><i></i><span>Review</span></div>
+      <div class="nav"><i></i><span>Pricing</span></div>
+      <div class="nav"><i></i><span>Orders</span></div>
+      <div class="nav"><i></i><span>Shipping</span></div>
+      <div class="nav"><i></i><span>Inventory</span></div>
+    </nav>
+    <main class="page">
+      <header class="page-head">
+        <h2>Capture</h2>
+        <div class="odo" id="odo"></div>
+        <div class="sound anno anno-new" data-anno="New: sound" id="sound" aria-live="polite"></div>
+      </header>
+      <div class="shell">
+        <aside class="rail">
+          <section class="card">
+            <h3>Session</h3>
+            <div class="row"><span>Box</span><b data-typed id="box-name">Long Box Ember</b></div>
+            <div class="row anno" data-anno="Today: Section row" id="section-row"></div>
+            <div class="row"><span>Set Hint</span><b data-typed id="set-hint">Glimmerwake</b></div>
+          </section>
+          <section class="card anno anno-new" data-anno="New: verdict marks" id="sections">
+            <h3>Sections</h3>
+            <ul class="secs" id="secs"></ul>
+          </section>
+          <section class="card recent-card anno" data-anno="Today: undo stack">
+            <h3>Recent</h3>
+            <div class="recent" id="recent"></div>
+          </section>
+        </aside>
+        <div class="work">
+          <section class="stage anno" data-anno="Today: viewfinder" aria-label="Viewfinder">
+            <div class="stage-head"><span class="live">Live</span><span id="stage-feeder">Feeder running</span></div>
+            <div class="vf"><div class="vf-card"></div></div>
+            <div class="stage-foot"><span id="stage-next"></span><span>Auto-capture</span></div>
+          </section>
+          <aside class="last" aria-label="Last capture">
+            <div class="thumb"></div>
+            <b id="last-card"></b>
+            <small id="last-place"></small>
+          </aside>
+          <section class="verdict anno anno-new" data-anno="New: verdict" id="verdict" aria-live="assertive"></section>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+(() => {
+  const BOX = 'Long Box Ember';
+  const STATES = [
+    ['feeding', 'Feeding (Today)'],
+    ['clean', 'Clean Section'],
+    ['to-fix', '2 to Fix'],
+    ['double-feed', 'Double Feed'],
+    ['missing-divider', 'Missing Divider'],
+    ['carried', 'Carried to Next Session'],
+    ['box-summary', 'End of Box'],
+  ];
+  const opt = { state: 'to-fix', t: null, tray: 'bottom', stop: 'on', anno: 'on', hide: [] };
+  let local = {}; // per-state clicks: which tiles are cleared
+
+  // Tray position, counted from the top of the tray, for card n of a section of size total.
+  const fromTop = (n, total) => (opt.tray === 'bottom' ? total - n + 1 : n);
+  const ord = (n) => {
+    const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const place = (sec, card) => `<span>${BOX}, Section ${sec},</span> <b>Card ${card}</b>`;
+
+  const DATA = {
+    'feeding': {
+      edge: 'none', sound: 'No sound while you feed', spoken: '',
+      odo: [['412', 'Cards This Sitting'], ['7', 'Sections']],
+      section: [7, 42], set: 'Glimmerwake',
+      secs: [[4, '61', 'ok'], [5, '118', 'ok'], [6, '61', 'ok'], [7, '41 so far', 'now']],
+      last: ['Cindertail Vix', 7, 41],
+    },
+    'clean': {
+      edge: 'ok', sound: '♪ Soft tick at the divider. Nothing else.', spoken: '',
+      odo: [['429', 'Cards This Sitting'], ['8', 'Sections']],
+      section: [8, 1], set: 'Glimmerwake',
+      secs: [[5, '118', 'ok'], [6, '61', 'ok'], [7, '58 ✓', 'ok'], [8, 'next', 'now']],
+      last: ['Lanternfin', 7, 58],
+    },
+    'to-fix': {
+      edge: 'warn', sound: '♪♪ Two-note chime', spoken: ', then “two”',
+      odo: [['429', 'Cards This Sitting'], ['8', 'Sections']],
+      section: [8, 1], set: 'Glimmerwake',
+      secs: [[5, '118', 'ok'], [6, '61', 'ok'], [7, '58 · 2 to fix', 'warn'], [8, 'waiting', '']],
+      last: ['Lanternfin', 7, 58],
+    },
+    'double-feed': {
+      edge: 'danger', sound: '♪ Low buzz. The rig paused mid-section.', spoken: '',
+      odo: [['514', 'Cards This Sitting'], ['9', 'Sections']],
+      section: [9, 25], set: 'Hollow Tides',
+      secs: [[7, '58 ✓', 'ok'], [8, '61 ✓', 'ok'], [9, '24 · paused', 'danger']],
+      last: ['Quartz Wyrmling', 9, 24],
+    },
+    'missing-divider': {
+      edge: 'warn', sound: '♪♪ Two-note chime', spoken: ', then “one”',
+      odo: [['118', 'Cards This Sitting'], ['5', 'Sections']],
+      section: [6, 1], set: 'Glimmerwake',
+      secs: [[3, '57 ✓', 'ok'], [4, '61 ✓', 'ok'], [5, '118 · ran long', 'warn'], [6, 'waiting', '']],
+      last: ['Driftseed Imp', 5, 118],
+    },
+    'carried': {
+      edge: 'none', sound: 'No sound. The list waits for a tap.', spoken: '',
+      odo: [['0', 'Cards This Sitting'], ['1', 'Sections']],
+      section: [1, 1], set: 'Emberfall Crown', box: 'Long Box Frost',
+      secs: [[1, 'next', 'now']],
+      last: null,
+    },
+    'box-summary': {
+      edge: 'none', sound: 'No sound', spoken: '',
+      odo: [['1,146', 'Cards This Sitting'], ['22', 'Sections']],
+      section: [22, 50], set: 'Emberfall Crown',
+      secs: [[7, '58 · 1 carried', 'warn'], [9, '41 · unsure after 23', 'danger'], [21, '52 ✓', 'ok'], [22, '49 ✓', 'ok']],
+      last: ['Mossback Tortle', 22, 49],
+    },
+  };
+
+  // ---- the verdict, per state ---------------------------------------------------------------
+  function trayHTML(total, marks, cls) {
+    // marks: { cardNumber: className }. Bars run top of tray first.
+    let bars = '';
+    const labels = [];
+    for (let top = 1; top <= total; top++) {
+      const card = opt.tray === 'bottom' ? total - top + 1 : top;
+      const m = marks[card] || '';
+      bars += `<i class="${m}"></i>`;
+    }
+    return { bars, labels };
+  }
+  function tray(total, marks, notes, cap) {
+    const dense = total > 80;
+    const bar = dense ? 3 : 5; // bar height + gap, px
+    const { bars } = trayHTML(total, marks);
+    const spans = notes.map(([card, text, tone]) => {
+      const top = fromTop(card, total);
+      const y = 4 + (top - 0.5) * bar;
+      return `<span style="top:${y}px;color:var(--bn-stage-${tone})">${esc(text)}</span>`;
+    }).join('');
+    return `<div class="tray" id="tray-stack"><div class="tray-cap">${esc(cap)}</div>
+      <div class="tray-stack${dense ? ' dense' : ''}" aria-hidden="true">${bars}</div>
+      <div class="tray-marks" aria-hidden="true">${spans}</div></div>`;
+  }
+  const feederPill = (kind, text) => `<span class="feeder" data-f="${kind}">${esc(text)}</span>`;
+
+  function verdictToFix() {
+    const total = 58;
+    const flags = [
+      { card: 28, art: 'back', problem: 'Face Down', say: 'Turn it over and feed it alone, or turn it in the tray and press Fixed.' },
+      { card: 55, art: 'blur', problem: 'Blurred Photo', say: 'Feed it again alone. The new photo replaces this one.' },
+    ];
+    const st = local['to-fix'] || (local['to-fix'] = {});
+    const open = flags.filter((f) => !st[f.card]).length;
+    const held = opt.stop === 'on' && open > 0;
+    const marks = {}; flags.forEach((f) => { marks[f.card] = 'f' + (st[f.card] ? ' done' : ''); });
+    const title = open
+      ? `<span class="tone-warn">Section 7</span> · ${open} to Fix`
+      : `<span class="tone-ok">Section 7</span> · All Clear`;
+    const tiles = flags.map((f) => {
+      const done = st[f.card];
+      const pos = fromTop(f.card, total);
+      return `<article class="tile" ${done ? 'data-done' : ''}>
+        <div class="tile-photo ${f.art}" role="img" aria-label="Sample photo, ${esc(f.problem.toLowerCase())}"></div>
+        <div>
+          <h4 class="tile-problem">${f.problem}</h4>
+          <p class="tile-pos"><b>${ord(pos)}</b><span>from the top</span></p>
+          <p class="place">${place(7, f.card)}</p>
+          ${done ? `<p class="done-note">${esc(done)}</p>` : `<p class="say">${f.say}</p>
+          <div class="tile-acts">
+            <button class="sbtn primary" data-act="Fixed" data-card="${f.card}">Fixed</button>
+            <button class="sbtn" data-act="Re-fed. The new photo replaced the old one." data-card="${f.card}">Re-feed</button>
+            <button class="sbtn btn-carry" data-act="Carried to the next session" data-card="${f.card}">Carry</button>
+          </div>`}
+        </div></article>`;
+    }).join('');
+    const foot = open
+      ? (held ? 'The feeder starts again when every flag is Fixed, Re-fed or Carried.'
+              : 'The feeder kept running. Section 8 has 3 cards on top of this section.')
+      : 'All clear. The feeder is running and the next divider starts at zero.';
+    return `<div class="v-head"><div>
+        <h3 class="v-title">${title}</h3>
+        <p class="v-sub">58 cards are still in the output tray. Count down from the top to reach each one.</p>
+      </div>${open ? (held ? feederPill('held', 'Feeder Held') : feederPill('run', 'Feeder Running')) : feederPill('run', 'Feeder Running')}</div>
+      <div class="v-body">${tray(total, marks, flags.map((f) => [f.card, ord(fromTop(f.card, total)), st[f.card] ? 'ok' : 'warn']), 'Tray, top first')}
+        <div class="tiles">${tiles}</div></div>
+      <p class="v-foot">${foot}</p>`;
+  }
+
+  function verdictDouble() {
+    const fed = 24, hit = 23;
+    const st = local['double-feed'] || (local['double-feed'] = {});
+    const marks = { [hit]: 'd' };
+    if (st.carried) for (let c = hit + 1; c <= fed; c++) marks[c] = 'u';
+    const top23 = fromTop(hit, fed), top24 = fromTop(24, fed);
+    const lift = opt.tray === 'bottom'
+      ? `Lift the top ${top23} cards (Cards 23 and 24).`
+      : `Lift Cards 23 and 24, the ${ord(top23)} and ${ord(top24)} from the top.`;
+    let body;
+    if (st.done) body = `<p class="done-note">${esc(st.done)}</p>`;
+    else if (st.carried) body = `<p class="done-note" style="color:var(--bn-stage-danger)">Carried. Every position after Card 23 in Section 9 is marked unsure.</p>`;
+    else body = `<p class="say">Card 23 may hide a second card. Positions after 23 may be off by one.</p>
+      <p class="say">${lift} Feed the hidden card alone. Every later position shifts by one.</p>
+      <div class="tile-acts">
+        <button class="sbtn primary" data-dbl="Hidden card fed. Positions after Card 23 moved up by one.">Feed Hidden Card</button>
+        <button class="sbtn" data-dbl="Kept as one card. Positions unchanged.">Only One Card</button>
+        <button class="sbtn btn-carry" data-dbl="carry">Carry</button>
+      </div>`;
+    const resolved = st.done || st.carried;
+    return `<div class="v-head"><div>
+        <h3 class="v-title"><span class="${resolved ? 'tone-ok' : 'tone-danger'}">Paused</span> in Section 9</h3>
+        <p class="v-sub">The rig stopped the feeder after Card 24, inside the section.</p>
+      </div>${resolved ? feederPill('run', 'Feeder Running') : feederPill('paused', 'Feeder Paused')}</div>
+      <div class="v-body">${tray(fed, marks, [[hit, `${ord(top23)} · Card 23`, 'danger']], 'Tray, top first')}
+        <div class="tiles"><article class="tile" data-tone="danger" ${st.done ? 'data-done' : ''}>
+          <div class="tile-photo two" role="img" aria-label="Sample photo, a card that looks thick"></div>
+          <div><h4 class="tile-problem">Possible Double Feed</h4>
+            <p class="tile-pos"><b>${ord(top23)}</b><span>from the top</span></p>
+            <p class="place">${place(9, hit)}</p>${body}</div></article></div></div>
+      <p class="v-foot">A double feed pauses at once, without waiting for the divider, so the slip stays two cards deep.</p>`;
+  }
+
+  function verdictMissing() {
+    const total = 118, cut = 61;
+    const st = local['missing-divider'] || (local['missing-divider'] = {});
+    const marks = {};
+    for (let c = cut; c <= total; c++) marks[c] = 'b';
+    marks[cut] = 'cut';
+    const pos = fromTop(cut, total);
+    let acts;
+    if (st.split) acts = `<p class="done-note">Split. Section 5 holds 60 cards and the new Section 6 holds 58. Sections 6 to 8 are now 7 to 9.</p>`;
+    else if (st.one) acts = `<p class="done-note">Kept as one section of 118.</p>`;
+    else acts = `<p class="say">Put a divider in the tray, ${ord(pos)} from the top, between Cards ${cut - 1} and ${cut}. Then press Split.</p>
+      <div class="tile-acts">
+        <button class="sbtn primary" data-miss="split">Split at Card ${cut}</button>
+        <button class="sbtn" data-miss="one">One Section</button>
+      </div>`;
+    const clear = st.split || st.one;
+    return `<div class="v-head"><div>
+        <h3 class="v-title"><span class="${clear ? 'tone-ok' : 'tone-warn'}">Section 5</span> Ran Long</h3>
+        <p class="v-sub">118 cards, against about 60 in the sections around it. The set changed at Card ${cut}.</p>
+      </div>${clear || opt.stop === 'off' ? feederPill('run', 'Feeder Running') : feederPill('held', 'Feeder Held')}</div>
+      <div class="v-body">${tray(total, marks, [[cut, `${ord(pos)} · set changes`, 'warn']], 'Tray, top first')}
+        <div class="tiles"><article class="tile" ${clear ? 'data-done' : ''}>
+          <div class="tile-photo" role="img" aria-label="Sample photo of Card 61"></div>
+          <div><h4 class="tile-problem">Glimmerwake, then Hollow Tides</h4>
+            <p class="tile-pos"><b>${ord(pos)}</b><span>from the top</span></p>
+            <p class="place">${place(5, cut)}</p>${acts}</div></article></div></div>
+      <p class="v-foot">Cards 1 to 60 are one set. Cards 61 to 118 are the next.</p>`;
+  }
+
+  function verdictCarried() {
+    const st = local['carried'] || (local['carried'] = {});
+    const items = [
+      { key: 'a', sec: 7, card: 28, size: 58, art: 'back', problem: 'Face Down',
+        say: (n) => `It is in the box now. Count ${ord(n)} back from the Section 8 divider.` },
+      { key: 'b', sec: 9, card: 23, size: 41, art: 'two', problem: 'Possible Double Feed', tone: 'danger',
+        say: (n) => `Positions after Card 23 are unsure. Count ${ord(n)} back from the Section 10 divider, lift two cards, and feed the hidden one alone.` },
+    ];
+    const open = items.filter((i) => !st[i.key]).length;
+    const tiles = items.map((i) => {
+      const back = i.size - i.card + 1; // in the box, the near end of a section is behind the next divider (D260)
+      const done = st[i.key];
+      return `<article class="tile" ${i.tone ? `data-tone="${i.tone}"` : ''} ${done === 'fixed' ? 'data-done' : ''}>
+        <div class="tile-photo ${i.art}" role="img" aria-label="Sample photo"></div>
+        <div><h4 class="tile-problem">${i.problem}</h4>
+          <p class="tile-pos"><b>Card ${i.card}</b><span>Section ${i.sec}</span></p>
+          <p class="place"><span>${BOX}</span></p>
+          ${done ? `<p class="done-note">${done === 'fixed' ? 'Pulled and fixed' : 'Left for later. It stays on this list.'}</p>`
+                 : `<p class="say">${i.say(back)}</p>
+          <div class="tile-acts">
+            <button class="sbtn primary" data-carry="${i.key}" data-v="fixed">Pulled and Fixed</button>
+            <button class="sbtn" data-carry="${i.key}" data-v="later">Leave for Later</button>
+          </div>`}</div></article>`;
+    }).join('');
+    return `<div class="v-head"><div>
+        <h3 class="v-title"><span class="tone-warn">${open || 'No'}</span> Open from Last Time</h3>
+        <p class="v-sub">Before the first card. These cards are back in ${BOX} now, not in the tray.</p>
+      </div>${feederPill('run', 'Ready to Feed')}</div>
+      <div class="v-body" style="grid-template-columns:minmax(0,1fr)"><div class="tiles" style="grid-template-columns:minmax(0,1fr)">${tiles}</div></div>
+      <p class="v-foot">A carried flag leaves this list only when you tap it. Feeding can start either way.</p>`;
+  }
+
+  function verdictSummary() {
+    let strip = '';
+    for (let s = 1; s <= 22; s++) strip += `<i class="${s === 9 ? 'w' : ''}" title="Section ${s}"></i>`;
+    return `<div class="v-head"><div>
+        <h3 class="v-title">Positions Trusted: <span class="tone-ok">21</span> of 22 Sections</h3>
+        <p class="v-sub">Section 9 is unsure after Card 23. It opens first next session.</p>
+      </div>${feederPill('held', 'Box Done')}</div>
+      <div class="sum">
+        <div class="sum-figs">
+          <div><b>22</b><span>Sections</span></div>
+          <div><b>1,146</b><span>Cards</span></div>
+          <div><b>9</b><span>Fixed at a divider</span></div>
+          <div><b>2</b><span>Carried</span></div>
+        </div>
+        <div><div class="sum-strip" role="img" aria-label="22 sections, Section 9 unsure">${strip}</div>
+          <div class="sum-strip-cap"><span>Section 1, back</span><span>Section 22, front</span></div></div>
+      </div>
+      <p class="v-foot">The first version draws only the headline line. The figures and strip come later.</p>`;
+  }
+
+  const VIEWS = { 'to-fix': verdictToFix, 'double-feed': verdictDouble, 'missing-divider': verdictMissing, 'carried': verdictCarried, 'box-summary': verdictSummary };
+
+  // ---- render ------------------------------------------------------------------------------
+  function render() {
+    const d = DATA[opt.state];
+    const root = document.documentElement;
+    if (opt.t) root.setAttribute('data-theme', opt.t); else root.removeAttribute('data-theme');
+    document.body.classList.toggle('no-anno', opt.anno === 'off');
+    ['edge', 'stack', 'spoken', 'ticks', 'carry'].forEach((h) => document.body.classList.toggle('hide-' + h, opt.hide.includes(h)));
+
+    document.querySelectorAll('#states button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.state === opt.state)));
+    const dark = opt.t ? opt.t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    document.querySelectorAll('[data-theme-set]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.themeSet === 'dark') === dark)));
+    document.querySelectorAll('[data-tray]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tray === opt.tray)));
+    document.querySelectorAll('[data-stop]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.stop === opt.stop)));
+    document.querySelectorAll('[data-anno]').forEach((b) => { if (b.tagName === 'BUTTON') b.setAttribute('aria-pressed', String(b.dataset.anno === opt.anno)); });
+    document.querySelectorAll('[data-hide]').forEach((c) => { c.checked = !opt.hide.includes(c.dataset.hide); });
+
+    // Edge: green replays its fade on every visit; amber and red hold until cleared.
+    let edge = d.edge;
+    const st = local[opt.state] || {};
+    if (opt.state === 'to-fix' && Object.keys(st).length >= 2) edge = 'ok';
+    if (opt.state === 'double-feed' && (st.done || st.carried)) edge = 'ok';
+    if (opt.state === 'missing-divider' && (st.split || st.one)) edge = 'ok';
+    const e = document.getElementById('edge');
+    e.dataset.edge = 'none'; void e.offsetWidth; e.dataset.edge = edge;
+
+    document.getElementById('sound').innerHTML = `<span class="sound-note" aria-hidden="true">♪</span><span>You hear: ${esc(d.sound.replace(/^♪+\s*/, ''))}<span class="spoken">${esc(d.spoken)}</span></span>`;
+    document.getElementById('odo').innerHTML = d.odo.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+    document.getElementById('section-row').innerHTML = `<span>Section</span><b>Section ${d.section[0]}<small>Next: Card ${d.section[1]}</small></b>`;
+    document.getElementById('set-hint').textContent = d.set;
+    document.getElementById('box-name').textContent = d.box || BOX;
+    const total = DATA[opt.state].secs;
+    document.getElementById('secs').innerHTML = total.map(([n, t, v]) => `<li class="sec" data-v="${v}"><span>Section ${n}</span><em>${esc(t)}</em></li>`).join('');
+    const names = ['Lanternfin', 'Cindertail Vix', 'Mossback Tortle', 'Quartz Wyrmling'];
+    const base = d.last ? d.last[2] : 0;
+    document.getElementById('recent').innerHTML = d.last
+      ? names.map((nm, i) => `<div class="recent-row"><div class="thumb"></div><div>${nm}<br><small>Section ${d.last[1]}, Card ${base - i}</small></div><button class="btn btn-sm" type="button">Undo ${i + 1}</button></div>`).join('')
+      : '<small style="color:var(--bn-ink-3)">No captures this sitting yet.</small>';
+    document.getElementById('stage-next').textContent = `Next: Section ${d.section[0]}, Card ${d.section[1]}`;
+    document.getElementById('stage-feeder').textContent = opt.state === 'carried' ? 'Feeder ready' : 'Feeder running';
+    document.getElementById('last-card').textContent = d.last ? `Card ${d.last[2]}` : 'No Capture Yet';
+    document.getElementById('last-place').textContent = d.last ? `${d.last[0]} · ${BOX}, Section ${d.last[1]}` : '';
+
+    const v = document.getElementById('verdict');
+    const view = VIEWS[opt.state];
+    v.classList.toggle('on', !!view);
+    v.innerHTML = view ? view() : '';
+    writeHash();
+  }
+
+  // ---- hash: #state=<name>&t=dark&tray=top&stop=off&labels=off&hide=edge,stack ------------
+  function readHash() {
+    const p = new URLSearchParams(location.hash.replace(/^#/, ''));
+    const s = p.get('state') || p.get('s');
+    if (s && DATA[s]) opt.state = s;
+    const t = p.get('t'); opt.t = t === 'dark' || t === 'light' ? t : null;
+    opt.tray = p.get('tray') === 'top' ? 'top' : 'bottom';
+    opt.stop = p.get('stop') === 'off' ? 'off' : 'on';
+    opt.anno = p.get('labels') === 'off' ? 'off' : 'on';
+    opt.hide = (p.get('hide') || '').split(',').filter(Boolean);
+  }
+  function writeHash() {
+    const p = new URLSearchParams();
+    p.set('state', opt.state);
+    if (opt.t) p.set('t', opt.t);
+    if (opt.tray !== 'bottom') p.set('tray', opt.tray);
+    if (opt.stop !== 'on') p.set('stop', opt.stop);
+    if (opt.anno !== 'on') p.set('labels', 'off');
+    if (opt.hide.length) p.set('hide', opt.hide.join(','));
+    const h = '#' + p.toString().replace(/%2C/g, ',');
+    if (location.hash !== h) history.replaceState(null, '', h);
+  }
+
+  document.getElementById('states').innerHTML = STATES.map(([k, l]) => `<button type="button" data-state="${k}">${l}</button>`).join('');
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('button'); if (!b) return;
+    const ds = b.dataset;
+    if (ds.state) { opt.state = ds.state; local[ds.state] = {}; }
+    else if (ds.themeSet) opt.t = ds.themeSet;
+    else if (ds.tray) opt.tray = ds.tray;
+    else if (ds.stop) opt.stop = ds.stop;
+    else if (ds.anno) opt.anno = ds.anno;
+    else if (ds.act) local['to-fix'][ds.card] = ds.act;
+    else if (ds.dbl) local['double-feed'][ds.dbl === 'carry' ? 'carried' : 'done'] = ds.dbl === 'carry' ? true : ds.dbl;
+    else if (ds.miss) local['missing-divider'][ds.miss] = true;
+    else if (ds.carry) local['carried'][ds.carry] = ds.v;
+    else return;
+    render();
+  });
+  document.addEventListener('change', (ev) => {
+    const c = ev.target; if (!c.dataset || !c.dataset.hide) return;
+    opt.hide = opt.hide.filter((h) => h !== c.dataset.hide);
+    if (!c.checked) opt.hide.push(c.dataset.hide);
+    render();
+  });
+  window.addEventListener('hashchange', () => { readHash(); render(); });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+  readHash();
+  render();
+})();
+</script>
+</body>
+</html>

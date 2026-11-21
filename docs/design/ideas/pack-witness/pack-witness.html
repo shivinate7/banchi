@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pack Witness</title>
+<script>
+  /* The default theme follows the system before first paint; the hash's t= overrides it. */
+  document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+</script>
+<style>
+/* ===== Banchi tokens, inlined from app/src/tokens.css (the subset this page reads) =====
+   The three faces are not inlined: the page loads nothing, so each family falls back to
+   the system face named last in its stack. */
+:root {
+  color-scheme: light;
+  --bn-bg: #f4f5f8; --bn-surface: #ffffff; --bn-surface-2: #eceef2; --bn-surface-3: #f7f8fa;
+  --bn-hover: rgba(15, 18, 23, 0.03);
+  --bn-ink: #0f1217; --bn-ink-2: #3b414b; --bn-ink-3: #666c76; --bn-ink-4: #7f8791;
+  --bn-line: rgba(15, 18, 23, 0.08); --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-line-focus: rgba(61, 90, 241, 0.55); --bn-field-edge: var(--bn-ink-4);
+  --bn-accent: #3d5af1; --bn-accent-hover: #2f4bd9; --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10); --bn-accent-tint-2: rgba(61, 90, 241, 0.18); --bn-on-accent: #ffffff;
+  --bn-flash: #ffffff;
+  --bn-live: #d63d2b; --bn-live-tint: rgba(239, 75, 58, 0.12);
+  --bn-ok: #15803d; --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309; --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-danger: #b91c1c; --bn-danger-tint: rgba(220, 38, 38, 0.10);
+  --bn-pill-ink-accent: var(--bn-accent-hover); --bn-pill-ink-ok: #11733a; --bn-pill-ink-warn: #a14b09;
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32), 0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-shadow-accent: 0 8px 24px -8px rgba(61, 90, 241, 0.55);
+  --bn-btn-bg: var(--bn-surface); --bn-btn-bg-hover: var(--bn-surface-3); --bn-btn-shadow: var(--bn-shadow-1);
+  --bn-font-display: 'Manrope', 'Manrope Fallback', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', 'Inter Fallback', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace, 'SF Mono', Menlo, monospace;
+  --bn-fs-2xs: 10px; --bn-fs-xs: 11px; --bn-fs-sm: 12px; --bn-fs-md: 13px; --bn-fs-base: 14px;
+  --bn-fs-lg: 16px; --bn-fs-xl: 18px; --bn-fs-2xl: 22px; --bn-fs-3xl: 28px; --bn-fs-4xl: 36px;
+  --bn-tracking-caps: 0.06em; --bn-tracking-tight: -0.02em;
+  --bn-lh-tight: 1.1; --bn-lh-snug: 1.25; --bn-lh-base: 1.4; --bn-lh-relaxed: 1.55;
+  --bn-1: 4px; --bn-2: 8px; --bn-3: 12px; --bn-4: 16px; --bn-5: 20px; --bn-6: 24px; --bn-7: 32px; --bn-8: 40px; --bn-9: 48px; --bn-10: 64px;
+  --bn-0-5: 2px; --bn-1-5: 6px;
+  --bn-r-xs: 4px; --bn-r-sm: 6px; --bn-r: 8px; --bn-r-lg: 12px; --bn-r-xl: 16px; --bn-r-2xl: 22px; --bn-r-full: 999px;
+  --bn-t-fast: 120ms; --bn-t: 200ms; --bn-ease: cubic-bezier(0.2, 0, 0, 1); --bn-ease-linear: linear;
+  --bn-stage-bg: #0c0e12; --bn-stage-bg-2: #171b25; --bn-stage-surface: #1b2029; --bn-stage-ink: #eef0f4;
+  --bn-stage-accent: #7f90ff; --bn-stage-ok: #3ddc84; --bn-stage-warn: #f5a524; --bn-stage-danger: #ff5c5c; --bn-stage-live: #ff6a58;
+  --bn-sidebar-w: 236px; --bn-rail-w: 64px;
+  --bn-control-h: 34px; --bn-control-h-lg: 40px; --bn-pill-h: 22px;
+  --bn-nav-tint-3: var(--bn-accent-tint); --bn-nav-accent-3: var(--bn-accent);
+  --bn-seg-active-ink: var(--bn-ink); --bn-seg-active-bg: var(--bn-surface);
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+  --bn-hover: rgba(255, 255, 255, 0.04);
+  --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+  --bn-line: rgba(255, 255, 255, 0.08); --bn-line-strong: rgba(255, 255, 255, 0.16); --bn-line-focus: rgba(129, 146, 255, 0.6);
+  --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14); --bn-accent-tint-2: rgba(127, 144, 255, 0.24); --bn-on-accent: #0c0e12;
+  --bn-live: #ff6a58; --bn-live-tint: rgba(255, 106, 88, 0.16);
+  --bn-ok: #3ddc84; --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524; --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-danger: #ff5c5c; --bn-danger-tint: rgba(255, 92, 92, 0.14);
+  --bn-pill-ink-accent: var(--bn-accent-hover); --bn-pill-ink-ok: var(--bn-ok); --bn-pill-ink-warn: var(--bn-warn);
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(127, 144, 255, 0.55);
+  --bn-btn-bg: var(--bn-surface-3); --bn-btn-bg-hover: #262b34;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bn-surface-2); color: var(--bn-ink); font-family: var(--bn-font-ui); }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--bn-line-focus); outline-offset: 2px; }
+.bn-icon { flex: none; }
+.mono { font-family: var(--bn-font-mono); font-variant-numeric: tabular-nums slashed-zero; letter-spacing: 0; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ===== mockup chrome: not part of the screen ===== */
+.mk-ribbon { position: sticky; top: 0; z-index: 300; display: flex; align-items: center; gap: var(--bn-3); min-height: 40px;
+  padding: 0 var(--bn-4); background: var(--bn-surface); font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink);
+  box-shadow: 0 1px 0 var(--bn-line); }
+.mk-pill { display: inline-flex; align-items: center; height: var(--bn-pill-h); padding: 0 var(--bn-2); border-radius: var(--bn-r-full);
+  font-size: var(--bn-fs-xs); font-weight: 700; background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn); flex: none; }
+.mk-bar { display: flex; flex-direction: column; gap: var(--bn-2); padding: var(--bn-3) var(--bn-4); background: var(--bn-surface);
+  box-shadow: 0 1px 0 var(--bn-line); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+.mk-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); }
+.mk-row > b { min-width: 64px; font-family: var(--bn-font-display); color: var(--bn-ink); }
+.mk-kind { margin-left: auto; font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.mk-chip { min-height: 32px; padding: 0 var(--bn-3); border-radius: var(--bn-r-full); border: 1px solid var(--bn-line-strong);
+  background: var(--bn-btn-bg); color: var(--bn-ink-2); font-size: var(--bn-fs-sm); }
+.mk-chip:hover { background: var(--bn-btn-bg-hover); }
+.mk-chip[aria-pressed='true'] { background: var(--bn-ink); color: var(--bn-bg); border-color: var(--bn-ink); }
+.mk-chip.off { text-decoration: line-through; opacity: .7; }
+.mk-chip[hidden] { display: none; }
+.mk-cap { margin: 0; max-width: 1100px; color: var(--bn-ink-2); font-size: var(--bn-fs-sm); }
+.mk-cap b { color: var(--bn-ink); }
+.mk-stage { display: flex; justify-content: center; }
+.mk-frame { width: 100%; container-type: inline-size; container-name: frame; background: var(--bn-bg); position: relative; }
+.mk-frame[data-w='1440'] { width: 1440px; flex: none; }
+.mk-frame[data-w='820'] { width: 820px; flex: none; }
+/* The dashed tags: what exists today, and what this design adds. */
+.mark { position: relative; }
+.tag { position: absolute; z-index: 6; top: -9px; right: 8px; padding: 0 var(--bn-1-5);
+  font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs); line-height: 16px; font-weight: 500; white-space: nowrap;
+  color: var(--bn-accent); background: var(--bn-bg); border: 1px dashed var(--bn-accent); border-radius: var(--bn-r-xs); pointer-events: none; }
+.tag.new { color: var(--bn-warn); border-color: var(--bn-warn); }
+.tag.side { left: calc(100% + 8px); right: auto; top: 50%; transform: translateY(-50%); }
+body.notags .tag { display: none; }
+
+/* ===== the slot mat, the card stand-ins and the photo ground (both views) ===== */
+.pw-photo { position: relative; display: grid; place-items: center; aspect-ratio: 63 / 88; padding: 7%;
+  background: var(--bn-stage-bg); border-radius: var(--bn-r-xl); container-type: inline-size; }
+.pw-photo.slabbed { aspect-ratio: 3 / 5; padding: 6%; }
+.pw-photo.crop { background: var(--bn-stage-bg-2); }
+.pw-photo.crop > * { transform: rotate(-1.5deg); filter: brightness(.92) saturate(.9); }
+/* A card is flat blocks: a frame, the art, two bars where the text would be. No name is drawn on it. */
+.pw-card { --hue: var(--bn-stage-accent); position: relative; width: 100%; aspect-ratio: 63 / 88; border-radius: 5%/3.6%;
+  background: color-mix(in srgb, var(--bn-stage-ink) 90%, var(--hue) 10%); box-shadow: 0 2px 6px rgba(0, 0, 0, .45); overflow: hidden; }
+.pw-card::before { content: ''; position: absolute; left: 8%; right: 8%; top: 9%; height: 44%; border-radius: 3%;
+  background: var(--hue); }
+.pw-card::after { content: ''; position: absolute; left: 8%; right: 8%; top: 60%; height: 26%;
+  background: linear-gradient(color-mix(in srgb, var(--bn-stage-bg) 22%, transparent) 0 18%, transparent 18% 40%,
+    color-mix(in srgb, var(--bn-stage-bg) 14%, transparent) 40% 54%, transparent 54% 72%,
+    color-mix(in srgb, var(--bn-stage-bg) 14%, transparent) 72% 84%, transparent 84%); }
+/* Holo shines on the art. Reverse holo shines on the frame, and the art stays flat. */
+.pw-card.holo::before { background: repeating-linear-gradient(130deg, color-mix(in srgb, var(--bn-stage-ink) 55%, transparent) 0 5%, transparent 5% 13%), var(--hue); }
+.pw-card.rev { background: repeating-linear-gradient(130deg, color-mix(in srgb, var(--hue) 45%, var(--bn-stage-ink)) 0 4%, var(--bn-stage-ink) 4% 10%); }
+.pw-card.back { background: radial-gradient(circle at 50% 50%, var(--bn-stage-ink) 0 9%, var(--bn-stage-bg) 9% 12%,
+  var(--bn-stage-danger) 12% 30%, var(--bn-stage-accent) 30%); }
+.pw-card.back::before, .pw-card.back::after { display: none; }
+/* A slab: a clear case, a label strip on top, the card inside. */
+.pw-slab { position: relative; width: 100%; aspect-ratio: 3 / 5; padding: 30% 9% 9%; border-radius: 6%/3.6%;
+  background: color-mix(in srgb, var(--bn-stage-ink) 22%, var(--bn-stage-bg-2)); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--bn-stage-ink) 40%, transparent), 0 2px 6px rgba(0, 0, 0, .5); }
+.pw-slab-label { position: absolute; left: 7%; right: 7%; top: 5%; height: 18%; border-radius: 4%;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--bn-stage-bg) 30%, transparent) 8% 60%, transparent 60%) 0 30% / 100% 16% no-repeat,
+    linear-gradient(90deg, color-mix(in srgb, var(--bn-stage-bg) 20%, transparent) 8% 45%, transparent 45%) 0 62% / 100% 12% no-repeat,
+    var(--bn-stage-ink); }
+.pw-slab-grade { position: absolute; right: 8%; top: 18%; width: 22%; height: 64%; border-radius: 6%; background: var(--bn-stage-danger); }
+.pw-slab.other .pw-slab-grade { background: var(--bn-stage-accent); }
+.pw-slab.glare .pw-slab-label::after { content: ''; position: absolute; inset: -60% -10%;
+  background: radial-gradient(ellipse at 45% 50%, var(--bn-flash) 0 30%, color-mix(in srgb, var(--bn-flash) 60%, transparent) 42%, transparent 66%); }
+
+.pw-mat { position: relative; container-type: inline-size; aspect-ratio: 3 / 2.18; border-radius: var(--bn-r-xl);
+  background: var(--bn-stage-bg); padding: 4%; box-shadow: 0 0 0 1px var(--bn-line-strong); }
+.pw-mat-sheet { height: 100%; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr);
+  gap: 3cqi 6cqi; padding: 3.5cqi 6cqi; border-radius: 1.6cqi; background: var(--bn-stage-bg-2);
+  box-shadow: inset 0 0 0 0.3cqi color-mix(in srgb, var(--bn-stage-ink) 10%, transparent); }
+.pw-slot { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.2cqi; min-height: 0; }
+.pw-well { position: relative; height: calc(100% - 5.6cqi); aspect-ratio: 63 / 88; border-radius: 1cqi;
+  outline: 0.35cqi dashed color-mix(in srgb, var(--bn-stage-ink) 32%, transparent); outline-offset: 0.6cqi; }
+.pw-slot.slabslot .pw-well { aspect-ratio: 3 / 5; }
+.pw-well > * { position: absolute; inset: 0; }
+.pw-well > .pw-card, .pw-well > .pw-slab { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; }
+.pw-print { font-family: var(--bn-font-mono); font-weight: 700; font-size: 3.1cqi; line-height: 1;
+  color: color-mix(in srgb, var(--bn-stage-ink) 50%, transparent); }
+.pw-slot[data-v='ok'] .pw-well { outline: 0.7cqi solid var(--bn-stage-ok); }
+.pw-slot[data-v='manual'] .pw-well { outline: 0.7cqi solid var(--bn-stage-ok); }
+.pw-slot[data-v='warn'] .pw-well { outline: 0.7cqi solid var(--bn-stage-warn); }
+.pw-slot[data-v='warn'][data-look='absent'] .pw-well { outline-style: dashed; }
+.pw-slot[data-v='focus'] .pw-well { outline: 0.7cqi solid var(--bn-stage-accent); }
+.pw-badge { position: absolute; z-index: 3; top: -2.4cqi; right: -2.4cqi; width: 4.6cqi; height: 4.6cqi; border-radius: 50%;
+  display: grid; place-items: center; color: var(--bn-stage-bg); }
+.pw-badge svg { width: 70%; height: 70%; }
+.pw-slot[data-v='ok'] .pw-badge, .pw-slot[data-v='manual'] .pw-badge { background: var(--bn-stage-ok); }
+.pw-slot[data-v='warn'] .pw-badge { background: var(--bn-stage-warn); }
+.pw-slot[data-v='focus'] .pw-badge { background: var(--bn-stage-accent); }
+/* Two cards on top of each other: slot 3's card slid over slot 2. */
+.pw-slot[data-look='slid'] .pw-well > .pw-card { transform: translate(-62%, 7%) rotate(-9deg); z-index: 2; }
+.pw-slot[data-look='slid'] { z-index: 2; }
+.pw-mat.dim .pw-mat-sheet { filter: saturate(.85); }
+
+/* ===== THE FULFILLER'S PACKING VIEW (no shell; his floors: 20px, 7:1, 44px targets) ===== */
+.ff { --ff-fill: var(--bn-accent-press); --ff-pad: var(--bn-6);
+  min-height: 960px; padding: var(--ff-pad) var(--ff-pad) var(--bn-10); background: var(--bn-bg); color: var(--bn-ink);
+  font-size: 20px; line-height: 1.5; display: flex; flex-direction: column; gap: var(--bn-6); }
+:root[data-theme='dark'] .ff { --ff-fill: var(--bn-accent-hover); }
+.ff p { margin: 0; }
+.ff-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--bn-4); }
+.ff-who { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
+.ff-who .ff-orderid { margin-top: calc(var(--bn-2) * -1); }
+.ff-back { display: inline-flex; align-items: center; gap: var(--bn-2); min-height: 48px; padding: 0 var(--bn-4) 0 var(--bn-3);
+  border-radius: var(--bn-r-xl); border: 0; background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow); font-size: 20px; font-weight: 600; color: var(--bn-ink); }
+.ff-shipto { align-self: flex-start; font-size: 24px; font-weight: 700; }
+.ff-shipto span { font-weight: 500; color: var(--bn-ink-2); }
+.ff-orderid { color: var(--bn-ink-2); font-size: 20px; }
+.ff-count { display: flex; align-items: baseline; gap: var(--bn-2); padding: var(--bn-2) var(--bn-5); border-radius: var(--bn-r-xl);
+  background: var(--bn-surface); box-shadow: var(--bn-shadow-1); }
+.ff-count b { font-family: var(--bn-font-mono); font-size: 32px; line-height: 1.2; }
+.ff-body { display: grid; gap: var(--bn-6); align-items: start; }
+@container frame (min-width: 1100px) { .ff-body { grid-template-columns: minmax(0, 1fr) 712px; } .ff-cam { position: sticky; top: var(--bn-6); } }
+.ff-cam { display: flex; flex-direction: column; gap: var(--bn-3); }
+/* One column (the iPad): a flatter mat, so the answer under it starts higher. */
+@container frame (max-width: 1099px) { .ff-cam .pw-mat { aspect-ratio: 3 / 1.7; } }
+.ff-cambar { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); min-height: 32px; color: var(--bn-ink-2); }
+.ff-cambar > span { display: inline-flex; align-items: center; gap: var(--bn-2); }
+.ff-live { width: 12px; height: 12px; border-radius: 50%; background: var(--bn-live); box-shadow: 0 0 0 4px var(--bn-live-tint); }
+.ff-panel { display: flex; flex-direction: column; gap: var(--bn-6); padding: var(--bn-6); border-radius: var(--bn-r-2xl);
+  background: var(--bn-surface); box-shadow: var(--bn-shadow-2); }
+.ff-say { display: flex; gap: var(--bn-4); align-items: flex-start; }
+.ff-say-icon { flex: none; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; }
+.ff-say-icon.ok { background: var(--bn-ok-tint); color: var(--bn-ok); }
+.ff-say-icon.warn { background: var(--bn-warn-tint); color: var(--bn-warn); }
+.ff-say-icon.do { background: var(--bn-accent-tint); color: var(--bn-accent); }
+.ff-say h2 { margin: 0; font-family: var(--bn-font-display); font-size: 32px; line-height: 1.2; font-weight: 800; letter-spacing: var(--bn-tracking-tight); }
+.ff-say p { color: var(--bn-ink-2); margin-top: var(--bn-1); }
+.ff-say-text { display: flex; flex-direction: column; }
+/* What goes where: one row per slot. */
+.ff-slots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ff-slot { display: grid; grid-template-columns: 48px 56px minmax(0, 1fr) 40px; align-items: center; gap: var(--bn-4);
+  min-height: 92px; padding: var(--bn-2) 0; box-shadow: 0 1px 0 var(--bn-line); }
+.ff-slot:last-child { box-shadow: none; }
+.ff-slot-n { font-family: var(--bn-font-mono); font-size: 32px; font-weight: 700; text-align: center; line-height: 1; }
+.ff-slot .pw-photo { width: 56px; padding: 4px; border-radius: var(--bn-r); }
+.ff-slot-name { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.ff-slot-name b { font-weight: 600; }
+.ff-slot-name span { color: var(--bn-ink-2); }
+.ff-tick { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; }
+.ff-tick.ok { background: var(--bn-ok-tint); color: var(--bn-ok); }
+.ff-tick.hand { background: var(--bn-ok-tint); color: var(--bn-ok); }
+/* The pair: the copy on file beside the copy on the mat, each 320px wide (his photo floor). */
+.ff-pair { display: flex; flex-wrap: wrap; gap: var(--bn-6); }
+.ff-pair figure { margin: 0; display: flex; flex-direction: column; gap: var(--bn-2); width: 320px; }
+.ff-pair figcaption { font-weight: 700; }
+.ff-diff { display: flex; flex-direction: column; gap: var(--bn-1); padding: var(--bn-4) var(--bn-5); border-radius: var(--bn-r-xl);
+  background: var(--bn-warn-tint); }
+.ff-diff b { font-weight: 700; }
+.ff-where { display: flex; flex-direction: column; gap: var(--bn-2); }
+.ff-place { display: flex; flex-wrap: wrap; gap: var(--bn-2) var(--bn-6); font-family: var(--bn-font-mono); font-size: 32px; font-weight: 700;
+  font-variant-numeric: tabular-nums; line-height: 1.2; }
+.ff-label-read { padding: var(--bn-4) var(--bn-5); border-radius: var(--bn-r-xl); background: var(--bn-surface-2); display: flex; flex-direction: column; gap: var(--bn-1); }
+.ff-label-read b { font-size: 24px; }
+.ff-rest { color: var(--bn-ink-2); }
+.ff-progress { display: flex; gap: var(--bn-2); }
+.ff-progress i { flex: 1; height: 8px; border-radius: var(--bn-r-full); background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+.ff-progress i.done { background: var(--bn-ok); box-shadow: none; }
+.ff-progress i.now { background: var(--bn-accent); box-shadow: none; }
+/* The action block reserves two steps from the start, so the second never lands on the first. */
+.ff-actions { display: grid; grid-template-rows: 64px 64px; row-gap: var(--bn-6); min-height: 152px; }
+.ff-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-3); min-height: 64px; width: 100%;
+  border: 0; border-radius: var(--bn-r-xl); font-size: 22px; font-weight: 700; transition: transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease); }
+.ff-btn.primary { background: var(--ff-fill); color: var(--bn-on-accent); box-shadow: var(--bn-shadow-2), var(--bn-shadow-accent); }
+.ff-btn.plain { background: var(--bn-btn-bg); color: var(--bn-ink); box-shadow: var(--bn-btn-shadow), inset 0 0 0 2px var(--bn-line-strong); }
+.ff-btn:hover { transform: translateY(-1px); }
+.ff-btn:active { transform: translateY(1px) scale(.985); }
+.ff-receipt { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: var(--bn-4);
+  padding: 0 var(--bn-2) 0 var(--bn-5); border-radius: var(--bn-r-xl); background: var(--bn-ok-tint); font-weight: 600; }
+.ff-receipt .ff-btn { width: auto; min-height: 48px; padding: 0 var(--bn-6); }
+.ff-drain { position: absolute; left: 0; bottom: 0; height: 4px; width: 100%; background: var(--bn-ok); transform-origin: left;
+  animation: drain 20s var(--bn-ease-linear) forwards; }
+@keyframes drain { to { transform: scaleX(0); } }
+.ff-hint { color: var(--bn-ink-2); display: flex; gap: var(--bn-3); align-items: center; }
+.ff-hint[hidden] { display: none; }
+
+/* ===== THE OWNER'S DISPUTE PAGE (the owner shell; owner density) ===== */
+.os { display: grid; grid-template-columns: var(--bn-sidebar-w) minmax(0, 1fr); min-height: 960px; font-size: var(--bn-fs-base); line-height: var(--bn-lh-base); }
+@container frame (max-width: 1023px) { .os { grid-template-columns: var(--bn-rail-w) minmax(0, 1fr); } }
+.os-side { background: var(--bn-surface-2); box-shadow: 1px 0 0 var(--bn-line); padding: var(--bn-4) var(--bn-3); display: flex; flex-direction: column; gap: var(--bn-1); }
+.os-brand { display: flex; align-items: center; gap: var(--bn-2); padding: var(--bn-1) var(--bn-2) var(--bn-4); font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-lg); }
+.os-brand i { width: 10px; height: 10px; border-radius: 50%; background: var(--bn-live); }
+.os-nav { display: flex; align-items: center; gap: var(--bn-3); height: 36px; padding: 0 var(--bn-2); border-radius: var(--bn-r); color: var(--bn-ink-2); font-weight: 500; }
+.os-nav[aria-current] { background: var(--bn-nav-tint-3); color: var(--bn-nav-accent-3); }
+@container frame (max-width: 1023px) {
+  .os-side { padding: var(--bn-3) var(--bn-2); align-items: center; }
+  .os-nav { width: 48px; height: 44px; justify-content: center; padding: 0; }
+  .os-nav span, .os-brand span { display: none; }
+}
+.os-page { padding: var(--bn-6) var(--bn-7) var(--bn-10); display: flex; flex-direction: column; gap: var(--bn-5); min-width: 0; }
+@container frame (max-width: 1023px) { .os-page { padding: var(--bn-6) var(--bn-6) var(--bn-10); } }
+.os-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-3) var(--bn-4); }
+.os-head h1 { margin: 0; font-family: var(--bn-font-display); font-size: var(--bn-fs-3xl); font-weight: 800; letter-spacing: var(--bn-tracking-tight); line-height: var(--bn-lh-tight); }
+.os-find { margin-left: auto; display: flex; gap: var(--bn-2); align-items: center; }
+.os-field { display: flex; align-items: center; gap: var(--bn-2); height: var(--bn-control-h-lg); width: 320px; padding: 0 var(--bn-3);
+  border-radius: var(--bn-r); background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-field-edge); color: var(--bn-ink-3); }
+.os-field input { border: 0; outline: 0; background: transparent; font: inherit; color: var(--bn-ink); width: 100%; font-family: var(--bn-font-mono); font-size: var(--bn-fs-md); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-2); height: var(--bn-control-h-lg); padding: 0 var(--bn-4);
+  border: 0; border-radius: var(--bn-r); background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow); font-weight: 600; font-size: var(--bn-fs-base); color: var(--bn-ink); }
+.btn:hover { background: var(--bn-btn-bg-hover); }
+.btn.primary { background: var(--bn-accent); color: var(--bn-on-accent); box-shadow: var(--bn-shadow-1); }
+.btn.primary:hover { background: var(--bn-accent-hover); }
+:root[data-theme='dark'] .btn.primary:hover { background: var(--bn-accent-hover); }
+.pill { display: inline-flex; align-items: center; gap: var(--bn-1); height: var(--bn-pill-h); padding: 0 var(--bn-2); border-radius: var(--bn-r-full);
+  font-size: var(--bn-fs-xs); font-weight: 600; }
+.pill.ok { background: var(--bn-ok-tint); color: var(--bn-pill-ink-ok); }
+.pill.warn { background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn); }
+.pill.acc { background: var(--bn-accent-tint); color: var(--bn-pill-ink-accent); }
+.os-status { min-height: 48px; display: flex; }
+.os-notice { flex: 1; display: flex; gap: var(--bn-3); align-items: center; padding: var(--bn-3) var(--bn-4); border-radius: var(--bn-r-lg);
+  background: var(--bn-accent-tint); color: var(--bn-ink); font-size: var(--bn-fs-md); }
+.os-notice svg { color: var(--bn-accent); }
+.os-grid { display: grid; gap: var(--bn-5); align-items: start; }
+@container frame (min-width: 1100px) { .os-grid { grid-template-columns: minmax(0, 1.35fr) minmax(340px, 1fr); } }
+.panel { background: var(--bn-surface); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-1); padding: var(--bn-5); display: flex; flex-direction: column; gap: var(--bn-4); }
+.panel h2 { margin: 0; font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; }
+.os-cap { margin: 0; color: var(--bn-ink-3); font-size: var(--bn-fs-md); }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--bn-2) var(--bn-5); margin: 0; font-size: var(--bn-fs-md); }
+.kv dt { color: var(--bn-ink-3); }
+.kv dd { margin: 0; color: var(--bn-ink); font-weight: 500; }
+.os-stack { display: flex; flex-direction: column; gap: var(--bn-2); }
+.os-stack > b { font-size: var(--bn-fs-md); }
+.os-row { display: flex; flex-wrap: wrap; gap: var(--bn-2); }
+.os-row[hidden], .btn[hidden] { display: none; }
+.seg { align-self: flex-start; display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--bn-r); background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-line); }
+.seg button { height: 34px; padding: 0 var(--bn-3); border: 0; border-radius: var(--bn-r-sm); background: transparent; color: var(--bn-ink-2); font-weight: 500; font-size: var(--bn-fs-md); }
+.seg button[aria-pressed='true'] { background: var(--bn-seg-active-bg); color: var(--bn-seg-active-ink); box-shadow: var(--bn-shadow-1); font-weight: 600; }
+.os-help { margin: 0; color: var(--bn-ink-3); font-size: var(--bn-fs-md); }
+.os-table { width: 100%; border-collapse: collapse; font-size: var(--bn-fs-md); }
+.os-table th { text-align: left; font-weight: 600; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); padding: 0 var(--bn-3) var(--bn-2); box-shadow: 0 1px 0 var(--bn-line); }
+.os-table td { padding: var(--bn-3); vertical-align: middle; box-shadow: 0 1px 0 var(--bn-line); }
+.os-table tr:last-child td { box-shadow: none; }
+.os-table .pw-photo { width: 92px; padding: 6px; border-radius: var(--bn-r); }
+.os-table .pw-photo.slabbed { width: 80px; }
+.os-card b { display: block; font-weight: 600; }
+.os-card span { color: var(--bn-ink-3); }
+.os-slotn { font-family: var(--bn-font-mono); font-weight: 700; font-size: var(--bn-fs-lg); width: 48px; }
+@container frame (max-width: 900px) { .os-table .col-set { display: none; } .os-table .pw-photo { width: 72px; } .os-table .pw-photo.slabbed { width: 64px; } }
+.os-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--bn-3); max-width: 640px; padding: var(--bn-7); }
+.os-empty h2 { margin: 0; font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; }
+.os-empty p { margin: 0; color: var(--bn-ink-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  .ff-drain { animation: none; transform: scaleX(.85); }
+}
+</style>
+</head>
+<body>
+<div class="mk-ribbon"><span class="mk-pill">Sample</span>Every card, set, buyer, order number, time and place on this page is made up. None is real.</div>
+<div class="mk-bar" id="mk-bar"></div>
+<div class="mk-stage"><div class="mk-frame" id="frame"></div></div>
+<script>
+/* Mockup chrome. The hash holds: state, t (light|dark), w (fit|1440|820), h (hidden options, comma separated), tags=off. */
+const P = {
+  check: 'M5 12l5 5 9-10', alert: 'M12 4l9 16H3z M12 10v4 M12 17h.01', camera: 'M4 8h3l2-3h6l2 3h3v11H4z M12 10.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+  flip: 'M4 12a8 8 0 0 1 14-5 M20 4v4h-4 M20 12a8 8 0 0 1-14 5 M4 20v-4h4', spread: 'M4 6h6v12H4z M14 6h6v12h-6z',
+  hand: 'M8 13V5a1.5 1.5 0 0 1 3 0v6 M11 11V4a1.5 1.5 0 0 1 3 0v7 M14 11V5.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-1a6 6 0 0 1-5-3l-2-4a1.5 1.5 0 0 1 2.5-1.5L8 15',
+  lock: 'M6 11h12v9H6z M8 11V8a4 4 0 0 1 8 0v3', search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M20 20l-4-4', file: 'M6 3h8l4 4v14H6z M14 3v4h4',
+  image: 'M4 5h16v14H4z M4 16l5-5 4 4 3-3 4 4 M15 9h.01', box: 'M21 8l-9-4-9 4v9l9 4 9-4z M3 8l9 4 9-4 M12 12v9', back: 'M15 6l-6 6 6 6',
+  home: 'M3 11l9-8 9 8v10H3z', capture: 'M4 8h3l2-3h6l2 3h3v11H4z', review: 'M4 5h16v11H8l-4 4z', tag: 'M3 12V4h8l10 10-8 8z M7.5 7.5h.01',
+  truck: 'M3 6h11v10H3z M14 10h4l3 3v3h-7z', chart: 'M4 20V4 M4 20h16 M8 16l4-5 3 3 5-7', layers: 'M12 3l9 5-9 5-9-5z M3 13l9 5 9-5', shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
+}
+const icon = (n, s = 20) => `<svg class="bn-icon" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${P[n]}"/></svg>`
+const tag = (t, isNew) => `<span class="tag${isNew ? ' new' : ''}">${isNew ? 'New' : 'Today'}: ${t}</span>`
+
+/* Made-up data. The order number has the marketplace's shape and no real order behind it. */
+const ORDER = { number: '7C41E0B2-00009D-00318', shipTo: 'Mara Quill', packedAt: 'Tue 3 Nov, 2:12 PM', shipped: 'Wed 4 Nov', exported: 'Fri 27 Nov' }
+const HUE = { live: 'var(--bn-stage-live)', accent: 'var(--bn-stage-accent)', ok: 'var(--bn-stage-ok)', warn: 'var(--bn-stage-warn)', danger: 'var(--bn-stage-danger)' }
+const CARDS = [
+  { slot: 1, name: 'Emberwisp', set: 'Ashen Tides', num: '014/162', printing: 'Holo', hue: 'live', place: ['Box 2', 'Section 1', 'Card 8'] },
+  { slot: 2, name: 'Tidecaller Lumen', set: 'Ashen Tides', num: '041/162', printing: 'Normal', hue: 'accent', place: ['Box 2', 'Section 3', 'Card 22'] },
+  { slot: 3, name: 'Briarfang', set: 'Verdant Echoes', num: '077/190', printing: 'Reverse Holo', hue: 'ok', place: ['Box 2', 'Section 4', 'Card 17'] },
+  { slot: 4, name: 'Pyrelark', set: 'Verdant Echoes', num: '102/190', printing: 'Normal', hue: 'warn', place: ['Box 3', 'Section 1', 'Card 5'] },
+  { slot: 5, name: 'Dunemote', set: 'Gilded Hollow', num: '056/120', printing: 'Normal', hue: 'danger', place: ['Box 3', 'Section 2', 'Card 31'] },
+  { slot: 6, name: 'Glimmoth', set: 'Gilded Hollow', num: '009/120', printing: 'Holo', hue: 'accent', slab: 'Grade 9', place: ['Slab Box', 'Card 4'] },
+]
+const printClass = (c) => c.printing === 'Holo' ? ' holo' : c.printing === 'Reverse Holo' ? ' rev' : ''
+function cardEl(c, look = 'face') {
+  if (c.slab) {
+    const cls = look === 'glare' ? ' glare' : look === 'other' ? ' other' : ''
+    return `<div class="pw-slab${cls}"><div class="pw-slab-label"><span class="pw-slab-grade"></span></div><div class="pw-card${printClass(c)}" style="--hue:${HUE[c.hue]}"></div></div>`
+  }
+  if (look === 'back') return `<div class="pw-card back"></div>`
+  /* The wrong printing: Holo where Reverse Holo was sold. */
+  const pc = look === 'wrongprint' ? ' holo' : printClass(c)
+  return `<div class="pw-card${pc}" style="--hue:${HUE[c.hue]}"></div>`
+}
+const photo = (c, { crop = false, look = 'face', label = '' } = {}) =>
+  `<div class="pw-photo${c.slab ? ' slabbed' : ''}${crop ? ' crop' : ''}" role="img" aria-label="${label || (crop ? 'On the mat: ' : 'On file: ') + c.name}">${cardEl(c, look)}</div>`
+
+/* ---- states ---- */
+const STATES = [
+  { id: 'ready', view: 'pack', label: 'Lay Out', cap: 'Before the photo. The camera is live and the panel says what goes in each slot.' },
+  { id: 'match', view: 'pack', label: 'All Cards Match', cap: 'Plan state 1. Every slot is green, the count shows, and one large Seal step.' },
+  { id: 'sealed', view: 'pack', label: 'Sealed', cap: 'After Seal. The photo is kept with the time, the order and who packed it. Undo stays for 20 seconds.' },
+  { id: 'wrong', view: 'pack', label: 'Wrong Printing', cap: 'Plan state 2. Slot 3 is amber, the two photos side by side, the difference named, and where the right card is.' },
+  { id: 'missing', view: 'pack', label: 'Missing Card', cap: 'Plan state 3. Slot 5 is empty: the card on file, where it lives, and a way to tell the owner. Nothing is dropped.' },
+  { id: 'notfound', view: 'pack', label: 'Told the Owner', cap: 'After Can’t Find It. The card goes to the owner’s Review as not found, and the order waits. Undo stays for 20 seconds.' },
+  { id: 'facedown', view: 'pack', label: 'Face Down', cap: 'Plan state 4. No verdict on any slot. It says what to do, and nothing is marked wrong.' },
+  { id: 'overlap', view: 'pack', label: 'Overlapping', cap: 'Plan state 4. Two cards share a slot. No verdict; it says Spread the Cards.' },
+  { id: 'slab', view: 'pack', label: 'Slab by Label', cap: 'Plan state 5. The slab in slot 6 is matched by its printed label, not by its art.' },
+  { id: 'slab-manual', view: 'pack', label: 'Slab Label Unreadable', cap: 'Plan state 5. Glare hides the label, so the Fulfiller checks it by hand.' },
+  { id: 'slab-checked', view: 'pack', label: 'Slab Checked by Hand', cap: 'After It Matches. The check is stored as done by hand, beside the photo.' },
+  { id: 'slab-wrong', view: 'pack', label: 'Slab Does Not Match', cap: 'After It Doesn’t Match. Same shape as the wrong printing: where the right slab is.' },
+  { id: 'byeye', view: 'pack', label: 'First Version: By Eye', opt: 'by-eye', cap: 'Plan section 4: no automatic matching yet. One pair at a time, at full size, and the Fulfiller says Same Card. Not the Same opens the Wrong Printing screen, drawn for slot 3.' },
+  { id: 'dispute', view: 'dispute', label: 'Dispute Page', cap: 'Plan state 6. Found by order number: the pack photo, each card’s pair, the ship date, export and the outcome.' },
+  { id: 'dispute-exported', view: 'dispute', label: 'Exported (Locked)', cap: 'Plan state 6, after export. The photo and pairs are read-only, so the copy sent stays true. The outcome can still be set.' },
+  { id: 'dispute-none', view: 'dispute', label: 'No Pack Photo', cap: 'An order sealed without a photo. It says so, and is not drawn as empty evidence.' },
+]
+const OPTIONS = [
+  { id: 'auto-shutter', label: 'Auto Shutter', about: 'The camera takes the photo itself once the mat is still (Lay Out).' },
+  { id: 'by-eye', label: 'By-Eye State', about: 'The first version, with no automatic matching.' },
+  { id: 'image-export', label: 'Image Export', about: 'An image export beside the PDF (Dispute Page).' },
+  { id: 'back-link', label: 'Back to Cards to Pull', about: 'A way back to the pull list from the packing view.' },
+]
+
+/* Each slot's look and verdict per state. v: ok | warn | focus | manual | none. */
+function matFor(state) {
+  const s = CARDS.map((c) => ({ c, look: 'face', v: 'ok' }))
+  const none = () => s.forEach((x) => (x.v = null))
+  switch (state) {
+    case 'ready': none(); break
+    case 'byeye': none(); s[eyeAt].v = 'focus'; break
+    case 'wrong': s[2].look = 'wrongprint'; s[2].v = 'warn'; break
+    case 'missing': case 'notfound': s[4].look = 'absent'; s[4].v = 'warn'; break
+    case 'facedown': none(); s[2].look = 'back'; s[2].v = 'focus'; break
+    case 'overlap': none(); s[2].look = 'slid'; s[1].v = 'focus'; break
+    case 'slab-manual': s[5].look = 'glare'; s[5].v = 'focus'; break
+    case 'slab-checked': case 'dispute': case 'dispute-exported': s[5].look = 'glare'; s[5].v = 'manual'; break
+    case 'slab-wrong': s[5].look = 'other'; s[5].v = 'warn'; break
+  }
+  return s
+}
+function mat(state, { id = 'pw-mat', label = 'The slot mat, seen from the camera' } = {}) {
+  const badge = { ok: 'check', manual: 'hand', warn: 'alert', focus: state === 'overlap' ? 'spread' : state === 'slab-manual' || state === 'byeye' ? 'hand' : 'flip' }
+  return `<div class="pw-mat" id="${id}" role="img" aria-label="${label}"><div class="pw-mat-sheet">${matFor(state).map(({ c, look, v }) => `
+    <div class="pw-slot${c.slab ? ' slabslot' : ''}" data-v="${v || ''}" data-look="${look}">
+      <div class="pw-well">${look === 'absent' ? '' : cardEl(c, look === 'slid' ? 'face' : look)}${v ? `<span class="pw-badge">${icon(badge[v])}</span>` : ''}</div>
+      <span class="pw-print" aria-hidden="true">${c.slot}</span>
+    </div>`).join('')}</div></div>`
+}
+
+/* ---- the Fulfiller's packing view ---- */
+const say = (kind, ic, h, p = '') => `<div class="ff-say"><span class="ff-say-icon ${kind}">${icon(ic, 26)}</span><div class="ff-say-text"><h2>${h}</h2>${p ? `<p>${p}</p>` : ''}</div></div>`
+const btn = (label, go, kind = 'primary', ic = '', id = '') => `<button type="button" class="ff-btn ${kind}" data-go="${go}"${id ? ` id="${id}"` : ''}>${ic ? icon(ic, 26) : ''}${label}</button>`
+const place = (c) => `<p class="ff-place mark">${c.place.map((x) => `<span>${x}</span>`).join('')}${tag('position label')}</p>`
+const receipt = (text, undoTo) => `<div class="ff-receipt" role="status"><span>${text}</span>${btn('Undo', undoTo, 'plain')}<span class="ff-drain"></span></div>`
+function slotList(state) {
+  const m = matFor(state)
+  return `<ul class="ff-slots" aria-label="What goes in each slot">${m.map(({ c, v }) => `
+    <li class="ff-slot"><span class="ff-slot-n">${c.slot}</span>${photo(c)}
+      <span class="ff-slot-name"><b>${c.name}</b><span>${c.slab ? `Slab, ${c.slab}` : c.printing}</span></span>
+      ${v === 'ok' ? `<span class="ff-tick ok" title="Matches">${icon('check', 22)}<span class="sr">Matches</span></span>` : v === 'manual' ? `<span class="ff-tick hand" title="Checked by you">${icon('hand', 22)}<span class="sr">Checked by you</span></span>` : '<span></span>'}
+    </li>`).join('')}</ul>`
+}
+let eyeAt = 0
+function panel(state) {
+  const C = CARDS
+  switch (state) {
+    case 'ready': return `${say('do', 'box', 'Lay out the 6 cards.', 'Face up, one in each numbered slot.')}
+      ${slotList(state)}
+      <p class="ff-hint" data-opt="auto-shutter">${icon('camera', 24)}Or keep your hands clear. It takes the photo when the mat is still.</p>
+      <div class="ff-actions">${btn('Take Photo', 'match', 'primary', 'camera', 'pw-shutter')}<span></span></div>`
+    case 'match': return `${say('ok', 'check', 'All 6 cards match.', 'Seal the envelope.')}
+      ${slotList(state)}
+      <div class="ff-actions">${btn('Seal', 'sealed', 'primary', '', 'pw-seal')}<span></span></div>`
+    case 'slab': return `${say('ok', 'check', 'All 6 cards match.', 'Slot 6 is a slab, so it was matched by its label.')}
+      <div class="ff-label-read"><span>The label reads</span><b>Glimmoth, Gilded Hollow 009, Grade 9</b></div>
+      ${slotList(state)}
+      <div class="ff-actions">${btn('Seal', 'sealed', 'primary', '', 'pw-seal')}<span></span></div>`
+    case 'slab-checked': return `${say('ok', 'check', 'All 6 cards match.', 'You checked slot 6 by hand. That is kept with the photo.')}
+      ${slotList(state)}
+      <div class="ff-actions">${btn('Seal', 'sealed', 'primary', '', 'pw-seal')}<span></span></div>`
+    case 'sealed': return `${say('ok', 'check', 'Sealed. The photo is kept.', 'Put the envelope in the outbox.')}
+      ${slotList('match')}
+      <div class="ff-actions">${receipt('Sealed for Mara Quill.', 'match')}${btn('Next Order', 'ready', 'primary', '', 'pw-next')}</div>`
+    case 'wrong': return `${say('warn', 'alert', 'Slot 3 is the wrong printing.', 'Briarfang, Verdant Echoes 077')}
+      <div class="ff-diff"><b>It should be Reverse Holo.</b><span>This one is Holo: the shine is on the picture, not the border.</span></div>
+      <div class="ff-pair" id="pw-pair"><figure><figcaption>Should Be</figcaption>${photo(C[2])}</figure><figure><figcaption>On the Mat</figcaption>${photo(C[2], { crop: true, look: 'wrongprint' })}</figure></div>
+      <div class="ff-where"><p>Swap it for the right one. It is at</p>${place(C[2])}</div>
+      <p class="ff-rest">The other 5 cards match.</p>
+      <div class="ff-actions">${btn('Take Photo Again', 'match', 'primary', 'camera')}<span></span></div>`
+    case 'slab-wrong': return `${say('warn', 'alert', 'Slot 6 is the wrong slab.', 'Glimmoth, Gilded Hollow 009')}
+      <div class="ff-diff"><b>It should be Grade 9.</b><span>This slab has a different label.</span></div>
+      <div class="ff-pair" id="pw-pair"><figure><figcaption>Should Be</figcaption>${photo(C[5])}</figure><figure><figcaption>On the Mat</figcaption>${photo(C[5], { crop: true, look: 'other' })}</figure></div>
+      <div class="ff-where"><p>Swap it for the right one. It is at</p>${place(C[5])}</div>
+      <div class="ff-actions">${btn('Take Photo Again', 'slab', 'primary', 'camera')}<span></span></div>`
+    case 'missing': return `${say('warn', 'alert', 'Slot 5 is empty.', 'Dunemote, Gilded Hollow 056, is not on the mat.')}
+      <div class="ff-where"><p>It should be at</p>${place(C[4])}</div>
+      <div class="ff-pair" id="pw-pair"><figure><figcaption>Look for This Card</figcaption>${photo(C[4])}</figure></div>
+      <div class="ff-actions">${btn('Take Photo Again', 'match', 'primary', 'camera')}${btn('Can’t Find It', 'notfound', 'plain', '', 'pw-notfound')}</div>`
+    case 'notfound': return `${say('do', 'alert', 'The owner will look for Dunemote.', 'This order waits. Set its other 5 cards aside together.')}
+      <div class="ff-pair"><figure><figcaption>Not Found</figcaption>${photo(C[4])}</figure></div>
+      <div class="ff-actions">${receipt('Sent to the owner.', 'missing')}${btn('Next Order', 'ready', 'primary')}</div>`
+    case 'facedown': return `${say('do', 'flip', 'Flip slot 3.', 'The card is face down. Turn it over, then take the photo again.')}
+      <div class="ff-actions">${btn('Take Photo Again', 'match', 'primary', 'camera')}<span></span></div>`
+    case 'overlap': return `${say('do', 'spread', 'Spread the cards.', 'Slots 2 and 3 overlap. Give each card its own slot, then take the photo again.')}
+      <div class="ff-actions">${btn('Take Photo Again', 'match', 'primary', 'camera')}<span></span></div>`
+    case 'slab-manual': return `${say('do', 'hand', 'Check slot 6 yourself.', 'Light on the case hides the label. Read the label and compare.')}
+      <div class="ff-pair" id="pw-pair"><figure><figcaption>Should Be</figcaption>${photo(C[5])}</figure>
+        <div class="ff-label-read" style="width:320px;align-self:start"><span>The label should read</span><b>Glimmoth</b><b>Gilded Hollow 009</b><b>Grade 9</b></div></div>
+      <div class="ff-actions">${btn('It Matches', 'slab-checked', 'primary', 'check', 'pw-handcheck')}${btn('It Doesn’t Match', 'slab-wrong', 'plain')}</div>`
+    case 'byeye': {
+      const c = C[eyeAt]
+      return `${say('do', 'hand', `Check slot ${c.slot}.`, 'Left is the card on file. Right is the card on the mat.')}
+        <div class="ff-progress" aria-label="Slot ${c.slot} of 6">${C.map((_, i) => `<i class="${i < eyeAt ? 'done' : i === eyeAt ? 'now' : ''}"></i>`).join('')}</div>
+        <p><b>${c.name}</b>, ${c.slab ? `slab, ${c.slab}` : c.printing}</p>
+        <div class="ff-pair" id="pw-pair"><figure><figcaption>On File</figcaption>${photo(c)}</figure><figure><figcaption>On the Mat</figcaption>${photo(c, { crop: true })}</figure></div>
+        <div class="ff-actions">${btn('Same Card', 'eye-next', 'primary', 'check')}${btn('Not the Same', 'wrong', 'plain')}</div>`
+    }
+  }
+}
+function packView(state) {
+  const live = state === 'ready' || state === 'facedown' || state === 'overlap' || state === 'byeye'
+  const cam = state === 'ready' ? `<span><i class="ff-live"></i>Camera on</span>`
+    : `<span>${icon('camera')}Photo taken at 2:12 PM</span>`
+  return `<div class="ff">
+    <header class="ff-head">
+      <div class="ff-who">
+        <button type="button" class="ff-back" data-opt="back-link" data-go="ready">${icon('back', 24)}Cards to Pull</button>
+        <p class="ff-shipto mark">Ship To <span>${ORDER.shipTo}</span>${tag('Ship To line').replace('class="tag', 'class="tag side')}</p>
+        <p class="ff-orderid mono">#${ORDER.number}</p>
+      </div>
+      <p class="ff-count mark"><b>6</b>Cards${tag('card count', true)}</p>
+    </header>
+    <div class="ff-body">
+      <section class="ff-cam mark" aria-label="Camera">${tag('slot mat photo', true)}
+        <div class="ff-cambar">${cam}</div>
+        ${mat(state)}
+      </section>
+      <section class="ff-panel mark" aria-live="polite">${tag('packing check', true)}${panel(state)}</section>
+    </div>
+  </div>`
+}
+
+/* ---- the owner's dispute page ---- */
+let outcome = null
+function disputeView(state) {
+  const nav = [['home', 'Home'], ['capture', 'Capture'], ['review', 'Review'], ['tag', 'Pricing'], ['box', 'Orders'], ['truck', 'Shipping'], ['chart', 'Sales'], ['layers', 'Inventory'], ['shield', 'Slabs']]
+  const side = `<nav class="os-side" aria-label="Sample sidebar"><div class="os-brand"><i></i><span>Banchi</span></div>
+    ${nav.map(([i, n]) => `<a class="os-nav"${n === 'Orders' ? ' aria-current="page"' : ''} title="${n}">${icon(i, 18)}<span>${n}</span></a>`).join('')}</nav>`
+  const locked = state === 'dispute-exported'
+  const head = `<header class="os-head"><h1>Pack Photo</h1>${locked ? `<span class="pill acc">${icon('lock', 12)}Locked</span>` : ''}
+    <div class="os-find"><label class="os-field">${icon('search', 16)}<span class="sr">Order Number</span><input value="${ORDER.number}" aria-label="Order Number"></label><button type="button" class="btn">Find</button></div></header>`
+  if (state === 'dispute-none') {
+    return `<div class="os">${side}<main class="os-page">${head}<div class="os-status"></div>
+      <section class="panel os-empty mark">${tag('no-photo state', true)}<h2>This order has no pack photo.</h2>
+        <p>It was sealed without one. 84 of the last 86 orders have a pack photo.</p>
+        <button type="button" class="btn primary" data-go="dispute">Open the Order in Orders</button></section></main></div>`
+  }
+  const pick = locked && outcome === null ? 'Sale Upheld' : outcome
+  const rows = matFor(state).map(({ c, look, v }) => `<tr>
+    <td class="os-slotn">${c.slot}</td>
+    <td class="os-card"><b>${c.name}</b><span>${c.slab ? `Slab, ${c.slab}` : c.printing}</span></td>
+    <td class="col-set os-card"><span>${c.set} ${c.num}</span></td>
+    <td>${photo(c)}</td><td>${photo(c, { crop: true, look: look === 'glare' ? 'glare' : 'face' })}</td>
+    <td>${v === 'manual' ? '<span class="pill ok">Checked by Hand</span>' : '<span class="pill ok">Matched</span>'}</td></tr>`).join('')
+  return `<div class="os">${side}<main class="os-page">${head}
+    <div class="os-status">${locked ? `<p class="os-notice" role="status">${icon('lock', 18)}Exported as a PDF on ${ORDER.exported}. The photo and the pairs are locked, so the copy you sent stays true.</p>` : ''}</div>
+    <div class="os-grid">
+      <section class="panel mark" id="pw-dispute-photo">${tag('pack photo', true)}<h2>On the Packing Table</h2>${mat(state, { id: 'pw-dispute-mat', label: 'The pack photo of this order' })}
+        <p class="os-cap">Taken ${ORDER.packedAt}, just before sealing.</p></section>
+      <section class="panel">
+        <dl class="kv mark">${tag('order facts')}
+          <dt>Ship To</dt><dd>${ORDER.shipTo}</dd><dt>Order</dt><dd class="mono">#${ORDER.number}</dd>
+          <dt>Cards</dt><dd>6, all matched</dd><dt>Packed</dt><dd>${ORDER.packedAt}</dd><dt>Packed By</dt><dd>The Fulfiller</dd><dt>Shipped</dt><dd>${ORDER.shipped}</dd></dl>
+        <div class="os-stack mark">${tag('export', true)}<b>Send It to the Buyer</b>
+          <div class="os-row"><button type="button" class="btn primary" data-go="dispute-exported" id="pw-export">${icon('file', 16)}${locked ? 'Export PDF Again' : 'Export PDF'}</button>
+            <button type="button" class="btn" data-opt="image-export" data-go="dispute-exported">${icon('image', 16)}Export Image</button></div>
+          <p class="os-help">Attach it to your reply in the marketplace message.</p></div>
+        <div class="os-stack mark" id="pw-outcome">${tag('outcome', true)}<b>Outcome</b>
+          <div class="seg" role="group" aria-label="Outcome">${['Refunded', 'Sale Upheld', 'Returned'].map((o) => `<button type="button" data-outcome="${o}" aria-pressed="${pick === o}">${o}</button>`).join('')}</div>
+          <p class="os-help">${pick ? `Kept with this order: ${pick}.` : 'Not decided yet.'}</p></div>
+      </section>
+    </div>
+    <section class="panel mark">${tag('pairs', true)}<h2>Card by Card</h2>
+      <table class="os-table"><thead><tr><th>Slot</th><th>Card</th><th class="col-set">Set</th><th>At Capture</th><th>At Packing</th><th>Check</th></tr></thead><tbody>${rows}</tbody></table></section>
+  </main></div>`
+}
+
+/* ---- hash and chrome ---- */
+const S = { state: 'match', t: null, w: 'fit', h: new Set(), tags: true }
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1))
+  const st = p.get('state') || p.get('s')
+  S.state = STATES.some((x) => x.id === st) ? st : 'match'
+  S.t = ['light', 'dark'].includes(p.get('t')) ? p.get('t') : null
+  S.w = ['1440', '820'].includes(p.get('w')) ? p.get('w') : 'fit'
+  S.h = new Set((p.get('h') || '').split(',').filter(Boolean))
+  S.tags = p.get('tags') !== 'off'
+}
+function writeHash() {
+  const p = new URLSearchParams()
+  p.set('state', S.state)
+  if (S.t) p.set('t', S.t)
+  if (S.w !== 'fit') p.set('w', S.w)
+  if (S.h.size) p.set('h', [...S.h].join(','))
+  if (!S.tags) p.set('tags', 'off')
+  history.replaceState(null, '', '#' + p.toString())
+  render()
+}
+function go(state) { S.state = state; writeHash(); document.getElementById('frame').scrollIntoView({ block: 'start' }) }
+function bar() {
+  const cur = STATES.find((x) => x.id === S.state)
+  const chips = (view) => STATES.filter((x) => x.view === view).map((x) =>
+    `<button type="button" class="mk-chip" data-state="${x.id}" aria-pressed="${x.id === S.state}"${x.opt && S.h.has(x.opt) ? ' hidden' : ''}>${x.label}</button>`).join('')
+  const sel = (key, vals) => vals.map(([v, l]) => `<button type="button" class="mk-chip" data-${key}="${v}" aria-pressed="${(S[key] ?? 'system') === v}">${l}</button>`).join('')
+  return `<div class="mk-row"><b>Packing</b>${chips('pack')}<span class="mk-kind">Designer kind: informed. Pack witness, proposal only</span></div>
+    <div class="mk-row"><b>Owner</b>${chips('dispute')}</div>
+    <div class="mk-row"><b>View</b>${sel('w', [['fit', 'Fit Window'], ['1440', '1440'], ['820', '820 (iPad)']])}
+      ${sel('t', [['system', 'System Theme'], ['light', 'Light'], ['dark', 'Dark']])}
+      <button type="button" class="mk-chip" data-tags aria-pressed="${S.tags}">Today / New Tags</button></div>
+    <div class="mk-row"><b>Options</b>${OPTIONS.map((o) => `<button type="button" class="mk-chip${S.h.has(o.id) ? ' off' : ''}" data-hide="${o.id}" title="${o.about}" aria-pressed="false">${S.h.has(o.id) ? 'Show' : 'Hide'} ${o.label}</button>`).join('')}</div>
+    <p class="mk-cap"><b>${cur.label}.</b> ${cur.cap}</p>`
+}
+function render() {
+  document.documentElement.dataset.theme = S.t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+  document.body.classList.toggle('notags', !S.tags)
+  if (S.state === 'byeye' && S.h.has('by-eye')) S.state = 'match'
+  document.getElementById('mk-bar').innerHTML = bar()
+  const f = document.getElementById('frame')
+  f.dataset.w = S.w
+  const st = STATES.find((x) => x.id === S.state)
+  f.innerHTML = st.view === 'pack' ? packView(S.state) : disputeView(S.state)
+  f.querySelectorAll('[data-opt]').forEach((el) => { el.hidden = S.h.has(el.dataset.opt) })
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button')
+  if (!b) return
+  if (b.dataset.state) { if (b.dataset.state === 'byeye') eyeAt = 0; return go(b.dataset.state) }
+  if (b.dataset.w) { S.w = b.dataset.w; return writeHash() }
+  if (b.dataset.t) { S.t = b.dataset.t === 'system' ? null : b.dataset.t; return writeHash() }
+  if ('tags' in b.dataset) { S.tags = !S.tags; return writeHash() }
+  if (b.dataset.hide) { const id = b.dataset.hide; S.h.has(id) ? S.h.delete(id) : S.h.add(id); return writeHash() }
+  if (b.dataset.outcome) { outcome = b.dataset.outcome; return render() }
+  if (b.dataset.go === 'eye-next') { eyeAt += 1; if (eyeAt >= CARDS.length) { eyeAt = 0; return go('match') } return render() }
+  if (b.dataset.go) { if (b.dataset.go === 'dispute-exported' && outcome === null) outcome = null; return go(b.dataset.go) }
+})
+addEventListener('hashchange', () => { readHash(); render() })
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render)
+readHash(); render()
+</script>
+</body>
+</html>
