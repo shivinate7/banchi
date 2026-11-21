@@ -36,12 +36,10 @@ cv2.QRCodeDetector at 450-1980 ms and 1-of-5 on 12 MP frames against zxing-cpp's
 and 5-of-5. So opencv is NOT taken, its original refusal STANDS, and the 46 MB it would have
 cost is not spent.
 
-THE VERSION IS PINNED AND THE PIN IS LOAD-BEARING. This repo's venv is Python 3.9.6, which
-is what `/usr/bin/python3` is on this machine. `pip install zxing-cpp` FAILS there: the 3.x
-line dropped cp39 wheels, pip resolves 3.1.1 anyway because its `requires_python` is >=3.9,
-falls back to the source distribution and dies in CMake. It does NOT quietly select an older
-release. `zxing-cpp==2.3.0` has a real cp39 wheel — 1.7 MB, universal2 — and installs
-cleanly. An unpinned requirement here is a broken clone, not a newer decoder.
+THE VERSION IS PINNED, AND THE PIN IS A GATE, NOT A WORKAROUND. `requirements.txt` holds
+`zxing-cpp` at the newest release that passes T8. The venv is Python 3.12, which every 3.x
+wheel supports, so a plain install works. Raising the pin means re-running T8 and
+re-measuring the hit rates below first.
 
 MEASURED HIT RATES OF THIS MODULE AS SHIPPED, over 17 degradation cases x 10 codes = 170
 frames at 3840x2160. Synthetic deliberately: no real code-card photograph exists in this repo
