@@ -375,9 +375,9 @@
         <div class="strip-head">
           <h2 class="h2" id="stripTitle">Next 8 Weeks</h2>
           <div class="legend" aria-hidden="true">
-            <span><i class="sw act"></i>Your orders a day</span>
-            <span><i class="sw band"></i>Normal range</span>
-            <span><i class="sw ev"></i>Expected range</span>
+            <span><i class="sw act"></i>Your Orders a Day</span>
+            <span><i class="sw band"></i>Normal Range</span>
+            <span><i class="sw ev"></i>Expected Range</span>
           </div>
           <span class="add-say" id="addSay" role="status"></span>
           <button class="btn" type="button" id="addBtn">
@@ -469,7 +469,7 @@ const EV = {
   ashenNear: { name: 'Ashen Circuit Regional', kind: 'Tournament', from: 12, to: 13, rng: [4, 18], nohist: true, wide: true },
   winterfest:{ name: 'Winterfest Break', kind: 'School break', from: 33, to: 48, rng: [2, 8], shape: 'flat' },
   frostPre:  { name: 'Frostbound Prerelease', kind: 'Prerelease', from: 31, to: 32, rng: [5, 12], shape: 'flat' },
-  hollowmere:{ name: 'Hollowmere Fair', kind: 'Holiday', from: 10, to: 13, rng: [2, 9], shape: 'flat' },
+  hollowmere:{ name: 'Hollowmere Fair', kind: 'Holiday', from: 10, to: 13, rng: [2, 10], shape: 'flat' },
   emberOver: { name: 'Emberfall Tides', kind: 'Release', from: 11, to: 20, rng: [14, 24], shape: 'release' },
 }
 const ACT = [3, 2, 4, 1, 3, 2]
@@ -494,7 +494,7 @@ function bandFor(stateKey, i, events) {
   }
   if (hits.length === 1) { [lo, hi] = hits[0]; kind = hits[0][2].wide ? 'wide' : 'ev' }
   if (hits.length > 1) {   // two events at once: the guess cannot separate them, so it takes the union and widens it
-    lo = Math.min(...hits.map((h) => h[0])); hi = Math.min(34, hits.reduce((s, h) => s + h[1], 0)); kind = 'ev'
+    lo = Math.max(...hits.map((h) => h[0])); hi = hits.reduce((s, h) => s + h[1], 0); kind = 'ev'
   }
   return { lo: Math.round(lo), hi: Math.round(hi), kind }
 }
@@ -647,7 +647,7 @@ function previewBlock() {
 function prepCard() {
   const e = EV.emberfall
   return `<div class="card-top">
-      <div class="card-pills">${kindPill(e)}<span class="pill accent">In 6 days</span></div>
+      <div class="card-pills">${kindPill(e)}<span class="pill accent">In 6 Days</span></div>
       <h2 class="card-title" id="focus-prep">${e.name}</h2>
       <p class="card-when">Fri Nov 27 to Sun Dec 6. Busiest the first 3 days, then easing.</p>
     </div>
@@ -685,7 +685,7 @@ function nohistCard() {
          <p class="note">Enough for 2 days at the top of the borrowed range.</p></div>
          <div class="fact"><h3>Fulfiller Days</h3><ul><li>Sat Nov 28<b>Usual</b></li><li>Sun Nov 29<b data-opt="extra">Extra</b></li></ul></div></div>`
   return `<div class="card-top">
-      <div class="card-pills">${kindPill(e)}<span class="pill accent">In 7 days</span></div>
+      <div class="card-pills">${kindPill(e)}<span class="pill accent">In 7 Days</span></div>
       <h2 class="card-title" id="focus-nohist">${e.name}</h2>
       <p class="card-when">Sat Nov 28 to Sun Nov 29.</p></div>
     <div class="notice"><span><b>No past event like this.</b> Choose how the clock treats it.</span></div>
@@ -697,7 +697,7 @@ function nohistCard() {
 }
 function quietCard() {
   return `<div class="card-top"><div class="card-pills"><span class="pill ok">Quiet</span></div>
-      <h2 class="card-title" id="focus-quiet">Three normal weeks</h2>
+      <h2 class="card-title" id="focus-quiet">Three Normal Weeks</h2>
       <p class="card-when">Sun Nov 22 to Fri Dec 11. Nothing on the clock, and nothing like a past spike.</p></div>
     <div class="figure"><span class="figure-n">1–5</span><span class="figure-u">orders a day, your normal</span>
       <span class="figure-basis">From your last 90 days with no event.</span></div>
@@ -706,8 +706,8 @@ function quietCard() {
       <button class="btn" type="button" data-pick="ashenFar">See the Next Event</button></div>`
 }
 function spikeCard() {
-  return `<div class="card-top"><div class="card-pills"><span class="pill warn">Above the range</span></div>
-      <h2 class="card-title" id="focus-spike">Is something happening?</h2>
+  return `<div class="card-top"><div class="card-pills"><span class="pill warn">Above the Range</span></div>
+      <h2 class="card-title" id="focus-spike">Is Something Happening?</h2>
       <p class="card-when">9 of today's 14 orders are Gilded Hollow cards. Yesterday ran 3.</p></div>
     <div class="figure"><span class="figure-n">14</span><span class="figure-u">orders so far today</span>
       <span class="figure-basis">1–5 expected for a Saturday.</span></div>
@@ -726,16 +726,16 @@ for (let k = 0; k < 10; k++) {
 }
 function afterCard() {
   return `<div class="card-top"><div class="card-pills"><span class="pill">Release</span><span class="pill">Over</span></div>
-      <h2 class="card-title" id="focus-after">Mistral Crown: guess against what happened</h2>
+      <h2 class="card-title" id="focus-after">Mistral Crown: Guess Against What Happened</h2>
       <p class="card-when">Fri Nov 6 to Sun Nov 15.</p></div>
     <svg id="afterChart" role="img" aria-label="Guess range against your orders per day, Nov 6 to Nov 15"></svg>
-    <div class="legend" aria-hidden="true"><span><i class="sw ev"></i>The guess</span><span><i class="sw act" style="background:var(--bn-ink)"></i>Your orders</span>
-      <span><i class="sw" style="width:10px;height:10px;border-radius:50%;background:var(--bn-warn)"></i>Outside the guess</span></div>
+    <div class="legend" aria-hidden="true"><span><i class="sw ev"></i>The Guess</span><span><i class="sw act" style="background:var(--bn-ink)"></i>Your Orders</span>
+      <span><i class="sw" style="width:10px;height:10px;border-radius:50%;background:var(--bn-warn)"></i>Outside the Guess</span></div>
     <table class="sets"><thead><tr><th>Set</th><th class="n">Guessed</th><th class="n">Sold</th><th>Against the Guess</th></tr></thead><tbody>
       <tr><td data-typed>Mistral Crown</td><td class="n">45%</td><td class="n">58%</td><td><span class="pill warn">More</span></td></tr>
       <tr><td data-typed>Gilded Hollow</td><td class="n">30%</td><td class="n">22%</td><td><span class="pill">Less</span></td></tr>
-      <tr><td data-typed>Ashfall Promos</td><td class="n">15%</td><td class="n">12%</td><td><span class="pill ok">As guessed</span></td></tr>
-      <tr><td>Other sets</td><td class="n">10%</td><td class="n">8%</td><td><span class="pill ok">As guessed</span></td></tr></tbody></table>
+      <tr><td data-typed>Ashfall Promos</td><td class="n">15%</td><td class="n">12%</td><td><span class="pill ok">As Guessed</span></td></tr>
+      <tr><td>Other sets</td><td class="n">10%</td><td class="n">8%</td><td><span class="pill ok">As Guessed</span></td></tr></tbody></table>
     <div class="acts"><span style="font-weight:600;margin-right:var(--bn-2)">Was the prep card worth it?</span>
       <button class="btn" type="button" data-score="Useful">Useful</button>
       <button class="btn" type="button" data-score="Missed">Missed</button>
@@ -760,11 +760,11 @@ function drawAfter() {
 }
 function overlapCard() {
   return `<div class="card-top">
-      <div class="card-pills"><span class="pill">Holiday</span><span class="pill">Release</span><span class="pill accent">In 5 days</span></div>
+      <div class="card-pills"><span class="pill">Holiday</span><span class="pill">Release</span><span class="pill accent">In 5 Days</span></div>
       <h2 class="card-title" id="focus-overlap">Hollowmere Fair and Emberfall Tides</h2>
       <p class="card-when">Thu Nov 26 to Sun Dec 6. They share Fri Nov 27 to Sun Nov 29.</p></div>
     <div class="figure"><span class="figure-n">14–34</span><span class="figure-u">orders a day on the shared days</span>
-      <span class="figure-basis">Releases ran 14–24 at the start, holiday weekends 2–9. You have never had both at once, so the guess cannot tell them apart and adds the two.</span></div>
+      <span class="figure-basis">Releases ran 14–24 at the start, holiday weekends 2–10. You have never had both at once, so the guess cannot tell them apart and adds the two.</span></div>
     <div class="facts">
       <div class="fact" data-opt="supplies"><h3>Supplies</h3><ul>
         <li>Mailers<b class="num">100</b></li><li>Sleeves<b class="num">330</b></li><li>Tape<b class="num">3 rolls</b></li></ul>
@@ -780,7 +780,7 @@ function farCard(id) {
   const rng = e.rng ? `<div class="figure"><span class="figure-n ${e.wide ? 'wide' : ''}">${e.rng[0]}–${e.rng[1]}</span><span class="figure-u">orders a day</span>
       <span class="figure-basis">The full prep card opens ${short(Math.max(TODAY, e.from - 7))}, a week before.</span></div>`
     : `<div class="notice"><span><b>No past event like this.</b> A week before, choose to borrow a range or watch it.</span></div>`
-  return `<div class="card-top"><div class="card-pills">${kindPill(e)}<span class="pill">In ${e.from - TODAY} days</span></div>
+  return `<div class="card-top"><div class="card-pills">${kindPill(e)}<span class="pill">In ${e.from - TODAY} Days</span></div>
       <h2 class="card-title">${e.name}</h2><p class="card-when">${short(e.from)} to ${short(e.to)}.</p></div>
     ${rng}
     <div class="acts"><button class="btn" type="button">Edit Event</button><button class="btn ghost" type="button" data-pick="">Back</button></div>`
