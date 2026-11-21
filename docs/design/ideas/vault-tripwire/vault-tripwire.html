@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vault Tripwire</title>
+<script>
+  /* Hash keys, joined by &:
+       state=<name>        one state (see STATES below); default: mixed
+       t=dark | t=light    theme (default: prefers-color-scheme)
+       hide=a,b            options the owner culled (see the cull strip)
+       notes=off           hides the dashed Today:/New: tags */
+  function readHash() {
+    return new Map(location.hash.slice(1).split('&').filter(Boolean).map((p) => {
+      const i = p.indexOf('='); return i < 0 ? [p, ''] : [p.slice(0, i), decodeURIComponent(p.slice(i + 1))]
+    }))
+  }
+  (function () {
+    const h = readHash()
+    const dark = h.has('t') ? h.get('t') === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
+  })()
+</script>
+<style>
+/* ---- Banchi tokens, inlined from app/src/tokens.css (light, then dark). Every colour below is one of these. ---- */
+:root {
+  color-scheme: light;
+  --bn-bg: #f4f5f8; --bn-surface: #ffffff; --bn-surface-2: #eceef2; --bn-surface-3: #f7f8fa;
+  --bn-surface-glass: rgba(255, 255, 255, 0.72); --bn-hover: rgba(15, 18, 23, 0.03);
+  --bn-ink: #0f1217; --bn-ink-2: #3b414b; --bn-ink-3: #666c76; --bn-ink-4: #7f8791;
+  --bn-line: rgba(15, 18, 23, 0.08); --bn-line-strong: rgba(15, 18, 23, 0.16); --bn-line-focus: rgba(61, 90, 241, 0.55);
+  --bn-field-edge: var(--bn-ink-4);
+  --bn-accent: #3d5af1; --bn-accent-hover: #2f4bd9; --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10); --bn-accent-tint-2: rgba(61, 90, 241, 0.18); --bn-on-accent: #ffffff;
+  --bn-live: #d63d2b; --bn-live-tint: rgba(239, 75, 58, 0.12);
+  --bn-ok: #15803d; --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309; --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-danger: #b91c1c; --bn-danger-tint: rgba(220, 38, 38, 0.10);
+  --bn-money: #0f1217;
+  --bn-pill-ink-accent: var(--bn-accent-hover); --bn-pill-ink-ok: #11733a; --bn-pill-ink-warn: #a14b09; --bn-pill-ink-danger: #b3123e;
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32), 0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-shadow-accent: 0 8px 24px -8px rgba(61, 90, 241, 0.55);
+  --bn-btn-bg: var(--bn-surface); --bn-btn-bg-hover: var(--bn-surface-3); --bn-btn-shadow: var(--bn-shadow-1);
+  --bn-font-display: 'Manrope', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --bn-fs-2xs: 10px; --bn-fs-xs: 11px; --bn-fs-sm: 12px; --bn-fs-md: 13px; --bn-fs-base: 14px; --bn-fs-lg: 16px;
+  --bn-fs-xl: 18px; --bn-fs-2xl: 22px; --bn-fs-3xl: 28px; --bn-fs-4xl: 36px;
+  --bn-fs-h1: var(--bn-fs-3xl); --bn-fs-h3: var(--bn-fs-lg);
+  --bn-tracking-caps: 0.06em; --bn-tracking-tight: -0.02em;
+  --bn-lh-tight: 1.1; --bn-lh-snug: 1.25; --bn-lh-base: 1.4; --bn-lh-relaxed: 1.55;
+  --bn-1: 4px; --bn-2: 8px; --bn-3: 12px; --bn-4: 16px; --bn-5: 20px; --bn-6: 24px; --bn-7: 32px; --bn-8: 40px; --bn-9: 48px; --bn-10: 64px;
+  --bn-0-5: 2px; --bn-0-75: 3px; --bn-1-5: 6px;
+  --bn-r-xs: 4px; --bn-r-sm: 6px; --bn-r: 8px; --bn-r-lg: 12px; --bn-r-xl: 16px; --bn-r-full: 999px;
+  --bn-t-fast: 120ms; --bn-t: 200ms; --bn-ease: cubic-bezier(0.2, 0, 0, 1);
+  --bn-sidebar-w: 236px; --bn-rail-w: 64px;
+  --bn-control-h: 34px; --bn-control-h-lg: 40px; --bn-control-h-sm: 28px; --bn-pill-h: 22px; --bn-pill-h-sm: 18px;
+  --bn-disabled: 0.45;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+  --bn-surface-glass: rgba(20, 23, 28, 0.72); --bn-hover: rgba(255, 255, 255, 0.04);
+  --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+  --bn-line: rgba(255, 255, 255, 0.08); --bn-line-strong: rgba(255, 255, 255, 0.16); --bn-line-focus: rgba(129, 146, 255, 0.6);
+  --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14); --bn-accent-tint-2: rgba(127, 144, 255, 0.24); --bn-on-accent: #0c0e12;
+  --bn-live: #ff6a58; --bn-live-tint: rgba(255, 106, 88, 0.16);
+  --bn-ok: #3ddc84; --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524; --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-danger: #ff5c5c; --bn-danger-tint: rgba(255, 92, 92, 0.14);
+  --bn-money: #eef0f4;
+  --bn-pill-ink-accent: var(--bn-accent-hover); --bn-pill-ink-ok: var(--bn-ok); --bn-pill-ink-warn: var(--bn-warn); --bn-pill-ink-danger: #f6799c;
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(127, 144, 255, 0.55);
+  --bn-btn-bg: var(--bn-surface-3); --bn-btn-bg-hover: #262b34;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- base and the few kit primitives this page needs (shapes read from app/src/kit.css) ---- */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--bn-bg); }
+body { color: var(--bn-ink); font-family: var(--bn-font-ui); font-size: var(--bn-fs-base); line-height: var(--bn-lh-base); }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--bn-line-focus); outline-offset: 2px; }
+.mono, .bn-money { font-family: var(--bn-font-mono); font-variant-numeric: tabular-nums; }
+.bn-money { font-weight: 600; color: var(--bn-money); }
+.bn-label { font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); }
+.bn-btn { --btn-h: var(--bn-control-h); display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-2);
+  height: var(--btn-h); min-height: 40px; padding: 0 var(--bn-3); border: 0; border-radius: var(--bn-r); background: var(--bn-btn-bg);
+  box-shadow: var(--bn-btn-shadow); font-size: var(--bn-fs-md); font-weight: 600; white-space: nowrap;
+  transition: background var(--bn-t-fast) var(--bn-ease); }
+.bn-btn:hover { background: var(--bn-btn-bg-hover); }
+.bn-btn:active { transform: translateY(1px); }
+.bn-btn-primary { color: var(--bn-on-accent); background: var(--bn-accent); box-shadow: var(--bn-shadow-1); }
+.bn-btn-primary:hover { background: var(--bn-accent-hover); box-shadow: var(--bn-shadow-accent); }
+.bn-btn-quiet { background: transparent; box-shadow: none; color: var(--bn-ink-2); }
+.bn-btn-quiet:hover { background: var(--bn-hover); }
+.bn-pill { display: inline-flex; align-items: center; gap: var(--bn-1-5); height: var(--bn-pill-h); padding: 0 var(--bn-2);
+  border-radius: var(--bn-r-full); font-size: var(--bn-fs-xs); font-weight: 600; white-space: nowrap;
+  background: var(--bn-surface-2); color: var(--bn-ink-2); }
+.bn-pill-warn { color: var(--bn-pill-ink-warn); background: var(--bn-warn-tint); }
+.bn-pill-danger { color: var(--bn-pill-ink-danger); background: var(--bn-danger-tint); }
+.bn-pill-ok { color: var(--bn-pill-ink-ok); background: var(--bn-ok-tint); }
+.bn-pill-accent { color: var(--bn-pill-ink-accent); background: var(--bn-accent-tint); }
+.bn-seg { display: inline-flex; align-items: stretch; gap: var(--bn-0-5); padding: var(--bn-0-75); border-radius: var(--bn-r); background: var(--bn-surface-2); }
+.bn-seg-item { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 var(--bn-3);
+  border: 0; border-radius: var(--bn-r-sm); background: transparent; font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); white-space: nowrap; }
+.bn-seg-item:hover { color: var(--bn-ink); }
+.bn-seg-item[aria-pressed='true'] { color: var(--bn-ink); background: var(--bn-surface); box-shadow: var(--bn-shadow-1); }
+.field { display: inline-flex; align-items: center; gap: 2px; height: 40px; width: 112px; padding: 0 var(--bn-2); border-radius: var(--bn-r);
+  background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-field-edge); font-family: var(--bn-font-mono); font-weight: 600; }
+.field > span { color: var(--bn-ink-3); }
+.field input { all: unset; width: 100%; min-width: 0; color: var(--bn-money); }
+.field input::placeholder { color: var(--bn-ink-3); font-family: var(--bn-font-ui); font-weight: 500; }
+.field:focus-within { box-shadow: inset 0 0 0 2px var(--bn-line-focus); }
+.field.sm { width: 92px; }
+
+/* ---- mockup-only layer: the sample ribbon, the state bar, the cull strip, the Today:/New: tags ---- */
+.mock { position: relative; z-index: 20; background: var(--bn-bg); box-shadow: 0 1px 0 var(--bn-line); }
+.ribbon { display: flex; align-items: center; gap: var(--bn-3); min-height: 40px; padding: 0 var(--bn-6);
+  background: var(--bn-warn-tint); font-size: var(--bn-fs-sm); font-weight: 600; }
+.ribbon-pill { background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-warn); }
+.states, .cull { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1-5); padding: var(--bn-2) var(--bn-6);
+  font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.cull { border-top: 1px dashed var(--bn-line-strong); }
+.states > span, .cull > span { margin-right: var(--bn-2); }
+.states .bn-btn, .cull .bn-btn { --btn-h: 32px; min-height: 32px; font-size: var(--bn-fs-sm); padding: 0 var(--bn-2); }
+.states .bn-btn[aria-current='true'] { color: var(--bn-on-accent); background: var(--bn-accent); box-shadow: none; }
+.cull .bn-btn[aria-pressed='true'] { text-decoration: line-through; color: var(--bn-ink-3); }
+.states .theme { margin-left: auto; }
+.mark { position: relative; }
+.tag { position: absolute; z-index: 3; top: -9px; right: var(--bn-2); padding: 0 var(--bn-1-5); font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-xs); line-height: 16px; color: var(--bn-accent); background: var(--bn-bg); border: 1px dashed var(--bn-accent);
+  border-radius: var(--bn-r-xs); white-space: nowrap; pointer-events: none; }
+.tag.new { color: var(--bn-warn); border-color: var(--bn-warn); }
+body.nonotes .tag { display: none; }
+#rows > .tag { top: auto; bottom: -9px; }
+.ff > .tag { top: var(--bn-2); }
+[hidden] { display: none !important; }
+
+/* ---- the shell: sidebar at 1024 and up, the 64px rail below ---- */
+.app { display: flex; align-items: stretch; min-height: calc(100vh - 120px); }
+.side { flex: none; width: var(--bn-sidebar-w); background: var(--bn-surface); border-right: 1px solid var(--bn-line);
+  padding: var(--bn-4) var(--bn-3); display: flex; flex-direction: column; gap: var(--bn-1); }
+.brand { font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-lg); padding: 0 var(--bn-2) var(--bn-4); }
+.nav { height: 40px; display: flex; align-items: center; gap: var(--bn-3); padding: 0 var(--bn-2); border-radius: var(--bn-r);
+  color: var(--bn-ink-2); font-weight: 500; text-decoration: none; }
+.nav:hover { background: var(--bn-hover); }
+.nav i { width: 18px; height: 18px; flex: none; border: 1.5px solid currentColor; border-radius: var(--bn-r-xs); opacity: .8; }
+.nav[aria-current='page'] { background: var(--bn-accent-tint); color: var(--bn-accent); font-weight: 600; }
+.main { flex: 1; min-width: 0; position: relative; }
+
+/* ---- the page ---- */
+.pg { max-width: 1344px; padding: var(--bn-6) var(--bn-7) var(--bn-10); display: flex; flex-direction: column; gap: var(--bn-5); }
+.pg-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--bn-4); }
+.eyebrow { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-weight: 500; }
+.eyebrow a { color: var(--bn-accent); text-decoration: none; font-weight: 600; }
+.pg-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-h1); font-weight: 800; letter-spacing: var(--bn-tracking-tight); line-height: var(--bn-lh-tight); margin-top: var(--bn-1); }
+.pg-lede { color: var(--bn-ink-3); font-size: var(--bn-fs-md); margin-top: var(--bn-1-5); }
+.head-act { display: flex; align-items: center; gap: var(--bn-2); padding-top: 19px; flex: none; }
+
+/* The line, drawn once: the summary every state keeps, so silence reads as checked. */
+.line-strip { display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr)); gap: var(--bn-3); }
+.tile { min-height: 76px; padding: var(--bn-3) var(--bn-4); border-radius: var(--bn-r-lg); background: var(--bn-surface);
+  box-shadow: inset 0 0 0 1px var(--bn-line); display: flex; flex-direction: column; gap: var(--bn-0-5); text-align: left; border: 0; }
+button.tile:hover { background: var(--bn-surface-3); box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+.tile-val { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; line-height: 1.25; }
+.tile-val .bn-money { font-size: inherit; }
+.tile-says { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.tile .scale { margin-top: var(--bn-2); }
+
+.measure { display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-6); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.measure b { color: var(--bn-ink); font-family: var(--bn-font-mono); font-weight: 600; }
+.measure .bad b { color: var(--bn-danger); }
+
+/* Notices: the upload and the budget. A notice is a sentence, so sentence case. */
+.notice { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--bn-3) var(--bn-5);
+  padding: var(--bn-4) var(--bn-5); border-radius: var(--bn-r-xl); background: var(--bn-surface); box-shadow: var(--bn-shadow-2); }
+.notice[data-tone='warn'] { box-shadow: inset 4px 0 0 var(--bn-warn), var(--bn-shadow-2); }
+.notice[data-tone='danger'] { box-shadow: inset 4px 0 0 var(--bn-danger), var(--bn-shadow-2); }
+.notice-head { font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 800; }
+.notice-body { font-size: var(--bn-fs-md); color: var(--bn-ink-2); margin-top: var(--bn-1); }
+.notice-names { display: flex; flex-wrap: wrap; gap: var(--bn-1-5); margin-top: var(--bn-2); }
+.notice-act { display: flex; gap: var(--bn-2); flex-wrap: wrap; justify-content: flex-end; }
+
+/* ---- the crossed list ---- */
+.list-head { display: flex; align-items: baseline; gap: var(--bn-2); }
+.list-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-h3); font-weight: 800; }
+.list-count { font-size: var(--bn-fs-sm); font-weight: 700; color: var(--bn-ink-3); font-family: var(--bn-font-mono); }
+.list-lede { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-left: var(--bn-2); }
+.rows { display: flex; flex-direction: column; border-top: 1px solid var(--bn-line); }
+.row { display: grid; column-gap: var(--bn-4); row-gap: var(--bn-1-5); padding: var(--bn-3) 0; border-bottom: 1px solid var(--bn-line);
+  grid-template-columns: 48px minmax(0, 1fr) 224px 204px 284px;
+  grid-template-areas: 'thumb item ruler ev act' 'thumb why why why act' 'thumb step step step step'; align-items: center; }
+.row:hover { background: var(--bn-hover); }
+.row > .thumb { grid-area: thumb; align-self: start; }
+.row > .item { grid-area: item; min-width: 0; }
+.row > .rul { grid-area: ruler; }
+.row > .ev { grid-area: ev; }
+.row > .act { grid-area: act; justify-self: end; align-self: start; }
+.row > .why { grid-area: why; }
+.row > .step { grid-area: step; }
+.thumb { width: 48px; aspect-ratio: 5 / 7; border-radius: var(--bn-r-xs); background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-line); }
+.thumb[data-h='1'] { background: var(--bn-accent-tint-2); }
+.thumb[data-h='2'] { background: var(--bn-ok-tint); }
+.thumb[data-h='3'] { background: var(--bn-warn-tint); }
+.thumb[data-h='4'] { background: var(--bn-live-tint); }
+.name { font-weight: 600; font-size: var(--bn-fs-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta > span + span::before { content: ''; display: inline-block; width: 3px; height: 3px; border-radius: var(--bn-r-full);
+  background: var(--bn-ink-4); margin: 0 var(--bn-2); vertical-align: middle; }
+/* The address, drawn as Banchi draws it: a tracked key, a mono figure, no interpuncts (D41). */
+.addr { display: flex; flex-wrap: wrap; gap: 0 var(--bn-3); margin-top: var(--bn-1); font-size: var(--bn-fs-sm); }
+.addr > span { display: inline-flex; align-items: baseline; gap: var(--bn-1); }
+.addr .k { font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); }
+.addr .v { font-family: var(--bn-font-mono); font-weight: 600; color: var(--bn-ink); }
+.addr.vault .v { color: var(--bn-pill-ink-warn); }
+.ev { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); display: flex; flex-direction: column; gap: 2px; }
+.ev .pair { display: flex; align-items: baseline; gap: var(--bn-2); color: var(--bn-ink-2); }
+.ev .pair .bn-money { font-size: var(--bn-fs-md); }
+.ev .was { color: var(--bn-ink-3); font-weight: 500; text-decoration: line-through; text-decoration-color: var(--bn-ink-4); }
+.why { font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2); }
+.why[data-tone='warn'] { color: var(--bn-pill-ink-warn); }
+.why[data-tone='danger'] { color: var(--bn-pill-ink-danger); }
+.why[data-tone='ok'] { color: var(--bn-pill-ink-ok); }
+.why .soft { font-weight: 400; color: var(--bn-ink-3); }
+.act { display: flex; flex-direction: column; align-items: flex-end; gap: var(--bn-1-5); }
+.act .status { min-height: var(--bn-pill-h); }
+
+/* The step a row asks for: a physical move, or a price. One line, one press. */
+.step { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2) var(--bn-3); margin-top: var(--bn-1);
+  padding: var(--bn-2) var(--bn-2) var(--bn-2) var(--bn-4); border-radius: var(--bn-r-lg); background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+.step-say { flex: 1 1 320px; font-size: var(--bn-fs-md); font-weight: 600; }
+.step-say .soft { font-weight: 400; color: var(--bn-ink-3); }
+.step .mono { font-weight: 700; }
+.row.reversed { opacity: .82; }
+.row.reversed .why { font-weight: 500; }
+
+/* ---- the tripwire ruler: the line, the gap under it, where the card was and where it is now ---- */
+.scale { position: relative; height: 34px; }
+.scale .track { position: absolute; left: 0; right: 0; top: 16px; height: 4px; border-radius: var(--bn-r-full); background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-line); }
+.scale .gap { position: absolute; top: 12px; height: 12px; background: var(--bn-warn-tint); border-radius: 2px; }
+.scale .entry { position: absolute; top: 8px; width: 2px; height: 20px; margin-left: -1px; background: var(--bn-warn); }
+.scale .entry-lab { position: absolute; top: -4px; transform: translateX(-50%); font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-pill-ink-warn); white-space: nowrap; }
+.scale .move { position: absolute; top: 17px; height: 2px; background: var(--bn-ink-3); }
+.scale .dot { position: absolute; top: 12px; width: 12px; height: 12px; margin-left: -6px; border-radius: var(--bn-r-full); }
+.scale .dot.old { background: var(--bn-surface); box-shadow: inset 0 0 0 2px var(--bn-ink-3); }
+.scale .dot.new { background: var(--bn-ink); box-shadow: 0 0 0 2px var(--bn-surface); }
+.scale .dot.new[data-tone='down'] { background: var(--bn-ink-3); }
+.scale .ends { position: absolute; left: 0; right: 0; top: 24px; display: flex; justify-content: space-between; font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.rul-plain { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+body.hide-ruler .rul .scale { display: none; }
+body:not(.hide-ruler) .rul-plain { display: none; }
+
+/* ---- the empty, checked state ---- */
+.calm { padding: var(--bn-7) var(--bn-6); border-radius: var(--bn-r-xl); background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-line);
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: var(--bn-7); align-items: center; max-width: 960px; }
+.calm-head { font-family: var(--bn-font-display); font-size: var(--bn-fs-2xl); font-weight: 800; letter-spacing: var(--bn-tracking-tight); }
+.calm-body { margin-top: var(--bn-2); color: var(--bn-ink-2); font-size: var(--bn-fs-md); line-height: var(--bn-lh-relaxed); }
+.calm .scale { height: 44px; }
+.calm .scale .entry-lab { top: -8px; }
+.calm .legend { display: flex; flex-wrap: wrap; gap: var(--bn-1) var(--bn-4); margin-top: var(--bn-3); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.calm .legend i { display: inline-block; width: 10px; height: 10px; border-radius: var(--bn-r-full); margin-right: var(--bn-1-5); vertical-align: -1px; }
+
+/* ---- the line panel, a sheet over the right of the page ---- */
+.sheet { position: absolute; z-index: 15; top: var(--bn-4); right: var(--bn-4); width: 460px;
+  background: var(--bn-surface); border-radius: var(--bn-r-xl); box-shadow: var(--bn-shadow-3); padding: var(--bn-5); display: flex; flex-direction: column; gap: var(--bn-5); }
+.sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--bn-3); }
+.sheet-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; }
+.sheet-lede { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-top: var(--bn-1); }
+.rule { display: flex; flex-direction: column; gap: var(--bn-2); padding-top: var(--bn-4); border-top: 1px solid var(--bn-line); }
+.rule-head { font-weight: 700; font-size: var(--bn-fs-base); }
+.rule-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+.rule-says { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.rule input[type='range'] { width: 100%; accent-color: var(--bn-accent); }
+.bt-big { font-family: var(--bn-font-display); font-size: var(--bn-fs-2xl); font-weight: 800; line-height: 1.2; }
+.bt-big .ok { color: var(--bn-pill-ink-ok); } .bt-big .noise { color: var(--bn-ink-3); }
+.chart { display: grid; grid-template-columns: repeat(30, 1fr); gap: 2px; align-items: end; height: 96px; position: relative; padding-top: var(--bn-2); }
+.chart .col { display: flex; flex-direction: column-reverse; gap: 1px; height: 100%; justify-content: flex-start; }
+.chart .seg { height: 14px; border-radius: 2px; }
+.chart .seg.real { background: var(--bn-accent); }
+.chart .seg.noise { background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-ink-4); }
+.chart .budget { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--bn-warn); }
+.chart .budget span { position: absolute; right: 0; top: -16px; font-size: var(--bn-fs-xs); color: var(--bn-pill-ink-warn); font-weight: 600; background: var(--bn-surface); padding-left: var(--bn-1); }
+.chart-axis { display: flex; justify-content: space-between; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-family: var(--bn-font-mono); margin-top: var(--bn-1); }
+.chart-key { display: flex; gap: var(--bn-4); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.chart-key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: var(--bn-1-5); vertical-align: -1px; }
+.bt-list { display: flex; flex-direction: column; font-size: var(--bn-fs-sm); }
+.bt-list li { list-style: none; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--bn-3); padding: var(--bn-1-5) 0; border-bottom: 1px solid var(--bn-line); align-items: baseline; }
+.bt-list .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--bn-ink-2); }
+.sheet-foot { display: flex; gap: var(--bn-2); justify-content: flex-end; margin-top: auto; padding-top: var(--bn-3); border-top: 1px solid var(--bn-line); }
+body.hide-backtest .backtest { display: none; }
+
+/* ---- the Fulfiller's view: no shell, the 24-64 end of the scale, every floor of DESIGN.md's table ---- */
+.ff { max-width: 1120px; margin: 0 auto; padding: var(--bn-6) var(--bn-6) var(--bn-10); font-size: 20px; color: var(--bn-ink); }
+.ff-bar { display: flex; align-items: center; gap: var(--bn-5); padding: var(--bn-4) 0 var(--bn-6); }
+.ff-title { font-family: var(--bn-font-display); font-size: 32px; font-weight: 800; letter-spacing: var(--bn-tracking-tight); }
+.ff-left { font-family: var(--bn-font-mono); font-size: 22px; font-weight: 700; padding: 0 var(--bn-4); min-height: 44px; display: inline-flex; align-items: center; border-radius: var(--bn-r-full); background: var(--bn-surface-2); }
+.ff-search { margin-left: auto; height: 52px; width: 320px; border-radius: var(--bn-r-lg); background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-field-edge);
+  display: flex; align-items: center; padding: 0 var(--bn-4); color: var(--bn-ink-2); font-size: 20px; }
+.pick { position: relative; display: grid; grid-template-columns: 408px minmax(0, 1fr); gap: var(--bn-7); padding: var(--bn-6); border-radius: var(--bn-r-xl);
+  background: var(--bn-surface); box-shadow: var(--bn-shadow-2); margin-bottom: var(--bn-6); }
+/* GOLD: the band, the tint and the edge are gold; every word stays ink, so the 7:1 floor holds in both themes. */
+.pick.gold { background: linear-gradient(var(--bn-warn-tint), var(--bn-warn-tint)), var(--bn-surface); box-shadow: inset 0 0 0 3px var(--bn-warn), var(--bn-shadow-2); }
+.ord { position: absolute; top: var(--bn-4); left: var(--bn-4); z-index: 1; width: 44px; height: 44px; border-radius: var(--bn-r-full); display: grid; place-items: center;
+  font-family: var(--bn-font-mono); font-weight: 700; font-size: 20px; background: var(--bn-surface); color: var(--bn-ink); box-shadow: var(--bn-shadow-1); }
+.photo { width: 100%; aspect-ratio: 63 / 88; border-radius: var(--bn-r-lg); background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-line-strong);
+  display: grid; place-items: center; color: var(--bn-ink-3); font-size: 20px; }
+.pick.gold .photo { background: var(--bn-surface); }
+.pick-body { display: flex; flex-direction: column; gap: var(--bn-5); min-width: 0; }
+.gold-flag { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--bn-3); min-height: 44px; padding: 0 var(--bn-4) 0 var(--bn-3);
+  border-radius: var(--bn-r-full); background: var(--bn-surface); color: var(--bn-ink); box-shadow: inset 0 0 0 2px var(--bn-warn); font-weight: 800; font-size: 20px; }
+.gold-flag .star { width: 22px; height: 22px; background: var(--bn-warn); clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+.place { font-family: var(--bn-font-mono); font-size: 40px; font-weight: 700; line-height: 1.15; letter-spacing: 0; }
+.place-sub { font-size: 20px; color: var(--bn-ink-2); margin-top: var(--bn-1); }
+.cardname { font-size: 26px; font-weight: 700; }
+.cardset { font-size: 20px; color: var(--bn-ink-2); }
+.pack-head { font-size: 22px; font-weight: 700; margin-bottom: var(--bn-3); }
+.pack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bn-3); }
+.pack li { list-style: none; display: flex; align-items: center; gap: var(--bn-3); min-height: 64px; padding: var(--bn-2) var(--bn-4); border-radius: var(--bn-r-lg);
+  background: var(--bn-surface); box-shadow: inset 0 0 0 1px var(--bn-line-strong); font-size: 20px; font-weight: 600; }
+.pack .ico { flex: none; width: 32px; height: 40px; border-radius: var(--bn-r-xs); box-shadow: inset 0 0 0 2.5px var(--bn-ink-2); }
+.pack .ico.bag { border-radius: var(--bn-r-sm) var(--bn-r-sm) 2px 2px; box-shadow: inset 0 0 0 2.5px var(--bn-ink-2), inset 0 6px 0 0 var(--bn-surface-2); }
+.pack .ico.mail { width: 44px; height: 32px; }
+.pack .ico.track { width: 40px; height: 28px; border-radius: 2px; box-shadow: inset 0 0 0 2.5px var(--bn-ink-2); background: repeating-linear-gradient(90deg, var(--bn-ink-2) 0 2px, transparent 2px 6px) 8px 8px / 24px 12px no-repeat; }
+.pull { align-self: flex-start; min-height: 64px; min-width: 240px; padding: 0 var(--bn-7); border: 0; border-radius: var(--bn-r-xl); font-size: 22px; font-weight: 700;
+  color: var(--bn-on-accent); background: var(--bn-accent-press); box-shadow: var(--bn-shadow-2), var(--bn-shadow-accent); }
+:root[data-theme='dark'] .pull { background: var(--bn-accent-hover); }
+body.hide-packing .pack-wrap { display: none; }
+.pick.plain .place { font-size: 36px; }
+
+/* ---- 820: the rail, the row folds to three lines, the sheet covers the page ---- */
+@media (max-width: 1023px) {
+  .side { width: var(--bn-rail-w); align-items: center; }
+  .brand { padding: 0 0 var(--bn-4); font-size: 0; }
+  .brand::before { content: 'B'; font-size: var(--bn-fs-lg); }
+  .nav { width: 40px; justify-content: center; padding: 0; }
+  .nav span { display: none; }
+  .pg { padding: var(--bn-5) var(--bn-5) var(--bn-10); }
+  .line-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .row { grid-template-columns: 40px minmax(0, 1fr) auto;
+    grid-template-areas: 'thumb item act' 'thumb ruler ruler' 'thumb ev ev' 'thumb why why' 'thumb step step'; }
+  .thumb { width: 40px; }
+  .row > .rul { max-width: 360px; }
+  .ev { flex-direction: row; flex-wrap: wrap; gap: var(--bn-1) var(--bn-4); }
+  .act .bn-seg { flex-wrap: wrap; justify-content: flex-end; }
+  .calm { grid-template-columns: 1fr; gap: var(--bn-5); }
+  .sheet { left: calc(var(--bn-rail-w) + var(--bn-4)); width: auto; }
+  .notice { grid-template-columns: 1fr; }
+  .notice-act { justify-content: flex-start; }
+  /* 820 is an iPad in portrait: the photo keeps its 320px short edge beside the place, so the
+     gold flag and the slot sit in the first screen rather than under the photo. */
+  .pick { grid-template-columns: 320px minmax(0, 1fr); gap: var(--bn-6); padding: var(--bn-5); }
+  .place { font-size: 34px; }
+  .pick.plain .place { font-size: 32px; }
+  .pack { grid-template-columns: 1fr; }
+  .ff-search { width: 220px; }
+  .list-lede { display: block; margin: 0; width: 100%; }
+  .list-head { flex-wrap: wrap; }
+  .head-act { padding-top: 0; }
+  .pg-head { flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="mock">
+  <div class="ribbon"><span class="bn-pill bn-pill-warn ribbon-pill">Sample</span>Every card, set, price, box and order on this page is made up. No figure is real.</div>
+  <nav class="states" aria-label="States" id="states"><span>State</span></nav>
+  <div class="cull" id="cull"><span>Options to judge. One press hides one.</span></div>
+</div>
+
+<div class="app" id="owner">
+  <nav class="side" aria-label="Main">
+    <div class="brand">Banchi</div>
+    <a class="nav" href="#"><i></i><span>Home</span></a>
+    <a class="nav" href="#"><i></i><span>Capture</span></a>
+    <a class="nav" href="#"><i></i><span>Review</span></a>
+    <a class="nav" href="#"><i></i><span>Inventory</span></a>
+    <a class="nav" href="#" aria-current="page"><i></i><span>Pricing</span></a>
+    <a class="nav" href="#"><i></i><span>Orders</span></a>
+    <a class="nav" href="#"><i></i><span>Sales</span></a>
+  </nav>
+  <div class="main">
+    <main class="pg">
+      <header class="pg-head">
+        <div>
+          <p class="eyebrow"><a href="#">Pricing</a> lens</p>
+          <h1 class="pg-title">Crossed Since the Last Price Read</h1>
+          <p class="pg-lede" id="lede"></p>
+        </div>
+        <div class="head-act">
+          <button class="bn-btn" type="button" data-open-line>Set the Line</button>
+          <button class="bn-btn bn-btn-primary" type="button" data-go="upload-refused">Build the Upload</button>
+        </div>
+      </header>
+
+      <section class="line-strip mark" aria-label="Your line" id="line-strip">
+        <span class="tag">Today: Value line tile (pricing-suggest). Exit, jump and sales rule are New.</span>
+        <button class="tile" type="button" data-open-line>
+          <span class="bn-label">Value Line</span>
+          <span class="tile-val">In at <span class="bn-money" data-v="in">$20.00</span>, out under <span class="bn-money" data-v="out">$15.00</span></span>
+          <span class="tile-says">Out only after two reads under it, so a card near the line does not flap.</span>
+        </button>
+        <button class="tile" type="button" data-open-line>
+          <span class="bn-label">Jump</span>
+          <span class="tile-val"><span data-v="pct">+50%</span> and <span class="bn-money" data-v="dz">+$5.00</span></span>
+          <span class="tile-says">Both, so $0.10 to $0.30 never fires.</span>
+        </button>
+        <button class="tile" type="button" data-open-line>
+          <span class="bn-label">Backed By</span>
+          <span class="tile-val"><span data-v="sales">3</span> sales</span>
+          <span class="tile-says">A jump counts only when recent sales agree.</span>
+        </button>
+        <div class="tile">
+          <span class="bn-label">Highest in Bulk</span>
+          <span class="tile-val"><span class="bn-money" data-v="high">$14.80</span></span>
+          <span class="tile-says" data-v="highwho">Glimmerfang Lynx, box 6</span>
+        </div>
+      </section>
+
+      <p class="measure mark" id="measure"><span class="tag new">New: the measure</span>
+        <span id="m-stale">Stale-price sales this month: <b>0</b>, <b>$0.00</b> lost</span>
+        <span>Dismissed: <b>1 of 6</b> rows (17%). Above half means the line is too low.</span>
+      </p>
+
+      <div id="notices"></div>
+
+      <section aria-labelledby="list-title" id="list-wrap">
+        <div class="list-head">
+          <h2 class="list-title" id="list-title">Crossed</h2>
+          <span class="list-count" id="list-count"></span>
+          <span class="list-lede" id="list-lede">A held card is off TCGplayer and off every upload until you act. It stays in its box.</span>
+        </div>
+        <div class="rows mark" id="rows"><span class="tag">Today: PricingThumb, ProductLink. Row and steps are New.</span></div>
+      </section>
+
+      <section id="calm" hidden></section>
+    </main>
+
+    <aside class="sheet" id="line-panel" aria-label="Set the line" hidden></aside>
+  </div>
+</div>
+
+<div class="ff mark" id="pick" hidden></div>
+
+<script>
+const STATES = [
+  ['mixed', 'Mixed Read'], ['normal', 'Normal'], ['crossed-up', 'Crossed Up'], ['confirmed', 'Confirmed'],
+  ['crossed-down', 'Crossed Down'], ['reversed', 'Spike Reversed'], ['too-late', 'Too Late'],
+  ['upload-refused', 'Upload Held Back'], ['upload-hard', 'Held Card Typed In'], ['budget', 'Too Many Rows'],
+  ['line', 'Set the Line'], ['pick', 'Gold Pick Line'],
+]
+const OPTIONS = [
+  ['ruler', 'Price ruler on each row'], ['measure', 'The measure line'], ['backtest', 'Backtest in the line panel'],
+  ['late', 'Cancel or honour on a too-late row'], ['packing', 'Packing list on the gold line'],
+]
+const LINE = { in: 20, out: 15, pct: 50, dz: 5, sales: 3 }
+const $ = (n) => '$' + n.toFixed(2)
+const money = (n) => `<span class="bn-money">${$(n)}</span>`
+const addr = (b, s, c) => `<span class="addr"><span><span class="k">Box</span><span class="v">${b}</span></span><span><span class="k">Section</span><span class="v">${s}</span></span><span><span class="k">Card</span><span class="v">${c}</span></span></span>`
+const vaultAddr = (slot) => `<span class="addr vault"><span><span class="k">Vault</span><span class="v">${slot}</span></span></span>`
+
+/* A price ruler: the gap between exit and entry, the entry line, the old price (ring) and the new (dot). */
+function scale(old, now, max, line = LINE.in, out = LINE.out) {
+  const top = max || Math.ceil(Math.max(old, now, line) * 1.15 / 5) * 5
+  const p = (v) => Math.min(100, Math.max(0, (v / top) * 100))
+  const lo = Math.min(p(old), p(now)), hi = Math.max(p(old), p(now))
+  return `<div class="scale" role="img" aria-label="Listed ${$(old)}, now ${$(now)}, line ${$(line)}, exit ${$(out)}">
+    <span class="track"></span>
+    <span class="gap" style="left:${p(out)}%;width:${p(line) - p(out)}%"></span>
+    <span class="move" style="left:${lo}%;width:${hi - lo}%"></span>
+    <span class="entry" style="left:${p(line)}%"></span>
+    <span class="entry-lab" style="left:${p(line)}%">${$(line)}</span>
+    <span class="dot old" style="left:${p(old)}%"></span>
+    <span class="dot new" data-tone="${now < old ? 'down' : 'up'}" style="left:${p(now)}%"></span>
+    <span class="ends"><span>$0</span><span>$${top}</span></span>
+  </div>`
+}
+
+const CARDS = {
+  ember: { name: 'Emberclaw Wyvern ex', set: 'Cinder Crown', no: '041/188', cond: 'Near Mint', h: 4, at: [3, 7, 112], old: 2.40, now: 38.10,
+    ev: '5 sold in 7 days, $34.00 to $41.00', kind: 'up',
+    why: ['warn', 'Crossed your $20.00 line.', 'Held off TCGplayer at 7:10. It stays in box 3 until the next read agrees.'] },
+  moth: { name: 'Glasswing Moth', set: 'Dusk Parade', no: '203/240', cond: 'Lightly Played', h: 1, at: [2, 11, 64], old: 1.10, now: 7.90,
+    ev: '4 sold in 7 days, $7.10 to $8.40', kind: 'up',
+    why: ['warn', 'Jumped +618%, +$6.80.', 'Under the line, but the jump rule fired and 4 sales back it. Held at 7:10.'] },
+  moss: { name: 'Mossback Golem', set: 'Verdant Hollow', no: '112/160', cond: 'Near Mint', h: 2, at: [5, 2, 40], old: 6.10, now: 24.80,
+    ev: '6 sold in 7 days, $22.50 to $27.00', kind: 'confirmed', slot: 'V-14',
+    why: ['warn', 'Second read agrees: $24.80, then $25.30.', 'Held since yesterday. Move it to the vault.'] },
+  kit: { name: 'Starlit Kitsune', set: 'Moonlit Tide', no: '077/201', cond: 'Near Mint', h: 1, vault: 'V-09', home: [3, 7, 58], old: 22.00, now: 12.90,
+    ev: 'Under $15.00 for two reads: $13.20, then $12.90', kind: 'down',
+    why: ['ok', 'Under your $15.00 exit for two reads.', 'Its vault price comes off. It goes back to bulk at the rule.'] },
+  rip: { name: 'Riptide Serpent', set: 'Moonlit Tide', no: '150/201', cond: 'Near Mint', h: 3, at: [1, 4, 9], old: 40.00, now: 3.00,
+    ev: 'Was 1 sale at $40.00, now 9 sold at $2.80 to $3.20', kind: 'reversed',
+    why: ['ok', 'Was $40.00 yesterday, $3.00 today. Hold released, card never moved.', 'Shown once, then gone. This is why a move waits for two reads.'] },
+  thorn: { name: 'Thornveil Druid', set: 'Verdant Hollow', no: '009/160', cond: 'Near Mint', h: 2, at: [4, 1, 17], old: 2.00, now: 38.00,
+    ev: 'Order 4417-0A, the 18th', kind: 'late',
+    why: ['danger', 'Sold at $2.00 on the 18th. Market was $38.00.', 'It sold before the read that would have held it. Gap: $36.00. Logged.'] },
+}
+const BUDGET = [
+  ['Pebble Sprite', 'Dusk Parade', 8.40, 3.10], ['Copperleaf Fawn', 'Verdant Hollow', 9.10, 4.20], ['Hollow Lantern', 'Moonlit Tide', 8.80, 5.00],
+  ['Saltmarsh Crab', 'Cinder Crown', 10.20, 6.60], ['Quill Imp', 'Dusk Parade', 8.25, 4.90], ['Bramble Hound', 'Verdant Hollow', 11.40, 7.10],
+  ['Tidewatch Heron', 'Moonlit Tide', 8.60, 3.80], ['Ashen Newt', 'Cinder Crown', 9.75, 5.40], ['Velvet Moth', 'Dusk Parade', 8.05, 4.40],
+]
+
+function holdSeg(id) {
+  return `<div class="bn-seg" role="group" aria-label="What happens to this card" id="${id}">
+    <button class="bn-seg-item" type="button" aria-pressed="true" data-choice="Held">Hold</button>
+    <button class="bn-seg-item" type="button" aria-pressed="false" data-choice="Repriced">Reprice in Bulk</button>
+    <button class="bn-seg-item" type="button" aria-pressed="false" data-choice="Dismissed">Dismiss</button>
+  </div>`
+}
+
+function row(key) {
+  const c = CARDS[key]
+  const loc = c.vault ? vaultAddr(c.vault) : addr(...c.at)
+  const id = 'row-' + key
+  let act = '', step = '', status = ''
+  if (c.kind === 'up') { status = '<span class="bn-pill bn-pill-warn status">Held</span>'; act = holdSeg('hold-' + key) }
+  if (c.kind === 'confirmed') {
+    status = '<span class="bn-pill bn-pill-warn status">Held, Move It</span>'
+    step = `<div class="step" id="move-${key}" data-step><span class="step-say">Pull box <span class="mono">${c.at[0]}</span>, section <span class="mono">${c.at[1]}</span>, card <span class="mono">${c.at[2]}</span> into vault slot <span class="mono">${c.slot}</span>.</span>
+      <button class="bn-btn bn-btn-primary" type="button" data-moved="${key}">Moved</button></div>`
+  }
+  if (c.kind === 'down') {
+    status = '<span class="bn-pill bn-pill-ok status">Leaving the Vault</span>'
+    step = `<div class="step" id="return-${key}"><span class="step-say">Return to box <span class="mono">${c.home[0]}</span>, section <span class="mono">${c.home[1]}</span>, card <span class="mono">${c.home[2]}</span>. <span class="soft">Its old sorted place.</span></span>
+      <button class="bn-btn" type="button" data-returned="${key}">Returned</button></div>`
+  }
+  if (c.kind === 'reversed') status = '<span class="bn-pill status">Shown Once</span>'
+  if (c.kind === 'late') {
+    status = '<span class="bn-pill bn-pill-danger status">Sold Too Cheap</span>'
+    step = `<div class="step mark late-choice" id="late-${key}"><span class="tag new">New: owner question 2 decides this</span><span class="step-say">What should happen to order 4417-0A? <span class="soft">Cancelling may hurt your seller standing.</span></span>
+      <div class="bn-seg" role="group" aria-label="Response to the stale sale">
+        <button class="bn-seg-item" type="button" aria-pressed="false" data-choice="Cancel">Cancel the Sale</button>
+        <button class="bn-seg-item" type="button" aria-pressed="true" data-choice="Honour">Honour the Sale</button></div></div>`
+  }
+  const plain = `<span class="rul-plain">Listed ${$(c.old)}, now ${$(c.now)}</span>`
+  const pair = c.kind === 'late'
+    ? `<span class="pair">Sold ${money(c.old)} <span>market</span> ${money(c.now)}</span>`
+    : `<span class="pair"><span class="bn-money was">${$(c.old)}</span>${money(c.now)}</span>`
+  return `<div class="row ${c.kind === 'reversed' ? 'reversed' : ''}" id="${id}" data-kind="${c.kind}">
+    <span class="thumb" data-h="${c.h}" aria-hidden="true"></span>
+    <div class="item"><div class="name">${c.name}</div>
+      <div class="meta"><span>${c.cond}</span><span>${c.set}</span><span class="mono">${c.no}</span></div>${loc}</div>
+    <div class="rul" id="ruler-${key}">${scale(c.old, c.now)}${plain}</div>
+    <div class="ev">${pair}<span>${c.ev}</span></div>
+    <div class="act">${status}${act}</div>
+    <p class="why" data-tone="${c.why[0]}">${c.why[1]} <span class="soft">${c.why[2]}</span></p>
+    ${step}
+  </div>`
+}
+
+function budgetRow(b, i) {
+  const [name, set, now, old] = b
+  return `<div class="row" data-kind="up">
+    <span class="thumb" data-h="${(i % 4) + 1}" aria-hidden="true"></span>
+    <div class="item"><div class="name">${name}</div><div class="meta"><span>Near Mint</span><span>${set}</span><span class="mono">${String(20 + i * 7).padStart(3, '0')}/188</span></div>${addr(2 + (i % 4), 1 + i, 10 + i * 9)}</div>
+    <div class="rul">${scale(old, now, 14, 8, 6)}<span class="rul-plain">Listed ${$(old)}, now ${$(now)}</span></div>
+    <div class="ev"><span class="pair"><span class="bn-money was">${$(old)}</span>${money(now)}</span><span>${3 + (i % 3)} sold in 7 days</span></div>
+    <div class="act"><span class="bn-pill bn-pill-warn status">Held</span></div>
+    <p class="why" data-tone="warn">Crossed your $8.00 line.</p>
+  </div>`
+}
+
+const NOTICES = {
+  'upload-refused': `<div class="notice mark" data-tone="warn" id="upload-notice"><span class="tag">Today: Send to TCGplayer (D273). Held cards left out is New.</span>
+    <div><p class="notice-head">3 copies held back from this file. 3,597 will upload.</p>
+      <p class="notice-body">Bulk never stops. The file is built without them, and they stay held until you act.</p>
+      <div class="notice-names"><span class="bn-pill bn-pill-warn">Emberclaw Wyvern ex</span><span class="bn-pill bn-pill-warn">Glasswing Moth</span><span class="bn-pill bn-pill-warn">Mossback Golem</span></div></div>
+    <div class="notice-act"><button class="bn-btn bn-btn-primary" type="button">Send 3,597 Copies to TCGplayer</button></div></div>`,
+  'upload-hard': `<div class="notice mark" data-tone="danger" id="upload-hard-notice"><span class="tag new">New: the one hard refusal</span>
+    <div><p class="notice-head">Nothing was sent. A held card was typed back into this file.</p>
+      <p class="notice-body">Emberclaw Wyvern ex is held at a market of $38.10, and the file lists it at $2.40. Take it out, or release its hold first.</p>
+      <div class="notice-names"><span class="bn-pill bn-pill-danger">Emberclaw Wyvern ex, $2.40 in the file</span></div></div>
+    <div class="notice-act"><button class="bn-btn" type="button">Release the Hold</button><button class="bn-btn bn-btn-primary" type="button">Take It Out and Send</button></div></div>`,
+  budget: `<div class="notice mark" data-tone="warn" id="budget-notice"><span class="tag new">New: the row budget</span>
+    <div><p class="notice-head">9 crossed in this read. The line looks too low.</p>
+      <p class="notice-body">Aim for 5 rows or fewer a read. At $8.00, cards a few dollars apart keep crossing. Every one is held, so nothing sells cheap while you decide.</p></div>
+    <div class="notice-act"><button class="bn-btn bn-btn-primary" type="button" data-open-line>Raise the Line</button></div></div>`,
+}
+
+const VIEWS = {
+  mixed: { rows: ['ember', 'moth', 'moss', 'kit', 'rip', 'thorn'], lede: 'Prices read at 7:10. 3,600 checked. 4 need you, 2 are for your eyes only.' },
+  normal: { rows: [], lede: 'Prices read at 7:10. 3,600 checked.' },
+  'crossed-up': { rows: ['ember', 'moth'], lede: 'Prices read at 7:10. 3,600 checked. 2 crossed and are held.' },
+  confirmed: { rows: ['moss'], lede: 'Prices read at 7:10. The second read agrees on 1 card.' },
+  'crossed-down': { rows: ['kit'], lede: 'Prices read at 7:10. 1 vault card stayed under the exit.' },
+  reversed: { rows: ['rip'], lede: 'Prices read at 7:10. 1 spike went back down before anything moved.' },
+  'too-late': { rows: ['thorn'], lede: 'Prices read at 7:10. 1 card sold before a read could hold it.', stale: true },
+  'upload-refused': { rows: ['ember', 'moth', 'moss'], lede: 'Building today’s upload. Held cards are left out.', notice: 'upload-refused' },
+  'upload-hard': { rows: ['ember', 'moth', 'moss'], lede: 'Building today’s upload. Held cards are left out.', notice: 'upload-hard' },
+  budget: { rows: 'budget', lede: 'Prices read at 7:10. 3,600 checked against an $8.00 line.', notice: 'budget', line: [8, 6, 7.95, 'Mirefen Toad, box 2'] },
+  line: { rows: ['ember', 'moth', 'moss', 'kit', 'rip', 'thorn'], lede: 'Prices read at 7:10. 3,600 checked.', panel: true },
+}
+
+/* ---- the line panel and its backtest: 30 daily reads of made-up moves, re-counted as the line moves ---- */
+function rng(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647 }
+const MOVES = (() => {
+  const r = rng(7), out = [], names = ['Cinder Drake', 'Fern Wisp', 'Glint Beetle', 'Harbor Seal', 'Ivory Owl', 'Jade Mantis', 'Kelp Knight', 'Lumen Fox', 'Marsh Toad', 'Nettle Imp', 'Opal Crane', 'Pyre Hound', 'Quartz Ram', 'Reed Viper', 'Sable Lynx', 'Talon Kite']
+  for (let d = 0; d < 30; d++) {
+    const n = 2 + Math.floor(r() * 5)
+    for (let i = 0; i < n; i++) {
+      const before = +(0.5 + r() * r() * 30).toFixed(2)
+      const up = r() < 0.75
+      const after = +(up ? before * (1 + r() * r() * 4) : before * (0.6 + r() * 0.3)).toFixed(2)
+      const sales = Math.floor(r() * 7)
+      const real = sales >= 2 && r() < 0.8
+      out.push({ d, name: names[Math.floor(r() * names.length)], before, after, sales, real })
+    }
+  }
+  return out
+})()
+function flagged(L) {
+  return MOVES.filter((m) => (m.after >= L.in && m.before < L.in) ||
+    (m.after >= m.before * (1 + L.pct / 100) && m.after - m.before >= L.dz && m.sales >= L.sales))
+}
+function panel() {
+  return `<div class="sheet-head"><div><h2 class="sheet-title">Set the Line</h2><p class="sheet-lede">Holding a listing is instant and free. A move waits for a second read.</p></div>
+      <button class="bn-btn bn-btn-quiet" type="button" data-close aria-label="Close the line panel">Close</button></div>
+    <div class="rule"><span class="rule-head">Value Line</span>
+      <div class="rule-line">A card at or above <span class="field sm"><span>$</span><input inputmode="decimal" data-k="in" value="${LINE.in.toFixed(2)}" aria-label="Value line in"></span> leaves bulk.</div>
+      <input type="range" min="5" max="60" step="1" value="${LINE.in}" data-k="in" aria-label="Value line in, slider">
+      <div class="rule-line">It leaves the vault under <span class="field sm"><span>$</span><input inputmode="decimal" data-k="out" value="${LINE.out.toFixed(2)}" aria-label="Value line out"></span> for two reads.</div>
+      <p class="rule-says">Same setting as Pricing's value line. One home, two readers.</p></div>
+    <div class="rule"><span class="rule-head">Jump</span>
+      <div class="rule-line">At least <span class="field sm"><span>+</span><input inputmode="numeric" data-k="pct" value="${LINE.pct}" aria-label="Jump percent"><span>%</span></span> and at least <span class="field sm"><span>+$</span><input inputmode="decimal" data-k="dz" value="${LINE.dz.toFixed(2)}" aria-label="Jump dollars"></span></div>
+      <div class="rule-line">Backed by <span class="field sm"><input inputmode="numeric" data-k="sales" value="${LINE.sales}" aria-label="Sales needed"><span>sales</span></span> in the last 7 days.</div>
+      <p class="rule-says">One odd listing can move the market price. Sales are the second source.</p></div>
+    <div class="rule backtest mark" id="backtest"><span class="tag new">New: backtest</span><span class="rule-head">Last 30 Days, at This Line</span><div id="bt"></div></div>
+    <div class="sheet-foot"><button class="bn-btn" type="button" data-close>Cancel</button><button class="bn-btn bn-btn-primary" type="button" data-close>Save the Line</button></div>`
+}
+function backtest() {
+  const f = flagged(LINE), real = f.filter((m) => m.real), noise = f.length - real.length
+  const per = Array.from({ length: 30 }, (_, d) => f.filter((m) => m.d === d))
+  const top = Math.max(6, ...per.map((x) => x.length))
+  const over = per.filter((x) => x.length > 5).length
+  const cols = per.map((x) => `<div class="col" title="Day ${x.length ? x[0].d + 1 : ''}: ${x.length} rows">${x.map((m) => `<span class="seg ${m.real ? 'real' : 'noise'}" style="height:${(100 / top) - 1}%"></span>`).join('')}</div>`).join('')
+  const list = f.slice(-5).reverse().map((m) => `<li><span class="n">${m.name}</span><span class="bn-money">${$(m.before)} to ${$(m.after)}</span><span class="bn-pill ${m.real ? 'bn-pill-ok' : ''}">${m.real ? 'Real' : 'Fell Back'}</span></li>`).join('')
+  document.getElementById('bt').innerHTML = `
+    <p class="bt-big">${f.length} rows: <span class="ok">${real.length} real</span>, <span class="noise">${noise} fell back</span></p>
+    <p class="rule-says">Real means it stayed over the line a week later. ${over ? `${over} reads went over 5 rows.` : 'No read went over 5 rows.'}</p>
+    <div class="chart" role="img" aria-label="Rows flagged per daily read, last 30 days">${cols}<span class="budget" style="bottom:${(5 / top) * 100}%"><span>5 a read</span></span></div>
+    <div class="chart-axis"><span>30 days ago</span><span>today</span></div>
+    <div class="chart-key"><span><i style="background:var(--bn-accent)"></i>Real</span><span><i style="background:var(--bn-surface-2);box-shadow:inset 0 0 0 1px var(--bn-ink-4)"></i>Fell back</span></div>
+    <ul class="bt-list">${list}</ul>`
+}
+
+/* ---- the Fulfiller's gold pick line ---- */
+function pickView() {
+  return `<span class="tag">Today: Fulfillment location card (Cards to Pull). Gold and packing are New.</span>
+  <div class="ff-bar"><h1 class="ff-title">Cards to Pull</h1><span class="ff-left">2 Left</span><span class="ff-search">Find a card</span></div>
+  <article class="pick gold" id="gold-pick" aria-label="Card 1 of 2, vault card">
+    <span class="ord">1</span>
+    <div class="photo" aria-label="Photo of the card">Card photo</div>
+    <div class="pick-body">
+      <span class="gold-flag"><span class="star" aria-hidden="true"></span>Vault Card</span>
+      <div><p class="place">Vault, Slot V-14</p><p class="place-sub">Not in a box. The vault drawer, slot 14.</p></div>
+      <div><p class="cardname">Emberclaw Wyvern ex</p><p class="cardset">Cinder Crown, number 041</p></div>
+      <div class="pack-wrap mark"><span class="tag new">New: packing list</span><p class="pack-head">Pack It Like This</p>
+        <ul class="pack"><li><span class="ico"></span>Toploader</li><li><span class="ico bag"></span>Team bag</li><li><span class="ico mail"></span>Rigid mailer</li><li><span class="ico track"></span>Tracked shipping</li></ul></div>
+      <button class="pull" type="button">Pull</button>
+    </div>
+  </article>
+  <article class="pick plain" aria-label="Card 2 of 2">
+    <span class="ord">2</span>
+    <div class="photo" aria-label="Photo of the card">Card photo</div>
+    <div class="pick-body">
+      <div><p class="place">Box 2, Section 4, Card 31</p></div>
+      <div><p class="cardname">Pebble Sprite</p><p class="cardset">Dusk Parade, number 031</p></div>
+      <button class="pull" type="button">Pull</button>
+    </div>
+  </article>`
+}
+
+function calm() {
+  return `<div class="calm mark" id="calm-box"><span class="tag new">New: a checked silence</span>
+    <div><p class="calm-head">Nothing crossed. 3,600 checked at 7:10.</p>
+      <p class="calm-body">Your line is $20.00. The highest card still in bulk is $14.80, Glimmerfang Lynx in box 6. Every upload is checked against the line before it is built.</p></div>
+    <div>${scale(14.80, 14.80, 25).replace('aria-label="Listed $14.80, now $14.80', 'aria-label="Highest in bulk $14.80')}
+      <div class="legend"><span><i style="background:var(--bn-ink)"></i>Highest in bulk, $14.80</span><span><i style="background:var(--bn-warn)"></i>Line, $20.00</span><span><i style="background:var(--bn-warn-tint);box-shadow:inset 0 0 0 1px var(--bn-warn)"></i>Exit gap, $15.00 to $20.00</span></div></div></div>`
+}
+
+/* ---- state, hash, render ---- */
+function setHash(mut) {
+  const h = readHash(); mut(h)
+  const s = [...h].filter(([, v]) => v !== '').map(([k, v]) => `${k}=${v}`).join('&')
+  location.hash = s
+}
+function render() {
+  const h = readHash()
+  const state = STATES.some(([k]) => k === h.get('state')) ? h.get('state') : 'mixed'
+  const hide = new Set((h.get('hide') || '').split(',').filter(Boolean))
+  if (h.has('t')) document.documentElement.setAttribute('data-theme', h.get('t') === 'dark' ? 'dark' : 'light')
+  document.body.classList.toggle('nonotes', h.get('notes') === 'off')
+  for (const [k] of OPTIONS) document.body.classList.toggle('hide-' + k, hide.has(k))
+  document.querySelectorAll('#states [data-state]').forEach((b) => b.setAttribute('aria-current', String(b.dataset.state === state)))
+  document.querySelectorAll('#cull [data-opt]').forEach((b) => b.setAttribute('aria-pressed', String(hide.has(b.dataset.opt))))
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark'
+  document.getElementById('theme').textContent = dark ? 'Light Theme' : 'Dark Theme'
+
+  const pick = state === 'pick'
+  document.getElementById('owner').hidden = pick
+  document.getElementById('pick').hidden = !pick
+  if (pick) { document.getElementById('pick').innerHTML = pickView(); return }
+
+  const v = VIEWS[state]
+  document.getElementById('lede').textContent = v.lede
+  document.getElementById('measure').hidden = hide.has('measure')
+  document.getElementById('m-stale').innerHTML = v.stale || state === 'mixed' || state === 'line'
+    ? 'Stale-price sales this month: <b>1</b>, <b>$36.00</b> lost. The target is zero.'
+    : 'Stale-price sales this month: <b>0</b>, <b>$0.00</b> lost. The target is zero.'
+  document.getElementById('m-stale').className = v.stale || state === 'mixed' || state === 'line' ? 'bad' : ''
+  document.getElementById('notices').innerHTML = v.notice ? NOTICES[v.notice] : ''
+  const L = v.line || [LINE.in, LINE.out, 14.80, 'Glimmerfang Lynx, box 6']
+  document.querySelector('[data-v="in"]').textContent = $(L[0])
+  document.querySelector('[data-v="out"]').textContent = $(L[1])
+  document.querySelector('[data-v="high"]').textContent = $(L[2])
+  document.querySelector('[data-v="highwho"]').textContent = L[3]
+
+  const rowsEl = document.getElementById('rows')
+  const tag = rowsEl.querySelector('.tag').outerHTML
+  const empty = v.rows.length === 0
+  document.getElementById('list-wrap').hidden = empty
+  document.getElementById('calm').hidden = !empty
+  if (empty) document.getElementById('calm').innerHTML = calm()
+  if (v.rows === 'budget') {
+    rowsEl.innerHTML = tag + BUDGET.map(budgetRow).join('')
+    document.getElementById('list-count').textContent = '9'
+  } else {
+    rowsEl.innerHTML = tag + v.rows.map(row).join('')
+    document.getElementById('list-count').textContent = String(v.rows.length)
+  }
+  document.querySelectorAll('.late-choice').forEach((el) => { el.hidden = hide.has('late') })
+
+  const sheet = document.getElementById('line-panel')
+  sheet.hidden = !v.panel
+  if (v.panel) { sheet.innerHTML = panel(); backtest() }
+}
+
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('button, a')
+  if (!t) return
+  if (t.matches('.nav, .eyebrow a')) { e.preventDefault(); return }
+  if (t.dataset.state) setHash((h) => h.set('state', t.dataset.state))
+  else if (t.dataset.opt) setHash((h) => {
+    const s = new Set((h.get('hide') || '').split(',').filter(Boolean))
+    s.has(t.dataset.opt) ? s.delete(t.dataset.opt) : s.add(t.dataset.opt)
+    h.set('hide', [...s].join(','))
+  })
+  else if (t.id === 'theme') setHash((h) => h.set('t', document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'))
+  else if (t.hasAttribute('data-open-line')) setHash((h) => h.set('state', 'line'))
+  else if (t.hasAttribute('data-close')) setHash((h) => h.set('state', 'mixed'))
+  else if (t.dataset.go) setHash((h) => h.set('state', t.dataset.go))
+  else if (t.dataset.choice) {
+    t.parentElement.querySelectorAll('[data-choice]').forEach((b) => b.setAttribute('aria-pressed', String(b === t)))
+    const pill = t.closest('.row') && t.closest('.row').querySelector('.status')
+    if (pill && t.closest('[id^="hold-"]')) {
+      pill.textContent = t.dataset.choice === 'Held' ? 'Held' : t.dataset.choice === 'Repriced' ? 'Listed at $' + CARDS[t.closest('.row').id.slice(4)].now.toFixed(2) : 'Dismissed, Back in Bulk'
+      pill.className = 'bn-pill status ' + (t.dataset.choice === 'Held' ? 'bn-pill-warn' : t.dataset.choice === 'Repriced' ? 'bn-pill-accent' : '')
+    }
+  } else if (t.dataset.moved) {
+    const c = CARDS[t.dataset.moved], r = document.getElementById('row-' + t.dataset.moved)
+    r.querySelector('.addr').outerHTML = vaultAddr(c.slot)
+    r.querySelector('.status').textContent = 'In the Vault'
+    r.querySelector('.why').innerHTML = 'Moved to vault slot V-14. <span class="soft">Set its price. From now on it lists apart from bulk.</span>'
+    t.closest('.step').innerHTML = `<span class="step-say">Price for the vault card <span class="soft">Market $24.80, 6 sold $22.50 to $27.00.</span></span>
+      <span class="field"><span>$</span><input inputmode="decimal" placeholder="Price" aria-label="Vault price"></span>
+      <button class="bn-btn bn-btn-primary" type="button">List It</button>`
+  } else if (t.dataset.returned) {
+    const c = CARDS[t.dataset.returned], r = document.getElementById('row-' + t.dataset.returned)
+    r.querySelector('.addr').outerHTML = addr(...c.home)
+    r.querySelector('.status').textContent = 'Back in Bulk'
+    t.closest('.step').innerHTML = '<span class="step-say">Back in box 3, section 7, card 58. <span class="soft">It lists at your rule from the next upload.</span></span>'
+  }
+})
+document.addEventListener('input', (e) => {
+  const k = e.target.dataset && e.target.dataset.k
+  if (!k) return
+  const n = parseFloat(e.target.value); if (!(n >= 0)) return
+  LINE[k] = n
+  document.querySelectorAll(`[data-k="${k}"]`).forEach((el) => { if (el !== e.target) el.value = el.type === 'range' ? n : (k === 'pct' || k === 'sales' ? n : n.toFixed(2)) })
+  document.querySelectorAll(`[data-v="${k}"]`).forEach((el) => { el.textContent = k === 'pct' ? `+${n}%` : k === 'sales' ? String(n) : (k === 'dz' ? '+' : '') + $(n) })
+  backtest()
+})
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !document.getElementById('line-panel').hidden) setHash((h) => h.set('state', 'mixed')) })
+
+document.getElementById('states').insertAdjacentHTML('beforeend',
+  STATES.map(([k, l]) => `<button class="bn-btn" type="button" data-state="${k}">${l}</button>`).join('') +
+  '<button class="bn-btn theme" type="button" id="theme">Dark Theme</button>')
+document.getElementById('cull').insertAdjacentHTML('beforeend',
+  OPTIONS.map(([k, l]) => `<button class="bn-btn" type="button" data-opt="${k}" aria-pressed="false">${l}</button>`).join(''))
+window.addEventListener('hashchange', render)
+render()
+</script>
+</body>
+</html>
