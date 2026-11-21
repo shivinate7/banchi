@@ -1008,6 +1008,10 @@
   .row[data-src='You'] .field { box-shadow: inset 0 0 0 1px var(--bn-ok); background: var(--bn-ok-tint); }
   .src { justify-self: start; }
   .src .bn-pill { height: var(--bn-pill-h-sm); }
+  /* A row this send carried: a green check, by shape, so "Sent" is said once, in the send line (ux-label-once). */
+  .went { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: var(--bn-r-full);
+          color: var(--bn-pill-ink-ok); background: var(--bn-ok-tint); }
+  .went svg { width: 14px; height: 14px; stroke-width: 2.5; }
   .ib { color: var(--bn-ink-3); }
   .group-more { display: flex; align-items: center; gap: var(--bn-3); padding: var(--bn-3) 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
@@ -1135,7 +1139,7 @@ const ROWS = [
   { k: 'r3', g: 'needs', name: 'Brambleking Special Collection', set: 'Starfall Tides', market: 125.33, low: 152.98, now: 169.99, sug: 132.22, cp: 1, kind: 'live',
     why: [['Unsold 69 days', 'warn'], ['36% over market', 'warn'], ['Worth $25.00 or more', 'warn']],
     sentence: 'Unsold 69 days, and priced 36% over market. Worth $25.00 or more: check the price before it goes.' },
-  { k: 'r4', g: 'needs', name: 'Listing 4402117', set: 'No market price', market: null, low: null, now: null, sug: null, cp: 1, kind: 'live',
+  { k: 'r4', g: 'needs', name: 'Listing 4402117', set: 'Not in the catalog yet', market: null, low: null, now: null, sug: null, cp: 1, kind: 'live',
     why: [['No market price', 'warn']], sentence: 'No market price. Type a price to send it.' },
   { k: 'r5', g: 'needs', name: 'Voltmole', set: 'Tidebreak', market: 0.19, low: null, now: 0.15, sug: 0.19, cp: 4, kind: 'live',
     why: [['Market up 217% since listed', ''], ['Capped at your 25%', 'warn']],
@@ -1163,7 +1167,7 @@ const ROWS = [
 const TOTAL = { new: { cp: 18, ls: 11, usd: 13.5 }, up: { cp: 24, ls: 15, usd: 4.1 }, down: { cp: 58, ls: 31, usd: -38.6 }, typed: { cp: 10, ls: 7, usd: 41.25 },
                 kept: 31, rows: 1110, needs: 34, sug: 62, rule: 983 }
 const OPTS = [
-  { key: 'fold-rule', name: 'Fold Going at the rule', says: 'The group draws as one line, 983 rows and their total, with Show them. Page: about 6,900px at 1440 against about 46,000px. Departs from: spec section 1, "Every row, made clearer". Owner grant: yes.' },
+  { key: 'fold-rule', name: 'Fold Going at the rule', says: 'The group draws as one line, 983 rows and their total, with Show them. Page: about 8,200px at 1440 against about 56,000px with every row drawn (today: 97,542px). Departs from: spec section 1, "Every row, made clearer". Owner grant: yes.' },
   { key: 'review-sheet', name: 'Review before Send', says: 'The press opens a sheet with what goes; a second press sends. Gain: a last look. Loss: a press the owner ruled out. Departs from: D273, one press sends. Owner grant: yes.' },
   { key: 'unit-listings', name: 'Count listings, not copies', says: 'The ledger and the press count listings (64), and the second line still names the 92 live copies that move. Departs from: list-notes item 13, "Send N copies".' },
   { key: 'movers-line', name: 'Keep the movers line', says: 'The status chip keeps "599 live listings moved more than 10%". Spec section 9a picks cutting it, unruled. Owner grant: yes.' },
@@ -1325,7 +1329,7 @@ function rowHTML(r, w, first) {
     <span class="ref c-low">${r.low === null ? '<span class="dash">—</span>' : money(r.low)}</span>
     ${refs}
     <div class="price">${was}<label class="field"><span>$</span><input inputmode="decimal" value="${val}" placeholder="${p === null ? 'Price' : ''}" data-act="price" aria-label="Price for ${r.name}" ${r.kept ? 'disabled' : ''}></label></div>
-    <span class="src c-src">${r.kept ? pill('Kept off') : r.went ? pill('Sent', 'ok') : pill(s, pillTone)}</span>
+    <span class="src c-src">${r.kept ? pill('Kept off') : r.went ? `<span class="went" role="img" aria-label="Sent at ${S.sentAt}" title="Sent at ${S.sentAt}">${svg('check')}</span>` : pill(s, pillTone)}</span>
     <button class="bn-icon-btn ib" type="button" data-act="hist" aria-label="Price history for ${r.name}" title="Price history" ${S.open === r.k ? 'aria-pressed="true"' : ''}>${svg('history', 18)}</button>
     <button class="bn-icon-btn ib" type="button" data-act="keep" aria-pressed="${r.kept}" aria-label="${r.kept ? 'Put back in the send: ' : 'Keep off TCGplayer: '}${r.name}" title="${r.kept ? 'Put back in the send' : 'Keep off TCGplayer'}">${svg(r.kept ? 'unlock' : 'lock', 18)}</button>
     ${one || r.went ? '' : r.left ? `<div class="why">${pill(`Left out: TCGplayer moved to $${r.sug.toFixed(2)}`, 'warn')}</div>` : reasonHTML(r)}
@@ -1356,7 +1360,7 @@ function listHTML(w, first) {
         <header class="group-head"><h2 class="group-title">${title}</h2><span class="group-count">${empty ? 0 : count.toLocaleString()}</span><span class="group-lede">${empty ? (g === 'needs' ? 'Every price here is set.' : 'No live listing has a reason to move.') : lede}</span>
           ${folded ? `<button class="bn-btn bn-btn-sm" type="button" data-act="unfold">Show them</button>` : ''}</header>
         ${empty ? '' : folded ? `<p class="group-more">${count.toLocaleString()} rows at the rule, listing for ${money(412.3)}. ${tag('Option: Fold Going at the rule', 'new')}</p>` : gr.map((r) => rowHTML(r, w, first)).join('')}
-        ${!empty && !folded && !q && !S.showKept && gr.length < count ? `<p class="mock-note">Mockup: the other <b>${(count - gr.length).toLocaleString()}</b> rows of this group are not drawn. Each is ${g === 'rule' ? '<b>48px</b> at 1440 and <b>64px</b> at 820' : '<b>76px</b> at 1440 and <b>104px</b> at 820'}.</p>` : ''}
+        ${!empty && !folded && !q && !S.showKept && gr.length < count ? `<p class="mock-note">Mockup: the other <b>${(count - gr.length).toLocaleString()}</b> rows of this group are not drawn. Each is ${g === 'rule' ? '<b>49px</b> at 1440 and <b>66px</b> at 820' : '<b>80px</b> at 1440 and <b>98px</b> at 820'}.</p>` : ''}
       </section>`
     }).join('')}
   </div>`
