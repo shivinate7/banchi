@@ -367,7 +367,7 @@ html[data-labels='off'] .mk::before { display: none; }
 @media (max-width: 767px) { .bn-page { padding: var(--bn-4) var(--bn-4) var(--bn-10); } }
 
 /* ---- kit (inlined from kit.css, trimmed) ------------------------------------------------ */
-.bn-page-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--bn-3) var(--bn-6); margin-bottom: var(--bn-4); }
+.bn-page-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--bn-5) var(--bn-6); margin-bottom: var(--bn-6); }
 .bn-head-text { display: flex; flex-direction: column; gap: var(--bn-1); min-width: 0; }
 .bn-head-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); margin-top: 19px; }
 .bn-eyebrow { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); font-weight: 500; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); }
@@ -442,12 +442,12 @@ html[data-labels='off'] .mk::before { display: none; }
 .lt-mini > span { position: absolute; inset: 0 auto 0 0; background: var(--bn-ink-3); border-radius: var(--bn-r-full); }
 .lt-mini.is-even > span { background: var(--bn-ok); }
 html[data-hide~='bar'] .lt-mini { display: none; }
-.lt-row-none { background: repeating-linear-gradient(135deg, transparent 0 6px, var(--bn-hover) 6px 8px); }
 
 /* the purchase page */
 .lt-detail { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
 .lt-dhead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--bn-2) var(--bn-4); }
 .lt-dtitle { margin: 0; font-family: var(--bn-font-display); font-size: var(--bn-fs-h2); font-weight: 800; letter-spacing: var(--bn-tracking-tight); line-height: var(--bn-lh-snug); }
+.lt-dsub { font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
 .lt-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: var(--bn-4); }
 .lt-figs .lt-fig-v { font-size: var(--bn-fs-xl); }
 
@@ -469,6 +469,8 @@ html[data-hide~='proj'] .lt-proj, html[data-hide~='proj'] .lt-rec-proj { display
 .lt-table tr:last-child td { border-bottom: 0; }
 .lt-table .r { text-align: right; white-space: nowrap; }
 .lt-table .muted { color: var(--bn-ink-3); }
+.lt-runs td:nth-child(1) { width: 9em; }
+.lt-runs td:nth-child(2) { width: 8em; text-align: left; }
 .lt-cardrow { cursor: pointer; }
 .lt-cardrow:hover td { background: var(--bn-hover); }
 .lt-prov { font-style: italic; color: var(--bn-ink-3); }
@@ -638,7 +640,7 @@ function money(n, cents) {
 function count(n) { return n.toLocaleString('en-US'); }
 function W(cap, plural) { var w = S.word === 'lot' ? (plural ? 'lots' : 'lot') : (plural ? 'purchases' : 'purchase'); return cap ? w.charAt(0).toUpperCase() + w.slice(1) : w; }
 function back(p) { return S.back === 'net' ? Math.round(p.back * 0.85) : p.back; }
-function backWord() { return S.back === 'net' ? 'after fees and postage' : 'gross, before fees'; }
+function backWord() { return S.back === 'net' ? 'after fees and postage' : 'gross before fees'; }
 function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function byId(id) { for (var i = 0; i < P.length; i++) if (P[i].id === id) return P[i]; return null; }
 
@@ -700,7 +702,7 @@ function coverage() {
     '<div class="lt-meter" role="img" aria-label="' + pct + '% of cards have a known cost"><span style="width:' + pct + '%"></span></div>' +
     '<div class="lt-totals">' +
       fig(money(paid), 'paid, with shipping and tax') +
-      fig(money(bk), 'back, ' + backWord()) +
+      fig(money(bk), 'back so far, ' + backWord()) +
       fig(money(Math.round(shelf)), 'on the shelf at cost, ' + money(unspread) + ' of it not yet spread') +
     '</div></section>';
 }
@@ -779,7 +781,7 @@ function detail(p) {
   var spread = '<section class="bn-panel mk mk-new" data-mk="New: the spread" id="spread"><div class="bn-panel-head"><h3 class="bn-panel-title">How the Cost Is Spread</h3></div><div class="bn-panel-body lt-stack">' +
     '<dl class="lt-kv"><dt>Method</dt><dd>$0.05 floor on every card, the rest by market-value share</dd><dt>State</dt>' + spreadState + '</dl>' + doneBtn + '</div></section>';
 
-  var runs = '<section class="bn-panel' + (p.kind === 'split' ? ' mk mk-new" data-mk="New: runs of one ' + W() : '') + '" id="runs"><div class="bn-panel-head"><h3 class="bn-panel-title">Capture Runs</h3><span class="lt-why">' + p.runs.length + '</span></div><div class="bn-panel-body"><table class="lt-table"><tbody>' +
+  var runs = '<section class="bn-panel' + (p.kind === 'split' ? ' mk mk-new" data-mk="New: runs of one ' + W() : '') + '" id="runs"><div class="bn-panel-head"><h3 class="bn-panel-title">Capture Runs</h3><span class="lt-why">' + p.runs.length + '</span></div><div class="bn-panel-body"><table class="lt-table lt-runs"><tbody>' +
     p.runs.map(function (r) { return '<tr><td class="num">' + r[0] + '</td><td class="r num">' + count(r[1]) + ' cards</td><td class="muted" data-typed>' + r[2] + '</td></tr>'; }).join('') + '</tbody></table></div></section>';
 
   var cards = CARDS[p.id] ? '<section class="bn-panel"><div class="bn-panel-head"><h3 class="bn-panel-title">Cards</h3><span class="lt-why">Highest cost first. Open one for its cost line.</span></div><div class="bn-panel-body"><table class="lt-table"><thead><tr><th>Card</th><th class="r">Market</th><th class="r">Cost</th></tr></thead><tbody>' +
@@ -788,7 +790,7 @@ function detail(p) {
     }).join('') + '</tbody></table></div></section>' : '';
 
   return '<section class="lt-detail" id="detail" aria-label="' + esc(p.name) + '">' +
-    '<div class="lt-dhead"><div class="bn-head-text"><span class="bn-eyebrow"><span>Bought ' + p.date + '</span><span data-typed>' + esc(p.seller) + '</span></span><h2 class="lt-dtitle" data-typed>' + esc(p.name) + '</h2></div>' +
+    '<div class="lt-dhead"><div class="bn-head-text"><h2 class="lt-dtitle" data-typed>' + esc(p.name) + '</h2><span class="lt-dsub">Bought ' + p.date + ' from <span data-typed>' + esc(p.seller) + '</span></span></div>' +
     '<button class="bn-btn bn-btn-ghost bn-btn-sm" aria-disabled="true" title="Not drawn in this mockup">Edit ' + W(true) + '</button></div>' +
     '<section class="bn-panel bn-panel-body lt-stack mk mk-new" data-mk="New: ' + W() + ' page" id="verdict"><p class="bn-verdict">' + verdict(p) + '</p>' + (p.kind === 'new' || p.kind === 'split' ? '' : recBar(p)) + figs + '</section>' +
     '<div class="lt-two">' + (out || '') + spread + '</div>' + runs + cards + '</section>';
@@ -796,7 +798,7 @@ function detail(p) {
 
 function noneDetail() {
   return '<section class="lt-detail" id="detail" aria-label="No ' + W() + '">' +
-    '<div class="lt-dhead"><div class="bn-head-text"><span class="bn-eyebrow">Stock with no ' + W() + '</span><h2 class="lt-dtitle">No ' + W(true) + '</h2></div></div>' +
+    '<div class="lt-dhead"><div class="bn-head-text"><h2 class="lt-dtitle">No ' + W(true) + '</h2><span class="lt-dsub">Stock that came from no recorded ' + W() + '</span></div></div>' +
     '<section class="bn-panel bn-panel-body lt-stack mk mk-new" data-mk="New: cost unknown" id="verdict"><p class="bn-verdict"><span class="lt-unknown">' + count(STOCK - KNOWN) + ' cards read Cost Unknown.</span></p>' +
     '<p class="lt-note">Their cost is unknown, not $0. They are left out of every total above, which is why each total says how many cards it covers. They still sell, and Sales still counts their gross.</p></section>' +
     '<section class="bn-panel mk mk-new" data-mk="New: tag by box and section" id="tag"><div class="bn-panel-head"><h3 class="bn-panel-title">Tag Old Stock by Range</h3></div><div class="bn-panel-body lt-stack">' +

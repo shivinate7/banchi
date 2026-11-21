@@ -29,4 +29,6 @@ The idea: each capture run carries the purchase it came from (paid, date, seller
 3. In a trade, do incoming cards cost what the outgoing cards cost you, or the market value of what you gave?
 4. Purchase or lot as the word (choice 1)?
 
+**Critique (impeccable, single context).** Fixed: the eyebrow over each purchase title became a sub-line, the hatch left the No Purchase row (it stays where it means "unknown"), the head marks no longer overlap, the runs table no longer spreads. Kept: Inter (the repo's token) and the hatch on the meter and badge. Outside this folder: the kit's page eyebrow.
+
 **Verdicts.** 1440 light (`lot-tag-1440-light.png`, partway): pass, list and page sit side by side with no overflow. 820 dark (`lot-tag-820-dark.png`, broke-even): pass, the rail shows and the list stacks above the page. Also looked at: picker-new 1440 light, card 1440 dark with `word=lot`, both pass.
