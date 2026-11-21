@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>banchi: tombstone slips (idea mockup)</title>
+<style>
+/* Banchi tokens, copied from app/src/tokens.css (light, dark). Only the names this page reads. */
+:root {
+  color-scheme: light;
+  --bn-bg: #f4f5f8; --bn-surface: #ffffff; --bn-surface-2: #eceef2; --bn-surface-3: #f7f8fa;
+  --bn-hover: rgba(15, 18, 23, 0.03);
+  --bn-ink: #0f1217; --bn-ink-2: #3b414b; --bn-ink-3: #666c76; --bn-ink-4: #7f8791;
+  --bn-line: rgba(15, 18, 23, 0.08); --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-line-focus: rgba(61, 90, 241, 0.55); --bn-field-edge: var(--bn-ink-4);
+  --bn-accent: #3d5af1; --bn-accent-hover: #2f4bd9; --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10); --bn-accent-tint-2: rgba(61, 90, 241, 0.18);
+  --bn-on-accent: #ffffff;
+  --bn-live: #d63d2b; --bn-live-tint: rgba(239, 75, 58, 0.12);
+  --bn-ok: #15803d; --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309; --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-danger: #b91c1c; --bn-danger-tint: rgba(220, 38, 38, 0.10);
+  --bn-pill-ink-accent: var(--bn-accent-hover); --bn-pill-ink-ok: #11733a;
+  --bn-pill-ink-warn: #a14b09; --bn-pill-ink-danger: #b3123e;
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32), 0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-btn-bg: var(--bn-surface); --bn-btn-bg-hover: var(--bn-surface-3); --bn-btn-shadow: var(--bn-shadow-1);
+  --bn-font-display: 'Manrope', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --bn-fs-2xs: 10px; --bn-fs-xs: 11px; --bn-fs-sm: 12px; --bn-fs-md: 13px; --bn-fs-base: 14px;
+  --bn-fs-lg: 16px; --bn-fs-xl: 18px; --bn-fs-2xl: 22px; --bn-fs-3xl: 28px;
+  --bn-tracking-caps: 0.06em; --bn-tracking-tight: -0.02em;
+  --bn-lh-tight: 1.1; --bn-lh-snug: 1.25; --bn-lh-base: 1.4; --bn-lh-relaxed: 1.55;
+  --bn-1: 4px; --bn-2: 8px; --bn-3: 12px; --bn-4: 16px; --bn-5: 20px; --bn-6: 24px; --bn-7: 32px; --bn-8: 40px;
+  --bn-0-5: 2px; --bn-1-5: 6px;
+  --bn-r-xs: 4px; --bn-r-sm: 6px; --bn-r: 8px; --bn-r-lg: 12px; --bn-r-xl: 16px; --bn-r-full: 999px;
+  --bn-t-fast: 120ms; --bn-t: 200ms; --bn-ease: cubic-bezier(0.2, 0, 0, 1);
+  --bn-sidebar-w: 236px; --bn-rail-w: 64px;
+  --bn-control-h: 34px; --bn-control-h-lg: 40px; --bn-control-h-sm: 28px; --bn-pill-h: 22px;
+
+  /* The slip is paper, not screen: it keeps its own two colours in both themes, as the
+     stage and flash tokens do. Thermal print is one ink. */
+  --slip-paper: #fbfbf7;
+  --slip-ink: #141414;
+  --mm: 1mm;              /* true scale; the 2x switch doubles it */
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+  --bn-hover: rgba(255, 255, 255, 0.04);
+  --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+  --bn-line: rgba(255, 255, 255, 0.08); --bn-line-strong: rgba(255, 255, 255, 0.16);
+  --bn-line-focus: rgba(129, 146, 255, 0.6);
+  --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14); --bn-accent-tint-2: rgba(127, 144, 255, 0.24);
+  --bn-on-accent: #0c0e12;
+  --bn-live: #ff6a58; --bn-live-tint: rgba(255, 106, 88, 0.16);
+  --bn-ok: #3ddc84; --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524; --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-danger: #ff5c5c; --bn-danger-tint: rgba(255, 92, 92, 0.14);
+  --bn-pill-ink-accent: var(--bn-accent-hover); --bn-pill-ink-ok: var(--bn-ok);
+  --bn-pill-ink-warn: var(--bn-warn); --bn-pill-ink-danger: #f6799c;
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-btn-bg: var(--bn-surface-3); --bn-btn-bg-hover: #262b34;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bn-bg); color: var(--bn-ink);
+  font: var(--bn-fs-base)/var(--bn-lh-base) var(--bn-font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+.num, .mono { font-family: var(--bn-font-mono); font-variant-numeric: tabular-nums slashed-zero; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--bn-line-focus); outline-offset: 2px; }
+
+/* ---------- page frame ---------- */
+.sample {
+  display: flex; gap: var(--bn-3); align-items: center; flex-wrap: wrap;
+  padding: var(--bn-2) var(--bn-6);
+  background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn);
+  font-size: var(--bn-fs-md); border-bottom: 1px solid var(--bn-line);
+}
+.sample b { font-weight: 700; }
+.page { display: flex; flex-direction: column; gap: var(--bn-6); padding: var(--bn-6); max-width: 1600px; }
+.head { display: flex; flex-direction: column; gap: var(--bn-3); }
+.head h1 {
+  margin: 0; font: 700 var(--bn-fs-3xl)/var(--bn-lh-tight) var(--bn-font-display);
+  letter-spacing: var(--bn-tracking-tight);
+}
+.head p { margin: 0; max-width: 72ch; color: var(--bn-ink-2); font-size: var(--bn-fs-lg); line-height: var(--bn-lh-relaxed); }
+.controls { display: flex; flex-direction: column; gap: var(--bn-3); }
+.cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); }
+.ctl-label { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); min-width: 56px; }
+
+/* segmented control (the kit's look) */
+.seg { display: inline-flex; flex-wrap: wrap; gap: var(--bn-0-5); padding: var(--bn-0-5);
+  background: var(--bn-surface-2); border-radius: var(--bn-r); }
+.seg button {
+  height: var(--bn-control-h-sm); padding: 0 var(--bn-3); border: 0; border-radius: var(--bn-r-sm);
+  background: transparent; color: var(--bn-ink-2); font-size: var(--bn-fs-md); font-weight: 500; cursor: pointer;
+}
+.seg button:hover { background: var(--bn-hover); color: var(--bn-ink); }
+.seg button[aria-pressed='true'] { background: var(--bn-surface); color: var(--bn-ink); box-shadow: var(--bn-shadow-1); font-weight: 600; }
+.toggle {
+  display: inline-flex; align-items: center; gap: var(--bn-1-5); height: var(--bn-control-h-sm);
+  padding: 0 var(--bn-3); border-radius: var(--bn-r-full); border: 1px solid var(--bn-line-strong);
+  background: var(--bn-btn-bg); font-size: var(--bn-fs-md); color: var(--bn-ink-2); cursor: pointer;
+}
+.toggle[aria-pressed='false'] { color: var(--bn-ink-3); text-decoration: line-through; background: transparent; }
+.toggle .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bn-accent); }
+.toggle[aria-pressed='false'] .dot { background: var(--bn-ink-4); }
+
+.state-say {
+  margin: 0; min-height: 3.2em; max-width: 90ch; font-size: var(--bn-fs-lg); line-height: var(--bn-lh-base);
+  color: var(--bn-ink);
+}
+
+/* ---------- the two physical views ---------- */
+.physical { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--bn-6); align-items: start; }
+.panel {
+  position: relative; background: var(--bn-surface); border-radius: var(--bn-r-lg);
+  box-shadow: var(--bn-shadow-1); padding: var(--bn-5); display: flex; flex-direction: column; gap: var(--bn-4);
+  min-width: 0;
+}
+.panel.bare { background: transparent; box-shadow: none; padding: 0; }
+.panel-head { display: flex; flex-wrap: wrap; gap: var(--bn-2); align-items: baseline; justify-content: space-between; }
+.panel h2 { margin: 0; font: 700 var(--bn-fs-xl)/var(--bn-lh-snug) var(--bn-font-display); }
+.panel .sub { color: var(--bn-ink-3); font-size: var(--bn-fs-md); }
+.tag {
+  display: inline-flex; align-items: center; height: var(--bn-pill-h); padding: 0 var(--bn-2);
+  border: 1px dashed var(--bn-ink-4); border-radius: var(--bn-r-sm); font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3); white-space: nowrap;
+}
+.tag.new { border-color: var(--bn-accent); color: var(--bn-pill-ink-accent); }
+.tags { display: flex; flex-wrap: wrap; gap: var(--bn-1-5); }
+
+/* the strip */
+.strip-stage {
+  display: flex; gap: var(--bn-3); align-items: flex-start; justify-content: center;
+  padding: var(--bn-5) var(--bn-4); background: var(--bn-surface-2); border-radius: var(--bn-r);
+  min-height: 420px;
+}
+.roll { display: flex; flex-direction: column; gap: 0; }
+.ruler {
+  position: relative; width: 44px; flex: none;
+  height: calc(100 * var(--mm)); margin-top: var(--bn-0-5);
+  border-right: 1px solid var(--bn-ink-4);
+  background: repeating-linear-gradient(to top, var(--bn-ink-4) 0 1px, transparent 1px calc(10 * var(--mm)));
+  background-size: 8px 100%; background-repeat: no-repeat; background-position: right top;
+}
+.ruler span {
+  position: absolute; right: 12px; transform: translateY(50%);
+  font: 500 var(--bn-fs-2xs)/1 var(--bn-font-mono); color: var(--bn-ink-3); white-space: nowrap; text-align: right;
+}
+.ruler span::after { content: ''; position: absolute; right: -12px; top: 50%; width: 10px; border-top: 1px solid var(--bn-ink-3); }
+.ruler .card-top { color: var(--bn-pill-ink-accent); }
+.ruler .card-top::after { border-color: var(--bn-accent); width: 12px; }
+
+.paper {
+  width: calc(58 * var(--mm)); background: var(--slip-paper); color: var(--slip-ink);
+  padding: 0 calc(5 * var(--mm));
+  font-family: var(--bn-font-mono); font-size: calc(2.5 * var(--mm)); line-height: calc(3.6 * var(--mm));
+  font-variant-numeric: tabular-nums slashed-zero; letter-spacing: 0;
+  box-shadow: 0 1px 2px rgba(15, 18, 23, 0.10), 0 10px 24px -14px rgba(15, 18, 23, 0.45);
+  --zig: calc(1.2 * var(--mm));
+  clip-path: polygon(0 var(--zig), 5% 0, 10% var(--zig), 15% 0, 20% var(--zig), 25% 0, 30% var(--zig), 35% 0, 40% var(--zig), 45% 0, 50% var(--zig), 55% 0, 60% var(--zig), 65% 0, 70% var(--zig), 75% 0, 80% var(--zig), 85% 0, 90% var(--zig), 95% 0, 100% var(--zig),
+    100% calc(100% - var(--zig)), 95% 100%, 90% calc(100% - var(--zig)), 85% 100%, 80% calc(100% - var(--zig)), 75% 100%, 70% calc(100% - var(--zig)), 65% 100%, 60% calc(100% - var(--zig)), 55% 100%, 50% calc(100% - var(--zig)), 45% 100%, 40% calc(100% - var(--zig)), 35% 100%, 30% calc(100% - var(--zig)), 25% 100%, 20% calc(100% - var(--zig)), 15% 100%, 10% calc(100% - var(--zig)), 5% 100%, 0 calc(100% - var(--zig)));
+}
+.paper + .paper { margin-top: calc(3 * var(--mm)); }
+.tall { height: calc(100 * var(--mm)); display: flex; flex-direction: column; padding-top: calc(1.2 * var(--mm)); }
+.band {
+  height: calc(11 * var(--mm)); margin: 0 calc(-5 * var(--mm)); background: var(--slip-ink); color: var(--slip-paper);
+  display: flex; align-items: center; justify-content: center;
+  font-size: calc(5 * var(--mm)); font-weight: 800; line-height: 1;
+}
+.band.plain span { visibility: hidden; }
+.ln { white-space: pre; overflow: hidden; }
+.ln.big { font-size: calc(4 * var(--mm)); line-height: calc(5.4 * var(--mm)); font-weight: 800; }
+.ln.b { font-weight: 800; }
+.gapmm { flex: 1; }
+.qr-row { display: flex; gap: calc(3 * var(--mm)); align-items: center; margin: calc(1.5 * var(--mm)) 0; }
+.qr {
+  width: calc(17 * var(--mm)); height: calc(17 * var(--mm)); flex: none; position: relative;
+  border: calc(0.6 * var(--mm)) dashed var(--slip-ink);
+  background:
+    repeating-linear-gradient(45deg, var(--slip-ink) 0 calc(0.5 * var(--mm)), transparent calc(0.5 * var(--mm)) calc(2 * var(--mm)));
+  display: grid; place-items: center;
+}
+.qr span {
+  background: var(--slip-paper); padding: calc(0.4 * var(--mm)) calc(1 * var(--mm));
+  font-size: calc(2.2 * var(--mm)); line-height: 1.1; font-weight: 800; text-align: center;
+}
+.tear {
+  margin: calc(1 * var(--mm)) calc(-5 * var(--mm)); border-top: calc(0.4 * var(--mm)) dashed var(--slip-ink);
+  position: relative; height: 0;
+}
+.tear span {
+  position: absolute; left: 50%; top: 0; transform: translate(-50%, -50%);
+  background: var(--slip-paper); padding: 0 calc(1.5 * var(--mm)); font-size: calc(2.2 * var(--mm));
+}
+.stub { padding: calc(2 * var(--mm)) 0 calc(4 * var(--mm)); display: flex; flex-direction: column; }
+.tickbox { display: inline-block; width: calc(3 * var(--mm)); height: calc(3 * var(--mm)); border: calc(0.35 * var(--mm)) solid var(--slip-ink); vertical-align: calc(-0.4 * var(--mm)); position: relative; }
+.tickbox.ticked::after {
+  /* a pen mark, not print: drawn in the screen's accent so it reads as a hand */
+  content: ''; position: absolute; left: 12%; top: -40%; width: 45%; height: 110%;
+  border: solid var(--bn-accent-press); border-width: 0 calc(0.6 * var(--mm)) calc(0.6 * var(--mm)) 0; transform: rotate(40deg);
+}
+.thumb-row { display: flex; justify-content: center; margin-top: calc(2 * var(--mm)); }
+.thumb { width: calc(30 * var(--mm)); height: calc(41.9 * var(--mm)); image-rendering: pixelated; display: block; }
+.feed { text-align: center; }
+html[data-opt-thumb='off'] .thumb-row { display: none; }
+html[data-opt-tick='off'] .tick-part { visibility: hidden; }
+html[data-opt-band='off'] .band span { visibility: hidden; }
+
+.callout {
+  display: flex; gap: var(--bn-2); align-items: flex-start; padding: var(--bn-3);
+  border-radius: var(--bn-r); background: var(--bn-surface-2); font-size: var(--bn-fs-md); color: var(--bn-ink-2);
+  max-width: 60ch;
+}
+.callout.warn { background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn); }
+.callout.ok { background: var(--bn-ok-tint); color: var(--bn-pill-ink-ok); }
+
+/* side view */
+.box-svg { width: 100%; height: auto; display: block; margin-inline: auto; }
+#box-svg-host { display: flex; justify-content: center; }
+.box-svg text { font-family: var(--bn-font-ui); fill: var(--bn-ink-2); }
+.box-svg .mono { font-family: var(--bn-font-mono); }
+.legend { display: flex; flex-wrap: wrap; gap: var(--bn-4); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -2px; margin-right: var(--bn-1-5); }
+
+/* ---------- the clearing screen, in Banchi's shell ---------- */
+.app {
+  display: grid; grid-template-columns: var(--bn-sidebar-w) minmax(0, 1fr);
+  background: var(--bn-bg); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-2); overflow: hidden;
+  min-height: 560px;
+}
+.nav { background: var(--bn-surface-2); padding: var(--bn-4) var(--bn-3); display: flex; flex-direction: column; gap: var(--bn-4); }
+.brand { display: flex; align-items: center; gap: var(--bn-2); padding: 0 var(--bn-2); font: 800 var(--bn-fs-lg)/1 var(--bn-font-display); }
+.brand i { width: 8px; height: 8px; border-radius: 50%; background: var(--bn-live); }
+.nav-group { display: flex; flex-direction: column; gap: var(--bn-0-5); }
+.nav-group > span { padding: 0 var(--bn-2) var(--bn-1); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.nav a {
+  display: flex; align-items: center; gap: var(--bn-2); height: 32px; padding: 0 var(--bn-2); border-radius: var(--bn-r-sm);
+  color: var(--bn-ink-2); text-decoration: none; font-size: var(--bn-fs-md);
+}
+.nav a .ic { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid currentColor; opacity: .7; flex: none; }
+.nav a[aria-current='page'] { background: var(--bn-accent-tint); color: var(--bn-pill-ink-accent); font-weight: 600; }
+.main { padding: var(--bn-6); display: flex; flex-direction: column; gap: var(--bn-5); min-width: 0; }
+.main-head { display: flex; flex-wrap: wrap; gap: var(--bn-3); align-items: baseline; justify-content: space-between; }
+.main-head h3 { margin: 0; font: 700 var(--bn-fs-3xl)/var(--bn-lh-tight) var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.main-head p { margin: 0; color: var(--bn-ink-3); font-size: var(--bn-fs-md); }
+.clear-grid { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: var(--bn-5); align-items: start; }
+.sec-list { background: var(--bn-surface); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-1); padding: var(--bn-2); display: flex; flex-direction: column; gap: var(--bn-0-5); }
+.sec-list h4 { margin: 0; padding: var(--bn-2) var(--bn-2) var(--bn-1); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-weight: 600; }
+.sec {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--bn-0-5) var(--bn-2); align-items: center;
+  padding: var(--bn-2); border-radius: var(--bn-r); border: 0; background: transparent; text-align: left; cursor: pointer;
+}
+.sec[aria-current='true'] { background: var(--bn-accent-tint); }
+.sec .where { font-weight: 600; font-size: var(--bn-fs-base); }
+.sec .what { grid-column: 1 / -1; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.pill {
+  display: inline-flex; align-items: center; gap: var(--bn-1); height: var(--bn-pill-h); padding: 0 var(--bn-2);
+  border-radius: var(--bn-r-full); font-size: var(--bn-fs-xs); font-weight: 600; white-space: nowrap;
+  background: var(--bn-surface-2); color: var(--bn-ink-2);
+}
+.pill.ok { background: var(--bn-ok-tint); color: var(--bn-pill-ink-ok); }
+.pill.warn { background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn); }
+.pill.accent { background: var(--bn-accent-tint); color: var(--bn-pill-ink-accent); }
+.pill.danger { background: var(--bn-danger-tint); color: var(--bn-pill-ink-danger); }
+
+.scan-card { background: var(--bn-surface); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-1); padding: var(--bn-5); display: flex; flex-direction: column; gap: var(--bn-4); }
+.scan-top { display: flex; flex-wrap: wrap; gap: var(--bn-3); align-items: center; }
+.scan-field {
+  flex: 1 1 260px; display: flex; align-items: center; gap: var(--bn-2); height: var(--bn-control-h-lg);
+  padding: 0 var(--bn-3); border: 1px solid var(--bn-field-edge); border-radius: var(--bn-r); background: var(--bn-surface);
+  color: var(--bn-ink-3); font-size: var(--bn-fs-base);
+}
+.scan-field.armed { border-color: var(--bn-accent); box-shadow: 0 0 0 3px var(--bn-accent-tint); }
+.scan-field .caret { width: 1.5px; height: 18px; background: var(--bn-accent); animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .scan-field .caret { animation: none; } }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-2); height: var(--bn-control-h-lg);
+  padding: 0 var(--bn-4); border-radius: var(--bn-r); border: 0; background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow);
+  font-size: var(--bn-fs-base); font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.btn:hover { background: var(--bn-btn-bg-hover); }
+.btn.primary { background: var(--bn-accent); color: var(--bn-on-accent); box-shadow: var(--bn-shadow-1); }
+.btn.primary:hover { background: var(--bn-accent-hover); }
+.btn.mock { border: 1px dashed var(--bn-ink-4); box-shadow: none; background: transparent; color: var(--bn-ink-2); }
+.btn[aria-disabled='true'] { opacity: .45; cursor: not-allowed; }
+.answer {
+  min-height: 48px; display: flex; gap: var(--bn-3); align-items: center; padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r); background: var(--bn-surface-2); font-size: var(--bn-fs-base);
+}
+.answer.ok { background: var(--bn-ok-tint); color: var(--bn-pill-ink-ok); }
+.answer.warn { background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn); }
+.beeps { display: inline-flex; gap: 3px; flex: none; }
+.beeps i { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+.slips { display: flex; flex-direction: column; border-top: 1px solid var(--bn-line); }
+.slip-row {
+  display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: var(--bn-1) var(--bn-4); align-items: center;
+  padding: var(--bn-3) 0; border-bottom: 1px solid var(--bn-line); min-height: 64px;
+}
+.slip-row .ord { font-family: var(--bn-font-mono); font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+.slip-row .card { font-weight: 600; }
+.slip-row .card small { display: block; font-weight: 400; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+.slip-row .card small .num { color: var(--bn-ink-2); }
+.slip-row .end { display: flex; gap: var(--bn-2); align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.slip-row .btn { height: var(--bn-control-h-sm); font-size: var(--bn-fs-md); padding: 0 var(--bn-3); }
+.slip-row.just { animation: land var(--bn-t) var(--bn-ease); }
+@keyframes land { from { background: var(--bn-accent-tint); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .slip-row.just { animation: none; } }
+.foot { display: flex; flex-wrap: wrap; gap: var(--bn-3); align-items: center; justify-content: space-between; }
+.foot .count { font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+.foot .count .num { color: var(--bn-ink); font-weight: 600; }
+.empty { padding: var(--bn-6) 0; display: flex; flex-direction: column; gap: var(--bn-3); align-items: flex-start; }
+.empty p { margin: 0; font-size: var(--bn-fs-lg); max-width: 52ch; }
+
+/* ---------- 820 and below: the shell folds to its rail, the views stack ---------- */
+@media (max-width: 1100px) {
+  .app { grid-template-columns: var(--bn-rail-w) minmax(0, 1fr); }
+  .nav { padding: var(--bn-4) var(--bn-2); align-items: center; }
+  .nav .brand b, .nav a b, .nav-group > span { display: none; }
+  .nav a { width: 40px; justify-content: center; padding: 0; }
+  .clear-grid { grid-template-columns: minmax(0, 1fr); }
+  .sec-list { flex-direction: row; flex-wrap: wrap; }
+  .sec-list h4 { flex-basis: 100%; }
+  .sec { flex: 1 1 200px; }
+}
+@media (max-width: 900px) {
+  .physical { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .page { padding: var(--bn-4); gap: var(--bn-5); }
+  .main { padding: var(--bn-4); }
+  .slip-row { grid-template-columns: 80px minmax(0, 1fr); }
+  .slip-row .end { grid-column: 2; justify-content: flex-start; }
+}
+</style>
+</head>
+<body>
+<div class="sample" role="note"><b>Sample</b><span>Every card, set, order, price and box on this page is made up. No figure is real, and the QR boxes are placeholders that hold no code.</span></div>
+
+<div class="page">
+  <header class="head">
+    <h1>Tombstone Slips Hold the Slot</h1>
+    <p>A small thermal printer prints one slip per sold card, in walk order. The card goes to the mailer and the slip's tall half stays in its slot, so a gap reads as sold, with its order number. The next re-capture of that section scans each slip out.</p>
+  </header>
+
+  <div class="controls" aria-label="Mockup controls">
+    <div class="cluster"><span class="ctl-label">State</span><div class="seg" id="state-tabs" role="group" aria-label="State"></div></div>
+    <div class="cluster">
+      <span class="ctl-label">Options</span>
+      <button class="toggle" data-opt="thumb" aria-pressed="true" title="Hide this option"><span class="dot"></span>Dithered Thumbnail (Version 2)</button>
+      <button class="toggle" data-opt="tick" aria-pressed="true" title="Hide this option"><span class="dot"></span>Neighbor-Off Box (Version 2)</button>
+      <button class="toggle" data-opt="band" aria-pressed="true" title="Hide this option"><span class="dot"></span>Order Number in the Band</button>
+    </div>
+    <div class="cluster">
+      <span class="ctl-label">View</span>
+      <div class="seg" role="group" aria-label="Strip size">
+        <button data-scale="1" aria-pressed="true">True Size</button>
+        <button data-scale="2" aria-pressed="false">2x</button>
+      </div>
+      <div class="seg" role="group" aria-label="Theme">
+        <button data-theme-set="light" aria-pressed="false">Light</button>
+        <button data-theme-set="dark" aria-pressed="false">Dark</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="state-say" id="state-say" aria-live="polite"></p>
+
+  <section class="physical">
+    <div class="panel" id="strip">
+      <div class="panel-head">
+        <h2 id="strip-title">The Slip</h2>
+        <div class="tags"><span class="tag new">New: printed strip</span></div>
+      </div>
+      <span class="sub" id="strip-sub">58 mm paper, 32 characters a line. The ruler counts up from the tear line.</span>
+      <div class="strip-stage">
+        <div class="ruler" id="ruler" aria-hidden="true"></div>
+        <div class="roll" id="roll"></div>
+      </div>
+      <div id="strip-callout"></div>
+    </div>
+
+    <div class="panel" id="box-view">
+      <div class="panel-head">
+        <h2 id="box-title">Box 3, Section 7, From the Side</h2>
+        <div class="tags"><span class="tag">Today: box, divider, cards</span><span class="tag new">New: slip in the slot</span></div>
+      </div>
+      <span class="sub">Box wall cut away. Card thickness is drawn wider than life so each one reads; heights are to scale.</span>
+      <div id="box-svg-host"></div>
+      <div class="legend" aria-hidden="true">
+        <span><i style="background:var(--bn-surface-2);border:1px solid var(--bn-ink-4)"></i>Card</span>
+        <span><i style="background:var(--slip-paper);border:1px solid var(--bn-ink-4);border-top:4px solid var(--slip-ink)"></i>Slip</span>
+        <span><i style="background:var(--bn-accent-tint-2);border:1px solid var(--bn-accent)"></i>This order's slot</span>
+        <span><i style="background:var(--bn-warn-tint);border:1px solid var(--bn-warn)"></i>Does not match the slip</span>
+      </div>
+      <div id="box-callout"></div>
+    </div>
+  </section>
+
+  <section class="panel bare" id="clear-screen" aria-labelledby="clear-h">
+    <div class="panel-head">
+      <h2 id="clear-h">Clearing Slips Before a Re-Capture</h2>
+      <div class="tags"><span class="tag">Today: Capture screen, nav</span><span class="tag new">New: Clear Slips step</span></div>
+    </div>
+    <span class="sub">A USB scanner types each slip's code into the focused field. One beep: the slip matches an order. Two beeps: it matches nothing.</span>
+    <div class="app">
+      <nav class="nav" aria-label="Banchi">
+        <div class="brand"><i></i><b>banchi</b></div>
+        <div class="nav-group"><a href="#" onclick="return false"><span class="ic"></span><b>Home</b></a></div>
+        <div class="nav-group"><span>Workflow</span>
+          <a href="#" aria-current="page" onclick="return false"><span class="ic"></span><b>Capture</b></a>
+          <a href="#" onclick="return false"><span class="ic"></span><b>Review</b></a>
+          <a href="#" onclick="return false"><span class="ic"></span><b>Pricing</b></a>
+        </div>
+        <div class="nav-group"><span>Sell</span>
+          <a href="#" onclick="return false"><span class="ic"></span><b>Orders</b></a>
+          <a href="#" onclick="return false"><span class="ic"></span><b>Shipping</b></a>
+          <a href="#" onclick="return false"><span class="ic"></span><b>Cards to Pull</b></a>
+        </div>
+        <div class="nav-group"><span>Library</span>
+          <a href="#" onclick="return false"><span class="ic"></span><b>Inventory</b></a>
+          <a href="#" onclick="return false"><span class="ic"></span><b>Slabs</b></a>
+        </div>
+      </nav>
+      <div class="main">
+        <div class="main-head">
+          <h3>Clear Slips</h3>
+          <p id="main-sub"></p>
+        </div>
+        <div class="clear-grid">
+          <div class="sec-list" id="sec-list"></div>
+          <div class="scan-card" id="scan-card"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  // ---------- sample data (all invented) ----------
+  const BOX = { n: 3, name: 'Bulk Rares' };
+  const SEC = { n: 7, name: 'Ember Hollow 150-199' };
+  const base = {
+    kind: 'sold', order: '1234', line: 2, of: 3, name: 'Cinderwyrm', num: '197/165', cond: 'NM', price: '4.25',
+    box: BOX, sec: SEC, card: 12, ofCards: 50, before: 'Mossling 196/165', after: 'Pebblet 198/165', ticked: false,
+  };
+  // The section around the slot: back (left) to front (right). role: card | target | slip | ret | odd
+  const around = (slotKind, extra = {}) => {
+    const names = ['Quillmouse 187/165', 'Lanternmoth 189/165', 'Thistlehorn 190/165', 'Gloamfin 192/165',
+      'Brambleback 193/165', 'Fernkit 195/165', 'Mossling 196/165', '__SLOT__', 'Pebblet 198/165',
+      'Dunehopper 199/165', 'Saltcrest 201/165', 'Ashwing 203/165'];
+    return names.map((nm) => nm === '__SLOT__' ? { t: slotKind, name: 'Cinderwyrm 197/165', ...extra } : { t: 'card', name: nm });
+  };
+
+  const STATES = {
+    run: {
+      tab: 'Print Run',
+      say: 'Orders arrive and the printer runs once: one slip per sold card, in walk order, then a footer with the count. The Fulfiller tears off the first slip and walks to the box it names.',
+      slips: [
+        { ...base, order: '1231', line: 1, of: 1, name: 'Gloamfin', num: '192/165', card: 5, before: 'Thistlehorn 190/165', after: 'Brambleback 193/165', price: '1.10' },
+        { ...base },
+        { ...base, order: '1236', line: 1, of: 2, box: { n: 5, name: 'Mixed Singles' }, sec: { n: 2, name: 'Saltmarsh 001-060' }, card: 31, ofCards: 58, name: 'Reedling', num: '044/098', before: 'Pondwick 043/098', after: 'Marshkin 046/098', price: '0.85' },
+      ],
+      footer: true, scale: 0.5,
+      strip: { title: 'One Run on the Roll', sub: 'Half size here, so the whole run fits. Switch to 2x for true size.' },
+      box: { items: around('target'), title: 'Box 3, Section 7, Before the Pull' },
+      boxCallout: { tone: '', text: 'The card to pull is still in its slot. The slip names the two cards on either side of it, so the Fulfiller finds it without counting.' },
+      clear: 'waiting',
+    },
+    normal: {
+      tab: 'Normal Slip',
+      say: 'Both neighbors are where the slip says. The Fulfiller swaps the card for the slip, tears at the dashed line and leaves the tall half standing. The stub rides with the card to the mailer.',
+      slips: [{ ...base }],
+      strip: { title: 'The Slip, Order 1234', sub: '58 mm paper, 32 characters a line. The ruler counts up from the tear line.' },
+      box: { items: around('slip', { order: '1234-2' }) },
+      boxCallout: { tone: 'ok', text: 'The black band stands 12 mm above the cards, and darker than any white divider tab. The slot reads as sold, not as a gap.' },
+      clear: 'normal',
+    },
+    neighbor: {
+      tab: 'Neighbor Moved',
+      say: 'The card in front of the slot is not Mossling. The Fulfiller counts from the divider to Card 12, checks the name and number before pulling, and ticks the box on the stub. That section is cleared first at the next re-capture.',
+      slips: [{ ...base, ticked: true }],
+      strip: { title: 'The Slip, Neighbor Ticked', sub: 'The tick is a pen mark on the stub. Version 2 reads it when the stub is scanned at packing.' },
+      box: { items: (() => {
+        const a = around('slip', { order: '1234-2' });
+        // Mossling sits two places back, so Fernkit and a stray card stand beside the slot
+        a[6] = { t: 'odd', name: 'Fernkit 195/165' }; a[5] = { t: 'card', name: 'Mossling 196/165' };
+        return a; })() },
+      boxCallout: { tone: 'warn', text: 'The slip says the card before is Mossling. Fernkit stands there. Card 12, counted from the divider, is still the right slot once its name and number match.' },
+      clear: 'neighbor',
+    },
+    return: {
+      tab: 'Return',
+      say: 'A buyer sends Order 1201 back. The Fulfiller stands the card directly in front of its own slip and leaves the slip in place. Nobody touches a screen. At re-capture, a card in front of its own slip counts as restored.',
+      slips: [{ ...base, order: '1201', line: 1, of: 1, price: '3.90' }],
+      strip: { title: 'The Slip Still Standing', sub: 'The same slip printed for Order 1201. It stays in the slot.' },
+      box: { items: (() => { const a = around('slip', { order: '1201-1' }); a.splice(8, 0, { t: 'ret', name: 'Cinderwyrm 197/165' }); return a; })() },
+      boxCallout: { tone: 'ok', text: 'The returned card stands in front of its slip, toward you. The pair says: this card was sold, came back, and belongs here.' },
+      clear: 'return',
+    },
+    mystery: {
+      tab: 'Mystery Slip',
+      say: 'A slip whose code matches no open or shipped order. It goes to Review with the photo of that slot. Banchi does not guess whether the card left the house.',
+      slips: [{ ...base, order: '1188', line: 1, of: 1, name: 'Ashwing', num: '203/165', card: 18, before: 'Saltcrest 201/165', after: 'Emberlark 204/165', price: '2.40' }],
+      strip: { title: 'The Slip Found in the Box', sub: 'Order 1188 is not open and was never shipped.' },
+      box: { items: (() => { const a = around('card'); a[10] = { t: 'mystery', name: 'Ashwing 203/165', order: '1188-1' }; a[11] = { t: 'card', name: 'Emberlark 204/165' }; return a; })() },
+      boxCallout: { tone: 'warn', text: 'No order stands behind this slip. The card may be in a mailer, on the desk, or never pulled. Review decides with the slot photo.' },
+      clear: 'mystery',
+    },
+    cancel: {
+      tab: 'Canceled Order',
+      say: 'Order 1240 is canceled. A CANCELED strip prints with the same neighbor lines. If the card was pulled, it goes back in front of its slip, as a return does. If it was never pulled, both strips go in the bin.',
+      slips: [{ ...base, kind: 'cancel', order: '1240', line: 1, of: 1 }],
+      strip: { title: 'The Cancel Strip', sub: 'Short, no tear line. It points at the same slot.' },
+      box: { items: (() => { const a = around('slip', { order: '1240-1' }); a.splice(8, 0, { t: 'ret', name: 'Cinderwyrm 197/165' }); return a; })() },
+      boxCallout: { tone: '', text: 'The card was already pulled, so it goes back in front of its slip. Re-capture reads it as restored.' },
+      clear: 'cancel',
+    },
+    slab: {
+      tab: 'Slab',
+      say: 'The strip says SLAB and the last four digits of the cert, which the Fulfiller compares before pulling. A slab is about 135 mm tall, so a 100 mm slip sinks below the slab tops in a slab box.',
+      slips: [{ ...base, kind: 'slab', order: '1238', line: 1, of: 1, name: 'Stormcrown', num: '011/120', cond: 'PSA 9', cert: '4417',
+        box: { n: 9, name: 'Slabs' }, sec: { n: 1, name: 'Slabs A-M' }, card: 4, ofCards: 22, before: 'Rimefang 009/120', after: 'Sunwarden 014/120', price: '86.00' }],
+      strip: { title: 'The Slab Strip', sub: 'The cert line is printed on both halves.' },
+      box: { slab: true, title: 'Box 9, Slabs, From the Side', items: [
+        { t: 'slab', name: 'Ironpetal' }, { t: 'slab', name: 'Glowmane' }, { t: 'slab', name: 'Rimefang 009/120' },
+        { t: 'slip', name: 'Stormcrown 011/120', order: '1238-1' },
+        { t: 'slab', name: 'Sunwarden 014/120' }, { t: 'slab', name: 'Tidecaller' }, { t: 'slab', name: 'Wispfox' }] },
+      boxCallout: { tone: 'warn', text: 'The slip stands 35 mm below the slab tops, so it holds nothing you can see. In a box of slabs the stub is enough (question 2).' },
+      clear: 'slab',
+    },
+  };
+  const ORDER = ['run', 'normal', 'neighbor', 'return', 'mystery', 'cancel', 'slab'];
+  const ALIAS = { neighbour: 'neighbor', cancelled: 'cancel', canceled: 'cancel', print: 'run', roll: 'run' };
+
+  // ---------- clearing screen data ----------
+  const row = (o, name, num, card, status) => ({ o, name, num, card, status });
+  const CLEAR = {
+    waiting: { done: [], rows: [row('1219-1', 'Brambleback', '193/165', 5, null), row('1222-3', 'Saltcrest', '201/165', 14, null), row('1227-1', 'Fernkit', '195/165', 9, null)] },
+    normal: { rows: [row('1219-1', 'Brambleback', '193/165', 5, 'shipped'), row('1222-3', 'Saltcrest', '201/165', 14, 'shipped'), row('1234-2', 'Cinderwyrm', '197/165', 12, null)] },
+    neighbor: { flag: true, rows: [row('1219-1', 'Brambleback', '193/165', 5, 'shipped'), row('1234-2', 'Cinderwyrm', '197/165', 12, 'shippedOff'), row('1222-3', 'Saltcrest', '201/165', 14, null)] },
+    return: { rows: [row('1201-1', 'Cinderwyrm', '197/165', 12, 'restored'), row('1222-3', 'Saltcrest', '201/165', 14, 'shipped'), row('1219-1', 'Brambleback', '193/165', 5, null)] },
+    mystery: { rows: [row('1219-1', 'Brambleback', '193/165', 5, 'shipped'), row('1188-1', 'Ashwing', '203/165', 18, 'mystery'), row('1222-3', 'Saltcrest', '201/165', 14, null)] },
+    cancel: { rows: [row('1240-1', 'Cinderwyrm', '197/165', 12, 'canceled'), row('1219-1', 'Brambleback', '193/165', 5, 'shipped'), row('1222-3', 'Saltcrest', '201/165', 14, null)] },
+    slab: { empty: true, rows: [] },
+  };
+  const STATUS = {
+    shipped: { pill: 'ok', word: 'Shipped', say: 'Order {o}, shipped. Recycle the slip.', beeps: 1, tone: 'ok' },
+    shippedOff: { pill: 'warn', word: 'Neighbor Off', say: 'Order {o}, shipped. Its stub was ticked: check this section’s order as you re-capture.', beeps: 1, tone: 'warn' },
+    restored: { pill: 'accent', word: 'Restored', say: 'Order {o} came back. Leave the card in the slot; re-capture counts it on hand.', beeps: 1, tone: 'ok' },
+    canceled: { pill: 'accent', word: 'Restored', say: 'Order {o} was canceled. Leave the card in the slot; re-capture counts it on hand.', beeps: 1, tone: 'ok' },
+    mystery: { pill: 'danger', word: 'No Order', say: 'No order matches this slip. It went to Review with this slot’s photo.', beeps: 2, tone: 'warn' },
+  };
+
+  // ---------- state from the hash ----------
+  const root = document.documentElement;
+  const params = () => new URLSearchParams(location.hash.slice(1));
+  let state = 'normal';
+  let scale = 1;
+  let clearRows = [];
+  let lastAnswer = null;
+  const opts = { thumb: 'on', tick: 'on', band: 'on' };
+  const themeDefault = () => (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+
+  function readHash() {
+    const p = params();
+    const s = (p.get('state') || p.get('s') || 'normal').toLowerCase();
+    state = STATES[s] ? s : (ALIAS[s] || 'normal');
+    const t = p.get('t');
+    root.dataset.theme = t === 'dark' || t === 'light' ? t : themeDefault();
+    scale = p.get('scale') === '2' ? 2 : 1;
+    for (const k of Object.keys(opts)) { opts[k] = p.get(k) === 'off' ? 'off' : 'on'; root.dataset['opt' + k[0].toUpperCase() + k.slice(1)] = opts[k]; }
+  }
+  function writeHash() {
+    const p = new URLSearchParams();
+    p.set('state', state);
+    const t = root.dataset.theme; if (t !== themeDefault()) p.set('t', t);
+    if (scale === 2) p.set('scale', '2');
+    for (const [k, v] of Object.entries(opts)) if (v === 'off') p.set(k, 'off');
+    history.replaceState(null, '', '#' + p.toString());
+  }
+
+  // ---------- the strip ----------
+  const pad = (a, b, w = 32) => a + ' '.repeat(Math.max(1, w - a.length - b.length)) + b;
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const L = (text, cls = '') => `<div class="ln ${cls}">${esc(text)}</div>`;
+
+  function slipHTML(s) {
+    const id = `#${s.order}-${s.line}`;
+    const where = [
+      L(pad(`BOX ${s.box.n}`, s.box.name.toUpperCase()), 'b'),
+      L(`SECTION ${s.sec.n}, CARD ${s.card} OF ${s.ofCards}`, 'b'),
+      L(`(${s.sec.name.toUpperCase()})`),
+      L(`before: ${s.before}`),
+      L(`after : ${s.after}`),
+    ].join('');
+    const qr = `<div class="qr-row"><div class="qr" role="img" aria-label="QR placeholder, no code"><span>QR<br>FAKE</span></div>
+      <div>${L(id, 'big')}${L('slip id')}</div></div>`;
+    if (s.kind === 'cancel') {
+      return `<div class="paper"><div style="padding:calc(1.2*var(--mm)) 0 calc(4*var(--mm))">
+        <div class="band"><span>CANCELED ${id}</span></div>
+        ${L('PUT THE CARD BACK', 'big')}
+        ${L(`${s.name} ${s.num}  ${s.cond}`)}
+        ${where}${qr}
+        ${L('Pulled: stand it in front of')}
+        ${L('its slip. Not pulled: bin both.')}
+      </div></div>`;
+    }
+    const slabLine = s.kind === 'slab' ? L(`SLAB  CERT ...${s.cert}  CHECK`, 'b') : '';
+    return `<div class="paper">
+      <div class="tall">
+        <div class="band"><span>SOLD ${id}</span></div>
+        ${L('SOLD - LEAVE IN SLOT', 'big')}
+        ${where}${slabLine}${qr}
+        <div class="gapmm"></div>
+      </div>
+      <div class="tear"><span>tear here</span></div>
+      <div class="stub">
+        ${L(pad(`ORDER #${s.order}`, `CARD ${s.line} OF ${s.of}`), 'b')}
+        ${L(pad(`${s.name} ${s.num}`, s.cond))}
+        ${slabLine}
+        <div class="ln">${esc(pad('$' + s.price, '', 15))}<span class="tick-part"><span class="tickbox ${s.ticked ? 'ticked' : ''}" role="img" aria-label="${s.ticked ? 'ticked' : 'empty'} box"></span> neighbor off</span></div>
+        <div class="thumb-row"><canvas class="thumb" aria-hidden="true" data-seed="${s.name}"></canvas></div>
+      </div>
+    </div>`;
+  }
+
+  // Ordered (Bayer 8x8) dither of an invented card face: frame, art window, a round creature, text bars.
+  const BAYER = [0,32,8,40,2,34,10,42,48,16,56,24,50,18,58,26,12,44,4,36,14,46,6,38,60,28,52,20,62,30,54,22,3,35,11,43,1,33,9,41,51,19,59,27,49,17,57,25,15,47,7,39,13,45,5,37,63,31,55,23,61,29,53,21];
+  function drawThumb(cv) {
+    // one dither dot per device pixel: real 203 dpi dots are finer than the screen at true size
+    const box = cv.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.max(60, Math.round(box.width * dpr)); cv.height = Math.round(cv.width * 335 / 240);
+    const ctx = cv.getContext('2d'); const W = cv.width, H = cv.height;
+    const sx = 240 / W;
+    let seed = 0; for (const ch of cv.dataset.seed) seed = (seed * 31 + ch.charCodeAt(0)) % 997;
+    const lum = (x, y) => {
+      if (x < 8 || y < 8 || x > 231 || y > 326) return 0.15;               // printed border
+      if (y < 30) return x < 150 ? 0.75 : 0.55;                                 // name bar
+      if (y >= 34 && y < 180 && x >= 16 && x < 224) {
+        const ex = 120 + (seed % 40) - 20;
+        if (Math.hypot(x - ex + 14, y - 98) < 6 || Math.hypot(x - ex - 14, y - 98) < 6) return 0.02; // eyes
+        const cx = 120 + (seed % 40) - 20, cy = 110, r = 46 + (seed % 12);
+        const d = Math.hypot(x - cx, (y - cy) * 1.1);
+        if (d < r) return 0.25 + 0.5 * (d / r) * (x > cx ? 1 : 0.6);             // creature, lit from the left
+        if (y > 150) return 0.45;                                               // ground
+        return 0.9 - (y - 34) / 300;                                            // sky
+      }
+      if (y >= 190 && y < 300) { const band = Math.floor((y - 190) / 14); return (band % 2 === 0 && x > 20 && x < 60 + ((band * 53 + seed) % 150)) ? 0.3 : 0.92; }
+      return 0.85;
+    };
+    const img = ctx.createImageData(W, H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const on = lum(x * sx, y * sx) * 64 < BAYER[(y % 8) * 8 + (x % 8)] + 0.5;
+      const i = (y * W + x) * 4; const v = on ? 20 : 251;
+      img.data[i] = v; img.data[i + 1] = v; img.data[i + 2] = on ? 20 : 247; img.data[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  function renderStrip(S) {
+    const k = (S.scale || 1) * scale;
+    root.style.setProperty('--mm', k + 'mm');
+    document.getElementById('strip-title').textContent = S.strip.title;
+    document.getElementById('strip-sub').textContent = S.strip.sub;
+    let html = S.slips.map(slipHTML).join('');
+    if (S.footer) html += `<div class="paper"><div style="padding:calc(3*var(--mm)) 0 calc(5*var(--mm))">${L('3 SLIPS PRINTED', 'big')}${L('Walk: Box 3, then Box 5')}${L('Orders 1231, 1234, 1236')}</div></div>`;
+    document.getElementById('roll').innerHTML = html;
+    document.querySelectorAll('canvas.thumb').forEach(drawThumb);
+    const ruler = document.getElementById('ruler');
+    const firstCancel = S.slips[0].kind === 'cancel';
+    ruler.style.display = firstCancel ? 'none' : '';
+    ruler.innerHTML = '<span style="bottom:0">tear 0</span><span style="bottom:50%">50</span><span class="card-top" style="bottom:88%">card top 88</span><span style="bottom:100%">100 mm</span>';
+    const c = document.getElementById('strip-callout');
+    c.innerHTML = state === 'mystery' ? '<div class="callout warn">Scanned at the clearing step: no open or shipped order has this slip id.</div>'
+      : state === 'return' ? '<div class="callout">No new strip prints for a return. The card goes back in front of this slip.</div>' : '';
+  }
+
+  // ---------- the side view (SVG in millimetres) ----------
+  function renderBox(S) {
+    const B = S.box; const slab = !!B.slab;
+    const pitch = slab ? 9 : 6, cardW = slab ? 7 : 4.2, cardH = slab ? 135 : 88;
+    const left = 10, floor = slab ? 172 : 128, top = slab ? 0 : 0;
+    const n = B.items.length; const W = left + 6 + n * pitch + 22; const H = floor + 26;
+    const tierY = (i) => [floor - 104, floor - 112, floor - 120][i];
+    let s = `<svg class="box-svg" style="max-width:${Math.round(W * 4.2)}px" viewBox="0 ${top} ${W} ${H}" role="img" aria-label="Side view of the section with the slip in its slot">`;
+    // floor and the cut-away wall
+    s += `<line x1="2" y1="${floor}" x2="${W - 2}" y2="${floor}" stroke="var(--bn-ink-3)" stroke-width="0.8"/>`;
+    s += `<line x1="2" y1="${floor - (slab ? 140 : 96)}" x2="${W - 2}" y2="${floor - (slab ? 140 : 96)}" stroke="var(--bn-ink-4)" stroke-width="0.4" stroke-dasharray="2 1.5"/>`;
+    s += `<text x="${W - 3}" y="${floor - (slab ? 141.5 : 97.5)}" font-size="3" text-anchor="end" fill="var(--bn-ink-3)">box wall, cut away</text>`;
+    s += `<text x="3" y="${floor + 7}" font-size="3.4" fill="var(--bn-ink-3)">Back</text><text x="${W - 3}" y="${floor + 7}" font-size="3.4" text-anchor="end" fill="var(--bn-ink-3)">Front, toward you</text>`;
+    // divider: edge-on, taller than the cards, white tab
+    if (!slab) {
+      s += `<rect x="${left}" y="${floor - 99}" width="1.6" height="99" fill="var(--bn-surface)" stroke="var(--bn-ink-3)" stroke-width="0.4"/>`;
+      s += `<text x="${left + 0.8}" y="${floor + 14}" font-size="3" text-anchor="middle" fill="var(--bn-ink-3)">divider</text>`;
+    }
+    let tier = 0;
+    B.items.forEach((it, i) => {
+      const x = left + 6 + i * pitch;
+      const labelAt = (txt, anchor, cls, y, tone) => {
+        s += `<line x1="${x + cardW / 2}" y1="${y + 1.2}" x2="${x + cardW / 2}" y2="${floor - (it.t === 'slip' || it.t === 'mystery' ? 100 : cardH) - 0.8}" stroke="${tone}" stroke-width="0.35"/>`;
+        s += `<text x="${x + cardW / 2}" y="${y}" font-size="3.4" text-anchor="${anchor}" class="${cls}" fill="${tone}">${esc(txt)}</text>`;
+      };
+      if (it.t === 'slip' || it.t === 'mystery') {
+        const sw = 2, sx = x + (cardW - sw) / 2;
+        const edge = it.t === 'mystery' ? 'var(--bn-warn)' : 'var(--bn-accent)';
+        s += `<rect x="${x - 0.8}" y="${floor - (slab ? cardH : 88) - 2}" width="${cardW + 1.6}" height="${(slab ? cardH : 88) + 2}" fill="${it.t === 'mystery' ? 'var(--bn-warn-tint)' : 'var(--bn-accent-tint-2)'}" rx="0.6"/>`;
+        s += `<rect x="${sx}" y="${floor - 100}" width="${sw}" height="100" fill="var(--slip-paper)" stroke="var(--bn-ink-3)" stroke-width="0.35"/>`;
+        s += `<rect x="${sx}" y="${floor - 100}" width="${sw}" height="11" fill="var(--slip-ink)"/>`;
+        const lbl = it.t === 'mystery' ? `slip #${it.order}, no order` : `slip #${it.order}`;
+        labelAt(lbl, 'middle', 'mono', slab ? floor - 166 : tierY(2), edge);
+      } else if (it.t === 'slab') {
+        s += `<rect x="${x}" y="${floor - cardH}" width="${cardW}" height="${cardH}" rx="0.8" fill="var(--bn-surface-2)" stroke="var(--bn-ink-4)" stroke-width="0.4"/>`;
+        s += `<rect x="${x}" y="${floor - cardH}" width="${cardW}" height="20" rx="0.8" fill="var(--bn-surface-3)" stroke="var(--bn-ink-4)" stroke-width="0.4"/>`;
+      } else {
+        const fill = it.t === 'target' ? 'var(--bn-accent-tint-2)' : it.t === 'odd' ? 'var(--bn-warn-tint)' : it.t === 'ret' ? 'var(--bn-ok-tint)' : 'var(--bn-surface-2)';
+        const stroke = it.t === 'target' ? 'var(--bn-accent)' : it.t === 'odd' ? 'var(--bn-warn)' : it.t === 'ret' ? 'var(--bn-ok)' : 'var(--bn-ink-4)';
+        s += `<rect x="${x}" y="${floor - cardH}" width="${cardW}" height="${cardH}" rx="0.5" fill="${fill}" stroke="${stroke}" stroke-width="${it.t === 'card' ? 0.35 : 0.6}"/>`;
+        if (it.t === 'target') labelAt('pull: Cinderwyrm 197/165', 'middle', '', tierY(2), 'var(--bn-accent)');
+        if (it.t === 'ret') labelAt('returned card', 'start', '', tierY(1), 'var(--bn-ok)');
+        if (it.t === 'odd') labelAt('Fernkit: slip expected Mossling', 'end', '', tierY(1), 'var(--bn-warn)');
+      }
+      // neighbor labels around the slot in the long-box states
+      const next = B.items[i + 1], prev = B.items[i - 1];
+      const isSlot = (o) => o && (o.t === 'slip' || o.t === 'target');
+      if (!slab && it.t === 'card' && isSlot(next) && state !== 'mystery') labelAt(`before: ${it.name}`, 'end', '', tierY(0), 'var(--bn-ink-2)');
+      if (!slab && it.t === 'card' && (isSlot(prev) || (prev && prev.t === 'ret' && isSlot(B.items[i - 2]))) && state !== 'mystery') labelAt(`after: ${it.name}`, 'start', '', tierY(0), 'var(--bn-ink-2)');
+      if (slab && (it.name || '').includes('/') && it.t === 'slab') labelAt(it.name, i < 3 ? 'end' : 'start', '', floor - 154, 'var(--bn-ink-2)');
+    });
+    if (!slab) {
+      s += `<line x1="1" y1="${floor - 88}" x2="${left - 1}" y2="${floor - 88}" stroke="var(--bn-accent)" stroke-width="0.4"/>`;
+      s += `<text x="1" y="${floor - 89.5}" font-size="2.8" fill="var(--bn-accent)">88</text>`;
+      s += `<text x="1" y="${floor - 101.5}" font-size="2.8" fill="var(--bn-ink-3)">100</text>`;
+      s += `<line x1="1" y1="${floor - 100}" x2="${left - 1}" y2="${floor - 100}" stroke="var(--bn-ink-3)" stroke-width="0.4"/>`;
+    }
+    s += '</svg>';
+    document.getElementById('box-svg-host').innerHTML = s;
+    document.getElementById('box-title').textContent = B.title || 'Box 3, Section 7, From the Side';
+    const c = S.boxCallout; document.getElementById('box-callout').innerHTML = `<div class="callout ${c.tone}">${esc(c.text)}</div>`;
+  }
+
+  // ---------- the clearing screen ----------
+  function renderClear() {
+    const C = CLEAR[STATES[state].clear];
+    const slab = state === 'slab';
+    const secs = [
+      { key: 'b3s7', where: 'Box 3, Section 7', what: slab ? '3 slips standing' : `${C.rows.length} slips standing`, flag: !!C.flag, cur: !slab },
+      { key: 'b5s2', where: 'Box 5, Section 2', what: '2 slips standing', cur: false },
+      { key: 'b9', where: 'Box 9, Slabs', what: 'No slips in a slab box', cur: slab },
+    ];
+    secs.sort((a, b) => (b.flag ? 1 : 0) - (a.flag ? 1 : 0));
+    document.getElementById('sec-list').innerHTML = `<h4>Sections with Slips</h4>` + secs.map((x) => `
+      <div class="sec" aria-current="${x.cur}"><span class="where">${x.where}</span>${x.flag ? '<span class="pill warn">Neighbor Off</span>' : '<span></span>'}<span class="what">${x.what}${x.flag ? '. Clear this one first.' : ''}</span></div>`).join('');
+    document.getElementById('main-sub').textContent = slab ? 'Box 9, Slabs, before you re-capture it' : 'Box 3, Section 7 (Ember Hollow 150-199), before you re-capture it';
+    const card = document.getElementById('scan-card');
+    if (slab) {
+      card.innerHTML = `<div class="empty"><p>This box holds no slips. Check each sold slab's cert against its stub, then re-capture.</p>
+        <button class="btn primary">Start Re-Capture</button></div>`;
+      return;
+    }
+    const left = clearRows.filter((r) => !r.status).length;
+    const ans = lastAnswer;
+    const answer = ans
+      ? `<div class="answer ${STATUS[ans.status].tone}" aria-live="polite"><span class="beeps" aria-label="${STATUS[ans.status].beeps === 1 ? 'one beep' : 'two beeps'}">${'<i></i>'.repeat(STATUS[ans.status].beeps)}</span><span>${esc(STATUS[ans.status].say.replace('{o}', ans.o.split('-')[0]))}</span></div>`
+      : `<div class="answer" aria-live="polite">Lift each slip out of the section and scan it.</div>`;
+    card.innerHTML = `
+      <div class="scan-top">
+        <div class="scan-field armed" role="textbox" aria-label="Scan a slip"><span class="caret"></span>Scan a slip</div>
+        <button class="btn mock" id="sim" ${left ? '' : 'aria-disabled="true" title="Every slip is scanned"'}>Simulate a Scan</button>
+      </div>
+      ${answer}
+      <div class="slips">${clearRows.map((r) => {
+        const st = r.status ? STATUS[r.status] : null;
+        const end = st ? `<span class="pill ${st.pill}">${st.word}</span>${r.status === 'mystery' ? '<button class="btn">Open in Review</button>' : ''}` : '<span class="pill">Waiting</span>';
+        return `<div class="slip-row ${r.just ? 'just' : ''}"><span class="ord">#${r.o}</span>
+          <span class="card">${r.name} <span class="num">${r.num}</span><small>Section 7, Card <span class="num">${r.card}</span> when printed</small></span>
+          <span class="end">${end}</span></div>`; }).join('')}</div>
+      <div class="foot">
+        <span class="count" id="clear-count"><span class="num">${clearRows.length - left}</span> of <span class="num">${clearRows.length}</span> slips scanned${left ? `. Scan the ${left > 1 ? left + ' waiting slips' : 'waiting slip'} to re-capture.` : '.'}</span>
+        <button class="btn primary" aria-describedby="clear-count"${left ? `aria-disabled="true" title="Scan the ${left} waiting slip${left > 1 ? 's' : ''} first"` : ''}>Start Re-Capture</button>
+      </div>`;
+    clearRows.forEach((r) => { r.just = false; });
+    const sim = document.getElementById('sim');
+    sim.onclick = () => {
+      const r = clearRows.find((x) => !x.status); if (!r) return;
+      r.status = 'shipped'; r.just = true; lastAnswer = r; renderClear();
+    };
+  }
+
+  // ---------- wiring ----------
+  const tabs = document.getElementById('state-tabs');
+  tabs.innerHTML = ORDER.map((k) => `<button data-state="${k}" aria-pressed="false">${STATES[k].tab}</button>`).join('');
+  tabs.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state = b.dataset.state; render(true); });
+  document.querySelectorAll('[data-scale]').forEach((b) => b.addEventListener('click', () => { scale = +b.dataset.scale; render(false); }));
+  document.querySelectorAll('[data-theme-set]').forEach((b) => b.addEventListener('click', () => { root.dataset.theme = b.dataset.themeSet; render(false); }));
+  document.querySelectorAll('[data-opt]').forEach((b) => b.addEventListener('click', () => {
+    const k = b.dataset.opt; opts[k] = opts[k] === 'on' ? 'off' : 'on'; root.dataset['opt' + k[0].toUpperCase() + k.slice(1)] = opts[k]; render(false);
+  }));
+
+  function render(resetClear) {
+    const S = STATES[state];
+    if (resetClear) {
+      clearRows = (CLEAR[S.clear].rows || []).map((r) => ({ ...r }));
+      lastAnswer = [...clearRows].reverse().find((r) => r.status) || null;
+    }
+    tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.state === state)));
+    document.querySelectorAll('[data-scale]').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.scale === scale)));
+    document.querySelectorAll('[data-theme-set]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themeSet === root.dataset.theme)));
+    document.querySelectorAll('[data-opt]').forEach((b) => b.setAttribute('aria-pressed', String(opts[b.dataset.opt] === 'on')));
+    document.getElementById('state-say').textContent = S.say;
+    renderStrip(S); renderBox(S); renderClear(); writeHash();
+  }
+  readHash(); render(true);
+  addEventListener('hashchange', () => { readHash(); render(true); });
+})();
+</script>
+</body>
+</html>
