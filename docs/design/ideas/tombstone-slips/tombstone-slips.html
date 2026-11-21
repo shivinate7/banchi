@@ -129,6 +129,7 @@ button { font: inherit; color: inherit; }
   box-shadow: var(--bn-shadow-1); padding: var(--bn-5); display: flex; flex-direction: column; gap: var(--bn-4);
   min-width: 0;
 }
+.panel.bare { background: transparent; box-shadow: none; padding: 0; }
 .panel-head { display: flex; flex-wrap: wrap; gap: var(--bn-2); align-items: baseline; justify-content: space-between; }
 .panel h2 { margin: 0; font: 700 var(--bn-fs-xl)/var(--bn-lh-snug) var(--bn-font-display); }
 .panel .sub { color: var(--bn-ink-3); font-size: var(--bn-fs-md); }
@@ -250,7 +251,7 @@ html[data-opt-band='off'] .band span { visibility: hidden; }
   color: var(--bn-ink-2); text-decoration: none; font-size: var(--bn-fs-md);
 }
 .nav a .ic { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid currentColor; opacity: .7; flex: none; }
-.nav a[aria-current='page'] { background: var(--bn-accent-tint); color: var(--bn-accent); font-weight: 600; }
+.nav a[aria-current='page'] { background: var(--bn-accent-tint); color: var(--bn-pill-ink-accent); font-weight: 600; }
 .main { padding: var(--bn-6); display: flex; flex-direction: column; gap: var(--bn-5); min-width: 0; }
 .main-head { display: flex; flex-wrap: wrap; gap: var(--bn-3); align-items: baseline; justify-content: space-between; }
 .main-head h3 { margin: 0; font: 700 var(--bn-fs-3xl)/var(--bn-lh-tight) var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
@@ -262,7 +263,6 @@ html[data-opt-band='off'] .band span { visibility: hidden; }
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--bn-0-5) var(--bn-2); align-items: center;
   padding: var(--bn-2); border-radius: var(--bn-r); border: 0; background: transparent; text-align: left; cursor: pointer;
 }
-.sec:hover { background: var(--bn-hover); }
 .sec[aria-current='true'] { background: var(--bn-accent-tint); }
 .sec .where { font-weight: 600; font-size: var(--bn-fs-base); }
 .sec .what { grid-column: 1 / -1; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
@@ -410,7 +410,7 @@ html[data-opt-band='off'] .band span { visibility: hidden; }
     </div>
   </section>
 
-  <section class="panel" id="clear-screen" aria-labelledby="clear-h">
+  <section class="panel bare" id="clear-screen" aria-labelledby="clear-h">
     <div class="panel-head">
       <h2 id="clear-h">Clearing Slips Before a Re-Capture</h2>
       <div class="tags"><span class="tag">Today: Capture screen, nav</span><span class="tag new">New: Clear Slips step</span></div>
@@ -716,10 +716,10 @@ html[data-opt-band='off'] .band span { visibility: hidden; }
         s += `<text x="${x + cardW / 2}" y="${y}" font-size="3.4" text-anchor="${anchor}" class="${cls}" fill="${tone}">${esc(txt)}</text>`;
       };
       if (it.t === 'slip' || it.t === 'mystery') {
-        const sw = 1.4, sx = x + (cardW - sw) / 2;
+        const sw = 2, sx = x + (cardW - sw) / 2;
         const edge = it.t === 'mystery' ? 'var(--bn-warn)' : 'var(--bn-accent)';
-        s += `<rect x="${x - 0.8}" y="${floor - (slab ? cardH : 88) - 2}" width="${cardW + 1.6}" height="${(slab ? cardH : 88) + 2}" fill="${it.t === 'mystery' ? 'var(--bn-warn-tint)' : 'var(--bn-accent-tint)'}" rx="0.6"/>`;
-        s += `<rect x="${sx}" y="${floor - 100}" width="${sw}" height="100" fill="var(--slip-paper)" stroke="var(--bn-ink-4)" stroke-width="0.25"/>`;
+        s += `<rect x="${x - 0.8}" y="${floor - (slab ? cardH : 88) - 2}" width="${cardW + 1.6}" height="${(slab ? cardH : 88) + 2}" fill="${it.t === 'mystery' ? 'var(--bn-warn-tint)' : 'var(--bn-accent-tint-2)'}" rx="0.6"/>`;
+        s += `<rect x="${sx}" y="${floor - 100}" width="${sw}" height="100" fill="var(--slip-paper)" stroke="var(--bn-ink-3)" stroke-width="0.35"/>`;
         s += `<rect x="${sx}" y="${floor - 100}" width="${sw}" height="11" fill="var(--slip-ink)"/>`;
         const lbl = it.t === 'mystery' ? `slip #${it.order}, no order` : `slip #${it.order}`;
         labelAt(lbl, 'middle', 'mono', slab ? floor - 166 : tierY(2), edge);
@@ -764,7 +764,7 @@ html[data-opt-band='off'] .band span { visibility: hidden; }
     ];
     secs.sort((a, b) => (b.flag ? 1 : 0) - (a.flag ? 1 : 0));
     document.getElementById('sec-list').innerHTML = `<h4>Sections with Slips</h4>` + secs.map((x) => `
-      <button class="sec" aria-current="${x.cur}"><span class="where">${x.where}</span>${x.flag ? '<span class="pill warn">Neighbor Off</span>' : '<span></span>'}<span class="what">${x.what}${x.flag ? '. Clear this one first.' : ''}</span></button>`).join('');
+      <div class="sec" aria-current="${x.cur}"><span class="where">${x.where}</span>${x.flag ? '<span class="pill warn">Neighbor Off</span>' : '<span></span>'}<span class="what">${x.what}${x.flag ? '. Clear this one first.' : ''}</span></div>`).join('');
     document.getElementById('main-sub').textContent = slab ? 'Box 9, Slabs, before you re-capture it' : 'Box 3, Section 7 (Ember Hollow 150-199), before you re-capture it';
     const card = document.getElementById('scan-card');
     if (slab) {
@@ -790,8 +790,8 @@ html[data-opt-band='off'] .band span { visibility: hidden; }
           <span class="card">${r.name} <span class="num">${r.num}</span><small>Section 7, Card <span class="num">${r.card}</span> when printed</small></span>
           <span class="end">${end}</span></div>`; }).join('')}</div>
       <div class="foot">
-        <span class="count"><span class="num">${clearRows.length - left}</span> of <span class="num">${clearRows.length}</span> slips scanned</span>
-        <button class="btn primary" ${left ? `aria-disabled="true" title="Scan the ${left} waiting slip${left > 1 ? 's' : ''} first"` : ''}>Start Re-Capture</button>
+        <span class="count" id="clear-count"><span class="num">${clearRows.length - left}</span> of <span class="num">${clearRows.length}</span> slips scanned${left ? `. Scan the ${left > 1 ? left + ' waiting slips' : 'waiting slip'} to re-capture.` : '.'}</span>
+        <button class="btn primary" aria-describedby="clear-count"${left ? `aria-disabled="true" title="Scan the ${left} waiting slip${left > 1 ? 's' : ''} first"` : ''}>Start Re-Capture</button>
       </div>`;
     clearRows.forEach((r) => { r.just = false; });
     const sim = document.getElementById('sim');
