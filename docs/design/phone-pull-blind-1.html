@@ -75,7 +75,7 @@ a { color: var(--c-act); }
 /* ---------- page chrome around the devices ---------- */
 .sample { position: sticky; top: 0; z-index: 10; background: var(--c-sample); color: var(--c-sample-ink);
   border-bottom: 1px solid var(--c-line); padding: var(--space-2) var(--space-4); font: var(--t-subhead); text-align: center; }
-.page { max-width: 1280px; margin-inline: auto; padding: var(--space-6) var(--space-4) var(--space-12);
+.page { max-width: 1340px; margin-inline: auto; padding: var(--space-6) var(--space-4) var(--space-12);
   display: flex; flex-direction: column; gap: var(--space-10); }
 .intro { display: flex; flex-direction: column; gap: var(--space-3); max-width: 70ch; }
 .intro h1 { font: var(--t-large); margin: 0; }
@@ -182,6 +182,7 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
   background: repeating-linear-gradient(hsl(var(--h) 25% 70%) 0 2px, transparent 2px 7px); opacity: .9; }
 .photo .badge { position: absolute; right: 4px; bottom: 4px; font: 600 9px/11px -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", sans-serif; background: rgba(0,0,0,.55);
   color: #fff; padding: 1px 4px; border-radius: 3px; }
+.photo.sm .nm { display: none; }
 .photo.lg .nm { font-size: 15px; line-height: 18px; }
 .photo.xl .nm { font-size: 20px; line-height: 24px; }
 
@@ -265,6 +266,7 @@ summary { min-height: 44px; display: flex; align-items: center; justify-content:
 .divd span { position: absolute; left: 3px; top: 1px; font: var(--t-caption2); color: var(--c-text-2); white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 6px); }
 .dot { position: absolute; left: 50%; width: 44px; height: 44px; translate: -50% -50%; display: grid; place-items: center; z-index: 1; }
+.map.labelled .dot { left: calc(100% - 18px); }
 .dot::before { content: ""; width: 14px; height: 14px; border-radius: 50%; background: var(--c-act); border: 2px solid var(--c-raised); }
 .dot.took::before { background: var(--c-done); }
 .dot.miss::before { background: var(--c-warn); border-radius: 2px; }
@@ -402,7 +404,7 @@ const status = () => `<div class="statusbar" aria-hidden="true"><span>9:41</span
 function photo(st, copyId, w, opts = {}) {
   const c = cp(st, copyId), k = CARDS[c.card];
   const x = 30 + (c.seed * 17) % 40, y = 35 + (c.seed * 11) % 25;
-  const cls = w >= 200 ? "xl" : w >= 120 ? "lg" : "";
+  const cls = w >= 200 ? "xl" : w >= 120 ? "lg" : w < 60 ? "sm" : "";
   const inner = `<span class="art" style="--x:${x}%;--y:${y}%"></span><span class="nm">${k.name}</span><span class="tx"></span>${opts.badge ? `<span class="badge">${opts.badge}</span>` : ""}`;
   const style = `--h:${k.hue};width:${w}px`;
   return opts.tap
@@ -468,7 +470,7 @@ function sheets(st, pose) {
   }
   if (s.kind === "owner") {
     return sheetFrame("For the owner", cancelBtn("Close"), "", st.owner.length ? `<div class="list">${st.owner.map(o =>
-      `<div class="li"><span style="color:var(--c-warn)">${icon("warn")}</span><div class="grow stack-1"><span class="head">${CARDS[o.card].name}</span><span class="sub muted">${o.why}. Owed to ${ORDERS[o.order]}.</span></div></div>`).join("")}</div>
+      `<div class="li"><span style="color:var(--c-warn)">${icon("warn")}</span><div class="grow stack-1"><span class="head">${CARDS[o.card].name}</span><span class="sub muted">${o.why}. For ${ORDERS[o.order]}</span></div></div>`).join("")}</div>
       <p class="foot muted" style="margin:0">The owner sees this list on the home Mac.</p>` : `<p style="margin:0">All is well.</p>`);
   }
   if (s.kind === "copy") {
@@ -491,7 +493,7 @@ function sheets(st, pose) {
     return sheetFrame("Move", cancelBtn(), `<button class="nav-btn" data-act="mv-save" style="font-weight:600">Move</button>`, `
       <div class="stack-1"><span class="sub muted">Box</span><div class="seg" role="group" aria-label="Box">${BOXES.map(b => `<button data-act="mv-box" data-arg="${b.n}" aria-pressed="${b.n === s.box}">${b.n}</button>`).join("")}</div></div>
       <div class="stack-1"><span class="sub muted">Section</span><div class="list" style="max-height:220px;overflow:auto">${secs.map(([nm]) => `<button class="li" data-act="mv-sec" data-arg="${esc(nm)}" ${nm === s.sec ? 'aria-current="true"' : ""}><span class="grow">${nm}</span>${nm === s.sec ? `<span style="color:var(--c-act)">${icon("check", "Chosen")}</span>` : ""}</button>`).join("")}</div></div>
-      <div class="stack-1"><span class="sub muted">Spot</span><div class="stepper"><button data-act="mv-spot" data-arg="-1" aria-label="One spot lower">−</button><output>${s.spot}</output><button data-act="mv-spot" data-arg="1" aria-label="One spot higher">+</button><span class="foot muted">of ${secCount(s.box, s.sec) + 1}</span></div></div>`);
+      <div class="stack-1"><span class="sub muted">Spot</span><div class="stepper"><button data-act="mv-spot" data-arg="-1" aria-label="One spot lower">−</button><output>${s.spot}</output><button data-act="mv-spot" data-arg="1" aria-label="One spot higher">+</button><span class="foot muted">of ${secCount(s.box, s.sec)}</span></div></div>`);
   }
   if (s.kind === "stack") {
     const rest = stack(st);
@@ -550,7 +552,7 @@ function findDetail(st) {
 }
 function ownerSection(st) {
   return st.owner.length ? `<div class="stack-1"><span class="sec-h">For the owner</span><div class="list">${st.owner.map(o =>
-    `<div class="li"><span style="color:var(--c-warn)">${icon("warn")}</span><div class="grow stack-1"><span class="head">${CARDS[o.card].name}</span><span class="sub muted">${o.why}. Owed to ${ORDERS[o.order]}.</span></div></div>`).join("")}</div><span class="foot muted" style="padding:0 var(--space-3)">The owner sees this list on the home Mac.</span></div>` : `<p style="margin:0">All is well.</p>`;
+    `<div class="li"><span style="color:var(--c-warn)">${icon("warn")}</span><div class="grow stack-1"><span class="head">${CARDS[o.card].name}</span><span class="sub muted">${o.why}. For ${ORDERS[o.order]}</span></div></div>`).join("")}</div><span class="foot muted" style="padding:0 var(--space-3)">The owner sees this list on the home Mac.</span></div>` : `<p style="margin:0">All is well.</p>`;
 }
 
 /* ================= Concept: Walk ================= */
@@ -573,7 +575,7 @@ function walkPull(st, pose) {
   if (pose === "folded") {
     return `${nav({ title: "Pull", trail: ownerBtn(st) })}${netBanner(st)}
       <div class="scroll">${progress}${spotBlock(c)}
-        <div class="row" style="align-items:flex-start">${photo(st, p.copy, 112, { tap: true })}
+        <div class="row" style="align-items:flex-start">${photo(st, p.copy, 150, { tap: true })}
           <div class="grow stack-1"><span class="t3">${k.name}</span><span class="foot muted">${k.set} ${k.no}</span><span class="sub">Take 1. Check it matches the photo.</span><span><span class="chip env">${ORDERS[p.order]}</span></span></div></div>${twin}</div>
       <div class="dock">${toastHtml(st, "dock")}${actBtns(st, i, "Took it", "took")}</div>`;
   }
@@ -679,10 +681,9 @@ function envDetail(st, pose) {
       <div class="scroll"><span class="sub muted">In shelf order. Tap a card at its spot.</span>${list}</div><div class="dock">${toastHtml(st, "dock")}${seal}</div>`;
   }
   const tiles = rows.map(i => { const p = st.pulls[i], c = cp(st, p.copy), k = CARDS[c.card];
-    return `<div class="cardtile ${p.packed || p.st === "missing" ? "done" : ""}"><div class="row" style="align-items:flex-start">${photo(st, p.copy, 96, { tap: true })}<div class="grow stack-1"><span class="head">${k.name}</span><span class="foot muted">${k.set} ${k.no}</span></div></div>
-      ${c.box ? spotBlock(c, true) : ""}
+    return `<div class="cardtile ${p.packed || p.st === "missing" ? "done" : ""}"><div class="row" style="align-items:flex-start;gap:var(--space-4)">${photo(st, p.copy, 96, { tap: true })}<div class="grow stack-1"><span class="head">${k.name}</span><span class="foot muted">${k.set} ${k.no}</span>${c.box ? spotBlock(c, true) : ""}</div></div>
       ${p.packed ? `<span class="chip done">${icon("check")}In the envelope</span>` : p.st === "missing" ? `<span class="chip warn">On the owner's list</span>` : actBtns(st, i, "In envelope", "in-env")}</div>`; }).join("");
-  return `<div class="nav"><h2 class="large">${ORDERS[o]}</h2></div>${netBanner(st)}<div class="scroll"><span class="sub muted">In shelf order. Check each card against its photo.</span><div class="grid2">${tiles}</div>${ns ? `<div class="list">${ns}</div>` : ""}</div><div class="dock">${toastHtml(st, "dock")}${seal}</div>`;
+  return `<div class="nav"><h2 class="large">${ORDERS[o]}</h2></div>${netBanner(st)}<div class="scroll"><span class="sub muted">In shelf order. Check each card against its photo.</span><div class="stack">${tiles}</div>${ns ? `<div class="list">${ns}</div>` : ""}</div><div class="dock">${toastHtml(st, "dock")}${seal}</div>`;
 }
 const ENV = {
   id: "envelopes", name: "Envelopes", tabs: ENV_TABS,
@@ -715,8 +716,9 @@ const ENV = {
 const SHELF_TABS = [["shelf", "Shelf", "shelf"], ["table", "Table", "table"]];
 function mapHtml(st, H, labels) {
   const q = st.q.trim().toLowerCase();
+  const cur = st.sel != null && st.pulls[st.sel].st === "todo" ? st.sel : nextTodo(st);
   const found = q ? Object.keys(st.copies).filter(id => CARDS[st.copies[id].card].name.toLowerCase().includes(q) && st.copies[id].box) : [];
-  return `<div class="map" role="group" aria-label="The shelf, seen from above. Six boxes, front at the top.">${BOXES.map(b => {
+  return `<div class="map${labels ? " labelled" : ""}" role="group" aria-label="The shelf, seen from above. Six boxes, front at the top.">${BOXES.map(b => {
     const tot = boxTotal(b.n); let off = 0;
     const divs = b.secs.map(([nm, c]) => { const y = off / tot * H; off += c; const tall = c / tot * H >= 15;
       return `<span class="divd" style="top:${y}px">${labels && tall ? `<span>${nm}</span>` : ""}</span>`; }).join("");
@@ -725,7 +727,7 @@ function mapHtml(st, H, labels) {
       dots.push(`<button class="dot find ${st.selCopy === id ? "sel" : ""}" style="top:${(secStart(b.n, c.sec) + c.spot - .5) / tot * H}px" data-act="selc" data-arg="${id}" aria-label="${CARDS[c.card].name}, ${spotText(c)}"></button>`); });
     else st.pulls.forEach((p, i) => { const c = cp(st, p.copy); if (c.box !== b.n) return;
       const cls = p.st === "took" ? "took" : p.st === "missing" ? "miss" : "";
-      dots.push(`<button class="dot ${cls} ${st.sel === i ? "sel" : ""}" style="top:${(secStart(b.n, c.sec) + c.spot - .5) / tot * H}px" data-act="sel" data-arg="${i}" aria-label="${CARDS[c.card].name}, ${spotText(c)}${p.st === "took" ? ", taken" : ""}"></button>`); });
+      dots.push(`<button class="dot ${cls} ${cur === i ? "sel" : ""}" style="top:${(secStart(b.n, c.sec) + c.spot - .5) / tot * H}px" data-act="sel" data-arg="${i}" aria-label="${CARDS[c.card].name}, ${spotText(c)}${p.st === "took" ? ", taken" : ""}"></button>`); });
     const has = dots.length > 0;
     return `<div class="mapcol"><span class="bx ${has ? "has" : ""}">Box ${b.n}</span><div class="boxbar" style="height:${H}px">${divs}${dots.join("")}</div></div>`; }).join("")}</div>
     <div class="legend" aria-hidden="true">${q ? `<span><b style="background:var(--c-find);border-radius:2px"></b>Matches</span>` : `<span><b style="background:var(--c-act)"></b>To take</span><span><b style="background:var(--c-done)"></b>Taken</span><span><b style="background:var(--c-warn);border-radius:2px"></b>Owner's list</span>`}<span>Front of each box at the top</span></div>`;
@@ -788,7 +790,7 @@ function tableScreen(st, pose) {
   const envs = ORDER_IDS.map(o => { const ps = orderPulls(st, o), h = ps.filter(j => st.pulls[j].packed).length, n = ps.length + orderNoSpot(o).length, lit = p && p.order === o;
     return `<button class="envtile ${lit ? "lit" : ""}" data-act="${lit ? "pack" : "noop"}" data-arg="${sel}" ${lit && !hold ? "" : 'aria-disabled="true"'}><span class="t3">${ORDERS[o]}</span><span class="sub">${h} of ${n} in</span>${lit ? `<span class="head">Tap to put ${cardOf(st, p.copy).name} in</span>` : ""}</button>`; }).join("");
   return `${nav({ title: "Table", large: false, mid: "Table", trail: ownerBtn(st) })}${netBanner(st)}<div class="split"><div class="side"><div class="scroll">${tray}${inEnv}</div></div>
-    <div class="main"><div class="scroll">${toastHtml(st, "dock")}${p ? `<div class="row" style="gap:var(--space-4)">${photo(st, p.copy, 110, { tap: true })}<span class="stack-1"><span class="sub muted">In your hand</span><span class="t2">${cardOf(st, p.copy).name}</span><span class="sub">Goes to ${ORDERS[p.order]}. Tap the lit envelope.</span></span></div>` : ""}<div class="grid2">${envs}</div></div></div></div>`;
+    <div class="main"><div class="scroll">${toastHtml(st, "dock")}${p ? `<div class="row" style="gap:var(--space-4)">${photo(st, p.copy, 110, { tap: true })}<span class="stack-1"><span class="sub muted">In your hand</span><span class="t2">${cardOf(st, p.copy).name}</span><span class="sub">Tap the lit envelope: ${ORDERS[p.order]}</span></span></div>` : ""}<div class="grid2">${envs}</div></div></div></div>`;
 }
 const SHELF = {
   id: "shelf", name: "Shelf map", tabs: SHELF_TABS, bold: true,
@@ -861,7 +863,7 @@ function act(cid, name, arg) {
     case "move": { const c = cp(st, arg); st.sheet = { kind: "move", copy: arg, box: c.box, sec: c.sec, spot: c.spot }; break; }
     case "mv-box": st.sheet.box = n; st.sheet.sec = boxOf(n).secs[0][0]; st.sheet.spot = 1; break;
     case "mv-sec": st.sheet.sec = arg; st.sheet.spot = 1; break;
-    case "mv-spot": st.sheet.spot = Math.min(secCount(st.sheet.box, st.sheet.sec) + 1, Math.max(1, st.sheet.spot + n)); break;
+    case "mv-spot": st.sheet.spot = Math.min(secCount(st.sheet.box, st.sheet.sec), Math.max(1, st.sheet.spot + n)); break;
     case "mv-save": { const s = st.sheet; Object.assign(st.copies[s.copy], { box: s.box, sec: s.sec, spot: s.spot });
       st.sheet = cid === "shelf" || isUnfoldedFind(st) ? null : { kind: "copy", copy: s.copy };
       st.toast = { text: `Moved to ${spotText(st.copies[s.copy])}.`, at: "copy" }; break; }
@@ -901,6 +903,7 @@ function draw(cid) {
     d.innerHTML = status() + `<div class="screen">${C.render(st, d.dataset.pose)}</div>`;
     const sc = d.querySelectorAll(".scroll"); (scrolls[d.dataset.pose] || []).forEach((t, k) => { if (sc[k]) sc[k].scrollTop = t; });
   });
+  sec.querySelectorAll('.sheet .list [aria-current="true"]').forEach(li => { const l = li.parentElement; if (!l.scrollTop) l.scrollTop = li.offsetTop - l.offsetTop - 44; });
   if (focusPose) { const inp = sec.querySelector(`.device[data-pose="${focusPose}"] [data-input]`); if (inp) { inp.focus(); inp.setSelectionRange(caret, caret); } }
 }
 document.addEventListener("click", e => {
