@@ -284,6 +284,8 @@ section.anno::after { top: -20px; }
 .it-def { margin-top: var(--bn-1-5); font-size: var(--bn-fs-md); color: var(--bn-ink-2); display: flex; gap: var(--bn-2); align-items: center; flex-wrap: wrap; }
 .it-def .date { font-weight: 600; color: var(--bn-ink); }
 .no-rate .rate { display: none; }
+.mins-meta { display: none; }
+.no-clock .mins-meta { display: inline; }
 .acts { display: flex; gap: var(--bn-2); align-items: center; justify-content: flex-end; flex-wrap: wrap; }
 .item.below { background: var(--bn-surface-3); }
 .item.below .it-title { color: var(--bn-ink-2); }
@@ -655,7 +657,7 @@ section.anno::after { top: -20px; }
     const all = P.items.reduce((s, it) => s + it.value, 0);
     const doneN = P.items.filter((it) => S.decided[it.id]).length;
     return '<div class="panel budget anno anno-new" data-anno="New: the week in minutes" id="minutes-bar">'
-      + '<div class="budget-top"><span>Your <b>' + S.budget + ' minutes</b> cover <b>' + above.length + ' of ' + P.items.length + '</b> items and <b>' + money(covered) + '</b> of the ' + money(all) + ' at stake.</span><span>' + doneN + ' decided</span></div>'
+      + '<div class="budget-top"><span>Your <b>' + S.budget + ' minutes</b> cover <b>' + above.length + ' of ' + P.items.length + '</b> items and <b>' + money(covered) + '</b> of the ' + money(all) + ' at stake. ' + doneN + ' decided so far.</span></div>'
       + '<div class="bar" role="img" aria-label="' + Math.round(P.total) + ' minutes of items against a ' + S.budget + ' minute budget"><div class="bar-track">' + segs.join('') + '</div>'
       + '<div class="bar-cut" style="left: ' + (S.budget / scale * 100) + '%"><span>' + S.budget + ' min</span></div></div>'
       + '<div class="bar-scale"><span>0</span><span>' + Math.round(scale) + ' min</span></div>'
@@ -697,12 +699,12 @@ section.anno::after { top: -20px; }
     if (it.back) pills.push('<span class="pill accent">Back Today</span>');
     if (k.none) pills.push('<span class="pill danger">No Default</span>');
     else if (!k.undo) pills.push('<span class="pill warn">Cannot Undo</span>');
-    const meta = '<div class="it-meta"><span>' + esc(k.label) + '</span><span class="money">' + money(it.value) + ' at stake</span><span>' + mins(it.min) + '</span><span class="rate mono">' + rateText(rate(it)) + '</span></div>';
+    const meta = '<div class="it-meta"><span>' + esc(k.label) + '</span><span class="money">' + money(it.value) + ' at stake</span><span class="mins-meta">' + mins(it.min) + '</span><span class="rate mono">' + rateText(rate(it)) + '</span></div>';
     let def;
     if (k.none) {
       def = '<div class="it-def"><span>Waits for you, with no date.' + (it.deadline ? ' Interrupts you once if <span class="date">' + esc(it.deadline) + '</span> gets close.' : (it.id === 'i-import' ? ' Never interrupts; it gets louder each Sunday.' : '')) + '</span></div>';
     } else {
-      const lead = it.below ? 'Keeps its default on ' : 'Default on ';
+      const lead = it.below ? 'Keeps its default on ' : 'On ';
       def = '<div class="it-def"><span>' + lead + '<span class="date">' + esc(it.date) + '</span>' + (k.undo ? '' : ', with no undo') + ': ' + esc(it.defText) + '.</span>' + '</div>';
     }
     let acts;
