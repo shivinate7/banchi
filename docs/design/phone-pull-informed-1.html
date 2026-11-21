@@ -1,0 +1,999 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phone Pull</title>
+<style>
+/* Banchi's --bn-* tokens (app/src/tokens.css), light and dark, mapped onto a native iPhone look.
+   Only the tokens this mockup paints are copied. */
+:root {
+  color-scheme: light;
+  --bn-bg: #f4f5f8;
+  --bn-surface: #ffffff;
+  --bn-surface-2: #eceef2;
+  --bn-surface-3: #f7f8fa;
+  --bn-surface-glass: rgba(255, 255, 255, 0.72);
+  --bn-ink: #0f1217;
+  --bn-ink-2: #3b414b;
+  --bn-ink-3: #666c76;
+  --bn-ink-4: #7f8791;
+  --bn-line: rgba(15, 18, 23, 0.08);
+  --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-accent: #3d5af1;
+  --bn-accent-hover: #2f4bd9;
+  --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10);
+  --bn-accent-tint-2: rgba(61, 90, 241, 0.18);
+  --bn-on-accent: #ffffff;
+  --bn-live: #d63d2b;
+  --bn-ok: #15803d;
+  --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309;
+  --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-danger: #b91c1c;
+  --bn-pill-ink-ok: #11733a;
+  --bn-pill-ink-warn: #a14b09;
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32);
+  --bn-stage-bg: #0c0e12;
+  --bn-stage-bg-2: #171b25;
+  --bn-stage-surface: #1b2029;
+  --bn-stage-ink: #eef0f4;
+  --bn-stage-accent: #7f90ff;
+  --bn-stage-live: #ff6a58;
+  /* PullConfirm's fill: the one accent step that clears 7:1 under --bn-on-accent (docs/DESIGN.md). */
+  --pc-fill: var(--bn-accent-press);
+  --bn-1: 4px; --bn-2: 8px; --bn-3: 12px; --bn-4: 16px; --bn-5: 20px; --bn-6: 24px; --bn-7: 32px;
+  --bn-r: 8px; --bn-r-lg: 12px; --bn-r-xl: 16px; --bn-r-2xl: 22px;
+  --bn-t-fast: 120ms; --bn-t: 200ms; --bn-ease: cubic-bezier(.2,0,0,1);
+  /* Dynamic Type at the default size (HIG Typography, Large (default) table). */
+  --ty-large: 34px; --ty-title1: 28px; --ty-title2: 22px; --ty-title3: 20px;
+  --ty-body: 17px; --ty-callout: 16px; --ty-subhead: 15px; --ty-footnote: 13px; --ty-cap1: 12px;
+  /* Safe areas. On a phone env() gives the real inset; on this desktop page it reads 0, so the
+     frame adds a drawn status bar and home indicator of its own. Drawn sizes, not Apple numbers. */
+  --drawn-top: 50px;
+  --drawn-bottom: 30px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+    --bn-surface-glass: rgba(20, 23, 28, 0.72);
+    --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+    --bn-line: rgba(255,255,255,0.08); --bn-line-strong: rgba(255,255,255,0.16);
+    --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+    --bn-accent-tint: rgba(127,144,255,0.14); --bn-accent-tint-2: rgba(127,144,255,0.24);
+    --bn-on-accent: #0c0e12; --bn-live: #ff6a58;
+    --bn-ok: #3ddc84; --bn-ok-tint: rgba(61,220,132,0.14); --bn-warn: #f5a524; --bn-warn-tint: rgba(245,165,36,0.14);
+    --bn-danger: #ff5c5c; --bn-pill-ink-ok: #3ddc84; --bn-pill-ink-warn: #f5a524;
+    --bn-shadow-2: 0 1px 2px rgba(0,0,0,0.5), 0 8px 24px -8px rgba(0,0,0,0.6);
+    --bn-shadow-3: 0 2px 4px rgba(0,0,0,0.5), 0 24px 56px -16px rgba(0,0,0,0.75);
+    --pc-fill: var(--bn-accent-hover);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+  --bn-surface-glass: rgba(20, 23, 28, 0.72);
+  --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+  --bn-line: rgba(255,255,255,0.08); --bn-line-strong: rgba(255,255,255,0.16);
+  --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127,144,255,0.14); --bn-accent-tint-2: rgba(127,144,255,0.24);
+  --bn-on-accent: #0c0e12; --bn-live: #ff6a58;
+  --bn-ok: #3ddc84; --bn-ok-tint: rgba(61,220,132,0.14); --bn-warn: #f5a524; --bn-warn-tint: rgba(245,165,36,0.14);
+  --bn-danger: #ff5c5c; --bn-pill-ink-ok: #3ddc84; --bn-pill-ink-warn: #f5a524;
+  --bn-shadow-2: 0 1px 2px rgba(0,0,0,0.5), 0 8px 24px -8px rgba(0,0,0,0.6);
+  --bn-shadow-3: 0 2px 4px rgba(0,0,0,0.5), 0 24px 56px -16px rgba(0,0,0,0.75);
+  --pc-fill: var(--bn-accent-hover);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bn-bg);
+  color: var(--bn-ink);
+  font-family: -apple-system, system-ui, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  font-size: var(--ty-body);
+  line-height: 1.3;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; }
+.num { font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 3px solid var(--bn-accent); outline-offset: 2px; }
+
+/* ---------- the page around the phones ---------- */
+.sample {
+  position: sticky; top: 0; z-index: 50;
+  background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn);
+  border-bottom: 1px solid var(--bn-line-strong);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  padding: var(--bn-2) var(--bn-4); font-size: var(--ty-subhead); font-weight: 600;
+}
+.wrap { display: flex; flex-direction: column; gap: var(--bn-5); padding: var(--bn-6) var(--bn-4) 64px; max-width: 1320px; margin-inline: auto; }
+.intro { display: flex; flex-direction: column; gap: var(--bn-2); max-width: 70ch; }
+.intro h1 { margin: 0; font-size: var(--ty-title1); letter-spacing: -0.02em; }
+.intro p { margin: 0; color: var(--bn-ink-2); font-size: var(--ty-subhead); line-height: 1.45; }
+.kind { font-weight: 700; color: var(--bn-ink); }
+.panel { display: flex; flex-direction: column; gap: var(--bn-3); background: var(--bn-surface); border: 1px solid var(--bn-line); border-radius: var(--bn-r-lg); padding: var(--bn-3) var(--bn-4); }
+.ctl-row { display: flex; flex-wrap: wrap; gap: var(--bn-2); align-items: center; }
+.ctl-row > b { min-width: 76px; font-size: var(--ty-footnote); color: var(--bn-ink-3); font-weight: 600; }
+.chip {
+  min-height: 32px; padding: 0 var(--bn-3); border-radius: 999px; border: 1px solid var(--bn-line-strong);
+  background: var(--bn-surface); font-size: var(--ty-footnote); cursor: pointer;
+}
+.chip[aria-pressed="true"], .chip[aria-current="true"] { background: var(--bn-ink); color: var(--bn-bg); border-color: var(--bn-ink); }
+.chip[hidden] { display: none; }
+.opt { display: inline-flex; align-items: center; gap: var(--bn-2); padding: var(--bn-1) var(--bn-1) var(--bn-1) var(--bn-3); border: 1px dashed var(--bn-accent); border-radius: 999px; font-size: var(--ty-footnote); }
+.opt[data-off="true"] { opacity: .5; border-style: dotted; }
+.opt .chip { min-height: 28px; }
+.caption { font-size: var(--ty-subhead); color: var(--bn-ink-2); max-width: 90ch; line-height: 1.45; margin: 0; }
+.caption b { color: var(--bn-ink); }
+.stage { display: flex; flex-wrap: wrap; gap: var(--bn-7); align-items: flex-start; }
+.pose { display: flex; flex-direction: column; gap: var(--bn-2); }
+.pose > span { font-size: var(--ty-footnote); color: var(--bn-ink-3); max-width: 375px; }
+
+/* ---------- a device frame ---------- */
+.device {
+  position: relative; flex: none; overflow: hidden;
+  background: var(--bn-bg);
+  border-radius: 46px;
+  box-shadow: 0 0 0 10px #1d1f24, 0 0 0 11px #3a3d44, var(--bn-shadow-3);
+  margin: 11px;
+  container-type: inline-size;
+}
+.device[data-device="iphone-duo-folded"] { width: 375px; height: 812px; }
+.device[data-device="iphone-duo-unfolded"] { width: 820px; height: 812px; border-radius: 34px; }
+.device[data-device="iphone-duo-unfolded"]::after { /* the hinge */
+  content: ""; position: absolute; inset: 0 auto 0 50%; width: 1px; background: var(--bn-line); pointer-events: none; z-index: 40;
+}
+.screen { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.statusbar {
+  flex: none; height: calc(var(--drawn-top) + env(safe-area-inset-top, 0px));
+  padding: 0 28px 0 34px; display: flex; align-items: center; justify-content: space-between;
+  font-size: var(--ty-body); font-weight: 600; position: relative; z-index: 30;
+}
+.statusbar .island { position: absolute; left: 50%; top: 11px; transform: translateX(-50%); width: 120px; height: 34px; border-radius: 20px; background: #000; }
+.device[data-device="iphone-duo-unfolded"] .statusbar .island { width: 96px; height: 28px; }
+.statusbar .glyphs { display: flex; gap: 6px; align-items: center; }
+.homebar { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 134px; height: 5px; border-radius: 3px; background: var(--bn-ink); opacity: .85; z-index: 45; pointer-events: none; }
+.on-stage .statusbar, .on-stage .homebar { color: var(--bn-stage-ink); }
+.on-stage .homebar { background: var(--bn-stage-ink); }
+
+/* scrolling body: keeps content out of the home indicator and tab bar */
+.body { flex: 1; overflow-y: auto; overflow-x: hidden; padding-bottom: calc(var(--drawn-bottom) + env(safe-area-inset-bottom, 0px) + 84px); scrollbar-width: none; }
+.body::-webkit-scrollbar { display: none; }
+.body.no-tabs { padding-bottom: calc(var(--drawn-bottom) + env(safe-area-inset-bottom, 0px) + 16px); }
+
+/* navigation bar: large title, and the inline title of a pushed screen */
+.nav { display: flex; flex-direction: column; gap: var(--bn-1); padding: 0 var(--bn-4) var(--bn-2); }
+.nav-tools { display: flex; align-items: center; justify-content: space-between; min-height: 44px; gap: var(--bn-2); }
+.nav-tools .end { display: flex; gap: var(--bn-2); margin-inline-start: auto; }
+.large { margin: 0; font-size: var(--ty-large); line-height: 41px; font-weight: 700; letter-spacing: -0.01em; }
+.inline-title { position: absolute; left: 50%; transform: translateX(-50%); font-size: var(--ty-body); font-weight: 600; white-space: nowrap; max-width: 55%; overflow: hidden; text-overflow: ellipsis; }
+.nav-inline { position: relative; display: flex; align-items: center; min-height: 44px; padding: 0 var(--bn-4); gap: var(--bn-2); }
+.glass-btn {
+  min-width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--bn-line);
+  background: var(--bn-surface-glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--bn-shadow-2);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px;
+  font-size: var(--ty-body); font-weight: 500; color: var(--bn-ink); cursor: pointer;
+}
+.glass-btn.tint { color: var(--bn-accent); }
+.glass-btn.prominent { background: var(--pc-fill); color: var(--bn-on-accent); border-color: transparent; font-weight: 600; }
+.on-stage .glass-btn { background: rgba(255,255,255,.12); color: var(--bn-stage-ink); border-color: rgba(255,255,255,.14); }
+
+/* segmented control */
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 2px; border-radius: 999px; background: var(--bn-surface-2); margin: 0 var(--bn-4); }
+.seg button { min-height: 40px; border: 0; border-radius: 999px; background: transparent; font-size: var(--ty-subhead); font-weight: 500; cursor: pointer; color: var(--bn-ink-2); }
+.seg button[aria-selected="true"] { background: var(--bn-surface); color: var(--bn-ink); font-weight: 600; box-shadow: var(--bn-shadow-2); }
+
+/* the count line: one sentence, the same numbers on every tab */
+.count { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--bn-3); padding: 0 var(--bn-4) var(--bn-3); font-size: var(--ty-title3); color: var(--bn-ink-2); }
+.count b { color: var(--bn-ink); font-weight: 700; }
+.count a { color: var(--bn-pill-ink-warn); font-weight: 600; text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+
+/* lists: inset grouped */
+.group { display: flex; flex-direction: column; gap: var(--bn-2); padding: 0 var(--bn-4); margin-top: var(--bn-4); }
+.group-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--bn-2); padding: 0 var(--bn-1); }
+.group-head h2 { margin: 0; font-size: var(--ty-title3); font-weight: 600; }
+.group-head span { font-size: var(--ty-subhead); color: var(--bn-ink-3); }
+.list { background: var(--bn-surface); border-radius: var(--bn-r-2xl); overflow: hidden; box-shadow: 0 0 0 1px var(--bn-line); }
+.row {
+  width: 100%; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--bn-3);
+  padding: var(--bn-3) var(--bn-4); min-height: 44px; border: 0; background: transparent; text-align: start; cursor: pointer;
+  position: relative;
+}
+.row + .row::before { content: ""; position: absolute; top: 0; right: 0; left: 72px; height: 1px; background: var(--bn-line); }
+.row.plain + .row.plain::before, .row.plain + .row::before { left: var(--bn-4); }
+.row[aria-current="true"] { background: var(--bn-accent-tint); }
+.row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.row-name { font-size: var(--ty-title3); font-weight: 600; line-height: 25px; }
+.row-sub { font-size: var(--ty-title3); color: var(--bn-ink-2); line-height: 25px; }
+.row-std .row-name { font-size: var(--ty-body); line-height: 22px; }
+.row-std .row-sub { font-size: var(--ty-subhead); color: var(--bn-ink-3); line-height: 20px; }
+.row-end { display: flex; flex-direction: column; align-items: flex-end; gap: var(--bn-2); }
+.chev { color: var(--bn-ink-4); }
+.row.done .row-name, .row.done .row-sub { color: var(--bn-ink-3); }
+.row.done .row-name { text-decoration: line-through; text-decoration-color: var(--bn-ink-4); }
+
+/* how many to pull: the capsule */
+.need { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border-radius: 999px; background: var(--bn-accent-tint); color: var(--bn-accent-hover); font-size: var(--ty-title3); font-weight: 700; white-space: nowrap; }
+:root[data-theme="dark"] .need { color: var(--bn-accent-hover); }
+.need.ok { background: var(--bn-ok-tint); color: var(--bn-pill-ink-ok); }
+.need.warn { background: var(--bn-warn-tint); color: var(--bn-pill-ink-warn); }
+
+/* buyer marks */
+.marks { display: flex; gap: 6px; flex-wrap: wrap; }
+.mark { width: 40px; height: 40px; border-radius: 20px; display: inline-flex; align-items: center; justify-content: center; font-size: var(--ty-title3); font-weight: 700; letter-spacing: -0.02em; background: var(--bn-surface-3); color: var(--bn-ink); box-shadow: inset 0 0 0 1.5px var(--bn-line-strong); flex: none; }
+.mark.big { width: 56px; height: 56px; border-radius: 28px; font-size: var(--ty-title2); }
+.mark.got { background: var(--bn-ok-tint); color: var(--bn-pill-ink-ok); box-shadow: inset 0 0 0 1.5px var(--bn-ok); }
+.mark.short { box-shadow: inset 0 0 0 1.5px var(--bn-warn); color: var(--bn-pill-ink-warn); background: var(--bn-warn-tint); }
+
+/* a card's sample picture */
+.art { flex: none; border-radius: 4px; background: var(--bn-stage-bg-2); display: grid; place-items: center; overflow: hidden; position: relative; }
+.art i { position: absolute; inset: 7% 8% 40% 8%; border-radius: 3px; background: linear-gradient(150deg, hsl(var(--h) 55% 58%), hsl(calc(var(--h) + 40) 45% 30%)); }
+.art em { position: absolute; left: 8%; right: 8%; bottom: 8%; height: 26%; border-radius: 2px; background: rgba(255,255,255,.12); }
+.art u { position: absolute; left: 10%; top: 63%; font-size: 9px; color: rgba(255,255,255,.85); text-decoration: none; font-weight: 700; white-space: nowrap; }
+.thumb { width: 44px; height: 61px; box-shadow: 0 0 0 1px var(--bn-line-strong); }
+/* card screen, folded */
+.placeline { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-2); padding: var(--bn-1) var(--bn-4) 0; }
+.placeline strong { font-size: var(--ty-large); line-height: 41px; font-weight: 800; letter-spacing: -0.02em; }
+.placeline small { font-size: var(--ty-title3); color: var(--bn-ink-3); }
+.track-only { position: relative; height: 6px; margin: var(--bn-2) var(--bn-4) 0; border-radius: 3px; background: var(--bn-surface-2); }
+.track-only b { position: absolute; top: -5px; width: 6px; height: 16px; border-radius: 3px; background: var(--bn-accent); transform: translateX(-50%); box-shadow: 0 0 0 3px var(--bn-bg); }
+.photo-tag.left { left: 10px; right: auto; }
+.slot-note { margin: 0; min-height: 64px; display: flex; align-items: center; gap: var(--bn-3); font-size: var(--ty-title3); color: var(--bn-ink-2); padding: 0 var(--bn-2); }
+.slot-note b { color: var(--bn-ink); }
+.slot-note.waits { justify-content: center; border: 1.5px dashed var(--bn-line-strong); border-radius: 32px; color: var(--bn-ink-2); }
+/* card screen, unfolded: the hinge splits acting from looking */
+.wide { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; }
+.wide > section { position: relative; display: flex; flex-direction: column; min-height: 0; padding-top: calc(var(--drawn-top) + env(safe-area-inset-top, 0px)); }
+.act-half { background: var(--bn-bg); }
+.act-foot { margin-top: auto; padding: var(--bn-3) var(--bn-4) calc(var(--drawn-bottom) + env(safe-area-inset-bottom, 0px) + 8px); }
+.photo-half { background: var(--bn-stage-bg); color: var(--bn-stage-ink); }
+.photo-center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--bn-3); padding-bottom: var(--drawn-bottom); }
+.photo-center p { margin: 0; font-size: var(--ty-title3); color: var(--bn-stage-ink); }
+.photo-l { width: 360px; height: 503px; }
+.screen:has(.wide) .statusbar .glyphs { color: var(--bn-stage-ink); }
+.copyart { width: 120px; height: 168px; border-radius: 8px; }
+.copyart u { font-size: 11px; }
+
+/* the tab bar: floats over the content */
+.tabbar {
+  position: absolute; z-index: 35; left: var(--bn-4); right: var(--bn-4);
+  bottom: calc(var(--drawn-bottom) + env(safe-area-inset-bottom, 0px) - 6px);
+  display: flex; gap: var(--bn-2); align-items: center;
+}
+.tabs {
+  flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 4px; border-radius: 32px;
+  background: var(--bn-surface-glass); backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: 0 0 0 1px var(--bn-line), var(--bn-shadow-3);
+}
+.tab { min-height: 54px; border: 0; background: transparent; border-radius: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 600; color: var(--bn-ink-2); cursor: pointer; position: relative; }
+.tab[aria-selected="true"] { color: var(--bn-accent); background: var(--bn-accent-tint); }
+.tab .badge { position: absolute; top: 4px; left: calc(50% + 6px); min-width: 20px; height: 20px; border-radius: 10px; background: var(--bn-live); color: #fff; font-size: var(--ty-cap1); font-weight: 700; display: grid; place-items: center; padding: 0 5px; }
+.search-tab { width: 62px; height: 62px; border-radius: 31px; flex: none; border: 0; display: grid; place-items: center; cursor: pointer; color: var(--bn-ink-2);
+  background: var(--bn-surface-glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); box-shadow: 0 0 0 1px var(--bn-line), var(--bn-shadow-3); }
+.search-tab[aria-selected="true"] { color: var(--bn-accent); }
+/* regular width: the tab bar floats at the top, centred */
+.device[data-device="iphone-duo-unfolded"] .tabbar { top: calc(var(--drawn-top) + env(safe-area-inset-top, 0px) - 6px); bottom: auto; left: 50%; right: auto; transform: translateX(-50%); }
+.device[data-device="iphone-duo-unfolded"] .tabs { grid-auto-columns: auto; }
+.device[data-device="iphone-duo-unfolded"] .tab { flex-direction: row; gap: 6px; min-height: 40px; padding: 0 14px; font-size: var(--ty-subhead); }
+.device[data-device="iphone-duo-unfolded"] .tab .badge { position: static; }
+.device[data-device="iphone-duo-unfolded"] .search-tab { width: 48px; height: 48px; }
+
+/* split view, unfolded */
+.split { flex: 1; display: grid; grid-template-columns: 410px 1fr; min-height: 0; }
+.split > section { display: flex; flex-direction: column; min-height: 0; position: relative; }
+.split > section + section { background: var(--bn-surface-3); }
+.split .body { padding-bottom: calc(var(--drawn-bottom) + env(safe-area-inset-bottom, 0px) + 16px); }
+.split-top { height: 56px; flex: none; }
+.placeholder { flex: 1; display: grid; place-items: center; text-align: center; color: var(--bn-ink-3); font-size: var(--ty-title3); padding: var(--bn-6); }
+
+/* card screen */
+.place { display: flex; flex-direction: column; gap: 2px; padding: var(--bn-2) var(--bn-4) 0; }
+.place small { font-size: var(--ty-title3); color: var(--bn-ink-2); }
+.place strong { font-size: var(--ty-large); line-height: 41px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.posbar { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--bn-2); padding: var(--bn-2) var(--bn-4) 0; font-size: var(--ty-subhead); color: var(--bn-ink-3); }
+.posbar .track { height: 8px; border-radius: 4px; background: var(--bn-surface-2); position: relative; }
+.posbar .track b { position: absolute; top: -6px; width: 6px; height: 20px; border-radius: 3px; background: var(--bn-accent); transform: translateX(-50%); box-shadow: 0 0 0 3px var(--bn-bg); }
+.photo-wrap { padding: var(--bn-3) var(--bn-4) 0; display: flex; justify-content: center; }
+.photo { width: 320px; height: 447px; border-radius: var(--bn-r-xl); box-shadow: var(--bn-shadow-2); }
+.photo u { font-size: 18px; }
+.photo-tag { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,.55); color: #fff; font-size: var(--ty-footnote); padding: 4px 10px; border-radius: 999px; }
+.copies { display: flex; gap: var(--bn-2); overflow-x: auto; padding: var(--bn-3) var(--bn-4) 0; scrollbar-width: none; }
+.copy { flex: none; min-height: 44px; padding: 0 var(--bn-4); border-radius: 999px; border: 1px solid var(--bn-line-strong); background: var(--bn-surface); font-size: var(--ty-subhead); font-weight: 600; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.copy[aria-selected="true"] { border-color: var(--bn-accent); color: var(--bn-accent-hover); background: var(--bn-accent-tint); }
+.copy.sold { color: var(--bn-ink-3); text-decoration: line-through; }
+.need-line { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); padding: var(--bn-3) var(--bn-4) 0; }
+.dots { display: flex; gap: 6px; }
+.dots i { width: 14px; height: 14px; border-radius: 7px; box-shadow: inset 0 0 0 2px var(--bn-accent); }
+.dots i.on { background: var(--bn-ok); box-shadow: none; }
+
+/* the action block: reserves both steps from the start (docs/DESIGN.md, 64 + 24 + 64) */
+.actions {
+  position: absolute; z-index: 20; left: 0; right: 0; bottom: 0;
+  padding: var(--bn-3) var(--bn-4) calc(var(--drawn-bottom) + env(safe-area-inset-bottom, 0px) + 8px);
+  background: var(--bn-surface-glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--bn-line);
+  display: flex; flex-direction: column; gap: var(--bn-2);
+}
+.to-whom { display: flex; align-items: center; gap: var(--bn-3); font-size: var(--ty-title3); color: var(--bn-ink-2); min-height: 40px; }
+.to-whom b { color: var(--bn-ink); }
+.steps { display: grid; grid-template-rows: 64px 64px; row-gap: var(--bn-6); }
+.big-btn {
+  min-height: 64px; border: 0; border-radius: 32px; background: var(--pc-fill); color: var(--bn-on-accent);
+  font-size: 22px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer;
+  box-shadow: var(--bn-shadow-2);
+}
+.big-btn:active { transform: scale(.985); }
+.big-btn.quiet { background: var(--bn-surface); color: var(--bn-accent-hover); box-shadow: 0 0 0 1.5px var(--bn-line-strong); }
+.said { display: flex; align-items: center; gap: var(--bn-3); font-size: 22px; font-weight: 700; color: var(--bn-pill-ink-ok); min-height: 64px; padding: 0 var(--bn-2); }
+.said.note { color: var(--bn-ink-2); font-weight: 600; font-size: var(--ty-title3); }
+.said .undo { margin-inline-start: auto; }
+.reserved { border-radius: 32px; border: 1.5px dashed transparent; }
+.with-actions .body { padding-bottom: 320px; }
+
+/* sheets */
+.scrim { position: absolute; inset: 0; background: rgba(0,0,0,.32); z-index: 38; }
+.sheet {
+  position: absolute; z-index: 39; left: 6px; right: 6px; bottom: 6px;
+  background: var(--bn-surface); border-radius: 38px; box-shadow: var(--bn-shadow-3);
+  display: flex; flex-direction: column; gap: var(--bn-3); padding: 6px var(--bn-4) calc(var(--drawn-bottom) + env(safe-area-inset-bottom, 0px));
+  max-height: calc(100% - 70px);
+}
+.device[data-device="iphone-duo-unfolded"] .sheet { left: 50%; right: auto; width: 540px; transform: translateX(-50%); bottom: auto; top: 90px; border-radius: 30px; padding-bottom: var(--bn-5); }
+.grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--bn-line-strong); align-self: center; margin-top: 4px; }
+.sheet-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-2); min-height: 44px; position: relative; }
+.sheet-bar h3 { margin: 0; font-size: var(--ty-body); font-weight: 600; position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; }
+.sheet p { margin: 0; font-size: var(--ty-title3); line-height: 1.35; color: var(--bn-ink-2); }
+.sheet p b { color: var(--bn-ink); }
+.choice { display: flex; flex-direction: column; background: var(--bn-surface-3); border-radius: var(--bn-r-2xl); overflow: hidden; box-shadow: 0 0 0 1px var(--bn-line); }
+.choice button { min-height: 56px; border: 0; background: transparent; text-align: start; padding: var(--bn-2) var(--bn-4); font-size: var(--ty-title3); display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); cursor: pointer; position: relative; }
+.choice button + button::before { content: ""; position: absolute; top: 0; left: var(--bn-4); right: 0; height: 1px; background: var(--bn-line); }
+.choice button span { font-size: var(--ty-subhead); color: var(--bn-ink-3); }
+.choice .std { font-size: var(--ty-body); min-height: 48px; }
+.check { color: var(--bn-accent); }
+
+/* banners and toasts */
+.banner {
+  position: absolute; z-index: 36; left: var(--bn-3); right: var(--bn-3);
+  bottom: calc(var(--drawn-bottom) + env(safe-area-inset-bottom, 0px) + 72px);
+  display: grid; grid-template-columns: auto 1fr; gap: var(--bn-2) var(--bn-3); align-items: center;
+  padding: var(--bn-3) var(--bn-4); border-radius: var(--bn-r-2xl);
+  background: var(--bn-surface); box-shadow: 0 0 0 1px var(--bn-line-strong), var(--bn-shadow-3);
+  font-size: var(--ty-title3); line-height: 1.3;
+}
+.banner.over-actions { bottom: 214px; }
+.banner .acts { grid-column: 1 / -1; display: flex; gap: var(--bn-2); }
+.banner .acts .glass-btn { flex: 1; box-shadow: none; }
+.banner .ic { color: var(--bn-warn); }
+.device[data-device="iphone-duo-unfolded"] .banner { left: auto; right: var(--bn-4); width: 380px; bottom: calc(var(--drawn-bottom) + 16px); }
+
+/* empty, loading */
+.empty { display: flex; flex-direction: column; align-items: center; gap: var(--bn-4); padding: 80px var(--bn-6) 0; text-align: center; }
+.empty p { margin: 0; font-size: var(--ty-title3); color: var(--bn-ink-2); max-width: 28ch; line-height: 1.35; }
+.skel { height: 85px; border-radius: 0; background: linear-gradient(90deg, var(--bn-surface) 0%, var(--bn-surface-2) 50%, var(--bn-surface) 100%); background-size: 200% 100%; animation: sh 1.4s linear infinite; }
+.skel + .skel { border-top: 1px solid var(--bn-line); }
+@keyframes sh { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+
+/* camera */
+.on-stage { background: var(--bn-stage-bg); color: var(--bn-stage-ink); }
+.viewfinder { flex: 1; position: relative; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 45%, #2a2f3a 0%, var(--bn-stage-bg) 70%); }
+.slab-shape { width: 230px; height: 380px; border-radius: 12px; background: linear-gradient(170deg, #3a4150, #1e232c); box-shadow: inset 0 0 0 2px rgba(255,255,255,.12); position: relative; }
+.slab-shape .lbl { position: absolute; left: 12px; right: 12px; top: 12px; height: 70px; border-radius: 6px; background: #e9ecf1; }
+.slab-shape .bar { position: absolute; right: 16px; top: 26px; width: 70px; height: 40px; background: repeating-linear-gradient(90deg, #111 0 2px, transparent 2px 4px, #111 4px 5px, transparent 5px 8px); }
+.slab-shape .win { position: absolute; left: 22px; right: 22px; top: 98px; bottom: 18px; border-radius: 4px; background: linear-gradient(150deg, hsl(210 55% 58%), hsl(250 45% 30%)); opacity: .85; }
+.reticle { position: absolute; width: 110px; height: 64px; border-radius: 12px; box-shadow: 0 0 0 3px var(--bn-stage-live), 0 0 0 4000px rgba(0,0,0,.45); top: calc(50% - 176px); left: calc(50% + 9px); }
+.cam-hint { position: absolute; left: var(--bn-4); right: var(--bn-4); bottom: 150px; text-align: center; font-size: var(--ty-title3); color: var(--bn-stage-ink); }
+.cam-live { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ty-subhead); color: var(--bn-stage-live); font-weight: 600; }
+.cam-live::before { content: ""; width: 8px; height: 8px; border-radius: 4px; background: var(--bn-stage-live); }
+.cam-foot { position: absolute; left: 0; right: 0; bottom: calc(var(--drawn-bottom) + 16px); display: flex; justify-content: center; }
+
+/* small parts */
+.kv { display: grid; grid-template-columns: 1fr auto; gap: var(--bn-1) var(--bn-3); font-size: var(--ty-body); }
+.kv dt { color: var(--bn-ink-2); }
+.kv dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.fig { font-size: var(--ty-title1); font-weight: 700; font-variant-numeric: tabular-nums; }
+.well { background: var(--bn-surface); border-radius: var(--bn-r-2xl); box-shadow: 0 0 0 1px var(--bn-line); padding: var(--bn-4); display: flex; flex-direction: column; gap: var(--bn-2); }
+.well h3 { margin: 0; font-size: var(--ty-subhead); color: var(--bn-ink-3); font-weight: 600; }
+.allwell { display: flex; align-items: center; gap: var(--bn-3); font-size: var(--ty-title3); font-weight: 600; }
+.field { display: flex; align-items: center; gap: var(--bn-2); min-height: 44px; margin: 0 var(--bn-4); padding: 0 var(--bn-3); border-radius: 999px; background: var(--bn-surface-2); font-size: var(--ty-body); color: var(--bn-ink); }
+.field span { color: var(--bn-ink-3); }
+.field .caret { width: 2px; height: 22px; background: var(--bn-accent); margin-left: -6px; }
+.receipt-sticky { position: absolute; z-index: 36; left: var(--bn-3); right: var(--bn-3); bottom: calc(var(--drawn-bottom) + env(safe-area-inset-bottom, 0px) + 72px); display: flex; align-items: center; gap: var(--bn-3); padding: var(--bn-2) var(--bn-2) var(--bn-2) var(--bn-4); border-radius: 999px; background: var(--bn-surface); box-shadow: 0 0 0 1px var(--bn-line-strong), var(--bn-shadow-3); font-size: var(--ty-body); }
+.receipt-sticky b { color: var(--bn-pill-ink-ok); }
+.device[data-device="iphone-duo-unfolded"] .receipt-sticky { left: auto; right: var(--bn-4); width: 380px; bottom: calc(var(--drawn-bottom) + 16px); }
+.picker-row { display: flex; justify-content: space-between; align-items: center; min-height: 52px; padding: 0 var(--bn-4); font-size: var(--ty-body); position: relative; }
+.picker-row + .picker-row::before { content: ""; position: absolute; top: 0; left: var(--bn-4); right: 0; height: 1px; background: var(--bn-line); }
+.picker-row span { color: var(--bn-accent); display: inline-flex; gap: 4px; align-items: center; }
+.hint { font-size: var(--ty-subhead); color: var(--bn-ink-3); padding: 0 var(--bn-1); margin: 0; }
+.refusal { display: flex; gap: var(--bn-3); align-items: flex-start; padding: var(--bn-3) var(--bn-4); background: var(--bn-warn-tint); border-radius: var(--bn-r-xl); font-size: var(--ty-body); color: var(--bn-ink); }
+
+/* Today / New tags: dashed outlines that say what exists in the web app and what this adds */
+body.tags [data-tag] { outline: 1.5px dashed var(--bn-ink-4); outline-offset: 2px; position: relative; }
+body.tags [data-tag^="New"] { outline-color: var(--bn-accent); }
+body.tags [data-tag]::after {
+  content: attr(data-tag); position: absolute; z-index: 60; top: -9px; left: 8px; pointer-events: none;
+  font: 600 10px/14px -apple-system, system-ui, sans-serif; padding: 0 5px; border-radius: 4px; white-space: nowrap;
+  background: var(--bn-ink-3); color: var(--bn-bg);
+}
+body.tags [data-tag^="New"]::after { background: var(--bn-accent-press); color: #fff; }
+body.tags .tab[data-tag]::after, body.tags .search-tab[data-tag]::after { top: -14px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body class="tags">
+<div class="sample" role="note">Sample: every name, card, buyer, price and count on this page is made up. No figure here is real.</div>
+<main class="wrap">
+  <header class="intro">
+    <h1>Phone Pull</h1>
+    <p><span class="kind">Designer kind: informed.</span> A first look at a native iPhone app for Banchi: pull owed cards at the shelf, find a card, scan a slab, and a read-only glance at the day. Tap anything inside a phone. Each state has its own link. Both poses always show the same state.</p>
+  </header>
+
+  <section class="panel" aria-label="Controls">
+    <div class="ctl-row" role="group" aria-label="Theme"><b>Theme</b>
+      <button class="chip" data-theme-set="auto">Auto</button>
+      <button class="chip" data-theme-set="light">Light</button>
+      <button class="chip" data-theme-set="dark">Dark</button>
+      <button class="chip" id="tagToggle" aria-pressed="true">Today and New Tags</button>
+    </div>
+    <div class="ctl-row" role="group" aria-label="Pull states"><b>Pull</b>
+      <button class="chip" data-go="pull">List by Box</button>
+      <button class="chip" data-go="buyers" data-needs="buyers">List by Buyer</button>
+      <button class="chip" data-go="card">One Card</button>
+      <button class="chip" data-go="pulled">Pulled</button>
+      <button class="chip" data-go="sold">Sold, with Undo</button>
+      <button class="chip" data-go="done">All Pulled</button>
+      <button class="chip" data-go="loading">Loading</button>
+      <button class="chip" data-go="empty">Nothing to Pull</button>
+    </div>
+    <div class="ctl-row" role="group" aria-label="Problem states"><b>Problems</b>
+      <button class="chip" data-go="nothere">Not in Its Spot</button>
+      <button class="chip" data-go="unlocated" data-needs="unloc">Not in a Box</button>
+      <button class="chip" data-go="away-wait" data-needs="wait">Mac out of Reach: Wait</button>
+      <button class="chip" data-go="away-hold" data-needs="hold">Mac out of Reach: Hold Sales</button>
+    </div>
+    <div class="ctl-row" role="group" aria-label="Find states"><b>Find</b>
+      <button class="chip" data-go="find">Find a Card</button>
+      <button class="chip" data-go="findcard">One Card's Copies</button>
+      <button class="chip" data-go="copy">One Copy</button>
+      <button class="chip" data-go="move">Move a Copy</button>
+      <button class="chip" data-go="moved">Moved, with Undo</button>
+    </div>
+    <div class="ctl-row" role="group" aria-label="Slab states"><b>Slabs</b>
+      <button class="chip" data-go="slabs">Slab List</button>
+      <button class="chip" data-go="scan">Scan a Cert</button>
+      <button class="chip" data-go="scanread">Cert Read</button>
+      <button class="chip" data-go="slabadded">Slab Added</button>
+      <button class="chip" data-go="slabrefused">Not Found</button>
+    </div>
+    <div class="ctl-row" role="group" aria-label="Today"><b>Today</b>
+      <button class="chip" data-go="today">Glance</button>
+    </div>
+    <div class="ctl-row" role="group" aria-label="Options"><b>Options</b>
+      <span class="opt" data-opt="count">Pull Count <button class="chip" data-hide="count">Hide</button></span>
+      <span class="opt" data-opt="marks">Buyer Marks <button class="chip" data-hide="marks">Hide</button></span>
+      <span class="opt" data-opt="buyers">List by Buyer <button class="chip" data-hide="buyers">Hide</button></span>
+      <span class="opt" data-opt="unloc">Not in a Box List <button class="chip" data-hide="unloc">Hide</button></span>
+      <span class="opt" data-opt="wait">Wait for the Mac <button class="chip" data-hide="wait">Hide</button></span>
+      <span class="opt" data-opt="hold">Hold Sales While Away <button class="chip" data-hide="hold">Hide</button></span>
+      <span class="opt" data-opt="scanCert">Scan the Cert <button class="chip" data-hide="scanCert">Hide</button></span>
+    </div>
+  </section>
+
+  <p class="caption" id="caption" aria-live="polite"></p>
+
+  <div class="stage">
+    <div class="pose"><span>iPhone Duo, folded. Drawn at 375 by 812 (the brief's width; no Duo size is written).</span>
+      <div class="device" data-device="iphone-duo-folded" id="folded"></div>
+    </div>
+    <div class="pose"><span>iPhone Duo, unfolded. Drawn at 820 by 812 (the brief's 820 width; no Duo size is written).</span>
+      <div class="device" data-device="iphone-duo-unfolded" id="unfolded"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+/* ---------------- sample data (made up) ---------------- */
+const BUYERS = {
+  MP: { name: 'Mara Pell', lane: 'Envelope' },
+  JO: { name: 'June Okafor', lane: 'Envelope' },
+  TB: { name: 'Theo Brandt', lane: 'Parcel' },
+  RL: { name: 'Rosa Lind', lane: 'Envelope' },
+  IV: { name: 'Iggy Vance', lane: 'Envelope' },
+};
+const CARDS = [
+  { id: 'gale', name: 'Gale Runner', about: 'Near Mint, 041/210', h: 200, box: 'Box 3', sec: 'Section 2', for: ['MP', 'JO'],
+    copies: [{ at: 'Card 18', of: 54, box: 'Box 3', sec: 'Section 2' }, { at: 'Card 25', of: 54, box: 'Box 3', sec: 'Section 2' }, { at: 'Card 3', of: 40, box: 'Box 5', sec: 'Section 1' }] },
+  { id: 'lantern', name: 'Quiet Lantern', about: 'Near Mint, 118/210', h: 42, box: 'Box 3', sec: 'Section 2', for: ['MP', 'IV'],
+    copies: [{ at: 'Card 31', of: 54, box: 'Box 3', sec: 'Section 2' }, { at: 'Card 40', of: 54, box: 'Box 3', sec: 'Section 2' }] },
+  { id: 'golem', name: 'Brass Golem', about: 'Lightly Played, 077/210', h: 28, box: 'Box 3', sec: 'Section 7', for: ['JO'],
+    copies: [{ at: 'Card 9', of: 38, box: 'Box 3', sec: 'Section 7' }] },
+  { id: 'oracle', name: 'Saltglass Oracle', about: 'Near Mint Foil, 162/210', h: 176, box: 'Box 5', sec: 'Section 1', for: ['TB'],
+    copies: [{ at: 'Card 12', of: 40, box: 'Box 5', sec: 'Section 1' }] },
+  { id: 'warden', name: 'Moss Warden', about: 'Near Mint, 090/210', h: 110, box: 'Box 5', sec: 'Section 1', for: ['TB', 'TB'],
+    copies: [{ at: 'Card 14', of: 40, box: 'Box 5', sec: 'Section 1' }, { at: 'Card 15', of: 40, box: 'Box 5', sec: 'Section 1' }, { at: 'Card 30', of: 40, box: 'Box 5', sec: 'Section 1' }] },
+  { id: 'ram', name: 'Thornback Ram', about: 'Near Mint, 013/210', h: 12, box: 'Box 5', sec: 'Section 4', for: ['RL'],
+    copies: [{ at: 'Card 2', of: 29, box: 'Box 5', sec: 'Section 4' }] },
+  { id: 'lookout', name: 'Ashen Lookout', about: 'Near Mint, 201/210', h: 268, box: 'Box 5', sec: 'Section 4', for: ['RL'],
+    copies: [{ at: 'Card 21', of: 29, box: 'Box 5', sec: 'Section 4' }] },
+];
+const UNLOCATED = [
+  { name: 'Ember Wyrm', about: 'Near Mint, 150/210', h: 8, for: ['JO'] },
+  { name: 'Hollow Crown', about: 'Near Mint, 188/210', h: 300, for: ['IV'] },
+];
+const TO_PULL = CARDS.reduce((n, c) => n + c.for.length, 0);   // 10
+const NOT_IN_BOX = UNLOCATED.reduce((n, c) => n + c.for.length, 0); // 2
+const OWED = TO_PULL + NOT_IN_BOX;                                // 12
+const SLABS = [
+  { label: 'Gale Runner Holo, First Print', grade: 'PSA 10', value: '$412', h: 200 },
+  { label: 'Saltglass Oracle Alt Art', grade: 'BGS 9.5', value: '$268', h: 176 },
+  { label: 'Moss Warden Promo', grade: 'CGC 9', value: '$95', h: 110 },
+  { label: 'Brass Golem', grade: 'SGC 10', value: 'No sales', h: 28 },
+];
+const GRADERS = ['PSA', 'Beckett', 'BGS', 'BVG', 'SGC', 'CGC'];
+
+/* ---------------- states ---------------- */
+const STATES = {
+  pull:       { tab: 'pull', say: 'The pull list, in walk order by box and section. Each card says how many to pull and whose envelope each copy goes in.' },
+  buyers:     { tab: 'pull', opt: 'buyers', say: 'The same list sorted by buyer: one row per envelope or parcel, with how many of its cards are in.' },
+  card:       { tab: 'pull', say: 'One card: the place, the photo to check against the card in hand, how many to pull, and whose envelope it goes in. Pull and Mark It Sold have their own slots from the start.' },
+  pulled:     { tab: 'pull', say: 'After Pull: the Pull slot becomes a sentence, and Mark It Sold appears below it, so a double tap lands on text.' },
+  sold:       { tab: 'pull', say: 'After Mark It Sold: the answer shows where the press was, with Undo. The next copy of the same card is ready, for the next buyer.' },
+  done:       { tab: 'pull', say: 'Every card on a shelf is pulled. The list keeps what is still owed: the cards not in a box.' },
+  loading:    { tab: 'pull', say: 'The first read from the Mac. The count slot keeps its size. Nothing reads as empty or zero.' },
+  empty:      { tab: 'pull', say: 'No open order owes a card. One sentence, one control.' },
+  nothere:    { tab: 'pull', say: 'The card is not in its spot. The sheet offers the next copy, or skipping the card for now.' },
+  unlocated:  { tab: 'pull', opt: 'unloc', say: 'Owed cards with no copy in any box get their own list, each with a way to look for it.' },
+  'away-wait':{ tab: 'pull', opt: 'wait', say: 'The Mac is out of reach. The list stays, from the last read. Pull still works; Mark It Sold waits and says why.' },
+  'away-hold':{ tab: 'pull', opt: 'hold', say: 'The Mac is out of reach. Sales are kept on the phone and sent when the Mac answers again.' },
+  find:       { tab: 'find', say: 'Find a card by name. Each result says how many copies there are, and where.' },
+  findcard:   { tab: 'find', say: 'One card in Find: every copy, by place.' },
+  copy:       { tab: 'find', say: 'One copy: its photo and place, with Sell This Copy and Move This Copy.' },
+  move:       { tab: 'find', say: 'Move one copy to another box and section.' },
+  moved:      { tab: 'find', say: 'The move is done. The answer shows at the place it was pressed, with Undo.' },
+  slabs:      { tab: 'slabs', say: 'Your slabs, sorted by value, with Scan in the toolbar.' },
+  scan:       { tab: 'slabs', opt: 'scanCert', say: 'The camera reads the barcode on the slab label. A typed cert stays one tap away.' },
+  scanread:   { tab: 'slabs', opt: 'scanCert', say: 'The cert is read. Pick the grader, then Add. The cert itself is not shown.' },
+  slabadded:  { tab: 'slabs', say: 'The slab is added and sits in the list where its value puts it.' },
+  slabrefused:{ tab: 'slabs', say: 'Card Ladder has no slab with that cert for that grader. The sheet stays open, nothing is saved.' },
+  today:      { tab: 'today', say: 'A read-only glance: what is not normal first, then shipping lanes, orders and sales. The same numbers as Pull.' },
+};
+const OPT_NAMES = { count: 'Pull Count', marks: 'Buyer Marks', buyers: 'List by Buyer', unloc: 'Not in a Box List', wait: 'Wait for the Mac', hold: 'Hold Sales While Away', scanCert: 'Scan the Cert' };
+
+/* ---------------- hash: #s=<state>&t=<theme>&h=<hidden,options> ---------------- */
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  const s = STATES[p.get('s')] ? p.get('s') : 'pull';
+  const t = ['light', 'dark'].includes(p.get('t')) ? p.get('t') : 'auto';
+  const h = new Set((p.get('h') || '').split(',').filter((x) => OPT_NAMES[x]));
+  return { s, t, h };
+}
+function writeHash(next) {
+  const cur = readHash();
+  const v = { ...cur, ...next };
+  const parts = ['s=' + v.s];
+  if (v.t !== 'auto') parts.push('t=' + v.t);
+  if (v.h.size) parts.push('h=' + [...v.h].join(','));
+  location.hash = parts.join('&');
+}
+let ST = readHash();
+const on = (k) => !ST.h.has(k);
+
+/* ---------------- icons ---------------- */
+const I = {
+  tray: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l2.5-7h11L20 13v6H4z"/><path d="M4 13h5a3 3 0 006 0h5"/></svg>',
+  search: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>',
+  slab: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M6 8h12"/></svg>',
+  sun: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>',
+  back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  chev: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
+  check: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  hand: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11V5.5a1.5 1.5 0 013 0V10M11 9.5v-5a1.5 1.5 0 013 0V10M14 10V6a1.5 1.5 0 013 0v8a7 7 0 01-7 7h-.5a6 6 0 01-4.8-2.4L3 15.5a1.6 1.6 0 012.5-2L8 15.5V11"/></svg>',
+  undo: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/></svg>',
+  warn: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5L2.5 20h19z"/><path d="M12 10v4.5M12 17.3v.2"/></svg>',
+  wifioff: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 8.5a15 15 0 0114.5-3M22 8.5a15 15 0 00-3-2M5.5 12a10 10 0 016.5-2.6M18.5 12a10 10 0 00-2-1.4M9 15.5a5 5 0 016 0M12 19.5v.1M3 3l18 18"/></svg>',
+  camera: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  x: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  box: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5l9 4.5 9-4.5M12 12v9"/></svg>',
+  up: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>',
+  env: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5"/></svg>',
+  parcel: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5l9 4.5 9-4.5M12 12v9"/></svg>',
+  refresh: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4v5h-5"/><path d="M19.5 9A8 8 0 1012 20a8 8 0 007.4-5"/></svg>',
+  type: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.1M10 10h.1M14 10h.1M18 10h.1M7 14h10"/></svg>',
+};
+
+/* ---------------- parts ---------------- */
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function art(h, cls, name, w) { return `<span class="art ${cls}" style="--h:${h}" aria-hidden="true"><i></i><em></em>${name ? `<u>${esc(name)}</u>` : ''}</span>`; }
+function status(stage) {
+  return `<div class="statusbar"><span class="num">9:41</span><span class="island" aria-hidden="true"></span><span class="glyphs" aria-hidden="true">
+    <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+    <svg width="26" height="12" viewBox="0 0 26 12" fill="none" stroke="currentColor"><rect x=".5" y=".5" width="22" height="11" rx="3.5" opacity=".5"/><rect x="2" y="2" width="17" height="8" rx="2" fill="currentColor" stroke="none"/></svg></span></div>`;
+}
+function marks(ids, state) {
+  if (!on('marks')) return '';
+  return `<span class="marks" data-tag="New: Buyer Marks" id="opt-marks">${ids.map((b, i) => `<span class="mark ${state ? state(i) : ''}" title="${BUYERS[b].name}">${b}</span>`).join('')}</span>`;
+}
+function need(n, cls = '') {
+  if (!on('count')) return '';
+  return `<span class="need ${cls}" data-tag="New: Pull Count" id="opt-count">Pull ${n}</span>`;
+}
+function tabBar(active, pose) {
+  const t = (id, label, icon, badge, tag) =>
+    `<button class="tab" role="tab" aria-selected="${active === id}" data-go="${{ pull: 'pull', slabs: 'slabs', today: 'today' }[id]}"${tag ? ` data-tag="${tag}"` : ''}>${icon}<span>${label}</span>${badge ? `<span class="badge num">${badge}</span>` : ''}</button>`;
+  return `<nav class="tabbar" aria-label="Sections"><div class="tabs" role="tablist">
+      ${t('pull', 'Pull', I.tray, TO_PULL, 'Today: Cards to Pull')}${t('slabs', 'Slabs', I.slab, 0, 'Today: Slabs')}${t('today', 'Today', I.sun, 0, 'New: Glance')}
+    </div><button class="search-tab" role="tab" aria-selected="${active === 'find'}" aria-label="Find" data-go="find" data-tag="Today: Inventory Search">${I.search}</button></nav>`;
+}
+function countLine() {
+  return `<p class="count num" data-tag="New: One Count"><span><b>${TO_PULL}</b> to pull</span><span><b>5</b> buyers</span>${NOT_IN_BOX ? `<a data-go="${on('unloc') ? 'unlocated' : 'pull'}" ${on('unloc') ? '' : 'aria-disabled="true"'}>${I.warn}<b style="color:inherit">${NOT_IN_BOX}</b>&nbsp;not in a box</a>` : ''}</p>`;
+}
+function navLarge(title, end = '', sub = '') {
+  return `<header class="nav"><div class="nav-tools"><span></span><span class="end">${end}</span></div><h1 class="large">${title}</h1>${sub}</header>`;
+}
+function navInline(title, backTo, backLabel, end = '') {
+  return `<header class="nav-inline"><button class="glass-btn" data-go="${backTo}" aria-label="Back to ${backLabel}">${I.back}</button><span class="inline-title">${esc(title)}</span><span class="end" style="margin-inline-start:auto;display:flex;gap:8px">${end}</span></header>`;
+}
+function segPull(which) {
+  if (!on('buyers')) return '';
+  return `<div class="seg" role="tablist" aria-label="Sort" data-tag="New: List by Buyer" id="opt-buyers"><button role="tab" aria-selected="${which === 'box'}" data-go="pull">By Box</button><button role="tab" aria-selected="${which === 'buyer'}" data-go="buyers">By Buyer</button></div>`;
+}
+
+/* the pull list, by box */
+function pullRows(opts = {}) {
+  const groups = [];
+  for (const c of CARDS) {
+    const k = c.box + ', ' + c.sec;
+    let g = groups.find((x) => x.k === k);
+    if (!g) groups.push(g = { k, cards: [] });
+    g.cards.push(c);
+  }
+  return groups.map((g) => `
+    <div class="group"><div class="group-head"><h2>${g.k}</h2><span class="num">${g.cards.reduce((n, c) => n + c.for.length, 0)} to pull</span></div>
+      <div class="list">${g.cards.map((c) => {
+        const here = c.copies.filter((x) => x.box === c.box && x.sec === c.sec).map((x) => x.at.replace('Card ', '')).join(', ');
+        const done = opts.done || (opts.soldOne && c.id === 'gale' && false);
+        const cur = opts.current === c.id;
+        const progress = opts.soldOne && c.id === 'gale';
+        return `<button class="row ${done ? 'done' : ''}" data-go="card" ${cur ? 'aria-current="true"' : ''}>
+          ${art(c.h, 'thumb')}
+          <span class="row-main"><span class="row-name">${c.name}</span><span class="row-sub num">${here.includes(',') ? 'Cards' : 'Card'} ${here}</span>${marks(c.for, progress ? (i) => (i === 0 ? 'got' : '') : done ? () => 'got' : null)}</span>
+          <span class="row-end">${done ? `<span class="need ok">${I.check}</span>` : progress ? need('1 More') : need(c.for.length)}</span>
+        </button>`;
+      }).join('')}</div></div>`).join('') +
+    (on('unloc') && !opts.noUnloc ? `<div class="group"><div class="group-head"><h2>Not in a Box</h2><span class="num">${NOT_IN_BOX} owed</span></div>
+      <div class="list">${UNLOCATED.map((u) => `<button class="row" data-go="unlocated">${art(u.h, 'thumb')}<span class="row-main"><span class="row-name">${u.name}</span><span class="row-sub">No copy in any box</span>${marks(u.for, () => 'short')}</span><span class="row-end"><span class="chev">${I.chev}</span></span></button>`).join('')}</div></div>` : '');
+}
+
+function pullList(pose, which = 'box', extra = {}) {
+  const head = navLarge('Pull', `<button class="glass-btn" aria-label="Read again from the Mac">${I.refresh}</button>`);
+  const body = which === 'buyer' ? buyerRows(extra) : pullRows(extra);
+  return head + countLine() + segPull(which) + body;
+}
+
+/* unfolded: the buyers beside the walk */
+function buyerPanel() {
+  const per = buyerTotals();
+  return `<div class="nav" style="padding-top:8px"><h2 class="large" style="font-size:var(--ty-title1);line-height:34px">Buyers</h2></div>
+    <p class="hint" style="padding:0 20px">Each buyer's cards go in one envelope or parcel.</p>
+    <div class="group" data-tag="New: Buyers Beside the Walk"><div class="list">${Object.keys(BUYERS).map((b) => `<div class="row row-std" style="cursor:default"><span class="mark">${b}</span>
+      <span class="row-main"><span class="row-name">${BUYERS[b].name}</span><span class="row-sub" style="display:flex;gap:6px;align-items:center">${BUYERS[b].lane === 'Parcel' ? I.parcel : I.env} ${BUYERS[b].lane}${per[b].short ? `, <span style="color:var(--bn-pill-ink-warn)">${per[b].short} not in a box</span>` : ''}</span></span>
+      <span class="num" style="font-size:var(--ty-body);color:var(--bn-ink-2)">0 of ${per[b].cards.length + per[b].short} in</span></div>`).join('')}</div></div>`;
+}
+function buyerTotals() {
+  const per = {};
+  for (const b of Object.keys(BUYERS)) per[b] = { cards: [], short: 0 };
+  for (const c of CARDS) c.for.forEach((b) => per[b].cards.push(c));
+  for (const u of UNLOCATED) u.for.forEach((b) => { per[b].short += 1; per[b].unloc = u; });
+  return per;
+}
+function buyerDetail(b) {
+  const p = buyerTotals()[b];
+  return `<div class="nav" style="padding-top:8px;flex-direction:row;align-items:center;gap:12px"><span class="mark big">${b}</span><h2 class="large" style="font-size:var(--ty-title1);line-height:34px">${BUYERS[b].name}</h2></div>
+    <p class="hint" style="padding:0 20px;display:flex;gap:6px;align-items:center">${I.env} ${BUYERS[b].lane}, ${p.cards.length + p.short} cards</p>
+    <div class="group"><div class="list">${p.cards.map((c) => `<button class="row" data-go="card">${art(c.h, 'thumb')}<span class="row-main"><span class="row-name">${c.name}</span><span class="row-sub num">${c.box}, ${c.sec}</span></span><span class="chev">${I.chev}</span></button>`).join('')}
+    ${p.short ? `<div class="row" style="cursor:default">${art(p.unloc.h, 'thumb')}<span class="row-main"><span class="row-name">${p.unloc.name}</span><span class="row-sub" style="color:var(--bn-pill-ink-warn)">Not in a box</span></span><span></span></div>` : ''}</div></div>`;
+}
+
+function buyerRows(extra = {}) {
+  const per = buyerTotals();
+  return `<div class="group"><div class="list">${Object.keys(BUYERS).map((b) => {
+    const p = per[b]; const total = p.cards.length + p.short;
+    return `<button class="row" data-go="${extra.noSeg ? 'buyers' : 'card'}" ${extra.noSeg && b === 'JO' ? 'aria-current="true"' : ''}><span class="mark big">${b}</span>
+      <span class="row-main"><span class="row-name">${BUYERS[b].name}</span><span class="row-sub">${[...new Set(p.cards.map((c) => c.name))].join(', ')}</span>
+      <span class="row-sub" style="display:flex;gap:6px;align-items:center;color:var(--bn-ink-3)">${BUYERS[b].lane === 'Parcel' ? I.parcel : I.env} ${BUYERS[b].lane}${p.short ? `, <span style="color:var(--bn-pill-ink-warn)">${p.short} not in a box</span>` : ''}</span></span>
+      <span class="row-end"><span class="need num">0 of ${total}</span></span></button>`;
+  }).join('')}</div><p class="hint">Each buyer's cards go in one envelope or parcel. The count says how many are in it.</p></div>`;
+}
+
+/* the card screen (photo check). phase: card | pulled | sold | pulled-wait | sold-hold */
+function cardScreen(pose, phase) {
+  const c = CARDS[0];
+  const cp = c.copies[0];
+  const who = c.for[0];
+  const sold = phase === 'sold' || phase === 'sold-hold';
+  const pos = Math.round((parseInt(cp.at.replace('Card ', ''), 10) / cp.of) * 100);
+  const mk = on('marks') ? marks([who]) : '';
+  const needCap = on('count') ? `<span class="need ${sold ? 'ok' : ''}" data-tag="New: Pull Count">${sold ? '1 More' : 'Pull ' + c.for.length}</span>` : '';
+  const copies = `<div class="copies" role="tablist" aria-label="Copies of ${c.name}" data-tag="Today: Every Copy, in Walk Order">${c.copies.map((x, i) =>
+      `<button class="copy num ${sold && i === 0 ? 'sold' : ''}" role="tab" aria-selected="${i === 0}" data-go="card">${x.box === c.box && x.sec === c.sec ? x.at : x.box + ', ' + x.at}</button>`).join('')}</div>`;
+  let top, low;
+  if (phase === 'card') {
+    top = `<button class="big-btn" data-go="pulled" data-tag="Today: Pull">${I.hand} Pull</button>`;
+    low = `<p class="slot-note">${mk}<span>${on('marks') ? `Goes to <b>${BUYERS[who].name}</b>` : `For <b>${BUYERS[who].name}</b>'s order`}</span></p>`;
+  } else if (phase === 'pulled') {
+    top = `<p class="said" role="status">${I.check}<span>Pulled.${on('marks') ? ' Goes to ' + BUYERS[who].name.split(' ')[0] + '.' : ''}</span></p>`;
+    low = `<button class="big-btn" data-go="sold" data-tag="Today: Mark It Sold">Mark It Sold</button>`;
+  } else if (phase === 'pulled-wait') {
+    top = `<p class="said" role="status">${I.check}<span>Pulled.</span></p>`;
+    low = `<p class="slot-note waits" data-tag="New: Wait for the Mac">${I.wifioff}<span>Mark It Sold waits for the Mac.</span></p>`;
+  } else {
+    const hold = phase === 'sold-hold';
+    top = `<p class="said" role="status"${hold ? ' data-tag="New: Kept on This Phone"' : ''}>${I.check}<span>${hold ? 'Kept on this phone.' : 'Sold to ' + BUYERS[who].name.split(' ')[0] + '.'}</span><button class="glass-btn tint undo" data-go="card" data-tag="Today: Undo">${I.undo} Undo</button></p>`;
+    low = `<button class="big-btn quiet" data-go="card"><span>Next Copy: <span class="num">Card 25</span></span></button>`;
+  }
+  const steps = `<div class="steps" data-tag="Today: Two Steps, Both Slots Kept">${top}${low}</div>`;
+  const end = `<button class="glass-btn" data-go="nothere" data-tag="New: Not Here">Not Here</button>`;
+  const photo = (cls) => `<span style="position:relative;display:block">${art(c.h, cls, c.name)}<span class="photo-tag">Sample photo</span><span class="photo-tag left num">Copy 1 of ${c.copies.length}</span></span>`;
+
+  if (pose === 'folded') {
+    return `<div class="screen">${status()}${navInline(c.box + ', ' + c.sec, 'pull', 'Pull', end)}
+      <div class="body no-tabs" style="padding-bottom:230px">
+        <div class="placeline" data-tag="Today: Place Label"><span><strong class="num">${cp.at}</strong> <small class="num">of ${cp.of}</small></span>${needCap}</div>
+        <div class="track-only" role="img" aria-label="${cp.at} of ${cp.of}, back to front"><b style="left:${pos}%"></b></div>
+        <div class="photo-wrap" style="padding-top:8px">${photo('photo')}</div>
+        ${copies}
+        <p class="hint" style="padding:12px 20px 0;font-size:var(--ty-title3);color:var(--bn-ink-2)">${esc(c.name)}, ${c.about}</p>
+      </div>
+      <div class="actions">${steps}</div></div>`;
+  }
+  return `<div class="screen">${status()}<div class="wide">
+      <section class="act-half">${navInline(c.name, 'pull', 'Pull', end)}
+        <div class="place" data-tag="Today: Place Label"><small>${cp.box}, ${cp.sec}</small><strong>${cp.at}</strong></div>
+        <div class="posbar num"><span>Back</span><span class="track"><b style="left:${pos}%"></b></span><span>Front</span></div>
+        <div class="need-line">${needCap || '<span></span>'}<span class="hint" style="font-size:var(--ty-title3)">${c.copies.length} copies</span></div>
+        ${copies}
+        ${on('marks') ? `<div class="group"><div class="group-head"><h2>For</h2></div><div class="list">${c.for.map((b, i) => `<div class="row" style="cursor:default">${marks([b], () => (sold && i === 0 ? 'got' : ''))}<span class="row-main"><span class="row-name">${BUYERS[b].name}</span></span><span class="row-sub">${sold && i === 0 ? 'Sold' : (sold ? i === 1 : i === 0) ? 'This copy' : 'Next'}</span></div>`).join('')}</div></div>` : ''}
+        <div class="act-foot">${steps}</div>
+      </section>
+      <section class="photo-half"><div class="photo-center">${photo('photo photo-l')}<p>${esc(c.name)}, ${c.about}</p></div></section>
+    </div></div>`;
+}
+
+/* -------- Find -------- */
+function findList(pose) {
+  return navLarge('Find') + `<div class="field" role="search" data-tag="Today: Search">${I.search}<span style="color:var(--bn-ink)">gale</span><i class="caret"></i></div>
+    <div class="group"><div class="list">
+      <button class="row row-std" data-go="findcard" aria-current="${pose === 'unfolded'}">${art(200, 'thumb')}<span class="row-main"><span class="row-name">Gale Runner</span><span class="row-sub num">3 copies, Box 3 and Box 5</span></span><span class="chev">${I.chev}</span></button>
+      <button class="row row-std" data-go="findcard">${art(205, 'thumb')}<span class="row-main"><span class="row-name">Gale Runner Holo</span><span class="row-sub num">1 copy, Box 6</span></span><span class="chev">${I.chev}</span></button>
+      <button class="row row-std" data-go="findcard">${art(190, 'thumb')}<span class="row-main"><span class="row-name">Galeforce Charm</span><span class="row-sub num">5 copies, Box 2</span></span><span class="chev">${I.chev}</span></button>
+    </div></div>`;
+}
+function findCard(pose, inSplit) {
+  const c = CARDS[0];
+  const head = inSplit ? `<div class="nav" style="padding-top:8px"><h2 class="large" style="font-size:var(--ty-title1);line-height:34px">${c.name}</h2></div>` : navInline(c.name, 'find', 'Find');
+  return head + `<p class="hint" style="padding:0 20px;font-size:var(--ty-body)">${c.about}. 2 owed to open orders.</p>
+    <div class="group"><div class="group-head"><h2 style="font-size:var(--ty-body)">Copies</h2><span class="num">3</span></div><div class="list">
+    ${c.copies.map((x, i) => `<button class="row row-std" data-go="copy" ${ST.s === 'copy' && i === 0 && inSplit ? 'aria-current="true"' : ''}>${art(c.h, 'thumb')}<span class="row-main"><span class="row-name num">${x.box}, ${x.sec}, ${x.at}</span><span class="row-sub">${i < 2 ? 'Owed to an order' : 'For sale'}</span></span><span class="chev">${I.chev}</span></button>`).join('')}
+    </div></div>`;
+}
+function copySheet(pose, moved) {
+  const c = CARDS[0];
+  return `<div class="scrim" data-go="findcard"></div><div class="sheet" role="dialog" aria-label="One copy"><span class="grabber"></span>
+    <div class="sheet-bar"><button class="glass-btn" data-go="findcard">Close</button><h3>One Copy</h3><span style="width:44px"></span></div>
+    <p class="num"><b>Box 3, Section 2, Card 18</b></p>
+    <div style="display:grid;grid-template-columns:120px 1fr;gap:16px;align-items:start">
+      ${art(c.h, 'copyart', c.name)}
+      <div style="display:flex;flex-direction:column;gap:8px"><p><b>${c.name}</b></p><p class="num" style="font-size:var(--ty-body)">${c.about}</p><p style="font-size:var(--ty-body)">Owed to Mara Pell's order.</p></div>
+    </div>
+    <div class="choice">
+      <button data-go="card" data-tag="Today: Sell This Copy"><b>Sell This Copy</b><span>Pull, then Mark It Sold</span></button>
+      <button data-go="move" data-tag="Today: Move This Copy"><b>Move This Copy</b><span>To another box</span></button>
+    </div></div>`;
+}
+function moveSheet(pose) {
+  return `<div class="scrim" data-go="copy"></div><div class="sheet" role="dialog" aria-label="Move a copy"><span class="grabber"></span>
+    <div class="sheet-bar"><button class="glass-btn" data-go="copy">Cancel</button><h3>Move a Copy</h3><button class="glass-btn prominent" data-go="moved">Move</button></div>
+    <p>Gale Runner, from <b class="num">Box 3, Section 2, Card 18</b></p>
+    <div class="choice" style="background:var(--bn-surface-3)">
+      <div class="picker-row"><span style="color:var(--bn-ink)">To Box</span><span>Box 5 ${I.up}</span></div>
+      <div class="picker-row"><span style="color:var(--bn-ink)">Section</span><span>Section 1 ${I.up}</span></div>
+    </div>
+    <p class="hint">It goes at the end of the section. Its new card number shows after the move.</p></div>`;
+}
+
+/* -------- Slabs -------- */
+function slabList(pose, added) {
+  const rows = added ? [{ label: 'Quiet Lantern Holo', grade: 'PSA 9', value: '$140', h: 42, fresh: true }, ...SLABS] : SLABS;
+  rows.sort((a, b) => (parseInt(b.value.replace(/\D/g, ''), 10) || -1) - (parseInt(a.value.replace(/\D/g, ''), 10) || -1));
+  const scanBtn = on('scanCert')
+    ? `<button class="glass-btn tint" data-go="scan" aria-label="Scan a cert" data-tag="New: Scan" id="opt-scanCert">${I.camera} Scan</button>`
+    : `<button class="glass-btn tint" data-go="scanread" aria-label="Add a slab" data-tag="Today: Add a Slab">+</button>`;
+  return navLarge('Slabs', scanBtn) + `<div class="group"><div class="list">${rows.map((s) =>
+    `<button class="row row-std" ${s.fresh ? 'aria-current="true"' : ''}>${art(s.h, 'thumb')}<span class="row-main"><span class="row-name">${s.label}</span><span class="row-sub">${s.grade}</span></span><span class="row-end"><b class="num" style="font-size:var(--ty-body)${s.value === 'No sales' ? ';color:var(--bn-ink-3);font-weight:400' : ''}">${s.value}</b></span></button>`).join('')}</div>
+    <p class="hint">Sorted by Card Ladder's value. A slab that never sold is last.</p></div>`;
+}
+function scanScreen() {
+  return `<div class="screen on-stage">${status()}<header class="nav-inline"><button class="glass-btn" data-go="slabs" aria-label="Close">${I.x}</button><span class="inline-title" style="color:var(--bn-stage-ink)">Scan a Cert</span><span style="margin-inline-start:auto" class="cam-live">Camera on</span></header>
+    <div class="viewfinder"><span class="slab-shape"><span class="lbl"></span><span class="bar"></span><span class="win"></span></span><span class="reticle" aria-hidden="true"></span>
+      <p class="cam-hint">Point at the barcode on the slab's label.</p>
+      <div class="cam-foot"><button class="glass-btn" data-go="scanread" style="min-height:52px;padding:0 20px">${I.type} Type the Cert Instead</button></div>
+      <button class="glass-btn" data-go="scanread" style="position:absolute;top:16px;right:16px;border-style:dashed" aria-label="Mockup only: act as if the barcode was read">Mockup: Read It</button>
+    </div><span class="homebar"></span></div>`;
+}
+function scanReadSheet(refused) {
+  return `<div class="scrim"></div><div class="sheet" role="dialog" aria-label="Add a slab"><span class="grabber"></span>
+    <div class="sheet-bar"><button class="glass-btn" data-go="slabs">Cancel</button><h3>Add a Slab</h3><button class="glass-btn prominent" data-go="${refused ? 'slabrefused' : 'slabadded'}">Add</button></div>
+    ${on('scanCert') ? `<p style="display:flex;gap:10px;align-items:center;color:var(--bn-pill-ink-ok);font-weight:600">${I.check} Cert read.</p>` : `<div class="field" style="margin:0"><span>Cert</span></div>`}
+    ${refused ? `<div class="refusal" role="alert"><span style="color:var(--bn-warn)">${I.warn}</span><span>Card Ladder has no slab with that cert for that grader. Nothing was saved.</span></div>
+      <div class="choice"><button class="std" data-go="scan">Scan Again</button></div>` : ''}
+    <div class="choice" role="radiogroup" aria-label="Grader">${GRADERS.map((g, i) => `<button class="std" role="radio" aria-checked="${i === 0}">${g}${i === 0 ? `<span class="check">${I.check}</span>` : ''}</button>`).join('')}</div>
+    <p class="hint">Reading Card Ladder takes a little while after Add.</p></div>`;
+}
+
+/* -------- Today -------- */
+function today(pose) {
+  return navLarge('Today') + `<div class="group" style="gap:12px">
+    <div class="well" data-tag="New: Not Normal First"><span class="allwell" style="color:var(--bn-pill-ink-warn)">${I.warn} ${NOT_IN_BOX} owed cards are not in a box.</span><button class="glass-btn tint" style="align-self:flex-start" data-go="${on('unloc') ? 'unlocated' : 'pull'}">Show Them</button></div>
+    <div class="well"><h3>Orders</h3><dl class="kv num"><dt>Owed</dt><dd>${OWED}</dd><dt>To pull</dt><dd>${TO_PULL}</dd><dt>Not in a box</dt><dd>${NOT_IN_BOX}</dd><dt>Buyers</dt><dd>5</dd></dl></div>
+    <div class="well" data-tag="Today: Shipping Lanes"><h3>Shipping</h3><dl class="kv num"><dt>Envelope</dt><dd>4</dd><dt>Parcel</dt><dd>1</dd><dt>Needs a Look</dt><dd>0</dd></dl></div>
+    <div class="well" data-tag="Today: Sales"><h3>Sales, last 7 days</h3><span class="fig">$1,284</span><span class="hint" style="padding:0">Canceled orders left out.</span></div>
+  </div>`;
+}
+
+/* -------- sheets for pull problems -------- */
+function notHereSheet() {
+  return `<div class="scrim" data-go="card"></div><div class="sheet" role="dialog" aria-label="Not in its spot"><span class="grabber"></span>
+    <div class="sheet-bar"><button class="glass-btn" data-go="card">Cancel</button><h3>Not Here</h3><span style="width:44px"></span></div>
+    <p><b class="num">Card 18</b> is not in its spot. Two other copies are on the shelf.</p>
+    <div class="choice">
+      <button data-go="card"><b class="num">Try Card 25</b><span>Same section</span></button>
+      <button data-go="card"><b class="num">Try Box 5, Card 3</b><span>Box 5, Section 1</span></button>
+      <button data-go="pull"><b>Skip for Now</b><span>It moves to the end</span></button>
+    </div>
+    <p class="hint">Nothing is sold or changed. Card 18 stays on the Mac's list for the owner to check.</p></div>`;
+}
+function unlocatedScreen(pose) {
+  return navInline('Not in a Box', 'pull', 'Pull') + `<p class="count" style="padding-top:8px">${NOT_IN_BOX} owed cards have no copy in any box.</p>
+    <div class="group"><div class="list">${UNLOCATED.map((u) => `<div class="row" style="cursor:default">${art(u.h, 'thumb')}<span class="row-main"><span class="row-name">${u.name}</span><span class="row-sub">${u.about}</span>${marks(u.for, () => 'short')}</span><span class="row-end"><button class="glass-btn tint" data-go="find">Look For It</button></span></div>`).join('')}</div>
+    <p class="hint">Look For It opens Find with the card's name, so a copy filed under another box shows.</p></div>`;
+}
+
+/* -------- away -------- */
+function awayBanner(kind) {
+  if (kind === 'hold') {
+    return `<div class="banner over-actions" role="status" data-tag="New: Hold Sales While Away" id="opt-hold"><span class="ic">${I.wifioff}</span><span>Can't reach the Mac. <b class="num">2 sales</b> are kept on this phone and send when it answers.</span>
+      <span class="acts"><button class="glass-btn tint">Try Again</button></span></div>`;
+  }
+  return `<div class="banner over-actions" role="status" data-tag="New: Wait for the Mac" id="opt-wait"><span class="ic">${I.wifioff}</span><span>Can't reach the Mac. This list is from <span class="num">9:12</span>. Selling waits until it answers.</span>
+    <span class="acts"><button class="glass-btn tint">Try Again</button></span></div>`;
+}
+
+/* ---------------- compose a pose ---------------- */
+function compose(pose) {
+  const s = ST.s;
+  const st = STATES[s];
+  const F = pose === 'folded';
+  const tab = tabBar(st.tab, pose);
+  const home = '<span class="homebar"></span>';
+  const wrap = (inner, opts = {}) => `<div class="screen">${status()}<div class="body${opts.noTabs ? ' no-tabs' : ''}">${inner}</div>${opts.over || ''}${opts.noTabs ? '' : tab}${home}</div>`;
+  const split = (left, right, over = '') => `<div class="screen">${status()}<div class="split"><section><div class="split-top"></div><div class="body">${left}</div></section><section><div class="split-top"></div>${right}</section></div>${over}${tab}${home}</div>`;
+  const pickCard = `<div class="placeholder">Pick a card to see its photo and where it is.</div>`;
+
+  switch (s) {
+    case 'pull':
+      if (F) return wrap(pullList(pose, 'box'));
+      return split(pullList(pose, 'box', { noSeg: true }), `<div class="body">${buyerPanel()}</div>`);
+    case 'buyers':
+      if (F) return wrap(pullList(pose, 'buyer'));
+      return split(pullList(pose, 'buyer', { noSeg: true }), `<div class="body">${buyerDetail('JO')}</div>`);
+    case 'card': case 'pulled': case 'sold':
+      return cardScreen(pose, s) + home;
+    case 'done': {
+      const doneList = navLarge('Pull') + `<p class="count num"><span><b>0</b> to pull</span><span><b>${TO_PULL}</b> pulled</span><a data-go="${on('unloc') ? 'unlocated' : 'pull'}">${I.warn}<b style="color:inherit">${NOT_IN_BOX}</b>&nbsp;not in a box</a></p>
+        <div class="group"><div class="well" style="flex-direction:row;align-items:center;gap:12px"><span style="color:var(--bn-ok)">${I.check}</span><span style="font-size:var(--ty-title3)">Every card on a shelf is pulled.</span></div></div>` + pullRows({ done: true });
+      if (F) return wrap(doneList);
+      return split(doneList, pickCard);
+    }
+    case 'loading': {
+      const l = navLarge('Pull') + `<p class="count num" aria-busy="true"><span><b>&ndash;</b> to pull</span><span>Reading from the Mac</span></p>
+        <div class="group"><div class="list">${'<div class="skel"></div>'.repeat(5)}</div></div>`;
+      if (F) return wrap(l);
+      return split(l, pickCard);
+    }
+    case 'empty': {
+      const e = navLarge('Pull') + `<p class="count num"><span><b>0</b> to pull</span></p><div class="empty"><span style="color:var(--bn-ink-3)">${I.tray}</span><p>No open order owes a card. New orders show here when the Mac reads them.</p><button class="glass-btn tint" style="min-height:50px">Read Again</button></div>`;
+      if (F) return wrap(e);
+      return split(e, `<div class="placeholder">Nothing to pull.</div>`);
+    }
+    case 'nothere':
+      return cardScreen(pose, 'card') + notHereSheet() + home;
+    case 'unlocated':
+      if (F) return wrap(unlocatedScreen(pose));
+      return split(pullList(pose, 'box'), `<div class="body">${unlocatedScreen(pose).replace(/<header class="nav-inline">[\s\S]*?<\/header>/, '<div class="nav"><h2 class="large" style="font-size:var(--ty-title1);line-height:34px">Not in a Box</h2></div>')}</div>`);
+    case 'away-wait': case 'away-hold': {
+      const kind = s === 'away-hold' ? 'hold' : 'wait';
+      return cardScreen(pose, kind === 'hold' ? 'sold-hold' : 'pulled-wait') + awayBanner(kind) + home;
+    }
+    case 'find':
+      if (F) return wrap(findList(pose));
+      return split(findList(pose), `<div class="body">${findCard(pose, true)}</div>`);
+    case 'findcard':
+      if (F) return wrap(findCard(pose, false));
+      return split(findList(pose), `<div class="body">${findCard(pose, true)}</div>`);
+    case 'copy': case 'move': {
+      const sheet = s === 'copy' ? copySheet(pose) : moveSheet(pose);
+      if (F) return wrap(findCard(pose, false), { over: sheet });
+      return split(findList(pose), `<div class="body">${findCard(pose, true)}</div>`, sheet);
+    }
+    case 'moved': {
+      const r = `<div class="receipt-sticky" role="status" data-tag="Today: Move Receipt"><span style="color:var(--bn-ok)">${I.check}</span><span><b>Moved.</b> <span class="num">Box 5, Section 1, Card 41</span></span><button class="glass-btn tint" style="margin-inline-start:auto" data-go="findcard">${I.undo} Undo</button></div>`;
+      const moved = findCard(pose, !F).replace('Box 3, Section 2, Card 18', 'Box 5, Section 1, Card 41');
+      if (F) return wrap(moved, { over: r });
+      return split(findList(pose), `<div class="body">${moved}</div>`, r);
+    }
+    case 'slabs': case 'slabadded': {
+      const added = s === 'slabadded';
+      const r = added ? `<div class="receipt-sticky" role="status"><span style="color:var(--bn-ok)">${I.check}</span><span><b>Added.</b> Quiet Lantern Holo, PSA 9</span></div>` : '';
+      const detail = `<div class="body"><div class="nav" style="padding-top:8px"><h2 class="large" style="font-size:var(--ty-title1);line-height:34px">${added ? 'Quiet Lantern Holo' : 'Gale Runner Holo, First Print'}</h2></div>
+        <div class="group"><div class="well"><dl class="kv num"><dt>Grade</dt><dd>${added ? 'PSA 9' : 'PSA 10'}</dd><dt>Card Ladder value</dt><dd>${added ? '$140' : '$412'}</dd><dt>Last sale</dt><dd>${added ? '$131' : '$398'}</dd><dt>Population</dt><dd>${added ? '1,204' : '312'}</dd></dl></div></div></div>`;
+      if (F) return wrap(slabList(pose, added), { over: r });
+      return split(slabList(pose, added), detail, r);
+    }
+    case 'scan':
+      return scanScreen();
+    case 'scanread': case 'slabrefused': {
+      const sh = scanReadSheet(s === 'slabrefused');
+      if (F) return wrap(slabList(pose, false), { over: sh });
+      return split(slabList(pose, false), `<div class="placeholder">Pick a slab.</div>`, sh);
+    }
+    case 'today':
+      if (F) return wrap(today(pose));
+      return `<div class="screen">${status()}<div class="body" style="padding-top:56px">${today(pose).replace('class="group" style="gap:12px"', 'class="group" style="display:grid;grid-template-columns:1fr 1fr;gap:12px"')}</div>${tab}${home}</div>`;
+  }
+  return '';
+}
+
+/* ---------------- render ---------------- */
+function render() {
+  ST = readHash();
+  if (STATES[ST.s].opt && !on(STATES[ST.s].opt)) { writeHash({ s: 'pull' }); return; }
+  const root = document.documentElement;
+  if (ST.t === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', ST.t);
+  document.querySelectorAll('[data-theme-set]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themeSet === ST.t)));
+  document.querySelectorAll('.panel [data-go]').forEach((b) => b.setAttribute('aria-current', String(b.dataset.go === ST.s)));
+  document.querySelectorAll('.panel [data-needs]').forEach((b) => { b.hidden = !on(b.dataset.needs); });
+  document.querySelectorAll('.opt').forEach((o) => {
+    const k = o.dataset.opt; o.dataset.off = String(!on(k));
+    o.querySelector('button').textContent = on(k) ? 'Hide' : 'Show';
+  });
+  document.getElementById('folded').innerHTML = compose('folded');
+  document.getElementById('unfolded').innerHTML = compose('unfolded');
+  /* one tag per name per phone, so a list of rows is not buried in labels; one id per page */
+  for (const dev of document.querySelectorAll('.device')) {
+    const seen = new Set();
+    dev.querySelectorAll('[data-tag]').forEach((el) => { if (seen.has(el.dataset.tag)) el.removeAttribute('data-tag'); else seen.add(el.dataset.tag); });
+  }
+  const ids = new Set();
+  document.querySelectorAll('[id^="opt-"]').forEach((el) => { if (ids.has(el.id)) el.removeAttribute('id'); else ids.add(el.id); });
+  const hidden = [...ST.h].map((k) => OPT_NAMES[k]);
+  document.getElementById('caption').innerHTML = `<b>${esc(document.querySelector('.panel [aria-current="true"]')?.textContent || '')}.</b> ${esc(STATES[ST.s].say)}${hidden.length ? ` Hidden: ${esc(hidden.join(', '))}.` : ''}`;
+}
+document.addEventListener('click', (e) => {
+  const go = e.target.closest('[data-go]');
+  const th = e.target.closest('[data-theme-set]');
+  const hide = e.target.closest('[data-hide]');
+  if (th) { writeHash({ t: th.dataset.themeSet }); return; }
+  if (hide) { const h = new Set(ST.h); const k = hide.dataset.hide; h.has(k) ? h.delete(k) : h.add(k); writeHash({ h }); return; }
+  if (e.target.closest('#tagToggle')) { const b = document.getElementById('tagToggle'); const v = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(v)); document.body.classList.toggle('tags', v); return; }
+  if (go && !go.hasAttribute('aria-disabled')) { writeHash({ s: go.dataset.go }); }
+});
+window.addEventListener('hashchange', render);
+render();
+</script>
+</body>
+</html>
