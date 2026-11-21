@@ -4,6 +4,10 @@ Designer kind: directed. Direction: the route first. The physical walk along the
 and the cards sit on it in walking order. Mockup: `docs/design/pull-directed-2.html`. Every name,
 card, box and count in it is made up.
 
+Sizes: `layout.py devices` gives no device list for this repo ("unknown"), so 1440 x 900 and
+820 x 1180 come from the brief and from `CLAUDE.md` ("Banchi's sizes: 1440 and 820"). Themes:
+light, dark, and the two dark palettes `tokens.css` ships.
+
 Behaviour kept from today is cited by file and symbol. Each departure has a "Departs from:" line.
 None of these questions blocks the mockup.
 
@@ -30,8 +34,9 @@ None of these questions blocks the mockup.
 
 3. **"Pull 2" and the copies at this stop.** Each card at a stop says how many to pull, with one
    pip per copy. With more copies here than wanted, a line says "Any 2 of these 3" and each
-   copy is a chip. When the count is met, the spare copies leave the screen and a line says
-   "Leave Card 66 in the box".
+   copy is a chip. A sold copy's chip is struck through. When the count is met, a spare copy
+   stays in place as a plain mark that cannot be pressed, and the line says "Done. Card 66 stays."
+   Nothing in the column changes size, so no press moves the Pull block (D118).
    Gain: fixes the largest pain. The count is the Orders walk's own count (Pick N of M, D279,
    and `docs/specs/order-walk-plan.md` section 8). Over-pulling is no longer the easy path
    (section 1, rule 1).
@@ -51,8 +56,8 @@ None of these questions blocks the mockup.
    screen only. The plan is not solved again, so the freeze in `docs/specs/order-walk-plan.md`
    section 8 holds. "Leave It for Now" marks the card left, and its envelope stays open.
    Gain: a short card has a way on (house rule ux-no-dead-end).
-   Loss: "Leave It for Now" promises that the owner sees it on Orders. No route records a
-   missing copy today, so a builder must add one, or the sentence must go (ux-statements-are-true).
+   Loss: the "left" mark lives only in the screen's state. A reload drops it, and the envelope's
+   Keep Open goes with it. A builder needs a write for it, which no route has today.
    Pick: yes. Owner grant: yes.
 
 6. **The two-step pull is kept, with a third slot.** Pull, then "Pulled." in its place, then Mark
@@ -78,9 +83,13 @@ None of these questions blocks the mockup.
    (`pickOrderFor`, `docs/specs/order-walk-plan.md` section 8). The envelope's name should be the
    name on the parcel (`orderLabel` in `app/src/Fulfillment.tsx`, D193). The mockup shows one
    name per buyer.
+   Before the press, one line over the Pull block says "For Mara Quill". It is one line
+   always, so a longer name on the next copy moves nothing below it.
    Gain: fixes the second pain. He knows which pile each card goes on. The newest sale's
-   receipt with Undo stays at the foot, as today.
-   Loss: the dock takes 80px of height. With many buyers it scrolls sideways.
+   receipt with Undo floats just above the dock, as today's receipt sheet does, so its arrival
+   moves no envelope. The envelope that lit grows slightly for a moment and moves no other.
+   Loss: the dock takes 80px of height. With many buyers it scrolls sideways. The receipt can
+   cover the foot of the photo column at 820 until the next press.
    Pick: yes. Owner grant: yes.
 
 9. **No count of cards he cannot act on.** "176 unlocated" is gone. Each card not in any box

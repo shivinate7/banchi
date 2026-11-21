@@ -985,7 +985,9 @@ ul, ol { list-style: none; }
 .map-row[data-skip] .map-box, .map-row[data-skip] .map-skip { color: var(--bn-ink-2); font-weight: 600; }
 .map-track { position: relative; height: 76px; }
 .map-track::before { content: ''; position: absolute; left: 0; right: 0; top: 23px; height: 2px; border-radius: 2px; background: var(--bn-line-strong); }
-.map-ticks { position: absolute; left: 0; right: 0; top: 17px; height: 14px; background: repeating-linear-gradient(to right, var(--bn-line-strong) 0 1px, transparent 1px calc(100% / var(--n))); }
+.map-ticks { position: absolute; left: 0; right: 0; top: 17px; height: 14px; display: flex; }
+.map-ticks i { flex: 1; border-left: 1px solid var(--bn-line-strong); }
+.map-ticks i:first-child { border-left: 0; }
 .map-skip { font-weight: 500; }
 .st-wrap { position: absolute; top: 0; left: clamp(56px, var(--x), calc(100% - 56px)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: var(--bn-1); z-index: 2; }
 .st-cap { color: var(--bn-ink-2); white-space: nowrap; }
@@ -1065,7 +1067,8 @@ ul, ol { list-style: none; }
 .take-icon[data-tone='ok'] { background: var(--bn-ok); color: var(--bn-on-accent); }
 .take-icon[data-tone='warn'] { background: var(--bn-warn-tint); color: var(--bn-ink); box-shadow: inset 0 0 0 2px var(--bn-warn); }
 .copies { display: flex; flex-direction: column; gap: var(--bn-2); }
-.copies p { color: var(--bn-ink-2); }
+.copies p { color: var(--bn-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip-ic { display: inline-flex; }
 .chips { display: flex; flex-wrap: wrap; gap: var(--bn-3); }
 .chip {
   min-height: 48px; padding: 0 var(--bn-4); border: 0; border-radius: var(--bn-r-full);
@@ -1073,7 +1076,11 @@ ul, ol { list-style: none; }
   background: var(--bn-surface); box-shadow: inset 0 0 0 2px var(--bn-line-strong); font-weight: 600; font-variant-numeric: tabular-nums;
 }
 .chip[aria-pressed='true'] { box-shadow: inset 0 0 0 3px var(--ff-fill); background: var(--bn-accent-tint); }
-.chip[data-sold] { background: var(--bn-surface-2); color: var(--bn-ink-2); box-shadow: none; }
+.chip[data-sold] { background: var(--bn-surface-2); color: var(--bn-ink-2); box-shadow: none; text-decoration: line-through; text-decoration-thickness: 2px; }
+.chip[data-leave] { background: transparent; color: var(--bn-ink-2); box-shadow: inset 0 0 0 2px var(--bn-line); font-weight: 500; }
+/* A box kept for a part that is gone, so the press beside it never moves (D118). */
+[data-keep] { visibility: hidden; }
+.ff-btn-quiet[hidden][data-keep] { display: inline-flex; }
 .leave { color: var(--bn-ink-2); }
 .where { display: flex; flex-direction: column; gap: var(--bn-2); }
 .where-card { font-family: var(--bn-font-display); font-weight: 800; font-size: 32px; font-variant-numeric: tabular-nums; line-height: 1.1; }
@@ -1081,6 +1088,10 @@ ul, ol { list-style: none; }
 .ruler i { position: absolute; top: -6px; width: 8px; height: 26px; border-radius: var(--bn-r-full); background: var(--ff-fill); transform: translateX(-50%); box-shadow: 0 0 0 3px var(--bn-surface); }
 .ruler-ends { display: flex; justify-content: space-between; color: var(--bn-ink-2); }
 .between, .goes { color: var(--bn-ink-2); }
+/* One line always: a longer name on the next copy must move nothing below it. The full name is in the answer. */
+.goes { display: flex; align-items: center; gap: var(--bn-2); white-space: nowrap; }
+.goes span { overflow: hidden; text-overflow: ellipsis; }
+.goes .bn-icon { flex: none; }
 .goes b { color: var(--bn-ink); }
 
 /* The action block reserves all three steps from the start, so nothing reflows on a press and
@@ -1123,8 +1134,10 @@ ul, ol { list-style: none; }
   padding: var(--bn-3) var(--ff-gutter);
   background: var(--bn-surface-glass); backdrop-filter: blur(12px); box-shadow: 0 -1px 0 var(--bn-line);
 }
+/* The receipt floats over the page, above the dock, so its arrival moves no envelope. */
 .receipt {
-  flex: none; display: flex; align-items: center; gap: var(--bn-3);
+  position: absolute; bottom: calc(100% + var(--bn-3)); left: var(--ff-gutter);
+  display: flex; align-items: center; gap: var(--bn-3);
   min-height: 56px; padding: 0 var(--bn-1) 0 var(--bn-4); border-radius: var(--bn-r-xl);
   background: var(--bn-surface); box-shadow: var(--bn-shadow-2);
 }
@@ -1402,7 +1415,7 @@ function shelfMap(a) {
   const rows = BOXES.map((b) => {
     if (!used.has(b.id)) return `<div class="map-row" data-skip><div class="map-box">Box <span data-typed>${b.id}</span></div><span class="map-skip">Nothing to pull</span></div>`
     const sts = STOPS.map((s, si) => (s.box === b.id ? si : -1)).filter((x) => x >= 0)
-    return `<div class="map-row"><div class="map-box">Box <span data-typed>${b.id}</span></div><div class="map-track"><span class="map-ticks" style="--n:${b.sections}"></span>
+    return `<div class="map-row"><div class="map-box">Box <span data-typed>${b.id}</span></div><div class="map-track"><span class="map-ticks" aria-hidden="true">${'<i></i>'.repeat(b.sections)}</span>
       ${sts.map((si) => `<div class="st-wrap" style="--x:${(((STOPS[si].section - 0.5) / b.sections) * 100).toFixed(1)}%"${S.mode === 'walk' && si === S.stop ? ' data-current' : ''}>${station(si)}<span class="st-cap">Section ${STOPS[si].section}</span></div>`).join('')}
     </div></div>`
   }).join('')
@@ -1474,11 +1487,11 @@ function stopPanel(opt) {
   if (t.here.length > 1) {
     const unsold = t.here.filter((c) => !S.sold.includes(ck(si, ti, c)))
     copies = `<div class="copies${ann(opt.a, 'New: how many, and which copies')}" id="copies">
-      <p>${st === 'full' ? `Done. Leave Card ${unsold.join(' and Card ')} in the box.` : `Any ${t.want} of these ${t.here.length}.${n ? ` ${n} pulled.` : ''}`}</p>
+      <p>${st === 'full' ? `Done. Card ${unsold.join(' and Card ')} ${unsold.length === 1 ? 'stays' : 'stay'}.` : `Any ${t.want} of these ${t.here.length}.`}</p>
       <div class="chips">${t.here.map((c, i) => {
         const done = S.sold.includes(ck(si, ti, c))
-        if (st === 'full' && !done) return ''
-        return `<button type="button" class="chip" data-copy="${i}" aria-pressed="${c === card}"${done ? ' data-sold' : ''}>${done ? icon('check', 18) : ''}Card ${c}</button>`
+        if (st === 'full' && !done) return `<span class="chip" data-leave aria-label="Card ${c} stays in the box">Card ${c}</span>`
+        return `<button type="button" class="chip" data-copy="${i}" aria-pressed="${c === card}"${done ? ' data-sold' : ''}${done ? ` aria-label="Card ${c}, sold"` : ''}>Card ${c}</button>`
       }).join('')}</div></div>`
   }
   const elsewhere = opt.copies === 'all' && t.other ? `<p class="between" id="opt-copies">Another copy: ${placeOf(t.other.stop)}, Card ${t.other.card}.</p>` : ''
@@ -1491,7 +1504,7 @@ function stopPanel(opt) {
     <div class="stop-body">
       <div class="photo-col">
         <button type="button" class="photo${ann(opt.a, 'Today: the photo check')}" data-zoom aria-label="Enlarge the photo of ${esc(t.name)}, Card ${card}">${art(t, card)}</button>
-        ${st === 'open' && !S.sold.includes(ck(si, ti, card)) && opt.copies !== 'all' ? `<button type="button" class="ff-btn-quiet${ann(opt.a, 'New: a way on when a card is not there')}" data-sheet="missing" id="opt-copies">Not There?</button>` : ''}
+        ${opt.copies !== 'all' ? `<button type="button" class="ff-btn-quiet${ann(opt.a, 'New: a way on when a card is not there')}" data-sheet="missing" id="opt-copies"${st === 'open' && !S.sold.includes(ck(si, ti, card)) ? '' : ' data-keep hidden'}>Not There?</button>` : ''}
         ${elsewhere}
         <div class="where">
           <div class="ruler" role="img" aria-label="Card ${card} in Section ${STOPS[si].section}, cards ${STOPS[si].span[0]} to ${STOPS[si].span[1]}"><i style="left:${pct.toFixed(1)}%"></i></div>
@@ -1502,7 +1515,7 @@ function stopPanel(opt) {
       <div class="side">
         <div class="takes${ann(opt.a, 'New: what to take here')}">${takes.map((_, x) => takeRow(si, x)).join('')}</div>
         ${copies}
-        ${st === 'open' && !S.sold.includes(ck(si, ti, card)) ? `<p class="goes">Goes in <b data-typed>${esc(envFor(si, ti, card))}</b>’s envelope.</p>` : ''}
+        <p class="goes"${st === 'moved' || st === 'held' ? ' data-keep' : ''}>${icon('env', 22)}<span>For <b data-typed>${esc(envFor(si, ti, card))}</b></span></p>
         ${action}
       </div>
     </div>
