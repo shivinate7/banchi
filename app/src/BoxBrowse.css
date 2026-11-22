@@ -820,8 +820,7 @@
 .browse-facts { display: flex; flex-direction: column; min-width: 0; }
 .browse-fact {
   display: grid;
-  /* THE LABEL TRACK HOLDS "Market when captured" (the widest label) on one line, so no row wraps. */
-  grid-template-columns: 128px minmax(0, 1fr);
+  grid-template-columns: 88px minmax(0, 1fr);
   gap: var(--bn-3);
   align-items: baseline;
   padding: var(--bn-1-5) 0;

@@ -165,11 +165,11 @@ type Detail = { label: string; value: string; kind?: 'mono' | 'money'; node?: Re
 function marketFact(card: InventoryCard, read: MarketRead | undefined): Detail {
   const value = marketText(card, read)
   if (!value.startsWith('$') || read === undefined || read.kind !== 'table') {
-    return { label: 'Market when captured', value, kind: isCode(value) ? 'mono' : undefined }
+    return { label: 'At capture', value, kind: isCode(value) ? 'mono' : undefined }
   }
   const price = read.rows[`${card.box}/${card.index}`]
   return {
-    label: 'Market when captured',
+    label: 'At capture',
     value,
     kind: 'money',
     node: (
