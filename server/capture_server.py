@@ -10720,15 +10720,57 @@ def _origin(store: Store, key: str, reader) -> Tuple[Optional[str], Optional[str
     return state, None
 
 
-def _order_built_on(snapshot, held_key: str) -> Optional[str]:
-    """The sentence refusing a sale's undo because its order has moved on, or None.
+def _instant(text) -> Optional[datetime]:
+    """A stored UTC stamp as an aware time, or None when it is missing or unparseable."""
+    if not isinstance(text, str) or not text:
+        return None
+    try:
+        when = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return when if when.tzinfo is not None else when.replace(tzinfo=timezone.utc)
+
+
+def _sold_at(snapshot, key: str) -> Optional[str]:
+    """The `at` of the newest `sold` event filed under this position, or None. Never raises.
+
+    `_sale_origin`'s read, `Store(snapshot.directory)`'s `history_at`, and for the same
+    reason: `Snapshot` has no `history()`. An unreadable history answers None, and the
+    caller reads None as "cannot tell" and refuses.
+    """
+    try:
+        events = Store(snapshot.directory).history_at(key)
+    except (files.StoreError, OSError, ValueError):
+        return None
+    for event in reversed(list(events)):
+        if event.get("position") == key and event.get("event") == master.SOLD:
+            return event.get("at")
+    return None
+
+
+def _order_built_on(snapshot, held_key: str, position_key: Optional[str] = None) -> Optional[str]:
+    """The sentence refusing a sale's undo because its order shipped after it, or None.
 
     UN-7 (`docs/specs/undo.md` section 11.1): a sale on an order is built on once the
-    order ships or closes. The feed's own word decides it, through
+    order ships or closes AFTER the sale. The feed's own word decides it, through
     `order_store.is_terminal_status`, and nothing here guesses a status it does not know.
+
+    AN ORDER THAT WAS ALREADY SHIPPED when Banchi first fetched it did not move after the
+    sale, so its sale is still undoable. `record.changed_at` is the time the feed's content
+    last moved, stamped by `Ledger.ingest`, so a terminal order whose `changed_at` is not
+    later than the sale's `sold` event shipped before it. Any other content change also
+    restamps `changed_at`, which can only make this refuse more, never less.
+
+    FAILS SAFE: a missing `position_key`, a missing sale event, a missing `changed_at` or
+    either stamp that will not parse refuses, because "cannot tell" must not read as
+    "shipped first".
     """
     record = snapshot.ledger.get(held_key)
     if record is None or not order_store.is_terminal_status(record.status):
+        return None
+    sold = _instant(_sold_at(snapshot, position_key)) if position_key else None
+    changed = _instant(record.changed_at)
+    if sold is not None and changed is not None and changed <= sold:
         return None
     return (
         f"Its order now reads {record.status!r}, so the sale can no longer be undone. "
@@ -11013,11 +11055,9 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
             capture_id = card.capture_id if card is not None else None
             if capture_id:
                 holder = snapshot.ledger.holder_of(str(capture_id))
-        shipped = holder is not None and _order_built_on(snapshot, holder[0]) is not None
-        if shipped and not still_here:
-            raise BadRequest(
-                HTTPStatus.CONFLICT, "sale_built_on", _order_built_on(snapshot, holder[0])
-            )
+        built_on = _order_built_on(snapshot, holder[0], key) if holder is not None else None
+        if built_on is not None and not still_here:
+            raise BadRequest(HTTPStatus.CONFLICT, "sale_built_on", built_on)
 
         body = _sell(snapshot, box, index, undo, still_here)
 
@@ -11031,7 +11071,7 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
         if undo and holder is not None:
             held_key, held_sku = holder
             snapshot.ledger.forget_pull(held_key, held_sku, [str(card.capture_id)])
-            if shipped:
+            if built_on is not None:
                 # THE SHIPPED ORDER KEEPS ITS COUNT (D212). A copy did leave for that
                 # buyer, and every copy is fungible, so the line stays filled. Only this
                 # card's id comes off it, as a hand-fill, so a later pull of this card is
@@ -15290,7 +15330,12 @@ def _prepare_targets(
 
 
 def _ledger_pull(
-    snapshot, key: str, sku: str, copies: List[str], undo: bool
+    snapshot,
+    key: str,
+    sku: str,
+    copies: List[str],
+    undo: bool,
+    positions: Sequence[str] = (),
 ) -> Tuple[str, str, int]:
     """Phase two's ledger half: record or forget, and map the store's refusals to this
     server's codes. Answers `(key, sku, newly)` — for an undo the key and SKU are DISCOVERED
@@ -15299,7 +15344,7 @@ def _ledger_pull(
     if undo:
         holders = []
         by_copy = _holder_map(snapshot.ledger)
-        for copy in copies:
+        for at, copy in enumerate(copies):
             holder = by_copy.get(str(copy).strip())
             if holder is None:
                 raise BadRequest(
@@ -15308,7 +15353,8 @@ def _ledger_pull(
                     "This order has no pulled copy to put back. "
                     "If the copy was marked sold on the Inventory screen, undo it there.",
                 )
-            built_on = _order_built_on(snapshot, holder[0])
+            position = positions[at] if at < len(positions) else None
+            built_on = _order_built_on(snapshot, holder[0], position)
             if built_on is not None:
                 raise BadRequest(HTTPStatus.CONFLICT, "sale_built_on", built_on)
             holders.append(holder)
@@ -15479,7 +15525,8 @@ def do_order_pull(payload: dict) -> dict:
         copies = [entry["capture_id"] for entry in prepared]
 
         # ---------------------------------------------------------------- phase two
-        key, sku, newly = _ledger_pull(snapshot, key, sku, copies, undo)
+        positions = [master.position_key(e["box"], e["index"]) for e in prepared]
+        key, sku, newly = _ledger_pull(snapshot, key, sku, copies, undo, positions)
 
         # `_sell`'s five refusals reach the dispatcher unchanged and unsoftened. A raise
         # here discards the ledger write above with everything else — `Store.write()`

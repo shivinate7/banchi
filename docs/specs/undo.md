@@ -141,7 +141,7 @@ an ordinary action.
 |---|---|---|
 | Capture | Its sitting ends, or a run identifies it. A sitting ends at a 30-minute gap (`SITTING_GAP_MINUTES`, D121, D164). "Undo just N" is permanent and asks first (Q2). | Manage box removes the card (D10 ruling 1). |
 | Sale on Inventory | Its photograph is reclaimed (D89), or its box is buried (D134). | "This card is still here" puts the card back. A shipped order re-points (§11.8). |
-| Sale on Orders | Its order ships or closes (`store/orders.py`'s `is_terminal_status`), or as for Inventory. | The same "still here" press. The order keeps its count, and its line becomes a hand-fill (§11.8). |
+| Sale on Orders | Its order ships or closes after the sale (`is_terminal_status` in `store/orders.py`, and the order's `changed_at` later than the sale), or as for Inventory. An order already shipped when Banchi first fetched it does not build on the sale. | The same "still here" press. The order keeps its count, and its line becomes a hand-fill (§11.8). |
 | Sale on Cards to pull | The same as Orders. The Fulfiller keeps the fast path only (D5, D31). | The owner's press on Inventory. |
 | Retire | Its box is buried (D134). | None needed. Nothing downstream reads a retirement. |
 | Move | Either box changes: a capture, a sale, a retire or a move in either box. | A new move. |
@@ -174,7 +174,7 @@ Capture is 50% of the pain, a wrong sale 30%, a wrong Review answer 20%. "Q" nam
 | UN-4 | The demo seed logs the state lines that a real capture, answer and sale log. | Both | `scripts/demo-seed.py`, a demo self-test | Every seeded card has an origin. | no |
 | UN-5 | The newest sale keeps Undo in its row and on the page. Rank replaces the clock. | Fast | `app/src/Inventory.tsx`, `Orders.tsx`, `Fulfillment.tsx`, their specs | Undo still works after a faked 60 s. A newer sale moves it. | Q1 |
 | UN-6 | A sold copy keeps its place, and its control becomes Undo (D57). The walk never advances itself. | Fast | `app/src/OrdersWalkPane.tsx`, `Fulfillment.tsx`, their specs | A rect-diff after a pull: no other row moves (D118). | no |
-| UN-7 | A sale refuses its undo once built on. "This card is still here" puts the card back. A shipped order's line re-points to a hand-fill (§11.8). | Slow | `server/capture_server.py`, `store/orders.py`, `app/src/BoxBrowse.tsx`, `server.ts` | Ship an order, then undo: a refusal. "Still here" restores the card, and the order keeps its count. | no |
+| UN-7 | A sale refuses its undo once built on: its order ships after the sale. "This card is still here" puts the card back. A shipped order's line re-points to a hand-fill (§11.8). | Slow | `server/capture_server.py`, `store/orders.py`, `app/src/BoxBrowse.tsx`, `server.ts` | Ship an order after the sale, then undo: a refusal. An order shipped before the sale undoes. "Still here" restores the card, and the order keeps its count. | no |
 | UN-8 | A departed card owes no answer. Open-entry reads skip it. | Both | `server/capture_server.py`, `app/src/ReviewQueue.tsx` (copy) | Retire from Review, then reload. The card is gone, and undo brings it back. | no |
 | UN-9 | On a phone the Review receipt is in view, and its arrow meets the 40 px floor (D117). | Fast | `app/src/ReviewQueue.tsx`, its spec | At 390, Undo is in view and 40 px or more. | no |
 | UN-10 | One kit hook arms `U`. | Fast | `app/src/kit/undo.ts`, `App.tsx` `SHORTCUTS`, `Gallery.tsx` | One spec presses `U` on each screen. `make kit-adoption` fails a screen that binds `U` itself. | no |
