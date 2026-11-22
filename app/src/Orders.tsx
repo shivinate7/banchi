@@ -2197,6 +2197,10 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
 
   const orders = payload?.orders ?? []
   const open = orders.filter((one) => one.open)
+  /* The headline counts what the list calls open: a shipped buyer that still owes copies is in
+     it, `ownsAWalkableBody` (the shared discriminator) deciding. The backlog panels below keep
+     `open`, the ledger's own answer, since they act on that set. */
+  const walkable = orders.filter(ownsAWalkableBody)
   const populated = payload !== null && orders.length > 0
   /* Still reading the ledger. The verdict's own slot is held, because a ledger with orders in it
      (the common one) draws a verdict where this draws the lede (D313). */
@@ -2289,7 +2293,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     <Page
       icon="cart"
       className={hub.walkLine === null ? 'orders-hub orders' : 'orders-hub orders is-walking'}
-      verdict={populated ? verdictOf(open, payload?.resolution.orders ?? []) : reading ? <VerdictHold /> : undefined}
+      verdict={populated ? verdictOf(walkable, payload?.resolution.orders ?? []) : reading ? <VerdictHold /> : undefined}
       lede={populated || reading ? undefined : 'Which copies each buyer gets, and where they are.'}
       /* THE WALK LINE (walk mode, under 1000px of column): who, how many, what is next, opening
          the buyer list, and one press out of the walk. CSS draws it only there. Out of the walk
