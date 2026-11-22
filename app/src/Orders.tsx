@@ -97,7 +97,7 @@ import {
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
 import { useLeaveWarning } from './useLeaveWarning'
-import { pickFigureOf, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
+import { pickFigureOf, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, walkHasUnsentSales, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   BoxRecord,
   IngestResult,
@@ -1394,6 +1394,8 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     const pull = hubState().lastPull
     if (pull === null) return null
     if (hubState().busy !== null) return null
+    /* A SALE STILL IN THE WALK'S LINE MAKES THIS PULL THE WRONG ONE: `lastPull` is the newest the server holds, not the newest pressed. */
+    if (walkHasUnsentSales()) return null
     return () => void undoFromToast(pull.target, pull.place, pull.name)
   })
 

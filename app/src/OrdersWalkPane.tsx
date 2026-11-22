@@ -288,6 +288,14 @@ type Job =
     }
   | { readonly kind: 'undo'; readonly gen: number; readonly copyKey: string; readonly name: string; readonly onUndo: WalkUndoFn }
 
+/** WRITES OF THE WALK'S LINE NOT YET ANSWERED, across every mounted walk. `Orders.tsx`'s `U` key reads it
+ *  (`walkHasUnsentSales`): `U` undoes the newest pull the SERVER holds, and while a newer press is still in the
+ *  line that is the wrong copy, so `U` waits and the row's own Undo (which cancels a queued sale) is the way. */
+let writesInLine = 0
+export function walkHasUnsentSales(): boolean {
+  return writesInLine > 0
+}
+
 /** The receipt that is newest by `at`: the one copy whose own row offers Undo. */
 function newestOf(receipts: ReadonlyMap<string, Receipt>): string | null {
   let key: string | null = null
@@ -622,16 +630,17 @@ export function useOrderWalk({
     } catch (err) {
       outcome = { ok: false, failure: describeFailure(err) }
     }
-    if (!live.current) return
     if (!outcome.ok) {
       clearFreshSale(job.copyKey)
-      /* THE SERVER'S REFUSAL IS SAID HERE, once per write: `onWalkPull` also sets the screen's one failure line,
-         but the next write in the line clears that before it can be read. `unmounted` is not a refusal. */
+      /* THE SERVER'S REFUSAL IS SAID HERE, once per write, even after the screen was left (the toast stack is
+         the app's, and a refusal that reaches nobody did not happen, D171). `onWalkPull` also sets the screen's
+         one failure line, but the next write in the line clears that before it can be read. `unmounted` is not
+         a refusal. */
       if (outcome.failure.code !== 'unmounted') {
         toast({ kind: 'refusal', tone: failureTone(outcome.failure), title: `Not marked sold: ${job.name}`, body: outcome.failure.message })
       }
     }
-    if (!mine) return
+    if (!live.current || !mine) return
     if (outcome.ok) {
       absorb(outcome.refreshed)
       patchReceipt(job.copyKey, { phase: 'recorded', place: outcome.place })
@@ -677,6 +686,8 @@ export function useOrderWalk({
             else await runUndo(job)
           } catch {
             /* One write's own trouble never strands the ones behind it. */
+          } finally {
+            writesInLine -= 1
           }
         }
       } finally {
@@ -732,6 +743,7 @@ export function useOrderWalk({
     )
     /* THE SALE IS NOTED HERE, not in the button: a digit key reaches this too, and its Undo plays the burst. */
     markFreshSale(copy.key)
+    writesInLine += 1
     queueRef.current.push({ kind: 'sell', gen: genRef.current, copyKey: copy.key, order, sku: take.sku, name: take.name ?? take.sku, target, place, onPull })
     pump()
   }
@@ -746,7 +758,9 @@ export function useOrderWalk({
     if (receipt.phase === 'sending' || receipt.phase === 'undoing') return
     if (receipt.phase === 'queued') {
       /* NOT SENT YET, SO NOTHING TO REVERSE: it leaves the line and the server never hears of it. */
+      const before = queueRef.current.length
       queueRef.current = queueRef.current.filter((job) => !(job.kind === 'sell' && job.copyKey === copyKey))
+      writesInLine -= before - queueRef.current.length
       dropSale(copyKey)
       return
     }
@@ -755,6 +769,7 @@ export function useOrderWalk({
     const named = plan?.stops.flatMap((stop) => stop.takes).find((take) => take.sku === receipt.sku)
     if (named === undefined) return
     patchReceipt(copyKey, { phase: 'undoing' })
+    writesInLine += 1
     queueRef.current.push({ kind: 'undo', gen: genRef.current, copyKey, name: named.name ?? named.sku, onUndo })
     pump()
   }
