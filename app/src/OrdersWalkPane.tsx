@@ -105,6 +105,12 @@ function pickOrderFor(
   return best === null ? null : best.order
 }
 
+/** The sold copies that count against one take's `wanted`: those its stop reaches (`here`) and the spares no stop reaches
+ *  (`homedKeys`, every copy some stop reaches). One rule for the pick chip's figure and the walk list's line. */
+function soldAgainstOf(take: WalkPlanTake, soldKeys: ReadonlySet<string>, homedKeys: ReadonlySet<string>): number {
+  return take.copies.filter((copy) => soldKeys.has(copy.key) && (copy.here || !homedKeys.has(copy.key))).length
+}
+
 /** What a row's "Pick X of Y" (or "Pick X" plus a short flag) should say.
  *
  *  `onHand` IS THE STORE-WIDE ON-HAND COUNT FOR THE SKU — `take.copies` already lists every
@@ -120,13 +126,18 @@ export function pickFigureOf(
   take: WalkPlanTake,
   owedBySku: ReadonlyMap<string, number>,
   soldKeys: ReadonlySet<string> = NO_SOLD,
+  homedKeys: ReadonlySet<string> = NO_SOLD,
 ): { readonly of: number; readonly short: number; readonly total: number; readonly here: number; readonly done: boolean } {
   /* A SOLD COPY IS NOT STILL TO PICK AND NOT ON HAND: `groupOf` keeps every take copy (the rows draw sold ones), so a
      caller that holds the walk's `soldKeys` passes them and this nets them out of every figure below. With none passed
      (the walk list's rows) the figures are exactly what they were. */
   const unsold = take.copies.filter((copy) => !soldKeys.has(copy.key))
   const onHand = unsold.length
-  const wantedLeft = Math.max(0, take.wanted - (take.copies.length - onHand))
+  /* A COPY SOLD AT ANOTHER STOP IS THAT STOP'S PICK, NOT THIS ONE'S: a take lists every on-hand copy (D212) and `wanted`
+     is what this stop is to supply. Counts against it: a copy this stop reaches (`here`), or a spare no stop reaches
+     (`homedKeys` holds every copy some stop reaches), which the owner's ruling lets a take sell. */
+  const soldHere = soldAgainstOf(take, soldKeys, homedKeys)
+  const wantedLeft = Math.max(0, take.wanted - soldHere)
   const owed = Math.max(wantedLeft, owedBySku.get(take.sku) ?? wantedLeft)
   const of = Math.min(owed, onHand)
   /* `total` IS THE COUNT STILL TO PICK THAT THE STORE CAN SUPPLY, THE PICK CHIP'S NUMBER (owner ruling: "Pick 4" for four
@@ -762,6 +773,7 @@ export function useOrderWalk({
   }, [keysSig])
 
   const soldKeys = useMemo(() => new Set(receipts.keys()), [receipts])
+  const homedKeys = useMemo(() => new Set(rows.map((row) => row.copy.key)), [rows])
 
   /* A COPY SOLD THIS WALK KEEPS ITS REAL CARD. `Orders.tsx` refills `readCards` after every
      write from a route that leaves sold cards out (so they stay unpickable), which would drop
@@ -1048,6 +1060,8 @@ export function useOrderWalk({
     busyCopy,
     receipts,
     soldKeys,
+    /** Every copy some stop of the plan reaches: what is left over is a spare, and a spare's sale counts for its take. */
+    homedKeys,
     newestUndoKey,
     /** THE REFRESHED PLACES (A4), so `WalkList`'s own per-line groups can read the same
      *  post-sale facts the pane already does — `groupOf`'s own overlay, shared rather than
@@ -1163,10 +1177,18 @@ function takeLinesOf(rows: readonly WalkRow[]): WalkTakeLine[] {
   return out
 }
 
-/** Every copy the wanted count is asking for has a receipt against it. Shared by the press's
- *  own snapshot (below) and each line's `is-done` styling — one formula, not two. */
-function pickedAllOf(line: WalkTakeLine, soldKeys: ReadonlySet<string>): boolean {
-  return line.take.copies.filter((copy) => soldKeys.has(copy.key)).length >= line.take.wanted
+/** How many sales count against this line's `wanted`. A take lists every on-hand copy in the store (D212) and `wanted`
+ *  is what THIS stop is to supply, so a copy sold at another stop is that stop's pick: counting it struck a stop
+ *  through that nothing had been sold at. A copy counts when this stop reaches it (`here`) or when no stop does (a
+ *  spare, which the owner's ruling lets a take sell; `homedKeys` holds every copy some stop reaches). One count for the
+ *  line's figure, its `is-done` styling and the press's snapshot. */
+function pickedOf(line: WalkTakeLine, soldKeys: ReadonlySet<string>, homedKeys: ReadonlySet<string>): number {
+  return soldAgainstOf(line.take, soldKeys, homedKeys)
+}
+
+/** Every copy the wanted count is asking for has a receipt against it. */
+function pickedAllOf(line: WalkTakeLine, soldKeys: ReadonlySet<string>, homedKeys: ReadonlySet<string>): boolean {
+  return pickedOf(line, soldKeys, homedKeys) >= line.take.wanted
 }
 
 /** Every take key across every section, flat — what a press of Hide picked snapshots. */
@@ -1230,7 +1252,7 @@ export function WalkList({
     } else if (hideSold && !wasHiding.current) {
       const picked = new Set<string>()
       for (const line of allTakeLinesOf(walk.sections)) {
-        if (pickedAllOf(line, walk.soldKeys)) picked.add(line.takeKey)
+        if (pickedAllOf(line, walk.soldKeys, walk.homedKeys)) picked.add(line.takeKey)
       }
       setFoldedKeys(picked)
     }
@@ -1268,8 +1290,7 @@ export function WalkList({
             </button>
             {isFolded ? null : <ul className="orders-walk-rows">
               {shown.map((line) => {
-                const picked = line.take.copies.filter((copy) => walk.soldKeys.has(copy.key)).length
-                const done = picked >= line.take.wanted
+                const done = pickedAllOf(line, walk.soldKeys, walk.homedKeys)
                 const figure = pickFigureOf(line.take, owedBySku)
                 const current = line.rows.some((row) => row.rowKey === walk.current)
                 const slots = line.rows.map((row) => row.copy.place.card).filter((card): card is number => card !== null)
@@ -1381,7 +1402,7 @@ export function WalkStrip({ walk, notInBoxes }: { readonly walk: OrderWalk; read
         {lines.map((line) => {
           const first = line.rows[0]
           const name = line.take.name ?? 'Not Identified Yet'
-          const done = pickedAllOf(line, walk.soldKeys)
+          const done = pickedAllOf(line, walk.soldKeys, walk.homedKeys)
           const current = line.rows.some((row) => row.rowKey === walk.current)
           /* THE PANE'S OWN LOOKUP: a card the inventory read has not answered draws no photograph, a pooled
              copy never does (D24, opsec). */

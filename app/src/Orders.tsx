@@ -2708,7 +2708,7 @@ function OrderPickPane({
      `with` records which combinations of the optional pills (the "here" and "short" ones) a row has shown. */
   const peak = useRef({ n: 1, with: { here: false, short: false, both: false } })
   for (const r of walk.rows) {
-    const f = pickFigureOf(r.take, owedBySku, walk.soldKeys)
+    const f = pickFigureOf(r.take, owedBySku, walk.soldKeys, walk.homedKeys)
     const elsewhere = !f.done && f.here < f.of
     const short = f.done ? 0 : f.short
     const flags = peak.current.with
@@ -2725,7 +2725,7 @@ function OrderPickPane({
   const where = currentWhere
   const spareOpen = walk.openSpares.has(currentRow.takeKey)
 
-  const figure = pickFigureOf(currentRow.take, owedBySku, walk.soldKeys)
+  const figure = pickFigureOf(currentRow.take, owedBySku, walk.soldKeys, walk.homedKeys)
   /* NOTHING LEFT TO PICK FOR THIS TAKE: one "Picked" pill, never "Pick 0" and never a "short" off the server's lagging figure. */
   const picked = figure.done
   const elsewhere = !picked && figure.here < figure.of
