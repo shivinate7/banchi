@@ -639,7 +639,7 @@ for (const width of [1440, 820]) {
 }
 
 /* The seeded walk is a Riftbound Epic card: the row holds the parts, the finish, the rarity, then the For and pick chips. The plan has
-   two takes of the same card, so the REAL set text stays and only the pick chip changes: "Pick 1 of 1", then "Pick 3" and "2 short".
+   two takes of the same card, so the REAL set text stays and only the pick chip changes: "Pick 1", then "Pick 3" and "2 short".
    `wide` is Verdana with the web fonts blocked, the face that wraps on Linux. */
 for (const width of [1440, 820]) for (const wide of [false, true]) {
   test(`L3 S13: stepping to a bigger pick moves no chip left of the pick chip, real set text${wide ? ', wide face' : ''}, at ${width}`, async ({ page }) => {
@@ -689,7 +689,7 @@ for (const width of [1440, 820]) for (const wide of [false, true]) {
     await expect(page.locator('.orders-pick-chip')).toContainText('2 short')
     await settleMotion(page)
     const b = await read()
-    expect(a.text, 'the first pick says "of"').toContain('of 1')
+    expect(a.text.replace(/\s+/g, ' ').trim(), 'the first pick says Pick 1, with no copy waiting at another stop').toBe('Pick 1')
     expect(b.text).toContain('Pick 3')
     expect(a.last && b.last, 'the pick chip is the last thing in the facts row').toBe(true)
     expect(a.kinds.some((k) => k.includes('bn-pill-outline')), 'the card has a finish and a rarity chip').toBe(true)
