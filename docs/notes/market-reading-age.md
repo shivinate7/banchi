@@ -1,0 +1,1 @@
+- market-reading-age: The band's Market figure reads `held_market_readings`, which sends one figure per SKU and no age. `_held_market` in `server/pipeline_routes.py` builds that map from each reading's `market` and drops its `at`. Sending `at` per SKU would let the band show how old the figure is.
