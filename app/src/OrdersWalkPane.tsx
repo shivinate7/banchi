@@ -120,7 +120,7 @@ export function pickFigureOf(
   take: WalkPlanTake,
   owedBySku: ReadonlyMap<string, number>,
   soldKeys: ReadonlySet<string> = NO_SOLD,
-): { readonly of: number; readonly short: number; readonly total: number; readonly here: number } {
+): { readonly of: number; readonly short: number; readonly total: number; readonly here: number; readonly done: boolean } {
   /* A SOLD COPY IS NOT STILL TO PICK AND NOT ON HAND: `groupOf` keeps every take copy (the rows draw sold ones), so a
      caller that holds the walk's `soldKeys` passes them and this nets them out of every figure below. With none passed
      (the walk list's rows) the figures are exactly what they were. */
@@ -136,7 +136,10 @@ export function pickFigureOf(
      hand-built take reached that, but the figure must hold for any take.
      `here` is how many of it this stop holds, so the chip can say a copy waits at another stop. */
   const here = Math.min(wantedLeft, unsold.filter((copy) => copy.here).length, of)
-  return { of, short: Math.max(0, owed - onHand), total: of, here }
+  /* `done`: every copy this take wanted has been sold this walk, so nothing is left to pick for it. `owedBySku` is the
+     server's figure and lags the walk's own sales until the orders re-read, so it must not read as "short" here. */
+  const done = take.wanted > 0 && wantedLeft === 0
+  return { of, short: Math.max(0, owed - onHand), total: of, here, done }
 }
 
 const NO_SOLD: ReadonlySet<string> = new Set()

@@ -2709,14 +2709,15 @@ function OrderPickPane({
   const peak = useRef({ n: 1, with: { here: false, short: false, both: false } })
   for (const r of walk.rows) {
     const f = pickFigureOf(r.take, owedBySku, walk.soldKeys)
-    const elsewhere = f.here < f.of
+    const elsewhere = !f.done && f.here < f.of
+    const short = f.done ? 0 : f.short
     const flags = peak.current.with
     peak.current = {
       n: Math.max(peak.current.n, f.total),
       with: {
-        here: flags.here || (elsewhere && f.short === 0),
-        short: flags.short || (!elsewhere && f.short > 0),
-        both: flags.both || (elsewhere && f.short > 0),
+        here: flags.here || (elsewhere && short === 0),
+        short: flags.short || (!elsewhere && short > 0),
+        both: flags.both || (elsewhere && short > 0),
       },
     }
   }
@@ -2725,7 +2726,10 @@ function OrderPickPane({
   const spareOpen = walk.openSpares.has(currentRow.takeKey)
 
   const figure = pickFigureOf(currentRow.take, owedBySku, walk.soldKeys)
-  const elsewhere = figure.here < figure.of
+  /* NOTHING LEFT TO PICK FOR THIS TAKE: one "Picked" pill, never "Pick 0" and never a "short" off the server's lagging figure. */
+  const picked = figure.done
+  const elsewhere = !picked && figure.here < figure.of
+  const shortCopies = picked ? 0 : figure.short
   /* THE HEAD RESOLVES FROM `take` UNTIL `rawCards` DOES — `currentCard` is null only
    *  transiently, on a fresh plan (`useOrderWalk`'s own comment), and `Orders.tsx`'s own read
    *  is what fills it in. `syntheticCard` fills a `CardHeroHead` with what the wire already
@@ -2759,23 +2763,27 @@ function OrderPickPane({
               <span
                 className="orders-pick-live"
                 role="group"
-                aria-label={[
-                  `Pick ${figure.total}`,
-                  ...(elsewhere ? [`${figure.here} here`] : []),
-                  ...(figure.short > 0 ? [`${figure.short} short`] : []),
-                ].join(', ')}
+                aria-label={
+                  picked
+                    ? 'Picked'
+                    : [
+                        `Pick ${figure.total}`,
+                        ...(elsewhere ? [`${figure.here} here`] : []),
+                        ...(shortCopies > 0 ? [`${shortCopies} short`] : []),
+                      ].join(', ')
+                }
               >
-                <Pill tone="accent">Pick {figure.total}</Pill>
+                {picked ? <Pill tone="ok" icon="check">Picked</Pill> : <Pill tone="accent">Pick {figure.total}</Pill>}
                 {elsewhere ? (
                   <>
                     {' '}
                     <Pill>{figure.here} here</Pill>
                   </>
                 ) : null}
-                {figure.short > 0 ? (
+                {shortCopies > 0 ? (
                   <>
                     {' '}
-                    <Pill tone="warn">{figure.short} short</Pill>
+                    <Pill tone="warn">{shortCopies} short</Pill>
                   </>
                 ) : null}
               </span>
@@ -2783,6 +2791,12 @@ function OrderPickPane({
                   reserve per combination of pills a row has shown, each at the peak figure, so the chip is as wide as its widest state. */}
               <span className="orders-pick-reserve" aria-hidden="true">
                 <span className="bn-pill" data-text={`Pick ${peak.current.n}`} />
+              </span>
+              {/* "Picked" is reachable from every row (the last sale), so its width is held from the first paint. */}
+              <span className="orders-pick-reserve" aria-hidden="true">
+                <span className="bn-pill" data-text="Picked">
+                  <Icon name="check" size={12} />
+                </span>
               </span>
               {peak.current.with.here ? (
                 <span className="orders-pick-reserve" aria-hidden="true">
