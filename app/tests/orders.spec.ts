@@ -4,6 +4,7 @@ import { test, expect, type Locator, type Page, type Route } from '@playwright/t
 import { sealEveryTest, stubStore } from './shell'
 import { line, order, payloadOf, pick, place, severalOrders } from './routeFixtures'
 import { afterPaint, settleMotion } from './motionSettled'
+import { closeFilters, openFilters, pickFacet, showDoneOnly, showOpenOnly } from './ordersFilterSheet'
 
 /** A real, tiny image `route.fulfill` can hand back for a photo read — `inventory.spec.ts`'s
  *  own constant, copied rather than imported (that file's is private): a PNG would need a
@@ -300,31 +301,6 @@ async function openManage(page: Page, at: 'order' | 'overview' = 'order'): Promi
  *  never inside one buyer's sheet. */
 async function openStore(page: Page): Promise<void> {
   await page.locator('main.orders .orders-filterbar').getByRole('button', { name: 'Add Orders', exact: true }).click()
-}
-
-/** THE FILTER BAR IS ONE LINE (the owner, 2026-09-24): every facet, the sort and the hide toggle
- *  are in the Filters sheet. Open it, returning the sheet's body. */
-async function openFilters(page: Page): Promise<Locator> {
-  await page.locator(`${VIEW} .bn-filterbar-trigger`).click()
-  const body = page.locator('.bn-filterbar-sheet-body')
-  await expect(body).toBeVisible()
-  return body
-}
-
-/** Close the Filters sheet: a first Escape may only close a pick list inside it. */
-async function closeFilters(page: Page): Promise<void> {
-  const body = page.locator('.bn-filterbar-sheet-body')
-  await page.keyboard.press('Escape')
-  if (await body.isVisible()) await page.keyboard.press('Escape')
-  await expect(body).toBeHidden()
-}
-
-/** Pick one option of a facet, through the Filters sheet. */
-async function pickFacet(page: Page, facet: string, option: RegExp): Promise<void> {
-  const body = await openFilters(page)
-  await body.getByRole('button', { name: new RegExp(`^${facet}`) }).click()
-  await page.getByRole('listbox', { name: facet }).getByRole('option', { name: option }).click()
-  await closeFilters(page)
 }
 
 /** The default world: one open order, one resolved line, one copy in box 3. */
@@ -4804,9 +4780,16 @@ test('a buyer whose one order shipped in transit and still owes copies draws the
   await open(page, {
     orders: payloadOf([order(), shipped], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]),
   })
-  await pickFacet(page, 'Show', /^Open/)
-  await pickFacet(page, 'Show', /^Done/)
-  await page.locator('.orders-index-row', { hasText: 'Grace Hopper' }).click()
+  /* F1 lists this buyer under Open, the default filter, and not under Done: the comment on
+     `ownsAWalkableBody` in `app/src/orderBuyers.ts` says an order the marketplace calls done while
+     copies are still owed is opened back up. */
+  const row = page.locator('.orders-index-row', { hasText: 'Grace Hopper' })
+  await expect(row, 'the buyer lists under Open by default').toHaveCount(1)
+  await showDoneOnly(page)
+  /* The empty title is drawn only for a Done-only view, so it states both the view and the buyer's absence. */
+  await expect(page.getByText('Nothing done yet'), 'Done shows no buyer, so the buyer is not under Done').toBeVisible()
+  await showOpenOnly(page)
+  await row.click()
 
   await expect(page.locator('.orders-walk-done')).toHaveCount(0)
   await expect(page.locator('.orders-walk')).toContainText('1 to pick')

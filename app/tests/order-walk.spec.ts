@@ -2,6 +2,7 @@
 // Governs: D118, D136, D164, D252
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { showDoneOnly, showOpenOnly } from './ordersFilterSheet'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
 
@@ -984,14 +985,21 @@ test('one copy left, at this stop, reads Pick 1 alone', async ({ page }) => {
 
 /* ---------------------------------------------------------------- 2. the order panel does not say Done while copies are owed */
 
-/** The lone shipped buyer (no open sibling), with one of its four copies already sold. The list
- *  opens on the Open filter, which hides a buyer with nothing open, so the case shows done buyers
- *  first, the way the owner would, and then opens the buyer's row. */
+/** The lone shipped buyer (no open sibling), with one of its four copies already sold. F1 lists a
+ *  shipped buyer that still owes copies under Open, the default filter, and not under Done: the
+ *  comment on `ownsAWalkableBody` in `app/src/orderBuyers.ts` says an order the marketplace calls
+ *  done while copies are still owed is opened back up. So the case finds the buyer in the default
+ *  list, checks that Done shows no buyer, then opens the buyer's row. */
 async function openLoneShipped(page: Page): Promise<void> {
   const gone = new Set(['3/21'])
   await open(page, { plan: shippedPlan(gone, 2, 1), orders: payloadOf([shippedOrder(1)], [shippedResolved(1)]), cards: shippedCards(gone) })
-  await page.getByRole('button', { name: 'Show done buyers' }).click()
-  await page.locator('.orders-index-row', { hasText: 'Ada Lovelace' }).click()
+  const row = page.locator('.orders-index-row', { hasText: 'Ada Lovelace' })
+  await expect(row, 'the buyer lists under Open, the default filter').toHaveCount(1)
+  await showDoneOnly(page)
+  /* The empty title is drawn only for a Done-only view, so it states both the view and the buyer's absence. */
+  await expect(page.getByText('Nothing done yet'), 'Done shows no buyer, so the buyer is not under Done').toBeVisible()
+  await showOpenOnly(page)
+  await row.click()
 }
 
 test('a shipped order that still owes copies draws no done banner', async ({ page }) => {
