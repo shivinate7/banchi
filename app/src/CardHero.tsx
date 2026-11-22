@@ -350,22 +350,28 @@ export type HeroFigures = {
   readonly rerank?: { readonly say: string | null; readonly onRerank: () => void }
 }
 
-/** THE MARKET PRICE OF ONE CARD, read once per run off the pricing file (`marketTable`): the band's
- *  Market figure. One home, called by `CardPane`, so `#/inventory` and the `#/orders` walk draw the
- *  same figure from the same read. Null while it loads, on a failed read, and where the run holds no
- *  row for this card: the band draws a quiet dash and never a made-up figure. */
+/** THE MARKET PRICE OF ONE CARD, the band's Market figure: the store's latest reading for
+ *  `card.sku` out of the pricing payload's `held_market_readings`, else the snapshot the card's own
+ *  run was priced with (`marketTable`). The latest reading comes first because copies of one SKU
+ *  from different runs hold different snapshots, and the band must draw one figure per SKU. Details'
+ *  Market fact is the run's snapshot and its age, not this. One home, called by `CardPane`, so
+ *  `#/inventory` and the `#/orders` walk draw the same figure from the same read. Null while it
+ *  loads, on a failed read, and where neither a reading nor a run row exists for this card: the
+ *  band draws a quiet dash and never a made-up figure. */
 export function useMarketPrice(card: InventoryCard): number | null {
   const table = useMarketTable(card)
   if (table === null) return null
-  const raw = table.rows[`${card.box}/${card.index}`]
+  const latest = card.sku ? table.readings[card.sku] : undefined
+  const raw = latest !== undefined && latest !== '' && !Number.isNaN(Number(latest)) ? latest : table.rows[`${card.box}/${card.index}`]
   const price = raw === null || raw === undefined ? NaN : Number(raw)
   return Number.isNaN(price) ? null : price
 }
 
 /** THE GLINT'S TWO FIGURES, BOTH OUT OF THE READINGS TABLE: the card's price by `card.sku` and the
  *  store's top-tenth cutoff (`held_market_cutoff`, `pipeline/holdings.py`). Like with like: the
- *  Market figure the hero draws is the run's snapshot, and it is not what the cutoff ranks. No
- *  fallback to it, so a card with no SKU or no reading has a null price. Null while loading and on
+ *  cutoff ranks this table, so the glint compares this table's figure and never a run's snapshot.
+ *  `useMarketPrice` draws the same reading, and falls back to the snapshot where this has none; this
+ *  has no fallback, so a card with no SKU or no reading has a null price. Null while loading and on
  *  a failed read. */
 export function useMarketRead(card: InventoryCard): { price: number | null; cutoff: number | null } {
   const table = useMarketTable(card)
