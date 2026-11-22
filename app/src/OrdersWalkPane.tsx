@@ -1323,7 +1323,7 @@ export function WalkList({
       setFoldedKeys(picked)
     }
     wasHiding.current = hideSold
-  }, [hideSold, walk.keysSig, walk.sections, walk.soldKeys])
+  }, [hideSold, walk.keysSig, walk.sections, walk.soldKeys, walk.homedKeys])
 
   if (walk.loading && walk.plan === null) {
     return (

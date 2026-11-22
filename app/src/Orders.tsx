@@ -3559,6 +3559,29 @@ function PullStage({
   const shownKey = useHeld(selectedKey, walk.pending)
   const shownTicked = useHeld(walkTicked, walk.pending)
   const shownKeys = useHeld(walkedKeys, walk.pending)
+  /* MEMOIZED ON ITS INPUTS: `OrderPickPane` derives its chip reserve from this map once per plan, so a
+     fresh map every render would rerun that derivation every render. It sits above `PullStage`'s early
+     returns, which a hook may not follow. */
+  const owedBySku = useMemo(() => {
+    const out = new Map<string, number>()
+    for (const key of shownKeys) {
+      // A stood-down line owes zero on the walk (`pipeline/walkplan.py:demand`'s own filter,
+      // the owner's ruling 2026-09-17) — `ResolvedLine.owed` does not know this, so it is
+      // read here off the same `OrderLineProgress.closed_at` the ledger stores. `!= null`
+      // (loose) rather than `!== null`: the review round's finding 1 was `undefined !== null`
+      // reading true for a wire that omitted the key, so every line looked stood down. The
+      // server now always sends it (`server/capture_server.py:_order_progress`), and this
+      // stays loose as the second, cheaper line of defence should that ever regress again.
+      const closedSkus = new Set(
+        (ordersByKey.get(key)?.progress ?? []).filter((row) => row.closed_at != null).map((row) => row.sku),
+      )
+      for (const line of answers.get(key)?.lines ?? []) {
+        if (closedSkus.has(line.sku)) continue
+        out.set(line.sku, (out.get(line.sku) ?? 0) + line.owed)
+      }
+    }
+    return out
+  }, [shownKeys, ordersByKey, answers])
   const shownWalking = useHeld(walking, walk.pending)
   const shownGroup = allGroups.find((group) => group.key === shownKey) ?? null
   const walkHeld = walk.held
@@ -3864,23 +3887,6 @@ function PullStage({
   const walkedGroups = allGroups.filter(
     (group) => group.key === shownKey || shownTicked.has(group.key),
   )
-  const owedBySku = new Map<string, number>()
-  for (const key of shownKeys) {
-    // A stood-down line owes zero on the walk (`pipeline/walkplan.py:demand`'s own filter,
-    // the owner's ruling 2026-09-17) — `ResolvedLine.owed` does not know this, so it is
-    // read here off the same `OrderLineProgress.closed_at` the ledger stores. `!= null`
-    // (loose) rather than `!== null`: the review round's finding 1 was `undefined !== null`
-    // reading true for a wire that omitted the key, so every line looked stood down. The
-    // server now always sends it (`server/capture_server.py:_order_progress`), and this
-    // stays loose as the second, cheaper line of defence should that ever regress again.
-    const closedSkus = new Set(
-      (ordersByKey.get(key)?.progress ?? []).filter((row) => row.closed_at != null).map((row) => row.sku),
-    )
-    for (const line of answers.get(key)?.lines ?? []) {
-      if (closedSkus.has(line.sku)) continue
-      owedBySku.set(line.sku, (owedBySku.get(line.sku) ?? 0) + line.owed)
-    }
-  }
   const cardsToPull = [...shownKeys].reduce(
     (sum, key) => sum + (answers.get(key)?.lines ?? []).reduce((s, line) => s + pickOf(line), 0),
     0,
