@@ -155,6 +155,31 @@ export function pickFigureOf(
 
 const NO_SOLD: ReadonlySet<string> = new Set()
 
+/** EVERY FIGURE A TAKE'S PICK CHIP CAN SHOW AS THE WALK SELLS ITS COPIES (D313). A sale removes one copy from the take's
+ *  unsold set, and which kind it is decides whether the chip gains a "here" or "short" pill: a copy this stop reaches, a
+ *  copy only another stop reaches, or a spare (`soldAgainstOf` counts the first and last against `wanted`). So the states
+ *  are the triples "h, o, s copies of each kind sold", at most copies cubed figures, never a subset walk. The pick chip
+ *  reserves the widest of them from the first paint, so a sale never grows it and slides the facts row. */
+export function reachablePickFigures(
+  take: WalkPlanTake,
+  owedBySku: ReadonlyMap<string, number>,
+  homedKeys: ReadonlySet<string>,
+): ReturnType<typeof pickFigureOf>[] {
+  const here = take.copies.filter((copy) => copy.here)
+  const other = take.copies.filter((copy) => !copy.here && homedKeys.has(copy.key))
+  const spare = take.copies.filter((copy) => !copy.here && !homedKeys.has(copy.key))
+  const out: ReturnType<typeof pickFigureOf>[] = []
+  for (let h = 0; h <= here.length; h++) {
+    for (let o = 0; o <= other.length; o++) {
+      for (let s = 0; s <= spare.length; s++) {
+        const sold = new Set([...here.slice(0, h), ...other.slice(0, o), ...spare.slice(0, s)].map((copy) => copy.key))
+        out.push(pickFigureOf(take, owedBySku, sold, homedKeys))
+      }
+    }
+  }
+  return out
+}
+
 /* ---------------------------------------------------------------------- the walk list's rows */
 
 /** One physical pick — one row in the walk list, one card a hand can go stand at. */

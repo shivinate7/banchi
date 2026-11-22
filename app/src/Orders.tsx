@@ -98,7 +98,7 @@ import {
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
 import { useLeaveWarning } from './useLeaveWarning'
-import { pickFigureOf, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, inWalkLine, newestWalkSale, undoWalkSale, walkReversalHeld, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
+import { pickFigureOf, reachablePickFigures, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, inWalkLine, newestWalkSale, undoWalkSale, walkReversalHeld, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   BoxRecord,
   IngestResult,
@@ -2704,21 +2704,26 @@ function OrderPickPane({
 
   /* THE PICK CHIP HOLDS ITS WIDEST STATE FROM THE FIRST PAINT (D313). The set text before it is the row's elastic part
      (`.browse-hero-parts`), so a chip that grows ("Pick 1" to "Pick 4", or "Pick 4" and "3 here") would shrink it
-     and slide every chip after it. The peak only rises, so a sale that lowers the figures never narrows the reserve.
-     `with` records which combinations of the optional pills (the "here" and "short" ones) a row has shown. */
+     and slide every chip after it. A sale can add a "here" or "short" pill the take did not show before, so the reserve reads every figure
+     each take can reach by selling its copies (`reachablePickFigures`), not only the figures on show. The peak only rises.
+     `with` records which combinations of the optional pills (the "here" and "short" ones) a take can reach. */
   const peak = useRef({ n: 1, with: { here: false, short: false, both: false } })
+  const seenTakes = new Set<string>()
   for (const r of walk.rows) {
-    const f = pickFigureOf(r.take, owedBySku, walk.soldKeys, walk.homedKeys)
-    const elsewhere = !f.done && f.here < f.of
-    const short = f.done ? 0 : f.short
-    const flags = peak.current.with
-    peak.current = {
-      n: Math.max(peak.current.n, f.total),
-      with: {
-        here: flags.here || (elsewhere && short === 0),
-        short: flags.short || (!elsewhere && short > 0),
-        both: flags.both || (elsewhere && short > 0),
-      },
+    if (seenTakes.has(r.takeKey)) continue
+    seenTakes.add(r.takeKey)
+    for (const f of reachablePickFigures(r.take, owedBySku, walk.homedKeys)) {
+      const elsewhere = !f.done && f.here < f.of
+      const short = f.done ? 0 : f.short
+      const flags = peak.current.with
+      peak.current = {
+        n: Math.max(peak.current.n, f.total),
+        with: {
+          here: flags.here || (elsewhere && short === 0),
+          short: flags.short || (!elsewhere && short > 0),
+          both: flags.both || (elsewhere && short > 0),
+        },
+      }
     }
   }
   if (currentRow === null || currentGroup === null || currentWhere === null) return null
