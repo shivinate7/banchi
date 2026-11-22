@@ -4604,11 +4604,28 @@ function historyPayload(): OrdersPayload {
   const owing = [2, 3, 4, 5, 3, 4] // 21 copies
   const openRows = owing.map((wanted, i) => {
     const num = `OPEN-${i}`
-    return order({ key: `TCGplayer:${num}`, number: num, buyer: `Open Buyer ${i}`, wanted, recorded: 0, lines: [line({ order: num, order_key: `TCGplayer:${num}` }).line] })
+    return order({
+      key: `TCGplayer:${num}`,
+      number: num,
+      buyer: `Open Buyer ${i}`,
+      wanted,
+      recorded: 0,
+      progress: progressOf({ wanted, recorded: 0 }),
+      lines: [line({ order: num, order_key: `TCGplayer:${num}` }).line],
+    })
   })
   const doneRows = Array.from({ length: 30 }, (_, i) => {
     const num = `DONE-${i}`
-    return order({ key: `TCGplayer:${num}`, number: num, buyer: `Done Buyer ${i}`, wanted: 1, recorded: 1, open: false, placed_at: '2025-01-01T00:00:00+00:00' })
+    return order({
+      key: `TCGplayer:${num}`,
+      number: num,
+      buyer: `Done Buyer ${i}`,
+      wanted: 1,
+      recorded: 1,
+      open: false,
+      placed_at: '2025-01-01T00:00:00+00:00',
+      progress: progressOf({ wanted: 1, recorded: 1 }),
+    })
   })
   const resolved = openRows.map((one, i) => ({
     key: one.key,
@@ -4639,7 +4656,7 @@ test('not in boxes counts the copies that cannot be pulled, so to pick is the wa
   const shortLine = line({ reason: 'short', owed: 2, wanted: 2, on_hand: 1, fulfilled: 1, outstanding: 1 })
   await open(page, {
     orders: payloadOf(
-      [order({ wanted: 2, recorded: 0 })],
+      [order({ wanted: 2, recorded: 0, progress: progressOf({ wanted: 2, recorded: 0 }) })],
       [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [shortLine] }],
     ),
   })
@@ -5629,6 +5646,7 @@ async function gatedPulls(page: Page, options: { refuse?: string } = {}) {
   const seen = {
     asked: [] as string[],
     undone: 0,
+    undoneIds: [] as string[],
     active: 0,
     mostAtOnce: 0,
     answered: 0,
@@ -5638,8 +5656,10 @@ async function gatedPulls(page: Page, options: { refuse?: string } = {}) {
     const body = route.request().postDataJSON() as { undo?: boolean; targets: { capture_id: string }[] }
     seen.active += 1
     seen.mostAtOnce = Math.max(seen.mostAtOnce, seen.active)
-    if (body.undo === true) seen.undone += 1
-    else seen.asked.push(body.targets[0]!.capture_id)
+    if (body.undo === true) {
+      seen.undone += 1
+      seen.undoneIds.push(body.targets[0]!.capture_id)
+    } else seen.asked.push(body.targets[0]!.capture_id)
     await new Promise<void>((release) => seen.held.push(release))
     seen.active -= 1
     seen.answered += 1
@@ -5776,7 +5796,7 @@ test('the Undo of a sale whose write is in flight is disabled, and a recorded on
   await expect(rows.nth(0).getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
 })
 
-test('U waits while a newer sale is still in the line, and never undoes the older one', async ({ page }) => {
+test('U on a sale still in flight undoes that newest press once its write lands, never the older one', async ({ page }) => {
   await open(page, { orders: oneOpenOrder(), walkPlan: threeCopyPlan() })
   const seen = await gatedPulls(page)
   const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
@@ -5788,11 +5808,36 @@ test('U waits while a newer sale is still in the line, and never undoes the olde
   await expect(rows.nth(0).getByRole('button', { name: /^Undo/ })).toBeEnabled()
   await page.keyboard.press('2')
   await expect.poll(() => seen.asked).toEqual(['cap-a', 'cap-b'])
+  /* cap-b is in flight: its reversal waits behind its write, and goes out only once that lands. */
   await page.keyboard.press('u')
   await letNextWrite(seen)
-  await expect.poll(() => seen.answered).toBe(2)
+  await expect.poll(() => seen.undone).toBe(1)
+  await letNextWrite(seen)
+  await expect.poll(() => seen.answered).toBe(3)
   await afterPaint(page)
-  expect(seen.undone, 'U undid nothing while a newer sale was in the line').toBe(0)
+  expect(seen.undoneIds, 'U reversed the newest press only').toEqual(['cap-b'])
+  await expect(rows.nth(1).getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
+  await expect(rows.nth(0).getByRole('button', { name: /^Undo/ })).toBeVisible()
+})
+
+test('U on a sale still queued cancels it, and the server never hears of it', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder(), walkPlan: threeCopyPlan() })
+  const seen = await gatedPulls(page)
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-sell[aria-keyshortcuts]`)).toHaveCount(3)
+  await walkTakesKeys(page)
+  await page.keyboard.press('1')
+  await expect.poll(() => seen.asked).toEqual(['cap-a'])
+  /* cap-a is in flight, so cap-b waits in the line, queued and not yet sent. */
+  await page.keyboard.press('2')
+  await expect(rows.nth(1).getByRole('button', { name: /^Undo/ })).toBeEnabled()
+  await page.keyboard.press('u')
+  await expect(rows.nth(1).getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
+  await letNextWrite(seen)
+  await expect.poll(() => seen.answered).toBe(1)
+  await afterPaint(page)
+  expect(seen.asked, 'the cancelled sale never went out').toEqual(['cap-a'])
+  expect(seen.undone, 'a cancelled sale is never undone on the server').toBe(0)
 })
 
 /* THE TAB CLOSES WITH A SALE IN THE LINE. A sale the line holds is drawn as sold but is not yet on the
