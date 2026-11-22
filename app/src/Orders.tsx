@@ -2754,7 +2754,17 @@ function OrderPickPane({
           <>
             {showBuyers ? <Pill>For {takeBuyers(currentRow.take)}</Pill> : null}
             <span className="orders-pick-chip">
-              <span className="orders-pick-live">
+              {/* ONE SPOKEN NAME FOR THE LIVE PILLS: read pill by pill they run together ("Pick 4 3 here"), so the group carries the
+                  sentence with its pauses. The reserve below is aria-hidden and adds nothing to it. */}
+              <span
+                className="orders-pick-live"
+                role="group"
+                aria-label={[
+                  `Pick ${figure.total}`,
+                  ...(elsewhere ? [`${figure.here} here`] : []),
+                  ...(figure.short > 0 ? [`${figure.short} short`] : []),
+                ].join(', ')}
+              >
                 <Pill tone="accent">Pick {figure.total}</Pill>
                 {elsewhere ? (
                   <>
