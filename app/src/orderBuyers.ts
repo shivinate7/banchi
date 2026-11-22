@@ -244,8 +244,15 @@ export function ownsAWalkableBody(order: OrderRow): boolean {
      that owes. Only an order with no progress rows falls back to the order-level sum.
      `!= null` (loose) as `Orders.tsx`'s `owedBySku` reads it. */
   if (!order.terminal) return false
-  if (order.progress.length === 0) return order.wanted > order.recorded
-  return order.progress.some((line) => line.closed_at == null && line.wanted > line.recorded)
+  return copiesOwedOf(order) > 0
+}
+
+/** The copies an order still owes, counted per line that is NOT stood down (`closed_at`), so an over-filled line
+ *  never hides another that owes. Only an order with no progress rows falls back to the order-level difference.
+ *  The one count behind `ownsAWalkableBody` and the headline's "to pull". */
+export function copiesOwedOf(order: OrderRow): number {
+  if (order.progress.length === 0) return Math.max(0, order.wanted - order.recorded)
+  return order.progress.reduce((sum, line) => (line.closed_at == null ? sum + Math.max(0, line.wanted - line.recorded) : sum), 0)
 }
 
 /** A buyer's orders that still own a walkable body: what the panel counts as still to pick. */

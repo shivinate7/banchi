@@ -54,7 +54,7 @@ import { PositionLabel } from './PositionLabel'
 import { RailFrame } from './RailFrame'
 import { sayPlace } from './position'
 import { isCanceled } from './revenueMath'
-import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, isSharedOrderNumber, lineReason, shipToOf, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, ownsAWalkableBody, walkableOf, type BuyerGroup, type Status } from './orderBuyers'
+import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, isSharedOrderNumber, copiesOwedOf, lineReason, shipToOf, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, ownsAWalkableBody, walkableOf, type BuyerGroup, type Status } from './orderBuyers'
 import {
   applyTake,
   buyerLabel,
@@ -98,7 +98,7 @@ import {
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
 import { useLeaveWarning } from './useLeaveWarning'
-import { pickFigureOf, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, walkHasUnsentSales, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
+import { pickFigureOf, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, inWalkLine, newestWalkSale, undoWalkSale, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   BoxRecord,
   IngestResult,
@@ -962,7 +962,7 @@ function VerdictHold() {
 }
 
 function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]): ReactNode {
-  const owed = open.reduce((sum, order) => sum + Math.max(0, order.wanted - order.recorded), 0)
+  const owed = open.reduce((sum, order) => sum + copiesOwedOf(order), 0)
   const buyers = new Set(open.map(buyerKeyOf)).size
   const byKey = new Map(resolved.map((order) => [order.key, order]))
   let pick = 0
@@ -984,10 +984,16 @@ const PULL_NOT_RECORDED = 'pull_not_recorded'
 /** The undo, pressed on a toast after the hub may have unmounted. It sends the target and
  *  nothing else — the server finds whoever holds the `capture_id` — and bumps the hub so any
  *  mounted screen re-reads. */
-async function undoFromToast(target: PullTarget, place: string, name: string): Promise<void> {
+function undoFromToast(target: PullTarget, place: string, name: string): Promise<void> {
   /* The lock lives on the HUB, not in a component: the toast outlives the list, and whichever hub
-     is mounted by the time the undo answers must see every Pull disabled until it does. */
+     is mounted by the time the undo answers must see every Pull disabled until it does. It is taken now, while
+     the undo waits for its turn in the walk's line, so nothing else starts beside it. */
   setHub({ busy: `undo/${target.capture_id}` })
+  /* THE WALK'S LINE, so this write never runs beside a sale that is still queued or out. */
+  return inWalkLine(() => undoPullNow(target, place, name))
+}
+
+async function undoPullNow(target: PullTarget, place: string, name: string): Promise<void> {
   try {
     await undoPull([target])
     toast({ kind: 'ok', icon: 'undo', title: 'Pull undone', body: `${place} holds ${name} again.` })
@@ -1382,11 +1388,13 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
    * its own undo clears it. */
   useUndoHotkey(() => {
     if (stage !== 'pull') return null
+    /* `U` UNDOES THE NEWEST PRESS. A sale still in the walk's line is newer than `lastPull` (the newest the server
+       holds): queued, it is cancelled and the server never hears of it; out, its reversal waits behind it. */
+    const sale = newestWalkSale()
+    if (sale !== null) return () => undoWalkSale(sale)
     const pull = hubState().lastPull
     if (pull === null) return null
     if (hubState().busy !== null) return null
-    /* A SALE STILL IN THE WALK'S LINE MAKES THIS PULL THE WRONG ONE: `lastPull` is the newest the server holds, not the newest pressed. */
-    if (walkHasUnsentSales()) return null
     return () => void undoFromToast(pull.target, pull.place, pull.name)
   })
 
@@ -1866,15 +1874,18 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
      from a real failure to draw `gone, skip` without ending the whole pass over it. */
   const onWalkPull: WalkPullFn = async ({ order, sku, name, target, place, refresh }) => {
     const busyKey = `walk/${sku}/${target.capture_id}`
-    setBusy(busyKey)
-    setFailure(null)
+    if (live.current) {
+      setBusy(busyKey)
+      setFailure(null)
+    }
     try {
       /* `refresh` NAMES CARDS THIS PRESS DOES NOT TOUCH — the walk's other rows in the same
          drawer, whose numbers and neighbours this write moves (D58). It reaches the same
          route in the same request, and `refreshed` comes back POST-write. `places` below is
          still the PRE-write receipt and the two are never confused. */
       const done = await pullCopy({ source: order.source, number: order.number, sku }, [target], refresh)
-      if (!live.current) return { ok: false, failure: { code: 'unmounted', message: '' } }
+      /* NO `live` CHECK: the toast and `lastPull` are the hub's, not this mount's. The write is made, and the way back to it must be
+         recorded even if the screen was left while it was out. */
       /* D218: same read as `onPull` above — the toast body carries this as plain text. */
       const resolvedPlace = sayPlace(done.places[0]?.label ?? place ?? `box ${target.box}, index ${target.index}`)
       /* D196: NO RAW ORDER KEY ON SCREEN. `order.number` is a machine string
