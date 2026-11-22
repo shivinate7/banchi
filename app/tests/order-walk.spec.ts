@@ -14,6 +14,7 @@ import type {
   ResolvedOrder,
   PlaceNeighbor,
   PullResult,
+  PullTarget,
   WalkPlan,
   WalkPlanCopy,
   WalkPlanRef,
@@ -188,7 +189,22 @@ function twoCopyPlan(): WalkPlan {
   ])
 }
 
-function pullResult(over: Partial<PullResult> = {}): PullResult {
+/** The place the plan's copy stands at for one pulled target, matched on box, index and capture id.
+ *  A target the plan does not hold gets a place with no label, so a toast that reads it says so. */
+function placeOfTarget(plan: WalkPlan, target: PullTarget): Place {
+  for (const stop of plan.stops) {
+    for (const take of stop.takes) {
+      for (const copy of take.copies) {
+        if (copy.place.box === target.box && copy.place.index === target.index && copy.capture_id === target.capture_id) return copy.place
+      }
+    }
+  }
+  return place({ box: target.box, index: target.index, label: null, located: false, slot: null, card: null, section: null })
+}
+
+/** The answer to one pull or undo: one `places` entry per target in request order, each the place that
+ *  copy stood at before the write (`PullResult.places`), read off the plan the walk was served. */
+function pullResult(over: Partial<PullResult> = {}, targets: readonly PullTarget[] = [], plan: WalkPlan = twoCopyPlan()): PullResult {
   return {
     undone: false,
     order_key: `TCGplayer:${ORDER_NUMBER}`,
@@ -196,7 +212,7 @@ function pullResult(over: Partial<PullResult> = {}): PullResult {
     newly: 1,
     recorded: 1,
     outstanding: 1,
-    places: [place()],
+    places: targets.map((target) => placeOfTarget(plan, target)),
     sales: [],
     ...over,
   }
@@ -284,10 +300,11 @@ async function open(
   const wire: Wire[] = []
 
   await page.route(/\/orders\/pull$/, async (route) => {
-    const body = route.request().postDataJSON() as { undo?: boolean }
+    const body = route.request().postDataJSON() as { undo?: boolean; targets?: PullTarget[] }
     wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body })
+    // The places are read before the write, as the server answers them: a sale takes its copy out of the plan.
+    const answer = pullResult({ undone: body.undo === true }, body.targets ?? [], planAt())
     if (body.undo !== true) options.onPull?.()
-    const answer = pullResult({ undone: body.undo === true })
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
   })
 
@@ -983,6 +1000,28 @@ test('one copy left, at this stop, reads Pick 1 alone', async ({ page }) => {
   await expect(page.locator('.orders-pick-chip .orders-pick-live'), 'the last copy reads alone').toHaveText('Pick 1')
 })
 
+test('a copy sold at stop A leaves stop B\'s line and chip unpicked: a sale counts against the stop it was made at', async ({ page }) => {
+  let gone = new Set<string>()
+  const wire = await open(page, {
+    plan: () => shippedPlan(gone, gone.has('3/21') ? 2 : 3, 1),
+    orders: () => withSibling(gone.size),
+    cards: () => shippedCards(gone),
+    onPull: () => {
+      gone = new Set(['3/21'])
+    },
+  })
+  // Stop B's line is the one whose only slot is #18, its copy in box 5. Stop A's line lists #17 to #19.
+  const stopB = page.locator('.orders-walk-line', { has: page.locator('.orders-walk-slot', { hasText: /^#18$/ }) })
+  await expect(stopB, 'stop B\'s line is drawn before the sale').toHaveCount(1)
+  await expect(stopB.locator('.orders-walk-pick'), 'stop B reads unpicked before the sale').toHaveText(/^Pick /)
+  await page.locator(`${CURRENT_PICK} .card-locations-row`).nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
+  await expect(stopB, 'stop B is not struck through: the copy sold was stop A\'s pick').not.toHaveClass(/is-done/)
+  await expect(stopB.locator('.orders-walk-pick'), 'stop B still reads Pick, not Picked').toHaveText(/^Pick /)
+  await stopB.locator('.orders-walk-press').click()
+  await expect(page.locator('.orders-pick-chip .orders-pick-live'), 'the chip at stop B reads Pick, not Picked').toHaveText(/^Pick /)
+})
+
 /* ---------------------------------------------------------------- 2. the order panel does not say Done while copies are owed */
 
 /** The lone shipped buyer (no open sibling), with one of its four copies already sold. F1 lists a
@@ -1059,4 +1098,22 @@ test('after a sale on the copy the head stands on, the head keeps its photograph
   await page.waitForLoadState('networkidle')
   await expect(head, 'the head keeps its finish after the sale').toContainText('Foil')
   await expect(head, 'the head keeps its photograph after the sale').not.toContainText('No photo was stored')
+})
+
+/* ---------------------------------------------------------------- 4. each receipt names the place its own copy stood at */
+
+test('three digit presses on copies at three places give three receipts, each naming its own place', async ({ page }) => {
+  // Three copies of one take, all at stop A: boxes and slots 17, 18 and 19, so three places a receipt can name.
+  const wire = await open(page, { plan: shippedPlan(new Set(), 3, 0), orders: withSibling(0), cards: shippedCards(new Set()) })
+  const pulls = () => wire.filter((one) => one.path.endsWith('/orders/pull')).length
+  // The digits are drawn beside the current pick's presses once the walk has landed; a key pressed before that reaches nothing.
+  await expect.poll(() => page.locator(`${CURRENT_PICK} .card-locations-sell`).evaluateAll((els) => els.map((el) => el.getAttribute('aria-keyshortcuts'))), 'the three copies carry their digits').toEqual(['1', '2', '3'])
+  for (const [at, key] of (['1', '2', '3'] as const).entries()) {
+    await page.keyboard.press(key)
+    await expect.poll(pulls, `digit ${key} sent its own pull`).toBe(at + 1)
+  }
+  const receipts = page.locator('.bn-toast-receipt')
+  await expect(receipts, 'one receipt per digit press').toHaveCount(3)
+  const cardsNamed = async () => (await receipts.allTextContents()).map((text) => text.match(/Card \d+/)?.[0] ?? text).sort()
+  await expect.poll(cardsNamed, 'the three receipts name three different cards, each its own copy\'s place').toEqual(['Card 17', 'Card 18', 'Card 19'])
 })
