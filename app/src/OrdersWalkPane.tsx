@@ -270,7 +270,7 @@ type Receipt = { readonly at: number; readonly target: PullTarget; readonly plac
 export function useOrderWalk({
   walkedKeys,
   ordersByKey,
-  rawCards,
+  rawCards: readCards,
   onPull,
   onUndo,
 }: {
@@ -407,6 +407,29 @@ export function useOrderWalk({
   }, [keysSig])
 
   const soldKeys = useMemo(() => new Set(receipts.keys()), [receipts])
+
+  /* A COPY SOLD THIS WALK KEEPS ITS REAL CARD. `Orders.tsx` refills `readCards` after every
+     write from a route that leaves sold cards out (so they stay unpickable), which would drop
+     the card the head still stands on to `syntheticCard` (no photo, no finish, no market).
+     `seen` remembers each card the map held; a copy in `soldKeys` whose place the new map no
+     longer holds reads its remembered card. Only sold copies are carried over, so which copies
+     the walk picks is unchanged. */
+  const seen = useRef<Map<string, InventoryCard>>(new Map())
+  const rawCards: ReadonlyMap<string, InventoryCard> = useMemo(() => {
+    for (const [mapKey, card] of readCards) seen.current.set(mapKey, card)
+    if (soldKeys.size === 0) return readCards
+    let merged: Map<string, InventoryCard> | null = null
+    for (const row of rows) {
+      if (!soldKeys.has(row.copy.key)) continue
+      const place = facts.get(row.copy.key) ?? row.copy.place
+      const mapKey = `${place.box}/${place.index}`
+      const kept = seen.current.get(mapKey)
+      if (readCards.has(mapKey) || kept === undefined) continue
+      merged ??= new Map(readCards)
+      merged.set(mapKey, kept)
+    }
+    return merged ?? readCards
+  }, [readCards, soldKeys, rows, facts])
 
   /** NO CLOCK (`docs/specs/undo.md` §3, D164): only the NEWEST pull this walk made stays
    *  undoable from its own row — the owner declined per-copy granularity here, so an older
