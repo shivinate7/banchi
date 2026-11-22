@@ -3617,7 +3617,7 @@ test('the card pane is the photograph, the pick and every copy with its place an
   await expect(pane.locator('.bn-photo')).toContainText("This card's photo is missing.")
   await expect(pane.locator('.bn-photo').getByRole('link', { name: /re-shoot/i })).toHaveAttribute('href', /#\/inventory\?box=3/)
   expect(await pane.locator('.bn-photo').innerText()).not.toMatch(/http|localhost|\/photo\//i)
-  await expect(pane.locator('.orders-pick-chip')).toHaveText('Pick 1 of 1')
+  await expect(pane.locator('.orders-pick-chip')).toHaveText('Pick 1')
   /* THE COPIES ARE THE PANE'S, BESIDE THE PHOTOGRAPH, as Inventory's hero draws them (section 18): one row
      per copy at the stop, with Mark sold on it. */
   await expect(pane.locator('.card-locations-row')).toHaveCount(1)

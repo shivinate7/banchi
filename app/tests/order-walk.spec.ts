@@ -7,8 +7,10 @@ import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layou
 
 import { afterPaint, settleMotion } from './motionSettled'
 import type {
+  OrderRow,
   OrdersPayload,
   Place,
+  ResolvedOrder,
   PlaceNeighbor,
   PullResult,
   WalkPlan,
@@ -256,18 +258,34 @@ const WALK_CARD = {
  *  `/orders/walk-plan` request fires from inside this call's own render. `plan` and `orders`
  *  default to this file's own fixtures, so every existing case reads exactly as before; A4's own
  *  case below is the one caller that names both. */
+/** A fixture one call serves: a value, or a function of what the test has done so far (a sale,
+ *  then a re-read of the same route). Every route asks again on each request, so a re-read sees it. */
+type Served<T> = T | (() => T)
+
+function served<T>(value: Served<T> | undefined, fallback: () => T): T {
+  if (value === undefined) return fallback()
+  return typeof value === 'function' ? (value as () => T)() : value
+}
+
 async function open(
   page: Page,
-  options: { plan?: WalkPlan; orders?: OrdersPayload; cards?: Record<string, object> } = {},
+  options: {
+    plan?: Served<WalkPlan>
+    orders?: Served<OrdersPayload>
+    cards?: Served<Record<string, object>>
+    /** Runs when the walk posts a pull, before the answer goes back: a test counts its own sales here. */
+    onPull?: () => void
+  } = {},
 ): Promise<Wire[]> {
-  const plan = options.plan ?? twoCopyPlan()
-  const orders = options.orders ?? oneOpenOrder()
-  const cards = options.cards ?? { '3/21': WALK_CARD }
+  const planAt = () => served(options.plan, twoCopyPlan)
+  const ordersAt = () => served(options.orders, oneOpenOrder)
+  const cardsAt = () => served(options.cards, () => ({ '3/21': WALK_CARD }))
   const wire: Wire[] = []
 
   await page.route(/\/orders\/pull$/, async (route) => {
     const body = route.request().postDataJSON() as { undo?: boolean }
     wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body })
+    if (body.undo !== true) options.onPull?.()
     const answer = pullResult({ undone: body.undo === true })
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
   })
@@ -276,7 +294,7 @@ async function open(
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ cards, listings: {} }),
+      body: JSON.stringify({ cards: cardsAt(), listings: {} }),
     })
   })
 
@@ -291,11 +309,11 @@ async function open(
   })
 
   await page.route(/\/orders\/walk-plan$/, async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(plan) })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(planAt()) })
   })
 
   await page.route(/\/orders\/picks$/, async (route) => {
-    const source = orders.resolution.orders
+    const source = ordersAt().resolution.orders
     const body = route.request().postDataJSON() as { keys?: string[] }
     const wanted = new Set(body.keys ?? [])
     await route.fulfill({
@@ -307,7 +325,7 @@ async function open(
 
   await page.route(/\/orders$/, async (route) => {
     wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body: null })
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(orders) })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(ordersAt()) })
   })
 
   // THE BOX REGISTRY (lane A3): the pane's own copies list reads it for the section strip and
@@ -763,4 +781,274 @@ test('a stock image that fails to load falls back to the owner\'s photograph, an
   await expect(thumbs.nth(1).locator('img')).toHaveAttribute('src', STOCK_B)
   await expect(thumbs.nth(0).locator('.orders-strip-count')).toHaveText('3')
   await expect(thumbs.nth(1).locator('.orders-strip-count')).toHaveText('2')
+})
+
+/* ------------------------------------------------- a shipped order that still owes copies
+
+   A TCGplayer order already at "Shipped - In Transit" when Banchi first fetches it: one line, 4 of
+   SKU `SKU`, with 3 copies on hand at stop A (box 3, section 2) and 1 at stop B (box 5, section 1).
+   The feed closes the order (`open: false`), but `ownsAWalkableBody` still walks it while copies
+   are owed (`terminal && wanted > recorded`). `recorded` is how many of the four are already sold.
+
+   The pick chip, the order panel and the head each read one of these figures. The walk is drawn
+   for the buyer only while the buyer has an open order, so the chip cases hold a second, open order
+   for the same buyer (another SKU, no copies on hand). A lone shipped order draws its done banner
+   instead of the walk, which is the defect the panel case below names. */
+
+const SHIPPED_STATUS = 'Shipped - In Transit'
+const SIBLING_NUMBER = 'ORD-OPEN'
+
+/** The four copies, store-wide. `stop` is the stop whose take reaches the copy (its `here`). */
+const FOUR_COPIES = [
+  { key: '3/21', box: 3, index: 21, card: 17, slot: 17, capture_id: 'cap-a', section: 2, stop: 'A' },
+  { key: '3/22', box: 3, index: 22, card: 18, slot: 18, capture_id: 'cap-c', section: 2, stop: 'A' },
+  { key: '3/23', box: 3, index: 23, card: 19, slot: 19, capture_id: 'cap-d', section: 2, stop: 'A' },
+  { key: '5/22', box: 5, index: 22, card: 18, slot: 18, capture_id: 'cap-b', section: 1, stop: 'B' },
+] as const
+
+/** The copies still on hand, as one stop's take lists them: every copy in the store, `here` where it stands at that stop. */
+function shippedCopies(gone: ReadonlySet<string>, stop: 'A' | 'B'): WalkPlanCopy[] {
+  return FOUR_COPIES.filter((copy) => !gone.has(copy.key)).map((copy) =>
+    walkPlanCopy({
+      box: copy.box,
+      index: copy.index,
+      slot: copy.slot,
+      card: copy.card,
+      capture_id: copy.capture_id,
+      label: `Box ${copy.box}, Section ${copy.section}, Card ${copy.card}`,
+      here: copy.stop === stop,
+      place: { section: copy.section },
+    }),
+  )
+}
+
+/** The walk plan for the shipped order's copies still owed: `aWanted` to take at stop A and `bWanted`
+ *  at stop B, with the copies in `gone` already sold. A stop the plan does not visit is left out. */
+function shippedPlan(gone: ReadonlySet<string>, aWanted: number, bWanted: number): WalkPlan {
+  const forRef: WalkPlanRef = { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace', owed: aWanted + bWanted }
+  const stops = [
+    walkPlanStop({
+      key: 'box/3/section/2',
+      box: 3,
+      section: 2,
+      order: 1,
+      span: { start: 12, end: 30 },
+      takes: [walkPlanTake({ wanted: aWanted, for: [forRef], copies: shippedCopies(gone, 'A') })],
+    }),
+    walkPlanStop({
+      key: 'box/5/section/1',
+      box: 5,
+      box_name: 'RB Epics',
+      section: 1,
+      order: 2,
+      span: { start: 1, end: 11 },
+      takes: [walkPlanTake({ wanted: bWanted, for: [forRef], copies: shippedCopies(gone, 'B') })],
+    }),
+  ].filter((stop) => stop.takes[0]!.wanted > 0)
+  return walkPlanOf(stops)
+}
+
+/** `POST /inventory/copies` for the copies still on hand. A sold copy has no card in the answer. */
+function shippedCards(gone: ReadonlySet<string>): Record<string, object> {
+  const out: Record<string, object> = {}
+  for (const copy of FOUR_COPIES) {
+    if (gone.has(copy.key)) continue
+    out[copy.key] = {
+      ...WALK_CARD,
+      box: copy.box,
+      index: copy.index,
+      capture_id: copy.capture_id,
+      card: copy.card,
+      section: copy.section,
+      label: `Box ${copy.box}, Section ${copy.section}, Card ${copy.card}`,
+      photo: `photos/${copy.box}/${copy.index}.jpg`,
+      metadata_finish: 'foil',
+    }
+  }
+  return out
+}
+
+/** The shipped order with `recorded` of its four copies already sold. */
+function shippedOrder(recorded: number): OrderRow {
+  return order({
+    status: SHIPPED_STATUS,
+    open: false,
+    terminal: true,
+    wanted: 4,
+    recorded,
+    lines: [{ ...line().line, quantity: 4 }],
+    progress: [
+      {
+        sku: SKU,
+        wanted: 4,
+        recorded,
+        outstanding: 4 - recorded,
+        over: 0,
+        copies: [],
+        at: null,
+        by_hand: 0,
+        reason: null,
+        declared_kind: null,
+        closed_at: null,
+        closed_reason: null,
+      },
+    ],
+  })
+}
+
+function shippedResolved(recorded: number): ResolvedOrder {
+  return {
+    key: `TCGplayer:${ORDER_NUMBER}`,
+    number: ORDER_NUMBER,
+    complete: false,
+    outstanding: 0,
+    lines: [line({ wanted: 4, owed: 4 - recorded, fulfilled: recorded, outstanding: 0, on_hand: 4 - recorded })],
+  }
+}
+
+/** The buyer's second order: still open, for another SKU with no copies on hand. It is not walked. */
+function siblingOrder(): OrderRow {
+  return order({
+    key: `TCGplayer:${SIBLING_NUMBER}`,
+    number: SIBLING_NUMBER,
+    status: 'Ready to ship',
+    open: true,
+    terminal: false,
+    wanted: 1,
+    recorded: 0,
+    lines: [{ ...line().line, sku: SKU_B, name: 'Dragonite', number: '090' }],
+    progress: [],
+  })
+}
+
+function siblingResolved(): ResolvedOrder {
+  return {
+    key: `TCGplayer:${SIBLING_NUMBER}`,
+    number: SIBLING_NUMBER,
+    complete: false,
+    outstanding: 1,
+    lines: [
+      line({
+        order: SIBLING_NUMBER,
+        order_key: `TCGplayer:${SIBLING_NUMBER}`,
+        line: { ...line().line, sku: SKU_B, name: 'Dragonite', number: '090' },
+        sku: SKU_B,
+        reason: 'no_copies_on_hand',
+        wanted: 1,
+        owed: 1,
+        fulfilled: 0,
+        outstanding: 1,
+        on_hand: 0,
+        picks: [],
+      }),
+    ],
+  }
+}
+
+/** The buyer's orders with the shipped order and its open sibling. */
+function withSibling(recorded: number): OrdersPayload {
+  return payloadOf([shippedOrder(recorded), siblingOrder()], [shippedResolved(recorded), siblingResolved()])
+}
+
+/* ---------------------------------------------------------------- 1. the pick chip counts what is still owed */
+
+test('the pick chip says the copies still to pick, and the ones at this stop beside them', async ({ page }) => {
+  await open(page, { plan: shippedPlan(new Set(), 3, 1), orders: withSibling(0), cards: shippedCards(new Set()) })
+  const chip = page.locator('.orders-pick-chip .orders-pick-live')
+  await expect(chip, 'the pick chip is drawn at stop A').toBeVisible()
+  await expect(chip, 'four copies are still to pick, three of them here').toHaveText('Pick 4 3 here')
+})
+
+test('after one sale at this stop the chip reads Pick 3 and 2 here', async ({ page }) => {
+  let gone = new Set<string>()
+  const wire = await open(page, {
+    plan: () => shippedPlan(gone, gone.has('3/21') ? 2 : 3, 1),
+    orders: () => withSibling(gone.size),
+    cards: () => shippedCards(gone),
+    onPull: () => {
+      gone = new Set(['3/21'])
+    },
+  })
+  const chip = page.locator('.orders-pick-chip .orders-pick-live')
+  await expect(chip, 'the pick chip is drawn before the sale').toBeVisible()
+  await page.locator(`${CURRENT_PICK} .card-locations-row`).nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
+  await expect(chip, 'three copies still to pick, two of them here').toHaveText('Pick 3 2 here')
+})
+
+test('one copy left, at this stop, reads Pick 1 alone', async ({ page }) => {
+  const gone = new Set(['3/21', '3/22', '3/23'])
+  await open(page, { plan: shippedPlan(gone, 0, 1), orders: withSibling(3), cards: shippedCards(gone) })
+  await expect(page.locator('.orders-pick-chip .orders-pick-live'), 'the last copy reads alone').toHaveText('Pick 1')
+})
+
+/* ---------------------------------------------------------------- 2. the order panel does not say Done while copies are owed */
+
+/** The lone shipped buyer (no open sibling), with one of its four copies already sold. The list
+ *  opens on the Open filter, which hides a buyer with nothing open, so the case shows done buyers
+ *  first, the way the owner would, and then opens the buyer's row. */
+async function openLoneShipped(page: Page): Promise<void> {
+  const gone = new Set(['3/21'])
+  await open(page, { plan: shippedPlan(gone, 2, 1), orders: payloadOf([shippedOrder(1)], [shippedResolved(1)]), cards: shippedCards(gone) })
+  await page.getByRole('button', { name: 'Show done buyers' }).click()
+  await page.locator('.orders-index-row', { hasText: 'Ada Lovelace' }).click()
+}
+
+test('a shipped order that still owes copies draws no done banner', async ({ page }) => {
+  await openLoneShipped(page)
+  await expect(page.locator('.orders-walk-done'), 'three copies are still owed, so there is no Shipped or All Sold banner').toHaveCount(0)
+})
+
+test('the order panel shows no Done pill while a shipped order still owes copies', async ({ page }) => {
+  await openLoneShipped(page)
+  const panel = page.locator('.orders-panel-facts')
+  await expect(panel, 'the order panel is drawn').toHaveCount(1)
+  await expect(panel, 'the status is not Done').not.toContainText('Done')
+})
+
+test('to pick counts the copies still owed on a shipped order, not zero', async ({ page }) => {
+  await openLoneShipped(page)
+  const toPick = page.locator('.orders-panel-figures .bn-stat').nth(0)
+  await expect(toPick.locator('.bn-stat-label')).toHaveText('to pick')
+  await expect(toPick.locator('.bn-stat-value'), 'three of the four are still owed').toHaveText('3')
+})
+
+/* ---------------------------------------------------------------- 3. the head keeps the card it stands on after a sale */
+
+test('control: the walk head draws the shipped order\'s card before any sale', async ({ page }) => {
+  await open(page, { plan: shippedPlan(new Set(), 3, 1), orders: withSibling(0), cards: shippedCards(new Set()) })
+  const head = page.locator('.browse-card')
+  await expect(head, 'the head is drawn with the card').toContainText('Volcanion')
+  await expect(head, 'the head shows its finish').toContainText('Foil')
+  await expect(head, 'the head draws a photograph').not.toContainText('No photo was stored')
+})
+
+test('after a sale on the copy the head stands on, the head keeps its photograph and finish', async ({ page }) => {
+  let gone = new Set<string>()
+  let sold = false
+  let rereads = 0
+  // The copies read that follows the sale: the head is judged once it has landed, never during the
+  // gap before it, when the sold copy's card is still the one on screen.
+  page.on('request', (request) => {
+    if (sold && /\/inventory\/copies$/.test(request.url())) rereads += 1
+  })
+  const wire = await open(page, {
+    plan: () => shippedPlan(gone, gone.has('3/21') ? 2 : 3, 1),
+    orders: () => withSibling(gone.size),
+    cards: () => shippedCards(gone),
+    onPull: () => {
+      gone = new Set(['3/21'])
+      sold = true
+    },
+  })
+  const head = page.locator('.browse-card')
+  await expect(head, 'the head shows its finish before the sale (control)').toContainText('Foil')
+  await expect(head, 'the head draws a photograph before the sale (control)').not.toContainText('No photo was stored')
+  await page.locator(`${CURRENT_PICK} .card-locations-row`).nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
+  await expect.poll(() => rereads, 'the copies are read again after the sale').toBeGreaterThan(0)
+  // The read has answered and the head has taken it: the settled head, not a frame of the gap.
+  await page.waitForLoadState('networkidle')
+  await expect(head, 'the head keeps its finish after the sale').toContainText('Foil')
+  await expect(head, 'the head keeps its photograph after the sale').not.toContainText('No photo was stored')
 })
