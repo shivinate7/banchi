@@ -2,7 +2,7 @@
 // Governs: D91, D97, D113, D118, D132, D193, D203
 import { test, expect, type Locator, type Page, type Route } from '@playwright/test'
 import { sealEveryTest, stubStore } from './shell'
-import { line, order, payloadOf, pick, place, severalOrders } from './routeFixtures'
+import { line, order, payloadOf, pick, place, progressOf, severalOrders } from './routeFixtures'
 import { afterPaint, settleMotion } from './motionSettled'
 import { closeFilters, openFilters, pickFacet, showDoneOnly, showOpenOnly } from './ordersFilterSheet'
 
@@ -3151,7 +3151,7 @@ function terminalOwingOrder(over: Partial<OrderRow> = {}): OrderRow {
 }
 
 test('a done order with nothing owed still draws nothing — unchanged from before this fix', async ({ page }) => {
-  const closed = order({ open: false, wanted: 1, recorded: 1, status: 'Shipped', terminal: true })
+  const closed = order({ open: false, wanted: 1, recorded: 1, status: 'Shipped', terminal: true, progress: progressOf({ wanted: 1, recorded: 1 }) })
   await open(page, { orders: payloadOf([closed], []) })
   /* NOTHING IS OWED, AND THE EMPTY STATE SAYS SO, with the one press that shows the done buyers. */
   await expect(page.locator('main.orders')).toContainText('Nothing is owed')
@@ -4799,7 +4799,15 @@ test('a buyer whose one order shipped in transit and owes nothing reads "Shipped
   /* The feed's own word for a shipped order is terminal (`TERMINAL_STATUSES`), so the order is done
      and nothing is recorded against it. With nothing owed the walk has no body, and the done line
      states the marketplace's fact, not a sale count. */
-  const shipped = order({ buyer: 'Grace Hopper', status: 'Shipped - in transit', open: false, terminal: true, wanted: 0, recorded: 0 })
+  const shipped = order({
+    buyer: 'Grace Hopper',
+    status: 'Shipped - in transit',
+    open: false,
+    terminal: true,
+    wanted: 0,
+    recorded: 0,
+    progress: progressOf({ wanted: 0, recorded: 0 }),
+  })
   await open(page, {
     orders: payloadOf([order(), shipped], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]),
   })
@@ -4813,7 +4821,7 @@ test('a buyer whose one order shipped in transit and owes nothing reads "Shipped
 })
 
 test('a buyer whose copies all sold reads "All N Sold", with N the copies sold', async ({ page }) => {
-  const sold = order({ buyer: 'Grace Hopper', open: false, terminal: true, recorded: 2, wanted: 2 })
+  const sold = order({ buyer: 'Grace Hopper', open: false, terminal: true, recorded: 2, wanted: 2, progress: progressOf({ wanted: 2, recorded: 2 }) })
   await open(page, {
     orders: payloadOf([order(), sold], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]),
   })
@@ -5116,7 +5124,17 @@ test('"Flagged" is not offered while no buyer owes a flagged copy', async ({ pag
 test('the Show facet takes several picks: a buyer passes on any, and the URL keeps them all', async ({ page }) => {
   const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
   const bob = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'short' })
-  const closed = order({ key: 'TCGplayer:Z0009', number: 'Z0009', buyer: 'Zed', open: false, wanted: 1, recorded: 1, status: 'Shipped', terminal: true })
+  const closed = order({
+    key: 'TCGplayer:Z0009',
+    number: 'Z0009',
+    buyer: 'Zed',
+    open: false,
+    wanted: 1,
+    recorded: 1,
+    status: 'Shipped',
+    terminal: true,
+    progress: progressOf({ wanted: 1, recorded: 1 }),
+  })
   await open(page, { orders: payloadOf([alice.row, bob.row, closed], [alice.resolved, bob.resolved]) })
   await expect(page.locator('.orders-index-row')).toHaveCount(2)
 
