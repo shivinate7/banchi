@@ -98,7 +98,7 @@ import {
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
 import { useLeaveWarning } from './useLeaveWarning'
-import { pickFigureOf, reachablePickFigures, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, inWalkLine, newestWalkSale, undoWalkSale, walkReversalHeld, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
+import { pickFigureOf, reachablePickPeak, NO_PICK_PEAK, type PickPeak, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, inWalkLine, newestWalkSale, undoWalkSale, walkReversalHeld, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   BoxRecord,
   IngestResult,
@@ -122,6 +122,7 @@ import type {
   SectionDetail,
   ShippingLane,
   WalkPlan,
+  WalkPlanTake,
 } from './types'
 import './Orders.css'
 
@@ -2705,27 +2706,21 @@ function OrderPickPane({
   /* THE PICK CHIP HOLDS ITS WIDEST STATE FROM THE FIRST PAINT (D313). The set text before it is the row's elastic part
      (`.browse-hero-parts`), so a chip that grows ("Pick 1" to "Pick 4", or "Pick 4" and "3 here") would shrink it
      and slide every chip after it. A sale can add a "here" or "short" pill the take did not show before, so the reserve reads every figure
-     each take can reach by selling its copies (`reachablePickFigures`), not only the figures on show. The peak only rises.
-     `with` records which combinations of the optional pills (the "here" and "short" ones) a take can reach. */
-  const peak = useRef({ n: 1, with: { here: false, short: false, both: false } })
-  const seenTakes = new Set<string>()
-  for (const r of walk.rows) {
-    if (seenTakes.has(r.takeKey)) continue
-    seenTakes.add(r.takeKey)
-    for (const f of reachablePickFigures(r.take, owedBySku, walk.homedKeys)) {
-      const elsewhere = !f.done && f.here < f.of
-      const short = f.done ? 0 : f.short
-      const flags = peak.current.with
-      peak.current = {
-        n: Math.max(peak.current.n, f.total),
-        with: {
-          here: flags.here || (elsewhere && short === 0),
-          short: flags.short || (!elsewhere && short > 0),
-          both: flags.both || (elsewhere && short > 0),
-        },
-      }
+     each take can reach by selling its copies (`reachablePickPeak`), not only the figures on show. The peak only rises.
+     Each shape of chip keeps its own widest figures, so the reserve is the widest single state. */
+  const peak = useRef<PickPeak>(NO_PICK_PEAK)
+  /* ONCE PER PLAN, NOT PER RENDER: the states are polynomial in a take's copies. */
+  useMemo(() => {
+    const seenTakes = new Set<string>()
+    const takes: WalkPlanTake[] = []
+    for (const r of walk.rows) {
+      if (seenTakes.has(r.takeKey)) continue
+      seenTakes.add(r.takeKey)
+      takes.push(r.take)
     }
-  }
+    peak.current = reachablePickPeak(takes, owedBySku, walk.homedKeys, peak.current)
+  }, [walk.rows, owedBySku, walk.homedKeys])
+  const reach = peak.current
   if (currentRow === null || currentGroup === null || currentWhere === null) return null
   const where = currentWhere
   const spareOpen = walk.openSpares.has(currentRow.takeKey)
@@ -2793,9 +2788,10 @@ function OrderPickPane({
                 ) : null}
               </span>
               {/* THE RESERVE: empty pills whose text is paint (`::before`), so it is never read, never selected and never in the text. One
-                  reserve per combination of pills a row has shown, each at the peak figure, so the chip is as wide as its widest state. */}
+                  reserve per shape of chip a take can reach, each at that shape's widest figures (`reachablePickPeak`), all in the chip's one
+                  grid cell: the chip is as wide as its widest single state, never the sum of them. */}
               <span className="orders-pick-reserve" aria-hidden="true">
-                <span className="bn-pill" data-text={`Pick ${peak.current.n}`} />
+                <span className="bn-pill" data-text={`Pick ${reach.plain.n}`} />
               </span>
               {/* "Picked" is reachable from every row (the last sale), so its width is held from the first paint. */}
               <span className="orders-pick-reserve" aria-hidden="true">
@@ -2803,23 +2799,23 @@ function OrderPickPane({
                   <Icon name="check" size={12} />
                 </span>
               </span>
-              {peak.current.with.here ? (
+              {reach.here ? (
                 <span className="orders-pick-reserve" aria-hidden="true">
-                  <span className="bn-pill" data-text={`Pick ${peak.current.n}`} />
-                  <span className="bn-pill" data-text={`${peak.current.n} here`} />
+                  <span className="bn-pill" data-text={`Pick ${reach.here.n}`} />
+                  <span className="bn-pill" data-text={`${reach.here.here} here`} />
                 </span>
               ) : null}
-              {peak.current.with.short ? (
+              {reach.short ? (
                 <span className="orders-pick-reserve" aria-hidden="true">
-                  <span className="bn-pill" data-text={`Pick ${peak.current.n}`} />
-                  <span className="bn-pill" data-text={`${peak.current.n} short`} />
+                  <span className="bn-pill" data-text={`Pick ${reach.short.n}`} />
+                  <span className="bn-pill" data-text={`${reach.short.short} short`} />
                 </span>
               ) : null}
-              {peak.current.with.both ? (
+              {reach.both ? (
                 <span className="orders-pick-reserve" aria-hidden="true">
-                  <span className="bn-pill" data-text={`Pick ${peak.current.n}`} />
-                  <span className="bn-pill" data-text={`${peak.current.n} here`} />
-                  <span className="bn-pill" data-text={`${peak.current.n} short`} />
+                  <span className="bn-pill" data-text={`Pick ${reach.both.n}`} />
+                  <span className="bn-pill" data-text={`${reach.both.here} here`} />
+                  <span className="bn-pill" data-text={`${reach.both.short} short`} />
                 </span>
               ) : null}
             </span>

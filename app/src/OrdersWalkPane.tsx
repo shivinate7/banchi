@@ -169,15 +169,56 @@ export function reachablePickFigures(
   const other = take.copies.filter((copy) => !copy.here && homedKeys.has(copy.key))
   const spare = take.copies.filter((copy) => !copy.here && !homedKeys.has(copy.key))
   const out: ReturnType<typeof pickFigureOf>[] = []
+  /* ONE SET, GROWN AND SHRUNK IN PLACE: `pickFigureOf` only reads it, and a fresh set per state made this the cost of a render. */
+  const sold = new Set<string>()
   for (let h = 0; h <= here.length; h++) {
+    if (h > 0) sold.add(here[h - 1]!.key)
     for (let o = 0; o <= other.length; o++) {
+      if (o > 0) sold.add(other[o - 1]!.key)
       for (let s = 0; s <= spare.length; s++) {
-        const sold = new Set([...here.slice(0, h), ...other.slice(0, o), ...spare.slice(0, s)].map((copy) => copy.key))
+        if (s > 0) sold.add(spare[s - 1]!.key)
         out.push(pickFigureOf(take, owedBySku, sold, homedKeys))
       }
+      for (const copy of spare) sold.delete(copy.key)
     }
+    for (const copy of other) sold.delete(copy.key)
   }
   return out
+}
+
+/** THE WIDEST FIGURE OF EACH SHAPE A PICK CHIP CAN TAKE (D313): the chip is "Pick N", with a "here" pill, a "short" pill, or both
+ *  beside it. Each shape keeps its own widest number per pill, drawn from the states that really have that shape, so the chip
+ *  reserves the widest SINGLE state it can reach and never one that mixes a big number from one take with a shape of another.
+ *  `null` where no take reaches the shape. */
+export type PickPeak = {
+  readonly plain: { readonly n: number }
+  readonly here: { readonly n: number; readonly here: number } | null
+  readonly short: { readonly n: number; readonly short: number } | null
+  readonly both: { readonly n: number; readonly here: number; readonly short: number } | null
+}
+
+export const NO_PICK_PEAK: PickPeak = { plain: { n: 1 }, here: null, short: null, both: null }
+
+/** Folds the states of every take in `takes` into a `PickPeak`, starting from `from` so a peak only rises. */
+export function reachablePickPeak(
+  takes: readonly WalkPlanTake[],
+  owedBySku: ReadonlyMap<string, number>,
+  homedKeys: ReadonlySet<string>,
+  from: PickPeak = NO_PICK_PEAK,
+): PickPeak {
+  let { plain, here, short, both } = from
+  for (const take of takes) {
+    for (const f of reachablePickFigures(take, owedBySku, homedKeys)) {
+      const elsewhere = !f.done && f.here < f.of
+      const gap = f.done ? 0 : f.short
+      if (elsewhere && gap > 0) both = { n: Math.max(both?.n ?? 1, f.total), here: Math.max(both?.here ?? 1, f.here), short: Math.max(both?.short ?? 1, gap) }
+      else if (elsewhere) here = { n: Math.max(here?.n ?? 1, f.total), here: Math.max(here?.here ?? 1, f.here) }
+      else if (f.done) continue
+      else if (gap > 0) short = { n: Math.max(short?.n ?? 1, f.total), short: Math.max(short?.short ?? 1, gap) }
+      else plain = { n: Math.max(plain.n, f.total) }
+    }
+  }
+  return { plain, here, short, both }
 }
 
 /* ---------------------------------------------------------------------- the walk list's rows */

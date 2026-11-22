@@ -362,7 +362,8 @@ export function useMarketPrice(card: InventoryCard): number | null {
   const table = useMarketTable(card)
   if (table === null) return null
   const latest = card.sku ? table.readings[card.sku] : undefined
-  const raw = latest !== undefined && latest !== '' && !Number.isNaN(Number(latest)) ? latest : table.rows[`${card.box}/${card.index}`]
+  // A reading that is not a positive number (a fixture's 0, a blank) is no reading: the snapshot is drawn instead.
+  const raw = latest !== undefined && latest !== '' && Number(latest) > 0 ? latest : table.rows[`${card.box}/${card.index}`]
   const price = raw === null || raw === undefined ? NaN : Number(raw)
   return Number.isNaN(price) ? null : price
 }
