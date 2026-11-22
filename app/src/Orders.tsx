@@ -3157,8 +3157,8 @@ function PullStage({
   const [finished, setFinished] = useState<ReadonlySet<string>>(new Set())
   const [seenGroups, setSeenGroups] = useState(allGroups)
   if (seenGroups !== allGroups) {
-    const openNow = new Set(allGroups.filter((group) => group.open.length > 0).map((group) => group.key))
-    const left = seenGroups.filter((group) => group.open.length > 0 && !openNow.has(group.key))
+    const openNow = new Set(allGroups.filter((group) => walkableOf(group).length > 0).map((group) => group.key))
+    const left = seenGroups.filter((group) => walkableOf(group).length > 0 && !openNow.has(group.key))
     setSeenGroups(allGroups)
     if (left.length > 0) setFinished((prev) => new Set([...prev, ...left.map((group) => group.key)]))
   }
@@ -3185,8 +3185,8 @@ function PullStage({
   const shows = (picked.show ?? NO_SHOWS) as readonly ShowValue[]
   const statuses = picked.status ?? []
 
-  const inOpenBase = (group: BuyerGroup) => group.open.length > 0 || finished.has(group.key)
-  const inDoneBase = (group: BuyerGroup) => group.open.length === 0
+  const inOpenBase = (group: BuyerGroup) => walkableOf(group).length > 0 || finished.has(group.key)
+  const inDoneBase = (group: BuyerGroup) => walkableOf(group).length === 0
   const passesFeed = (group: BuyerGroup) =>
     statuses.length === 0 || group.orders.some((order) => statuses.includes((order.status ?? '').trim()))
   const passesSearch = (group: BuyerGroup) =>
@@ -3194,8 +3194,8 @@ function PullStage({
   /* A buyer still owed a copy that is on hand. A finished or done buyer has nothing to pull and
      stays: the default hides open buyers only. */
   const groupPullable = (group: BuyerGroup) =>
-    group.open.length === 0 ||
-    group.open.some((order) => (answers.get(order.key)?.lines ?? []).some((line) => pickOf(line) > 0))
+    walkableOf(group).length === 0 ||
+    walkableOf(group).some((order) => (answers.get(order.key)?.lines ?? []).some((line) => pickOf(line) > 0))
   /* MEMBERSHIP IS FROZEN WHEN TAKEN (D181, D118): a sale that takes a buyer's last on-hand card
      must not drop the buyer from the list under the hand. `pinned` is who was pullable when the
      view was last set by an explicit input (the same moment `take` below is retaken), and stays

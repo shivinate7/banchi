@@ -238,7 +238,12 @@ export function ownsAWalkableBody(order: OrderRow): boolean {
   if (order.open) return true
   /* A canceled order owes nothing, whatever its lines still say: the buyer's done line reads "Canceled", never a walk. */
   if (isCanceled(order.status)) return false
-  return order.terminal && order.wanted > order.recorded
+  /* A stood-down line (`closed_at`) owes nothing on the walk (`pipeline/walkplan.py:demand`'s own
+     filter), and `order.wanted` sums every line, so once any line is stood down the order is walkable
+     only while some line that is NOT stood down still owes. `!= null` (loose) as `Orders.tsx`'s `owedBySku` reads it. */
+  if (!order.terminal || order.wanted <= order.recorded) return false
+  if (!order.progress.some((line) => line.closed_at != null)) return true
+  return order.progress.some((line) => line.closed_at == null && line.wanted > line.recorded)
 }
 
 /** A buyer's orders that still own a walkable body: what the panel counts as still to pick. */
