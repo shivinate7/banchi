@@ -754,6 +754,9 @@ type OpenOptions = {
   retire?: (box: number, index: number, body: unknown) => { status: number; body: unknown }
   /** Answers `POST /inventory/<box>/<index>/take-off`, the receipt's press. A case that holds the press open awaits its own gate. */
   takeOff?: (box: number, index: number) => Promise<{ status: number; body: unknown }>
+  /** Pricing tables for runs other than `PRICED_RUN`, keyed by run name, so one case can hold two
+   *  copies of a SKU that two runs each priced. A name not listed here still refuses. */
+  otherRuns?: Readonly<Record<string, Priced>>
 }
 
 async function open(
@@ -1095,7 +1098,8 @@ async function open(
      hand in cards which do carry one. */
   await page.route(/\/pipeline\/runs\/[^/]+\/pricing$/, async (route) => {
     const name = decodeURIComponent(new URL(route.request().url()).pathname.split('/')[3] ?? '')
-    if (name !== PRICED_RUN) {
+    const answer = name === PRICED_RUN ? priced : options.otherRuns?.[name]
+    if (answer === undefined) {
       await route.fulfill({
         status: 409,
         contentType: 'application/json',
@@ -1108,7 +1112,7 @@ async function open(
       })
       return
     }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(priced()) })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer()) })
   })
 
   /* THE CARD PANEL'S QUEUE READ, stubbed like everything else and for the reason at the top of
@@ -7223,6 +7227,79 @@ test('the card carries what its run said the market was, and how old that readin
   await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
     'no row in this run',
   )
+})
+
+/* THE BAND'S MARKET FIGURE IS THE STORE'S LATEST READING FOR THE CARD'S SKU. Every run's table
+ * carries the same `held_market_readings`, so copies of one SKU that two runs priced must draw one
+ * figure. `CardHero.tsx`'s `useMarketPrice` reads that figure and falls back to the run's own
+ * snapshot only where the readings hold no price for the SKU. These cases are the hero's figure.
+ * The Details fold's "Market" row is not asserted here: it is the run's snapshot with its age,
+ * by the case above. */
+const LATEST: Record<string, string> = { '8937370': '3.47' }
+
+/** The run that priced the copy at `2/3`: its table holds SKU 8937370 at its own snapshot, 2.85. */
+const OTHER_RUN = '2026-08-30-box2-02'
+const TWO_RUNS: Cards = Object.fromEntries(
+  Object.entries(JOINED).map(([key, held]) => [key, key === '2/3' ? { ...held, run: OTHER_RUN } : held]),
+)
+const OTHER_PRICING = {
+  ...PRICING,
+  run: OTHER_RUN,
+  pricing: {
+    ...PRICING.pricing,
+    run: OTHER_RUN,
+    skus: PRICING.pricing.skus.slice(0, 1).map((sku) => ({
+      ...sku,
+      snap: { ...sku.snap, market: '2.85' },
+      positions: [{ box: 2, index: 3, label: 'Box 2, Section 1, Card 3' }],
+    })),
+  },
+}
+
+/** The figure the hero draws beside Live: its own `.browse-hero-fig`, never the Details row. */
+const bandMarket = (page: Page) => page.locator('.browse-hero-fig', { hasText: 'Market' }).locator('.bn-money')
+
+test("the band's Market figure is the store's latest reading for the SKU, not the run's snapshot", async ({ page }) => {
+  await open(page, BOXES, PRICED_STORE, () => ({ ...PRICING, held_market_readings: LATEST }))
+  /* SCOPE FIRST: the card on screen is 2/1, SKU 8937370, whose run snapshot is 5.47. */
+  await expect(page.locator('.browse-fact', { hasText: /^SKU/ })).toContainText('8937370')
+  await expect(bandMarket(page)).toHaveText('$3.47')
+})
+
+test('two copies of one SKU, read by two runs, draw the same band Market figure', async ({ page }) => {
+  await open(
+    page,
+    BOXES,
+    { cards: TWO_RUNS, search: (query) => searchAnswer(query, TWO_RUNS) },
+    () => ({ ...PRICING, held_market_readings: LATEST }),
+    undefined,
+    { otherRuns: { [OTHER_RUN]: () => ({ ...OTHER_PRICING, held_market_readings: LATEST }) } },
+  )
+  await expandAll(page)
+  /* The copy from the other run first: its own run's snapshot is the figure a stale band would draw. */
+  await page.locator('.browse-row').nth(2).click()
+  /* SCOPE FIRST: the copy now on screen is 2/3, and its run is the other one. */
+  await expect(page.locator('.browse-fact', { hasText: /^Run/ }).locator('dd')).toContainText(OTHER_RUN)
+  await expect(bandMarket(page)).toHaveText('$3.47')
+  await page.locator('.browse-row').nth(0).click()
+  await expect(page.locator('.browse-fact', { hasText: /^Run/ }).locator('dd')).toContainText(PRICED_RUN)
+  await expect(bandMarket(page)).toHaveText('$3.47')
+})
+
+test("a SKU with no reading in the store draws the run's snapshot in the band", async ({ page }) => {
+  /* The empty readings map: the fallback is the only figure the band can draw. */
+  await open(page, BOXES, PRICED_STORE, () => ({ ...PRICING, held_market_readings: {} }))
+  await expect(page.locator('.browse-fact', { hasText: /^SKU/ })).toContainText('8937370')
+  await expect(bandMarket(page)).toHaveText('$5.47')
+})
+
+test('a SKU the run never priced draws its store reading in the band', async ({ page }) => {
+  await open(page, BOXES, PRICED_STORE, () => ({ ...PRICING, held_market_readings: { ...LATEST, '8937371': '1.10' } }))
+  await expandAll(page)
+  await page.locator('.browse-row').nth(3).click()
+  /* SCOPE FIRST: 2/4, Eiscue, SKU 8937371, is a card whose run snapshot is null. */
+  await expect(page.locator('.browse-fact', { hasText: /^SKU/ })).toContainText('8937371')
+  await expect(bandMarket(page)).toHaveText('$1.10')
 })
 
 /** How many lines the Market row's value actually draws, measured rather than inferred from the
