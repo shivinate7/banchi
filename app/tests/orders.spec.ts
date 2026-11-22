@@ -5885,13 +5885,9 @@ test('a remount with a sale in flight keeps it: the toast fires, its row reads S
   await page.keyboard.press('2')
   await expect.poll(() => seen.asked).toEqual(['cap-a', 'cap-b'])
   /* cap-b is out, and the walk is left and come back to while it is. */
-  await page.evaluate(() => {
-    location.hash = '#/shipping'
-  })
+  await page.locator('a.app-nav-link[href="#/shipping"]').click()
   await expect(page).toHaveURL(/#\/shipping/)
-  await page.evaluate(() => {
-    location.hash = '#/orders'
-  })
+  await page.locator('a.app-nav-link[href="#/orders"]').click()
   await expect(rows).toHaveCount(3)
   await letNextWrite(seen)
   await expect.poll(() => seen.answered).toBe(2)
@@ -5963,15 +5959,11 @@ test('a digit pressed in the gap of a remounted walk, whose first pick is alread
   await walkTakesKeys(page)
   await page.keyboard.press('1')
   await expect.poll(() => seen.asked).toEqual(['cap-a'])
-  await page.evaluate(() => {
-    location.hash = '#/shipping'
-  })
+  await page.locator('a.app-nav-link[href="#/shipping"]').click()
   await expect(page).toHaveURL(/#\/shipping/)
   /* Armed on the live page, so it is in place before the route comes back and draws the plan's rows. */
   await page.evaluate(gapDigitPress, '1')
-  await page.evaluate(() => {
-    location.hash = '#/orders'
-  })
+  await page.locator('a.app-nav-link[href="#/orders"]').click()
   await expect
     .poll(() => page.evaluate(() => (window as Window & { __gapPress?: string }).__gapPress), {
       message: 'the digit went in before the remounted walk set its current pick',
@@ -6035,9 +6027,7 @@ test('closing the tab asks first while a sale write is in the line, and an in-ap
       counted.__unloads = (counted.__unloads ?? 0) + 1
     })
   })
-  await page.evaluate(() => {
-    location.hash = '#/inventory'
-  })
+  await page.locator('a.app-nav-link[href="#/inventory"]').click()
   await expect(page).toHaveURL(/#\/inventory/)
   expect(
     await page.evaluate(() => (window as Window & { __unloads?: number }).__unloads ?? 0),
