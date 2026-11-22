@@ -5597,17 +5597,184 @@ test('paging with the arrows skips a pick the Hide picked fold has taken off the
   await expect(page.locator('.browse-card .browse-hero-name')).toHaveText('Riposte')
 })
 
-test('a digit pressed while a sale is in flight says one sale at a time', async ({ page }) => {
-  const wire = await open(page, { orders: oneOpenOrder(), walkPlan: twoCopyPlan(), pull: SPARE_PULL })
+/* THE QUEUED SALES. A write the test holds (`gatedPulls`) answers only when the test lets it go, so each
+   write's place in the line is a state the test reads, never a race against a timer. A case that proves
+   "no further write" lets the line drain first, then waits two frames (`afterPaint`). */
+function threeCopyPlan(copiesOnHand = 3): WalkPlan {
+  const copies = Array.from({ length: copiesOnHand }, (_, i) =>
+    walkPlanCopy({ index: 21 + i, slot: 17 + i, card: 17 + i, label: `Box 3, Section 2, Card ${17 + i}`, capture_id: `cap-${'abcd'[i]}` }),
+  )
+  return walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ wanted: 3, copies })] })])
+}
+
+async function gatedPulls(page: Page, options: { refuse?: string } = {}) {
+  const seen = {
+    asked: [] as string[],
+    undone: 0,
+    active: 0,
+    mostAtOnce: 0,
+    answered: 0,
+    held: [] as (() => void)[],
+  }
   await page.route(/\/orders\/pull$/, async (route) => {
-    await new Promise((settled) => setTimeout(settled, 1500)) // keep: stubbed answer held 1500 ms on purpose, a latency fixture
-    await route.fallback()
+    const body = route.request().postDataJSON() as { undo?: boolean; targets: { capture_id: string }[] }
+    seen.active += 1
+    seen.mostAtOnce = Math.max(seen.mostAtOnce, seen.active)
+    if (body.undo === true) seen.undone += 1
+    else seen.asked.push(body.targets[0]!.capture_id)
+    await new Promise<void>((release) => seen.held.push(release))
+    seen.active -= 1
+    seen.answered += 1
+    if (body.undo !== true && body.targets[0]!.capture_id === options.refuse) {
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'copy_gone', message: 'That copy is not in the box any more.' } }),
+      })
+      return
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...SPARE_PULL, undone: body.undo === true }) })
   })
-  await expect(page.locator('.card-locations-sell[aria-keyshortcuts]').first()).toBeVisible()
+  return seen
+}
+
+type GatedPulls = Awaited<ReturnType<typeof gatedPulls>>
+
+/* Lets the oldest held write answer, once it has reached the server. */
+async function letNextWrite(seen: GatedPulls): Promise<void> {
+  await expect.poll(() => seen.held.length).toBeGreaterThan(0)
+  seen.held.shift()!()
+}
+
+/* The walk takes keys once its first pick is current. `current` is set in an effect after the plan
+   lands, so a key pressed in the frames before that effect runs is dropped while the rows already
+   show. Wait for the mark the current pick draws, then press. */
+async function walkTakesKeys(page: Page): Promise<void> {
+  await expect(page.locator('.orders-walk-press[aria-current="true"]').first()).toBeAttached()
+}
+
+test('digits pressed in a burst all take effect at once, and the writes go one at a time in press order', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder(), walkPlan: threeCopyPlan() })
+  const seen = await gatedPulls(page)
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-sell[aria-keyshortcuts]`)).toHaveCount(3)
+  await walkTakesKeys(page)
+  await page.keyboard.press('3')
+  await page.keyboard.press('2')
+  await page.keyboard.press('1')
+  /* No write has been answered, so the rows going at once is the screen, not the server. */
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-sell`)).toHaveCount(0)
+  await expect(page.locator('.orders-walk-line').first()).toHaveClass(/is-done/)
+  await expect(page.locator('.bn-toast', { hasText: 'One sale at a time' })).toHaveCount(0)
+  await expect.poll(() => seen.asked).toEqual(['cap-c'])
+  await letNextWrite(seen)
+  await expect.poll(() => seen.asked).toEqual(['cap-c', 'cap-b'])
+  await letNextWrite(seen)
+  await expect.poll(() => seen.asked).toEqual(['cap-c', 'cap-b', 'cap-a'])
+  await letNextWrite(seen)
+  await expect.poll(() => seen.answered).toBe(3)
+  expect(seen.mostAtOnce, 'never two writes in flight together').toBe(1)
+})
+
+test('a press past what the orders owe refuses, even while earlier sales are still queued', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder(), walkPlan: threeCopyPlan(4) })
+  const seen = await gatedPulls(page)
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-sell[aria-keyshortcuts]`)).toHaveCount(4)
+  await walkTakesKeys(page)
+  for (const key of ['1', '2', '3', '4']) await page.keyboard.press(key)
+  await expect(page.locator('.bn-toast', { hasText: 'Nobody here still owes a copy' })).toBeVisible()
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-sell`)).toHaveCount(1)
+  await expect.poll(() => seen.asked).toEqual(['cap-a'])
+  await letNextWrite(seen)
+  await expect.poll(() => seen.asked).toEqual(['cap-a', 'cap-b'])
+  await letNextWrite(seen)
+  await expect.poll(() => seen.asked).toEqual(['cap-a', 'cap-b', 'cap-c'])
+  await letNextWrite(seen)
+  await expect.poll(() => seen.answered).toBe(3)
+  await afterPaint(page)
+  expect(seen.asked, 'the refused press sent no fourth write').toEqual(['cap-a', 'cap-b', 'cap-c'])
+})
+
+test('a refused write puts back only its own row, and the writes behind it still run', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder(), walkPlan: threeCopyPlan() })
+  const seen = await gatedPulls(page, { refuse: 'cap-b' })
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-sell[aria-keyshortcuts]`)).toHaveCount(3)
+  await walkTakesKeys(page)
   await page.keyboard.press('1')
   await page.keyboard.press('2')
-  await expect(page.locator('.bn-toast', { hasText: 'One sale at a time' })).toBeVisible()
-  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
+  await page.keyboard.press('3')
+  await expect.poll(() => seen.asked).toEqual(['cap-a'])
+  await letNextWrite(seen)
+  await expect.poll(() => seen.asked).toEqual(['cap-a', 'cap-b'])
+  await letNextWrite(seen)
+  await expect(page.locator('.bn-toast', { hasText: 'That copy is not in the box any more.' })).toBeVisible()
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  await expect(rows.nth(1).getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
+  await expect(rows.nth(0).getByRole('button', { name: /^Mark Sold/ })).toHaveCount(0)
+  await expect(rows.nth(2).getByRole('button', { name: /^Mark Sold/ })).toHaveCount(0)
+  await expect.poll(() => seen.asked).toEqual(['cap-a', 'cap-b', 'cap-c'])
+  await letNextWrite(seen)
+  await expect.poll(() => seen.answered).toBe(3)
+  /* The order still wants one, so the put-back row sells again. */
+  await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => seen.asked.length).toBe(4)
+})
+
+test('Undo on a sale still queued cancels it with no server call', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder(), walkPlan: threeCopyPlan() })
+  const seen = await gatedPulls(page)
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-sell[aria-keyshortcuts]`)).toHaveCount(3)
+  await walkTakesKeys(page)
+  await page.keyboard.press('1')
+  await page.keyboard.press('2')
+  const undo = rows.nth(1).getByRole('button', { name: /^Undo/ })
+  await expect(undo).toBeEnabled()
+  await undo.click()
+  await expect(rows.nth(1).getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
+  await expect.poll(() => seen.asked).toEqual(['cap-a'])
+  await expect(rows.nth(0).getByRole('button', { name: /^Undo/ })).toBeVisible()
+  await letNextWrite(seen)
+  await expect.poll(() => seen.answered).toBe(1)
+  await afterPaint(page)
+  expect(seen.asked, 'the cancelled sale never went out').toEqual(['cap-a'])
+  expect(seen.undone, 'a cancelled sale is never undone on the server').toBe(0)
+})
+
+test('the Undo of a sale whose write is in flight is disabled, and a recorded one still undoes', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder(), walkPlan: threeCopyPlan() })
+  const seen = await gatedPulls(page)
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  const undo = rows.nth(0).getByRole('button', { name: /^Undo/ })
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-sell[aria-keyshortcuts]`)).toHaveCount(3)
+  await walkTakesKeys(page)
+  await page.keyboard.press('1')
+  await expect.poll(() => seen.asked).toEqual(['cap-a'])
+  await expect(undo).toBeDisabled()
+  await letNextWrite(seen)
+  await expect(undo).toBeEnabled()
+  await undo.click()
+  await expect.poll(() => seen.undone).toBe(1)
+  await letNextWrite(seen)
+  await expect(rows.nth(0).getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
+})
+
+test('U waits while a newer sale is still in the line, and never undoes the older one', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder(), walkPlan: threeCopyPlan() })
+  const seen = await gatedPulls(page)
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-sell[aria-keyshortcuts]`)).toHaveCount(3)
+  await walkTakesKeys(page)
+  await page.keyboard.press('1')
+  await expect.poll(() => seen.asked).toEqual(['cap-a'])
+  await letNextWrite(seen)
+  await expect(rows.nth(0).getByRole('button', { name: /^Undo/ })).toBeEnabled()
+  await page.keyboard.press('2')
+  await expect.poll(() => seen.asked).toEqual(['cap-a', 'cap-b'])
+  await page.keyboard.press('u')
+  await letNextWrite(seen)
+  await expect.poll(() => seen.answered).toBe(2)
+  await afterPaint(page)
+  expect(seen.undone, 'U undid nothing while a newer sale was in the line').toBe(0)
 })
 
 test('the pick figure never breaks "1 of 1" across lines in a narrow column', async ({ page }) => {
@@ -5644,6 +5811,7 @@ test('a quick undo plays the bills back, by click and by key; a late one plays n
   const undo = page.locator(`${CURRENT_PICK} .card-locations-undo`)
   const sold = page.locator(`${CURRENT_PICK} .card-locations-sell`)
   await expect(sold).toHaveCount(2)
+  await walkTakesKeys(page)
   await page.keyboard.press('1')
   await expect(undo).toHaveCount(1)
   await expect(page.locator(BILLS)).toHaveCount(0)
@@ -5655,6 +5823,8 @@ test('a quick undo plays the bills back, by click and by key; a late one plays n
   /* THE SAME BY KEY. */
   await page.keyboard.press('1')
   await expect(undo).toHaveCount(1)
+  /* The Undo is live once its sale has drawn, and U is pressed only then. */
+  await expect(undo).toBeEnabled()
   await page.keyboard.press('u')
   await expect(sold).toHaveCount(2)
   await expect(page.locator(REVERSE_BILLS).first()).toBeAttached()
