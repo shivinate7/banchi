@@ -889,7 +889,10 @@ body {
 
 
 /* ---- the mockup's own frame: not product CSS ------------------------------------------------- */
-.mk-ribbon { display: flex; align-items: center; gap: var(--bn-2); padding: var(--bn-2) var(--bn-6); background: var(--bn-warn-tint); color: var(--bn-ink); font-size: var(--bn-fs-md); }
+/* The ribbon's ground is a neutral surface, not the warn tint: the warn pill's ink is set for one tint, not two. */
+.mk-ribbon { display: flex; align-items: center; gap: var(--bn-2); padding: var(--bn-2) var(--bn-6); background: var(--bn-surface-2); color: var(--bn-ink); font-size: var(--bn-fs-md); }
+.mk-verdict { display: flex; flex-direction: column; gap: var(--bn-1); max-width: 80ch; padding: var(--bn-4); border-radius: var(--bn-r-lg); background: var(--bn-surface); box-shadow: var(--bn-shadow-1); font-size: var(--bn-fs-md); line-height: var(--bn-lh-relaxed); color: var(--bn-ink-2); }
+.mk-verdict b { color: var(--bn-ink); }
 .mk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2) var(--bn-4); padding: var(--bn-4) var(--bn-6); border-bottom: 1px solid var(--bn-line); background: var(--bn-surface); }
 .mk-bar h1 { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; letter-spacing: var(--bn-tracking-tight); margin-right: auto; }
 .mk-kind { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
@@ -1082,6 +1085,8 @@ function render() {
   const optName = st.o === 'main' ? 'Main today' : OPTS.find((o) => o.id === st.o).name
   const visible = OPTS.filter((o) => !st.h.has(o.id))
   document.getElementById('mk-stage').innerHTML = `
+    <div class="mk-verdict" id="verdict"><p><b>Pick: Here count, as built.</b> "Pick 4" then "3 here": the smaller figure reads as a part of the larger one, and it is the number the hand pulls at this stop.</p>
+      <p><b>Finding: at 820 the For chip hides the pick chip</b>, on main too. Press "For chip" to see it, and the last section for the stacked band that fixes it.</p></div>
     <p class="mk-caption"><b>${f.name}.</b> ${f.say} Second pill: <b>${optName}</b>. The sample walk holds the four brief states${st.x ? ' and the extra one' : ''}, so its reserve is sized to Pick ${peak.n}${peak.here ? ' with the second pill' : ''}${peak.short ? ', with short' : ''}${peak.both ? ', and with both' : ''}.</p>
     <div class="mk-key"><span><i class="n"></i>New: the second pill</span><span><i class="t"></i>Today: the chip on main</span></div>
     <section class="mk-section" id="frames"><h2>The facts row at each size and theme</h2>
