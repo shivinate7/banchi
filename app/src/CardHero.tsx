@@ -143,33 +143,17 @@ export function marketTable(payload: PricingPayload): MarketRead {
   return { kind: 'table', at: payload.written_at ?? null, rows, cutoff: payload.held_market_cutoff ?? null, readings: payload.held_market_readings ?? {} }
 }
 
-/** THE ONE MARKET FIGURE FOR A CARD, shared by the band and Details: the store's latest reading for
- *  `card.sku` when the table holds a usable one (`from: 'reading'`), else the run's snapshot for this
- *  card's row (`from: 'snapshot'`). `price` is null for a row that holds no market data and
- *  undefined for a card the run holds no row for. */
-function marketFigure(
-  card: InventoryCard,
-  table: Extract<MarketRead, { kind: 'table' }>,
-): { from: 'reading' | 'snapshot'; price: string | null | undefined } {
-  const latest = card.sku ? table.readings[card.sku] : undefined
-  if (latest !== undefined && latest !== '' && !Number.isNaN(Number(latest))) return { from: 'reading', price: latest }
-  return { from: 'snapshot', price: table.rows[`${card.box}/${card.index}`] }
-}
-
 function marketText(card: InventoryCard, read: MarketRead | undefined): string {
   if (card.run === null) return 'not joined yet'
   if (read === undefined) return 'reading…'
   if (read.kind === 'absent') return read.why
 
-  const { from, price } = marketFigure(card, read)
+  const price = read.rows[`${card.box}/${card.index}`]
   if (price === undefined) return 'no row in this run'
   if (price === null) return 'no_market_data'
 
-  const said = money(Number(price))
-  // The wire carries a reading's figure and not the moment it was written, so a reading states no
-  // age. Only the snapshot has one: the pricing file's `written_at`.
-  if (from === 'reading') return said
   const ago = read.at === null ? null : readingAgo(new Date(read.at * 1000).toISOString())
+  const said = money(Number(price))
   if (ago === null) return `${said} · no age`
   return `${said} · read ${ago}`
 }
@@ -183,7 +167,7 @@ function marketFact(card: InventoryCard, read: MarketRead | undefined): Detail {
   if (!value.startsWith('$') || read === undefined || read.kind !== 'table') {
     return { label: 'Market', value, kind: isCode(value) ? 'mono' : undefined }
   }
-  const { from, price } = marketFigure(card, read)
+  const price = read.rows[`${card.box}/${card.index}`]
   return {
     label: 'Market',
     value,
@@ -191,7 +175,7 @@ function marketFact(card: InventoryCard, read: MarketRead | undefined): Detail {
     node: (
       <span className="browse-fact-live">
         <span className="bn-tnum">{money(Number(price))}</span>
-        {from === 'snapshot' ? <ReadingAge at={read.at === null ? null : new Date(read.at * 1000).toISOString()} /> : null}
+        <ReadingAge at={read.at === null ? null : new Date(read.at * 1000).toISOString()} />
       </span>
     ),
   }
@@ -368,15 +352,17 @@ export type HeroFigures = {
 
 /** THE MARKET PRICE OF ONE CARD, the band's Market figure: the store's latest reading for
  *  `card.sku` out of the pricing payload's `held_market_readings`, else the snapshot the card's own
- *  run was priced with (`marketFigure`). The latest reading comes first because copies of one SKU
- *  from different runs hold different snapshots, and the band must draw one figure per SKU. One
- *  home, called by `CardPane`, so `#/inventory` and the `#/orders` walk draw the same figure from
- *  the same read. Null while it loads, on a failed read, and where neither a reading nor a run row
- *  exists for this card: the band draws a quiet dash and never a made-up figure. */
+ *  run was priced with (`marketTable`). The latest reading comes first because copies of one SKU
+ *  from different runs hold different snapshots, and the band must draw one figure per SKU. Details'
+ *  Market fact is the run's snapshot and its age, not this. One home, called by `CardPane`, so
+ *  `#/inventory` and the `#/orders` walk draw the same figure from the same read. Null while it
+ *  loads, on a failed read, and where neither a reading nor a run row exists for this card: the
+ *  band draws a quiet dash and never a made-up figure. */
 export function useMarketPrice(card: InventoryCard): number | null {
   const table = useMarketTable(card)
   if (table === null) return null
-  const raw = marketFigure(card, table).price
+  const latest = card.sku ? table.readings[card.sku] : undefined
+  const raw = latest !== undefined && latest !== '' && !Number.isNaN(Number(latest)) ? latest : table.rows[`${card.box}/${card.index}`]
   const price = raw === null || raw === undefined ? NaN : Number(raw)
   return Number.isNaN(price) ? null : price
 }
