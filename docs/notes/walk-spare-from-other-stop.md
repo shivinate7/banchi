@@ -1,0 +1,1 @@
+- walk-spare-from-other-stop: `sparesOf` in `app/src/OrdersWalkPane.tsx` offers every copy not `here`, so stop A's fold can sell a copy standing at stop B. The sale is recorded against A's orders, but the display credits B.

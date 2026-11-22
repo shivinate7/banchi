@@ -32,6 +32,7 @@
  * receipt above it so the two cannot disagree about what "today" means mid-render.
  */
 
+import { isCanceled } from './revenueMath'
 import type { OrderLineReason, OrderRow, ResolvedLine, ResolvedOrder } from './types'
 
 /** How long a buyer with nothing open still counts as RECENT rather than sinking under the
@@ -226,8 +227,41 @@ export function lineReason(order: OrderRow, line: ResolvedLine): OrderLineReason
   return got > 0 ? 'short' : line.reason
 }
 
+/** Does this order still have a body worth drawing — a walk, its lines, a Pull button — even
+ *  though `order.open` says no? An order the marketplace calls done for having every copy
+ *  pulled already (`!open`, not `terminal`, nothing owed) has nothing left to walk. An order the
+ *  marketplace calls done for its OWN reasons while copies are still owed (`terminal` and
+ *  `wanted > recorded`) is the one the owner wants opened back up — `terminal` is `types.ts`'s
+ *  own field, off `server/capture_server.py:_order_row`. THE ONE DISCRIMINATOR: the walk, and
+ *  every figure and done state of a buyer's panel, read it, never `order.open` alone. */
+export function ownsAWalkableBody(order: OrderRow): boolean {
+  if (order.open) return true
+  /* A canceled order owes nothing, whatever its lines still say: the buyer's done line reads "Canceled", never a walk. */
+  if (isCanceled(order.status)) return false
+  /* A stood-down line (`closed_at`) owes nothing on the walk (`pipeline/walkplan.py:demand`'s own
+     filter), so a terminal order is walkable while some line that is NOT stood down still owes,
+     read per line: `order.wanted` sums every line, and one over-filled line would mask another
+     that owes. Only an order with no progress rows falls back to the order-level sum.
+     `!= null` (loose) as `Orders.tsx`'s `owedBySku` reads it. */
+  if (!order.terminal) return false
+  return copiesOwedOf(order) > 0
+}
+
+/** The copies an order still owes, counted per line that is NOT stood down (`closed_at`), so an over-filled line
+ *  never hides another that owes. Only an order with no progress rows falls back to the order-level difference.
+ *  The one count behind `ownsAWalkableBody` and the headline's "to pull". */
+export function copiesOwedOf(order: OrderRow): number {
+  if (order.progress.length === 0) return Math.max(0, order.wanted - order.recorded)
+  return order.progress.reduce((sum, line) => (line.closed_at == null ? sum + Math.max(0, line.wanted - line.recorded) : sum), 0)
+}
+
+/** A buyer's orders that still own a walkable body: what the panel counts as still to pick. */
+export function walkableOf(group: BuyerGroup): OrderRow[] {
+  return group.orders.filter(ownsAWalkableBody)
+}
+
 export function statusOf(order: OrderRow, answer: ResolvedOrder | null): Status {
-  if (!order.open) return 'done'
+  if (!ownsAWalkableBody(order)) return 'done'
   if (answer === null) return 'unresolved'
   const reasons = answer.lines.map((line) => lineReason(order, line))
   if (reasons.some((reason) => reason !== 'resolved' && reason !== 'short')) return 'look'
@@ -235,7 +269,7 @@ export function statusOf(order: OrderRow, answer: ResolvedOrder | null): Status 
   return 'ready'
 }
 
-/** Worst-of ordering over a group's open orders — `look` and `unresolved` outrank `short`,
+/** Worst-of ordering over a group's walkable orders — `look` and `unresolved` outrank `short`,
  *  which outranks `ready`. A group with nothing open is `done`. Used only to pick the ONE dot
  *  colour a multi-order buyer's row shows; every order's own status still shows on its own
  *  chip beside it. */
@@ -243,7 +277,7 @@ export const STATUS_RANK: Record<Status, number> = { look: 0, unresolved: 1, sho
 
 export function worstStatus(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): Status {
   let worst: Status = 'done'
-  for (const order of group.open) {
+  for (const order of walkableOf(group)) {
     const status = statusOf(order, answers.get(order.key) ?? null)
     if (STATUS_RANK[status] < STATUS_RANK[worst]) worst = status
   }

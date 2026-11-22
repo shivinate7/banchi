@@ -1,0 +1,1 @@
+- orders-headline-lags-queue: The Orders headline and the buyer panel count only sales the server has recorded. During a fast burst of digit presses they trail the walk's own sold rows until the writes land and the orders re-read.

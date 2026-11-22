@@ -1,0 +1,1 @@
+- market-runless-card: `useMarketPrice` in `app/src/CardHero.tsx` returns null when `card.run` is null. `useMarketTable` fetches pricing by run and returns null with no run. A card with a SKU and a store reading, but no run, therefore shows a dash in the band.

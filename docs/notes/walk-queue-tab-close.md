@@ -1,0 +1,1 @@
+- walk-queue-tab-close: The module-level `beforeunload` listener in `app/src/OrdersWalkPane.tsx` asks before the page unloads while `writesInLine` is above zero. A sale still in the line when the tab closes is lost if the person dismisses the browser's leave prompt. The prompt is the only guard.

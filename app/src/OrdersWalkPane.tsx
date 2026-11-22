@@ -26,7 +26,7 @@ import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
 import { isEditableTarget } from './keys'
 import { MarkSoldButton, UndoSaleButton, markFreshSale, clearFreshSale } from './CardLocations'
-import { describeFailure, photoUrl, walkPlan } from './server'
+import { describeFailure, failureTone, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
   InventoryCard,
@@ -105,6 +105,12 @@ function pickOrderFor(
   return best === null ? null : best.order
 }
 
+/** The sold copies that count against one take's `wanted`: those its stop reaches (`here`) and the spares no stop reaches
+ *  (`homedKeys`, every copy some stop reaches). One rule for the pick chip's figure and the walk list's line. */
+function soldAgainstOf(take: WalkPlanTake, soldKeys: ReadonlySet<string>, homedKeys: ReadonlySet<string>): number {
+  return take.copies.filter((copy) => soldKeys.has(copy.key) && (copy.here || !homedKeys.has(copy.key))).length
+}
+
 /** What a row's "Pick X of Y" (or "Pick X" plus a short flag) should say.
  *
  *  `onHand` IS THE STORE-WIDE ON-HAND COUNT FOR THE SKU — `take.copies` already lists every
@@ -119,10 +125,100 @@ function pickOrderFor(
 export function pickFigureOf(
   take: WalkPlanTake,
   owedBySku: ReadonlyMap<string, number>,
-): { readonly of: number; readonly short: number } {
-  const onHand = take.copies.length
-  const owed = Math.max(take.wanted, owedBySku.get(take.sku) ?? take.wanted)
-  return { of: Math.min(owed, onHand), short: Math.max(0, owed - onHand) }
+  soldKeys: ReadonlySet<string> = NO_SOLD,
+  homedKeys: ReadonlySet<string> = NO_SOLD,
+): { readonly of: number; readonly short: number; readonly total: number; readonly here: number; readonly done: boolean } {
+  /* A SOLD COPY IS NOT STILL TO PICK AND NOT ON HAND: `groupOf` keeps every take copy (the rows draw sold ones), so a
+     caller that holds the walk's `soldKeys` passes them and this nets them out of every figure below. With none passed
+     (the walk list's rows) the figures are exactly what they were. */
+  const unsold = take.copies.filter((copy) => !soldKeys.has(copy.key))
+  const onHand = unsold.length
+  /* A COPY SOLD AT ANOTHER STOP IS THAT STOP'S PICK, NOT THIS ONE'S: a take lists every on-hand copy (D212) and `wanted`
+     is what this stop is to supply. Counts against it: a copy this stop reaches (`here`), or a spare no stop reaches
+     (`homedKeys` holds every copy some stop reaches), which a take may sell. */
+  const soldHere = soldAgainstOf(take, soldKeys, homedKeys)
+  const wantedLeft = Math.max(0, take.wanted - soldHere)
+  const owed = Math.max(wantedLeft, owedBySku.get(take.sku) ?? wantedLeft)
+  const of = Math.min(owed, onHand)
+  /* `total` IS THE COUNT STILL TO PICK THAT THE STORE CAN SUPPLY, THE PICK CHIP'S NUMBER ("Pick 4" for four
+     owed, though this stop holds three): every owed copy the store really has (`of`). It never counts an owed copy the
+     store lacks, which `short` carries alone (the "2 short" wording above). It was once `max(wantedLeft, of)`, which counted
+     the missing copies when a take's `wanted` outran the copies on hand; the planner caps `wanted` at on-hand, so only a
+     hand-built take reached that, but the figure must hold for any take.
+     `here` is how many of it this stop holds, so the chip can say a copy waits at another stop. */
+  const here = Math.min(wantedLeft, unsold.filter((copy) => copy.here).length, of)
+  /* `done`: every copy this take wanted has been sold this walk, so nothing is left to pick for it. `owedBySku` is the
+     server's figure and lags the walk's own sales until the orders re-read, so it must not read as "short" here. */
+  const done = take.wanted > 0 && wantedLeft === 0
+  return { of, short: Math.max(0, owed - onHand), total: of, here, done }
+}
+
+const NO_SOLD: ReadonlySet<string> = new Set()
+
+/** EVERY FIGURE A TAKE'S PICK CHIP CAN SHOW AS THE WALK SELLS ITS COPIES (D313). A sale removes one copy from the take's
+ *  unsold set, and which kind it is decides whether the chip gains a "here" or "short" pill: a copy this stop reaches, a
+ *  copy only another stop reaches, or a spare (`soldAgainstOf` counts the first and last against `wanted`). So the states
+ *  are the triples "h, o, s copies of each kind sold", at most copies cubed figures, never a subset walk. The pick chip
+ *  reserves the widest of them from the first paint, so a sale never grows it and slides the facts row. */
+export function reachablePickFigures(
+  take: WalkPlanTake,
+  owedBySku: ReadonlyMap<string, number>,
+  homedKeys: ReadonlySet<string>,
+): ReturnType<typeof pickFigureOf>[] {
+  const here = take.copies.filter((copy) => copy.here)
+  const other = take.copies.filter((copy) => !copy.here && homedKeys.has(copy.key))
+  const spare = take.copies.filter((copy) => !copy.here && !homedKeys.has(copy.key))
+  const out: ReturnType<typeof pickFigureOf>[] = []
+  /* ONE SET, GROWN AND SHRUNK IN PLACE: `pickFigureOf` only reads it, and a fresh set per state made this the cost of a render. */
+  const sold = new Set<string>()
+  for (let h = 0; h <= here.length; h++) {
+    if (h > 0) sold.add(here[h - 1]!.key)
+    for (let o = 0; o <= other.length; o++) {
+      if (o > 0) sold.add(other[o - 1]!.key)
+      for (let s = 0; s <= spare.length; s++) {
+        if (s > 0) sold.add(spare[s - 1]!.key)
+        out.push(pickFigureOf(take, owedBySku, sold, homedKeys))
+      }
+      for (const copy of spare) sold.delete(copy.key)
+    }
+    for (const copy of other) sold.delete(copy.key)
+  }
+  return out
+}
+
+/** THE WIDEST FIGURE OF EACH SHAPE A PICK CHIP CAN TAKE (D313): the chip is "Pick N", with a "here" pill, a "short" pill, or both
+ *  beside it. Each shape keeps its own widest number per pill, drawn from the states that really have that shape, so the chip
+ *  reserves the widest SINGLE state it can reach and never one that mixes a big number from one take with a shape of another.
+ *  `null` where no take reaches the shape. */
+export type PickPeak = {
+  readonly plain: { readonly n: number }
+  readonly here: { readonly n: number; readonly here: number } | null
+  readonly short: { readonly n: number; readonly short: number } | null
+  readonly both: { readonly n: number; readonly here: number; readonly short: number } | null
+}
+
+export const NO_PICK_PEAK: PickPeak = { plain: { n: 1 }, here: null, short: null, both: null }
+
+/** Folds the states of every take in `takes` into a `PickPeak`, starting from `from` so a peak only rises. */
+export function reachablePickPeak(
+  takes: readonly WalkPlanTake[],
+  owedBySku: ReadonlyMap<string, number>,
+  homedKeys: ReadonlySet<string>,
+  from: PickPeak = NO_PICK_PEAK,
+): PickPeak {
+  let { plain, here, short, both } = from
+  for (const take of takes) {
+    for (const f of reachablePickFigures(take, owedBySku, homedKeys)) {
+      const elsewhere = !f.done && f.here < f.of
+      const gap = f.done ? 0 : f.short
+      if (elsewhere && gap > 0) both = { n: Math.max(both?.n ?? 1, f.total), here: Math.max(both?.here ?? 1, f.here), short: Math.max(both?.short ?? 1, gap) }
+      else if (elsewhere) here = { n: Math.max(here?.n ?? 1, f.total), here: Math.max(here?.here ?? 1, f.here) }
+      else if (f.done) continue
+      else if (gap > 0) short = { n: Math.max(short?.n ?? 1, f.total), short: Math.max(short?.short ?? 1, gap) }
+      else plain = { n: Math.max(plain.n, f.total) }
+    }
+  }
+  return { plain, here, short, both }
 }
 
 /* ---------------------------------------------------------------------- the walk list's rows */
@@ -253,11 +349,313 @@ function groupOf(
 
 /* ------------------------------------------------------------------ one receipt (a Mark sold) */
 
-/** ONE PULL, RECORDED — no clock (`docs/specs/undo.md` §2-3, D164): a receipt names the write a
+/** ONE SALE THIS WALK MADE — no clock (`docs/specs/undo.md` §2-3, D164): a receipt names the write a
  *  copy's `Undo` would reverse, and `at` orders receipts against each other, never against a
  *  deadline. What ends a copy's OWN reversal is not this record aging out; it is a newer pull
- *  taking the "newest" rank away from it (below), or the walk itself resetting. */
-type Receipt = { readonly at: number; readonly target: PullTarget; readonly place: string; readonly orderKey: string; readonly sku: string }
+ *  taking the "newest" rank away from it (below), or the walk itself resetting.
+ *
+ *  `phase` is how far the write has got. A press makes the receipt at once (`queued`), so the row
+ *  draws sold before the server has heard of it: `sending` while its write is the one in flight,
+ *  `recorded` once the server has it, `undoing` while its reversal waits or is out. */
+type Receipt = {
+  readonly at: number
+  readonly target: PullTarget
+  readonly place: string
+  readonly orderKey: string
+  readonly sku: string
+  readonly phase: 'queued' | 'sending' | 'recorded' | 'undoing'
+}
+
+/* ------------------------------------------------------------------------------ the sales line */
+
+/** ONE SALE THE LINE IS HANDLING, queued, out, or waiting to be reversed. Mutable on purpose: the line moves it
+ *  through its phases and every mounted walk reads it, so a walk mounted after the press (the router remounts
+ *  the screen on every route change) still finds the sale the press made. It carries its own write functions,
+ *  because the screen that pressed it may be gone by the time it goes out. */
+type LineSale = {
+  readonly copyKey: string
+  readonly at: number
+  readonly target: PullTarget
+  place: string
+  readonly orderKey: string
+  readonly sku: string
+  readonly name: string
+  phase: Receipt['phase']
+  /** Its reversal is queued behind its write (`U` pressed while the write was out). */
+  undoAfter: boolean
+  /** It did not stand (refused, cancelled while queued, or reversed): the line skips what is left of it. */
+  gone: boolean
+  readonly onUndo: WalkUndoFn
+  readonly refresh: () => readonly PullRefresh[]
+}
+
+/** One write waiting its turn. Presses, undos and a toast's Undo share one line, so the server never hears two
+ *  of the page's walk writes together (the capture server is threaded, and a burst of clients kills it). */
+type Job =
+  | {
+      readonly kind: 'sell'
+      readonly sale: LineSale
+      readonly order: OrderRow
+      readonly placeLabel: string | null
+      readonly onPull: WalkPullFn
+    }
+  | { readonly kind: 'undo'; readonly sale: LineSale }
+  | { readonly kind: 'run'; readonly run: () => Promise<void> }
+
+/** What a mounted walk hears from the line, to keep its own rows and tally in step. */
+type LineEvent =
+  | { readonly type: 'phase'; readonly copyKey: string; readonly phase: Receipt['phase']; readonly place?: string; readonly refreshed?: readonly Place[] }
+  | { readonly type: 'drop'; readonly copyKey: string; readonly refreshed?: readonly Place[] }
+  | { readonly type: 'busy'; readonly copyKey: string | null }
+
+/* THE PAGE'S ONE LINE AND ONE WORKER, at module level so they outlive any mounted walk: leaving the screen does
+   not stop the writes already pressed, and coming back must not start a second worker beside the first. */
+const lineQueue: Job[] = []
+const lineSales = new Map<string, LineSale>()
+const lineListeners = new Set<(event: LineEvent) => void>()
+let lineDraining = false
+let lineBusyCopy: string | null = null
+let lastSaleAt = 0
+
+/** WRITES OF THE LINE NOT YET ANSWERED (waiting or out). Closing the tab loses them, so the page asks first. */
+let writesInLine = 0
+
+function emitLine(event: LineEvent): void {
+  for (const listener of lineListeners) listener(event)
+}
+
+function setLineBusy(copyKey: string | null): void {
+  lineBusyCopy = copyKey
+  emitLine({ type: 'busy', copyKey })
+}
+
+/* CLOSING OR RELOADING THE TAB WITH A WRITE STILL IN THE LINE LOSES IT, though the screen drew the sale as sold,
+   so the page asks first. One listener for the page, never per walk, because the line outlives the screen
+   (leaving by the hash router does not stop it, and the router never fires this event). */
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', (event) => {
+    if (writesInLine <= 0) return
+    event.preventDefault()
+    event.returnValue = ''
+  })
+}
+
+const receiptOf = (sale: LineSale): Receipt => ({
+  at: sale.at,
+  target: sale.target,
+  place: sale.place,
+  orderKey: sale.orderKey,
+  sku: sale.sku,
+  phase: sale.undoAfter ? 'undoing' : sale.phase,
+})
+
+/** A sale that does not stand leaves the line, and every walk is told so its row and tally go back together. */
+function dropLineSale(sale: LineSale, refreshed?: readonly Place[]): void {
+  sale.gone = true
+  if (lineSales.get(sale.copyKey) === sale) lineSales.delete(sale.copyKey)
+  emitLine({ type: 'drop', copyKey: sale.copyKey, refreshed })
+}
+
+async function runSell(job: Extract<Job, { kind: 'sell' }>): Promise<void> {
+  const { sale } = job
+  if (sale.gone) return
+  sale.phase = 'sending'
+  emitLine({ type: 'phase', copyKey: sale.copyKey, phase: sale.undoAfter ? 'undoing' : 'sending' })
+  setLineBusy(sale.copyKey)
+  let outcome: WalkPullOutcome
+  try {
+    outcome = await job.onPull({
+      order: job.order,
+      sku: sale.sku,
+      name: sale.name,
+      target: sale.target,
+      /* D218: `place` reaches a toast body as plain text (`onWalkPull`'s own receipt),
+         never a component that splits it — sent through `sayPlace` at the press, the one place the
+         pre-write label crosses into text. */
+      place: job.placeLabel,
+      refresh: sale.refresh(),
+    })
+  } catch (err) {
+    outcome = { ok: false, failure: describeFailure(err) }
+  }
+  if (!outcome.ok) {
+    clearFreshSale(sale.copyKey)
+    /* THE SERVER'S REFUSAL IS SAID HERE, once per write, even after the screen was left (the toast stack is
+       the app's, and a refusal that reaches nobody did not happen, D171). `onWalkPull` also sets the screen's
+       one failure line, but the next write in the line clears that before it can be read. */
+    toast({ kind: 'refusal', tone: failureTone(outcome.failure), title: `Not marked sold: ${sale.name}`, body: outcome.failure.message })
+    dropLineSale(sale)
+  } else {
+    sale.place = outcome.place
+    if (sale.undoAfter) sale.phase = 'undoing'
+    else {
+      sale.phase = 'recorded'
+      if (lineSales.get(sale.copyKey) === sale) lineSales.delete(sale.copyKey)
+    }
+    emitLine({ type: 'phase', copyKey: sale.copyKey, phase: sale.phase, place: outcome.place, refreshed: outcome.refreshed })
+  }
+  setLineBusy(null)
+}
+
+async function runUndo(job: Extract<Job, { kind: 'undo' }>): Promise<void> {
+  const { sale } = job
+  /* A reversal made elsewhere while this one waited has already taken the sale: nothing left to reverse. */
+  if (sale.gone) return
+  setLineBusy(sale.copyKey)
+  let outcome: WalkUndoOutcome
+  try {
+    outcome = await sale.onUndo(sale.target, sale.place, sale.name, sale.refresh())
+  } catch {
+    outcome = { ok: false }
+  }
+  if (lineSales.get(sale.copyKey) === sale) lineSales.delete(sale.copyKey)
+  if (outcome.ok) {
+    dropLineSale(sale, outcome.refreshed)
+  } else {
+    sale.undoAfter = false
+    sale.phase = 'recorded'
+    emitLine({ type: 'phase', copyKey: sale.copyKey, phase: 'recorded' })
+  }
+  setLineBusy(null)
+}
+
+/** A write that threw past its own handling must not strand its row: the sale is put back to what the server
+ *  last said, the failure is said, and the line goes on. */
+function settleAfterThrow(job: Job, err: unknown): void {
+  if (job.kind === 'run') return
+  const { sale } = job
+  const trouble = describeFailure(err)
+  if (job.kind === 'sell') {
+    clearFreshSale(sale.copyKey)
+    toast({ kind: 'refusal', tone: failureTone(trouble), title: `Not marked sold: ${sale.name}`, body: trouble.message })
+    dropLineSale(sale)
+  } else {
+    if (lineSales.get(sale.copyKey) === sale) lineSales.delete(sale.copyKey)
+    sale.undoAfter = false
+    sale.phase = 'recorded'
+    emitLine({ type: 'phase', copyKey: sale.copyKey, phase: 'recorded' })
+  }
+  setLineBusy(null)
+}
+
+/** THE LINE'S ONE WORKER: sends the waiting writes in the order they were pressed, each only after the one
+ *  before it has answered. Leaving the screen does not stop it, and a screen coming back never starts another. */
+function pumpLine(): void {
+  if (lineDraining) return
+  lineDraining = true
+  void (async () => {
+    try {
+      for (let job = lineQueue.shift(); job !== undefined; job = lineQueue.shift()) {
+        try {
+          if (job.kind === 'sell') await runSell(job)
+          else if (job.kind === 'undo') await runUndo(job)
+          else await job.run()
+        } catch (err) {
+          /* One write's own trouble never strands the ones behind it. */
+          settleAfterThrow(job, err)
+        } finally {
+          writesInLine -= 1
+        }
+      }
+    } finally {
+      lineDraining = false
+    }
+  })()
+}
+
+function pushJob(job: Job): void {
+  writesInLine += 1
+  lineQueue.push(job)
+  pumpLine()
+}
+
+/** Run one write through the page's line, after every write already in it. A toast's own Undo goes this way,
+ *  so it never runs beside a sale that is still queued. Resolves when `run` has. */
+export function inWalkLine(run: () => Promise<void>): Promise<void> {
+  return new Promise((resolve) => {
+    pushJob({
+      kind: 'run',
+      run: async () => {
+        try {
+          await run()
+        } finally {
+          resolve()
+        }
+      },
+    })
+  })
+}
+
+/** The newest press the line still holds that has not been reversed: what `U` undoes first. A sale already
+ *  recorded is the hub's `lastPull`, and `U` takes that only when this answers null. */
+export function newestWalkSale(): { readonly copyKey: string } | null {
+  let newest: LineSale | null = null
+  for (const sale of lineSales.values()) {
+    if (sale.gone || sale.undoAfter || (sale.phase !== 'queued' && sale.phase !== 'sending')) continue
+    if (newest === null || sale.at > newest.at) newest = sale
+  }
+  return newest
+}
+
+/** Is a reversal of this pull already in the line, queued behind its write or out? `U` skips the hub's `lastPull`
+ *  while this says yes, so a second press never queues a second reversal of the same copy. */
+export function walkReversalHeld(captureId: string): boolean {
+  for (const sale of lineSales.values()) {
+    if (!sale.gone && sale.target.capture_id === captureId && (sale.undoAfter || sale.phase === 'undoing')) return true
+  }
+  return false
+}
+
+/** Reverse one press: still queued, it leaves the line and the server never hears of it; out, its reversal
+ *  waits behind it; recorded, its reversal goes to the line. */
+export function undoWalkSale(held: { readonly copyKey: string }): void {
+  const sale = lineSales.get(held.copyKey)
+  if (sale === undefined || sale.gone) return
+  if (sale.phase === 'queued') {
+    const at = lineQueue.findIndex((job) => job.kind === 'sell' && job.sale === sale)
+    if (at === -1) return
+    lineQueue.splice(at, 1)
+    writesInLine -= 1
+    clearFreshSale(sale.copyKey)
+    dropLineSale(sale)
+    return
+  }
+  if (sale.undoAfter || sale.phase === 'undoing') return
+  if (sale.phase === 'sending') sale.undoAfter = true
+  else sale.phase = 'undoing'
+  emitLine({ type: 'phase', copyKey: sale.copyKey, phase: 'undoing' })
+  pushJob({ kind: 'undo', sale })
+}
+
+/** What the line holds for a walk that mounts now: its receipts, so the rows still draw sold. */
+function lineReceipts(): ReadonlyMap<string, Receipt> {
+  const out = new Map<string, Receipt>()
+  for (const sale of [...lineSales.values()].sort((a, b) => a.at - b.at)) if (!sale.gone) out.set(sale.copyKey, receiptOf(sale))
+  return out
+}
+
+/** The tally of what the receipts hold, per SKU per order (`pickOrderFor`'s second argument). */
+function tallyOf(receipts: ReadonlyMap<string, Receipt>): Map<string, Map<string, number>> {
+  const out = new Map<string, Map<string, number>>()
+  for (const receipt of receipts.values()) {
+    const bySku = out.get(receipt.sku) ?? new Map<string, number>()
+    bySku.set(receipt.orderKey, (bySku.get(receipt.orderKey) ?? 0) + 1)
+    out.set(receipt.sku, bySku)
+  }
+  return out
+}
+
+/** The receipt that is newest by `at`: the one copy whose own row offers Undo. */
+function newestOf(receipts: ReadonlyMap<string, Receipt>): string | null {
+  let key: string | null = null
+  let latest = -Infinity
+  for (const [candidate, receipt] of receipts) {
+    if (receipt.at <= latest) continue
+    latest = receipt.at
+    key = candidate
+  }
+  return key
+}
 
 /* ------------------------------------------------------------------------ the walk, as a hook */
 
@@ -270,7 +668,7 @@ type Receipt = { readonly at: number; readonly target: PullTarget; readonly plac
 export function useOrderWalk({
   walkedKeys,
   ordersByKey,
-  rawCards,
+  rawCards: readCards,
   onPull,
   onUndo,
 }: {
@@ -395,36 +793,86 @@ export function useOrderWalk({
   }, [plan])
 
   const [facts, setFacts] = useState<ReadonlyMap<string, Place>>(new Map())
-  const [recorded, setRecorded] = useState<ReadonlyMap<string, ReadonlyMap<string, number>>>(new Map())
-  const [receipts, setReceipts] = useState<ReadonlyMap<string, Receipt>>(new Map())
-  const [busyCopy, setBusyCopy] = useState<string | null>(null)
+  /* A WALK MOUNTED AFTER A PRESS (the router remounts the screen on every route change) STARTS FROM WHAT THE
+     PAGE'S LINE STILL HOLDS: its rows draw those sales as sold and their Undo works. */
+  const [receipts, setReceipts] = useState<ReadonlyMap<string, Receipt>>(lineReceipts)
+  /** The copy whose write (a sale or an undo) is out to the server right now, or null. At most one. */
+  const [busyCopy, setBusyCopy] = useState<string | null>(lineBusyCopy)
+  /* THE SALES LINE (module level, above). A press is on screen at once and its write waits there for its turn.
+     Everything a press reads is a ref, kept current in the same turn it changes, so two presses a frame apart
+     still see each other: the tally of what this walk has sold (and has queued to sell) per SKU per order, the
+     receipts, and the plan the writes name their neighbours from. */
+  const tallyRef = useRef<Map<string, Map<string, number>>>(tallyOf(receipts))
+  const receiptsRef = useRef<ReadonlyMap<string, Receipt>>(receipts)
+  const planNow = useRef<WalkPlan | null>(plan)
+  planNow.current = plan
+  const commitReceipts = (next: ReadonlyMap<string, Receipt>) => {
+    receiptsRef.current = next
+    setReceipts(next)
+  }
+
+  /* THE LINE TELLS THIS WALK how its sales fared, whichever mount pressed them. A walk with no receipt for the
+     copy (it reset since, or never held it) has nothing to change. */
+  const onLine = useRef<(event: LineEvent) => void>(() => {})
+  onLine.current = (event) => {
+    if (event.type === 'busy') {
+      setBusyCopy(event.copyKey)
+      return
+    }
+    if (!receiptsRef.current.has(event.copyKey)) return
+    if (event.refreshed !== undefined) absorb(event.refreshed)
+    if (event.type === 'drop') dropSale(event.copyKey)
+    else patchReceipt(event.copyKey, event.place === undefined ? { phase: event.phase } : { phase: event.phase, place: event.place })
+  }
+  useEffect(() => {
+    const listener = (event: LineEvent) => onLine.current(event)
+    lineListeners.add(listener)
+    return () => void lineListeners.delete(listener)
+  }, [])
 
   useEffect(() => {
     setFacts(new Map())
-    setRecorded(new Map())
-    setReceipts(new Map())
-    setBusyCopy(null)
+    const held = lineReceipts()
+    tallyRef.current = tallyOf(held)
+    commitReceipts(held)
+    setBusyCopy(lineBusyCopy)
   }, [keysSig])
 
   const soldKeys = useMemo(() => new Set(receipts.keys()), [receipts])
+  const homedKeys = useMemo(() => new Set(rows.map((row) => row.copy.key)), [rows])
+
+  /* A COPY SOLD THIS WALK KEEPS ITS REAL CARD. `Orders.tsx` refills `readCards` after every
+     write from a route that leaves sold cards out (so they stay unpickable), which would drop
+     the card the head still stands on to `syntheticCard` (no photo, no finish, no market).
+     `seen` remembers each card the map held; a copy in `soldKeys` whose place the new map no
+     longer holds reads its remembered card. Only sold copies are carried over, so which copies
+     the walk picks is unchanged. */
+  const seen = useRef<Map<string, InventoryCard>>(new Map())
+  const rawCards: ReadonlyMap<string, InventoryCard> = useMemo(() => {
+    for (const [mapKey, card] of readCards) seen.current.set(mapKey, card)
+    if (soldKeys.size === 0) return readCards
+    let merged: Map<string, InventoryCard> | null = null
+    for (const row of rows) {
+      if (!soldKeys.has(row.copy.key)) continue
+      const place = facts.get(row.copy.key) ?? row.copy.place
+      const mapKey = `${place.box}/${place.index}`
+      const kept = seen.current.get(mapKey)
+      if (readCards.has(mapKey) || kept === undefined) continue
+      merged ??= new Map(readCards)
+      merged.set(mapKey, kept)
+    }
+    return merged ?? readCards
+  }, [readCards, soldKeys, rows, facts])
 
   /** NO CLOCK (`docs/specs/undo.md` §3, D164): only the NEWEST pull this walk made stays
    *  undoable from its own row — the owner declined per-copy granularity here, so an older
    *  sold copy is drawn `Sold` and its way back is the card, on `#/inventory`'s departed row
    *  (§4), never a second Undo left standing beside it. A pull loses "newest" the instant a
    *  later one is recorded, not after any span of time. */
-  const newestUndoKey = useMemo(() => {
-    let key: string | null = null
-    let latest = -Infinity
-    for (const [candidate, receipt] of receipts) {
-      if (receipt.at <= latest) continue
-      latest = receipt.at
-      key = candidate
-    }
-    return key
-  }, [receipts])
+  const newestUndoKey = useMemo(() => newestOf(receipts), [receipts])
 
-  const currentRow = rows.find((row) => row.rowKey === current) ?? rows[0] ?? null
+  /* WITH NO ROW SELECTED (one render after a plan lands), THE WALK STANDS ON THE FIRST PICK THAT STILL HAS A COPY TO SELL, not on a first pick already sold out. */
+  const currentRow = rows.find((row) => row.rowKey === current) ?? firstUnsoldRowOf(rows, soldKeys) ?? null
 
   /** `Inventory.tsx`'s own `loneGroup` and the old `TakeBlock`'s `group`, restated: a
    *  `SearchGroup` synthesised from one take's wire fields, `copies` in the WIRE's own order —
@@ -459,17 +907,18 @@ export function useOrderWalk({
   }, [currentRow, facts, rawCards])
 
   /** Every copy in the plan sitting in `box`, minus the one being pressed and minus a copy
-   *  already recorded here — `OrdersWalk.tsx`'s own `staleAfter`, restated over the flat
+   *  already sold here — `OrdersWalk.tsx`'s own `staleAfter`, restated over the flat
    *  `rows` this file keeps instead of a `RowState` map per take. */
   const staleAfter = (box: number, pressedKey: string): PullRefresh[] => {
-    if (plan === null) return []
+    const held = planNow.current
+    if (held === null) return []
     const out: PullRefresh[] = []
     const seen = new Set<string>()
-    for (const stop of plan.stops) {
+    for (const stop of held.stops) {
       for (const take of stop.takes) {
         for (const copy of take.copies) {
           if (copy.place.box !== box) continue
-          if (copy.key === pressedKey || soldKeys.has(copy.key)) continue
+          if (copy.key === pressedKey || receiptsRef.current.has(copy.key)) continue
           if (seen.has(copy.key)) continue
           seen.add(copy.key)
           out.push({ box: copy.place.box, index: copy.place.index })
@@ -519,8 +968,43 @@ export function useOrderWalk({
     return next.takeKey
   }
 
+  /** Lower this walk's own tally by one copy against `orderKey`/`sku`: the other half of a press that did not
+   *  stand (a refused write, a cancelled one) or of an undo, whether the row's own (`undoCopy`) or one that
+   *  happened OUTSIDE this hook (`noteExternalUndo`: a toast's own Undo or the `U` key, which write through
+   *  `Orders.tsx:undoFromToast` and never touch this hook). Before the tally was shared, a toast or `U` undo
+   *  mid-walk left it believing a copy was still recorded that the ledger no longer held, and `pickOrderFor`
+   *  then returned `null` for an order that still owed one (D171, refusals must reach a reader). */
+  const lowerTally = (sku: string, orderKey: string) => {
+    const bySku = tallyRef.current.get(sku)
+    const count = bySku?.get(orderKey)
+    if (bySku === undefined || count === undefined) return
+    if (count <= 1) bySku.delete(orderKey)
+    else bySku.set(orderKey, count - 1)
+  }
+
+  const patchReceipt = (copyKey: string, patch: Partial<Receipt>) => {
+    const held = receiptsRef.current.get(copyKey)
+    if (held === undefined) return
+    commitReceipts(new Map(receiptsRef.current).set(copyKey, { ...held, ...patch }))
+  }
+
+  /** A sale that does not stand: its receipt goes and its tally lowers, together, so neither can outlive the
+   *  other. A copy with no receipt is a no-op, which is what makes a second path to the same end harmless. */
+  const dropSale = (copyKey: string) => {
+    const receipt = receiptsRef.current.get(copyKey)
+    if (receipt === undefined) return
+    const next = new Map(receiptsRef.current)
+    next.delete(copyKey)
+    commitReceipts(next)
+    lowerTally(receipt.sku, receipt.orderKey)
+  }
+
+  /** A PRESS TAKES EFFECT AT ONCE and its write waits its turn (three digits in a burst
+   *  mark three copies sold, and nothing says "one at a time"). The row draws sold, the tally counts it for the
+   *  next press (`pickOrderFor`, the "nobody owes" refusal), and a failed write puts back only its own row. */
   const onSell = (copy: SearchCopy, forTake?: WalkPlanTake) => {
-    if (busyCopy !== null) return
+    /* A copy that already has a receipt (sold, queued or out) is not sold twice, however quickly it is pressed. */
+    if (receiptsRef.current.has(copy.key) || lineSales.has(copy.key)) return
     /* EVERY CALLER NAMES ITS TAKE, OR FALLS BACK TO THE PICK THE WALK STANDS ON. The walk column's
        copy rows pass `forTake` (a row can belong to a different take than the one the panel shows),
        and the digit keys sell the current pick's copies through `currentLineOf`. The card panel no
@@ -528,7 +1012,7 @@ export function useOrderWalk({
        anchor for a press that names no take, and never for a copy the walk column does not draw. */
     const take = forTake ?? currentRow?.take
     if (take === undefined) return
-    const order = pickOrderFor(take, ordersByKey, recorded.get(take.sku) ?? new Map())
+    const order = pickOrderFor(take, ordersByKey, tallyRef.current.get(take.sku) ?? new Map())
     if (order === null) {
       /* D171: a refusal that reaches nobody did not happen. This pass's own tally may be
          stale (an undo made elsewhere, not yet synced here) or the plan may simply be behind
@@ -543,100 +1027,64 @@ export function useOrderWalk({
     }
     const target: PullTarget | null = copy.capture_id === null ? null : { box: copy.place.box, index: copy.place.index, capture_id: copy.capture_id }
     if (target === null) return
-    setBusyCopy(copy.key)
+    const place = copy.place.label === null ? null : sayPlace(copy.place.label)
+    /* STRICTLY LATER THAN EVERY RECEIPT BEFORE IT, on any mount, so two presses in one millisecond still rank. */
+    const at = Math.max(Date.now(), lastSaleAt + 1)
+    lastSaleAt = at
+    const bySku = tallyRef.current.get(take.sku) ?? new Map<string, number>()
+    bySku.set(order.key, (bySku.get(order.key) ?? 0) + 1)
+    tallyRef.current.set(take.sku, bySku)
+    const sale: LineSale = {
+      copyKey: copy.key,
+      at,
+      target,
+      place: place ?? `box ${target.box}, index ${target.index}`,
+      orderKey: order.key,
+      sku: take.sku,
+      name: take.name ?? take.sku,
+      phase: 'queued',
+      undoAfter: false,
+      gone: false,
+      onUndo,
+      refresh: () => staleAfter(target.box, copy.key),
+    }
+    commitReceipts(new Map(receiptsRef.current).set(copy.key, receiptOf(sale)))
     /* THE SALE IS NOTED HERE, not in the button: a digit key reaches this too, and its Undo plays the burst. */
     markFreshSale(copy.key)
-    void (async () => {
-      const refresh = staleAfter(target.box, copy.key)
-      const outcome = await onPull({
-        order,
-        sku: take.sku,
-        name: take.name ?? take.sku,
-        target,
-        /* D218: `place` reaches a toast body as plain text (`onWalkPull`'s own receipt),
-           never a component that splits it — sent through `sayPlace` here rather than left
-           for the caller, since this is the one place the pre-write label crosses into text. */
-        place: copy.place.label === null ? null : sayPlace(copy.place.label),
-        refresh,
-      })
-      if (!live.current) return
-      if (!outcome.ok) clearFreshSale(copy.key)
-      if (outcome.ok) {
-        absorb(outcome.refreshed)
-        setRecorded((prev) => {
-          const next = new Map(prev)
-          const bySku = new Map(next.get(take.sku) ?? [])
-          bySku.set(order.key, (bySku.get(order.key) ?? 0) + 1)
-          next.set(take.sku, bySku)
-          return next
-        })
-        /* UN-6's rebuild deletes the walk's own auto-advance (below), so the per-stop
-           `satisfied` tally walk-fix computed here (finding 4: `take` is THIS STOP's own
-           instance, never summed store-wide) has no `advanceAfter` left to feed. `sku` on
-           the receipt stays: `undoCopy`/`noteExternalUndo` read it to lower the right tally. */
-        setReceipts((prev) => new Map(prev).set(copy.key, { at: Date.now(), target, place: outcome.place, orderKey: order.key, sku: take.sku }))
-      }
-      /* UN-6, REBUILT (`docs/specs/undo.md` §11.3, D57, D118): the walk no longer advances
-         itself. The sold copy's own `RowAction` reads `receipts` fresh every render and turns
-         into `Undo` in the exact row it was pressed from — nothing else on the pane is
-         re-mounted, so no OTHER row's button can ever land under a repeated tap. The operator
-         moves to the next card on their own press (J/K, or a row in the walk list), the same
-         door every other screen's Undo leaves open. The earlier fix disabled the new card's
-         button for `ADVANCE_GUARD_MS` after an automatic jump; the jump itself was the defect,
-         so there is nothing left here to guard against. */
-      setBusyCopy(null)
-    })()
-  }
-
-  /** Lower this pass's own tally by one copy against `orderKey`/`sku` — the state half of an
-   *  undo, shared by the row's own inline Undo (`undoCopy`, below) and an undo that happened
-   *  OUTSIDE this hook (`noteExternalUndo`): a toast's own Undo or the `U` key, which write
-   *  through `Orders.tsx:undoFromToast` and never touch this hook at all. Before this shared
-   *  helper existed, only `undoCopy` lowered the tally, so a toast/`U` undo mid-walk left this
-   *  pass believing a copy was still recorded that the ledger no longer held — `pickOrderFor`
-   *  then returned `null` for an order that still owed one, and the next press did nothing
-   *  and said nothing (the review round's finding 2, D171). */
-  const lowerTally = (sku: string, orderKey: string) => {
-    setRecorded((prev) => {
-      const bySku = prev.get(sku)
-      if (bySku === undefined) return prev
-      const count = bySku.get(orderKey)
-      if (count === undefined) return prev
-      const nextBySku = new Map(bySku)
-      if (count <= 1) nextBySku.delete(orderKey)
-      else nextBySku.set(orderKey, count - 1)
-      const next = new Map(prev)
-      next.set(sku, nextBySku)
-      return next
-    })
+    lineSales.set(copy.key, sale)
+    pushJob({ kind: 'sell', sale, order, placeLabel: place, onPull })
   }
 
   const undoCopy = (copyKey: string) => {
-    const receipt = receipts.get(copyKey)
-    /* Only the newest pull is undoable from its own row (no clock, see `newestUndoKey` above).
+    const receipt = receiptsRef.current.get(copyKey)
+    /* Only the newest sale is undoable from its own row (no clock, see `newestUndoKey` above).
        `RowAction` only ever wires this to the newest copy's own button, and this guard is the
        same rule enforced a second time, defensively, rather than trusted to the caller. */
-    if (receipt === undefined || busyCopy !== null || copyKey !== newestUndoKey) return
+    if (receipt === undefined || copyKey !== newestOf(receiptsRef.current)) return
+    /* ITS OWN WRITE IS OUT (or its reversal is waiting or out): nothing to press yet. */
+    if (receipt.phase === 'sending' || receipt.phase === 'undoing') return
+    const held = lineSales.get(copyKey)
+    if (receipt.phase === 'queued') {
+      /* NOT SENT YET, SO NOTHING TO REVERSE: it leaves the line and the server never hears of it. */
+      if (held === undefined) dropSale(copyKey)
+      else undoWalkSale(held)
+      return
+    }
     /* THE NAME COMES FROM THE PLAN'S TAKES, NOT FROM `rows`: `rows` holds only the copies at a stop, and
        a sold spare (`here: false`) has no row there, so keying the lookup on it made its Undo a no-op. */
     const named = plan?.stops.flatMap((stop) => stop.takes).find((take) => take.sku === receipt.sku)
     if (named === undefined) return
-    setBusyCopy(copyKey)
-    void (async () => {
-      const refresh = staleAfter(receipt.target.box, copyKey)
-      const outcome = await onUndo(receipt.target, receipt.place, named.name ?? named.sku, refresh)
-      if (!live.current) return
-      if (outcome.ok) {
-        absorb(outcome.refreshed)
-        setReceipts((prev) => {
-          const next = new Map(prev)
-          next.delete(copyKey)
-          return next
-        })
-        lowerTally(receipt.sku, receipt.orderKey)
-      }
-      setBusyCopy(null)
-    })()
+    /* A RECORDED SALE JOINS THE LINE FOR ITS REVERSAL, so the reversal waits behind every write already in it. */
+    lineSales.set(copyKey, {
+      copyKey,
+      ...receipt,
+      name: named.name ?? named.sku,
+      undoAfter: false,
+      gone: false,
+      onUndo,
+      refresh: () => staleAfter(receipt.target.box, copyKey),
+    })
+    undoWalkSale({ copyKey })
   }
 
   /** THE OTHER UNDO PATH — a toast's own Undo (`docs/specs/undo.md` §3) or the `U` key,
@@ -645,17 +1093,13 @@ export function useOrderWalk({
    *  this hook exists. `Orders.tsx` calls this instead, once that write succeeds, keyed off
    *  the SAME `PullTarget` the toast already carries — never off `rows`, which may already be
    *  behind a re-plan. A copy this pass never recorded (an undo of a pull made outside the
-   *  walk entirely) is a no-op: `receipts` holds nothing for it. */
+   *  walk entirely) is a no-op: `receipts` holds nothing for it, and a sale still queued or
+   *  out has no toast to undo it from. */
   const noteExternalUndo = (target: PullTarget) => {
     const copyKey = `${target.box}/${target.index}`
-    const receipt = receipts.get(copyKey)
-    if (receipt === undefined) return
-    setReceipts((prev) => {
-      const next = new Map(prev)
-      next.delete(copyKey)
-      return next
-    })
-    lowerTally(receipt.sku, receipt.orderKey)
+    const receipt = receiptsRef.current.get(copyKey)
+    if (receipt === undefined || receipt.phase === 'queued' || receipt.phase === 'sending') return
+    dropSale(copyKey)
   }
 
   return {
@@ -682,6 +1126,8 @@ export function useOrderWalk({
     busyCopy,
     receipts,
     soldKeys,
+    /** Every copy some stop of the plan reaches: what is left over is a spare, and a spare's sale counts for its take. */
+    homedKeys,
     newestUndoKey,
     /** THE REFRESHED PLACES (A4), so `WalkList`'s own per-line groups can read the same
      *  post-sale facts the pane already does — `groupOf`'s own overlay, shared rather than
@@ -747,11 +1193,6 @@ export function useWalkKeys(walk: OrderWalk): void {
       const copy = groupOf(line.take, keyedCopiesOf(line, now.openSpares), now.facts, now.rawCards).copies[Number(event.key) - 1]
       if (copy === undefined || now.soldKeys.has(copy.key) || copy.state === 'sold' || copy.state === 'retired') return
       event.preventDefault()
-      /* ONE SALE AT A TIME: a digit pressed while another sale is in flight says so, never nothing. */
-      if (now.busyCopy !== null) {
-        toast({ kind: 'status', title: 'One sale at a time', body: 'The last one is still being recorded.', ttlMs: 2500 })
-        return
-      }
       now.onSell(copy, line.take)
     }
     window.addEventListener('keydown', onKey)
@@ -773,7 +1214,17 @@ function keyedCopiesOf(line: WalkTakeLine, openSpares: ReadonlySet<string>): Wal
 
 /** The pick the walk stands on: its take at its stop, with every copy row it draws. */
 function currentLineOf(walk: OrderWalk): WalkTakeLine | null {
-  return allTakeLinesOf(walk.sections).find((line) => line.rows.some((row) => row.rowKey === walk.current)) ?? null
+  const lines = allTakeLinesOf(walk.sections)
+  const found = lines.find((line) => line.rows.some((row) => row.rowKey === walk.current))
+  /* `current` IS NULL FOR ONE RENDER AFTER A PLAN LANDS (its effect sets it), so a digit pressed then acts on
+     the first pick that still has an unsold copy, the one `currentRow` falls back to: it is never dropped. */
+  const fallback = firstUnsoldRowOf(walk.rows, walk.soldKeys)
+  return found ?? lines.find((line) => line.rows.some((row) => row.rowKey === fallback?.rowKey)) ?? null
+}
+
+/** The first row whose copy has no receipt, else the first row. */
+function firstUnsoldRowOf(rows: readonly WalkRow[], soldKeys: ReadonlySet<string>): WalkRow | undefined {
+  return rows.find((row) => !soldKeys.has(row.copy.key)) ?? rows[0]
 }
 
 /* ------------------------------------------------------------------------------ the walk list */
@@ -792,10 +1243,18 @@ function takeLinesOf(rows: readonly WalkRow[]): WalkTakeLine[] {
   return out
 }
 
-/** Every copy the wanted count is asking for has a receipt against it. Shared by the press's
- *  own snapshot (below) and each line's `is-done` styling — one formula, not two. */
-function pickedAllOf(line: WalkTakeLine, soldKeys: ReadonlySet<string>): boolean {
-  return line.take.copies.filter((copy) => soldKeys.has(copy.key)).length >= line.take.wanted
+/** How many sales count against this line's `wanted`. A take lists every on-hand copy in the store (D212) and `wanted`
+ *  is what THIS stop is to supply, so a copy sold at another stop is that stop's pick: counting it struck a stop
+ *  through that nothing had been sold at. A copy counts when this stop reaches it (`here`) or when no stop does (a
+ *  spare, which a take may sell; `homedKeys` holds every copy some stop reaches). One count for the
+ *  line's figure, its `is-done` styling and the press's snapshot. */
+function pickedOf(line: WalkTakeLine, soldKeys: ReadonlySet<string>, homedKeys: ReadonlySet<string>): number {
+  return soldAgainstOf(line.take, soldKeys, homedKeys)
+}
+
+/** Every copy the wanted count is asking for has a receipt against it. */
+function pickedAllOf(line: WalkTakeLine, soldKeys: ReadonlySet<string>, homedKeys: ReadonlySet<string>): boolean {
+  return pickedOf(line, soldKeys, homedKeys) >= line.take.wanted
 }
 
 /** Every take key across every section, flat — what a press of Hide picked snapshots. */
@@ -859,12 +1318,12 @@ export function WalkList({
     } else if (hideSold && !wasHiding.current) {
       const picked = new Set<string>()
       for (const line of allTakeLinesOf(walk.sections)) {
-        if (pickedAllOf(line, walk.soldKeys)) picked.add(line.takeKey)
+        if (pickedAllOf(line, walk.soldKeys, walk.homedKeys)) picked.add(line.takeKey)
       }
       setFoldedKeys(picked)
     }
     wasHiding.current = hideSold
-  }, [hideSold, walk.keysSig, walk.sections, walk.soldKeys])
+  }, [hideSold, walk.keysSig, walk.sections, walk.soldKeys, walk.homedKeys])
 
   if (walk.loading && walk.plan === null) {
     return (
@@ -897,8 +1356,7 @@ export function WalkList({
             </button>
             {isFolded ? null : <ul className="orders-walk-rows">
               {shown.map((line) => {
-                const picked = line.take.copies.filter((copy) => walk.soldKeys.has(copy.key)).length
-                const done = picked >= line.take.wanted
+                const done = pickedAllOf(line, walk.soldKeys, walk.homedKeys)
                 const figure = pickFigureOf(line.take, owedBySku)
                 const current = line.rows.some((row) => row.rowKey === walk.current)
                 const slots = line.rows.map((row) => row.copy.place.card).filter((card): card is number => card !== null)
@@ -964,7 +1422,9 @@ export function WalkList({
  *  it is showing when `take` is omitted. */
 export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk; readonly copy: SearchCopy; readonly take?: WalkPlanTake; readonly hint?: string }) {
   const receipt = walk.receipts.get(copy.key)
-  const busy = walk.busyCopy === copy.key
+  /* BUSY ONLY WHILE THIS ROW'S OWN WRITE IS OUT (or its reversal is waiting). A sale still in the line shows
+     no busy: its Undo cancels it. Nothing here waits on another row's write. */
+  const busy = receipt?.phase === 'sending' || receipt?.phase === 'undoing'
   const where = copy.place.label === null ? copy.key : sayPlace(copy.place.label)
   if (receipt !== undefined && copy.key !== walk.newestUndoKey) return <Pill tone="ok" icon="check">Sold</Pill>
   const undo = receipt !== undefined
@@ -977,8 +1437,8 @@ export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk
         name={`Mark Sold: ${where}`}
         saleKey={copy.key}
         kbd={hint}
-        busy={busy}
-        disabled={walk.busyCopy !== null && !busy}
+        busy={false}
+        disabled={false}
         onClick={() => walk.onSell(copy, take)}
       />
     )
@@ -988,7 +1448,7 @@ export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk
       saleKey={copy.key}
       name={`Undo sale: ${where}`}
       busy={busy}
-      disabled={walk.busyCopy !== null && !busy}
+      disabled={busy}
       onClick={() => walk.undoCopy(copy.key)}
     />
   )
@@ -1008,7 +1468,7 @@ export function WalkStrip({ walk, notInBoxes }: { readonly walk: OrderWalk; read
         {lines.map((line) => {
           const first = line.rows[0]
           const name = line.take.name ?? 'Not Identified Yet'
-          const done = pickedAllOf(line, walk.soldKeys)
+          const done = pickedAllOf(line, walk.soldKeys, walk.homedKeys)
           const current = line.rows.some((row) => row.rowKey === walk.current)
           /* THE PANE'S OWN LOOKUP: a card the inventory read has not answered draws no photograph, a pooled
              copy never does (D24, opsec). */

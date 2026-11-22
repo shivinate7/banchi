@@ -6,7 +6,7 @@ import type { OrderLineWire, OrderRow } from './types'
 
 /** The one word this screen treats as "not a sale" — folded the way `is_terminal_status`
  *  folds its own vocabulary, but for exactly one status rather than that whole terminal set. */
-function isCanceled(status: string | null): boolean {
+export function isCanceled(status: string | null): boolean {
   return (status ?? '').trim().toLowerCase() === 'canceled'
 }
 

@@ -118,6 +118,7 @@ The Playwright specs and unit tests of the app, and the helpers they share.
   - Decisions: `D118`, `D16`, `D50`
 - `app/tests/nav.spec.ts` — The shell's keyboard, and the first test this app has had of the strip every screen sits under: D51's Cmd-arrow steps the ring in the order the nav draws it, both ends stop, and the three refusals hold — a bare arrow belongs to the screens, a held Cmd in a text field belongs to the caret, and a screen outside the ring keeps the browser's key.
   - Decisions: `D20`, `D43`, `D51`, `D70`, `D86`, `D105`, `D134`, `D192`, `D298`, `D174`, `D291`, `D109`, `D275`, `D276`, `D95`, `D5`, `D31`, `D39`, `D69`, `D100`
+- `app/tests/ordersFilterSheet.ts` — The Orders page's Filters sheet picks (open, close, pick a facet option, Open only, Done only), shared by `orders.spec.ts` and `order-walk.spec.ts` so neither copies them.
 - `app/tests/order-walk.spec.ts` — `OrdersWalkPane.tsx`'s OWN undo, and nothing else `tests/orders.spec.ts` already covers (that file's own docstring names this file so a reader is not sent looking for two copies of the same case).
   - Decisions: `D118`, `D136`, `D164`, `D252`, `D304`, `D313`, `D57`, `D58`, `D113`, `D212`, `D220`
 - `app/tests/orders.spec.ts` — The order screen in a browser: that the six-way counts render including the zeros, that a pick already held by another line is drawn as spoken for, that the pull sends the row's own capture_id, and that the receipt reads the pre-write place rather than the sale's departed label.

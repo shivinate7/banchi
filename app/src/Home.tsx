@@ -24,6 +24,7 @@ import { useCardCrop } from './cardCrop'
 import { Button, cropStyle, Icon, Kbd, Loading, Page, Skeleton, SkeletonText, type IconName } from './kit'
 import { boxTitle } from './kit/data'
 import { absoluteDate, clockTime, dayMonth, weekdayDate } from './dates'
+import { copiesOwedOf } from './orderBuyers'
 import { pricingTileNote, runsOwingPrice, sendCounts, standing, type Standing } from './standing'
 import { photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
@@ -559,11 +560,11 @@ export function Home() {
   const captured = status.state === 'ready' ? (status.value.states.captured ?? 0) : null
 
   /* Orders: the figure is open orders; the note is the PULL BACKLOG the Orders screen itself
-     draws as "N of M pulled" — `wanted − recorded` over the ledger's open rows. The resolver's
+     draws as "N of M pulled" — `copiesOwedOf` (per line not stood down) over the ledger's open rows. The resolver's
      `outstanding` is a different fact (copies the store cannot FIND) and is named as such. */
   const openRows = orders.state === 'ready' ? orders.value.orders.filter((o) => o.open) : null
   const openOrders = openRows === null ? null : openRows.length
-  const toPull = openRows === null ? null : openRows.reduce((n, o) => n + Math.max(0, o.wanted - o.recorded), 0)
+  const toPull = openRows === null ? null : openRows.reduce((n, o) => n + copiesOwedOf(o), 0)
   /* Same join `standing.ts` makes, for the same reason: `resolution.orders` is already a
      subset of the open orders (`do_orders`'s own `open_keys`, D63 amended), and this counts
      a resolved line only where ITS order reads `open: true` here too, rather than trusting

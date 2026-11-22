@@ -1,0 +1,1 @@
+- walk-undo-held-untested: The `U` handler's `walkReversalHeld` guard in `app/src/Orders.tsx` has no test case. With the guard off, a duplicate reversal reaches the server. The server answers that the pull is not recorded, and the screen shows "Already undone".

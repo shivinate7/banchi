@@ -6,6 +6,7 @@ import type {
   CodeLedger,
   LiveListing,
   MatchState,
+  OrderLineProgress,
   OrderRow,
   OrdersPayload,
   PickRow,
@@ -247,6 +248,29 @@ export function line(over: Partial<ResolvedLine> = {}): ResolvedLine {
   return { ...base, ...over }
 }
 
+/** The progress rows of a one-line order, stated from its totals: the one row `_order_progress`
+ *  builds for the line. A case that states `wanted`/`recorded` passes this as `progress` too, so
+ *  no row says "1 wanted, 0 recorded" under an order stated as done. */
+export function progressOf(totals: { wanted: number; recorded: number }): OrderLineProgress[] {
+  const { wanted, recorded } = totals
+  return [
+    {
+      sku: '9191486',
+      wanted,
+      recorded,
+      outstanding: Math.max(0, wanted - recorded),
+      over: Math.max(0, recorded - wanted),
+      copies: [],
+      at: null,
+      by_hand: 0,
+      reason: null,
+      declared_kind: null,
+      closed_at: null,
+      closed_reason: null,
+    },
+  ]
+}
+
 /** One order row — `orders.spec.ts`'s own `order`. */
 export function order(over: Partial<OrderRow> = {}): OrderRow {
   const base: OrderRow = {
@@ -263,22 +287,7 @@ export function order(over: Partial<OrderRow> = {}): OrderRow {
     open: true,
     terminal: false,
     lines: [line().line],
-    progress: [
-      {
-        sku: '9191486',
-        wanted: 1,
-        recorded: 0,
-        outstanding: 1,
-        over: 0,
-        copies: [],
-        at: null,
-        by_hand: 0,
-        reason: null,
-        declared_kind: null,
-        closed_at: null,
-        closed_reason: null,
-      },
-    ],
+    progress: progressOf({ wanted: 1, recorded: 0 }),
   }
   return { ...base, ...over }
 }

@@ -1201,6 +1201,24 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 @container pane (min-width: 560px) {
   .orders-cardcol .browse-band { height: auto; min-height: min(720px, max(520px, calc(100dvh - 280px))); }
 }
+/* THE WALK'S BAND STACKS UP TO 760px OF PANE, NOT ONLY UNDER 520px. At 820 the walking pane is 692px: beside two
+   figures the facts row gets about 220px, and the "For" chip then clips the pick chip out of sight. Stacked, the
+   row has the pane's whole width. These are `BoxBrowse.css`'s own stacked-band declarations (its
+   `@container pane (max-width: 520px)`), copied because a container query cannot carry two widths for one scope;
+   `#/inventory`'s pane keeps its two-column band, since only `.orders-cardcol` is named here. */
+@container pane (max-width: 760px) {
+  .orders-cardcol .browse-hero-head { grid-template-columns: minmax(0, 1fr); padding: var(--bn-4); }
+  .orders-cardcol .browse-hero-lead {
+    grid-auto-columns: minmax(min-content, 1fr);
+    padding-top: var(--bn-3);
+    border-top: 1px solid var(--bn-line);
+    margin-top: var(--bn-2);
+  }
+  .orders-cardcol .browse-hero-side { order: 3; }
+  .orders-cardcol .browse-hero-fig { min-width: 0; }
+  .orders-cardcol .browse-hero-fig + .browse-hero-fig { padding-left: var(--bn-3); margin-left: var(--bn-3); }
+  .orders-cardcol .browse-hero-fig-live { width: auto; }
+}
 /* THE PANE'S COPY ROWS DO NOT SCROLL ON THEIR OWN. The list's own scroll serves Inventory's fixed hero band
    (D118, `CardLocations.css`); here the column is sticky in the page, so the wheel over a row scrolls the page. */
 .orders-cardcol .card-locations-rows {

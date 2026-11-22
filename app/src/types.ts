@@ -2642,7 +2642,9 @@ export type PricingPayload = {
    *  so the screen compares one card's price to it and ranks nothing. Optional for an older server. */
   held_market_cutoff?: string | null
   /** `{sku: market}` out of the same readings table the cutoff ranks, for this run's SKUs that it
-   *  holds a figure for. The glint compares THIS to the cutoff, never the run's `snap`. */
+   *  holds a figure for. The glint compares THIS to the cutoff, never the run's `snap`. The band's Market figure
+   *  (`useMarketPrice`) draws THIS first and falls back to `snap`; Details' At capture row stays the
+   *  run's `snap` with `written_at`. It carries no age: the reading's own write time is not on the wire. */
   held_market_readings?: Record<string, string>
 }
 

@@ -1,0 +1,1 @@
+- walk-worker-throw-untested: The case "a throw inside the line worker…" in `app/tests/orders.spec.ts` never reaches the worker's catch. `onWalkPull` catches a malformed reply first, so the worker's own recovery path has no test. Related: a reply whose `refreshed` is not a list crashes the Orders screen through a render update. The real server never sends one.

@@ -53,7 +53,8 @@ import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore
 import { PositionLabel } from './PositionLabel'
 import { RailFrame } from './RailFrame'
 import { sayPlace } from './position'
-import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, isSharedOrderNumber, lineReason, shipToOf, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
+import { isCanceled } from './revenueMath'
+import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, isSharedOrderNumber, copiesOwedOf, lineReason, shipToOf, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, ownsAWalkableBody, walkableOf, type BuyerGroup, type Status } from './orderBuyers'
 import {
   applyTake,
   buyerLabel,
@@ -97,7 +98,7 @@ import {
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
 import { useLeaveWarning } from './useLeaveWarning'
-import { pickFigureOf, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
+import { pickFigureOf, reachablePickPeak, NO_PICK_PEAK, type PickPeak, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, inWalkLine, newestWalkSale, undoWalkSale, walkReversalHeld, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   BoxRecord,
   IngestResult,
@@ -121,6 +122,7 @@ import type {
   SectionDetail,
   ShippingLane,
   WalkPlan,
+  WalkPlanTake,
 } from './types'
 import './Orders.css'
 
@@ -855,16 +857,6 @@ function headlineOf(line: ResolvedLine): Headline {
 /* ---- status ---------------------------------------------------------------------------------- */
 
 
-/** Does this order still have a body worth drawing — a walk, its lines, a Pull button — even
- *  though `order.open` says no? An order the marketplace calls done for having every copy
- *  pulled already (`!open`, not `terminal`, nothing owed) has nothing left to walk, same as
- *  before. An order the marketplace calls done for its OWN reasons while copies are still
- *  owed (`terminal` and `wanted > recorded`) is the one the owner wants opened back up —
- *  `terminal` is `types.ts`'s own field now, off `server/capture_server.py:_order_row`. */
-function ownsAWalkableBody(order: OrderRow): boolean {
-  if (order.open) return true
-  return order.terminal && order.wanted > order.recorded
-}
 
 
 
@@ -971,7 +963,7 @@ function VerdictHold() {
 }
 
 function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]): ReactNode {
-  const owed = open.reduce((sum, order) => sum + Math.max(0, order.wanted - order.recorded), 0)
+  const owed = open.reduce((sum, order) => sum + copiesOwedOf(order), 0)
   const buyers = new Set(open.map(buyerKeyOf)).size
   const byKey = new Map(resolved.map((order) => [order.key, order]))
   let pick = 0
@@ -993,10 +985,16 @@ const PULL_NOT_RECORDED = 'pull_not_recorded'
 /** The undo, pressed on a toast after the hub may have unmounted. It sends the target and
  *  nothing else — the server finds whoever holds the `capture_id` — and bumps the hub so any
  *  mounted screen re-reads. */
-async function undoFromToast(target: PullTarget, place: string, name: string): Promise<void> {
+function undoFromToast(target: PullTarget, place: string, name: string): Promise<void> {
   /* The lock lives on the HUB, not in a component: the toast outlives the list, and whichever hub
-     is mounted by the time the undo answers must see every Pull disabled until it does. */
+     is mounted by the time the undo answers must see every Pull disabled until it does. It is taken now, while
+     the undo waits for its turn in the walk's line, so nothing else starts beside it. */
   setHub({ busy: `undo/${target.capture_id}` })
+  /* THE WALK'S LINE, so this write never runs beside a sale that is still queued or out. */
+  return inWalkLine(() => undoPullNow(target, place, name))
+}
+
+async function undoPullNow(target: PullTarget, place: string, name: string): Promise<void> {
   try {
     await undoPull([target])
     toast({ kind: 'ok', icon: 'undo', title: 'Pull undone', body: `${place} holds ${name} again.` })
@@ -1391,9 +1389,15 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
    * its own undo clears it. */
   useUndoHotkey(() => {
     if (stage !== 'pull') return null
+    /* `U` UNDOES THE NEWEST PRESS. A sale still in the walk's line is newer than `lastPull` (the newest the server
+       holds): queued, it is cancelled and the server never hears of it; out, its reversal waits behind it. */
+    const sale = newestWalkSale()
+    if (sale !== null) return () => undoWalkSale(sale)
     const pull = hubState().lastPull
     if (pull === null) return null
     if (hubState().busy !== null) return null
+    /* Its reversal is already in the walk's line: a second press does nothing, never a second reversal of one copy. */
+    if (walkReversalHeld(pull.target.capture_id)) return null
     return () => void undoFromToast(pull.target, pull.place, pull.name)
   })
 
@@ -1873,15 +1877,18 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
      from a real failure to draw `gone, skip` without ending the whole pass over it. */
   const onWalkPull: WalkPullFn = async ({ order, sku, name, target, place, refresh }) => {
     const busyKey = `walk/${sku}/${target.capture_id}`
-    setBusy(busyKey)
-    setFailure(null)
+    if (live.current) {
+      setBusy(busyKey)
+      setFailure(null)
+    }
     try {
       /* `refresh` NAMES CARDS THIS PRESS DOES NOT TOUCH — the walk's other rows in the same
          drawer, whose numbers and neighbours this write moves (D58). It reaches the same
          route in the same request, and `refreshed` comes back POST-write. `places` below is
          still the PRE-write receipt and the two are never confused. */
       const done = await pullCopy({ source: order.source, number: order.number, sku }, [target], refresh)
-      if (!live.current) return { ok: false, failure: { code: 'unmounted', message: '' } }
+      /* NO `live` CHECK: the toast and `lastPull` are the hub's, not this mount's. The write is made, and the way back to it must be
+         recorded even if the screen was left while it was out. */
       /* D218: same read as `onPull` above — the toast body carries this as plain text. */
       const resolvedPlace = sayPlace(done.places[0]?.label ?? place ?? `box ${target.box}, index ${target.index}`)
       /* D196: NO RAW ORDER KEY ON SCREEN. `order.number` is a machine string
@@ -2204,6 +2211,10 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
 
   const orders = payload?.orders ?? []
   const open = orders.filter((one) => one.open)
+  /* The headline counts what the list calls open: a shipped buyer that still owes copies is in
+     it, `ownsAWalkableBody` (the shared discriminator) deciding. The backlog panels below keep
+     `open`, the ledger's own answer, since they act on that set. */
+  const walkable = orders.filter(ownsAWalkableBody)
   const populated = payload !== null && orders.length > 0
   /* Still reading the ledger. The verdict's own slot is held, because a ledger with orders in it
      (the common one) draws a verdict where this draws the lede (D313). */
@@ -2296,7 +2307,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     <Page
       icon="cart"
       className={hub.walkLine === null ? 'orders-hub orders' : 'orders-hub orders is-walking'}
-      verdict={populated ? verdictOf(open, payload?.resolution.orders ?? []) : reading ? <VerdictHold /> : undefined}
+      verdict={populated ? verdictOf(walkable, payload?.resolution.orders ?? []) : reading ? <VerdictHold /> : undefined}
       lede={populated || reading ? undefined : 'Which copies each buyer gets, and where they are.'}
       /* THE WALK LINE (walk mode, under 1000px of column): who, how many, what is next, opening
          the buyer list, and one press out of the walk. CSS draws it only there. Out of the walk
@@ -2693,18 +2704,32 @@ function OrderPickPane({
   }, [currentRow?.copy.key])
 
   /* THE PICK CHIP HOLDS ITS WIDEST STATE FROM THE FIRST PAINT (D313). The set text before it is the row's elastic part
-     (`.browse-hero-parts`), so a chip that grows ("Pick 1 of 3" to "Pick 3 of 3", or "Pick 3" and "2 short") would shrink it
-     and slide every chip after it. The peak only rises, so a sale that lowers the figures never narrows the reserve. */
-  const peak = useRef({ n: 1, short: 0 })
-  for (const r of walk.rows) {
-    const f = pickFigureOf(r.take, owedBySku)
-    peak.current = { n: Math.max(peak.current.n, r.take.wanted, f.of), short: Math.max(peak.current.short, f.short) }
-  }
+     (`.browse-hero-parts`), so a chip that grows ("Pick 1" to "Pick 4", or "Pick 4" and "3 here") would shrink it
+     and slide every chip after it. A sale can add a "here" or "short" pill the take did not show before, so the reserve reads every figure
+     each take can reach by selling its copies (`reachablePickPeak`), not only the figures on show. The peak only rises.
+     Each shape of chip keeps its own widest figures, so the reserve is the widest single state. */
+  const peak = useRef<PickPeak>(NO_PICK_PEAK)
+  /* ONCE PER PLAN, NOT PER RENDER: the states are polynomial in a take's copies. */
+  useMemo(() => {
+    const seenTakes = new Set<string>()
+    const takes: WalkPlanTake[] = []
+    for (const r of walk.rows) {
+      if (seenTakes.has(r.takeKey)) continue
+      seenTakes.add(r.takeKey)
+      takes.push(r.take)
+    }
+    peak.current = reachablePickPeak(takes, owedBySku, walk.homedKeys, peak.current)
+  }, [walk.rows, owedBySku, walk.homedKeys])
+  const reach = peak.current
   if (currentRow === null || currentGroup === null || currentWhere === null) return null
   const where = currentWhere
   const spareOpen = walk.openSpares.has(currentRow.takeKey)
 
-  const figure = pickFigureOf(currentRow.take, owedBySku)
+  const figure = pickFigureOf(currentRow.take, owedBySku, walk.soldKeys, walk.homedKeys)
+  /* NOTHING LEFT TO PICK FOR THIS TAKE: one "Picked" pill, never "Pick 0" and never a "short" off the server's lagging figure. */
+  const picked = figure.done
+  const elsewhere = !picked && figure.here < figure.of
+  const shortCopies = picked ? 0 : figure.short
   /* THE HEAD RESOLVES FROM `take` UNTIL `rawCards` DOES — `currentCard` is null only
    *  transiently, on a fresh plan (`useOrderWalk`'s own comment), and `Orders.tsx`'s own read
    *  is what fills it in. `syntheticCard` fills a `CardHeroHead` with what the wire already
@@ -2733,26 +2758,64 @@ function OrderPickPane({
           <>
             {showBuyers ? <Pill>For {takeBuyers(currentRow.take)}</Pill> : null}
             <span className="orders-pick-chip">
-              <span className="orders-pick-live">
-                <Pill tone="accent">
-                  Pick {currentRow.take.wanted}
-                  {figure.short > 0 ? null : ` of ${figure.of}`}
-                </Pill>
-                {figure.short > 0 ? (
+              {/* ONE SPOKEN NAME FOR THE LIVE PILLS: read pill by pill they run together ("Pick 4 3 here"), so the group carries the
+                  sentence with its pauses. The reserve below is aria-hidden and adds nothing to it. */}
+              <span
+                className="orders-pick-live"
+                role="group"
+                aria-label={
+                  picked
+                    ? 'Picked'
+                    : [
+                        `Pick ${figure.total}`,
+                        ...(elsewhere ? [`${figure.here} here`] : []),
+                        ...(shortCopies > 0 ? [`${shortCopies} short`] : []),
+                      ].join(', ')
+                }
+              >
+                {picked ? <Pill tone="ok" icon="check">Picked</Pill> : <Pill tone="accent">Pick {figure.total}</Pill>}
+                {elsewhere ? (
                   <>
                     {' '}
-                    <Pill tone="warn">{figure.short} short</Pill>
+                    <Pill>{figure.here} here</Pill>
+                  </>
+                ) : null}
+                {shortCopies > 0 ? (
+                  <>
+                    {' '}
+                    <Pill tone="warn">{shortCopies} short</Pill>
                   </>
                 ) : null}
               </span>
-              {/* THE RESERVE: empty pills whose text is paint (`::before`), so it is never read, never selected and never in the text. */}
+              {/* THE RESERVE: empty pills whose text is paint (`::before`), so it is never read, never selected and never in the text. One
+                  reserve per shape of chip a take can reach, each at that shape's widest figures (`reachablePickPeak`), all in the chip's one
+                  grid cell: the chip is as wide as its widest single state, never the sum of them. */}
               <span className="orders-pick-reserve" aria-hidden="true">
-                <span className="bn-pill" data-text={`Pick ${peak.current.n} of ${peak.current.n}`} />
+                <span className="bn-pill" data-text={`Pick ${reach.plain.n}`} />
               </span>
-              {peak.current.short > 0 ? (
+              {/* "Picked" is reachable from every row (the last sale), so its width is held from the first paint. */}
+              <span className="orders-pick-reserve" aria-hidden="true">
+                <span className="bn-pill" data-text="Picked">
+                  <Icon name="check" size={12} />
+                </span>
+              </span>
+              {reach.here ? (
                 <span className="orders-pick-reserve" aria-hidden="true">
-                  <span className="bn-pill" data-text={`Pick ${peak.current.n}`} />
-                  <span className="bn-pill" data-text={`${peak.current.short} short`} />
+                  <span className="bn-pill" data-text={`Pick ${reach.here.n}`} />
+                  <span className="bn-pill" data-text={`${reach.here.here} here`} />
+                </span>
+              ) : null}
+              {reach.short ? (
+                <span className="orders-pick-reserve" aria-hidden="true">
+                  <span className="bn-pill" data-text={`Pick ${reach.short.n}`} />
+                  <span className="bn-pill" data-text={`${reach.short.short} short`} />
+                </span>
+              ) : null}
+              {reach.both ? (
+                <span className="orders-pick-reserve" aria-hidden="true">
+                  <span className="bn-pill" data-text={`Pick ${reach.both.n}`} />
+                  <span className="bn-pill" data-text={`${reach.both.here} here`} />
+                  <span className="bn-pill" data-text={`${reach.both.short} short`} />
                 </span>
               ) : null}
             </span>
@@ -3138,8 +3201,8 @@ function PullStage({
   const [finished, setFinished] = useState<ReadonlySet<string>>(new Set())
   const [seenGroups, setSeenGroups] = useState(allGroups)
   if (seenGroups !== allGroups) {
-    const openNow = new Set(allGroups.filter((group) => group.open.length > 0).map((group) => group.key))
-    const left = seenGroups.filter((group) => group.open.length > 0 && !openNow.has(group.key))
+    const openNow = new Set(allGroups.filter((group) => walkableOf(group).length > 0).map((group) => group.key))
+    const left = seenGroups.filter((group) => walkableOf(group).length > 0 && !openNow.has(group.key))
     setSeenGroups(allGroups)
     if (left.length > 0) setFinished((prev) => new Set([...prev, ...left.map((group) => group.key)]))
   }
@@ -3166,8 +3229,8 @@ function PullStage({
   const shows = (picked.show ?? NO_SHOWS) as readonly ShowValue[]
   const statuses = picked.status ?? []
 
-  const inOpenBase = (group: BuyerGroup) => group.open.length > 0 || finished.has(group.key)
-  const inDoneBase = (group: BuyerGroup) => group.open.length === 0
+  const inOpenBase = (group: BuyerGroup) => walkableOf(group).length > 0 || finished.has(group.key)
+  const inDoneBase = (group: BuyerGroup) => walkableOf(group).length === 0
   const passesFeed = (group: BuyerGroup) =>
     statuses.length === 0 || group.orders.some((order) => statuses.includes((order.status ?? '').trim()))
   const passesSearch = (group: BuyerGroup) =>
@@ -3175,8 +3238,8 @@ function PullStage({
   /* A buyer still owed a copy that is on hand. A finished or done buyer has nothing to pull and
      stays: the default hides open buyers only. */
   const groupPullable = (group: BuyerGroup) =>
-    group.open.length === 0 ||
-    group.open.some((order) => (answers.get(order.key)?.lines ?? []).some((line) => pickOf(line) > 0))
+    walkableOf(group).length === 0 ||
+    walkableOf(group).some((order) => (answers.get(order.key)?.lines ?? []).some((line) => pickOf(line) > 0))
   /* MEMBERSHIP IS FROZEN WHEN TAKEN (D181, D118): a sale that takes a buyer's last on-hand card
      must not drop the buyer from the list under the hand. `pinned` is who was pullable when the
      view was last set by an explicit input (the same moment `take` below is retaken), and stays
@@ -3400,17 +3463,17 @@ function PullStage({
    *  Per GROUP rather than one flat list, because the tick is per buyer (D193). A buyer with
    *  none of these draws no tick at all: there is nothing to select, and a disabled tick would
    *  be a control offering a press that can never mean anything. */
-  const walkableOf = useMemo(() => {
+  const walkableByGroup = useMemo(() => {
     const out = new Map<string, readonly OrderRow[]>()
-    for (const group of allGroups) out.set(group.key, group.orders.filter(ownsAWalkableBody))
+    for (const group of allGroups) out.set(group.key, walkableOf(group))
     return out
   }, [allGroups])
 
   /* Keyed by the keys drawn, not by the array's identity: the list is rebuilt every render. */
   const shownSig = shownGroups.map((group) => group.key).join('\n')
   const tickableKeys = useMemo(
-    () => new Set(shownSig.split('\n').filter((key) => key !== '' && (walkableOf.get(key)?.length ?? 0) > 0)),
-    [shownSig, walkableOf],
+    () => new Set(shownSig.split('\n').filter((key) => key !== '' && (walkableByGroup.get(key)?.length ?? 0) > 0)),
+    [shownSig, walkableByGroup],
   )
   /* A TICK DOES NOT SURVIVE A FILTER THAT HIDES ITS ROW, AND FILTERING BACK DOES NOT BRING IT
    * BACK (§12 answer 1, the owner's ruling 2026-09-18): a real prune of the stored set, never a
@@ -3480,10 +3543,10 @@ function PullStage({
    *  walkable contributes nothing, so viewing a done buyer alone never opens an empty walk. */
   const walkedKeys = useMemo(() => {
     const out = new Set<string>()
-    if (selectedGroup !== null) for (const order of walkableOf.get(selectedGroup.key) ?? []) out.add(order.key)
-    for (const key of walkTicked) for (const order of walkableOf.get(key) ?? []) out.add(order.key)
+    if (selectedGroup !== null) for (const order of walkableByGroup.get(selectedGroup.key) ?? []) out.add(order.key)
+    for (const key of walkTicked) for (const order of walkableByGroup.get(key) ?? []) out.add(order.key)
     return out
-  }, [selectedGroup, walkableOf, walkTicked])
+  }, [selectedGroup, walkableByGroup, walkTicked])
 
   const walk = useOrderWalk({ walkedKeys, ordersByKey, rawCards, onPull: onWalkPull, onUndo: onWalkUndo })
 
@@ -3496,6 +3559,29 @@ function PullStage({
   const shownKey = useHeld(selectedKey, walk.pending)
   const shownTicked = useHeld(walkTicked, walk.pending)
   const shownKeys = useHeld(walkedKeys, walk.pending)
+  /* MEMOIZED ON ITS INPUTS: `OrderPickPane` derives its chip reserve from this map once per plan, so a
+     fresh map every render would rerun that derivation every render. It sits above `PullStage`'s early
+     returns, which a hook may not follow. */
+  const owedBySku = useMemo(() => {
+    const out = new Map<string, number>()
+    for (const key of shownKeys) {
+      // A stood-down line owes zero on the walk (`pipeline/walkplan.py:demand`'s own filter,
+      // D037) — `ResolvedLine.owed` does not know this, so it is read here off the same
+      // `OrderLineProgress.closed_at` the ledger stores. `!= null` (loose) rather than
+      // `!== null`: `undefined !== null` reads true for a wire that omitted the key, so every
+      // line would look stood down. The server always sends it
+      // (`server/capture_server.py:_order_progress`); the loose compare is a second, cheaper
+      // line of defence should that regress.
+      const closedSkus = new Set(
+        (ordersByKey.get(key)?.progress ?? []).filter((row) => row.closed_at != null).map((row) => row.sku),
+      )
+      for (const line of answers.get(key)?.lines ?? []) {
+        if (closedSkus.has(line.sku)) continue
+        out.set(line.sku, (out.get(line.sku) ?? 0) + line.owed)
+      }
+    }
+    return out
+  }, [shownKeys, ordersByKey, answers])
   const shownWalking = useHeld(walking, walk.pending)
   const shownGroup = allGroups.find((group) => group.key === shownKey) ?? null
   const walkHeld = walk.held
@@ -3801,23 +3887,6 @@ function PullStage({
   const walkedGroups = allGroups.filter(
     (group) => group.key === shownKey || shownTicked.has(group.key),
   )
-  const owedBySku = new Map<string, number>()
-  for (const key of shownKeys) {
-    // A stood-down line owes zero on the walk (`pipeline/walkplan.py:demand`'s own filter,
-    // the owner's ruling 2026-09-17) — `ResolvedLine.owed` does not know this, so it is
-    // read here off the same `OrderLineProgress.closed_at` the ledger stores. `!= null`
-    // (loose) rather than `!== null`: the review round's finding 1 was `undefined !== null`
-    // reading true for a wire that omitted the key, so every line looked stood down. The
-    // server now always sends it (`server/capture_server.py:_order_progress`), and this
-    // stays loose as the second, cheaper line of defence should that ever regress again.
-    const closedSkus = new Set(
-      (ordersByKey.get(key)?.progress ?? []).filter((row) => row.closed_at != null).map((row) => row.sku),
-    )
-    for (const line of answers.get(key)?.lines ?? []) {
-      if (closedSkus.has(line.sku)) continue
-      owedBySku.set(line.sku, (owedBySku.get(line.sku) ?? 0) + line.owed)
-    }
-  }
   const cardsToPull = [...shownKeys].reduce(
     (sum, key) => sum + (answers.get(key)?.lines ?? []).reduce((s, line) => s + pickOf(line), 0),
     0,
@@ -3839,7 +3908,7 @@ function PullStage({
       <OrderPanel group={shownGroup} answers={answers} status={statusByGroup.get(shownGroup.key) ?? 'done'} onManage={() => setManageOpen(true)} />
     )
 
-  const buyerDone = walkedGroups.length === 1 && shownGroup !== null && shownGroup.open.length === 0
+  const buyerDone = walkedGroups.length === 1 && shownGroup !== null && walkableOf(shownGroup).length === 0
 
   const anyFolded = foldedSections.size > 0 && walk.sections.some((section) => foldedSections.has(section.key))
   const walkColumn = (
@@ -4131,7 +4200,7 @@ function ManagePanel({
   return (
     <div className="orders-manage-orders">
       <SettingsFigures title="Overview">
-        <SettingsCensus label="Orders" value={group.orders.length} note={`${group.open.length} open`} />
+        <SettingsCensus label="Orders" value={group.orders.length} note={`${walkableOf(group).length} open`} />
         <SettingsCensus
           label="Cards owed"
           value={figures.owed}
@@ -4147,13 +4216,13 @@ function ManagePanel({
       <SettingsGroup title="Orders" note="Open one to see its lines">
         {group.orders.map((one) => {
           const word = STATUS_PILL[statusOf(one, answers.get(one.key) ?? null)].label
-          const owes = Math.max(0, one.wanted - one.recorded)
+          const owes = copiesOwedOf(one)
           return (
             <SettingsOp
               key={one.key}
               icon="package"
               label={one.number}
-              detail={one.open ? `${word}, ${countOf(owes, 'card')} owed` : word}
+              detail={ownsAWalkableBody(one) ? `${word}, ${countOf(owes, 'card')} owed` : word}
               busy={false}
               onClick={() => setEditing(one.key)}
             />
@@ -4177,7 +4246,7 @@ function ManagePanel({
 function buyerDoneSay(group: BuyerGroup): string {
   const sold = group.orders.reduce((sum, one) => sum + one.recorded, 0)
   if (sold > 0) return `All ${sold} Sold`
-  const canceled = (one: BuyerGroup['orders'][number]) => /^canceled$/i.test((one.status ?? '').trim())
+  const canceled = (one: BuyerGroup['orders'][number]) => isCanceled(one.status)
   if (group.orders.length > 0 && group.orders.every(canceled)) {
     return group.orders.length === 1 ? 'Order Canceled' : 'Orders Canceled'
   }
@@ -4185,15 +4254,15 @@ function buyerDoneSay(group: BuyerGroup): string {
   return 'Not Shipping'
 }
 
-/** A buyer's three figures, each over ONE set (UX-168, UX-235). `owed` is what the open orders
+/** A buyer's three figures, each over ONE set (UX-168, UX-235). `owed` is what the walkable orders
  *  still want. `short` is the copies that cannot be pulled: per line, what it owes less what is
  *  on hand (`outstanding`), so owed less short is the cards in the walk. `sold` counts every
  *  order the buyer has, open or done. */
 function figuresOf(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): { owed: number; sold: number; short: number } {
   let owed = 0
   let short = 0
-  for (const order of group.open) {
-    owed += Math.max(0, order.wanted - order.recorded)
+  for (const order of walkableOf(group)) {
+    owed += copiesOwedOf(order)
     for (const line of answers.get(order.key)?.lines ?? []) short += line.outstanding
   }
   const sold = group.orders.reduce((sum, order) => sum + order.recorded, 0)
@@ -4227,7 +4296,7 @@ function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
     not_a_single: 'flagged',
   }
   const tally = new Map<string, number>()
-  for (const order of group.open) {
+  for (const order of walkableOf(group)) {
     for (const line of answers.get(order.key)?.lines ?? []) {
       const said = words[lineReason(order, line)]
       if (said !== undefined) tally.set(said, (tally.get(said) ?? 0) + line.outstanding)
@@ -4265,7 +4334,7 @@ function statusWords(status: Status, group: BuyerGroup, answers: ReadonlyMap<str
 /** The one status a buyer shows, as pill props: words, tone and icon. */
 function statusPill(status: Status, group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>) {
   const label = statusWords(status, group, answers)
-  const flagged = group.open.flatMap((order) => (answers.get(order.key)?.lines ?? []).filter((line) => line.outstanding > 0).map((line) => lineReason(order, line)))
+  const flagged = walkableOf(group).flatMap((order) => (answers.get(order.key)?.lines ?? []).filter((line) => line.outstanding > 0).map((line) => lineReason(order, line)))
   const sealedOnly = flagged.some((reason) => reason === 'not_a_single') && !flagged.some((reason) => reason === 'sku_unseen' || reason === 'sku_unknown')
   return { label, ...(status === 'look' ? lookPill(label, sealedOnly) : STATUS_PILL[status]) }
 }
@@ -4456,6 +4525,7 @@ function OrderDetail({
       : `${stood.length >= order.lines.length ? 'Stood down' : `${stood.length} of ${order.lines.length} lines stood down`}${
           reasons.size === 1 ? (reasons.has('not_shipping') ? ', cancelled or refunded' : reasons.has('shipped_elsewhere') ? ', shipped elsewhere' : '') : ''
         }`
+  const owedCopies = copiesOwedOf(order)
   const stoodNote = stoodWord === null ? null : <p className="orders-order-stood"><Icon name="check" size={14} /> {stoodWord}</p>
 
   const body =
@@ -4533,11 +4603,18 @@ function OrderDetail({
           a change rather than sitting there as furniture. */}
       <div className="orders-order-progress">
         <span className="orders-order-figure">
+          {/* THE OWED COUNT IS `copiesOwedOf`'s, the one home every other owed figure reads: with a
+              stood-down line, `wanted - recorded` counts copies that line no longer owes. */}
           {order.recorded >= order.wanted ? (
             <>All {order.wanted} sold</>
+          ) : owedCopies === 0 ? (
+            <>
+              Nothing left to sell
+              {order.recorded === 0 ? null : <i>{order.recorded} already sold</i>}
+            </>
           ) : (
             <>
-              <b>{order.wanted - order.recorded}</b> remaining
+              <b>{owedCopies}</b> remaining
               {order.recorded === 0 ? null : <i>{order.recorded} already sold</i>}
             </>
           )}
