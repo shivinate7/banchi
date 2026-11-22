@@ -354,7 +354,7 @@ export type HeroFigures = {
  *  `card.sku` out of the pricing payload's `held_market_readings`, else the snapshot the card's own
  *  run was priced with (`marketTable`). The latest reading comes first because copies of one SKU
  *  from different runs hold different snapshots, and the band must draw one figure per SKU. Details'
- *  Market fact is the run's snapshot and its age, not this. One home, called by `CardPane`, so
+ *  At capture row is the run's snapshot and its age, not this. One home, called by `CardPane`, so
  *  `#/inventory` and the `#/orders` walk draw the same figure from the same read. Null while it
  *  loads, on a failed read, and where neither a reading nor a run row exists for this card: the
  *  band draws a quiet dash and never a made-up figure. */

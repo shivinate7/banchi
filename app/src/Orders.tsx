@@ -4518,6 +4518,7 @@ function OrderDetail({
       : `${stood.length >= order.lines.length ? 'Stood down' : `${stood.length} of ${order.lines.length} lines stood down`}${
           reasons.size === 1 ? (reasons.has('not_shipping') ? ', cancelled or refunded' : reasons.has('shipped_elsewhere') ? ', shipped elsewhere' : '') : ''
         }`
+  const owedCopies = copiesOwedOf(order)
   const stoodNote = stoodWord === null ? null : <p className="orders-order-stood"><Icon name="check" size={14} /> {stoodWord}</p>
 
   const body =
@@ -4595,11 +4596,18 @@ function OrderDetail({
           a change rather than sitting there as furniture. */}
       <div className="orders-order-progress">
         <span className="orders-order-figure">
+          {/* THE OWED COUNT IS `copiesOwedOf`'s, the one home every other owed figure reads: with a
+              stood-down line, `wanted - recorded` counts copies that line no longer owes. */}
           {order.recorded >= order.wanted ? (
             <>All {order.wanted} sold</>
+          ) : owedCopies === 0 ? (
+            <>
+              Nothing left to sell
+              {order.recorded === 0 ? null : <i>{order.recorded} already sold</i>}
+            </>
           ) : (
             <>
-              <b>{order.wanted - order.recorded}</b> remaining
+              <b>{owedCopies}</b> remaining
               {order.recorded === 0 ? null : <i>{order.recorded} already sold</i>}
             </>
           )}
