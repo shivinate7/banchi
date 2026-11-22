@@ -5777,6 +5777,89 @@ test('U waits while a newer sale is still in the line, and never undoes the olde
   expect(seen.undone, 'U undid nothing while a newer sale was in the line').toBe(0)
 })
 
+/* THE TAB CLOSES WITH A SALE IN THE LINE. A sale the line holds is drawn as sold but is not yet on the
+   server, so closing the page would lose it: `beforeunload` is prevented while one is queued or in flight.
+   The test dispatches the event itself and reads `defaultPrevented`, so no browser dialog opens. */
+function unloadPrevented(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const event = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(event)
+    return event.defaultPrevented
+  })
+}
+
+/* THE DIGIT IN THE GAP. The plan's rows draw in one commit, and the walk's `current` is set by an effect after
+   it, so a key pressed between the two finds no current pick. A key from Playwright arrives after that effect,
+   so this init script presses the digit from a MutationObserver: its callback is a microtask that runs right
+   after the commit's DOM writes, before the effect's task. It records whether `current` was unset at the press. */
+async function pressDigitInTheGap(page: Page, digit: string): Promise<void> {
+  await page.addInitScript((key: string) => {
+    const gap = window as Window & { __gapPress?: string }
+    new MutationObserver(() => {
+      if (gap.__gapPress !== undefined || document.querySelector('.card-locations-sell[aria-keyshortcuts]') === null) return
+      gap.__gapPress = document.querySelector('.orders-walk-press[aria-current="true"]') === null ? 'unset' : 'set'
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+    }).observe(document, { childList: true, subtree: true })
+  }, digit)
+}
+
+test('closing the tab asks first while a sale write is in the line, and an in-app hash route change does not', async ({
+  page,
+}) => {
+  /* The shell's own reads on a route change (`/queues`, `/graveyard`) reach the seal unless stubbed. */
+  await stubStore(page)
+  await open(page, { orders: oneOpenOrder(), walkPlan: threeCopyPlan() })
+  const seen = await gatedPulls(page)
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-sell[aria-keyshortcuts]`)).toHaveCount(3)
+  await walkTakesKeys(page)
+  expect(await unloadPrevented(page), 'no sale is in the line, so nothing asks').toBe(false)
+  await page.keyboard.press('1')
+  await page.keyboard.press('2')
+  await expect.poll(() => seen.asked).toEqual(['cap-a'])
+  expect(await unloadPrevented(page), 'a write in flight asks before the tab closes').toBe(true)
+  /* The second sale is queued behind the first, and the line still holds it. */
+  await page.evaluate(() => {
+    const counted = window as Window & { __unloads?: number }
+    counted.__unloads = 0
+    window.addEventListener('beforeunload', () => {
+      counted.__unloads = (counted.__unloads ?? 0) + 1
+    })
+  })
+  await page.evaluate(() => {
+    location.hash = '#/inventory'
+  })
+  await expect(page).toHaveURL(/#\/inventory/)
+  expect(
+    await page.evaluate(() => (window as Window & { __unloads?: number }).__unloads ?? 0),
+    'an in-app hash route change fires no beforeunload',
+  ).toBe(0)
+  expect(await unloadPrevented(page), 'the line still holds the sales after the route change').toBe(true)
+  await letNextWrite(seen)
+  await expect.poll(() => seen.asked).toEqual(['cap-a', 'cap-b'])
+  await letNextWrite(seen)
+  await expect.poll(() => seen.answered).toBe(2)
+  await expect.poll(() => unloadPrevented(page)).toBe(false)
+})
+
+test('a digit pressed before the walk sets its current pick sells the first pick, and is not dropped', async ({
+  page,
+}) => {
+  await pressDigitInTheGap(page, '1')
+  const wire = await open(page, { orders: oneOpenOrder(), walkPlan: threeCopyPlan(), pull: SPARE_PULL })
+  await expect
+    .poll(() => page.evaluate(() => (window as Window & { __gapPress?: string }).__gapPress), {
+      message: 'the digit went in before the walk set its current pick',
+    })
+    .toBe('unset')
+  await expect
+    .poll(() =>
+      wire
+        .filter((one) => one.path.endsWith('/orders/pull'))
+        .map((one) => (one.body as { targets: { capture_id: string }[] }).targets[0]!.capture_id),
+    )
+    .toEqual(['cap-a'])
+})
+
 test('the pick figure never breaks "1 of 1" across lines in a narrow column', async ({ page }) => {
   await setViewport(page, { width: 820, height: 1000 })
   await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan() })
