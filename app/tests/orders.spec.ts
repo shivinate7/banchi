@@ -5642,11 +5642,32 @@ function threeCopyPlan(copiesOnHand = 3): WalkPlan {
   return walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ wanted: 3, copies })] })])
 }
 
-async function gatedPulls(page: Page, options: { refuse?: string } = {}) {
+/* Two picks, one copy each, so a remounted walk can have a first pick whose only copy is already sold. */
+function twoPickPlan(): WalkPlan {
+  return walkPlanOf([
+    walkPlanStop({ takes: [walkPlanTake({ wanted: 1, copies: [walkPlanCopy({ capture_id: 'cap-a' })] })] }),
+    walkPlanStop({
+      key: 'box/3/section/3',
+      section: 3,
+      order: 2,
+      takes: [
+        /* Owed two, so the sale of the first pick's copy leaves this pick one still owed to its order. */
+        walkPlanTake({
+          wanted: 2,
+          copies: [walkPlanCopy({ index: 22, slot: 18, card: 18, label: 'Box 3, Section 3, Card 18', capture_id: 'cap-b' })],
+        }),
+      ],
+    }),
+  ])
+}
+
+async function gatedPulls(page: Page, options: { refuse?: string; malformed?: string } = {}) {
   const seen = {
     asked: [] as string[],
     undone: 0,
     undoneIds: [] as string[],
+    /* How many writes had answered when each reversal arrived: the order of requests, read at arrival. */
+    undoneAnswered: [] as number[],
     active: 0,
     mostAtOnce: 0,
     answered: 0,
@@ -5659,10 +5680,16 @@ async function gatedPulls(page: Page, options: { refuse?: string } = {}) {
     if (body.undo === true) {
       seen.undone += 1
       seen.undoneIds.push(body.targets[0]!.capture_id)
+      seen.undoneAnswered.push(seen.answered)
     } else seen.asked.push(body.targets[0]!.capture_id)
     await new Promise<void>((release) => seen.held.push(release))
     seen.active -= 1
     seen.answered += 1
+    /* A 200 whose body is not JSON: the client's own parse throws inside the write, and the write's handling says so. */
+    if (body.undo !== true && body.targets[0]!.capture_id === options.malformed) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"undone": ' })
+      return
+    }
     if (body.undo !== true && body.targets[0]!.capture_id === options.refuse) {
       await route.fulfill({
         status: 409,
@@ -5840,6 +5867,123 @@ test('U on a sale still queued cancels it, and the server never hears of it', as
   expect(seen.undone, 'a cancelled sale is never undone on the server').toBe(0)
 })
 
+/* A REMOUNT IS A HASH ROUTE CHANGE AWAY AND BACK. The walk is unmounted and mounted again; the line is the page's
+   one line, so a sale still in it must come back to the walk that mounts next, with its toast and its `U`. */
+test('a remount with a sale in flight keeps it: the toast fires, its row reads Sold with Undo, and U undoes that sale, not the older one', async ({
+  page,
+}) => {
+  await stubStore(page)
+  await open(page, { orders: oneOpenOrder(), walkPlan: threeCopyPlan() })
+  const seen = await gatedPulls(page)
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-sell[aria-keyshortcuts]`)).toHaveCount(3)
+  await walkTakesKeys(page)
+  await page.keyboard.press('1')
+  await expect.poll(() => seen.asked).toEqual(['cap-a'])
+  await letNextWrite(seen)
+  await expect.poll(() => seen.answered).toBe(1)
+  await page.keyboard.press('2')
+  await expect.poll(() => seen.asked).toEqual(['cap-a', 'cap-b'])
+  /* cap-b is out, and the walk is left and come back to while it is. */
+  await page.evaluate(() => {
+    location.hash = '#/shipping'
+  })
+  await expect(page).toHaveURL(/#\/shipping/)
+  await page.evaluate(() => {
+    location.hash = '#/orders'
+  })
+  await expect(rows).toHaveCount(3)
+  await letNextWrite(seen)
+  await expect.poll(() => seen.answered).toBe(2)
+  /* Receipts stack and last twenty seconds, so cap-a's is still there: the sale that was out across the remount
+     fires a second one beside it. */
+  await expect(page.locator('.bn-toast-receipt button.bn-toast-action')).toHaveCount(2)
+  await expect(rows.nth(1).getByRole('button', { name: /^Undo/ })).toBeVisible()
+  await expect(rows.nth(0).getByRole('button', { name: /^Undo/ })).toHaveCount(0)
+  await page.keyboard.press('u')
+  await expect.poll(() => seen.undoneIds, 'U reversed the newest press, the one left in flight').toEqual(['cap-b'])
+  await letNextWrite(seen)
+  await expect(rows.nth(1).getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
+  await expect(rows.nth(0).getByRole('button', { name: /^Undo/ })).toHaveCount(0)
+})
+
+/* THE TOAST'S UNDO BEHIND A SALE. The toast's own Undo runs through the page's line, so it waits for the write in
+   flight, and its reversal reaches the server only once that write has answered. */
+test('a toast Undo for an earlier sale waits for the sale in flight, and its reversal goes out only after that write answers', async ({
+  page,
+}) => {
+  await open(page, { orders: oneOpenOrder(), walkPlan: threeCopyPlan() })
+  const seen = await gatedPulls(page)
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-sell[aria-keyshortcuts]`)).toHaveCount(3)
+  await walkTakesKeys(page)
+  await page.keyboard.press('1')
+  await expect.poll(() => seen.asked).toEqual(['cap-a'])
+  await letNextWrite(seen)
+  const toastUndo = page.locator('.bn-toast-receipt button.bn-toast-action')
+  await expect(toastUndo).toHaveText('Undo')
+  await page.keyboard.press('2')
+  await expect.poll(() => seen.asked).toEqual(['cap-a', 'cap-b'])
+  await toastUndo.click()
+  await letNextWrite(seen)
+  await expect.poll(() => seen.undoneIds, 'the reversal of the earlier sale went out').toEqual(['cap-a'])
+  expect(seen.undoneAnswered, 'the reversal arrived only after the in-flight write had answered (two writes answered by then)').toEqual([2])
+  await letNextWrite(seen)
+  await expect.poll(() => seen.answered).toBe(3)
+})
+
+/* THE LINE'S WORKER SURVIVES A THROW. A malformed answer makes the client throw inside the worker: the sale that threw
+   is put back and said so, and the next sale queued behind it still goes out. */
+test('a throw inside the line worker rolls its sale back, toasts it, and the next queued sale still sends', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder(), walkPlan: threeCopyPlan() })
+  const seen = await gatedPulls(page, { malformed: 'cap-a' })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-sell[aria-keyshortcuts]`)).toHaveCount(3)
+  await walkTakesKeys(page)
+  await page.keyboard.press('1')
+  await expect.poll(() => seen.asked).toEqual(['cap-a'])
+  await page.keyboard.press('2')
+  await letNextWrite(seen)
+  await expect(page.locator('.bn-toast', { hasText: 'Not marked sold' })).toBeVisible()
+  await expect(rows.nth(0).getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
+  await expect.poll(() => seen.asked, 'the next queued sale still went out').toEqual(['cap-a', 'cap-b'])
+  await letNextWrite(seen)
+  await expect.poll(() => seen.answered).toBe(2)
+  await expect(rows.nth(1).getByRole('button', { name: /^Undo/ })).toBeVisible()
+})
+
+/* THE GAP IN A REMOUNTED WALK. The first pick's only copy is sold and still in the line, so the walk that mounts
+   again has no unsold copy at its first pick. A digit pressed in the gap must act on the first pick with an unsold copy. */
+test('a digit pressed in the gap of a remounted walk, whose first pick is already sold, sells the first pick with an unsold copy', async ({
+  page,
+}) => {
+  await stubStore(page)
+  await open(page, { orders: oneOpenOrder(), walkPlan: twoPickPlan() })
+  const seen = await gatedPulls(page)
+  await expect(page.locator(`${CURRENT_PICK} .card-locations-sell[aria-keyshortcuts]`)).toHaveCount(1)
+  await walkTakesKeys(page)
+  await page.keyboard.press('1')
+  await expect.poll(() => seen.asked).toEqual(['cap-a'])
+  await page.evaluate(() => {
+    location.hash = '#/shipping'
+  })
+  await expect(page).toHaveURL(/#\/shipping/)
+  /* Armed on the live page, so it is in place before the route comes back and draws the plan's rows. */
+  await page.evaluate(gapDigitPress, '1')
+  await page.evaluate(() => {
+    location.hash = '#/orders'
+  })
+  await expect
+    .poll(() => page.evaluate(() => (window as Window & { __gapPress?: string }).__gapPress), {
+      message: 'the digit went in before the remounted walk set its current pick',
+    })
+    .toBe('unset')
+  await expect.poll(() => seen.asked).toEqual(['cap-a'])
+  await letNextWrite(seen)
+  await expect.poll(() => seen.asked, 'the digit sold the first pick with an unsold copy, cap-b').toEqual(['cap-a', 'cap-b'])
+  await letNextWrite(seen)
+  await expect.poll(() => seen.answered).toBe(2)
+})
+
 /* THE TAB CLOSES WITH A SALE IN THE LINE. A sale the line holds is drawn as sold but is not yet on the
    server, so closing the page would lose it: `beforeunload` is prevented while one is queued or in flight.
    The test dispatches the event itself and reads `defaultPrevented`, so no browser dialog opens. */
@@ -5855,15 +5999,18 @@ function unloadPrevented(page: Page): Promise<boolean> {
    it, so a key pressed between the two finds no current pick. A key from Playwright arrives after that effect,
    so this init script presses the digit from a MutationObserver: its callback is a microtask that runs right
    after the commit's DOM writes, before the effect's task. It records whether `current` was unset at the press. */
+function gapDigitPress(key: string): void {
+  const gap = window as Window & { __gapPress?: string }
+  new MutationObserver(() => {
+    if (gap.__gapPress !== undefined || document.querySelector('.card-locations-sell[aria-keyshortcuts]') === null) return
+    gap.__gapPress = document.querySelector('.orders-walk-press[aria-current="true"]') === null ? 'unset' : 'set'
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+  }).observe(document, { childList: true, subtree: true })
+}
+
 async function pressDigitInTheGap(page: Page, digit: string): Promise<void> {
-  await page.addInitScript((key: string) => {
-    const gap = window as Window & { __gapPress?: string }
-    new MutationObserver(() => {
-      if (gap.__gapPress !== undefined || document.querySelector('.card-locations-sell[aria-keyshortcuts]') === null) return
-      gap.__gapPress = document.querySelector('.orders-walk-press[aria-current="true"]') === null ? 'unset' : 'set'
-      document.body.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
-    }).observe(document, { childList: true, subtree: true })
-  }, digit)
+  /* Armed on a live page instead (`page.evaluate(gapDigitPress, digit)`) when a hash route change remounts the walk. */
+  await page.addInitScript(gapDigitPress, digit)
 }
 
 test('closing the tab asks first while a sale write is in the line, and an in-app hash route change does not', async ({
