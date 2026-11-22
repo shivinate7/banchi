@@ -3322,7 +3322,7 @@ test('clicking buyer B while A is selected replaces A — the walk is over B alo
 /* ------------------------------------------------------------------------ the order panel */
 
 test('the selected order\'s panel is mock A\'s shape: label, title, Manage, pill, the bn-stat triad', async ({ page }) => {
-  const owing = order({ wanted: 4, recorded: 1 })
+  const owing = order({ wanted: 4, recorded: 1, progress: progressOf({ wanted: 4, recorded: 1 }) })
   const resolvedLine = line({ reason: 'short', owed: 2, wanted: 2, outstanding: 2 })
   await open(page, {
     orders: payloadOf([owing], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [resolvedLine] }]),
