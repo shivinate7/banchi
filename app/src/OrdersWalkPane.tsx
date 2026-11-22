@@ -296,6 +296,17 @@ export function walkHasUnsentSales(): boolean {
   return writesInLine > 0
 }
 
+/* CLOSING OR RELOADING THE TAB WITH A WRITE STILL IN THE LINE LOSES IT, though the screen drew the sale as sold,
+   so the page asks first. One listener for the page, never per walk, because the line outlives the screen
+   (leaving by the hash router does not stop it, and the router never fires this event). */
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', (event) => {
+    if (writesInLine <= 0) return
+    event.preventDefault()
+    event.returnValue = ''
+  })
+}
+
 /** The receipt that is newest by `at`: the one copy whose own row offers Undo. */
 function newestOf(receipts: ReadonlyMap<string, Receipt>): string | null {
   let key: string | null = null
@@ -899,7 +910,11 @@ function keyedCopiesOf(line: WalkTakeLine, openSpares: ReadonlySet<string>): Wal
 
 /** The pick the walk stands on: its take at its stop, with every copy row it draws. */
 function currentLineOf(walk: OrderWalk): WalkTakeLine | null {
-  return allTakeLinesOf(walk.sections).find((line) => line.rows.some((row) => row.rowKey === walk.current)) ?? null
+  const lines = allTakeLinesOf(walk.sections)
+  const found = lines.find((line) => line.rows.some((row) => row.rowKey === walk.current))
+  /* `current` IS NULL FOR ONE RENDER AFTER A PLAN LANDS (its effect sets it), so a digit pressed then acts on
+     the first row, the one that effect selects and `currentRow` already falls back to: it is never dropped. */
+  return found ?? lines.find((line) => line.rows.some((row) => row.rowKey === walk.rows[0]?.rowKey)) ?? null
 }
 
 /* ------------------------------------------------------------------------------ the walk list */
