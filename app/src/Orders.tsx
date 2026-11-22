@@ -3566,12 +3566,12 @@ function PullStage({
     const out = new Map<string, number>()
     for (const key of shownKeys) {
       // A stood-down line owes zero on the walk (`pipeline/walkplan.py:demand`'s own filter,
-      // the owner's ruling 2026-09-17) — `ResolvedLine.owed` does not know this, so it is
-      // read here off the same `OrderLineProgress.closed_at` the ledger stores. `!= null`
-      // (loose) rather than `!== null`: the review round's finding 1 was `undefined !== null`
-      // reading true for a wire that omitted the key, so every line looked stood down. The
-      // server now always sends it (`server/capture_server.py:_order_progress`), and this
-      // stays loose as the second, cheaper line of defence should that ever regress again.
+      // D037) — `ResolvedLine.owed` does not know this, so it is read here off the same
+      // `OrderLineProgress.closed_at` the ledger stores. `!= null` (loose) rather than
+      // `!== null`: `undefined !== null` reads true for a wire that omitted the key, so every
+      // line would look stood down. The server always sends it
+      // (`server/capture_server.py:_order_progress`); the loose compare is a second, cheaper
+      // line of defence should that regress.
       const closedSkus = new Set(
         (ordersByKey.get(key)?.progress ?? []).filter((row) => row.closed_at != null).map((row) => row.sku),
       )

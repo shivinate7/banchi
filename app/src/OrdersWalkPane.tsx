@@ -135,14 +135,14 @@ export function pickFigureOf(
   const onHand = unsold.length
   /* A COPY SOLD AT ANOTHER STOP IS THAT STOP'S PICK, NOT THIS ONE'S: a take lists every on-hand copy (D212) and `wanted`
      is what this stop is to supply. Counts against it: a copy this stop reaches (`here`), or a spare no stop reaches
-     (`homedKeys` holds every copy some stop reaches), which the owner's ruling lets a take sell. */
+     (`homedKeys` holds every copy some stop reaches), which a take may sell. */
   const soldHere = soldAgainstOf(take, soldKeys, homedKeys)
   const wantedLeft = Math.max(0, take.wanted - soldHere)
   const owed = Math.max(wantedLeft, owedBySku.get(take.sku) ?? wantedLeft)
   const of = Math.min(owed, onHand)
-  /* `total` IS THE COUNT STILL TO PICK THAT THE STORE CAN SUPPLY, THE PICK CHIP'S NUMBER (owner ruling: "Pick 4" for four
+  /* `total` IS THE COUNT STILL TO PICK THAT THE STORE CAN SUPPLY, THE PICK CHIP'S NUMBER ("Pick 4" for four
      owed, though this stop holds three): every owed copy the store really has (`of`). It never counts an owed copy the
-     store lacks, which `short` carries alone (the "2 short" ruling above). It was once `max(wantedLeft, of)`, which counted
+     store lacks, which `short` carries alone (the "2 short" wording above). It was once `max(wantedLeft, of)`, which counted
      the missing copies when a take's `wanted` outran the copies on hand; the planner caps `wanted` at on-hand, so only a
      hand-built take reached that, but the figure must hold for any take.
      `here` is how many of it this stop holds, so the chip can say a copy waits at another stop. */
@@ -973,7 +973,7 @@ export function useOrderWalk({
    *  happened OUTSIDE this hook (`noteExternalUndo`: a toast's own Undo or the `U` key, which write through
    *  `Orders.tsx:undoFromToast` and never touch this hook). Before the tally was shared, a toast or `U` undo
    *  mid-walk left it believing a copy was still recorded that the ledger no longer held, and `pickOrderFor`
-   *  then returned `null` for an order that still owed one (the review round's finding 2, D171). */
+   *  then returned `null` for an order that still owed one (D171, refusals must reach a reader). */
   const lowerTally = (sku: string, orderKey: string) => {
     const bySku = tallyRef.current.get(sku)
     const count = bySku?.get(orderKey)
@@ -999,7 +999,7 @@ export function useOrderWalk({
     lowerTally(receipt.sku, receipt.orderKey)
   }
 
-  /** A PRESS TAKES EFFECT AT ONCE and its write waits its turn (the owner's ruling: three digits in a burst
+  /** A PRESS TAKES EFFECT AT ONCE and its write waits its turn (three digits in a burst
    *  mark three copies sold, and nothing says "one at a time"). The row draws sold, the tally counts it for the
    *  next press (`pickOrderFor`, the "nobody owes" refusal), and a failed write puts back only its own row. */
   const onSell = (copy: SearchCopy, forTake?: WalkPlanTake) => {
@@ -1246,7 +1246,7 @@ function takeLinesOf(rows: readonly WalkRow[]): WalkTakeLine[] {
 /** How many sales count against this line's `wanted`. A take lists every on-hand copy in the store (D212) and `wanted`
  *  is what THIS stop is to supply, so a copy sold at another stop is that stop's pick: counting it struck a stop
  *  through that nothing had been sold at. A copy counts when this stop reaches it (`here`) or when no stop does (a
- *  spare, which the owner's ruling lets a take sell; `homedKeys` holds every copy some stop reaches). One count for the
+ *  spare, which a take may sell; `homedKeys` holds every copy some stop reaches). One count for the
  *  line's figure, its `is-done` styling and the press's snapshot. */
 function pickedOf(line: WalkTakeLine, soldKeys: ReadonlySet<string>, homedKeys: ReadonlySet<string>): number {
   return soldAgainstOf(line.take, soldKeys, homedKeys)
