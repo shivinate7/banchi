@@ -1,0 +1,10 @@
+{
+  "title": "Undo a sale on an order that shipped before the sale",
+  "status": "doing",
+  "phase": "Orders walk fixes",
+  "why": "UN-7 refused undo whenever the order is terminal, even when it shipped before the sale.",
+  "note": "branch lane/fix-undo-preshipped",
+  "ask": null,
+  "updatedAt": "2026-11-22T03:30:00Z",
+  "order": 999
+}

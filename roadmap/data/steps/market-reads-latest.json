@@ -1,0 +1,10 @@
+{
+  "title": "Card band Market reads the latest price",
+  "status": "doing",
+  "phase": "Orders walk fixes",
+  "why": "Market showed the copy's own run snapshot, so one SKU drew different prices across orders.",
+  "note": "branch lane/fix-market-latest",
+  "ask": null,
+  "updatedAt": "2026-11-22T03:30:00Z",
+  "order": 999
+}

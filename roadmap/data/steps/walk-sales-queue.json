@@ -1,0 +1,10 @@
+{
+  "title": "Fast digit-key sales queue behind the scenes",
+  "status": "doing",
+  "phase": "Orders walk fixes",
+  "why": "Each press waited for the last sale to save ('One sale at a time'); presses should land at once with serial background writes.",
+  "note": "branch lane/walk-sales-queue",
+  "ask": null,
+  "updatedAt": "2026-11-22T03:30:00Z",
+  "order": 999
+}

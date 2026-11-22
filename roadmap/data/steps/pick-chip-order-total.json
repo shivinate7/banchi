@@ -1,0 +1,10 @@
+{
+  "title": "Pick chip states the order-wide count and how many are here",
+  "status": "doing",
+  "phase": "Orders walk fixes",
+  "why": "The chip read 'Pick 3 of 4' for a 4-copy order whose first stop held 3; the 4th copy was hidden.",
+  "note": "branch lane/fix-pick-chip",
+  "ask": null,
+  "updatedAt": "2026-11-22T03:30:00Z",
+  "order": 999
+}

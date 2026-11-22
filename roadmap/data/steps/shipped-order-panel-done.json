@@ -1,0 +1,10 @@
+{
+  "title": "Order panel stays open while a shipped order still owes copies",
+  "status": "doing",
+  "phase": "Orders walk fixes",
+  "why": "After 1 of 4 sold, the panel read Done, 0 to pick, All 1 Sold: it read group.open, while the walk reads ownsAWalkableBody.",
+  "note": "branch lane/fix-shipped-panel",
+  "ask": null,
+  "updatedAt": "2026-11-22T03:30:00Z",
+  "order": 999
+}

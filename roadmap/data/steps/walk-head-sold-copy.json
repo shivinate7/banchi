@@ -1,0 +1,10 @@
+{
+  "title": "Walk head keeps the real card after its copy is sold",
+  "status": "doing",
+  "phase": "Orders walk fixes",
+  "why": "After a sale the head fell to syntheticCard (no photo, Foil, market): the copies read drops sold cards.",
+  "note": "branch lane/fix-walk-head-sold",
+  "ask": null,
+  "updatedAt": "2026-11-22T03:30:00Z",
+  "order": 999
+}
