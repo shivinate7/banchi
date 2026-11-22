@@ -98,7 +98,7 @@ import {
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
 import { useLeaveWarning } from './useLeaveWarning'
-import { pickFigureOf, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, inWalkLine, newestWalkSale, undoWalkSale, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
+import { pickFigureOf, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, inWalkLine, newestWalkSale, undoWalkSale, walkReversalHeld, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   BoxRecord,
   IngestResult,
@@ -1395,6 +1395,8 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     const pull = hubState().lastPull
     if (pull === null) return null
     if (hubState().busy !== null) return null
+    /* Its reversal is already in the walk's line: a second press does nothing, never a second reversal of one copy. */
+    if (walkReversalHeld(pull.target.capture_id)) return null
     return () => void undoFromToast(pull.target, pull.place, pull.name)
   })
 
@@ -4183,7 +4185,7 @@ function ManagePanel({
       <SettingsGroup title="Orders" note="Open one to see its lines">
         {group.orders.map((one) => {
           const word = STATUS_PILL[statusOf(one, answers.get(one.key) ?? null)].label
-          const owes = Math.max(0, one.wanted - one.recorded)
+          const owes = copiesOwedOf(one)
           return (
             <SettingsOp
               key={one.key}
@@ -4229,7 +4231,7 @@ function figuresOf(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
   let owed = 0
   let short = 0
   for (const order of walkableOf(group)) {
-    owed += Math.max(0, order.wanted - order.recorded)
+    owed += copiesOwedOf(order)
     for (const line of answers.get(order.key)?.lines ?? []) short += line.outstanding
   }
   const sold = group.orders.reduce((sum, order) => sum + order.recorded, 0)

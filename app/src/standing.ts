@@ -6,7 +6,7 @@ import type { IconName } from './kit'
  * the React-free half `boxTitle` lives in for exactly this reason ("No React, so a spec can
  * import it" — see its own header). */
 import { boxTitle } from './kit/dataRules'
-import { missingCopies, UNFILLABLE_FACETS } from './orderBuyers'
+import { copiesOwedOf, missingCopies, UNFILLABLE_FACETS } from './orderBuyers'
 import type {
   EmptySend,
   OrdersPayload,
@@ -278,7 +278,7 @@ export function standing(input: StandingInput): Standing | null {
      three non-values apart. */
   const review = status.queues.review
   const open = orders === null ? null : orders.orders.filter((o) => o.open)
-  const toPull = open === null ? null : open.reduce((sum, o) => sum + Math.max(0, o.wanted - o.recorded), 0)
+  const toPull = open === null ? null : open.reduce((sum, o) => sum + copiesOwedOf(o), 0)
   /* `resolution.orders` is a SUBSET of `orders` keyed on the ledger's own `open_keys`
      (`server/capture_server.py:do_orders`, D63 amended) — a Canceled or already-shipped
      order is excluded from it before this ever runs. This still joins by KEY against `open`

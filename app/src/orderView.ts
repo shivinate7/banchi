@@ -27,7 +27,7 @@
  */
 
 import type { OrderRow, ResolvedOrder, WalkPlan } from './types'
-import type { BuyerGroup } from './orderBuyers'
+import { copiesOwedOf, type BuyerGroup } from './orderBuyers'
 import type { SortValue } from './kit'
 
 export type StatusOption = { readonly status: string; readonly count: number }
@@ -107,9 +107,9 @@ export type OrderSortInputs = {
 }
 
 /** `cardsOf`'s own answer where nothing narrower is asked for — copies still owed, summed over
- *  the group's open orders (the same figure `verdictOf`'s lede counts store-wide). */
+ *  the group's open orders by `copiesOwedOf`, the same per-line count `verdictOf`'s lede uses store-wide. */
 export function groupCardsOwed(group: BuyerGroup): number {
-  return group.open.reduce((sum, order) => sum + Math.max(0, order.wanted - order.recorded), 0)
+  return group.open.reduce((sum, order) => sum + copiesOwedOf(order), 0)
 }
 
 /** `valueOf`'s own answer where nothing narrower is asked for: `quantity * unit_price` summed

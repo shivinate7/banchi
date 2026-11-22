@@ -515,6 +515,15 @@ export function newestWalkSale(): { readonly copyKey: string } | null {
   return newest
 }
 
+/** Is a reversal of this pull already in the line, queued behind its write or out? `U` skips the hub's `lastPull`
+ *  while this says yes, so a second press never queues a second reversal of the same copy. */
+export function walkReversalHeld(captureId: string): boolean {
+  for (const sale of lineSales.values()) {
+    if (!sale.gone && sale.target.capture_id === captureId && (sale.undoAfter || sale.phase === 'undoing')) return true
+  }
+  return false
+}
+
 /** Reverse one press: still queued, it leaves the line and the server never hears of it; out, its reversal
  *  waits behind it; recorded, its reversal goes to the line. */
 export function undoWalkSale(held: { readonly copyKey: string }): void {
