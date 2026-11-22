@@ -1,0 +1,1 @@
+- walk-chip-states-untested: No test case names the pick chip's "Picked" pill, its group aria-label, or `pickFigureOf`'s `done`. No case checks the 820 stacking of the walk card's figures, which the `.orders-cardcol` container query in `app/src/Orders.css` sets.
