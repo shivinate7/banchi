@@ -1,0 +1,1 @@
+- order-panel-nothing-untested: The order card's "Nothing left to sell" branch and its stood-down count (`copiesOwedOf` in `OrderDetail`, `app/src/Orders.tsx`) have no test.

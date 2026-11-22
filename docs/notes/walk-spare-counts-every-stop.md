@@ -1,0 +1,1 @@
+- walk-spare-counts-every-stop: A sold spare (a copy no stop reaches) counts against every stop's take of that SKU in `soldAgainstOf` (`app/src/OrdersWalkPane.tsx`), since receipts carry only order and SKU. Two stops of one SKU can both read "Picked" after one spare sale. Main did this too.

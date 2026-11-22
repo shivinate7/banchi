@@ -51,9 +51,11 @@ build is older than the walking layout, so it shows the two-column 408px pane an
    completely. Main's 74px chip clips too, and the built 108px chip clips the same way. Without the For chip, only the
    108px chip fits. The set name and the finish and rarity pills clip at 820 in every option.
    Option "Stack the figures": stack the band in the walk pane, with the figures under the facts, as the band already
-   does under 520px (BoxBrowse.css `@container pane (max-width: 520px)`). Drawn in the "Extra" section. Measured: the
-   chip, the set name, the finish and the rarity are all whole.
+   does under 520px (BoxBrowse.css `@container pane (max-width: 520px)`). Drawn in the "Extra" section. In the mockup at
+   820 (the card pane is 692px, from the CSS), the chip, the set name, the finish and the rarity are all whole. A builder
+   measured the walk's card pane at 408px with the For chip: there the set name gives way first, as BoxBrowse's own rule
+   has set and game give way before other facts.
    Gain: the pick chip shows at 820 with any number of buyers. Loss: the band is about 50px taller at 820 (133px to 184px, measured in the mockup).
    Pick: stack it, scoped to the walk's pane (`.orders-cardcol`), so Inventory's pane keeps its shape.
    Departs from: BoxBrowse.css `.browse-hero-head`'s two-column band at pane widths from 521px up.
-   Owner grant: yes.
+   Owner grant: none. The lane took this pick as reversible.
