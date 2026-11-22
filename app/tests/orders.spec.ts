@@ -4796,10 +4796,27 @@ test('a buyer whose one order was stood down as not shipping reads "Not Shipping
   await expect(done).not.toContainText('Shipped')
 })
 
-test('a buyer whose one order shipped in transit and sold nothing reads "Shipped", never "Nothing Sold"', async ({ page }) => {
+test('a buyer whose one order shipped in transit and still owes copies draws the walk, not a "Shipped" banner', async ({ page }) => {
+  /* The feed's own word for a shipped order is terminal (`TERMINAL_STATUSES`), but a terminal order that
+     still owes copies is the one `ownsAWalkableBody` opens back up: the walk and its Pull button draw,
+     and the done line does not. */
+  const shipped = order({ buyer: 'Grace Hopper', status: 'Shipped - in transit', open: false, terminal: true, wanted: 1, recorded: 0 })
+  await open(page, {
+    orders: payloadOf([order(), shipped], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]),
+  })
+  await pickFacet(page, 'Show', /^Open/)
+  await pickFacet(page, 'Show', /^Done/)
+  await page.locator('.orders-index-row', { hasText: 'Grace Hopper' }).click()
+
+  await expect(page.locator('.orders-walk-done')).toHaveCount(0)
+  await expect(page.locator('.orders-walk')).toContainText('1 to pick')
+})
+
+test('a buyer whose one order shipped in transit and owes nothing reads "Shipped", never "Not Shipping"', async ({ page }) => {
   /* The feed's own word for a shipped order is terminal (`TERMINAL_STATUSES`), so the order is done
-     and nothing is recorded against it. The done line states the marketplace's fact, not a sale count. */
-  const shipped = order({ buyer: 'Grace Hopper', status: 'Shipped - in transit', open: false, terminal: true, recorded: 0 })
+     and nothing is recorded against it. With nothing owed the walk has no body, and the done line
+     states the marketplace's fact, not a sale count. */
+  const shipped = order({ buyer: 'Grace Hopper', status: 'Shipped - in transit', open: false, terminal: true, wanted: 0, recorded: 0 })
   await open(page, {
     orders: payloadOf([order(), shipped], [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }]),
   })
@@ -4809,7 +4826,7 @@ test('a buyer whose one order shipped in transit and sold nothing reads "Shipped
 
   const done = page.locator('.orders-walk-done')
   await expect(done).toContainText('Shipped')
-  await expect(done).not.toContainText('Nothing Sold')
+  await expect(done).not.toContainText('Not Shipping')
 })
 
 test('a buyer whose copies all sold reads "All N Sold", with N the copies sold', async ({ page }) => {
