@@ -1330,6 +1330,75 @@ def check_undo_until_built_on(checks: Checks) -> None:
         checks.equal(field(undone, "to"), live.key, "and the card is back at its own key")
 
 
+def _pulled_then_shipped(capture_id: str, number: str, shipped_at_offset: timedelta) -> None:
+    """A card sold to an order, then the order's own feed status set to shipped with a
+    `changed_at` stamped `shipped_at_offset` from the sale's own `sold` event. The sale's time is
+    read back from `history.jsonl`, so no assertion reads the real clock."""
+    capture_server.do_capture(capture_payload(4, capture_id=capture_id))
+    with Store().write() as snapshot:
+        snapshot.inventory.set_state("4/1", master.IDENTIFIED)
+        _bind(snapshot, "4/1", "9191486")
+        snapshot.ledger.ingest([
+            order_store.OrderRecord(
+                source="TCGplayer",
+                number=number,
+                placed_at="2026-09-25T10:00:00.000+00:00",
+                status="Ready to Ship",
+                lines=[order_store.OrderLine(sku="9191486", quantity=1)],
+            )
+        ])
+    target = [{"box": 4, "index": 1, "capture_id": capture_id}]
+    capture_server.do_order_pull({"source": "TCGplayer", "number": number, "sku": "9191486", "targets": target})
+    sold_at = [
+        event["at"]
+        for event in Store().history()
+        if event.get("event") == "sold" and event.get("position") == "4/1"
+    ][-1]
+    sale = datetime.fromisoformat(sold_at)
+    with Store().write() as snapshot:
+        record = snapshot.ledger.get(order_store.order_key("TCGplayer", number))
+        record.status = "Shipped - In Transit"
+        record.changed_at = (sale + shipped_at_offset).isoformat(timespec="milliseconds")
+
+
+def check_undo_order_shipped_before_sale(checks: Checks) -> None:
+    """`docs/specs/undo.md` section 11.1, UN-7, read as its own rule: a sale is built on once its
+    order ships AFTER the sale, not once the order is merely terminal. An order the feed
+    already marked shipped before the sale was recorded is not built on, and its sale can still
+    be undone. The order's own `changed_at` is the one fact that orders the two events.
+
+    The two cases pin both sides of the rule. The before case is the red one: the undo of a
+    sale whose order shipped earlier must succeed. The after case is the green control: a
+    shipment that lands after the sale still refuses the undo with `sale_built_on`."""
+    checks.note("")
+    checks.note("UN-7, read as the rule: a sale is built on once its order ships after the sale")
+
+    with isolated_home():
+        _pulled_then_shipped("un7-before", "UN7-BEFORE", -timedelta(minutes=1))
+        back = answers(
+            checks,
+            lambda: capture_server.do_mark_sold(4, 1, {"undo": True}),
+            "UN-7: an order that shipped BEFORE the sale does not block that sale's undo",
+        )
+        # Only read the answer when the route gave one: a refusal is already the failure above.
+        if isinstance(back, dict):
+            checks.equal(
+                (back.get("undone"), back.get("state")),
+                (True, master.IDENTIFIED),
+                "and the undo puts the card back to identified",
+            )
+
+    with isolated_home():
+        _pulled_then_shipped("un7-after", "UN7-AFTER", timedelta(minutes=1))
+        refusal(
+            checks,
+            lambda: capture_server.do_mark_sold(4, 1, {"undo": True}),
+            "sale_built_on",
+            "UN-7: an order that shipped AFTER the sale still refuses that sale's undo",
+        )
+
+
 CHECKS = (
     check_undo_until_built_on,
+    check_undo_order_shipped_before_sale,
 )
