@@ -129,9 +129,8 @@ def check_undo_until_built_on(checks: Checks) -> None:
         capture_server.do_order_pull(
             {"source": "TCGplayer", "number": "UN7-1", "sku": "9191486", "targets": target}
         )
-        with Store().write() as snapshot:
-            record = snapshot.ledger.get(key)
-            record.status = "Shipped - In Transit"
+        # The feed ships the order AFTER the sale, so the fetch restamps `changed_at` past it.
+        _feed_order("UN7-1", "Shipped - In Transit")
         refusal(
             checks,
             lambda: capture_server.do_order_pull({"undo": True, "targets": target}),
@@ -1330,35 +1329,31 @@ def check_undo_until_built_on(checks: Checks) -> None:
         checks.equal(field(undone, "to"), live.key, "and the card is back at its own key")
 
 
-def _pulled_then_shipped(capture_id: str, number: str, shipped_at_offset: timedelta) -> None:
-    """A card sold to an order, then the order's own feed status set to shipped with a
-    `changed_at` stamped `shipped_at_offset` from the sale's own `sold` event. The sale's time is
-    read back from `history.jsonl`, so no assertion reads the real clock."""
-    capture_server.do_capture(capture_payload(4, capture_id=capture_id))
+def _feed_order(number: str, status: str) -> None:
+    """One order as the feed writes it on a fetch: one line of 9191486, at `status`. The ledger
+    stamps `changed_at` only where this content moved, so a fetch that ships the order after a
+    sale restamps it past the sale."""
     with Store().write() as snapshot:
-        snapshot.inventory.set_state("4/1", master.IDENTIFIED)
-        _bind(snapshot, "4/1", "9191486")
         snapshot.ledger.ingest([
             order_store.OrderRecord(
                 source="TCGplayer",
                 number=number,
                 placed_at="2026-09-25T10:00:00.000+00:00",
-                status="Ready to Ship",
+                status=status,
                 lines=[order_store.OrderLine(sku="9191486", quantity=1)],
             )
         ])
+
+
+def _sold_to_order(capture_id: str, number: str, status: str) -> None:
+    """Card 4/1, identified, pulled to one order that the feed reports at `status`."""
+    capture_server.do_capture(capture_payload(4, capture_id=capture_id))
+    with Store().write() as snapshot:
+        snapshot.inventory.set_state("4/1", master.IDENTIFIED)
+        _bind(snapshot, "4/1", "9191486")
+    _feed_order(number, status)
     target = [{"box": 4, "index": 1, "capture_id": capture_id}]
     capture_server.do_order_pull({"source": "TCGplayer", "number": number, "sku": "9191486", "targets": target})
-    sold_at = [
-        event["at"]
-        for event in Store().history()
-        if event.get("event") == "sold" and event.get("position") == "4/1"
-    ][-1]
-    sale = datetime.fromisoformat(sold_at)
-    with Store().write() as snapshot:
-        record = snapshot.ledger.get(order_store.order_key("TCGplayer", number))
-        record.status = "Shipped - In Transit"
-        record.changed_at = (sale + shipped_at_offset).isoformat(timespec="milliseconds")
 
 
 def check_undo_order_shipped_before_sale(checks: Checks) -> None:
@@ -1374,7 +1369,9 @@ def check_undo_order_shipped_before_sale(checks: Checks) -> None:
     checks.note("UN-7, read as the rule: a sale is built on once its order ships after the sale")
 
     with isolated_home():
-        _pulled_then_shipped("un7-before", "UN7-BEFORE", -timedelta(minutes=1))
+        # The feed had the order shipped when Banchi first fetched it, and the card sold to it
+        # afterwards: the fetch's `changed_at` is earlier than the sale.
+        _sold_to_order("un7-before", "UN7-BEFORE", "Shipped - In Transit")
         back = answers(
             checks,
             lambda: capture_server.do_mark_sold(4, 1, {"undo": True}),
@@ -1389,7 +1386,8 @@ def check_undo_order_shipped_before_sale(checks: Checks) -> None:
             )
 
     with isolated_home():
-        _pulled_then_shipped("un7-after", "UN7-AFTER", timedelta(minutes=1))
+        _sold_to_order("un7-after", "UN7-AFTER", "Ready to Ship")
+        _feed_order("UN7-AFTER", "Shipped - In Transit")
         refusal(
             checks,
             lambda: capture_server.do_mark_sold(4, 1, {"undo": True}),
