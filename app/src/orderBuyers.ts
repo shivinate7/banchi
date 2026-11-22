@@ -32,6 +32,7 @@
  * receipt above it so the two cannot disagree about what "today" means mid-render.
  */
 
+import { isCanceled } from './revenueMath'
 import type { OrderLineReason, OrderRow, ResolvedLine, ResolvedOrder } from './types'
 
 /** How long a buyer with nothing open still counts as RECENT rather than sinking under the
@@ -235,6 +236,8 @@ export function lineReason(order: OrderRow, line: ResolvedLine): OrderLineReason
  *  every figure and done state of a buyer's panel, read it, never `order.open` alone. */
 export function ownsAWalkableBody(order: OrderRow): boolean {
   if (order.open) return true
+  /* A canceled order owes nothing, whatever its lines still say: the buyer's done line reads "Canceled", never a walk. */
+  if (isCanceled(order.status)) return false
   return order.terminal && order.wanted > order.recorded
 }
 

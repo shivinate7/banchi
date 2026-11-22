@@ -129,10 +129,12 @@ export function pickFigureOf(
   const wantedLeft = Math.max(0, take.wanted - (take.copies.length - onHand))
   const owed = Math.max(wantedLeft, owedBySku.get(take.sku) ?? wantedLeft)
   const of = Math.min(owed, onHand)
-  /* `total` IS THE ORDER-WIDE COUNT STILL TO PICK (the pick chip's number, owner ruling: "Pick 4" for four owed, though
-     this stop holds three); `here` is how many of it this stop holds, so the chip can say a copy waits at another stop. */
+  /* `total` IS THE COUNT STILL TO PICK, THE PICK CHIP'S NUMBER (owner ruling: "Pick 4" for four owed, though this stop
+     holds three): this stop's own ask, or every copy the order owes that the store really has (`of`), whichever is more.
+     It never counts an owed copy the store lacks beyond this stop's ask, which `short` carries (the "2 short" ruling above).
+     `here` is how many of it this stop holds, so the chip can say a copy waits at another stop. */
   const here = Math.min(wantedLeft, unsold.filter((copy) => copy.here).length, of)
-  return { of, short: Math.max(0, owed - onHand), total: owed, here }
+  return { of, short: Math.max(0, owed - onHand), total: Math.max(wantedLeft, of), here }
 }
 
 const NO_SOLD: ReadonlySet<string> = new Set()

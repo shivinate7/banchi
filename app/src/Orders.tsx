@@ -53,6 +53,7 @@ import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore
 import { PositionLabel } from './PositionLabel'
 import { RailFrame } from './RailFrame'
 import { sayPlace } from './position'
+import { isCanceled } from './revenueMath'
 import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, isSharedOrderNumber, lineReason, shipToOf, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, ownsAWalkableBody, walkableOf, type BuyerGroup, type Status } from './orderBuyers'
 import {
   applyTake,
@@ -4195,7 +4196,7 @@ function ManagePanel({
 function buyerDoneSay(group: BuyerGroup): string {
   const sold = group.orders.reduce((sum, one) => sum + one.recorded, 0)
   if (sold > 0) return `All ${sold} Sold`
-  const canceled = (one: BuyerGroup['orders'][number]) => /^canceled$/i.test((one.status ?? '').trim())
+  const canceled = (one: BuyerGroup['orders'][number]) => isCanceled(one.status)
   if (group.orders.length > 0 && group.orders.every(canceled)) {
     return group.orders.length === 1 ? 'Order Canceled' : 'Orders Canceled'
   }
