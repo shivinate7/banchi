@@ -143,17 +143,33 @@ export function marketTable(payload: PricingPayload): MarketRead {
   return { kind: 'table', at: payload.written_at ?? null, rows, cutoff: payload.held_market_cutoff ?? null, readings: payload.held_market_readings ?? {} }
 }
 
+/** THE ONE MARKET FIGURE FOR A CARD, shared by the band and Details: the store's latest reading for
+ *  `card.sku` when the table holds a usable one (`from: 'reading'`), else the run's snapshot for this
+ *  card's row (`from: 'snapshot'`). `price` is null for a row that holds no market data and
+ *  undefined for a card the run holds no row for. */
+function marketFigure(
+  card: InventoryCard,
+  table: Extract<MarketRead, { kind: 'table' }>,
+): { from: 'reading' | 'snapshot'; price: string | null | undefined } {
+  const latest = card.sku ? table.readings[card.sku] : undefined
+  if (latest !== undefined && latest !== '' && !Number.isNaN(Number(latest))) return { from: 'reading', price: latest }
+  return { from: 'snapshot', price: table.rows[`${card.box}/${card.index}`] }
+}
+
 function marketText(card: InventoryCard, read: MarketRead | undefined): string {
   if (card.run === null) return 'not joined yet'
   if (read === undefined) return 'reading…'
   if (read.kind === 'absent') return read.why
 
-  const price = read.rows[`${card.box}/${card.index}`]
+  const { from, price } = marketFigure(card, read)
   if (price === undefined) return 'no row in this run'
   if (price === null) return 'no_market_data'
 
-  const ago = read.at === null ? null : readingAgo(new Date(read.at * 1000).toISOString())
   const said = money(Number(price))
+  // The wire carries a reading's figure and not the moment it was written, so a reading states no
+  // age. Only the snapshot has one: the pricing file's `written_at`.
+  if (from === 'reading') return said
+  const ago = read.at === null ? null : readingAgo(new Date(read.at * 1000).toISOString())
   if (ago === null) return `${said} · no age`
   return `${said} · read ${ago}`
 }
@@ -167,7 +183,7 @@ function marketFact(card: InventoryCard, read: MarketRead | undefined): Detail {
   if (!value.startsWith('$') || read === undefined || read.kind !== 'table') {
     return { label: 'Market', value, kind: isCode(value) ? 'mono' : undefined }
   }
-  const price = read.rows[`${card.box}/${card.index}`]
+  const { from, price } = marketFigure(card, read)
   return {
     label: 'Market',
     value,
@@ -175,7 +191,7 @@ function marketFact(card: InventoryCard, read: MarketRead | undefined): Detail {
     node: (
       <span className="browse-fact-live">
         <span className="bn-tnum">{money(Number(price))}</span>
-        <ReadingAge at={read.at === null ? null : new Date(read.at * 1000).toISOString()} />
+        {from === 'snapshot' ? <ReadingAge at={read.at === null ? null : new Date(read.at * 1000).toISOString()} /> : null}
       </span>
     ),
   }
@@ -350,22 +366,26 @@ export type HeroFigures = {
   readonly rerank?: { readonly say: string | null; readonly onRerank: () => void }
 }
 
-/** THE MARKET PRICE OF ONE CARD, read once per run off the pricing file (`marketTable`): the band's
- *  Market figure. One home, called by `CardPane`, so `#/inventory` and the `#/orders` walk draw the
- *  same figure from the same read. Null while it loads, on a failed read, and where the run holds no
- *  row for this card: the band draws a quiet dash and never a made-up figure. */
+/** THE MARKET PRICE OF ONE CARD, the band's Market figure: the store's latest reading for
+ *  `card.sku` out of the pricing payload's `held_market_readings`, else the snapshot the card's own
+ *  run was priced with (`marketFigure`). The latest reading comes first because copies of one SKU
+ *  from different runs hold different snapshots, and the band must draw one figure per SKU. One
+ *  home, called by `CardPane`, so `#/inventory` and the `#/orders` walk draw the same figure from
+ *  the same read. Null while it loads, on a failed read, and where neither a reading nor a run row
+ *  exists for this card: the band draws a quiet dash and never a made-up figure. */
 export function useMarketPrice(card: InventoryCard): number | null {
   const table = useMarketTable(card)
   if (table === null) return null
-  const raw = table.rows[`${card.box}/${card.index}`]
+  const raw = marketFigure(card, table).price
   const price = raw === null || raw === undefined ? NaN : Number(raw)
   return Number.isNaN(price) ? null : price
 }
 
 /** THE GLINT'S TWO FIGURES, BOTH OUT OF THE READINGS TABLE: the card's price by `card.sku` and the
  *  store's top-tenth cutoff (`held_market_cutoff`, `pipeline/holdings.py`). Like with like: the
- *  Market figure the hero draws is the run's snapshot, and it is not what the cutoff ranks. No
- *  fallback to it, so a card with no SKU or no reading has a null price. Null while loading and on
+ *  cutoff ranks this table, so the glint compares this table's figure and never a run's snapshot.
+ *  `useMarketPrice` draws the same reading, and falls back to the snapshot where this has none; this
+ *  has no fallback, so a card with no SKU or no reading has a null price. Null while loading and on
  *  a failed read. */
 export function useMarketRead(card: InventoryCard): { price: number | null; cutoff: number | null } {
   const table = useMarketTable(card)
