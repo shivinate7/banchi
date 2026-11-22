@@ -117,7 +117,7 @@ pull hands the rank back to the pull before it, if one still stands. Only one ro
 walk never piles up open buttons. An older sold copy is a dead end in this row on purpose. Its way back is the
 card on `#/inventory` (§4). A test fakes the clock and advances it past the old window. `Undo` on the newest pull survives.
 
-The `U` key on the Pull stage undoes the newest press. A sale still queued in the walk's line is cancelled, and the
+The `U` key on the Pull stage undoes the newest press. A sale still queued in the walk's line is canceled, and the
 server is never called. A sale whose write is in flight gets its reversal queued behind it. Otherwise `U` reverses
 the last recorded pull (`lastPull`). A `lastPull` whose reversal is already queued or out is skipped, so a second `U`
 does nothing and never queues a second reversal of the same copy.
