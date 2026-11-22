@@ -7180,7 +7180,7 @@ test('the card carries what its run said the market was, and how old that readin
      sub-threshold and withheld card in the store. */
   await open(page, BOXES, PRICED_STORE)
 
-  const market = page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')
+  const market = page.locator('.browse-fact', { hasText: 'At capture' }).locator('dd')
   /* THE FIGURE AND ITS AGE, IN THE SAME ROW — drawn as the listed row above it draws its own
      now (one `ReadingAge`, one weight), so the compact `· read 2d` is a spelt-out age instead.
      Both halves are still asserted, and separately: the price, and that the age names the
@@ -7204,7 +7204,7 @@ test('the card carries what its run said the market was, and how old that readin
   await expandAll(page)
   await page.locator('.browse-row').nth(1).click()
   await expect(page.locator('.browse-fact', { hasText: 'Number' })).toBeVisible()
-  const second = page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')
+  const second = page.locator('.browse-fact', { hasText: 'At capture' }).locator('dd')
   await expect(second.locator('.bn-tnum')).toHaveText('$5.47')
   await expect(second).toContainText('read 2 days ago')
 
@@ -7217,14 +7217,14 @@ test('the card carries what its run said the market was, and how old that readin
      to nothing against the `no_market_data` block `GET .../pricing` serves, which is where a
      card in this state is actually priced. */
   await page.locator('.browse-row').nth(3).click()
-  await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
+  await expect(page.locator('.browse-fact', { hasText: 'At capture' }).locator('dd')).toHaveText(
     'no_market_data',
   )
 
   /* A POSITION THE TABLE DOES NOT HOLD IS A CARD THE JOIN MATCHED NO ROW FOR, which is a
      different fact again from a blank cell and gets a different sentence. */
   await page.locator('.browse-row').nth(4).click()
-  await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
+  await expect(page.locator('.browse-fact', { hasText: 'At capture' }).locator('dd')).toHaveText(
     'no row in this run',
   )
 })
@@ -7302,7 +7302,7 @@ test('a SKU the run never priced draws its store reading in the band', async ({ 
   await expect(bandMarket(page)).toHaveText('$1.10')
 })
 
-test("the band's figure is labelled Market, and the Details row names its figure Market when captured", async ({
+test("the band's figure is labelled Market, and the Details row names its figure At capture", async ({
   page,
 }) => {
   await open(page, BOXES, PRICED_STORE, () => ({ ...PRICING, held_market_readings: LATEST }))
@@ -7310,7 +7310,7 @@ test("the band's figure is labelled Market, and the Details row names its figure
   await expect(page.locator('.browse-fact', { hasText: /^SKU/ })).toContainText('8937370')
   /* ONE ASSERTION, TWO LABELS. Each figure has one label (lane ruling: one label per figure). The
      band keeps `Market` for the store's latest reading; the Details row names the run's own
-     snapshot `Market when captured`. Polled, so a row that is still drawing is waited for. */
+     snapshot `At capture`. Polled, so a row that is still drawing is waited for. */
   await expect
     .poll(() =>
       page.evaluate(() => ({
@@ -7320,20 +7320,20 @@ test("the band's figure is labelled Market, and the Details row names its figure
             ?.querySelector('.bn-label')?.textContent ?? null,
         details:
           [...document.querySelectorAll('.browse-fact')]
-            .find((row) => /^Market/.test(row.querySelector('dt')?.textContent ?? ''))
+            .find((row) => /^At capture/.test(row.querySelector('dt')?.textContent ?? ''))
             ?.querySelector('dt')?.textContent ?? null,
       })),
     )
-    .toEqual({ band: 'Market', details: 'Market when captured' })
+    .toEqual({ band: 'Market', details: 'At capture' })
 })
 
 /** How many lines the Market row's value actually draws, measured rather than inferred from the
  *  string. A wrapped value is the defect this guards, and it is invisible from the text. The row
- *  is the Details fold's, labelled `Market when captured`; the band's `Market` is another figure. */
+ *  is the Details fold's, labelled `At capture`; the band's `Market` is another figure. */
 async function marketLines(page: Page): Promise<number> {
   return page.evaluate(() => {
     const dd = [...document.querySelectorAll('.browse-fact')]
-      .find((row) => row.querySelector('dt')?.textContent === 'Market when captured')
+      .find((row) => row.querySelector('dt')?.textContent === 'At capture')
       ?.querySelector('dd') as HTMLElement
     const line = parseFloat(getComputedStyle(dd).lineHeight)
     return Math.round(dd.getBoundingClientRect().height / line)
@@ -7363,7 +7363,7 @@ test('the market row draws on one line at the width the owner works at', async (
      fixed. */
   await setViewport(page, { width: 1440, height: 900 })
   await open(page, BOXES, PRICED_STORE)
-  await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toBeVisible()
+  await expect(page.locator('.browse-fact', { hasText: 'At capture' }).locator('dd')).toBeVisible()
   expect(await marketLines(page)).toBe(1)
 
   await expandAll(page)
@@ -7390,7 +7390,7 @@ test('Reload re-reads the price, because a join is what a reload is pressed afte
   let at = PRICED_AT
   await open(page, BOXES, PRICED_STORE, () => ({ ...PRICING, written_at: at }))
 
-  const market = page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')
+  const market = page.locator('.browse-fact', { hasText: 'At capture' }).locator('dd')
   /* THE FIGURE AND ITS AGE, IN THE SAME ROW — drawn as the listed row above it draws its own
      now (one `ReadingAge`, one weight), so the compact `· read 2d` is a spelt-out age instead.
      Both halves are still asserted, and separately: the price, and that the age names the
@@ -7423,7 +7423,7 @@ test('the market row is drawn even for a card no run has read', async ({
      indistinguishable, which is the defect those two were added to fix. So every way there is no
      figure gets a sentence instead of an absence. */
   await open(page)
-  await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
+  await expect(page.locator('.browse-fact', { hasText: 'At capture' }).locator('dd')).toHaveText(
     'not joined yet',
   )
 })
@@ -7445,7 +7445,7 @@ test('a run with no pricing table names the remedy rather than reading as an unp
   )
   await setViewport(page, { width: 1440, height: 900 })
   await open(page, BOXES, { cards: stale, search: (query) => searchAnswer(query, stale) })
-  await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
+  await expect(page.locator('.browse-fact', { hasText: 'At capture' }).locator('dd')).toHaveText(
     'join this run',
   )
 
