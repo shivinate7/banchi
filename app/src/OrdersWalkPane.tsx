@@ -119,11 +119,23 @@ function pickOrderFor(
 export function pickFigureOf(
   take: WalkPlanTake,
   owedBySku: ReadonlyMap<string, number>,
-): { readonly of: number; readonly short: number } {
-  const onHand = take.copies.length
-  const owed = Math.max(take.wanted, owedBySku.get(take.sku) ?? take.wanted)
-  return { of: Math.min(owed, onHand), short: Math.max(0, owed - onHand) }
+  soldKeys: ReadonlySet<string> = NO_SOLD,
+): { readonly of: number; readonly short: number; readonly total: number; readonly here: number } {
+  /* A SOLD COPY IS NOT STILL TO PICK AND NOT ON HAND: `groupOf` keeps every take copy (the rows draw sold ones), so a
+     caller that holds the walk's `soldKeys` passes them and this nets them out of every figure below. With none passed
+     (the walk list's rows) the figures are exactly what they were. */
+  const unsold = take.copies.filter((copy) => !soldKeys.has(copy.key))
+  const onHand = unsold.length
+  const wantedLeft = Math.max(0, take.wanted - (take.copies.length - onHand))
+  const owed = Math.max(wantedLeft, owedBySku.get(take.sku) ?? wantedLeft)
+  const of = Math.min(owed, onHand)
+  /* `total` IS THE ORDER-WIDE COUNT STILL TO PICK (the pick chip's number, owner ruling: "Pick 4" for four owed, though
+     this stop holds three); `here` is how many of it this stop holds, so the chip can say a copy waits at another stop. */
+  const here = Math.min(wantedLeft, unsold.filter((copy) => copy.here).length, of)
+  return { of, short: Math.max(0, owed - onHand), total: owed, here }
 }
+
+const NO_SOLD: ReadonlySet<string> = new Set()
 
 /* ---------------------------------------------------------------------- the walk list's rows */
 
