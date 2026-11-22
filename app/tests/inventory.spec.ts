@@ -7302,12 +7302,38 @@ test('a SKU the run never priced draws its store reading in the band', async ({ 
   await expect(bandMarket(page)).toHaveText('$1.10')
 })
 
+test("the band's figure is labelled Market, and the Details row names its figure Market when captured", async ({
+  page,
+}) => {
+  await open(page, BOXES, PRICED_STORE, () => ({ ...PRICING, held_market_readings: LATEST }))
+  /* SCOPE FIRST: the card on screen is 2/1, SKU 8937370, the one both figures price. */
+  await expect(page.locator('.browse-fact', { hasText: /^SKU/ })).toContainText('8937370')
+  /* ONE ASSERTION, TWO LABELS. Each figure has one label (lane ruling: one label per figure). The
+     band keeps `Market` for the store's latest reading; the Details row names the run's own
+     snapshot `Market when captured`. Polled, so a row that is still drawing is waited for. */
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        band:
+          [...document.querySelectorAll('.browse-hero-fig')]
+            .find((fig) => fig.textContent?.includes('Market'))
+            ?.querySelector('.bn-label')?.textContent ?? null,
+        details:
+          [...document.querySelectorAll('.browse-fact')]
+            .find((row) => /^Market/.test(row.querySelector('dt')?.textContent ?? ''))
+            ?.querySelector('dt')?.textContent ?? null,
+      })),
+    )
+    .toEqual({ band: 'Market', details: 'Market when captured' })
+})
+
 /** How many lines the Market row's value actually draws, measured rather than inferred from the
- *  string. A wrapped value is the defect this guards, and it is invisible from the text. */
+ *  string. A wrapped value is the defect this guards, and it is invisible from the text. The row
+ *  is the Details fold's, labelled `Market when captured`; the band's `Market` is another figure. */
 async function marketLines(page: Page): Promise<number> {
   return page.evaluate(() => {
     const dd = [...document.querySelectorAll('.browse-fact')]
-      .find((row) => row.querySelector('dt')?.textContent === 'Market')
+      .find((row) => row.querySelector('dt')?.textContent === 'Market when captured')
       ?.querySelector('dd') as HTMLElement
     const line = parseFloat(getComputedStyle(dd).lineHeight)
     return Math.round(dd.getBoundingClientRect().height / line)
