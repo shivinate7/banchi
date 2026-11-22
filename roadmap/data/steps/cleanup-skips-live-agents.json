@@ -1,0 +1,10 @@
+{
+  "title": "Worktree cleanup skips a worktree whose agent is still running",
+  "status": "todo",
+  "phase": "Guards to build",
+  "why": "Mistake: the Orders walk lane's cleanup loop removed a running test-author's worktree (nothing lost, the test restarted). Harm it stops: losing an agent's uncommitted work.",
+  "note": "Check: a worktree removal is refused while the agent that owns it has not reported done.",
+  "ask": null,
+  "updatedAt": "2026-11-22T06:36:00Z",
+  "order": 999
+}
