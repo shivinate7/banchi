@@ -53,7 +53,7 @@ import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore
 import { PositionLabel } from './PositionLabel'
 import { RailFrame } from './RailFrame'
 import { sayPlace } from './position'
-import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, isSharedOrderNumber, lineReason, shipToOf, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
+import { buyerKeyOf, groupBuyers, groupFacetCopies, groupForOrderKey, isSharedOrderNumber, lineReason, shipToOf, FLAGGED_FACET, NONE_LEFT_FACET, UNFILLABLE_FACETS, statusOf, worstStatus, ownsAWalkableBody, walkableOf, type BuyerGroup, type Status } from './orderBuyers'
 import {
   applyTake,
   buyerLabel,
@@ -855,16 +855,6 @@ function headlineOf(line: ResolvedLine): Headline {
 /* ---- status ---------------------------------------------------------------------------------- */
 
 
-/** Does this order still have a body worth drawing — a walk, its lines, a Pull button — even
- *  though `order.open` says no? An order the marketplace calls done for having every copy
- *  pulled already (`!open`, not `terminal`, nothing owed) has nothing left to walk, same as
- *  before. An order the marketplace calls done for its OWN reasons while copies are still
- *  owed (`terminal` and `wanted > recorded`) is the one the owner wants opened back up —
- *  `terminal` is `types.ts`'s own field now, off `server/capture_server.py:_order_row`. */
-function ownsAWalkableBody(order: OrderRow): boolean {
-  if (order.open) return true
-  return order.terminal && order.wanted > order.recorded
-}
 
 
 
@@ -3400,17 +3390,17 @@ function PullStage({
    *  Per GROUP rather than one flat list, because the tick is per buyer (D193). A buyer with
    *  none of these draws no tick at all: there is nothing to select, and a disabled tick would
    *  be a control offering a press that can never mean anything. */
-  const walkableOf = useMemo(() => {
+  const walkableByGroup = useMemo(() => {
     const out = new Map<string, readonly OrderRow[]>()
-    for (const group of allGroups) out.set(group.key, group.orders.filter(ownsAWalkableBody))
+    for (const group of allGroups) out.set(group.key, walkableOf(group))
     return out
   }, [allGroups])
 
   /* Keyed by the keys drawn, not by the array's identity: the list is rebuilt every render. */
   const shownSig = shownGroups.map((group) => group.key).join('\n')
   const tickableKeys = useMemo(
-    () => new Set(shownSig.split('\n').filter((key) => key !== '' && (walkableOf.get(key)?.length ?? 0) > 0)),
-    [shownSig, walkableOf],
+    () => new Set(shownSig.split('\n').filter((key) => key !== '' && (walkableByGroup.get(key)?.length ?? 0) > 0)),
+    [shownSig, walkableByGroup],
   )
   /* A TICK DOES NOT SURVIVE A FILTER THAT HIDES ITS ROW, AND FILTERING BACK DOES NOT BRING IT
    * BACK (§12 answer 1, the owner's ruling 2026-09-18): a real prune of the stored set, never a
@@ -3480,10 +3470,10 @@ function PullStage({
    *  walkable contributes nothing, so viewing a done buyer alone never opens an empty walk. */
   const walkedKeys = useMemo(() => {
     const out = new Set<string>()
-    if (selectedGroup !== null) for (const order of walkableOf.get(selectedGroup.key) ?? []) out.add(order.key)
-    for (const key of walkTicked) for (const order of walkableOf.get(key) ?? []) out.add(order.key)
+    if (selectedGroup !== null) for (const order of walkableByGroup.get(selectedGroup.key) ?? []) out.add(order.key)
+    for (const key of walkTicked) for (const order of walkableByGroup.get(key) ?? []) out.add(order.key)
     return out
-  }, [selectedGroup, walkableOf, walkTicked])
+  }, [selectedGroup, walkableByGroup, walkTicked])
 
   const walk = useOrderWalk({ walkedKeys, ordersByKey, rawCards, onPull: onWalkPull, onUndo: onWalkUndo })
 
@@ -3839,7 +3829,7 @@ function PullStage({
       <OrderPanel group={shownGroup} answers={answers} status={statusByGroup.get(shownGroup.key) ?? 'done'} onManage={() => setManageOpen(true)} />
     )
 
-  const buyerDone = walkedGroups.length === 1 && shownGroup !== null && shownGroup.open.length === 0
+  const buyerDone = walkedGroups.length === 1 && shownGroup !== null && walkableOf(shownGroup).length === 0
 
   const anyFolded = foldedSections.size > 0 && walk.sections.some((section) => foldedSections.has(section.key))
   const walkColumn = (
@@ -4131,7 +4121,7 @@ function ManagePanel({
   return (
     <div className="orders-manage-orders">
       <SettingsFigures title="Overview">
-        <SettingsCensus label="Orders" value={group.orders.length} note={`${group.open.length} open`} />
+        <SettingsCensus label="Orders" value={group.orders.length} note={`${walkableOf(group).length} open`} />
         <SettingsCensus
           label="Cards owed"
           value={figures.owed}
@@ -4153,7 +4143,7 @@ function ManagePanel({
               key={one.key}
               icon="package"
               label={one.number}
-              detail={one.open ? `${word}, ${countOf(owes, 'card')} owed` : word}
+              detail={ownsAWalkableBody(one) ? `${word}, ${countOf(owes, 'card')} owed` : word}
               busy={false}
               onClick={() => setEditing(one.key)}
             />
@@ -4185,14 +4175,14 @@ function buyerDoneSay(group: BuyerGroup): string {
   return 'Not Shipping'
 }
 
-/** A buyer's three figures, each over ONE set (UX-168, UX-235). `owed` is what the open orders
+/** A buyer's three figures, each over ONE set (UX-168, UX-235). `owed` is what the walkable orders
  *  still want. `short` is the copies that cannot be pulled: per line, what it owes less what is
  *  on hand (`outstanding`), so owed less short is the cards in the walk. `sold` counts every
  *  order the buyer has, open or done. */
 function figuresOf(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): { owed: number; sold: number; short: number } {
   let owed = 0
   let short = 0
-  for (const order of group.open) {
+  for (const order of walkableOf(group)) {
     owed += Math.max(0, order.wanted - order.recorded)
     for (const line of answers.get(order.key)?.lines ?? []) short += line.outstanding
   }
@@ -4227,7 +4217,7 @@ function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
     not_a_single: 'flagged',
   }
   const tally = new Map<string, number>()
-  for (const order of group.open) {
+  for (const order of walkableOf(group)) {
     for (const line of answers.get(order.key)?.lines ?? []) {
       const said = words[lineReason(order, line)]
       if (said !== undefined) tally.set(said, (tally.get(said) ?? 0) + line.outstanding)
@@ -4265,7 +4255,7 @@ function statusWords(status: Status, group: BuyerGroup, answers: ReadonlyMap<str
 /** The one status a buyer shows, as pill props: words, tone and icon. */
 function statusPill(status: Status, group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>) {
   const label = statusWords(status, group, answers)
-  const flagged = group.open.flatMap((order) => (answers.get(order.key)?.lines ?? []).filter((line) => line.outstanding > 0).map((line) => lineReason(order, line)))
+  const flagged = walkableOf(group).flatMap((order) => (answers.get(order.key)?.lines ?? []).filter((line) => line.outstanding > 0).map((line) => lineReason(order, line)))
   const sealedOnly = flagged.some((reason) => reason === 'not_a_single') && !flagged.some((reason) => reason === 'sku_unseen' || reason === 'sku_unknown')
   return { label, ...(status === 'look' ? lookPill(label, sealedOnly) : STATUS_PILL[status]) }
 }
