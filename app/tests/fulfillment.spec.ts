@@ -2474,21 +2474,60 @@ test('ux-w2: a failed refresh on the card view moves nothing once the stale noti
   await expectInViewport(page, view(page).locator('.ff-notice'), 'the stale notice on the card view')
 })
 
-/* A pull the server refuses because the order was canceled, or its line stood down after the list was
-   read. The server answers 409 with that code. Pressing "Mark it sold" again is refused again, so the
-   screen names the change instead: the list-changed sentence that `PULL_STALE` gives, and a re-read. */
-const LIST_CHANGED = 'The list has changed since it was opened. Go back to the cards and try again.'
-for (const refusal of [
-  { code: 'order_canceled', message: 'This order was canceled, so nothing can be pulled from it.' },
-  { code: 'line_stood_down', message: 'This line was stood down, so nothing can be pulled from it.' },
-]) {
-  test(`a pull refused as ${refusal.code} says the list changed, never to press again, and re-reads the list`, async ({ page }) => {
+/* A pull the server refuses because the order was canceled, or its line stood down, after the list was
+   read. The server answers 409 with that code and its own words (order key and SKU included). The screen
+   says the card is no longer needed for the order and to put it back: never "try again", never "press
+   again". The re-read then answers the order as it now stands, with no copy owed, so the card must not
+   offer "Mark it sold" any more. */
+const NO_LONGER_NEEDED = 'This card is no longer needed for this order. Put it back where you found it.'
+const STOOD_AT = '2026-11-21T10:00:00+00:00'
+const REFUSALS = [
+  {
+    code: 'order_canceled',
+    message: `Order ${ORDER_KEY} is canceled, so nothing more can be recorded against it. A copy recorded now would count as going to a buyer who will never receive it.`,
+    after: {
+      ...ONE_OPEN_ORDER,
+      orders: ONE_OPEN_ORDER.orders.map((one) => ({ ...one, status: 'Canceled', open: false })),
+    },
+  },
+  {
+    code: 'line_stood_down',
+    message: `SKU ${ORDER_SKU} on order ${ORDER_KEY} is stood down, so this store has stopped accounting for it. Reopen the line first if it should take a copy again.`,
+    after: {
+      ...ONE_OPEN_ORDER,
+      orders: ONE_OPEN_ORDER.orders.map((one) => ({
+        ...one,
+        lines: one.lines.map((line) => ({ ...line, closed_at: STOOD_AT })),
+      })),
+    },
+  },
+]
+for (const refusal of REFUSALS) {
+  test(`a pull refused as ${refusal.code} says the card is no longer needed, never to try again, and offers no Mark it sold after the re-read`, async ({ page }) => {
     await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
-    await page.route(/\/orders\/pull$/, (route) =>
-      route.fulfill({
+    /* Once the server has refused, its next answers are the order as the refusal left it. Routes
+       registered later take precedence over `stubServer`'s, so these override the open-order answers. */
+    let refused = false
+    await page.route(/\/orders\/pull$/, (route) => {
+      refused = true
+      return route.fulfill({
         status: 409,
         contentType: 'application/json',
         body: JSON.stringify({ error: { code: refusal.code, message: refusal.message } }),
+      })
+    })
+    await page.route(/\/orders$/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(refused ? refusal.after : ONE_OPEN_ORDER),
+      }),
+    )
+    await page.route(/\/orders\/walk-plan$/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(refused ? EMPTY_PLAN : ONE_OPEN_ORDER_PLAN),
       }),
     )
     let reads = 0
@@ -2502,16 +2541,20 @@ for (const refusal of [
     await page.getByRole('button', { name: 'Mark it sold' }).click()
     await expect(
       view(page).locator('.ff-trouble'),
-      `the ${refusal.code} refusal draws the list-changed sentence`,
-    ).toHaveText(LIST_CHANGED)
+      `the ${refusal.code} refusal draws the card-no-longer-needed sentence`,
+    ).toHaveText(NO_LONGER_NEEDED)
     await expect(
       view(page),
-      `the ${refusal.code} refusal never tells him to press Mark it sold again`,
-    ).not.toContainText('Press Mark it sold again.')
+      `the ${refusal.code} refusal never tells him to try again or to press again`,
+    ).not.toContainText(/try again|press mark it sold again/i)
     await expect.poll(
       () => reads,
       { message: `the list re-reads after the ${refusal.code} refusal` },
     ).toBeGreaterThan(readsBefore)
+    await expect(
+      view(page).getByRole('button', { name: 'Mark it sold' }),
+      `after the re-read the ${refusal.code} card offers no Mark it sold`,
+    ).toHaveCount(0)
   })
 }
 
