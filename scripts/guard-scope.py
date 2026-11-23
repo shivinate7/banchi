@@ -499,6 +499,11 @@ EXTRA_SUBJECTS = {
     "tests-for-selftest": (
         ("scripts/browser-scope.py", "tests-for.py loads it for import_closure."),
     ),
+    "screen-freshness-selftest": (
+        ("app/src/server.ts", "`classifyServer` parses it; the deriver finds it only in a header comment."),
+        ("app/src/*.tsx", "`tsxFiles(APP_SRC)` audits every screen, and the self-test reruns that audit."),
+        ("app/src/kit/settings.tsx", "`KIT_HOOKS` parses it for `useSheetWrite`."),
+    ),
 }
 
 # Targets whose test executes its subjects, so a docstring or comment edit cannot move a verdict.
@@ -876,6 +881,11 @@ def selftest() -> int:
           verdict("reap-selftest", ["pipeline/livecheck.py"]), False)
     check("githooks-selftest runs on a hook this reader never sees as a literal path",
           verdict("githooks-selftest", ["scripts/githooks/pre-push"]), True)
+    for path in ("app/src/server.ts", "app/src/Orders.tsx", "app/src/kit/settings.tsx"):
+        check(f"screen-freshness-selftest runs on {path}, a file the audit parses",
+              verdict("screen-freshness-selftest", [path]), True)
+    check("screen-freshness-selftest skips on a kit file it never parses",
+          verdict("screen-freshness-selftest", ["app/src/kit/index.tsx"]), False)
 
     def recipe_edit_verdict(target: str, edited: str) -> bool:
         """One Makefile edit inside the `edited` recipe, as `target`'s gate sees it."""
