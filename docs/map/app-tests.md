@@ -58,6 +58,7 @@ The Playwright specs and unit tests of the app, and the helpers they share.
   - Decisions: `D132`, `D5`
 - `app/tests/filters/index.html` — A test page the dev server serves and the build never ships: it mounts `FilterSpecimens` and a small view-state demo, so `filters.spec.ts` does not wait on a real screen to mount either.
   - Decisions: `D5`
+- `app/tests/focusHeld.ts` — One helper, `heldFocus`, the one way a test reads which element holds focus: the held element's class, or its tag (`BODY`) once focus has dropped.
 - `app/tests/fontsReady.ts` — One helper, `settleFonts`, awaited after every `page.goto` in the seven specs that measure type — it said FOUR, and the three that joined since arrived with nothing reading the sentence.
   - Decisions: `D124`, `D16`, `D38`, `D50`
 - `app/tests/fulfillment.spec.ts` — All nine rows of the Fulfillment constraints table against the rendered view, with every contrast ratio computed from the colors the page actually painted rather than from a number published in docs/DESIGN.md.
