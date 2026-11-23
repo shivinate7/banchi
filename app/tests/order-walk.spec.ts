@@ -1373,14 +1373,15 @@ test('a receipt toast’s Undo puts the next copy back at its own place, as the 
  *  sale after every write the case queued. */
 const COPY_NAMES = ['a', 'b', 'c', 'd', 'e'] as const
 
-function sectionPlan(count: number, gone: ReadonlySet<string> = new Set()): WalkPlan {
+function sectionPlan(count: number, gone: ReadonlySet<string> = new Set(), owed = count): WalkPlan {
   /* `gone` names the copies a sale has taken off the server's plan, as `twoCopyPlan`'s does: they leave `copies`, and
-     `wanted` and the order's `owed` fall by them. With none named the plan is the one every caller above is built on. */
+     `wanted` and the order's `owed` fall by them. `owed` is what the order wants before any sale; it defaults to every
+     copy. With none named the plan is the one every caller above is built on. */
   const copies = COPY_NAMES.slice(0, count)
     .map((name, at) => walkPlanCopy({ box: 3, index: 21 + at, capture_id: `cap-${name}`, key: `3/${21 + at}`, place: cardPlace(14 + at, 34, 21 + at) }))
     .filter((copy) => !gone.has(copy.key))
   if (copies.length === 0) return walkPlanOf([])
-  return walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ wanted: copies.length, copies })] })])
+  return walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ wanted: owed - gone.size, copies })] })])
 }
 
 function sectionOrders(count: number): OrdersPayload {
@@ -2076,6 +2077,58 @@ test('a Mark sold refused as already sold leaves focus where the person moved it
   await expect(sell, 'the row draws no Mark sold once the refusal lands: another tab sold this copy').toHaveCount(0)
 
   await expect(moved, 'focus stays on the control the person moved to, not taken back by the refused sale').toBeFocused()
+})
+
+test('an undo the server answers pull_not_recorded leaves the walk at the store’s owed count, so a copy past it is refused', async ({ page }) => {
+  /* A reply with no `owed` moves the figure by the one copy the press moved (`OrdersWalkPane.tsx`'s `owedNoteOf`). An undo
+     answered `pull_not_recorded` means the ledger no longer holds that pull, so it moved nothing: the store owes what it
+     owed after the elsewhere reversal, two. The walk has re-read that figure before the undo arrives. On the head the undo
+     moves the figure up by one more, to three, and the walk offers a third copy the store says is not owed. */
+  let gone = new Set<string>()
+  const wire = await open(page, {
+    plan: () => sectionPlan(3, gone, 2),
+    orders: sectionOrders(3),
+    refuse: (body) => (body.undo === true ? { status: 409, code: 'pull_not_recorded', message: 'That pull is no longer recorded.' } : null),
+  })
+  let walkPlanReads = 0
+  await page.route(/\/orders\/walk-plan$/, async (route) => {
+    walkPlanReads += 1
+    await route.fallback()
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  await expect(rows, 'before any sale the pane holds three copies').toHaveCount(3)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length, 'the sale reaches the server').toBe(1)
+
+  /* The elsewhere reversal: the store takes the copy back, so it owes two again, and the walk's return read brings its
+     figure up to two. */
+  gone = new Set()
+  const landed = page.waitForResponse(/\/orders\/walk-plan$/)
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('focus'))
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await landed
+  expect(walkPlanReads, 'the return read reached the server').toBeGreaterThan(0)
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => pullsOf(wire).length, 'the undo reaches the server').toBe(2)
+  expect(pullsOf(wire)[1]?.body).toMatchObject({ undo: true, targets: [{ box: 3, index: 21, capture_id: 'cap-a' }] })
+  await expect(page.locator('.bn-toast', { hasText: 'Already undone' }), 'the undo is answered as already undone').toBeVisible()
+
+  /* Three presses after the undo: the store owes two, so the third is refused. */
+  await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length, 'the first copy after the undo sells').toBe(3)
+  await rows.nth(2).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length, 'the second copy after the undo sells').toBe(4)
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect(
+    page.locator('.bn-toast', { hasText: 'Nobody here still owes a copy' }),
+    'the walk offers no third copy: the store owes two after the undo it could not reverse, and that undo moved nothing',
+  ).toBeVisible()
+  expect(pullsOf(wire).length, 'the refused third press sends no fifth write').toBe(4)
 })
 
 test('a copy another Orders tab already pulled leaves its row Sold with no Mark sold, and focus on the row, as already_sold does', async ({ page }) => {
