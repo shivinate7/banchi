@@ -278,11 +278,15 @@ below hold for the walk in that screen.
   as `#/inventory` opens its first box. The tick set stays empty. On a phone no sheet opens by
   itself.
 
-### The plan moves when the walked set moves, and on nothing else
+### The plan moves when the walked set moves, on a return, and on each write's answer
 
 `app/src/OrdersWalkPane.tsx:useOrderWalk` fetches `POST /orders/walk-plan` again when the key set
-changes, and never on a press. An answer for any other key set is dropped, whenever it lands. There
-is no `Re-plan` control. A new order that arrives is not in the walked set, so it does not touch the
+changes, and never on a press. On a return (window focus, or the tab becoming visible) it fetches
+once more, after a 300 ms debounce and silently. That read keeps any figure a write answered since
+the read was issued (`keepNewerOwed`). A write's answer sets its own order's `owed` (`applyOwed`),
+and nothing else on the plan moves. The screen's re-reads after a write (`useRereadOnWrite` in
+`app/src/Orders.tsx`, whatever the write's outcome) re-read the orders and the store, not the plan. An
+answer for any other key set is dropped, whenever it lands. There is no `Re-plan` control. A new order that arrives is not in the walked set, so it does not touch the
 walk. A copy that goes while the walk is open marks its own row and moves nothing around it (D118).
 The stop stays in the list even when every row in it has gone, because removing it would move the
 rest. A toast is the ceiling of the interruption. `CopyAlreadyPulled` has the same shape: the row
@@ -332,10 +336,12 @@ write refuses a full line.
   on leaves the row in place. It folds at the next press or load.
 - **A stop can hold more candidates than a take wants.** Then the row says `(either)`, because every
   copy is fungible. It never picks one for the operator (D97).
-- **The pass's own tally and the plan's snapshot decide which order a press records against.** A
-  live re-read never decides it. `_walk_plan_order_ref` puts `owed` on every ref: the ledger's own
-  `outstanding`, zeroed for a stood-down line. `pickOrderFor` takes the ref whose remaining (`owed`
-  less what this walk has recorded against it) is smallest and still positive. It returns `null`,
+- **The plan's `owed` and each write's answer decide which order a press records against.** The walk
+  keeps no tally of its own. `_walk_plan_order_ref` puts `owed` on every ref: the ledger's own
+  `outstanding`, zeroed for a stood-down line. Each sale and undo answers with its order's `owed`
+  (`do_order_pull`), and the walk sets its held figure from that answer (`applyOwed`). A sale still
+  queued or sending is taken off first (`unansweredOf`). `pickOrderFor` takes the ref whose remaining
+  (`owed` less those sales) is smallest and still positive. It returns `null`,
   never `for[0]`, once no ref owes. Ties go to the order placed longest ago. The order closest to done
   is the one a single short copy most likely finishes. `pickOrderFor` must never fall back to
   `for[0]`, because that sends presses to an already full order (`over_fulfilled`). This rule decides

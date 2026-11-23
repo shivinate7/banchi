@@ -10,6 +10,7 @@ Each row has the slug, the first sentence of the record, and a link to it. A rec
 
 | Slug | Gist | Link |
 |---|---|---|
+| `D073-screens-reread-on-return` | Screens re-read after every write, whatever its outcome, and again when the operator returns. | [`docs/decisions/D073-screens-reread-on-return.md`](../docs/decisions/D073-screens-reread-on-return.md) |
 | `D135-codex-reads-same-rules` | Banchi has no Codex setup. | [`docs/decisions/D135-codex-reads-same-rules.md`](../docs/decisions/D135-codex-reads-same-rules.md) |
 | `D216-history-host-blocks-agent` | The price-history host declines this project's default User-Agent, so Banchi sends a browser User-Agent through one setting. | [`docs/decisions/D216-history-host-blocks-agent.md`](../docs/decisions/D216-history-host-blocks-agent.md) |
 | `D218-a-typed-dot-is-a-defect` | A typed middle dot or bullet (U+00B7, U+2022) in a user-visible string is a defect. | [`docs/decisions/D218-a-typed-dot-is-a-defect.md`](../docs/decisions/D218-a-typed-dot-is-a-defect.md) |
@@ -96,7 +97,6 @@ Each row has the slug, the first sentence of the record, and a link to it. A rec
 | `D068-departed-label-names-record` | **`join.departed_label` ends on the store key, spelled `B3 #96`. | [`docs/decisions/D068-departed-label-names-record.md`](../docs/decisions/D068-departed-label-names-record.md) |
 | `D069-orders-shipping-separate` | `#/orders` answers *which copies does this buyer get, and where in the boxes are they*, from D63's ledger. | [`docs/decisions/D069-orders-shipping-separate.md`](../docs/decisions/D069-orders-shipping-separate.md) |
 | `D070-a-code-card-s-qr-is-its-identity` | **The redemption code is the QR's payload, so identification on this track is free.** `codes/qr.py` decodes locally at the rig's 3840x2160 (measured on zxing-cpp 2.3.0: 140 of 140 possible frames, zero mis-reads, 87 ms each). | [`docs/decisions/D070-a-code-card-s-qr-is-its-identity.md`](../docs/decisions/D070-a-code-card-s-qr-is-its-identity.md) |
-| `D073-screens-reread-on-return` | **Two questions look alike.** `X-Banchi-Boot` (`BOOT_ID`, `noteBoot`, `onServerBoot`) answers whether the code changed. | [`docs/decisions/D073-screens-reread-on-return.md`](../docs/decisions/D073-screens-reread-on-return.md) |
 | `D074-docs-are-linted-as-documents` | **Prose checking is scoped to what a file is, not to how much of it a session reads.** A sweep of `docs/` found two defect classes. | [`docs/decisions/D074-docs-are-linted-as-documents.md`](../docs/decisions/D074-docs-are-linted-as-documents.md) |
 | `D075-refuse-a-suspect-crop` | **`geometry.detect_card` answers "not found" honestly and cannot answer "found the wrong thing".** So the crop path asks the frame a second question. | [`docs/decisions/D075-refuse-a-suspect-crop.md`](../docs/decisions/D075-refuse-a-suspect-crop.md) |
 | `D076-a-set-hint-s-width-is-per-game` | **A set filter needs the box to be unanimous, and the game decides whether to narrow at all.** D65 scoped the export by the set hints the box's cards carry. | [`docs/decisions/D076-a-set-hint-s-width-is-per-game.md`](../docs/decisions/D076-a-set-hint-s-width-is-per-game.md) |

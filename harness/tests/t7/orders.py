@@ -3546,6 +3546,13 @@ def check_order_screen(checks: Checks) -> None:
                 "of three — the counts come off the LEDGER rather than off the request",
             )
             checks.equal(
+                pulled.get("owed"),
+                2,
+                "THE PULL'S REPLY CARRIES `owed`, the order's owed count for this line after the "
+                "write, so the walk takes its figure from the answer and never counts its own sales "
+                "(`docs/specs/order-walk-plan.md` section 8). Two still owed of three",
+            )
+            checks.equal(
                 sorted(pulled["sales"][0]),
                 ["box", "card", "index", "listing", "position", "previous_state",
                  "restores_to", "state", "undone"],
@@ -4003,6 +4010,32 @@ def check_order_screen(checks: Checks) -> None:
             "identified",
             "AND THE CARD IS NOT UN-SOLD BY IT: a refusal in phase two discards every state "
             "change queued behind it, because `Store.write()` commits only on a clean exit",
+        )
+
+    # ------------------------------------------- a stood-down line owes the walk nothing
+    with isolated_home():
+        stock(3, 5, "9191486", prefix="p")
+        with Store().write() as snapshot:
+            snapshot.inventory.listing("9191486").set(master.LIVE, 3)
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest(
+                paste("S-1", line("9191486", 3, name="Moonfall", unit_price="11.88"))
+            ),
+            "an order for three copies of the SKU is ingested, to be stood down",
+        )
+        standing_down = order_store.order_key("TCGplayer", "S-1")
+        with Store().write() as snapshot:
+            snapshot.ledger.close_line(standing_down, "9191486", order_store.CLOSE_NOT_SHIPPING)
+        # A pull against this line is refused now (section 9 below). The figure the walk reads for it is what
+        # this case keeps: `_walk_plan_order_ref` zeroes a stood-down line, so the walk is not offered copies
+        # the order no longer wants (`docs/specs/order-walk-plan.md` section 8).
+        ref = capture_server._walk_plan_order_ref(Store().read().ledger, standing_down, "9191486")
+        checks.equal(
+            ref["owed"] if ref is not None else None,
+            0,
+            "A STOOD-DOWN LINE OWES THE WALK 0: `_walk_plan_order_ref` zeroes it, so the walk is not offered copies "
+            "the order no longer wants (`docs/specs/order-walk-plan.md` section 8)",
         )
 
     # ----------------------------------- 9. a pull on a canceled order or a stood-down line

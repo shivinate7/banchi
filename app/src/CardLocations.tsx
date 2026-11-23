@@ -343,6 +343,15 @@ export function askFocusBack(saleKey: string | undefined, as: FocusNote['to'], p
 function noteRestoreFor(saleKey: string | undefined, as: FocusNote['to'], button: FocusButton): void {
   askFocusBack(saleKey, as, button.current)
 }
+/** `U` or a toast reverses a sale whose Undo holds focus, as if that Undo were pressed: the Undo is disabled while its
+ *  write is out, so the note that hands focus to the Mark sold which replaces it is made now, while it still holds it. */
+export function noteUndoPressedBy(saleKey: string): void {
+  const held = document.activeElement
+  if (!(held instanceof HTMLElement) || !held.classList.contains('card-locations-undo')) return
+  if (held.closest(`[data-copy-key="${CSS.escape(saleKey)}"]`) === null) return
+  askFocusBack(saleKey, 'undo', held)
+  noteFocusFor(saleKey, 'sell')
+}
 /** The ask has no button left to return to: put focus on the copy's row, from the body only, and end the ask. */
 function landStrandedFocus(list: HTMLElement | null): void {
   const ask = FOCUS_RESTORE
