@@ -304,36 +304,34 @@ export function hiddenCopies(
   ).length
 }
 
-/* FOCUS FOLLOWS THE SWAP. Mark sold and Undo replace each other in one slot, so the pressed button leaves the
-   page and focus would drop to the body. A press names the class of the button that replaces it, by copy key.
-   Whichever button of that class mounts for the key takes focus once it can: a disabled button cannot, and
-   the replacement is disabled while the press's write is out. A re-read that remounts the row finds the same
-   note, so it holds across remounts. The note is dropped when focus has gone anywhere else, or when it is
-   older than `HAND_OFF_MS`. */
-type HandOff = { readonly to: 'sell' | 'undo'; readonly at: number }
-const HAND_OFFS = new Map<string, HandOff>()
-const HAND_OFF_MS = 15000
-function handFocusTo(saleKey: string | undefined, to: HandOff['to']): void {
-  if (saleKey !== undefined) HAND_OFFS.set(saleKey, { to, at: Date.now() })
+/* FOCUS FOLLOWS THE SWAP. Mark sold and Undo replace each other in one slot, so the button that held focus
+   leaves the page and focus would drop to the body. A press, or an Undo that held focus when it left, notes
+   the class of the button that replaces it, by copy key. That button takes focus once it can: a disabled
+   button cannot, and the replacement is disabled while the press's write is out. A re-read that remounts the
+   row finds the same note. There is one note: the next press replaces it, a failed sale clears it
+   (`clearFreshSale`), and a button that finds focus anywhere else drops it. */
+type FocusNote = { readonly key: string; readonly to: 'sell' | 'undo' }
+let FOCUS_NOTE: FocusNote | null = null
+function noteFocusFor(saleKey: string | undefined, to: FocusNote['to']): void {
+  if (saleKey !== undefined) FOCUS_NOTE = { key: saleKey, to }
 }
-function useTakesHandOff(
+function useTakesFocusNote(
   saleKey: string | undefined,
-  as: HandOff['to'],
+  as: FocusNote['to'],
   button: { readonly current: HTMLButtonElement | HTMLAnchorElement | null },
 ): void {
   useLayoutEffect(() => {
-    if (saleKey === undefined) return
-    const note = HAND_OFFS.get(saleKey)
-    if (note === undefined || note.to !== as) return
+    const note = FOCUS_NOTE
+    if (saleKey === undefined || note === null || note.key !== saleKey || note.to !== as) return
     const held = document.activeElement
-    if (Date.now() - note.at > HAND_OFF_MS || (held !== null && held !== document.body && held !== button.current)) {
-      HAND_OFFS.delete(saleKey)
+    const el = button.current
+    if (held !== null && held !== document.body && held !== el) {
+      FOCUS_NOTE = null
       return
     }
-    const el = button.current
     if (el === null || (el instanceof HTMLButtonElement && el.disabled) || el.getAttribute('aria-disabled') === 'true') return
     el.focus({ preventScroll: true })
-    HAND_OFFS.delete(saleKey)
+    FOCUS_NOTE = null
   })
 }
 
@@ -365,7 +363,7 @@ export function MarkSoldButton({
 }) {
   const [back, setBack] = useState(false)
   const button = useRef<HTMLButtonElement | HTMLAnchorElement>(null)
-  useTakesHandOff(saleKey, 'sell', button)
+  useTakesFocusNote(saleKey, 'sell', button)
   /* READ IN AN EFFECT, NOT A RENDER: the Undo's own cleanup (which stamps the undo) runs in the same
      commit that mounts this, after this renders. A layout effect runs after it, before paint. */
   useLayoutEffect(() => {
@@ -390,7 +388,7 @@ export function MarkSoldButton({
         /* A press on the button is a sale like any other. `markFreshSale` is idempotent, so the
            sell path that follows (`onSell`) may note it again. */
         if (saleKey !== undefined) markFreshSale(saleKey)
-        handFocusTo(saleKey, 'undo')
+        noteFocusFor(saleKey, 'undo')
         onClick()
       }}
     />
@@ -416,6 +414,7 @@ export function markFreshSale(key: string): void {
 export function clearFreshSale(key: string): void {
   FRESH_SALES.delete(key)
   SALE_AT.delete(key)
+  if (FOCUS_NOTE?.key === key) FOCUS_NOTE = null
 }
 /** The sale's burst window, and the window in which an undo plays it backwards. */
 const FRESH_MS = 15000
@@ -496,21 +495,23 @@ export function UndoSaleButton({
     UNDONE_AT.delete(saleKey)
   }, [saleKey])
   /* A sale by any path (a press, a digit key) hands focus to the Undo, and a keyboard user can take it
-     back at once. Noted before `useTakesHandOff` reads it, and it waits out a disabled Undo. */
+     back at once. Noted before `useTakesFocusNote` reads it, and it waits out a disabled Undo. */
   useLayoutEffect(() => {
-    if (wasFresh) handFocusTo(saleKey, 'undo')
+    if (wasFresh) noteFocusFor(saleKey, 'undo')
   }, [saleKey, wasFresh])
-  useTakesHandOff(saleKey, 'undo', button)
+  useTakesFocusNote(saleKey, 'undo', button)
   /* THE UNDO LEAVING, BY ANY PATH (a click, `U`, a toast), inside the sale's window: the Mark sold that
      stands here next plays the burst backwards. A LAYOUT cleanup, so it runs before that Mark sold's
-     own layout effect reads it in the same commit. */
-  useLayoutEffect(
-    () => () => {
+     own layout effect reads it in the same commit. An Undo that held focus as it left hands it to that
+     Mark sold, so `U` and a toast keep focus where a press does. */
+  useLayoutEffect(() => {
+    const node = button.current
+    return () => {
       const at = SALE_AT.get(saleKey)
       if (at !== undefined && Date.now() - at < FRESH_MS) UNDONE_AT.set(saleKey, Date.now())
-    },
-    [saleKey],
-  )
+      if (node !== null && document.activeElement === node) noteFocusFor(saleKey, 'sell')
+    }
+  }, [saleKey])
   return (
     <span className="card-locations-undo-wrap">
       <IconButton
@@ -525,7 +526,7 @@ export function UndoSaleButton({
         disabled={disabled}
         kbd={kbd}
         onClick={() => {
-          handFocusTo(saleKey, 'sell')
+          noteFocusFor(saleKey, 'sell')
           onClick()
         }}
       />
