@@ -313,6 +313,8 @@ export type Failure = {
  *  longer be reversed. Codes, never messages. */
 export const ALREADY_SOLD = 'already_sold'
 export const SALE_BUILT_ON = 'sale_built_on'
+/** A pull refused because another client already pulled that copy (`_ledger_pull`). */
+export const COPY_ALREADY_PULLED = 'copy_already_pulled'
 /** Did the server answer an undo with a refusal (a 4xx) rather than fail or time out? The same press can clear a
  *  network failure, a 5xx, or a busy store (a `retry` failure), so those keep the pull for another try. Any other
  *  refusal drops the pull from the screen's undo list, whatever its code. */

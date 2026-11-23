@@ -16,6 +16,8 @@ export type Toast = {
   readonly tone?: 'warn' | 'danger'
   readonly ttlMs: number
   readonly action?: { readonly label: string; readonly kbd?: string; readonly onPress: () => void }
+  /** The action is spent (`clearToastAction`): its label still takes its box, hidden, so the toast keeps its size. */
+  readonly spent?: boolean
   /** Dismissed and folding away; gone from the list one beat later. */
   readonly leaving?: boolean
   /** Under the body, inside the text column: a `ToastLine`, with presses of its own that do not
@@ -91,11 +93,11 @@ export function holdToast(id: number, held: boolean): void {
 }
 
 /** Take the action off a standing toast (a receipt whose Undo is no longer the newest write's): the toast stays,
- *  its control goes, so no press is left that does nothing. */
+ *  its control goes so no press is left that does nothing, and its label keeps the box, hidden (D313). */
 export function clearToastAction(id: number): void {
   const hit = toasts.find((t) => t.id === id)
-  if (hit === undefined || hit.leaving || hit.action === undefined) return
-  toasts = toasts.map((t) => (t.id === id ? { ...t, action: undefined } : t))
+  if (hit === undefined || hit.leaving || hit.action === undefined || hit.spent === true) return
+  toasts = toasts.map((t) => (t.id === id ? { ...t, spent: true } : t))
   emit()
 }
 
@@ -161,7 +163,12 @@ export function Toaster() {
             {t.body ? <div className="bn-toast-body">{t.body}</div> : null}
             {t.extra}
           </div>
-          {t.action ? (
+          {t.action && t.spent ? (
+            <span className="bn-toast-action" data-spent aria-hidden="true">
+              {t.action.label}
+              {t.action.kbd ? <kbd className="bn-kbd">{t.action.kbd}</kbd> : null}
+            </span>
+          ) : t.action ? (
             <button
               type="button"
               className="bn-toast-action"

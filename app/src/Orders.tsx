@@ -96,6 +96,8 @@ import {
   refusalToast,
   ALREADY_SOLD,
   isFinalUndoRefusal,
+  COPY_ALREADY_PULLED,
+  SALE_BUILT_ON,
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
@@ -984,13 +986,21 @@ function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]
  *  carries the same constant for its own fallback. */
 const PULL_NOT_RECORDED = 'pull_not_recorded'
 
-/** The server's `already_sold` refusal on a sale. Its sentence tells an API caller to send `{"undo": true}`, which is no
- *  instruction for a person at this screen, so a sale refused this way is said in this screen's own words. Every other
- *  refusal keeps the server's sentence. */
+/** The server's `already_sold` and `copy_already_pulled` refusals of a sale. The first tells an API caller to send
+ *  `{"undo": true}`; the second names the order key and SKU. Neither is for a person at this screen, so a sale refused
+ *  either way is said in this screen's own words. Every other refusal keeps the server's sentence. */
 function pullFailure(err: unknown, place: string | null): Failure {
   const trouble = describeFailure(err)
-  if (trouble.code !== ALREADY_SOLD) return trouble
+  if (trouble.code !== ALREADY_SOLD && trouble.code !== COPY_ALREADY_PULLED) return trouble
   return { ...trouble, message: `${place === null ? 'That copy' : sayPlace(place)} was already sold.` }
+}
+
+/** The server's `sale_built_on` refusal of an undo says where to go on another screen ("This card is still here") and
+ *  quotes the order's status. This screen has neither control, so it says only what holds. */
+function undoFailure(err: unknown, place: string): Failure {
+  const trouble = describeFailure(err)
+  if (trouble.code !== SALE_BUILT_ON) return trouble
+  return { ...trouble, message: `${sayPlace(place)} stays sold: its order has moved on.` }
 }
 
 /** A pull is recorded: it becomes the newest standing pull, taking the rank from the one before it. */
@@ -1066,7 +1076,7 @@ async function undoPullNow(target: PullTarget, place: string, name: string): Pro
       toast({ kind: 'ok', icon: 'undo', title: 'Already undone', body: `${place} holds it, from somewhere else.` })
       forgetPull(target.capture_id)
     } else {
-      const trouble = describeFailure(err)
+      const trouble = undoFailure(err, place)
       toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
       /* The server refused the undo: a second press gets the same answer, so `U` moves to the pull before it. */
       if (isFinalUndoRefusal(trouble)) forgetPull(target.capture_id)
@@ -1987,7 +1997,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         await Promise.all([reread(), rereadStore()])
         return { ok: true, refreshed: [] }
       }
-      const trouble = describeFailure(err)
+      const trouble = undoFailure(err, place)
       toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
       if (isFinalUndoRefusal(trouble)) forgetPull(target.capture_id)
       return { ok: false }
