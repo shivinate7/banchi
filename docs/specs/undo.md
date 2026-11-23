@@ -123,7 +123,7 @@ the newest pull that still stands, whatever was clicked since. Once that pull is
 pull now newest. While the newest pull's reversal is queued or out, `U` waits and does nothing, so it never queues
 a second reversal of the same copy and never reaches past it to an older pull. A pull leaves the list, and its receipt loses its `Undo`, once it is undone by any route, once the ledger says it is
 no longer recorded (`pull_not_recorded`), or once the server refuses its reversal for good: its order has moved on
-(`sale_built_on`), or its card or capture is not there to put back (`card_not_found`, `capture_id_mismatch`). The next
+(`sale_built_on`), or the server refuses its entry (`pull_entry_refused`, which holds a missing card and a capture mismatch). The next
 `U` then reaches the pull before it. Any other refusal leaves the pull in the list, so `U` retries it. A receipt
 toast's `Undo` follows the same rank: a newer recorded pull takes the control off every older receipt, and a press on
 the newest receipt while its reversal is queued or out does nothing. A sale still queued or in flight is not yet a pull

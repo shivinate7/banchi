@@ -313,9 +313,10 @@ export type Failure = {
  *  longer be reversed. Codes, never messages. */
 export const ALREADY_SOLD = 'already_sold'
 export const SALE_BUILT_ON = 'sale_built_on'
-/** The refusals of an undo that no second press can clear: the order moved on, or the card or its capture is not
- *  there to put back. A screen drops the pull from its undo list for any of these. */
-export const UNDO_NEVER_CODES: ReadonlySet<string> = new Set([SALE_BUILT_ON, 'card_not_found', 'capture_id_mismatch'])
+/** The refusals of an undo that no second press can clear: the order moved on, or the pull's entry is refused (the
+ *  server folds a missing card and a capture mismatch into that one 409). A screen drops the pull from its undo list
+ *  for any of these. */
+export const UNDO_NEVER_CODES: ReadonlySet<string> = new Set([SALE_BUILT_ON, 'pull_entry_refused'])
 
 /** The codes a second press can clear: nothing answered, or the store was mid-write. */
 const RETRY_CODES: ReadonlySet<string> = new Set(['unreachable', 'bad_response', 'store_busy'])
