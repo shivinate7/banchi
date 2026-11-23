@@ -1838,7 +1838,7 @@ test('a Mark sold refused as already sold returns focus to the Mark sold on that
   await expect(sell, 'the row draws Mark sold again once the refusal lands').toHaveCount(1)
   await expect(sell, 'the Mark sold is enabled again once the refusal lands').toBeEnabled()
 
-  expect(await heldFocus(page), 'focus returns to the Mark sold on that row, the button the person pressed').toContain('card-locations-sell')
+  await expect(sell, 'focus returns to the Mark sold on that row, the button the person pressed').toBeFocused()
 })
 
 test('an Undo refused as built on leaves focus on the Undo the person pressed, not the body', async ({ page }) => {
@@ -1859,5 +1859,32 @@ test('an Undo refused as built on leaves focus on the Undo the person pressed, n
   await expect(undo, 'the Undo is still drawn: the sale still stands').toHaveCount(1)
   await expect(undo, 'the Undo is enabled again once the refusal lands').toBeEnabled()
 
-  expect(await heldFocus(page), 'focus returns to the Undo the person pressed, not the page body').toContain('card-locations-undo')
+  await expect(undo, 'focus returns to the Undo the person pressed, not the page body').toBeFocused()
+})
+
+test('a Mark sold refused as already sold leaves focus where the person moved it, while the write is out', async ({ page }) => {
+  let answer!: () => void
+  const held = new Promise<void>((done) => {
+    answer = done
+  })
+  const wire = await open(page, {
+    holdPull: (body) => (body.undo === true ? null : held),
+    refuse: (body) => (body.undo === true ? null : { status: 409, code: 'already_sold', message: ALREADY_SOLD }),
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  const sell = rows.nth(0).locator('.card-locations-sell')
+
+  await sell.focus()
+  await page.keyboard.press('Enter')
+  await expect.poll(() => pullsOf(wire).length, 'the sale is out and held at the server').toBe(1)
+
+  /* Another control on the walk, not a row's: the rail's own pick press. */
+  const moved = page.locator('.orders-walk-line .orders-walk-press').first()
+  await moved.focus()
+  answer()
+  await expect(page.locator('.bn-toast', { hasText: 'Not marked sold' }), 'the refusal says the sale did not stand').toBeVisible()
+  await expect(sell, 'the row draws Mark sold again once the refusal lands').toHaveCount(1)
+  await expect(sell, 'the Mark sold is enabled again once the refusal lands').toBeEnabled()
+
+  await expect(moved, 'focus stays on the control the person moved to, not taken back by the refused sale').toBeFocused()
 })

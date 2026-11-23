@@ -2343,8 +2343,36 @@ test('a Mark sold the server refuses as already sold leaves focus on its row, ne
   await expect(receiptToast(page), 'the refusal reaches the person as a receipt').toContainText('Already sold')
   await expect(row.getByRole('button', { name: /^(Mark Sold|Undo)/ }), 'no Mark sold or Undo returns to the row').toHaveCount(0)
 
-  const onRow = await row.evaluate((el) => el.contains(document.activeElement))
-  expect(onRow, 'focus is not on the row after the refused sale').toBe(true)
+  await expect(row, 'focus lands on the row itself after the refused sale').toBeFocused()
+})
+
+test('a Mark sold refused as already sold keeps focus on the search box the person moved to, while the write is out', async ({ page }) => {
+  const { store, sell } = sellableStore()
+  await open(page, BOXES, store, () => PRICING, () => {
+    sell('2/1')
+    return { status: 409, body: { error: { code: 'already_sold', message: 'Box 2, card 1 is already sold.' } } }
+  })
+  let answer!: () => void
+  const held = new Promise<void>((done) => {
+    answer = done
+  })
+  /* Registered after `open`, so it answers first: it holds the sale until released, then hands it on to `open`'s own stub. */
+  await page.route(/\/inventory\/\d+\/\d+\/sold$/, async (route) => {
+    await held
+    await route.fallback()
+  })
+  const row = copyRow(page, CARD_1)
+
+  const sent = page.waitForRequest(/\/inventory\/\d+\/\d+\/sold$/)
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
+  await sent
+
+  const search = page.getByRole('searchbox')
+  await search.focus()
+  answer()
+  await expect(receiptToast(page), 'the refusal reaches the person as a receipt').toContainText('Already sold')
+  await expect(row.getByRole('button', { name: /^(Mark Sold|Undo)/ }), 'no Mark sold or Undo returns to the row').toHaveCount(0)
+  await expect(search, 'focus stays on the search box the person moved to, not taken back by the refused sale').toBeFocused()
 })
 
 test('a phone sticky Mark sold the server refuses as already sold leaves focus off the page body', async ({ page }) => {
