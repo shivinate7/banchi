@@ -1521,7 +1521,11 @@ test('U after an undo reverses the sale still standing before it, the newest one
 
   await page.keyboard.press('u')
   await expect.poll(() => undos().length, 'the second U finds the sale still standing, A, and reverses it').toBe(2)
-  expect(undos()[1]?.body).toEqual({ undo: true, targets: [COPY_A] })
+  expect(undos()[1]?.body, 'the second U names the refresh list the row’s own Undo names, so the copy after A takes its restored place').toEqual({
+    undo: true,
+    targets: [COPY_A],
+    refresh: expect.arrayContaining([expect.objectContaining({ box: COPY_B.box, index: COPY_B.index })]),
+  })
 })
 
 const BUILT_ON =
@@ -2069,8 +2073,7 @@ test('a Mark sold refused as already sold leaves focus where the person moved it
   await moved.focus()
   answer()
   await expect(page.locator('.bn-toast', { hasText: 'Not marked sold' }), 'the refusal says the sale did not stand').toBeVisible()
-  await expect(sell, 'the row draws Mark sold again once the refusal lands').toHaveCount(1)
-  await expect(sell, 'the Mark sold is enabled again once the refusal lands').toBeEnabled()
+  await expect(sell, 'the row draws no Mark sold once the refusal lands: another tab sold this copy').toHaveCount(0)
 
   await expect(moved, 'focus stays on the control the person moved to, not taken back by the refused sale').toBeFocused()
 })
