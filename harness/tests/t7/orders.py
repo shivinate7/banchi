@@ -2548,6 +2548,113 @@ def check_order_ledger(checks: Checks) -> None:
         "what lets the two maps be tables without this module learning what a table is",
     )
 
+    # ------------------------------------ 9. a pull on a canceled order or a stood-down line
+    #
+    # THE FEED SAYS CANCELED, OR THE OPERATOR STOOD THE LINE DOWN, AND EITHER WAY THIS STORE OWES
+    # NOTHING MORE ON IT. A copy recorded against either would be counted as going to a buyer who
+    # will never receive it, so `record_pull` refuses and writes nothing. The last case pins the
+    # store's own reversal, `forget_pull`, which reads no status: the way back does not depend on
+    # the state it recovers. The route's undo is a separate question and is not asserted here.
+    #
+    # ITS OWN `isolated_home`, as the docstring above asks for every block that writes orders.
+    with isolated_home():
+        with Store().write() as snapshot:
+            snapshot.ledger.ingest([record("F-6", line("9191486", 2), status="Canceled")])
+            snapshot.ledger.ingest([record("G-7", line("9191486", 2))])
+            snapshot.ledger.close_line(
+                order_store.order_key("TCGplayer", "G-7"), "9191486",
+                order_store.CLOSE_SHIPPED_ELSEWHERE,
+            )
+        canceled = order_store.order_key("TCGplayer", "F-6")
+        stood_down = order_store.order_key("TCGplayer", "G-7")
+        checks.equal(
+            Store().read().ledger.get(canceled).status, "Canceled",
+            "precondition: F-6 is canceled in the ledger, as the feed said",
+        )
+        checks.ok(
+            Store().read().ledger.recorded(stood_down, "9191486").closed,
+            "precondition: G-7's line is stood down, with its stamp set",
+        )
+
+        def ledger_rows() -> dict:
+            tables = store_tables()
+            return {name: tables[name] for name in ("orders", "fulfilment")}
+
+        def pull_into_ledger(key: str, copy: str) -> int:
+            # A WRITE, NOT A READ: a `Store().read()` snapshot is discarded, so a pull made
+            # through one records nothing whether or not the ledger refuses it.
+            with Store().write() as snapshot:
+                return snapshot.ledger.record_pull(key, "9191486", [copy])
+
+        held = ledger_rows()
+        _, caught = attempt(lambda: pull_into_ledger(canceled, "f1"))
+        checks.ok(
+            caught is not None,
+            "A PULL AGAINST A CANCELED ORDER REFUSES — a copy recorded against it would be "
+            "counted as going to a buyer who will never receive it",
+            "record_pull recorded the copy and raised nothing",
+        )
+        if caught is not None:
+            checks.ok(
+                "cancel" in str(caught).lower(),
+                "and the refusal names the cancellation, so the operator can tell why a pull "
+                "that looks fine was turned away",
+                f"the refusal said: {caught}",
+            )
+        checks.equal(
+            ledger_rows(), held,
+            "AND THE LEDGER IS UNCHANGED — no copy recorded, no count moved, no row written",
+        )
+
+        held = ledger_rows()
+        _, caught = attempt(lambda: pull_into_ledger(stood_down, "g1"))
+        checks.ok(
+            caught is not None,
+            "A PULL AGAINST A STOOD-DOWN LINE REFUSES — the store has stopped accounting for "
+            "that line, so a copy recorded against it would be counted against nothing",
+            "record_pull recorded the copy and raised nothing",
+        )
+        if caught is not None:
+            checks.ok(
+                any(word in str(caught).lower()
+                    for word in ("stood down", "stand-down", "stand down", "closed")),
+                "and the refusal names the stand-down, so the operator can tell why the line "
+                "will not take a copy",
+                f"the refusal said: {caught}",
+            )
+        checks.equal(
+            ledger_rows(), held,
+            "AND THE LEDGER IS UNCHANGED for the stood-down line as well",
+        )
+
+        # THE GUARD. A copy pulled while the order was live is still taken back once the feed
+        # cancels that order. Nothing about the cancellation may refuse the way back.
+        with Store().write() as snapshot:
+            snapshot.ledger.ingest([record("H-8", line("9191486", 2))])
+        live = order_store.order_key("TCGplayer", "H-8")
+        with Store().write() as snapshot:
+            snapshot.ledger.record_pull(live, "9191486", ["h1"])
+        with Store().write() as snapshot:
+            snapshot.ledger.ingest([record("H-8", line("9191486", 2), status="Canceled")])
+        checks.equal(
+            (Store().read().ledger.get(live).status,
+             list(Store().read().ledger.recorded(live, "9191486").copies)),
+            ("Canceled", ["h1"]),
+            "precondition: H-8 is canceled now, and the copy pulled while it was live is still "
+            "on record",
+        )
+        with Store().write() as snapshot:
+            removed = snapshot.ledger.forget_pull(live, "9191486", ["h1"])
+        checks.equal(
+            removed, 1,
+            "THE UNDO OF A PULL ON A SINCE-CANCELED ORDER STILL WORKS: the copy comes back off "
+            "the line",
+        )
+        checks.equal(
+            list(Store().read().ledger.recorded(live, "9191486").copies), [],
+            "and the line no longer holds it",
+        )
+
 # -------------------------------------------------------- the one-time backlog reconcile
 
 
@@ -3896,6 +4003,187 @@ def check_order_screen(checks: Checks) -> None:
             "identified",
             "AND THE CARD IS NOT UN-SOLD BY IT: a refusal in phase two discards every state "
             "change queued behind it, because `Store.write()` commits only on a clean exit",
+        )
+
+    # ----------------------------------- 9. a pull on a canceled order or a stood-down line
+    #
+    # `POST /orders/pull` SELLS THE CARD. Against an order the feed says is canceled, or a line
+    # the operator stood down, that sale is for a purchase nobody will ship. Each refuses with a
+    # 4xx that names the reason, and writes nothing. The undo of a pull on an order canceled
+    # after the pull is not asserted here: `_order_built_on` refuses it today under the undo
+    # spec's section 11.1 rule, which an owner has to settle first.
+    # The sentences `server/capture_server.py` sends for the two refusals, held here as test data. The
+    # screen shows them as they stand, so each refusal is checked against its exact sentence. The cause
+    # words are what the operator reads for the reason, whichever sentence the server holds.
+    CANCELED_WORDS = "This order was canceled. Put back any card you took for it."
+    STOOD_DOWN_WORDS = "This card is no longer needed for this order. Put it back where you found it."
+    STOOD_DOWN_CAUSE = ("stood down", "stand-down", "stand down", "closed", "no longer needed")
+
+    def pull_state(number: str) -> tuple:
+        """Everything a refused pull must leave alone: the line's count and copies, and card 3/1."""
+        row = Store().read().ledger.recorded(order_store.order_key("TCGplayer", number), "9191486")
+        return (int(row.fulfilled), list(row.copies), Store().read().inventory.cards["3/1"].state)
+
+    def refused_and_unchanged(act, state, words: tuple, subject: str, number: str, wording: str) -> None:
+        """`act()` refuses as a 4xx with a named code whose message contains one of `words`, and its
+        message is exactly `wording`, the sentence the server sends and the screen shows. The message
+        names neither the order key nor the SKU of `number`'s line: a screen shows it as it stands
+        (D196). `state()` is what the refusal leaves alone. `subject` names the request and its cause,
+        such as "a pull against a canceled order"."""
+        before = state()
+        _, caught = attempt(act)
+        refused = isinstance(caught, capture_server.BadRequest)
+        checks.ok(
+            refused,
+            f"{subject.upper()} REFUSES",
+            "the route answered" if caught is None
+            else f"raised {type(caught).__name__}: {caught}",
+        )
+        if refused:
+            checks.ok(
+                400 <= int(caught.status) < 500,
+                f"as a 4xx, a refusal of the request and not a fault of the server ({subject})",
+                f"status was {int(caught.status)}",
+            )
+            checks.ok(
+                bool(caught.code),
+                f"with a named code the screen can show ({subject})",
+                f"code was {caught.code!r}",
+            )
+            checks.ok(
+                any(word in str(caught).lower() for word in words),
+                f"and the message names the cause, so the operator can tell why it was turned "
+                f"away ({subject})",
+                f"the message was: {caught}",
+            )
+            checks.ok(
+                str(caught) == wording,
+                f"and the message is the server's own sentence, which the screen shows as it stands ({subject})",
+                f"expected: {wording}\n       actual:   {caught}",
+            )
+            for label, leaked in (
+                ("order key", order_store.order_key("TCGplayer", number)),
+                ("SKU", "9191486"),
+            ):
+                checks.ok(
+                    leaked.lower() not in str(caught).lower(),
+                    f"and the message names no {label}, which a screen would show as it stands ({subject})",
+                    f"the message was: {caught}",
+                )
+        checks.equal(state(), before, f"AND NOTHING IS WRITTEN ({subject})")
+
+    def refused_pull_and_unchanged(number: str, capture_id: str, words: tuple, cause: str, wording: str) -> None:
+        """One pull of card 3/1 against `number` refuses as a 4xx that names `cause`, and writes nothing."""
+        refused_and_unchanged(
+            lambda: capture_server.do_order_pull({
+                "source": "TCGplayer", "number": number, "sku": "9191486",
+                "targets": [target(3, 1, capture_id)],
+            }),
+            lambda: pull_state(number),
+            words,
+            f"a pull against {cause}",
+            number,
+            wording,
+        )
+
+    def canceled_order(number: str) -> None:
+        """Ingests `number`, two copies of 9191486, as the feed sends a canceled order."""
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest(
+                paste(number, line("9191486", 2, name="Moonfall"), status="Canceled")
+            ),
+            f"a canceled order {number} for two copies is ingested, as the feed would send it",
+        )
+        checks.equal(
+            Store().read().ledger.get(order_store.order_key("TCGplayer", number)).status,
+            "Canceled",
+            f"precondition: {number} is canceled in the ledger",
+        )
+
+    def stood_down_line(number: str) -> None:
+        """Ingests `number` open, then stands its 9191486 line down through the close route."""
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest(
+                paste(number, line("9191486", 2, name="Moonfall"))
+            ),
+            f"an open order {number} for two copies is ingested",
+        )
+        answers(
+            checks,
+            lambda: capture_server.do_order_close({
+                "lines": [{"source": "TCGplayer", "number": number, "sku": "9191486"}],
+                "reason": order_store.CLOSE_SHIPPED_ELSEWHERE,
+            }),
+            f"and its line is stood down: this store stops accounting for {number}",
+        )
+        checks.ok(
+            Store().read().ledger.recorded(
+                order_store.order_key("TCGplayer", number), "9191486"
+            ).closed,
+            f"precondition: the stand-down is recorded on {number}'s line",
+        )
+
+    with isolated_home():
+        stock(3, 2, "9191486", prefix="c")
+        canceled_order("C-1")
+        refused_pull_and_unchanged("C-1", "c1", ("cancel",), "a canceled order", CANCELED_WORDS)
+
+    with isolated_home():
+        stock(3, 2, "9191486", prefix="s")
+        stood_down_line("S-1")
+        refused_pull_and_unchanged(
+            "S-1", "s1", STOOD_DOWN_CAUSE, "a stood-down line", STOOD_DOWN_WORDS,
+        )
+
+    # ------------- 9b. a hand-fill or a line kind on a canceled order or a stood-down line
+    #
+    # `POST /orders/fill` and `POST /orders/line-kind` write the same LINE the pull writes, and carry
+    # the same cause. A fill would count copies toward a shipment nobody will send, and a kind would
+    # classify a line this store no longer accounts for. Each refuses as a 4xx with a named code, and
+    # no row of the fulfilment table moves.
+    def fill_body(number: str) -> dict:
+        return {
+            "source": "TCGplayer", "number": number, "sku": "9191486",
+            "count": 1, "reason": order_store.FILL_SOLD_SEPARATELY,
+        }
+
+    def kind_body(number: str) -> dict:
+        return {"source": "TCGplayer", "number": number, "sku": "9191486", "kind": "sealed"}
+
+    def fulfilment_rows() -> list:
+        return store_tables()["fulfilment"]
+
+    with isolated_home():
+        canceled_order("CF-1")
+        refused_and_unchanged(
+            lambda: capture_server.do_order_fill(fill_body("CF-1")),
+            fulfilment_rows, ("cancel",), "a fill against a canceled order", "CF-1", CANCELED_WORDS,
+        )
+
+    with isolated_home():
+        stood_down_line("SF-1")
+        refused_and_unchanged(
+            lambda: capture_server.do_order_fill(fill_body("SF-1")),
+            fulfilment_rows, STOOD_DOWN_CAUSE, "a fill against a stood-down line", "SF-1",
+            STOOD_DOWN_WORDS,
+        )
+
+    with isolated_home():
+        canceled_order("CK-1")
+        refused_and_unchanged(
+            lambda: capture_server.do_order_line_kind(kind_body("CK-1")),
+            fulfilment_rows, ("cancel",), "a line kind declared on a canceled order", "CK-1",
+            CANCELED_WORDS,
+        )
+
+    with isolated_home():
+        stood_down_line("SK-1")
+        refused_and_unchanged(
+            lambda: capture_server.do_order_line_kind(kind_body("SK-1")),
+            fulfilment_rows, STOOD_DOWN_CAUSE, "a line kind declared on a stood-down line", "SK-1",
+            STOOD_DOWN_WORDS,
         )
 
 
