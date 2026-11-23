@@ -99,6 +99,8 @@ const PULL_STALE = new Set([
   'sku_not_on_order',
   'over_fulfilled',
   'copy_not_identifiable',
+  'order_canceled',
+  'line_stood_down',
 ])
 /** The ledger never recorded this pull, so the way back is the plain sale undo. */
 const PULL_NOT_RECORDED = 'pull_not_recorded'
