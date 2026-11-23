@@ -69,7 +69,8 @@ PASS_CRITERIA = (
     "the plan is the proven optimum on a fixture greedy gets wrong. A section holding one "
     "copy never satisfies a demand for two. An unfillable SKU lands in the shortfall rather "
     "than making the instance infeasible. A pooled game is one stop, last, and never a "
-    "section. And `exact` comes back false when the budget cannot be met"
+    "section. `exact` comes back false when the budget cannot be met, and never on a cover "
+    "short of its demand. Every owed copy is either walked to or listed short"
 )
 
 
@@ -143,6 +144,8 @@ def run() -> Result:
     _pooled(c)
     _stood_down(c)
     _exact(c)
+    _owed_copies_are_walked_or_short(c)
+    _partial_cover_is_not_exact(c)
     _cost_name(c)
     _take_order(c)
     _drawn_order_is_density_not_box_number(c)
@@ -569,6 +572,89 @@ def _exact(c: Checks) -> None:
     c.equal(proved.counts.exact, True,
             "the same instance under the ordinary budget is proved, so the flag tracks the "
             "budget and not the fixture")
+
+
+def _walked(plan, sku):
+    """The copies of `sku` the plan's stops ask for, summed over every stop."""
+    return sum(take.wanted for stop in plan.stops for take in stop.takes if take.sku == sku)
+
+
+def _short_of(plan, sku):
+    """The copies of `sku` the plan reports as unfillable."""
+    return sum(short.short for short in plan.shortfall if short.sku == sku)
+
+
+def _owed_copies_are_walked_or_short(c: Checks) -> None:
+    """Every owed copy is walked to or listed short, and a partial cover is never `exact`.
+
+    THE DOMINANCE REDUCTION CAN DROP A COPY, NOT ONLY A DUPLICATE STOP. Two sections, one copy
+    of A in each:
+
+        section 1   A
+        section 2   A
+
+    An order owes two A and the store holds two, so nothing is short and both copies must be
+    walked to. `_dominated` sees two identical vectors and drops the later one. The solve is
+    left one stop and a demand for two, `_greedy` breaks at "Unreachable" holding a partial
+    cover, and `solve` returns it flagged exact. The shortfall was built before the solve from
+    on-hand counts, so it cannot see the copy that went missing: one stop wanting one copy,
+    nothing short, and nothing that says a second copy was owed.
+
+    THE SAME SHAPE AT FOUR COPIES. An order owing four A over sections holding one, one and two:
+    the two-copy section dominates the other two, and the plan asks for two of four.
+
+    THE CONTROL is one section holding both copies. No dominance, one stop, exact, and it passes
+    on the old code, so a green here is not a checker that always fails. THE EMPTY STORE is the
+    other end of the range: nothing walked, everything short, and the same invariant holds.
+    """
+    cases = [
+        ("two sections, one copy each", _store([1, 2], ["A", "A"]), 2),
+        ("three sections, holding one, one and two", _store([1, 2, 3], ["A", "A", "A", "A"]), 4),
+        ("control, one section holding both", _store([1], ["A", "A"]), 2),
+        ("empty store", _store([1], []), 2),
+    ]
+    for name, inventory, owed in cases:
+        ledger = _ledger({"A": owed})
+
+        # THE SCOPE FIRST: the order owes what the case says, before the plan is read.
+        wants = walkplan.demand(ledger, ["tcg:1"])
+        c.equal([(want.sku, want.wanted) for want in wants], [("A", owed)],
+                f"{name}: the order owes {owed} A")
+
+        plan = walkplan.plan(inventory, ledger, ["tcg:1"])
+        walked, short = _walked(plan, "A"), _short_of(plan, "A")
+        c.equal(walked + short, owed,
+                f"{name}: every owed A is walked to or listed short (walked {walked}, "
+                f"short {short})")
+
+        # A PARTIAL COVER is one that walks fewer copies than the fillable demand asks for.
+        fillable = owed - short
+        c.ok(not (walked < fillable and plan.counts.exact),
+             f"{name}: a plan that walks fewer copies than it can fill is not exact",
+             f"walked {walked} of {fillable} fillable, exact={plan.counts.exact}")
+
+
+def _partial_cover_is_not_exact(c: Checks) -> None:
+    """`solve` never returns a cover short of its demand flagged `exact`.
+
+    The solver-level half of the drop above, on the four-copy instance. Its demand of four is
+    coverable (one, one and two copies), so `solve` accepts it. The dominance reduction then
+    leaves only the two-copy section, which covers two of the four. The search has nothing left
+    to improve and returns that partial cover flagged `exact`. A cover that does not meet its
+    demand proves nothing, so the flag must be false whenever the copies fall short.
+    """
+    stocks = walkplan.supply(_store([1, 2, 3], ["A", "A", "A", "A"]), ["A"])
+
+    # THE SCOPE FIRST: the store holds all four copies, so the instance is coverable at all.
+    c.equal(sum(int(held.get("A", 0)) for held in stocks.per_stop.values()), 4,
+            "the store holds all four A, so the four-copy demand is coverable")
+
+    solution = walkplan.solve(stocks.per_stop, {"A": 4})
+    covered = min(4, sum(int(stocks.per_stop[key].get("A", 0)) for key in solution.chosen))
+    c.ok(not (covered < 4 and solution.exact),
+         "solve does not flag a cover short of its demand exact",
+         f"chosen {len(solution.chosen)} stop(s) covering {covered} of 4, "
+         f"exact={solution.exact}")
 
 
 def _cost_name(c: Checks) -> None:
