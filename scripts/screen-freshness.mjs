@@ -772,6 +772,16 @@ function kitHook(name) {
   return kitHookCache.get(name)
 }
 
+/** The top-level function declaration (or the arrow a top-level const holds) named `name`, or undefined. */
+function functionNode(screen, name) {
+  let found
+  walk(screen.src, (n) => {
+    if (found !== undefined || !isFunctionLike(n) || !isTopLevelDeclared(n) || functionName(n) !== name) return
+    found = n
+  })
+  return found
+}
+
 function evidenceScope(screen, handler) {
   const nodes = [handler]
   const aliases = new Map()
@@ -1213,7 +1223,11 @@ function recognizers(screens) {
       const refetch = local.get('rereadNow')
       const register = local.get('useRereadOnWrite')
       if (register === undefined || (helper === undefined && refetch === undefined)) return null
-      const registered = collect(ctx.screen.src, (n) =>
+      /* THE REGISTRATION IS THE WRITING COMPONENT'S OWN: a sibling that registers a read re-reads for itself, and the
+       * registry is only as good as what is mounted when the write answers. A write in no component (a module-level
+       * function a component calls) takes any registration in the file. */
+      const owner = ctx.component === null ? null : functionNode(ctx.screen, ctx.component.name)
+      const registered = collect(owner ?? ctx.screen.src, (n) =>
         ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === register &&
         n.arguments[0] !== undefined && reachesRead(ctx.screen, n.arguments[0]))
       if (registered.length === 0) return null
@@ -1227,9 +1241,12 @@ function recognizers(screens) {
           return 'afterWrite(() => write) and a registered re-read'
         }
       }
-      /* OR ITS HANDLER CALLS THE HELPER (the write's own undo on a toast, a loop that ends by re-reading). */
+      /* OR ITS HANDLER CALLS `rereadNow` AFTER THE WRITE (a loop of writes that ends by re-reading). A call before the
+       * write re-reads what the write has not yet changed, and a call to `afterWrite` covers only the write inside it. */
+      const writeAt = ctx.site.node.getEnd()
       for (const node of ctx.scope.nodes) {
-        if (collect(node, callsHelper).length > 0) return 'the handler calls the helper and a re-read is registered'
+        const later = collect(node, (n) => callsHelper(n) && n.expression.text === refetch && n.getStart() >= writeAt)
+        if (later.length > 0) return 'the handler calls rereadNow after the write and a re-read is registered'
       }
       return null
     }],
@@ -2083,6 +2100,30 @@ function selfTest() {
         const press = async () => { await afterWrite(() => doWrite(1, 2)) }
         const sneak = async () => { await doWrite(3, 4) }
         return <button onClick={press}>{rows}<i onClick={sneak} /></button>
+      }`],
+    ['14f. a second write after afterWrite in the same handler', null, `
+      export function Second() {
+        const [rows, setRows] = useState(null)
+        useRereadOnWrite(async () => { setRows(await doRead()) })
+        const press = async () => { await afterWrite(() => doWrite(1, 2)); await doWrite(3, 4) }
+        return <button onClick={press}>{rows}</button>
+      }`],
+    ['14g. rereadNow called before the write it should follow', null, `
+      export function Early() {
+        const [rows, setRows] = useState(null)
+        useRereadOnWrite(async () => { setRows(await doRead()) })
+        const press = async () => { rereadNow(); await doWrite(1, 2) }
+        return <button onClick={press}>{rows}</button>
+      }`],
+    ['14h. the re-read registered by a sibling component, not the one that writes', null, `
+      export function Reader() {
+        const [rows, setRows] = useState(null)
+        useRereadOnWrite(async () => { setRows(await doRead()) })
+        return <div>{rows}</div>
+      }
+      export function Writer() {
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
       }`],
     ['3e. the kit hook useSheetWrite handed a no-op onChanged', null, `
       export function KitNoop({ onChanged }: { onChanged: () => void }) {
