@@ -127,7 +127,7 @@ no longer recorded (`pull_not_recorded`), or once the server answers its reversa
 network failure, a server fault (5xx) or a busy store leaves the pull in the list, so `U` retries it. A receipt
 toast's `Undo` follows the same rank: a newer recorded pull takes the control off every older receipt, and a press on
 the newest receipt while its reversal is queued or out does nothing. A sale still queued or in flight is not yet a pull
-that stands, so during that window an older receipt still reverses its own copy, behind the write in flight. `undoFromReceipt` in `app/src/Orders.tsx` does nothing unless the receipt's pull is the newest and its reversal is not held. `notePull` in the same file calls `clearToastAction` in `app/src/kit/toast.tsx` on every older receipt, which takes its Undo control off.
+that stands, so during that window an older receipt still reverses its own copy, behind the write in flight. `undoFromReceipt` in `app/src/Orders.tsx` acts only when the receipt's pull is the newest and its reversal is idle. `notePull` in the same file calls `clearToastAction` in `app/src/kit/toast.tsx` on every older receipt, which takes its Undo control off.
 
 ## 11. The undo rules
 
