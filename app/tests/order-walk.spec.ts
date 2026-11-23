@@ -5,6 +5,7 @@ import { sealEveryTest } from './shell'
 import { showDoneOnly, showOpenOnly } from './ordersFilterSheet'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
+import { heldFocus } from './focusHeld'
 
 import { afterPaint, settleMotion } from './motionSettled'
 import type {
@@ -1130,11 +1131,6 @@ function pullsOf(wire: readonly Wire[]): Wire[] {
   return wire.filter((one) => one.path.endsWith('/orders/pull'))
 }
 
-/** The class of the element that holds focus, or its tag when focus has dropped to the page (`BODY`). */
-function focusedOn(page: Page): Promise<string> {
-  return page.evaluate(() => document.activeElement?.getAttribute('class') ?? document.activeElement?.tagName ?? '')
-}
-
 test('a return read after a sale does not refuse the next sale of the same order', async ({ page }) => {
   let pressed = 0
   const wire = await open(page, {
@@ -1206,7 +1202,7 @@ test('a Mark sold press leaves focus on the Undo that replaces it, never on the 
   await expect(rows.nth(0).locator('.card-locations-undo'), 'the row draws Undo after the sale').toHaveCount(1)
   await expect(rows.nth(0).locator('.card-locations-undo'), 'the Undo is enabled again once its write lands').toBeEnabled()
 
-  expect(await focusedOn(page), 'focus lands on the Undo that replaced Mark sold').toContain('card-locations-undo')
+  expect(await heldFocus(page), 'focus lands on the Undo that replaced Mark sold').toContain('card-locations-undo')
 })
 
 test('an Undo press leaves focus on the Mark sold that replaces it, never on the body', async ({ page }) => {
@@ -1225,5 +1221,5 @@ test('an Undo press leaves focus on the Mark sold that replaces it, never on the
   await expect(sell, 'the row draws Mark sold again after the undo').toHaveCount(1)
   await expect(sell, 'the Mark sold is enabled once the undo lands').toBeEnabled()
 
-  expect(await focusedOn(page), 'focus lands on the Mark sold that replaced Undo').toContain('card-locations-sell')
+  expect(await heldFocus(page), 'focus lands on the Mark sold that replaced Undo').toContain('card-locations-sell')
 })
