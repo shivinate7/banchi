@@ -1,21 +1,13 @@
 {
- "readAt": "2026-11-23T17:11:13Z",
+ "readAt": "2026-11-23T19:59:54Z",
  "pulls": [
   {
    "number": 1137,
-   "title": "tests: Orders re-read cases, red first, for the after-write helper",
+   "title": "Orders: re-read after every write; the walk takes owed from the reply",
    "branch": "lane/orders-reread",
-   "draft": true,
+   "draft": false,
    "createdAt": "2026-11-23T16:52:21Z",
    "url": "https://github.com/shivinate7/banchi/pull/1137"
-  },
-  {
-   "number": 1135,
-   "title": "Undo a sale on a canceled order when nothing has shipped",
-   "branch": "lane/undo-after-cancel",
-   "draft": true,
-   "createdAt": "2026-11-23T16:31:45Z",
-   "url": "https://github.com/shivinate7/banchi/pull/1135"
   }
  ],
  "branches": [
@@ -338,9 +330,6 @@
    "name": "lane/shipped-order-walk"
   },
   {
-   "name": "lane/undo-after-cancel"
-  },
-  {
    "name": "lane/walk-pane-tally-focus"
   },
   {
@@ -431,12 +420,6 @@
    "status": "open",
    "home": "orders-plumbing-fixes",
    "lane": "orders-undo-plumbing"
-  },
-  {
-   "n": 124,
-   "status": "open",
-   "home": "orders-plumbing-fixes",
-   "lane": null
   },
   {
    "n": 32,
