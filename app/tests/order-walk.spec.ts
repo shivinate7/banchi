@@ -1629,11 +1629,15 @@ test('an older receipt keeps its height and top edge once a newer pull takes its
   await expect.poll(() => pullsOf(wire).length).toBe(1)
   const olderReceipt = page.locator('.bn-toast-receipt', { hasText: 'Card 14' })
   await expect(olderReceipt.locator('button.bn-toast-action'), 'the older receipt has its Undo first').toHaveCount(1)
+  /* The entrance is scaled and shifted until it settles, so the box is read once the motion has finished. */
+  await afterPaint(page)
+  await settleMotion(page)
   const before = await olderReceipt.boundingBox()
 
   await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect.poll(() => pullsOf(wire).length).toBe(2)
   await expect(olderReceipt.locator('button.bn-toast-action'), 'the older receipt has lost its Undo').toHaveCount(0)
+  await settleMotion(page)
   const after = await olderReceipt.boundingBox()
 
   expect.soft(after?.height, 'the older receipt changed height when its Undo went').toBe(before?.height)
@@ -1659,12 +1663,16 @@ test('a receipt whose undo is refused built-on keeps its height and top edge (D3
 
   const receipt = page.locator('.bn-toast-receipt', { hasText: 'Card 15' })
   await expect(receipt.locator('button.bn-toast-action'), 'the newest receipt has its Undo first').toHaveCount(1)
+  /* The entrance is scaled and shifted until it settles, so the box is read once the motion has finished. */
+  await afterPaint(page)
+  await settleMotion(page)
   const before = await receipt.boundingBox()
 
   await page.getByRole('heading', { name: 'Orders' }).click()
   await page.keyboard.press('u')
   await expect(page.locator('.bn-toast', { hasText: 'The card was not put back' })).toBeVisible()
   await expect(receipt.locator('button.bn-toast-action'), 'the refused pull’s receipt has lost its Undo').toHaveCount(0)
+  await settleMotion(page)
   const after = await receipt.boundingBox()
 
   expect.soft(after?.height, 'the receipt changed height when its Undo went').toBe(before?.height)
