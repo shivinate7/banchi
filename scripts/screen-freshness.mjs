@@ -1006,6 +1006,53 @@ function counterCausesRead(screens, screen, stateName, seen = new Set()) {
 }
 
 /**
+ * Whether a function registered with `useRereadOnWrite` causes a read when the after-write helper runs it.
+ *
+ * Two forms count. The function reaches a read itself (`async () => setRows(await doRead())`), or it bumps a reload
+ * counter that some effect, here or in a child, depends on (`() => setReloads((n) => n + 1)`), which is
+ * `counterCausesRead`'s question. The argument may be a function or the name of a local one (`useRereadOnWrite(load)`);
+ * a name that resolves to no function in this file registers nothing the scan can see, so it does not count.
+ * A counter bump nothing reads re-reads nothing, and is still a finding.
+ */
+function registrationCausesRead(screens, screen, argument) {
+  let node = argument
+  if (ts.isIdentifier(argument)) {
+    node = screen.declarations.get(argument.text)?.node
+    if (node === undefined) return false
+  }
+  if (reachesRead(screen, node)) return true
+  for (const scoped of evidenceScope(screen, node).nodes) {
+    for (const bump of collect(scoped, isCounterBump)) {
+      const stateName = screen.stateOf.get(bump.expression.text)
+      if (stateName !== undefined && counterCausesRead(screens, screen, stateName) !== null) return true
+    }
+  }
+  return false
+}
+
+/** Whether every use of the local function `name` is as the first argument of `helper(...)`, and there is one. */
+function onlyHandedTo(screen, name, helper) {
+  let uses = 0
+  let others = 0
+  walk(screen.src, (n) => {
+    if (!ts.isIdentifier(n) || n.text !== name || inTypePosition(n)) return
+    const parent = n.parent
+    const declares =
+      (ts.isVariableDeclaration(parent) || ts.isFunctionDeclaration(parent)) && parent.name === n
+    const member =
+      (ts.isPropertyAccessExpression(parent) && parent.name === n) ||
+      (ts.isPropertyAssignment(parent) && parent.name === n)
+    if (declares || member) return
+    uses += 1
+    const handed =
+      ts.isCallExpression(parent) && ts.isIdentifier(parent.expression) &&
+      parent.expression.text === helper && parent.arguments[0] === n
+    if (!handed) others += 1
+  })
+  return uses > 0 && others === 0
+}
+
+/**
  * Whether a callback prop, invoked by the child, is bound at the parent to something that
  * re-reads.
  *
@@ -1229,7 +1276,7 @@ function recognizers(screens) {
       const owner = ctx.component === null ? null : functionNode(ctx.screen, ctx.component.name)
       const registered = collect(owner ?? ctx.screen.src, (n) =>
         ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === register &&
-        n.arguments[0] !== undefined && reachesRead(ctx.screen, n.arguments[0]))
+        n.arguments[0] !== undefined && registrationCausesRead(ctx.screens, ctx.screen, n.arguments[0]))
       if (registered.length === 0) return null
       const callsHelper = (node) =>
         ts.isCallExpression(node) && ts.isIdentifier(node.expression) &&
@@ -1239,6 +1286,19 @@ function recognizers(screens) {
         if (ts.isCallExpression(up) && helper !== undefined && ts.isIdentifier(up.expression) &&
             up.expression.text === helper && up.arguments.includes(child)) {
           return 'afterWrite(() => write) and a registered re-read'
+        }
+      }
+      /* OR THE WRITE IS INSIDE A NAMED FUNCTION THAT IS ONLY EVER HANDED TO `afterWrite` (`afterWrite(save)`). A name
+       * that is also called or bound anywhere else has a route around the helper, so it does not count. */
+      if (helper !== undefined) {
+        for (let up = ctx.site.node.parent; up !== undefined; up = up.parent) {
+          if (!isFunctionLike(up)) continue
+          if (isTopLevelDeclared(up)) break
+          for (const [name, declaration] of ctx.screen.declarations) {
+            if (declaration.node === up && onlyHandedTo(ctx.screen, name, helper)) {
+              return 'afterWrite(named write) and a registered re-read'
+            }
+          }
         }
       }
       /* OR ITS HANDLER CALLS `rereadNow` AFTER THE WRITE (a loop of writes that ends by re-reading). A call before the
@@ -2124,6 +2184,53 @@ function selfTest() {
       export function Writer() {
         const press = async () => { await afterWrite(() => doWrite(1, 2)) }
         return <button onClick={press} />
+      }`],
+    ['14i. the registered re-read bumps a counter that an effect reads', 'write through the after-write helper', `
+      export function Bumped() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        useRereadOnWrite(() => setReloads((n) => n + 1))
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press}>{rows}</button>
+      }`],
+    ['14j. the registered re-read bumps a counter that no read depends on', null, `
+      export function Bumpless() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [])
+        useRereadOnWrite(() => setReloads((n) => n + 1))
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press}>{rows}{reloads}</button>
+      }`],
+    ['14k. named arguments: useRereadOnWrite(load) and afterWrite(save)', 'write through the after-write helper', `
+      export function Named() {
+        const [rows, setRows] = useState(null)
+        const load = useCallback(async () => { setRows(await doRead()) }, [])
+        useRereadOnWrite(load)
+        const save = async () => { await doWrite(1, 2) }
+        const press = async () => { await afterWrite(save) }
+        return <button onClick={press}>{rows}</button>
+      }`],
+    ['14l. named arguments, and the named re-read reads nothing', null, `
+      export function NamedBlind() {
+        const [rows, setRows] = useState(null)
+        useEffect(() => { void doRead().then(setRows) }, [])
+        const load = async () => undefined
+        useRereadOnWrite(load)
+        const save = async () => { await doWrite(1, 2) }
+        const press = async () => { await afterWrite(save) }
+        return <button onClick={press}>{rows}</button>
+      }`],
+    ['14m. a named write handed to afterWrite and also called without it', null, `
+      export function NamedTwice() {
+        const [rows, setRows] = useState(null)
+        const load = async () => { setRows(await doRead()) }
+        useRereadOnWrite(load)
+        const save = async () => { await doWrite(1, 2) }
+        const press = async () => { await afterWrite(save) }
+        const sneak = async () => { await save() }
+        return <button onClick={press}>{rows}<i onClick={sneak} /></button>
       }`],
     ['3e. the kit hook useSheetWrite handed a no-op onChanged', null, `
       export function KitNoop({ onChanged }: { onChanged: () => void }) {
