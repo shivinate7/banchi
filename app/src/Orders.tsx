@@ -982,6 +982,17 @@ function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]
  *  carries the same constant for its own fallback. */
 const PULL_NOT_RECORDED = 'pull_not_recorded'
 
+/** The server's `already_sold` refusal on a sale. Its sentence tells an API caller to send `{"undo": true}`, which is no
+ *  instruction for a person at this screen, so a sale refused this way is said in this screen's own words. Every other
+ *  refusal keeps the server's sentence. */
+const ALREADY_SOLD = 'already_sold'
+
+function pullFailure(err: unknown, place: string | null): Failure {
+  const trouble = describeFailure(err)
+  if (trouble.code !== ALREADY_SOLD) return trouble
+  return { ...trouble, message: `${place === null ? 'That copy' : sayPlace(place)} was already sold.` }
+}
+
 /** A pull is recorded: it becomes the newest standing pull, taking the rank from the one before it. */
 function notePull(note: PullNote): void {
   setHub((current) => ({ pulls: [...current.pulls.filter((one) => one.target.capture_id !== note.target.capture_id), note] }))
@@ -1887,7 +1898,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         await Promise.all([reread(), rereadStore()])
       } catch (err) {
         if (!live.current) return
-        setFailure(describeFailure(err))
+        setFailure(pullFailure(err, pick.place.label ?? null))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -1933,7 +1944,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       await Promise.all([reread(), rereadStore()])
       return { ok: true, place: resolvedPlace, refreshed: done.refreshed ?? [] }
     } catch (err) {
-      const trouble = describeFailure(err)
+      const trouble = pullFailure(err, place ?? null)
       if (live.current) setFailure(trouble)
       return { ok: false, failure: trouble }
     } finally {
