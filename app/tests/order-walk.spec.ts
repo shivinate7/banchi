@@ -1960,7 +1960,9 @@ test('a failed sale leaves no focus note: a later re-render does not move focus'
  * The codes are `already_sold` and `sale_built_on`, the values `app/src/server.ts` exports as `ALREADY_SOLD` and
  * `SALE_BUILT_ON`. That module reads `import.meta.env` at load, which this Node process does not have, so it is not imported. */
 
-test('a Mark sold refused as already sold returns focus to the Mark sold on that row, not the body', async ({ page }) => {
+test('a Mark sold refused as already sold leaves the row Sold with no Mark sold, and focus on the row', async ({ page }) => {
+  /* undo.md §3: the copy another tab sold is not offered for sale here, so the row reads Sold and has no button to
+     hold focus. Focus lands on the copy's own row (`landStrandedFocus`), not on the body. */
   const wire = await open(page, {
     refuse: (body) => (body.undo === true ? null : { status: 409, code: 'already_sold', message: ALREADY_SOLD }),
   })
@@ -1972,13 +1974,14 @@ test('a Mark sold refused as already sold returns focus to the Mark sold on that
   await page.keyboard.press('Enter')
   await expect.poll(() => pullsOf(wire).length, 'the refused sale reaches the server').toBe(1)
   await expect(page.locator('.bn-toast', { hasText: 'Not marked sold' }), 'the refusal says the sale did not stand').toBeVisible()
-  await expect(sell, 'the row draws Mark sold again once the refusal lands').toHaveCount(1)
-  await expect(sell, 'the Mark sold is enabled again once the refusal lands').toBeEnabled()
+  await expect(sell, 'the row draws no Mark sold once the refusal lands: another tab sold this copy').toHaveCount(0)
+  await expect(rows.nth(0), 'the row reads Sold once the refusal lands').toContainText('Sold')
 
-  await expect(sell, 'focus returns to the Mark sold on that row, the button the person pressed').toBeFocused()
+  await expect(rows.nth(0), 'focus lands on the copy’s own row, the button it began from being gone').toBeFocused()
 })
 
-test('an Undo refused as built on leaves focus on the Undo the person pressed, not the body', async ({ page }) => {
+test('an Undo refused as built on takes the row’s Undo away and leaves focus on the row, not the body', async ({ page }) => {
+  /* undo.md §3: a sale built on has no Undo on any row, so the row's button is gone and focus lands on the row. */
   const wire = await open(page, {
     refuse: (body) => (body.undo === true ? { status: 409, code: 'sale_built_on', message: BUILT_ON } : null),
   })
@@ -1993,10 +1996,9 @@ test('an Undo refused as built on leaves focus on the Undo the person pressed, n
   await undo.click()
   await expect.poll(() => pullsOf(wire).length, 'the refused undo reaches the server').toBe(2)
   await expect(page.locator('.bn-toast', { hasText: 'The card was not put back' }), 'the refusal says the undo did not stand').toBeVisible()
-  await expect(undo, 'the Undo is still drawn: the sale still stands').toHaveCount(1)
-  await expect(undo, 'the Undo is enabled again once the refusal lands').toBeEnabled()
+  await expect(undo, 'the row’s Undo is gone once the refusal lands: the sale is built on, so no control here can undo it').toHaveCount(0)
 
-  await expect(undo, 'focus returns to the Undo the person pressed, not the page body').toBeFocused()
+  await expect(rows.nth(0), 'focus lands on the copy’s own row, the Undo it began from being gone').toBeFocused()
 })
 
 test('a Mark sold refused as already sold leaves focus where the person moved it, while the write is out', async ({ page }) => {
