@@ -1,0 +1,1400 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Banchi Design Portfolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&family=Atkinson+Hyperlegible:wght@400;700&family=Martian+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700&family=Archivo:wdth,wght@75..125,400;75..125,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================================
+     This page is built out of Banchi's own tokens — the real --bn-* set from
+     app/src/tokens.css, light and dark, plus the real kit CSS for every
+     component drawn on the System tab.
+     ========================================================================= */
+  :root{
+    --bn-bg:#f4f5f8; --bn-surface:#ffffff; --bn-surface-2:#eceef2; --bn-surface-3:#f7f8fa;
+    --bn-hover:rgba(15,18,23,.03);
+    --bn-ink:#0f1217; --bn-ink-2:#3b414b; --bn-ink-3:#6b7280; --bn-ink-4:#7f8791;
+    --bn-line:rgba(15,18,23,.08); --bn-line-strong:rgba(15,18,23,.16);
+    --bn-accent:#3d5af1; --bn-accent-hover:#2f4bd9; --bn-accent-press:#2540c2;
+    --bn-accent-tint:rgba(61,90,241,.10); --bn-accent-tint-2:rgba(61,90,241,.18);
+    --bn-on-accent:#ffffff;
+    --bn-live:#d63d2b; --bn-live-tint:rgba(239,75,58,.12);
+    --bn-ok:#15803d; --bn-ok-tint:rgba(22,163,74,.12);
+    --bn-warn:#b45309; --bn-warn-tint:rgba(217,119,6,.13);
+    --bn-danger:#b91c1c; --bn-danger-tint:rgba(220,38,38,.10);
+    --bn-shadow-1:0 1px 2px rgba(15,18,23,.05), 0 0 0 1px rgba(15,18,23,.05);
+    --bn-shadow-2:0 1px 2px rgba(15,18,23,.06), 0 6px 20px -8px rgba(15,18,23,.18), 0 0 0 1px rgba(15,18,23,.05);
+    --bn-shadow-3:0 2px 4px rgba(15,18,23,.06), 0 18px 48px -16px rgba(15,18,23,.32), 0 0 0 1px rgba(15,18,23,.06);
+    --bn-shadow-accent:0 8px 24px -8px rgba(61,90,241,.55);
+    --bn-btn-bg:var(--bn-surface); --bn-btn-bg-hover:var(--bn-surface-3); --bn-btn-shadow:var(--bn-shadow-1);
+
+    --bn-font-display:'Manrope','Inter',system-ui,sans-serif;
+    --bn-font-ui:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --bn-font-mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+
+    --bn-fs-2xs:10px; --bn-fs-xs:11px; --bn-fs-sm:12px; --bn-fs-md:13px; --bn-fs-base:14px;
+    --bn-fs-lg:16px; --bn-fs-xl:18px; --bn-fs-2xl:22px; --bn-fs-3xl:28px; --bn-fs-4xl:36px; --bn-fs-5xl:48px;
+    --bn-tracking-caps:.06em; --bn-tracking-tight:-.015em;
+
+    --bn-1:4px; --bn-2:8px; --bn-3:12px; --bn-4:16px; --bn-5:20px;
+    --bn-6:24px; --bn-7:32px; --bn-8:40px; --bn-9:48px; --bn-10:64px;
+
+    --bn-r-xs:4px; --bn-r-sm:6px; --bn-r:8px; --bn-r-lg:12px; --bn-r-xl:16px; --bn-r-2xl:22px; --bn-r-full:999px;
+
+    --bn-t-fast:120ms; --bn-t:200ms; --bn-t-slow:320ms;
+    --bn-ease:cubic-bezier(.2,0,0,1); --bn-ease-out:cubic-bezier(0,0,.2,1); --bn-ease-spring:cubic-bezier(.34,1.4,.44,1);
+    --bn-t-pulse:1.8s; --bn-t-spin:.7s; --bn-disabled:.45;
+
+    --bn-control-h:34px; --bn-control-h-lg:40px; --bn-control-h-sm:28px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bn-bg:#0c0e12; --bn-surface:#14171c; --bn-surface-2:#090b0e; --bn-surface-3:#1b1f26;
+      --bn-hover:rgba(255,255,255,.04);
+      --bn-ink:#eef0f4; --bn-ink-2:#b9bfc9; --bn-ink-3:#838b98; --bn-ink-4:#707886;
+      --bn-line:rgba(255,255,255,.08); --bn-line-strong:rgba(255,255,255,.16);
+      --bn-accent:#7f90ff; --bn-accent-hover:#93a2ff; --bn-accent-press:#6b7dfa;
+      --bn-accent-tint:rgba(127,144,255,.14); --bn-accent-tint-2:rgba(127,144,255,.24);
+      --bn-on-accent:#0c0e12;
+      --bn-live:#ff6a58; --bn-live-tint:rgba(255,106,88,.16);
+      --bn-ok:#3ddc84; --bn-ok-tint:rgba(61,220,132,.14);
+      --bn-warn:#f5a524; --bn-warn-tint:rgba(245,165,36,.14);
+      --bn-danger:#ff5c5c; --bn-danger-tint:rgba(255,92,92,.14);
+      --bn-shadow-1:0 1px 2px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.06);
+      --bn-shadow-2:0 1px 2px rgba(0,0,0,.5), 0 8px 24px -8px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.07);
+      --bn-shadow-3:0 2px 4px rgba(0,0,0,.5), 0 24px 56px -16px rgba(0,0,0,.75), 0 0 0 1px rgba(255,255,255,.08);
+      --bn-shadow-accent:0 8px 28px -8px rgba(127,144,255,.55);
+      --bn-btn-bg:var(--bn-surface-3); --bn-btn-bg-hover:#262b34;
+      --bn-btn-shadow:0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bn-bg:#0c0e12; --bn-surface:#14171c; --bn-surface-2:#090b0e; --bn-surface-3:#1b1f26;
+    --bn-hover:rgba(255,255,255,.04);
+    --bn-ink:#eef0f4; --bn-ink-2:#b9bfc9; --bn-ink-3:#838b98; --bn-ink-4:#707886;
+    --bn-line:rgba(255,255,255,.08); --bn-line-strong:rgba(255,255,255,.16);
+    --bn-accent:#7f90ff; --bn-accent-hover:#93a2ff; --bn-accent-press:#6b7dfa;
+    --bn-accent-tint:rgba(127,144,255,.14); --bn-accent-tint-2:rgba(127,144,255,.24);
+    --bn-on-accent:#0c0e12;
+    --bn-live:#ff6a58; --bn-live-tint:rgba(255,106,88,.16);
+    --bn-ok:#3ddc84; --bn-ok-tint:rgba(61,220,132,.14);
+    --bn-warn:#f5a524; --bn-warn-tint:rgba(245,165,36,.14);
+    --bn-danger:#ff5c5c; --bn-danger-tint:rgba(255,92,92,.14);
+    --bn-shadow-1:0 1px 2px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.06);
+    --bn-shadow-2:0 1px 2px rgba(0,0,0,.5), 0 8px 24px -8px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.07);
+    --bn-shadow-3:0 2px 4px rgba(0,0,0,.5), 0 24px 56px -16px rgba(0,0,0,.75), 0 0 0 1px rgba(255,255,255,.08);
+    --bn-shadow-accent:0 8px 28px -8px rgba(127,144,255,.55);
+    --bn-btn-bg:var(--bn-surface-3); --bn-btn-bg-hover:#262b34;
+    --bn-btn-shadow:0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0,0,0,.4);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--bn-bg); color:var(--bn-ink);
+    font-family:var(--bn-font-ui); font-size:var(--bn-fs-base); line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    font-feature-settings:'cv11','ss01','ss03','calt';
+  }
+  h1,h2,h3{font-family:var(--bn-font-display); text-wrap:balance; margin:0; letter-spacing:var(--bn-tracking-tight); line-height:1.15}
+  p{margin:0}
+  code, .mono{font-family:var(--bn-font-mono)}
+
+  .wrap{max-width:1180px; margin:0 auto; padding:0 var(--bn-6)}
+  .col{max-width:760px}
+
+  header{padding:var(--bn-10) 0 0}
+  .kicker{
+    font-family:var(--bn-font-mono); font-size:var(--bn-fs-xs); font-weight:600;
+    letter-spacing:.14em; text-transform:uppercase; color:var(--bn-accent);
+    display:flex; align-items:center; gap:var(--bn-2); margin-bottom:var(--bn-4);
+  }
+  .kicker::before{content:""; width:7px; height:7px; border-radius:2px; background:var(--bn-accent)}
+  h1{font-size:var(--bn-fs-4xl); font-weight:800; letter-spacing:-.02em; margin-bottom:var(--bn-3)}
+  header p{color:var(--bn-ink-3); font-size:var(--bn-fs-lg); max-width:660px}
+
+  .tabbar{
+    position:sticky; top:0; z-index:10; background:var(--bn-bg);
+    display:flex; gap:var(--bn-1); margin-top:var(--bn-8); padding:var(--bn-3) 0;
+    border-bottom:1px solid var(--bn-line); overflow-x:auto;
+  }
+  .tabbtn{
+    font-family:var(--bn-font-mono); font-size:var(--bn-fs-sm); font-weight:600;
+    color:var(--bn-ink-3); background:none; border:1px solid transparent; border-radius:var(--bn-r);
+    padding:9px var(--bn-4); cursor:pointer; white-space:nowrap;
+    transition:background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+  }
+  .tabbtn:hover{background:var(--bn-surface-2); color:var(--bn-ink-2)}
+  .tabbtn:active{translate:0 1px}
+  .tabbtn.active{background:var(--bn-ink); color:var(--bn-bg)}
+  .tabpanel{display:none; padding:var(--bn-9) 0 var(--bn-10)}
+  .tabpanel.active{display:block}
+
+  .block{padding-bottom:var(--bn-9)}
+  .block + .block{border-top:1px solid var(--bn-line); padding-top:var(--bn-9)}
+  .section-head{margin-bottom:var(--bn-7)}
+  .section-head .kicker{margin-bottom:var(--bn-2)}
+  .section-head h2{font-size:var(--bn-fs-3xl); font-weight:800}
+  .section-head p{color:var(--bn-ink-3); font-size:var(--bn-fs-base); margin-top:var(--bn-2); max-width:640px}
+
+  /* ---- identity tab ---- */
+  .hero-card{background:var(--bn-surface); border:1px solid var(--bn-line); border-radius:var(--bn-r-xl);
+    box-shadow:var(--bn-shadow-2); overflow:hidden; margin-bottom:var(--bn-6)}
+  .hero-card img{display:block; width:100%; height:auto; cursor:zoom-in}
+  .shipped{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:1px;
+    background:var(--bn-line); border:1px solid var(--bn-line); border-radius:var(--bn-r-lg); overflow:hidden}
+  .shipped > div{background:var(--bn-surface); padding:var(--bn-5) var(--bn-4) var(--bn-4);
+    display:flex; flex-direction:column; align-items:center; gap:var(--bn-3); text-align:center}
+  .shipped .label{font-family:var(--bn-font-mono); font-size:var(--bn-fs-xs); color:var(--bn-ink-3)}
+
+  .timeline{position:relative; padding-left:var(--bn-8)}
+  .timeline::before{content:""; position:absolute; left:11px; top:6px; bottom:6px; width:2px;
+    background:linear-gradient(var(--bn-line-strong), transparent 97%)}
+  .stage{position:relative; margin-bottom:var(--bn-9)}
+  .stage:last-child{margin-bottom:0}
+  .stage-num{position:absolute; left:calc(-1 * var(--bn-8)); top:2px; width:24px; height:24px; border-radius:50%;
+    background:var(--bn-surface); border:2px solid var(--bn-line-strong); color:var(--bn-ink-3);
+    font-family:var(--bn-font-mono); font-size:var(--bn-fs-xs); font-weight:600;
+    display:flex; align-items:center; justify-content:center}
+  .stage-head{display:flex; align-items:baseline; gap:var(--bn-3); flex-wrap:wrap; margin-bottom:var(--bn-2)}
+  .stage-head h3{font-size:var(--bn-fs-xl); font-weight:700}
+  .tag{font-family:var(--bn-font-mono); font-size:var(--bn-fs-2xs); font-weight:600; letter-spacing:.08em;
+    text-transform:uppercase; padding:3px var(--bn-2); border-radius:var(--bn-r-full); white-space:nowrap}
+  .tag.locked{color:var(--bn-ok); background:var(--bn-ok-tint)}
+  .tag.rejected{color:var(--bn-danger); background:var(--bn-danger-tint)}
+  .tag.parked{color:var(--bn-warn); background:var(--bn-warn-tint)}
+  .cap{color:var(--bn-ink-2); font-size:var(--bn-fs-base); max-width:660px; margin-bottom:var(--bn-4)}
+  .cap b{color:var(--bn-ink); font-weight:600}
+  .cap q{font-style:italic; color:var(--bn-ink-3)}
+  .sheet{background:var(--bn-surface); border:1px solid var(--bn-line); border-radius:var(--bn-r-lg);
+    box-shadow:var(--bn-shadow-1); overflow:hidden; max-width:900px}
+  .sheet img{display:block; width:100%; height:auto; cursor:zoom-in}
+  .sheet.tall img{max-height:640px; object-fit:cover; object-position:top}
+  .studies{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:var(--bn-5)}
+  .study{background:var(--bn-surface); border:1px solid var(--bn-line); border-radius:var(--bn-r-lg);
+    overflow:hidden; box-shadow:var(--bn-shadow-1)}
+  .study .frame{height:200px; overflow:hidden; position:relative; background:var(--bn-surface-2)}
+  .study .frame img{width:100%; position:absolute; top:0; left:0; cursor:zoom-in}
+  .study .cap{padding:var(--bn-3) var(--bn-4); margin:0; display:flex; justify-content:space-between;
+    align-items:center; gap:var(--bn-2); font-size:var(--bn-fs-sm)}
+
+  /* ---- specimen scaffolding (System tab) ---- */
+  .spec{border:1px solid var(--bn-line); border-radius:var(--bn-r-lg); background:var(--bn-surface);
+    box-shadow:var(--bn-shadow-1); overflow:hidden; margin-bottom:var(--bn-5)}
+  .spec-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--bn-3);
+    padding:var(--bn-3) var(--bn-5); border-bottom:1px solid var(--bn-line); background:var(--bn-surface-2)}
+  .spec-head .n{font-size:var(--bn-fs-md); font-weight:700}
+  .spec-head .m{font-family:var(--bn-font-mono); font-size:var(--bn-fs-xs); color:var(--bn-ink-3)}
+  .spec-body{padding:var(--bn-5); display:flex; flex-wrap:wrap; gap:var(--bn-3); align-items:center}
+  .spec-body.stack{flex-direction:column; align-items:stretch}
+  .spec-note{padding:0 var(--bn-5) var(--bn-4); font-size:var(--bn-fs-sm); color:var(--bn-ink-3); max-width:70ch}
+
+  .swatch-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); gap:var(--bn-3)}
+  .sw{border:1px solid var(--bn-line); border-radius:var(--bn-r); overflow:hidden; background:var(--bn-surface)}
+  .sw .patch{height:52px; display:grid; place-items:center; font-weight:700; font-size:var(--bn-fs-md)}
+  .sw .meta{padding:7px 10px}
+  .sw .meta b{display:block; font-size:var(--bn-fs-sm); font-weight:600}
+  .sw .meta i{font-style:normal; font-family:var(--bn-font-mono); font-size:var(--bn-fs-2xs); color:var(--bn-ink-3)}
+
+  .scale-list{display:flex; flex-direction:column; gap:var(--bn-2); width:100%}
+  .scale-row{display:grid; grid-template-columns:120px 60px 1fr; gap:var(--bn-3); align-items:center}
+  .scale-row .nm{font-family:var(--bn-font-mono); font-size:var(--bn-fs-xs); color:var(--bn-ink-3)}
+  .scale-row .vl{font-family:var(--bn-font-mono); font-size:var(--bn-fs-xs); color:var(--bn-ink-2); text-align:right}
+  .scale-row .bar{height:10px; border-radius:3px; background:var(--bn-accent)}
+  .type-row-spec{display:grid; grid-template-columns:120px 60px 1fr; gap:var(--bn-3); align-items:baseline}
+  .radius-row{display:flex; gap:var(--bn-3); flex-wrap:wrap}
+  .radius-chip{width:76px; height:56px; background:var(--bn-accent-tint); border:1px solid var(--bn-accent);
+    display:grid; place-items:end center; font-family:var(--bn-font-mono); font-size:var(--bn-fs-2xs);
+    color:var(--bn-accent); padding-bottom:4px}
+
+  /* ---- THE REAL KIT CSS, from app/src/kit.css ---- */
+  .bn-btn{--btn-h:var(--bn-control-h); position:relative; display:inline-flex; align-items:center;
+    justify-content:center; gap:var(--bn-2); height:var(--btn-h); padding:0 var(--bn-4);
+    border-radius:var(--bn-r); border:1px solid transparent; font-family:inherit;
+    font-size:var(--bn-fs-md); font-weight:600; line-height:1; white-space:nowrap;
+    color:var(--bn-ink); background:var(--bn-btn-bg); box-shadow:var(--bn-btn-shadow); cursor:pointer;
+    transition:background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease),
+      box-shadow var(--bn-t-fast) var(--bn-ease), opacity var(--bn-t-fast) var(--bn-ease);
+    user-select:none}
+  .bn-btn:hover{background:var(--bn-btn-bg-hover)}
+  .bn-btn:active{translate:0 1px; transform:scale(.99)}
+  .bn-btn:disabled{opacity:var(--bn-disabled); transform:none; translate:none; cursor:not-allowed}
+  .bn-btn-primary{color:var(--bn-on-accent); background:var(--bn-accent);
+    box-shadow:var(--bn-shadow-1), inset 0 1px 0 rgba(255,255,255,.18)}
+  .bn-btn-primary:hover{background:var(--bn-accent-hover); box-shadow:var(--bn-shadow-accent)}
+  .bn-btn-primary:active{background:var(--bn-accent-press)}
+  .bn-btn-ghost{background:transparent; box-shadow:none; color:var(--bn-ink-2)}
+  .bn-btn-ghost:hover{background:var(--bn-accent-tint); color:var(--bn-ink)}
+  .bn-btn-quiet{background:var(--bn-surface-2); box-shadow:none}
+  .bn-btn-quiet:hover{background:var(--bn-line-strong)}
+  .bn-btn-danger{color:var(--bn-danger); background:var(--bn-btn-bg)}
+  .bn-btn-danger:hover{background:var(--bn-danger-tint)}
+  .bn-btn-danger-solid{color:#fff; background:var(--bn-danger); box-shadow:none}
+  .bn-btn-danger-solid:hover{filter:brightness(1.08)}
+  .bn-btn-ok{color:var(--bn-ok)}
+  .bn-btn-ok:hover{background:var(--bn-ok-tint)}
+  .bn-btn-sm{--btn-h:var(--bn-control-h-sm); padding:0 var(--bn-3); font-size:var(--bn-fs-sm); border-radius:var(--bn-r-sm)}
+  .bn-btn-lg{--btn-h:var(--bn-control-h-lg); padding:0 var(--bn-5); font-size:var(--bn-fs-base); border-radius:var(--bn-r-lg)}
+  .bn-btn-xl{--btn-h:52px; padding:0 var(--bn-6); font-size:var(--bn-fs-lg); border-radius:var(--bn-r-lg)}
+
+  .bn-kbd{display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px;
+    padding:0 5px; border-radius:5px; border:1px solid var(--bn-line-strong); border-bottom-width:2px;
+    background:var(--bn-surface); font-family:var(--bn-font-mono); font-size:var(--bn-fs-2xs);
+    font-weight:600; line-height:1; color:var(--bn-ink-3); vertical-align:middle}
+  .bn-btn-primary .bn-kbd{color:inherit; background:color-mix(in srgb, currentColor 18%, transparent); border-color:transparent}
+
+  .bn-pill{display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 var(--bn-2);
+    border-radius:var(--bn-r-full); font-size:var(--bn-fs-xs); font-weight:600; line-height:1;
+    white-space:nowrap; color:var(--bn-ink-2); background:var(--bn-surface-2)}
+  .bn-pill-accent{color:var(--bn-accent); background:var(--bn-accent-tint)}
+  .bn-pill-ok{color:var(--bn-ok); background:var(--bn-ok-tint)}
+  .bn-pill-warn{color:var(--bn-warn); background:var(--bn-warn-tint)}
+  .bn-pill-danger{color:var(--bn-danger); background:var(--bn-danger-tint)}
+  .bn-pill-live{color:var(--bn-live); background:var(--bn-live-tint)}
+  .bn-pill-mono{font-family:var(--bn-font-mono); font-weight:500}
+  .bn-pill-outline{background:transparent; box-shadow:inset 0 0 0 1px var(--bn-line-strong)}
+
+  .bn-chip{display:inline-flex; align-items:center; gap:6px; height:var(--bn-control-h-sm);
+    padding:0 var(--bn-3); border-radius:var(--bn-r-full); border:0; background:var(--bn-btn-bg);
+    box-shadow:var(--bn-btn-shadow); color:var(--bn-ink-2); font-family:inherit;
+    font-size:var(--bn-fs-sm); font-weight:600; line-height:1; white-space:nowrap; cursor:pointer; user-select:none;
+    transition:background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease),
+      box-shadow var(--bn-t-fast) var(--bn-ease)}
+  .bn-chip:hover{background:var(--bn-btn-bg-hover); color:var(--bn-ink)}
+  .bn-chip:active{translate:0 1px}
+  .bn-chip[aria-pressed='true']{background:var(--bn-ink); color:var(--bn-bg); box-shadow:none}
+  .bn-chip-count{display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px;
+    padding:0 5px; border-radius:var(--bn-r-full); background:var(--bn-surface-2); color:var(--bn-ink-3);
+    font-size:var(--bn-fs-2xs); font-variant-numeric:tabular-nums; margin-right:-4px}
+  .bn-chip[aria-pressed='true'] .bn-chip-count{background:color-mix(in srgb, currentColor 16%, transparent); color:inherit}
+  .bn-dot{width:8px; height:8px; border-radius:50%; background:var(--bn-ink-4); flex:none}
+  .bn-dot-ok{background:var(--bn-ok)} .bn-dot-warn{background:var(--bn-warn)}
+  .bn-dot-danger{background:var(--bn-danger)} .bn-dot-accent{background:var(--bn-accent)}
+  .bn-dot-live{background:var(--bn-live); box-shadow:0 0 0 0 var(--bn-live-tint); animation:bn-pulse var(--bn-t-pulse) ease-out infinite}
+  @keyframes bn-pulse{0%{box-shadow:0 0 0 0 var(--bn-live-tint)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+
+  .bn-notice{display:flex; gap:var(--bn-3); align-items:flex-start; padding:var(--bn-3) var(--bn-4);
+    border-radius:var(--bn-r); background:var(--bn-accent-tint); color:var(--bn-ink); font-size:var(--bn-fs-md); width:100%}
+  .bn-notice .ic{flex:none; margin-top:1px; width:16px; height:16px; border-radius:50%; display:grid; place-items:center;
+    font-size:10px; font-weight:700; color:#fff; background:var(--bn-accent)}
+  .bn-notice-warn{background:var(--bn-warn-tint)} .bn-notice-warn .ic{background:var(--bn-warn)}
+  .bn-notice-danger{background:var(--bn-danger-tint)} .bn-notice-danger .ic{background:var(--bn-danger)}
+  .bn-notice-ok{background:var(--bn-ok-tint)} .bn-notice-ok .ic{background:var(--bn-ok)}
+  .bn-notice-title{font-weight:600}
+  .bn-notice-code{font-family:var(--bn-font-mono); font-size:var(--bn-fs-sm); color:var(--bn-ink-3)}
+
+  .bn-seg{display:inline-flex; align-items:center; gap:2px; padding:3px; border-radius:var(--bn-r); background:var(--bn-surface-2)}
+  .bn-seg-item{display:inline-flex; align-items:center; justify-content:center; gap:6px; height:28px;
+    padding:0 var(--bn-3); border:0; background:none; border-radius:var(--bn-r-sm); cursor:pointer;
+    font-family:inherit; font-size:var(--bn-fs-sm); font-weight:600; color:var(--bn-ink-3); white-space:nowrap;
+    transition:background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease),
+      box-shadow var(--bn-t-fast) var(--bn-ease)}
+  .bn-seg-item:hover{color:var(--bn-ink)}
+  .bn-seg-item:active{translate:0 1px}
+  .bn-seg-item[aria-pressed='true']{color:var(--bn-ink); background:var(--bn-surface); box-shadow:var(--bn-shadow-1)}
+
+  .bn-stat{display:flex; flex-direction:column; gap:2px; min-width:0}
+  .bn-stat-value{font-family:var(--bn-font-display); font-size:var(--bn-fs-2xl); font-weight:800;
+    letter-spacing:-.02em; line-height:1; font-variant-numeric:tabular-nums; color:var(--bn-ink)}
+  .bn-stat-label{font-size:var(--bn-fs-sm); color:var(--bn-ink-3)}
+
+  .bn-receipt{display:flex; align-items:center; gap:var(--bn-3);
+    padding:var(--bn-2) var(--bn-2) var(--bn-2) var(--bn-4); border-radius:var(--bn-r-lg);
+    background:var(--bn-ink); color:var(--bn-bg); font-size:var(--bn-fs-md); box-shadow:var(--bn-shadow-3)}
+  .bn-receipt .bn-btn{background:rgba(255,255,255,.12); color:inherit; box-shadow:none}
+  .bn-receipt .bn-kbd{background:transparent; color:inherit; border-color:rgba(255,255,255,.4)}
+  .bn-receipt-bar{position:relative; height:3px; border-radius:2px; background:rgba(255,255,255,.15); overflow:hidden; flex:0 0 64px}
+  .bn-receipt-bar > span{position:absolute; inset:0; right:38%; background:currentColor; border-radius:2px}
+
+  .bn-skeleton{position:relative; overflow:hidden; border-radius:var(--bn-r-sm); background:var(--bn-surface-2); min-height:12px}
+  .bn-skeleton::after{content:''; position:absolute; inset:0; transform:translateX(-100%);
+    background:linear-gradient(90deg, transparent, var(--bn-surface-3), transparent);
+    animation:bn-shimmer 1.4s ease-in-out infinite}
+  @keyframes bn-shimmer{to{transform:translateX(100%)}}
+  .bn-progress{height:6px; border-radius:3px; background:var(--bn-surface-2); overflow:hidden; width:100%}
+  .bn-progress > span{display:block; height:100%; border-radius:3px; background:var(--bn-accent)}
+
+  .bn-panel{background:var(--bn-surface); border-radius:var(--bn-r-lg); box-shadow:var(--bn-shadow-1); overflow:hidden; width:100%}
+  .bn-panel-head{display:flex; align-items:center; justify-content:space-between; gap:var(--bn-3);
+    padding:var(--bn-4) var(--bn-5); border-bottom:1px solid var(--bn-line); font-weight:600}
+  .bn-panel-body{padding:var(--bn-5)}
+  .bn-well{background:var(--bn-surface-2); border-radius:var(--bn-r); padding:var(--bn-3) var(--bn-4);
+    font-family:var(--bn-font-mono); font-size:var(--bn-fs-sm)}
+  .bn-table{width:100%; border-collapse:collapse; font-size:var(--bn-fs-md)}
+  .bn-table th{text-align:left; font-size:var(--bn-fs-xs); font-weight:600; letter-spacing:var(--bn-tracking-caps);
+    text-transform:uppercase; color:var(--bn-ink-3); padding:var(--bn-2) var(--bn-3);
+    border-bottom:1px solid var(--bn-line); white-space:nowrap}
+  .bn-table td{padding:var(--bn-3); border-bottom:1px solid var(--bn-line)}
+  .bn-table tbody tr:hover{background:var(--bn-hover)}
+  .bn-table .num{text-align:right; font-variant-numeric:tabular-nums}
+  .bn-list-row{display:flex; align-items:center; gap:var(--bn-3); padding:var(--bn-3) var(--bn-4);
+    border-bottom:1px solid var(--bn-line); width:100%; text-align:left; background:none; border-left:0;
+    border-right:0; border-top:0; color:var(--bn-ink); font-family:inherit; font-size:var(--bn-fs-md); cursor:pointer;
+    transition:background-color var(--bn-t-fast) var(--bn-ease)}
+  .bn-list-row:hover{background:var(--bn-hover)}
+  .bn-list-row:active{translate:0 1px}
+  .bn-list-row[aria-current='true']{background:var(--bn-accent-tint)}
+  .bn-empty{display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;
+    gap:var(--bn-3); padding:var(--bn-10) var(--bn-6); color:var(--bn-ink-3); width:100%}
+  .bn-empty-art{width:56px; height:56px; border-radius:var(--bn-r-xl); display:grid; place-items:center;
+    background:var(--bn-accent-tint); color:var(--bn-accent); margin-bottom:var(--bn-2); font-size:24px}
+  .bn-empty-title{font-family:var(--bn-font-display); font-size:var(--bn-fs-xl); font-weight:700; color:var(--bn-ink)}
+  .bn-code{font-family:var(--bn-font-mono); font-size:var(--bn-fs-sm); background:var(--bn-surface-2);
+    padding:2px 6px; border-radius:var(--bn-r-xs)}
+  @media (max-width:767px), (hover:none) and (pointer:coarse){
+    :root{--bn-control-h-sm:40px; --bn-control-h:42px; --bn-control-h-lg:46px}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .bn-skeleton::after, .bn-dot-live{animation:none}
+  }
+
+  /* ---- decision cards ---- */
+  .dec{background:var(--bn-surface); border:1px solid var(--bn-line); border-radius:var(--bn-r-lg);
+    box-shadow:var(--bn-shadow-1); overflow:hidden; margin-bottom:var(--bn-5)}
+  .dec-head{display:flex; align-items:baseline; gap:var(--bn-3); flex-wrap:wrap;
+    padding:var(--bn-4) var(--bn-5); border-bottom:1px solid var(--bn-line)}
+  .dec-head .id{font-family:var(--bn-font-mono); font-size:var(--bn-fs-xs); color:var(--bn-ink-3)}
+  .dec-head h3{font-size:var(--bn-fs-lg); font-weight:700; flex:1 1 320px}
+  .dec-body{padding:var(--bn-5); display:grid; grid-template-columns:minmax(0,1fr) minmax(200px,260px); gap:var(--bn-6)}
+  @media (max-width:720px){ .dec-body{grid-template-columns:minmax(0,1fr)} }
+  .dec-body .txt p + p{margin-top:var(--bn-3)}
+  .dec-body .txt p{font-size:var(--bn-fs-base); color:var(--bn-ink-2)}
+  .dec-body .txt b{color:var(--bn-ink); font-weight:600}
+  .dec-fig{border-left:2px solid var(--bn-accent); padding-left:var(--bn-4); align-self:start}
+  .dec-fig .big{font-family:var(--bn-font-display); font-size:var(--bn-fs-4xl); font-weight:800;
+    letter-spacing:-.03em; line-height:1; color:var(--bn-ink); font-variant-numeric:tabular-nums}
+  .dec-fig .sub{font-size:var(--bn-fs-sm); color:var(--bn-ink-3); margin-top:var(--bn-2)}
+  .quote{margin:var(--bn-4) 0 0; padding:var(--bn-3) var(--bn-4); border-radius:var(--bn-r);
+    background:var(--bn-surface-2); font-size:var(--bn-fs-md); color:var(--bn-ink-2); font-style:italic}
+  .quote::before{content:'“'} .quote::after{content:'”'}
+  .quote cite{display:block; font-style:normal; font-family:var(--bn-font-mono); font-size:var(--bn-fs-2xs);
+    color:var(--bn-ink-4); margin-top:6px; text-transform:uppercase; letter-spacing:.06em}
+  .verdicts{display:flex; flex-direction:column; gap:var(--bn-2); margin-top:var(--bn-4)}
+  .verdict-line{display:flex; gap:var(--bn-3); align-items:flex-start; font-size:var(--bn-fs-sm); color:var(--bn-ink-3)}
+  .verdict-line .vt{flex:none; width:64px; font-family:var(--bn-font-mono); font-size:var(--bn-fs-2xs);
+    text-transform:uppercase; letter-spacing:.06em; padding-top:2px}
+  .verdict-line.no .vt{color:var(--bn-danger)} .verdict-line.yes .vt{color:var(--bn-ok)}
+
+  /* ---- legacy sheets (Before Banchi) ---- */
+  .legacy-wrap{margin-bottom:var(--bn-8)}
+  .legacy-label{display:flex; align-items:baseline; gap:var(--bn-3); margin-bottom:var(--bn-3)}
+  .legacy-label h3{font-size:var(--bn-fs-lg); font-weight:700}
+  .legacy-frame{border:1px solid var(--bn-line); border-radius:var(--bn-r-lg); box-shadow:var(--bn-shadow-2); overflow:hidden}
+  .legacy-notice{display:flex; align-items:center; gap:var(--bn-2); padding:10px var(--bn-5);
+    background:repeating-linear-gradient(-45deg, var(--bn-surface-2), var(--bn-surface-2) 10px, var(--bn-surface) 10px, var(--bn-surface) 20px);
+    border-bottom:1px solid var(--bn-line-strong); font-family:var(--bn-font-mono); font-size:var(--bn-fs-xs);
+    font-weight:600; letter-spacing:.04em; color:var(--bn-ink-3); text-transform:uppercase}
+  .legacy-notice b{color:var(--bn-ink-2)}
+
+  .lg-sheet, .lgr-sheet{
+    --lbg:#FCFCFD; --lsurface:#FFFFFF; --link:#08090A; --lmuted:#52555B; --lline:#E6E7EA;
+    --laccent:#1E40AF; --lhover:#F4F5F7; --lpressed:#17348F;
+    --ldisplay:'Fraunces','Manrope',serif; --lbody:'Atkinson Hyperlegible',sans-serif; --lutil:'Martian Mono',monospace; --lr:4px;
+    background:var(--lbg); color:var(--link); font-family:var(--lbody); font-size:16px; line-height:1.5; padding:var(--bn-7)}
+  .lg-sheet *, .lgr-sheet *{box-sizing:border-box}
+  .lg-sheet .sheet-h1, .lgr-sheet .sheet-h1{font-family:var(--ldisplay); font-size:28px; font-weight:800; letter-spacing:-.02em}
+  .lg-sheet .sheet-lede, .lgr-sheet .sheet-lede{color:var(--lmuted); max-width:76ch; margin-top:8px; font-size:14.5px}
+  .lg-sheet code, .lgr-sheet code{font-family:var(--lutil); font-size:11.5px; background:none; padding:0}
+  .lg-sheet h4, .lgr-sheet h4{font-family:var(--lutil); font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--lmuted); margin:36px 0 14px; border-top:1px solid var(--lline); padding-top:12px; font-weight:600}
+  .lg-sheet .note, .lgr-sheet .why{color:var(--lmuted); font-size:13.5px; max-width:76ch; margin-bottom:14px}
+  .lg-sheet .note b, .lgr-sheet .why b{color:var(--link); font-weight:700}
+  .lg-sheet .lrow{display:flex; gap:28px; align-items:flex-start; flex-wrap:wrap}
+  .lgr-sheet .lrow{display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap}
+  .lg-sheet .lcol{flex:0 1 340px} .lg-sheet .lwide{flex:1 1 420px}
+  .lgr-sheet .lcol{flex:1 1 250px; min-width:230px}
+  .lgr-sheet .ltag{font-family:var(--lutil); font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--lmuted); margin-bottom:8px; display:block}
+  .lgr-sheet .ltag b{color:var(--link); font-weight:600}
+  .lg-sheet .card{aspect-ratio:63/88; width:100%; max-width:200px; margin:18px auto; border:1px solid var(--lline);
+    border-radius:var(--lr); background:var(--lsurface); display:grid; grid-template-rows:auto 1fr auto; gap:8px; padding:8px}
+  .lgr-sheet .card{aspect-ratio:63/88; width:100%; max-width:120px; margin:12px auto; border:1px solid var(--p-ln,var(--lline));
+    border-radius:var(--lr); background:var(--p-sf,var(--lsurface)); display:grid; grid-template-rows:auto 1fr; gap:6px; padding:6px}
+  .lg-sheet .title-band{height:20px; background:var(--lhover); border-radius:2px}
+  .lg-sheet .art{background:var(--lhover); border-radius:2px}
+  .lgr-sheet .title-band{height:12px; background:var(--p-bg,var(--lbg)); border-radius:2px}
+  .lgr-sheet .art{background:var(--p-bg,var(--lbg)); border-radius:2px}
+  .lg-sheet .foot{display:flex; justify-content:space-between; font-family:var(--lutil); font-size:9px; color:var(--lmuted)}
+  .lg-sheet .card.sm{max-width:none; width:34px; margin:0; padding:3px; gap:3px; border-radius:3px}
+  .lg-sheet .card.sm .title-band{height:6px} .lg-sheet .card.sm .foot{display:none}
+  .lg-sheet .panel{background:var(--lbg); border:1px solid var(--lline); border-radius:var(--lr); padding:16px}
+  .lgr-sheet .panel{background:var(--p-bg,var(--lbg)); color:var(--p-ink,var(--link)); border:1px solid var(--p-ln,var(--lline));
+    border-radius:var(--lr); font-family:var(--b,var(--lbody)); overflow:hidden}
+  .lgr-sheet .panel .inner{padding:14px}
+  .lgr-sheet .strip{display:flex; justify-content:space-between; background:#F4F5F7; border-bottom:1px solid var(--p-ln,var(--lline));
+    padding:8px 14px; font-family:var(--u,var(--lutil)); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--p-mut,var(--lmuted))}
+  .lg-sheet .count{font-family:var(--lutil); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--lmuted); margin-bottom:8px}
+  .lgr-sheet .count{font-family:var(--u,var(--lutil)); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--p-mut,var(--lmuted)); margin-bottom:8px}
+  .lg-sheet .pos{font-family:var(--lutil); font-variant-numeric:tabular-nums; font-size:22px; font-weight:600; letter-spacing:-.04em; line-height:1.15}
+  .lgr-sheet .pos{font-family:var(--u,var(--lutil)); font-variant-numeric:tabular-nums; font-size:18px; font-weight:600; letter-spacing:-.04em; line-height:1.2}
+  .lg-sheet .pos span{color:var(--lmuted); font-weight:400}
+  .lgr-sheet .pos span{color:var(--p-mut,var(--lmuted)); font-weight:400}
+  .lg-sheet .lchips, .lgr-sheet .lchips{display:flex; gap:5px; margin-top:10px; flex-wrap:wrap}
+  .lg-sheet .lchip{font-family:var(--lutil); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase;
+    border:1px solid var(--lline); border-radius:3px; padding:4px 7px; color:var(--lmuted)}
+  .lgr-sheet .lchip{font-family:var(--u,var(--lutil)); font-size:9px; letter-spacing:.05em; text-transform:uppercase;
+    border:1px solid var(--p-ln,var(--lline)); border-radius:3px; padding:3px 6px; color:var(--p-mut,var(--lmuted))}
+  .lg-sheet .lchip.unsure{border-color:var(--laccent); color:var(--laccent); font-weight:600}
+  .lgr-sheet .lchip.unsure{border-color:var(--p-acc,var(--laccent)); color:var(--p-acc,var(--laccent)); font-weight:600}
+  .lg-sheet .raw, .lgr-sheet .raw{display:block; font-size:8.5px; letter-spacing:.02em; opacity:.62; text-transform:none; margin-top:2px}
+  .lg-sheet .claim{font-family:var(--ldisplay); font-size:19px; font-weight:700; line-height:1.25; margin:14px 0}
+  .lgr-sheet .claim{font-family:var(--d,var(--ldisplay)); font-size:15px; font-weight:700; line-height:1.25; margin:10px 0}
+  .lg-sheet .claim em, .lgr-sheet .claim em{font-style:normal; color:var(--p-acc,var(--laccent))}
+  .lg-sheet .choices{border:1px solid var(--lline); border-radius:var(--lr); overflow:hidden; background:var(--lsurface)}
+  .lgr-sheet .choices{border:1px solid var(--p-ln,var(--lline)); border-radius:var(--lr); overflow:hidden; background:var(--p-sf,var(--lsurface))}
+  .lg-sheet .choice{display:grid; grid-template-columns:1fr auto auto; gap:12px; align-items:center; padding:11px 15px; border-bottom:1px solid var(--lline)}
+  .lgr-sheet .choice{display:grid; grid-template-columns:1fr auto auto; gap:8px; align-items:center; padding:8px 11px; border-bottom:1px solid var(--p-ln,var(--lline))}
+  .lg-sheet .choice:last-child, .lgr-sheet .choice:last-child{border-bottom:0}
+  .lg-sheet .what{font-size:16px; font-weight:700} .lgr-sheet .what{font-size:14px; font-weight:700}
+  .lg-sheet .money{font-family:var(--lutil); font-variant-numeric:tabular-nums; font-size:15px; font-weight:600}
+  .lgr-sheet .money{font-family:var(--u,var(--lutil)); font-variant-numeric:tabular-nums; font-size:13px; font-weight:600}
+  .lgr-sheet .choice.filled{background:var(--p-acc,var(--laccent)); border-color:var(--p-acc,var(--laccent))}
+  .lgr-sheet .choice.filled .what, .lgr-sheet .choice.filled .money{color:#fff}
+  .lg-sheet .lkbd{font-family:var(--lutil); font-size:9.5px; color:var(--lmuted); border:1px solid var(--lline);
+    border-radius:3px; padding:2px 5px; min-width:20px; text-align:center}
+  .lgr-sheet .lkbd{font-family:var(--u,var(--lutil)); font-size:9px; color:var(--p-mut,var(--lmuted));
+    border:1px solid var(--p-ln,var(--lline)); border-radius:3px; padding:2px 5px; min-width:18px; text-align:center}
+  .lgr-sheet .choice.filled .lkbd{color:#fff; border-color:rgba(255,255,255,.5)}
+  .lg-sheet .queue{background:var(--lsurface); border:1px solid var(--lline); border-radius:var(--lr); overflow:hidden; max-width:600px}
+  .lg-sheet .qrow{display:grid; grid-template-columns:34px 1fr auto; gap:12px; padding:11px 15px; border-bottom:1px solid var(--lline); align-items:center}
+  .lg-sheet .qrow:last-child{border-bottom:0}
+  .lg-sheet .qname{font-size:16px; font-weight:700; line-height:1.2}
+  .lg-sheet .qmeta{font-family:var(--lutil); font-size:9px; color:var(--lmuted); margin-top:4px; text-transform:uppercase}
+  .lg-sheet .qmoney{font-family:var(--lutil); font-variant-numeric:tabular-nums; font-size:18px; font-weight:600; text-align:right}
+  .lg-sheet .qrow.low .qname{font-size:12.5px; font-weight:400}
+  .lg-sheet .qrow.low .qmoney{font-size:12.5px; font-weight:400; color:var(--lmuted)}
+  .lg-sheet .qrow.parked{opacity:.5}
+  .lg-sheet .qrow.nomarket .qmoney{color:var(--laccent); font-size:10.5px; font-weight:600; text-transform:uppercase}
+  .lg-sheet .lbtn{display:grid; grid-template-columns:1fr auto; align-items:center; gap:12px; border-radius:var(--lr);
+    padding:13px 15px; font-size:17px; font-weight:700; min-height:44px; border:1px solid transparent; max-width:320px}
+  .lg-sheet .lbtn.default{background:var(--laccent); color:#fff}
+  .lg-sheet .lbtn.pressed{background:var(--lpressed); color:#fff}
+  .lg-sheet .lbtn.disabled{background:var(--lsurface); color:var(--lmuted); border-color:var(--lline)}
+  .lg-sheet .lbtn.default .lkbd, .lg-sheet .lbtn.pressed .lkbd{color:#fff; border-color:rgba(255,255,255,.5)}
+  .lg-sheet .btn-label{font-family:var(--lutil); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--lmuted); margin:14px 0 6px}
+  .lg-sheet .sw-list{display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px}
+  .lg-sheet .lsw{border:1px solid var(--lline); border-radius:var(--lr); overflow:hidden}
+  .lg-sheet .lsw .patch{height:44px}
+  .lg-sheet .lsw .meta{padding:8px 10px; font-family:var(--lutil); font-size:9.5px; line-height:1.6}
+  .lg-sheet .lsw .meta i{font-style:normal; color:var(--lmuted); display:block}
+  .lg-sheet .lscale{display:flex; align-items:flex-end; gap:8px}
+  .lg-sheet .lscale div{background:var(--laccent); border-radius:2px; width:24px; font-family:var(--lutil); font-size:9px; color:var(--lmuted); text-align:center}
+  .lg-sheet .lscale span{display:block; margin-top:6px}
+  .lg-sheet .spec-d{font-family:var(--ldisplay); font-size:34px; font-weight:700; letter-spacing:-.03em}
+  .lg-sheet .spec-b{font-family:var(--lbody); font-size:18px; margin-top:10px; max-width:44ch}
+  .lg-sheet .spec-u{font-family:var(--lutil); font-variant-numeric:tabular-nums; font-size:22px; font-weight:600; margin-top:10px}
+  .lg-sheet .spec-u small{display:block; font-size:11px; font-weight:400; color:var(--lmuted); margin-top:6px}
+  .lgr-sheet .a-paper{--p-bg:#F5F1E8; --p-sf:#FFFDF8; --p-ink:#1C1917; --p-mut:#6B6355; --p-acc:#8A2B10; --p-ln:#D9D2C4}
+  .lgr-sheet .a-cool{--p-bg:#F4F6F8; --p-sf:#FFFFFF; --p-ink:#14181C; --p-mut:#5A6570; --p-acc:#0C4F69; --p-ln:#D8DEE4}
+  .lgr-sheet .a-graphite{--p-bg:#F2F3F5; --p-sf:#FFFFFF; --p-ink:#0E1116; --p-mut:#5B6472; --p-acc:#4338CA; --p-ln:#DFE2E7}
+  .lgr-sheet .chosen{--p-bg:#FCFCFD; --p-sf:#FFFFFF; --p-ink:#08090A; --p-mut:#52555B; --p-acc:#1E40AF; --p-ln:#E6E7EA}
+  .lgr-sheet .y-fraunces{--d:'Fraunces',serif; --b:'Source Sans 3',sans-serif; --u:'IBM Plex Mono',monospace}
+  .lgr-sheet .y-bricolage{--d:'Bricolage Grotesque',sans-serif; --b:'Inter',sans-serif; --u:'JetBrains Mono',monospace}
+  .lgr-sheet .y-archivo{--d:'Archivo',sans-serif; --b:'Atkinson Hyperlegible',sans-serif; --u:'DM Mono',monospace}
+  .lgr-sheet .y-geist{--d:'Inter',sans-serif; --b:'Inter',sans-serif; --u:'JetBrains Mono',monospace}
+  .lgr-sheet .y-chosen{--d:'Fraunces',serif; --b:'Atkinson Hyperlegible',sans-serif; --u:'Martian Mono',monospace}
+  .lgr-sheet .verdict{font-family:var(--lutil); font-size:10.5px; margin-top:8px; color:var(--lmuted)}
+  .lgr-sheet .verdict.no::before{content:"REJECTED — "; color:var(--laccent); font-weight:600}
+  .lgr-sheet .verdict.yes::before{content:"CHOSEN — "; color:var(--laccent); font-weight:600}
+
+  .proposal{background:var(--bn-surface); border:1px solid var(--bn-line); border-radius:var(--bn-r-lg);
+    box-shadow:var(--bn-shadow-1); padding:var(--bn-5) var(--bn-6); margin-bottom:var(--bn-4)}
+  .proposal .ph{display:flex; align-items:baseline; gap:var(--bn-3); flex-wrap:wrap; margin-bottom:var(--bn-2)}
+  .proposal .letter{font-family:var(--bn-font-mono); font-size:var(--bn-fs-sm); color:var(--bn-ink-3)}
+  .proposal h3{font-size:var(--bn-fs-lg); font-weight:800}
+  .proposal .thesis{color:var(--bn-ink-2); font-size:var(--bn-fs-md); font-style:italic; margin-bottom:var(--bn-3)}
+  .proposal .evidence{margin-top:var(--bn-3); padding-top:var(--bn-3); border-top:1px dashed var(--bn-line-strong);
+    font-size:var(--bn-fs-sm); color:var(--bn-ink-3)}
+  .proposal .evidence b{color:var(--bn-ink-2)}
+  .stat-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:1px; background:var(--bn-line);
+    border:1px solid var(--bn-line); border-radius:var(--bn-r-lg); overflow:hidden; margin-bottom:var(--bn-6)}
+  .stat-grid > div{background:var(--bn-surface); padding:var(--bn-4) var(--bn-4) var(--bn-3)}
+  .stat-grid .k{font-family:var(--bn-font-mono); font-size:var(--bn-fs-2xs); color:var(--bn-ink-3);
+    letter-spacing:.05em; text-transform:uppercase; margin-bottom:var(--bn-2)}
+  .stat-grid .v{font-family:var(--bn-font-display); font-size:var(--bn-fs-2xl); font-weight:800; letter-spacing:-.01em}
+  .stat-grid .v small{font-family:var(--bn-font-ui); font-size:var(--bn-fs-sm); font-weight:500; color:var(--bn-ink-3); display:block; margin-top:2px}
+
+  footer{padding:var(--bn-8) 0 var(--bn-10); color:var(--bn-ink-3); font-size:var(--bn-fs-sm); font-family:var(--bn-font-mono)}
+
+  #lightbox{position:fixed; inset:0; background:rgba(4,5,7,.92); z-index:50; display:none;
+    align-items:flex-start; justify-content:center; overflow:auto; padding:var(--bn-8) var(--bn-5); cursor:zoom-out}
+  #lightbox.open{display:flex}
+  #lightbox img{max-width:min(1400px,100%); width:100%; height:auto; box-shadow:0 20px 60px rgba(0,0,0,.5); border-radius:6px}
+
+  @media (max-width:640px){
+    h1{font-size:var(--bn-fs-3xl)}
+    .timeline{padding-left:var(--bn-7)}
+    .stage-num{left:calc(-1 * var(--bn-7)); width:20px; height:20px}
+    .scale-row, .type-row-spec{grid-template-columns:100px 52px 1fr}
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="kicker">Design Portfolio · 番地 Banchi</div>
+    <h1>An identity, a design system, and the arguments behind both.</h1>
+    <p>Banchi is a tool for listing trading cards — 番地 means "lot number", the address of a thing. Every card in the store has one. This is the mark it got, the system every screen paints from, and the decisions that shaped them, including the ones that lost.</p>
+  </header>
+
+  <nav class="tabbar" id="tabbar">
+    <button class="tabbtn active" data-tab="identity">Identity &amp; Mark</button>
+    <button class="tabbtn" data-tab="system">The Design System</button>
+    <button class="tabbtn" data-tab="decisions">UX Decisions</button>
+    <button class="tabbtn" data-tab="before">Before Banchi</button>
+  </nav>
+
+  <!-- ============================= TAB 1 — IDENTITY ============================= -->
+  <div class="tabpanel active" id="tab-identity">
+    <div class="block">
+      <div class="hero-card"><img src="hero-locked-set.png" alt="The six locked Banchi marks" onclick="openLightbox(this.src)"></div>
+      <div class="shipped">
+        <div><img src="favicon.svg" width="40" height="40" alt="favicon"><span class="label">favicon.svg</span></div>
+        <div><img src="icon-1024.png" width="56" height="56" style="border-radius:12px" alt="app icon"><span class="label">icon · 1024px</span></div>
+        <div><img src="icon-1024.png" width="34" height="34" style="border-radius:8px" alt="app icon small"><span class="label">icon · 32px cut</span></div>
+        <div><img src="icon-1024.png" width="18" height="18" style="border-radius:5px" alt="app icon tiny"><span class="label">rail · 16px cut</span></div>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="section-head col">
+        <div class="kicker">Process</div>
+        <h2>How the mark got locked</h2>
+        <p>Every ground is derived, not picked — the prism's own hue, driven dark. What follows is the actual sequence: what was swept, what was measured, what got dropped.</p>
+      </div>
+      <div class="timeline">
+        <div class="stage">
+          <div class="stage-num">01</div>
+          <div class="stage-head"><h3>The ground rule</h3><span class="tag locked">Locked</span></div>
+          <p class="cap">The ground isn't a free color next to the prism — it's the <b>prism's own hue, driven down to near-black</b>. One formula reproduces every published stop across bluesteel, lilacish and mint.</p>
+          <div class="sheet"><img src="sheets/ground-per-prism.png" alt="Ground derived per prism" onclick="openLightbox(this.src)"></div>
+        </div>
+        <div class="stage">
+          <div class="stage-num">02</div>
+          <div class="stage-head"><h3>Which drop</h3><span class="tag locked">Locked</span></div>
+          <p class="cap"><b>Flat</b> and <b>inverted</b> shown and dropped — one has no bottom to fall to, the other only worked by two effects cancelling out. <b>Held</b> and <b>cooler</b> both kept: <q>both work</q>, so both became live variants rather than one answer with a runner-up.</p>
+          <div class="sheet"><img src="sheets/ground-choice.png" alt="Choosing between three grounds" onclick="openLightbox(this.src)"></div>
+        </div>
+        <div class="stage">
+          <div class="stage-num">03</div>
+          <div class="stage-head"><h3>Brackets, measured</h3><span class="tag locked">Locked</span></div>
+          <p class="cap">Not eyeballed: plain gold's darkest stop lands at <b>L 0.606</b>, right where the bracket tapers to nothing. <b>Pale gold</b> was the only candidate that cleared chrome's own floor there.</p>
+          <div class="sheet"><img src="sheets/brackets.png" alt="Bracket sweeps" onclick="openLightbox(this.src)"></div>
+        </div>
+        <div class="stage">
+          <div class="stage-num">04</div>
+          <div class="stage-head"><h3>Black &amp; gold</h3><span class="tag locked">Locked</span></div>
+          <p class="cap">The formula's own answer for a gold ground was an espresso brown — reads dirty, not black. Rejected for <b>true black</b>: <q>have pale gold with true black as our locked option.</q></p>
+          <div class="sheet"><img src="sheets/black-and-gold.png" alt="Black and gold exploration" onclick="openLightbox(this.src)"></div>
+        </div>
+        <div class="stage">
+          <div class="stage-num">05</div>
+          <div class="stage-head"><h3>White &amp; rose gold — and the lock</h3><span class="tag locked">Locked</span></div>
+          <p class="cap">Cool white gold turned out to <b>be bluesteel</b> — dropped for colliding with an existing member. Rose gold's marbling reads as coral rather than metal, flagged as a real limit rather than patched. Row 5 is where all six were called: <q>lock all on #5; we'll have the bluesteel one be the default.</q></p>
+          <div class="sheet"><img src="sheets/white-and-rose-gold.png" alt="White gold and rose gold" onclick="openLightbox(this.src)"></div>
+        </div>
+        <div class="stage">
+          <div class="stage-num">06</div>
+          <div class="stage-head"><h3>The small cut</h3><span class="tag locked">Locked</span></div>
+          <p class="cap">The display mark's taper vanishes below 64px. Stroke swept 2.4 / 3.0 / <b>4.2</b> / 5.0, no taper, no filter — 4.2 ships in the rail and the favicon.</p>
+          <div class="sheet tall"><img src="sheets/small-cut.png" alt="Small-cut stroke sweep" onclick="openLightbox(this.src)"></div>
+        </div>
+        <div class="stage">
+          <div class="stage-num">07</div>
+          <div class="stage-head"><h3>A light ground</h3><span class="tag rejected">Rejected</span></div>
+          <p class="cap">Derivable, and handsome at 150px. But every surface in this app draws the mark under 64px, and at real size the light tile <b>loses its silhouette</b> — a smudge, not an object. The mark stays fixed dark in both themes.</p>
+          <div class="sheet"><img src="sheets/light-ground.png" alt="Light ground, rejected" onclick="openLightbox(this.src)"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="section-head col">
+        <div class="kicker">Further studies</div>
+        <h2>Kept, not pruned</h2>
+        <p>An alternative that wasn't chosen once is not the same as eliminated — these stay on file.</p>
+      </div>
+      <div class="studies">
+        <div class="study"><div class="frame"><img src="sheets/family.png" alt="The family" onclick="openLightbox(this.src)"></div><div class="cap"><span>The family, systematically</span><span class="tag locked">Locked</span></div></div>
+        <div class="study"><div class="frame"><img src="sheets/gold-silver-on-black.png" alt="Gold and silver" onclick="openLightbox(this.src)"></div><div class="cap"><span>Gold × silver</span><span class="tag parked">Parked</span></div></div>
+        <div class="study"><div class="frame"><img src="sheets/gray-prisms.png" alt="Gray prisms" onclick="openLightbox(this.src)"></div><div class="cap"><span>Warmer &amp; quieter grays</span><span class="tag parked">Parked</span></div></div>
+        <div class="study"><div class="frame"><img src="sheets/ground-bisect.png" alt="Ground bisected" onclick="openLightbox(this.src)"></div><div class="cap"><span>Ground, bisected</span><span class="tag parked">Study</span></div></div>
+        <div class="study"><div class="frame"><img src="sheets/ground-matrix.png" alt="Ground and sheen matrix" onclick="openLightbox(this.src)"></div><div class="cap"><span>Ground × sheen matrix</span><span class="tag parked">Study</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= TAB 2 — THE DESIGN SYSTEM ============================= -->
+  <div class="tabpanel" id="tab-system">
+    <div class="block" style="border-top:none; padding-top:0">
+      <div class="section-head col">
+        <div class="kicker">Current · app/src/tokens.css + kit.css</div>
+        <h2>The system, live</h2>
+        <p>Everything below is drawn with Banchi's own tokens and its own kit CSS — not a mockup of it. Switch your system theme and the whole page follows, the way the app does. Hover and press anything.</p>
+      </div>
+
+      <div class="spec">
+        <div class="spec-head"><span class="n">Color</span><span class="m">152 --bn-* names · two themes, one set of names</span></div>
+        <div class="spec-body stack">
+          <div class="swatch-grid">
+            <div class="sw"><div class="patch" style="background:var(--bn-bg)"></div><div class="meta"><b>Page</b><i>--bn-bg</i></div></div>
+            <div class="sw"><div class="patch" style="background:var(--bn-surface)"></div><div class="meta"><b>Surface</b><i>--bn-surface</i></div></div>
+            <div class="sw"><div class="patch" style="background:var(--bn-surface-2)"></div><div class="meta"><b>Sunken</b><i>--bn-surface-2</i></div></div>
+            <div class="sw"><div class="patch" style="background:var(--bn-ink); color:var(--bn-bg)">Aa</div><div class="meta"><b>Ink</b><i>--bn-ink</i></div></div>
+            <div class="sw"><div class="patch" style="background:var(--bn-ink-3); color:var(--bn-bg)">Aa</div><div class="meta"><b>Ink 3</b><i>--bn-ink-3</i></div></div>
+            <div class="sw"><div class="patch" style="background:var(--bn-accent); color:var(--bn-on-accent)">Aa</div><div class="meta"><b>Accent</b><i>--bn-accent</i></div></div>
+            <div class="sw"><div class="patch" style="background:var(--bn-live); color:#fff">Aa</div><div class="meta"><b>Live</b><i>--bn-live</i></div></div>
+            <div class="sw"><div class="patch" style="background:var(--bn-ok); color:#fff">Aa</div><div class="meta"><b>OK</b><i>--bn-ok</i></div></div>
+            <div class="sw"><div class="patch" style="background:var(--bn-warn); color:#fff">Aa</div><div class="meta"><b>Warn</b><i>--bn-warn</i></div></div>
+            <div class="sw"><div class="patch" style="background:var(--bn-danger); color:#fff">Aa</div><div class="meta"><b>Danger</b><i>--bn-danger</i></div></div>
+          </div>
+        </div>
+        <p class="spec-note">Three registers: <b>ink</b> is what you read, <b>line</b> is what separates, <b>brand</b> is where to look — indigo for action, vermilion for what is live. Dark redefines the same names rather than adding new ones, so no component knows which theme it is in.</p>
+      </div>
+
+      <div class="spec">
+        <div class="spec-head"><span class="n">Type</span><span class="m">three faces, three jobs · 11-step scale</span></div>
+        <div class="spec-body stack">
+          <div style="font-family:var(--bn-font-display); font-size:var(--bn-fs-4xl); font-weight:800; letter-spacing:-.02em">Every card has an address</div>
+          <div style="font-family:var(--bn-font-ui); font-size:var(--bn-fs-lg)">Manrope for headings and big figures · Inter for everything a person reads</div>
+          <div style="font-family:var(--bn-font-mono); font-size:var(--bn-fs-md); color:var(--bn-ink-2)">SKU 8608002 · 2026-09-02-box6-01 · sku_not_a_candidate · 108/198</div>
+          <hr style="border:0; border-top:1px solid var(--bn-line); width:100%; margin:var(--bn-2) 0">
+          <div class="scale-list">
+            <div class="type-row-spec"><span class="nm">--bn-fs-5xl</span><span class="vl">48px</span><span style="font-family:var(--bn-font-display); font-size:48px; font-weight:800; line-height:1">Aa</span></div>
+            <div class="type-row-spec"><span class="nm">--bn-fs-3xl</span><span class="vl">28px</span><span style="font-family:var(--bn-font-display); font-size:28px; font-weight:800; line-height:1">Aa</span></div>
+            <div class="type-row-spec"><span class="nm">--bn-fs-2xl</span><span class="vl">22px</span><span style="font-family:var(--bn-font-display); font-size:22px; font-weight:800; line-height:1">Aa</span></div>
+            <div class="type-row-spec"><span class="nm">--bn-fs-lg</span><span class="vl">16px</span><span style="font-size:16px">Every card has an address</span></div>
+            <div class="type-row-spec"><span class="nm">--bn-fs-base</span><span class="vl">14px</span><span style="font-size:14px">Every card has an address — body</span></div>
+            <div class="type-row-spec"><span class="nm">--bn-fs-md</span><span class="vl">13px</span><span style="font-size:13px">Every card has an address</span></div>
+            <div class="type-row-spec"><span class="nm">--bn-fs-sm</span><span class="vl">12px</span><span style="font-size:12px">Every card has an address</span></div>
+            <div class="type-row-spec"><span class="nm">--bn-fs-xs</span><span class="vl">11px</span><span style="font-size:11px">Every card has an address</span></div>
+            <div class="type-row-spec"><span class="nm">--bn-fs-2xs</span><span class="vl">10px</span><span style="font-size:10px">Every card has an address</span></div>
+          </div>
+        </div>
+        <p class="spec-note">Mono carries machine strings only — SKUs, run names, reason codes, key caps. Numbers in tables are Inter with <code>tabular-nums</code>, never mono, so a column cannot shift width between two cards.</p>
+      </div>
+
+      <div class="spec">
+        <div class="spec-head"><span class="n">Space &amp; radius</span><span class="m">a 4px scale, and seven radii</span></div>
+        <div class="spec-body stack">
+          <div class="scale-list">
+            <div class="scale-row"><span class="nm">--bn-1</span><span class="vl">4px</span><span class="bar" style="width:4px"></span></div>
+            <div class="scale-row"><span class="nm">--bn-2</span><span class="vl">8px</span><span class="bar" style="width:8px"></span></div>
+            <div class="scale-row"><span class="nm">--bn-3</span><span class="vl">12px</span><span class="bar" style="width:12px"></span></div>
+            <div class="scale-row"><span class="nm">--bn-4</span><span class="vl">16px</span><span class="bar" style="width:16px"></span></div>
+            <div class="scale-row"><span class="nm">--bn-5</span><span class="vl">20px</span><span class="bar" style="width:20px"></span></div>
+            <div class="scale-row"><span class="nm">--bn-6</span><span class="vl">24px</span><span class="bar" style="width:24px"></span></div>
+            <div class="scale-row"><span class="nm">--bn-7</span><span class="vl">32px</span><span class="bar" style="width:32px"></span></div>
+            <div class="scale-row"><span class="nm">--bn-8</span><span class="vl">40px</span><span class="bar" style="width:40px"></span></div>
+            <div class="scale-row"><span class="nm">--bn-9</span><span class="vl">48px</span><span class="bar" style="width:48px"></span></div>
+            <div class="scale-row"><span class="nm">--bn-10</span><span class="vl">64px</span><span class="bar" style="width:64px"></span></div>
+          </div>
+          <div class="radius-row" style="margin-top:var(--bn-4)">
+            <div class="radius-chip" style="border-radius:4px">4</div>
+            <div class="radius-chip" style="border-radius:6px">6</div>
+            <div class="radius-chip" style="border-radius:8px">8</div>
+            <div class="radius-chip" style="border-radius:12px">12</div>
+            <div class="radius-chip" style="border-radius:16px">16</div>
+            <div class="radius-chip" style="border-radius:22px">22</div>
+            <div class="radius-chip" style="border-radius:999px">full</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="spec">
+        <div class="spec-head"><span class="n">Buttons</span><span class="m">seven variants, four sizes</span></div>
+        <div class="spec-body">
+          <button class="bn-btn bn-btn-primary">Price these <span class="bn-kbd">P</span></button>
+          <button class="bn-btn">Default</button>
+          <button class="bn-btn bn-btn-quiet">Quiet</button>
+          <button class="bn-btn bn-btn-ghost">Ghost</button>
+          <button class="bn-btn bn-btn-ok">Mark sold</button>
+          <button class="bn-btn bn-btn-danger">Retire</button>
+          <button class="bn-btn bn-btn-danger-solid">Delete this box</button>
+          <button class="bn-btn" disabled>Disabled</button>
+        </div>
+        <div class="spec-body" style="border-top:1px solid var(--bn-line)">
+          <button class="bn-btn bn-btn-sm bn-btn-primary">Small · 28</button>
+          <button class="bn-btn bn-btn-primary">Medium · 34</button>
+          <button class="bn-btn bn-btn-lg bn-btn-primary">Large · 40</button>
+          <button class="bn-btn bn-btn-xl bn-btn-primary">Extra large · 52</button>
+        </div>
+        <p class="spec-note">The control heights raise themselves under 767px <b>and on any coarse pointer</b> — 34 → 42 — so an iPad in portrait gets thumb-sized controls even though it is 820px wide. A mouse-sized control hand-rolled on a phone is the defect that rule exists to stop.</p>
+      </div>
+
+      <div class="spec">
+        <div class="spec-head"><span class="n">Pills, chips, keycaps</span><span class="m">status in six tones; a chip is pressable, a pill is not</span></div>
+        <div class="spec-body">
+          <span class="bn-pill">Default</span>
+          <span class="bn-pill bn-pill-accent">Queued</span>
+          <span class="bn-pill bn-pill-ok">Listed</span>
+          <span class="bn-pill bn-pill-warn">Held back</span>
+          <span class="bn-pill bn-pill-danger">Refused</span>
+          <span class="bn-pill bn-pill-live"><span class="bn-dot bn-dot-live" style="width:6px;height:6px"></span>Live</span>
+          <span class="bn-pill bn-pill-mono">8608002</span>
+          <span class="bn-pill bn-pill-outline">Outline</span>
+        </div>
+        <div class="spec-body" style="border-top:1px solid var(--bn-line)">
+          <button class="bn-chip" aria-pressed="true">Hide sold <span class="bn-chip-count">372</span></button>
+          <button class="bn-chip" aria-pressed="false"><span class="bn-dot bn-dot-ok"></span>On hand <span class="bn-chip-count">2,245</span></button>
+          <button class="bn-chip" aria-pressed="false">Near Mint</button>
+          <span style="display:inline-flex; gap:4px; align-items:center; margin-left:var(--bn-3)">
+            <kbd class="bn-kbd">⌘</kbd><kbd class="bn-kbd">K</kbd>
+            <span style="color:var(--bn-ink-3); font-size:var(--bn-fs-sm); margin:0 6px">palette</span>
+            <kbd class="bn-kbd">?</kbd>
+            <span style="color:var(--bn-ink-3); font-size:var(--bn-fs-sm)">shortcuts</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="spec">
+        <div class="spec-head"><span class="n">Notice</span><span class="m">four tones; the code line is the pipeline's own string</span></div>
+        <div class="spec-body stack">
+          <div class="bn-notice"><span class="ic">i</span><div><div class="bn-notice-title">This export is 4 days old</div><div>A newer reading exists at TCGplayer.</div></div></div>
+          <div class="bn-notice bn-notice-warn"><span class="ic">!</span><div><div class="bn-notice-title">Two cards are priced but not yet listed</div><div>They are on hand, and nothing sends them.</div></div></div>
+          <div class="bn-notice bn-notice-danger"><span class="ic">!</span><div><div class="bn-notice-title">The answer was refused</div><div>The queue file was rewritten after this screen read it.</div><div class="bn-notice-code">sku_not_a_candidate · Box 2 · Section 1 · Card 14</div></div></div>
+          <div class="bn-notice bn-notice-ok"><span class="ic">✓</span><div><div class="bn-notice-title">Reconciled</div><div>405 SKUs read a live count for the first time.</div></div></div>
+        </div>
+        <p class="spec-note">A reason code appears twice: the human label large, the pipeline's own string small beneath it — so what you saw on screen is greppable in the run report. That rule survived the rebrand unchanged from the very first interview.</p>
+      </div>
+
+      <div class="spec">
+        <div class="spec-head"><span class="n">Receipt &amp; toast</span><span class="m">an undo anchored beside the thing it undoes</span></div>
+        <div class="spec-body stack">
+          <div class="bn-receipt">
+            <span style="flex:1">Answered as <b>Near Mint Holofoil</b><br><span style="opacity:.65; font-size:var(--bn-fs-sm)">Box 2 · Section 1 · Card 14</span></span>
+            <span class="bn-receipt-bar"><span></span></span>
+            <button class="bn-btn bn-btn-sm">↺ Undo <span class="bn-kbd">U</span></button>
+          </div>
+        </div>
+        <p class="spec-note">The receipt lands where the press happened and drains over its own window. A write that cannot be taken back within a few seconds of realising is a write the operator has to be careful about — and careful is slow.</p>
+      </div>
+
+      <div class="spec">
+        <div class="spec-head"><span class="n">Surfaces, data, empty</span><span class="m">a panel is raised, a well is sunken</span></div>
+        <div class="spec-body stack">
+          <div class="bn-panel">
+            <div class="bn-panel-head"><span>Recent runs</span><button class="bn-btn bn-btn-sm bn-btn-ghost">All runs →</button></div>
+            <div class="bn-panel-body" style="padding:0">
+              <table class="bn-table">
+                <thead><tr><th>Card</th><th>Condition</th><th>SKU</th><th class="num">Market</th><th class="num">Copies</th></tr></thead>
+                <tbody>
+                  <tr><td>Snorlax</td><td>Near Mint Holofoil</td><td class="mono">8608002</td><td class="num">$143.65</td><td class="num">1</td></tr>
+                  <tr><td>Charizard ex</td><td>Near Mint</td><td class="mono">8607411</td><td class="num">$12.00</td><td class="num">3</td></tr>
+                  <tr><td>Bidoof</td><td>Near Mint</td><td class="mono">8601230</td><td class="num">$0.12</td><td class="num">14</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="bn-well">banchi emit runs/2026-09-02-box6-01</div>
+          <div class="bn-panel" style="margin-top:var(--bn-2)">
+            <button class="bn-list-row"><span style="flex:1">Box 3 · RB Epics</span><span class="bn-pill">723</span></button>
+            <button class="bn-list-row" aria-current="true"><span style="flex:1">Box 4 · WB1 R2</span><span class="bn-pill bn-pill-accent">56</span></button>
+            <button class="bn-list-row" style="border-bottom:0"><span style="flex:1">Box 5 · UNL BBOX C/UC 1</span><span class="bn-pill">105</span></button>
+          </div>
+          <div class="bn-panel" style="margin-top:var(--bn-2)">
+            <div class="bn-empty">
+              <div class="bn-empty-art">✓</div>
+              <div class="bn-empty-title">All caught up.</div>
+              <div style="max-width:44ch">You answered 16 cards in 4 min 12 s · 2 closed.</div>
+              <div style="display:flex; gap:var(--bn-2); margin-top:var(--bn-2)">
+                <button class="bn-btn bn-btn-primary">Price the answers →</button>
+                <button class="bn-btn">Run another box</button>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex; gap:var(--bn-6); align-items:flex-start; flex-wrap:wrap; margin-top:var(--bn-2)">
+            <div style="flex:1 1 240px; display:flex; flex-direction:column; gap:var(--bn-2)">
+              <div class="bn-skeleton" style="height:12px; width:60%"></div>
+              <div class="bn-skeleton" style="height:12px; width:80%"></div>
+              <div class="bn-skeleton" style="height:44px"></div>
+            </div>
+            <div style="flex:1 1 240px">
+              <div class="bn-progress"><span style="width:62%"></span></div>
+              <div style="display:flex; gap:var(--bn-6); margin-top:var(--bn-4)">
+                <div class="bn-stat"><span class="bn-stat-value">16</span><span class="bn-stat-label">answered</span></div>
+                <div class="bn-stat"><span class="bn-stat-value">$184</span><span class="bn-stat-label">to list</span></div>
+                <div class="bn-stat"><span class="bn-stat-value">2</span><span class="bn-stat-label">closed</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="spec-note">An empty state is a real sentence and one action. At zero it should feel like a reward, not a void.</p>
+      </div>
+
+      <div class="spec">
+        <div class="spec-head"><span class="n">Segmented</span><span class="m">one of a few, always visible</span></div>
+        <div class="spec-body">
+          <div class="bn-seg" role="group">
+            <button class="bn-seg-item" aria-pressed="true">All copies</button>
+            <button class="bn-seg-item" aria-pressed="false">On hand</button>
+            <button class="bn-seg-item" aria-pressed="false">Departed</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="spec">
+        <div class="spec-head"><span class="n">The four interaction floors</span><span class="m">app/src/base.css — element selectors, not per-screen rules</span></div>
+        <div class="spec-body stack">
+          <div class="bn-well" style="white-space:pre-wrap; line-height:1.7">button, select, summary, [role='button'] <span style="color:var(--bn-ink-3)">{ cursor: pointer; }</span>
+[aria-disabled='true'], :disabled <span style="color:var(--bn-ink-3)">{ cursor: not-allowed; }</span>
+
+button, select, summary, a, [role='tab'] <span style="color:var(--bn-ink-3)">{
+  transition: background-color 120ms, border-color 120ms, color 120ms, box-shadow 120ms; }</span>
+
+button:active, a:active, [role='button']:active <span style="color:var(--bn-ink-3)">{ translate: 0 1px; }</span></div>
+          <div style="display:flex; gap:var(--bn-3); flex-wrap:wrap; align-items:center; margin-top:var(--bn-2)">
+            <button class="bn-btn bn-btn-primary">Press me</button>
+            <button class="bn-btn" disabled>And me</button>
+            <span style="font-size:var(--bn-fs-sm); color:var(--bn-ink-3); max-width:38ch">Cursor, response, press — all three are live on this page, because this page uses the real rules.</span>
+          </div>
+        </div>
+        <p class="spec-note"><b>The press dip is <code>translate</code>, never <code>transform: translateY</code></b> — the two compose, so spelling it as a transform silently doubled the dip to 2px in six rules. And a control may never <i>ease</i> the movement its own <code>:active</code> makes: the dip lands on the frame the finger goes down, and a squeeze on a 120ms transition beside it is one gesture on two clocks. The fourth floor — <b>a press may not move what is around it</b> — can't be written as a stylesheet rule at all; it is enforced by two test suites instead. See the UX Decisions tab.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= TAB 3 — UX DECISIONS ============================= -->
+  <div class="tabpanel" id="tab-decisions">
+    <div class="block" style="border-top:none; padding-top:0">
+      <div class="section-head col">
+        <div class="kicker">September 2026 · the overhaul and after</div>
+        <h2>What was argued, measured, and thrown out</h2>
+        <p>Each of these started as a complaint or a question, got measured before it got designed, and records what lost as carefully as what shipped.</p>
+      </div>
+
+      <div class="stat-grid">
+        <div><div class="k">The rebuild, in one diff</div><div class="v">+28,718<small>−29,709 across 69 files under app/</small></div></div>
+        <div><div class="k">Plumbing frozen</div><div class="v">11 lines<small>server.ts moved, against 1,693 in App.tsx</small></div></div>
+        <div><div class="k">Tokens declared</div><div class="v">152<small>--bn-* names; no sheet may name a color</small></div></div>
+        <div><div class="k">Legacy names still read</div><div class="v">0 of 30<small>stylesheets, vs 255 uses of --bn-ink</small></div></div>
+      </div>
+
+      <div class="dec">
+        <div class="dec-head"><span class="id">D121</span><h3>The front page says what is owed</h3><span class="tag rejected">Rejected 4×</span></div>
+        <div class="dec-body">
+          <div class="txt">
+            <p>The old lede counted the store: <i>"100 cards on hand in 4 boxes · 19 sold."</i> Six replacement variants went up in one pass. All six were turned down at once.</p>
+            <p>The diagnosis was structural, not cosmetic: every variant restated an aggregate that was <b>already drawn by the spine 24px below</b>, already known to the store's only author, and <b>unchanged between most two openings</b>. Duplicated, already known and static is not information — it is furniture.</p>
+            <p>The test the replacement had to pass: <b>does reading it change what the operator does in the next ten minutes.</b> What survived was a ranked standing line — head of the queue, verb in it, a coloured left rule for whose turn it is.</p>
+            <p>Then the owner amended it: the page still could not show <i>the library at a glance</i>. Totals came back — but as context below the button, behind a hairline, achromatic. Never as the headline. <b>Settled after five passes.</b></p>
+            <p>The library is drawn as the work that made it: sittings clustered from capture timestamps, each block as wide as its minutes and as tall as its cards-an-hour, <b>so its area is its card count</b>. The geometry reads back 543 / 172 / 152 / 138 / 555 / 65 — the true counts.</p>
+          </div>
+          <div class="dec-fig">
+            <div class="big">30 min</div>
+            <div class="sub">the sitting gap, measured not chosen — 5 min gives 12 sittings, 15 gives 7, and 30 / 60 / 120 / 240 all give 6.</div>
+            <blockquote class="quote">none of these were doing it for me<cite>the owner, on pass 1</cite></blockquote>
+          </div>
+        </div>
+      </div>
+
+      <div class="dec">
+        <div class="dec-head"><span class="id">D118</span><h3>A press changes what is on the screen, never where the rest of it is</h3><span class="tag locked">Shipped</span></div>
+        <div class="dec-body">
+          <div class="txt">
+            <p>Measured at 1440×900: one <b>Mark sold</b> collapsed the card panel <b>98px and moved 131 elements</b>. Stepping the box walk moved 39, 66 or 98px depending on which two cards were involved. Every other route: zero.</p>
+            <p>Four causes. Three were facts about whichever card was selected — the position lens (85px), the action slot (18px), the copies list. The fourth was found by the guard rather than by eye: a row auto-placing a fourth child onto a second grid row, <b>32px → 50px</b> the moment a card sold.</p>
+            <p>The fix is a band height bounded by the <b>viewport</b>, not by the card — because every other candidate for that number is a fact about the selection, and the selection is what was moving.</p>
+            <p>Asked how a departed copy should leave its row, the owner said <i>"a sentence or even better an animation"</i> — so the row is marked and animates out rather than being deleted, because a deleted node cannot animate.</p>
+          </div>
+          <div class="dec-fig">
+            <div class="big">98px</div>
+            <div class="sub">panel collapse on one sale · 131 elements moved</div>
+            <blockquote class="quote">I am getting a lot of screen shake when I am in inventory and am marking something sold, things should not be moving around when I hit buttons it's too janky — how do we resolve this (not just inventory, but any/everywhere)<cite>the owner</cite></blockquote>
+          </div>
+        </div>
+      </div>
+
+      <div class="dec">
+        <div class="dec-head"><span class="id">D50</span><h3>An element's feedback is the product's, not each stylesheet's</h3><span class="tag locked">Shipped</span></div>
+        <div class="dec-body">
+          <div class="txt">
+            <p>Three floors, built in stages. <b>Cursor</b>: of 65 control shapes, 41 had a wrong cursor — and the concentration was the <i>disabled</i> state, where <b>30 clickables said <code>pointer</code> while refusing the click</b>. Missing focus rings, the thing everybody would have guessed: zero.</p>
+            <p><b>Response</b>: hovering all 315 controls with the transition settled, 293 responded, <b>17 snapped</b>, 22 were dead. Ten of the seventeen were one element — the brand block, drawn once per route. The floor took snaps to <b>0 of 294</b> without a single per-screen edit.</p>
+            <p><b>Press</b>: 121 of 311 controls answered a finger; <b>190 were silent</b>, the largest group being every sidebar nav link. After: 317 of 317.</p>
+            <p>Rejected along the way: <code>transition: all</code>; and a flat gradient hover layer that <b>shipped, passed the guard, and still snapped</b> — because <code>background-image</code> is not animatable, so it lands in one frame however it is transitioned. The entry leaves the earlier wrong sentence visibly struck rather than deleted, "because it is the thing that was wrong."</p>
+          </div>
+          <div class="dec-fig">
+            <div class="big">190/311</div>
+            <div class="sub">controls silent under a press, before the floor</div>
+            <blockquote class="quote">why would we decline?<cite>the owner, on the earlier deferral — then: "you have my permission to change that settled entry."</cite></blockquote>
+          </div>
+        </div>
+      </div>
+
+      <div class="dec">
+        <div class="dec-head"><span class="id">D110</span><h3>A hover is an alpha, because one paint over three grounds is three hovers</h3><span class="tag locked">Shipped</span></div>
+        <div class="dec-body">
+          <div class="txt">
+            <p>One token was the hover everywhere. Measured in CIE L*, it landed on three different grounds as <b>ΔL* 8.67 on the sidebar, 7.70 on the page, 4.00 on a panel</b> — a spread of 4.67. 4.00 is a good hover; 8.67 reads as <i>selection</i>, competing with the accent tint two rows below it.</p>
+            <p>As a 4% white alpha instead: <b>3.61 / 4.22 / 4.51 — spread 0.90</b>. An alpha composites against whatever is beneath it, so no element has to know its own ground.</p>
+            <p>The rules split by a real distinction: 31 rules whose element rests transparent take the alpha; 12 that paint their own ground keep theirs — and every one of those 12 independently carries a lift or a shadow, which is the same claim made a second way.</p>
+            <p>Three dark-only overrides were deleted, two of which hovered <i>down</i> — drawn as dark holes punched in a panel.</p>
+          </div>
+          <div class="dec-fig">
+            <div class="big">4.67 → 0.90</div>
+            <div class="sub">ΔL* spread across the sidebar, the page and a panel</div>
+            <blockquote class="quote">is that lighter grayish one favorable to you?<cite>the owner — the answer was no, and the element they asked about wasn't the one at fault</cite></blockquote>
+          </div>
+        </div>
+      </div>
+
+      <div class="dec">
+        <div class="dec-head"><span class="id">D120</span><h3>The shell speaks one brand at every width</h3><span class="tag locked">Shipped</span></div>
+        <div class="dec-body">
+          <div class="txt">
+            <p>The product wore <b>two brands, and which one you saw depended on window width</b>: the 番地/BANCHI lockup in the sidebar above 1023px, and a tile plus wordmark in the top bar — plus tile, wordmark and tagline in the drawer — below 768. Three brand objects in one shell, with the dark tile very nearly disappearing on the glass surface.</p>
+            <p>Putting the real lockup in the top bar was rejected <b>with arithmetic</b>: its floor is a 102×75 block against a 52px bar, and a bar tall enough would be 84px — <b>10% of an 844px viewport spent on a brand row, on every screen</b>. So the phone bar draws exactly what the 64px rail draws.</p>
+            <p>Why nothing caught it: the nav spec scoped to the sidebar, and the cursor sweep harvested its routes from sidebar links — which are <code>display:none</code> below 768, so <b>it could not run at a phone width even in principle</b>. Of twenty specs, one set a phone viewport. <b>The shell had no test at any width.</b></p>
+          </div>
+          <div class="dec-fig">
+            <div class="big">3 → 1</div>
+            <div class="sub">brand objects in one shell</div>
+            <blockquote class="quote">the tab should be what the collapsed sidebar is<cite>the owner's earlier ruling, cited back</cite></blockquote>
+          </div>
+        </div>
+      </div>
+
+      <div class="dec">
+        <div class="dec-head"><span class="id">D152</span><h3>Every row in the collapsed rail draws one glyph on one spine</h3><span class="tag locked">Shipped</span></div>
+        <div class="dec-body">
+          <div class="txt">
+            <p>Two defects visible in a single screenshot of the 64px rail, both shipped, suite green through both. The hand-off row wore <b>two glyphs, at x = 19 and x = 47</b>, straddling a 48px box beside three rows carrying one glyph at 32. The server dot rested at <b>x = 24</b> — eight pixels left of the spine.</p>
+            <p>The cause is the <i>shape</i> of the rule: the fold-away rule <b>enumerates class names</b>, so anything new is invisible to it. The button next door never had the defect because its rule is structural — <code>&gt; :not(.bn-icon)</code> — rather than a list.</p>
+            <p>And it existed twice, because the rail block exists twice: a <code>data-rail</code> form and a 768–1023 media-query copy. A fix tested only at 1440 covers half the product.</p>
+            <p>Why the suite was green: the brand spec <b>asserts travel, not rest</b> — and a sample sitting between two identically wrong numbers is inside the corridor.</p>
+          </div>
+          <div class="dec-fig">
+            <div class="big">19 · 47</div>
+            <div class="sub">where two glyphs sat, against a spine at 32</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dec">
+        <div class="dec-head"><span class="id">D117</span><h3>The thumb floor is the kit's, and the measurement is the hit area</h3><span class="tag locked">Shipped</span></div>
+        <div class="dec-body">
+          <div class="txt">
+            <p>Two phone floors had been published since the rebrand and <b>neither had a reader</b>. Twenty-five controls hand-rolled a mouse-sized one; the checkbox had no height at all — <b>19.5px at 390px wide</b> — and two sheets had quietly lifted private copies of it.</p>
+            <p><b>The arm is the pointer, not the width.</b> Ten stylesheets carried width-only blocks, so an iPad in portrait — 820px, and all thumb — got none of them.</p>
+            <p>The measurement is the <b>hit area, not the box</b>, and that is what removes the allow-list: ticks draw at 22px and take the tap at 46 via a negative-inset pseudo-element. A box-only assertion needs a forgiveness list, and a list of names is a list somebody adds to.</p>
+            <p>On the pricing screen, the ship bar stood <b>430px of an 844px viewport</b> with the control it gates underneath it — visible, and impossible to press at any scroll position. The obvious fix, padding the page by the bar height, was <b>built and then refused</b>: it added 172px of dead scroll under a list the operator walks.</p>
+          </div>
+          <div class="dec-fig">
+            <div class="big">19.5px</div>
+            <div class="sub">the checkbox's real height at 390, against a 44px floor nothing read</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dec">
+        <div class="dec-head"><span class="id">D159</span><h3>The band is copies rather than SKUs, and the drawer is the first answer</h3><span class="tag locked">Shipped</span></div>
+        <div class="dec-body">
+          <div class="txt">
+            <p>Asked to <i>brainstorm this all</i> rather than receive it, so the store was measured first. Across <b>2,245 cards on hand</b>: median $0.23, mean $1.36, top card $47.74. The <b>top 5% is 92 cards carrying 53.8% of the value</b>; the bottom 56% is 1,042 cards carrying 5.7%.</p>
+            <p>The load-bearing measurement: value <b>clusters by box and scatters within one</b>. Box 4 is 65% of the money. But contiguity runs <b>1.40 cards per reach above $5, against 6.51 below the cut-off</b> — so one control with two ends: the rich end is a pick list with an address per row, the cheap end is not a list at all, because the honest instruction is <i>take drawer 2 and drawer 5</i>.</p>
+            <p><b>The unit is the copy, not the SKU</b>: the 122 cards above $5 are only 38 SKUs, and a per-SKU list draws a third of the rows and a third of the drawers a hand has to open.</p>
+            <p><b>390 of 2,245 have no market price</b> — each is still a row, tagged with one of three causes, because a screen that collapsed them would prescribe one thing for three different problems.</p>
+          </div>
+          <div class="dec-fig">
+            <div class="big">1.40 vs 6.51</div>
+            <div class="sub">cards per reach, rich end vs cheap end</div>
+            <blockquote class="quote">cross box lists are the direction im trying to take the whole app<cite>the owner</cite></blockquote>
+          </div>
+        </div>
+      </div>
+
+      <div class="dec">
+        <div class="dec-head"><span class="id">D132</span><h3>Sold is folded away, and the rail is ordered by the hand</h3><span class="tag locked">Shipped</span></div>
+        <div class="dec-body">
+          <div class="txt">
+            <p>Four asks, all from watching the owner work. Departed rows fold out of the walk — and when shown, they <b>sink beneath the live ones</b> rather than sitting in place.</p>
+            <p><b>The row the walk is standing on is never folded away</b>, whatever its state: a sale has to leave its receipt where it was pressed.</p>
+            <p>The box rail sorts by <b>when this browser last opened the box</b>, then by cards on hand — not by cards, because a box full of sold records is not a box worth reaching for — then by number, the last thing the owner thinks in.</p>
+            <p>Recency is stored on the device rather than the server, and that was put to the owner explicitly: the phone in the garage and the laptop at the desk are looking for different boxes.</p>
+          </div>
+          <div class="dec-fig">
+            <div class="big">372</div>
+            <div class="sub">sold rows folded out of one box walk by default</div>
+            <blockquote class="quote">WB1 R1 is how i actually know it by<cite>the owner, on why the address leads with the name</cite></blockquote>
+          </div>
+        </div>
+      </div>
+
+      <div class="dec">
+        <div class="dec-head"><span class="id">D123</span><h3>Browser zoom is not the lever it looks like</h3><span class="tag parked">Half deferred</span></div>
+        <div class="dec-body">
+          <div class="txt">
+            <p>The owner noticed their coding sessions looked <i>way nicer at like 80% zoom rather than 100%</i> and asked whether the app should be denser. Half the answer is no: <b>zoom is a similarity transform</b> — 80% is every length ×0.8 and every breakpoint ×1.25. There is no rendering quality to reclaim. A density token is <b>deferred on the record</b> rather than silently dropped.</p>
+            <p>The other half is a real defect, and zoom makes it worse. Across 31 stylesheets there were <b>124 media blocks and 16 container blocks — and above 1024px, only 13 rules in 7 files.</b> The single widest breakpoint in the product hid a class no component renders.</p>
+            <p>What that costs, on the pricing screen at 1920: nine of ten tracks are fixed, so <b>the card's name was 924px wide while the price field it exists to decide was 68px.</b></p>
+          </div>
+          <div class="dec-fig">
+            <div class="big">924 : 68</div>
+            <div class="sub">px given to the name vs the price field it decides, at 1920</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dec">
+        <div class="dec-head"><span class="id">D95</span><h3>The Fulfiller's crash page has no door out</h3><span class="tag locked">Shipped</span></div>
+        <div class="dec-body">
+          <div class="txt">
+            <p>The app has two personas and one of them — the person pulling cards to ship — gets <b>no shell at all</b>: no nav, no palette, no theme toggle. Not hidden; not rendered, so it is not focusable, not reachable by a screen reader, and not one specificity change from coming back.</p>
+            <p>That extends to the error boundary. His crash page offers <b>one control, and it reopens the screen he is on</b>, because the constraints table reads <i>zero routes reachable from this view</i> and a crash is the moment he is most likely to press whatever is offered.</p>
+            <p>Before this, the shared boundary drew a "Go home" link at 14px — <b>below his own type floor, and a door into the pipeline reachable only by the screen breaking.</b></p>
+            <p>Also rejected here: restoring the inline arrow-key hints the rebuild had dropped. One complete reference sheet on <code>?</code> beats a hint on one screen that isn't.</p>
+          </div>
+          <div class="dec-fig">
+            <div class="big">1</div>
+            <div class="sub">control on the Fulfiller's crash page</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dec">
+        <div class="dec-head"><span class="id">D155</span><h3>The section is the ruler, the box is the margin note</h3><span class="tag locked">Shipped</span></div>
+        <div class="dec-body">
+          <div class="txt">
+            <p>Two sentences from the owner: the box view is <i>nicer than section</i>, and the lens between the two scales is <i>more noise than useful</i>. Read as praise of <b>structure, not size</b> — a flip that only made the section taller would have answered the wrong half.</p>
+            <p>Justified by resolution: the box track draws <b>1.45px per card</b> on the owner's bar, and the mark's own footprint covers about 7.6 cards — while the caption 3px above already says <code>#51 of 53 · 96% in</code> exactly. The section scale runs 6.8px to 82.9px per card.</p>
+            <p>The trapezoid lens was three defects, two of them unfixable in principle: its asymmetry is <b>scale-invariant</b>, and its dominant output was a tint band in the same token as the track 3px below it. The third — a percentage calculation that had to agree with a flex layout — drifted <b>8px on 5 sections and 42px on a 22-section box</b>.</p>
+            <p>Total height is unchanged at 73px, <b>so no row moves a pixel</b> — which is D118's rule applied to a redesign rather than to a press.</p>
+          </div>
+          <div class="dec-fig">
+            <div class="big">1.45px</div>
+            <div class="sub">per card on the box track — the whole argument</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= TAB 4 — BEFORE BANCHI ============================= -->
+  <div class="tabpanel" id="tab-before">
+    <div class="block" style="border-top:none; padding-top:0">
+      <div class="section-head col">
+        <div class="kicker">August 2026 · pre-rebrand, superseded</div>
+        <h2>Before Banchi</h2>
+        <p>The product was called pkmnscan and had a different palette, different faces and a different navigation argument. None of it is current — it is here because the rejections are the useful part, and a negative constraint nobody can see reads as taste.</p>
+      </div>
+
+      <div class="legacy-wrap">
+        <div class="legacy-label"><h3>The first token interview</h3><span class="tag locked">Chosen, then superseded</span></div>
+        <div class="legacy-frame">
+          <div class="legacy-notice">⧗ Archived — superseded by <b>--bn-accent #3d5af1</b> and the rest of tokens.css</div>
+          <div class="lg-sheet">
+            <div class="sheet-h1">Locked tokens, rendered</div>
+            <p class="sheet-lede">The design <code>docs/DESIGN.md</code> specified, drawn — on the argument that an agent given "clean" produces the average of everything it has seen. The card is a synthetic rectangle at the real card aspect (63/88), never a photograph: the pre-commit hook blocks any image outside <code>captures/</code>, and that guard outranks a prettier mock.</p>
+
+            <h4>Palette · six tokens, two interaction states</h4>
+            <div class="sw-list">
+              <div class="lsw"><div class="patch" style="background:#FCFCFD"></div><div class="meta"><b>bg &nbsp;#FCFCFD</b><i>the page</i></div></div>
+              <div class="lsw"><div class="patch" style="background:#FFFFFF;border-bottom:1px solid #E6E7EA"></div><div class="meta"><b>surface &nbsp;#FFFFFF</b><i>choice rows, queue rows</i></div></div>
+              <div class="lsw"><div class="patch" style="background:#08090A"></div><div class="meta"><b>ink &nbsp;#08090A</b><i>19.4:1 on bg</i></div></div>
+              <div class="lsw"><div class="patch" style="background:#52555B"></div><div class="meta"><b>muted &nbsp;#52555B</b><i>7.29:1 on bg</i></div></div>
+              <div class="lsw"><div class="patch" style="background:#E6E7EA"></div><div class="meta"><b>line &nbsp;#E6E7EA</b><i>the 1px hairline</i></div></div>
+              <div class="lsw"><div class="patch" style="background:#1E40AF"></div><div class="meta"><b>accent &nbsp;#1E40AF</b><i>unsure / only-action</i></div></div>
+            </div>
+
+            <h4>Type · three faces, three jobs</h4>
+            <div class="spec-d">Reverse Holo</div>
+            <div class="spec-b">You toggled this stack Normal. The photo reads Reverse Holo. Tap the one that is true; nothing is written until you do.</div>
+            <div class="spec-u">Box 3 · Section 2 · Card 17<small>0123456789 · $2.90 · 215/197 · 41 WAITING · 14D</small></div>
+
+            <h4>The review queue · one card at a time, photo first</h4>
+            <div class="lrow">
+              <div class="lcol">
+                <div class="panel">
+                  <div class="count">review · 3 of 41</div>
+                  <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+                  <div class="lchips">
+                    <span class="lchip">sv3 · 215/197</span>
+                    <span class="lchip unsure">toggle ≠ photo<span class="raw">metadata_detection_disagreement</span></span>
+                  </div>
+                  <div class="card"><div class="title-band"></div><div class="art"></div><div class="foot"><span>215/197</span><span>SV3</span></div></div>
+                  <p class="claim">You toggled this stack <em>Normal</em>. The photo reads <em>Reverse Holo</em>.</p>
+                  <div class="choices">
+                    <div class="choice"><span class="what">Normal</span><span class="money">$0.41</span><span class="lkbd">1</span></div>
+                    <div class="choice"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="lkbd">2</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="lwide">
+                <p class="note"><b>No solid fill here, and that is the rule.</b> Two answers means no only-action, so accent stays at outline weight on both.</p>
+                <p class="note"><b>No panel header strip.</b> Built, looked at, rejected. The count sits inline above the position label instead.</p>
+                <p class="note"><b>Reason code twice.</b> Human label large, the pipeline's own string small beneath — greppable in the run report. <b>This one survived into Banchi unchanged.</b></p>
+                <p class="note"><b>A key on every choice.</b> Owner-side only. Answering writes and advances; there is no confirmation to dismiss.</p>
+              </div>
+            </div>
+
+            <h4>The queue list · the sort has to be visible without reading a number</h4>
+            <div class="queue">
+              <div class="qrow">
+                <div class="card sm"><div class="title-band"></div><div class="art"></div></div>
+                <div><div class="qname">Charizard ex</div><div class="qmeta">B3·S2·C17 · toggle ≠ photo · 2d</div></div>
+                <div class="qmoney">$8.20</div>
+              </div>
+              <div class="qrow">
+                <div class="card sm"><div class="title-band"></div><div class="art"></div></div>
+                <div><div class="qname">Glimmora ex</div><div class="qmeta">B3·S2·C19 · low confidence · 2d</div></div>
+                <div class="qmoney">$2.90</div>
+              </div>
+              <div class="qrow low">
+                <div class="card sm"><div class="title-band"></div><div class="art"></div></div>
+                <div><div class="qname">Tarountula</div><div class="qmeta">B3·S3·C04 · no catalog row · 6d</div></div>
+                <div class="qmoney">$0.44</div>
+              </div>
+              <div class="qrow nomarket">
+                <div class="card sm"><div class="title-band"></div><div class="art"></div></div>
+                <div><div class="qname">Bill's Transfer</div><div class="qmeta">B4·S1·C02 · no market data · 6d</div></div>
+                <div class="qmoney">price it</div>
+              </div>
+              <div class="qrow low parked">
+                <div class="card sm"><div class="title-band"></div><div class="art"></div></div>
+                <div><div class="qname">Pineco</div><div class="qmeta">B4·S1·C11 · parked · 14d</div></div>
+                <div class="qmoney">$0.06</div>
+              </div>
+            </div>
+
+            <h4>Pull-confirm, three states</h4>
+            <div class="lrow">
+              <div class="lcol">
+                <div class="btn-label">default · 8.7:1</div>
+                <div class="lbtn default"><span>Pull this card</span><span class="lkbd">↵</span></div>
+                <div class="btn-label">pressed · 10.9:1</div>
+                <div class="lbtn pressed"><span>Pull this card</span><span class="lkbd">↵</span></div>
+                <div class="btn-label">disabled · never in the Fulfillment view</div>
+                <div class="lbtn disabled"><span>Pull this card</span><span class="lkbd">↵</span></div>
+              </div>
+              <div class="lwide">
+                <p class="note">All three clear 44px tall. The Fulfillment view's minimums — 20px body, 32px position label, 320px photo short edge, 44×44 targets 12px apart, 7:1 contrast — are assertions in a browser test, not prose. <b>Those floors are still live today.</b></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="legacy-wrap">
+        <div class="legacy-label"><h3>What was rejected, and what it looked like</h3><span class="tag rejected">Rejected</span></div>
+        <div class="legacy-frame">
+          <div class="legacy-notice">⧗ Archived — every panel below was rendered, looked at, and turned down on 2026-08-12</div>
+          <div class="lgr-sheet">
+            <h4>Grounds</h4>
+            <p class="why">The first pass was built on warm paper with a high-contrast serif display. It reads <b>NYT / FT</b> — editorial, professional in a way that belongs to a newspaper and not to a workbench. That verdict is why the spec bans newspaper coding by name rather than merely specifying a hex.</p>
+            <div class="lrow">
+              <div class="lcol a-paper y-fraunces">
+                <span class="ltag"><b>Warm paper</b> · #F5F1E8 / #8A2B10</span>
+                <div class="panel"><div class="inner">
+                  <div class="count">review · 3 of 41</div>
+                  <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+                  <div class="card"><div class="title-band"></div><div class="art"></div></div>
+                  <p class="claim">You toggled this stack <em>Normal</em>.</p>
+                  <div class="choices">
+                    <div class="choice"><span class="what">Normal</span><span class="money">$0.41</span><span class="lkbd">1</span></div>
+                    <div class="choice"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="lkbd">2</span></div>
+                  </div>
+                </div></div>
+                <div class="verdict no">the ground and the serif together read as a newspaper</div>
+              </div>
+              <div class="lcol a-cool y-fraunces">
+                <span class="ltag"><b>Cool clinical</b> · #F4F6F8 / #0C4F69</span>
+                <div class="panel"><div class="inner">
+                  <div class="count">review · 3 of 41</div>
+                  <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+                  <div class="card"><div class="title-band"></div><div class="art"></div></div>
+                  <p class="claim">You toggled this stack <em>Normal</em>.</p>
+                  <div class="choices">
+                    <div class="choice"><span class="what">Normal</span><span class="money">$0.41</span><span class="lkbd">1</span></div>
+                    <div class="choice"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="lkbd">2</span></div>
+                  </div>
+                </div></div>
+                <div class="verdict no">same register, cooler ground — the serif was carrying it</div>
+              </div>
+              <div class="lcol a-graphite y-bricolage">
+                <span class="ltag"><b>Graphite &amp; signal</b> · #F2F3F5 / #4338CA</span>
+                <div class="panel"><div class="inner">
+                  <div class="count">review · 3 of 41</div>
+                  <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+                  <div class="card"><div class="title-band"></div><div class="art"></div></div>
+                  <p class="claim">You toggled this stack <em>Normal</em>.</p>
+                  <div class="choices">
+                    <div class="choice"><span class="what">Normal</span><span class="money">$0.41</span><span class="lkbd">1</span></div>
+                    <div class="choice"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="lkbd">2</span></div>
+                  </div>
+                </div></div>
+                <div class="verdict no">right register, but the grey ground has a colour of its own</div>
+              </div>
+              <div class="lcol chosen y-chosen">
+                <span class="ltag"><b>Ink &amp; electric</b> · #FCFCFD / #1E40AF</span>
+                <div class="panel"><div class="inner">
+                  <div class="count">review · 3 of 41</div>
+                  <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+                  <div class="card"><div class="title-band"></div><div class="art"></div></div>
+                  <p class="claim">You toggled this stack <em>Normal</em>.</p>
+                  <div class="choices">
+                    <div class="choice"><span class="what">Normal</span><span class="money">$0.41</span><span class="lkbd">1</span></div>
+                    <div class="choice"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="lkbd">2</span></div>
+                  </div>
+                </div></div>
+                <div class="verdict yes">the card photo is the only chromatic thing on screen</div>
+              </div>
+            </div>
+
+            <h4>Display faces</h4>
+            <p class="why">All four on the chosen ground, so only the face differs. <b>Geist as a single-family system</b> is the interesting rejection: it is the most coherent of the four and it lost precisely because it satisfies the token block by deleting one of its requirements — one characterful face.</p>
+            <div class="lrow">
+              <div class="lcol chosen y-bricolage">
+                <span class="ltag"><b>Bricolage Grotesque</b></span>
+                <div class="panel"><div class="inner"><p class="claim" style="margin-top:0">Reverse Holo</p><div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div></div></div>
+                <div class="verdict no">the most of-this-moment, and therefore the most datable</div>
+              </div>
+              <div class="lcol chosen y-archivo">
+                <span class="ltag"><b>Archivo Expanded</b></span>
+                <div class="panel"><div class="inner"><p class="claim" style="margin-top:0">Reverse Holo</p><div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div></div></div>
+                <div class="verdict no">close second; its body face survived into the chosen stack</div>
+              </div>
+              <div class="lcol chosen y-geist">
+                <span class="ltag"><b>Geist</b> · one family, three roles</span>
+                <div class="panel"><div class="inner"><p class="claim" style="margin-top:0">Reverse Holo</p><div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div></div></div>
+                <div class="verdict no">no characterful face at all — deletes the requirement</div>
+              </div>
+              <div class="lcol chosen y-chosen">
+                <span class="ltag"><b>Cabinet Grotesk</b> · the pick</span>
+                <div class="panel"><div class="inner"><p class="claim" style="margin-top:0">Reverse Holo</p><div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div></div></div>
+                <div class="verdict yes">flared terminals, character without volume</div>
+              </div>
+            </div>
+
+            <h4>Where the solid fill goes</h4>
+            <p class="why">Accent works at two weights: outline for <b>unsure</b>, solid fill for <b>the only action</b>. On a two-answer screen the fill needs a rule, and both available rules are worse than having none.</p>
+            <div class="lrow">
+              <div class="lcol chosen y-chosen">
+                <span class="ltag"><b>Fill on the pricier row</b></span>
+                <div class="panel"><div class="inner">
+                  <div class="choices">
+                    <div class="choice"><span class="what">Normal</span><span class="money">$0.41</span><span class="lkbd">1</span></div>
+                    <div class="choice filled"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="lkbd">2</span></div>
+                  </div>
+                </div></div>
+                <div class="verdict no">points at the money — drifts toward over-listing</div>
+              </div>
+              <div class="lcol chosen y-chosen">
+                <span class="ltag"><b>Fill on the toggle's answer</b></span>
+                <div class="panel"><div class="inner">
+                  <div class="choices">
+                    <div class="choice filled"><span class="what">Normal</span><span class="money">$0.41</span><span class="lkbd">1</span></div>
+                    <div class="choice"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="lkbd">2</span></div>
+                  </div>
+                </div></div>
+                <div class="verdict no">unbiased, but the fill now means two things</div>
+              </div>
+              <div class="lcol chosen y-chosen">
+                <span class="ltag"><b>No fill on a two-answer screen</b></span>
+                <div class="panel"><div class="inner">
+                  <div class="choices">
+                    <div class="choice"><span class="what">Normal</span><span class="money">$0.41</span><span class="lkbd">1</span></div>
+                    <div class="choice"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="lkbd">2</span></div>
+                  </div>
+                </div></div>
+                <div class="verdict yes">the fill's meaning never has to be learned twice</div>
+              </div>
+            </div>
+
+            <h4>Reason codes</h4>
+            <p class="why">Twelve machine strings come out of the pipeline. A friendly label alone creates a second vocabulary nothing audits; the raw string alone is honest and unreadable.</p>
+            <div class="lrow">
+              <div class="lcol chosen y-chosen">
+                <span class="ltag"><b>Verbatim only</b></span>
+                <div class="panel"><div class="inner"><div class="lchips"><span class="lchip">sv3 · 215/197</span><span class="lchip unsure">metadata_detection_disagreement</span></div></div></div>
+                <div class="verdict no">named for code, not for reading</div>
+              </div>
+              <div class="lcol chosen y-chosen">
+                <span class="ltag"><b>Label only</b></span>
+                <div class="panel"><div class="inner"><div class="lchips"><span class="lchip">sv3 · 215/197</span><span class="lchip unsure">toggle ≠ photo</span></div></div></div>
+                <div class="verdict no">a second vocabulary that nothing audits</div>
+              </div>
+              <div class="lcol chosen y-chosen">
+                <span class="ltag"><b>Label, raw beneath</b></span>
+                <div class="panel"><div class="inner"><div class="lchips"><span class="lchip">sv3 · 215/197</span><span class="lchip unsure">toggle ≠ photo<span class="raw">metadata_detection_disagreement</span></span></div></div></div>
+                <div class="verdict yes">readable, and still greppable</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-head col" style="margin-top:var(--bn-9)">
+        <div class="kicker">2026-08-24 · navigation, from first principles</div>
+        <h2>Four architectures, one built</h2>
+        <p>The old app was measured before anything was proposed, then three competing first principles were put through an adversarial evidence pass against real prior art. Two were refuted on their own numbers.</p>
+      </div>
+
+      <div class="stat-grid">
+        <div><div class="k">#/review — unused width</div><div class="v">752px<small>52.2% of the screen</small></div></div>
+        <div><div class="k">#/review — scroll for one task</div><div class="v">4,018px<small>4.5 viewports</small></div></div>
+        <div><div class="k">#/inventory — the clicked card's photo</div><div class="v">y=482<small>54% down the viewport, behind two folds</small></div></div>
+        <div><div class="k">The card, as a share of screen</div><div class="v">10.3%<small>for the one thing that screen exists to show</small></div></div>
+      </div>
+
+      <div class="proposal">
+        <div class="ph"><span class="letter">A</span><h3>The Rig — one instrument, three fixed docks</h3><span class="tag parked">Survives as convention</span></div>
+        <p class="thesis">"A tool you spend hours in should never change address."</p>
+        <p class="cap">A frame that never reflows — rail, stage, dock — whatever the subject. The best-evidenced structure in the corpus.</p>
+        <div class="evidence"><b>Verdict:</b> the skeleton survives, "as written" does not — the Fulfiller's screen fails the frame outright, so the product deliberately carries two navigational paradigms. Kept as convention: each route declares its own layout and never reflows, deep operations push rather than cover, the URL addresses the subject.</div>
+      </div>
+
+      <div class="proposal">
+        <div class="ph"><span class="letter">B</span><h3>The Line — the pipeline is the navigation</h3><span class="tag rejected">Refuted</span></div>
+        <p class="thesis">"The product is a conveyor, so the UI should be the conveyor."</p>
+        <p class="cap">The nav strip deleted and replaced by a stage bar — <code>SHOOT 85 · ANSWER 47 · PRICE 3 · SELL 597</code> — where the count is the navigation and the to-do list at once.</p>
+        <div class="evidence"><b>Refuted, and not on taste:</b> Jenkins Blue Ocean was the purest stage-first UX ever shipped and is deprecated; Dagster beat Airflow by moving <i>further</i> toward objects; GitHub Actions ships zero counts in navigation. It also fails on its own facts — the seven stops omit the step that produces both the answer queue and the price questions, and the counts carry three different denominators.</div>
+      </div>
+
+      <div class="proposal">
+        <div class="ph"><span class="letter">C</span><h3>The Slab — no navigation, only a subject line</h3><span class="tag rejected">Refuted</span></div>
+        <p class="thesis">"Navigation is overhead; addressing is not."</p>
+        <p class="cap">Delete the nav, the routes and the titles. One full-bleed surface and one line that is address bar, search field and verb entry at once.</p>
+        <div class="evidence"><b>Refuted on an absence:</b> the corpus was searched for a tool with more than one object type navigating by typed line alone and found none — Superhuman, the most keyboard-extreme product surveyed, says so in its own palette guide. And its arithmetic is fatal: deleting a 45px nav to install a 40px command line <b>recovers 5px of 900</b>, against 752px of measured waste.</div>
+      </div>
+
+      <div class="proposal">
+        <div class="ph"><span class="letter">D</span><h3>The Repair — no frame, four screens fixed where they stand</h3><span class="tag locked">Built</span></div>
+        <p class="thesis">"Every measured defect is a decision about what sits above what, inside a column that already exists."</p>
+        <p class="cap">Two of the three zones already existed in the tree — and the 240px header and the buried photograph happened <i>inside</i> them. A frame cannot fix a stacking order. Four edits, no new routes.</p>
+        <div class="evidence"><b>Measured:</b> the review card goes from 10.3% of the viewport to 32.7% — <b>3.17× the area</b> — and 4,018px of scroll goes to zero. One item inside this proposal was withdrawn on the owner's correction: <q>your #3 is wrong because 16:9 is landscape and we use portrait.</q> The rig's camera is side-mounted, height binds, and a frame already as tall as the stage allows cannot grow when width is freed beside it.</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>docs/specs/logo.md · docs/DESIGN.md · docs/decisions/ · docs/design-refs/ · docs/specs/ui-redesign-options.md</footer>
+</div>
+
+<div id="lightbox" onclick="this.classList.remove('open')"><img id="lightbox-img" src="" alt=""></div>
+<script>
+  function openLightbox(src){
+    document.getElementById('lightbox-img').src = src;
+    document.getElementById('lightbox').classList.add('open');
+  }
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape') document.getElementById('lightbox').classList.remove('open');
+  });
+  document.getElementById('tabbar').addEventListener('click', function(e){
+    var btn = e.target.closest('.tabbtn');
+    if(!btn) return;
+    document.querySelectorAll('.tabbtn').forEach(function(b){ b.classList.remove('active'); });
+    document.querySelectorAll('.tabpanel').forEach(function(p){ p.classList.remove('active'); });
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    window.scrollTo({top:0, behavior:'instant'});
+  });
+  document.querySelectorAll('.bn-chip, .bn-seg-item').forEach(function(el){
+    el.addEventListener('click', function(){
+      if(el.classList.contains('bn-seg-item')){
+        el.parentElement.querySelectorAll('.bn-seg-item').forEach(function(s){ s.setAttribute('aria-pressed','false'); });
+        el.setAttribute('aria-pressed','true');
+      } else {
+        el.setAttribute('aria-pressed', el.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+      }
+    });
+  });
+</script>
+
+</body></html>

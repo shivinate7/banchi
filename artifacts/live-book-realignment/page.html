@@ -1,0 +1,666 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found]){display:none!important}</style></head><body>
+<title>Live Book Realignment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+:root {
+  --display: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+  --body: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --ground: #F6F7FB;
+  --surface: #FFFFFF;
+  --surface-2: #F0F2F8;
+  --ink: #12141C;
+  --ink-2: #4C5265;
+  --ink-3: #767D92;
+  --line: #E1E4EE;
+  --line-strong: #C9CEDD;
+
+  --accent: #3B4CE0;
+  --accent-soft: #EBEDFD;
+  --danger: #C0302A;
+  --danger-soft: #FBEDEC;
+  --warn: #9A5B00;
+  --warn-soft: #FCF2E2;
+  --ok: #14704A;
+  --ok-soft: #E8F4EE;
+
+  --step: 1.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0D0F15;
+    --surface: #161923;
+    --surface-2: #1E222E;
+    --ink: #E9EBF2;
+    --ink-2: #A6ACBF;
+    --ink-3: #7B8296;
+    --line: #262B39;
+    --line-strong: #394052;
+
+    --accent: #8A96FF;
+    --accent-soft: #1C2140;
+    --danger: #FF8078;
+    --danger-soft: #33191A;
+    --warn: #E9A94A;
+    --warn-soft: #302313;
+    --ok: #63C79A;
+    --ok-soft: #12271F;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground: #0D0F15;
+  --surface: #161923;
+  --surface-2: #1E222E;
+  --ink: #E9EBF2;
+  --ink-2: #A6ACBF;
+  --ink-3: #7B8296;
+  --line: #262B39;
+  --line-strong: #394052;
+
+  --accent: #8A96FF;
+  --accent-soft: #1C2140;
+  --danger: #FF8078;
+  --danger-soft: #33191A;
+  --warn: #E9A94A;
+  --warn-soft: #302313;
+  --ok: #63C79A;
+  --ok-soft: #12271F;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 56px 28px 96px;
+}
+
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 10px;
+}
+
+h1 { font-size: 38px; font-weight: 800; letter-spacing: -0.022em; line-height: 1.12; }
+
+.standfirst {
+  font-size: 17px;
+  color: var(--ink-2);
+  margin: 14px 0 0;
+  max-width: 62ch;
+}
+
+.stamp {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+}
+
+h2 {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 20px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--line);
+}
+
+section { margin-top: 54px; }
+
+/* ---------------------------------------------------------------- figures */
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.fig { background: var(--surface); padding: 18px 20px 20px; }
+.fig-n {
+  font-family: var(--display);
+  font-size: 27px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.fig-n.is-danger { color: var(--danger); }
+.fig-n.is-warn { color: var(--warn); }
+.fig-n.is-ok { color: var(--ok); }
+.fig-k { font-size: 13px; font-weight: 600; margin-top: 3px; }
+.fig-d { font-size: 12.5px; color: var(--ink-3); margin-top: 6px; line-height: 1.45; }
+
+/* ---------------------------------------------------------------- verdict */
+
+.verdict {
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 20px 22px;
+}
+.verdict h3 { font-size: 19px; font-weight: 700; letter-spacing: -0.012em; }
+.verdict p { margin: 10px 0 0; color: var(--ink-2); }
+.verdict p:first-of-type { color: var(--ink); }
+
+.why { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 14px; }
+.why li {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 12px;
+  font-size: 14.5px;
+  color: var(--ink-2);
+}
+.why b { color: var(--ink); font-weight: 600; }
+.why .mark {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  padding-top: 3px;
+}
+
+/* ---------------------------------------------------------------- steps */
+
+.steps { display: grid; gap: 0; }
+
+.step {
+  display: grid;
+  grid-template-columns: 46px 1fr;
+  gap: 20px;
+  padding: 26px 0;
+  border-top: 1px solid var(--line);
+}
+.step:first-child { border-top: none; padding-top: 6px; }
+
+.num {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+  padding-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.num.pre { color: var(--accent); }
+
+.step h3 {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.step p { margin: 9px 0 0; color: var(--ink-2); max-width: 64ch; }
+.step p b { color: var(--ink); font-weight: 600; }
+
+.chip {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+  position: relative;
+  top: -1px;
+}
+.chip.rev { background: var(--ok-soft); color: var(--ok); }
+.chip.irrev { background: var(--danger-soft); color: var(--danger); }
+.chip.free { background: var(--surface-2); color: var(--ink-3); }
+.chip.done { background: var(--ok-soft); color: var(--ok); }
+.step.is-done h3 { color: var(--ink-2); }
+.step.is-done > .num { color: var(--ok); }
+.result {
+  margin: 14px 0 0;
+  padding: 13px 16px;
+  border-radius: 5px;
+  background: var(--ok-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.result .lbl {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ok);
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+.result b { color: var(--ink); font-weight: 600; }
+
+pre {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 12px 14px;
+  margin: 14px 0 0;
+  overflow-x: auto;
+  color: var(--ink);
+}
+pre .c { color: var(--ink-3); }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.885em;
+  background: var(--surface-2);
+  padding: 1.5px 5px;
+  border-radius: 3px;
+  color: var(--ink);
+}
+.verdict code, .trap code { background: transparent; padding: 0; }
+
+/* ---------------------------------------------------------------- traps */
+
+.trap {
+  margin: 16px 0 0;
+  padding: 13px 16px;
+  border-radius: 5px;
+  background: var(--warn-soft);
+  border: 1px solid transparent;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.trap.hard { background: var(--danger-soft); }
+.trap .lbl {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--warn);
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+.trap.hard .lbl { color: var(--danger); }
+.trap b { color: var(--ink); font-weight: 600; }
+.trap .src {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  display: block;
+  margin-top: 6px;
+}
+
+/* ---------------------------------------------------------------- table */
+
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 500px; }
+th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+td { padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--surface); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.sku { font-family: var(--mono); font-size: 12.5px; }
+
+/* ---------------------------------------------------------------- misc */
+
+.note {
+  font-size: 13.5px;
+  color: var(--ink-3);
+  border-left: 2px solid var(--line-strong);
+  padding-left: 14px;
+  margin: 18px 0 0;
+  max-width: 64ch;
+}
+
+.notfix { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.notfix li {
+  font-size: 14px;
+  color: var(--ink-2);
+  padding-left: 18px;
+  position: relative;
+  max-width: 66ch;
+}
+.notfix li::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 9px;
+  width: 6px; height: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 1px;
+}
+.notfix b { color: var(--ink); font-weight: 600; }
+
+footer {
+  margin-top: 64px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--ink-3);
+  max-width: 66ch;
+}
+
+@media (max-width: 620px) {
+  .wrap { padding: 36px 18px 72px; }
+  h1 { font-size: 29px; }
+  .figures { grid-template-columns: 1fr; }
+  .step { grid-template-columns: 1fr; gap: 8px; }
+  .num { padding-top: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">Runbook · Banchi ↔ TCGplayer</p>
+  <h1>Live Book Realignment</h1>
+  <p class="standfirst">Bringing the marketplace and the shelf into agreement — what the defect actually is, why the wipe is off the table, and the order to do it in.</p>
+  <div class="stamp">
+    <span>export live-tcgplayer-20260907-234156.csv</span>
+    <span>779 rows · 400 live SKUs · 1,049 copies</span>
+    <span>shelf 1,283 copies / 384 SKUs</span>
+    <span>P1 P2 P4 done · step 1 answered</span>
+  </div>
+</header>
+
+<section>
+  <h2>What is actually wrong</h2>
+  <div class="figures">
+    <div class="fig">
+      <div class="fig-n is-danger">17</div>
+      <div class="fig-k">phantom copies</div>
+      <div class="fig-d">8 SKUs listed above what the shelf holds. ~$8.50. Every one traces to a single import file uploaded twice.</div>
+    </div>
+    <div class="fig">
+      <div class="fig-n is-warn">403</div>
+      <div class="fig-k">copies unoffered</div>
+      <div class="fig-d">139 SKUs sitting in boxes that TCGplayer is not selling. This is the money, and it is 24× the defect.</div>
+    </div>
+    <div class="fig">
+      <div class="fig-n is-ok">428/442</div>
+      <div class="fig-k">SKUs predicted exactly</div>
+      <div class="fig-d">The store's <code>live_estimate</code> matches TCGplayer's own quantity. The bookkeeping is in good shape.</div>
+    </div>
+  </div>
+
+  <p class="note">Read against <code>live_estimate</code> — <code>max(0, live − sold_here)</code>, which is what every screen draws — not the raw <code>live</code> column. Raw <code>live</code> omits 84 sales marked on 2026-09-07 that no export has caught up with yet, and reading it directly is what produced the earlier figure of 43 SKUs / 70 copies.</p>
+
+  <div class="tbl-wrap" style="margin-top:22px">
+    <table>
+      <thead><tr><th>SKU</th><th>Card</th><th class="n">TCGplayer</th><th class="n">On hand</th><th class="n">Phantom</th></tr></thead>
+      <tbody>
+        <tr><td class="sku">9035566</td><td>Glasc Mixologist</td><td class="n">8</td><td class="n">5</td><td class="n">+3</td></tr>
+        <tr><td class="sku">9027225</td><td>Windsinger</td><td class="n">6</td><td class="n">3</td><td class="n">+3</td></tr>
+        <tr><td class="sku">9034719</td><td>Brutalizer</td><td class="n">3</td><td class="n">0</td><td class="n">+3</td></tr>
+        <tr><td class="sku">9198149</td><td>Shadow</td><td class="n">6</td><td class="n">4</td><td class="n">+2</td></tr>
+        <tr><td class="sku">9035556</td><td>Vanguard Armory</td><td class="n">4</td><td class="n">2</td><td class="n">+2</td></tr>
+        <tr><td class="sku">9026926</td><td>B.F. Sword</td><td class="n">4</td><td class="n">2</td><td class="n">+2</td></tr>
+        <tr><td class="sku">9035648</td><td>Rocket Barrage</td><td class="n">2</td><td class="n">1</td><td class="n">+1</td></tr>
+        <tr><td class="sku">9035581</td><td>Drag Under</td><td class="n">2</td><td class="n">1</td><td class="n">+1</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note">All eight are Riftbound commons at $0.50 from <code>runs/2026-08-31-box3-01/import-subthreshold-riftbound.csv</code> — nine rows, uploaded twice. Every SKU in that file reads exactly <code>2 × emitted − sold</code>; no other import file on the machine shows the pattern. The quantities have been static across all six live exports since 09-06, so nothing is correcting them and they are not selling.</p>
+</section>
+
+<section>
+  <h2>The wipe is off the table</h2>
+  <div class="verdict">
+    <h3>Don't clear the inventory. The reason I gave you first was wrong; these three are not.</h3>
+    <p>My original objection — that clearing would destroy $18k of hand-listed stock — was false. TCGplayer's Delete Inventory keeps prices and only zeroes quantities. But the audit found three things that break the plan for reasons I hadn't checked.</p>
+    <ul class="why">
+      <li><span class="mark">01</span><span><b>The wipe makes the re-push smaller, not bigger.</b> <code>_copies_out</code> gates the sold-copy ceiling on <code>read &gt; 0</code>, so an export reading zero everywhere falls back to the full <code>pushed + staged</code> of 1,181. Simulated: a full re-emit writes <b>300 copies today and 7 after a wipe</b>. And nothing in the repo can reset <code>pushed</code>.</span></li>
+      <li><span class="mark">02</span><span><b>The post-wipe reconcile may be impossible.</b> If the export comes back header-only, <code>fetch_live</code> refuses it outright as <code>tcg_export_empty</code>; if it comes back all-zeros, every ledger SKU lands in <code>report.absent</code>, which is not in <code>settling</code>, and the write loop never touches it. Either way the store cannot be told what happened.</span></li>
+      <li><span class="mark">03</span><span><b>The 43 records the reconcile creates fall into a hole.</b> <code>livecheck.py:188-192</code> drops any row where <code>claim == 0</code> and quantity is <code>0</code> — into no bucket at all. Every D109 record has <code>pushed = 0</code> by design, so after a clear their stale <code>live</code> is unsettleable and every later reconcile silently skips them.</span></li>
+    </ul>
+    <p>Against a defect of 17 copies and $8.50, traceable to one known file, none of that risk buys anything. The negative-quantity CSV closes it in one upload.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Before anything touches TCGplayer</h2>
+  <div class="steps">
+
+    <div class="step">
+      <div class="num pre">P1</div>
+      <div>
+        <h3>Fix the merged-emit crash <span class="chip done">done · PR #216</span></h3>
+        <p><code>pipeline/merge.py:170</code> does <code>max(leg.match.live_cap for leg in legs)</code>. Since yesterday's D7 rewrite <code>live_cap</code> defaults to <code>None</code>, so this raises <code>TypeError</code> the moment one SKU appears in two runs — <b>exactly the shape step 5 needs</b>. My defect, introduced in PR #212. The two fields below it already use the right idiom.</p>
+        <pre><span class="c"># collect the real caps; no cap only when no leg names one, and the</span>
+<span class="c"># tightest bound wins rather than the loosest (a cap is a ceiling).</span>
+caps = [leg.match.live_cap for leg in legs if leg.match.live_cap is not None]
+live_cap = min(caps) if caps else None</pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="num pre">P2</div>
+      <div>
+        <h3>Finish retiring the standing cap <span class="chip done">done · PR #216</span></h3>
+        <p><code>pipeline/corpus.py:159</code> still reads <code>live_cap: object = pricing.LIVE_QUANTITY_CAP</code>, and <code>to_payload</code> writes it unconditionally, so a fresh store inherits the bound D7 retired. Change the default to <code>None</code>. <code>Corpus.parse</code> already routes through <code>parse_live_cap</code> correctly.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="num pre">P3</div>
+      <div>
+        <h3>Decide the cap for your store</h3>
+        <p>Your <code>inventory/prices.json</code> holds <code>"live_cap": 4</code>. The code change does not reach a store that has the figure written down — <code>_cap_for</code> reads that key, and neither the CLI nor the ship bar can express "no cap" while it holds a number. With 403 copies unoffered, a cap of 4 is a large part of why. Remove the key, or set the send's cap explicitly in step 5.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="num pre">P4</div>
+      <div>
+        <h3>Snapshot the store <span class="chip done">done</span></h3>
+        <p>There is no backup command — <code>cli/__main__.py</code> registers only scan, identify, join, emit, reconcile, prices and reprice. <code>pushed</code> has no drawdown, and step 2 clears 84 <code>sold_here</code> counters irreversibly. A file copy is the only rollback for either.</p>
+        <pre>sqlite3 "file:inventory/store.sqlite?mode=ro" ".backup ~/banchi-backups/store-20260907.sqlite"
+cp -R inventory/.live ~/banchi-backups/live-exports-20260907
+cp inventory/prices.json ~/banchi-backups/prices-20260907.json</pre>
+        <div class="result">
+          <span class="lbl">Taken 2026-09-07</span>
+          <code>PRAGMA integrity_check</code> → <b>ok</b>. 1,625 cards · 443 listings · 100 orders · 7,852 events, plus all seven live exports and the pricing corpus. Taken through <code>.backup</code> rather than <code>cp</code>, so it is consistent against the running server.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section>
+  <h2>The sequence</h2>
+  <div class="steps">
+
+    <div class="step">
+      <div class="num">01</div>
+      <div>
+        <h3>Settle the orders question <span class="chip done">answered</span></h3>
+        <p>The ledger was 22 hours stale, not wrong. TCGplayer's own status counts over the last three months carry <b>no Ready-to-Ship row at all</b> — 269 Completed&nbsp;·&nbsp;Paid, 89 Shipped&nbsp;·&nbsp;In&nbsp;Transit, 33 Delivered, 11 Canceled. All 14 orders the ledger held open came back Shipped&nbsp;·&nbsp;In&nbsp;Transit.</p>
+        <div class="result">
+          <span class="lbl">Ledger synced</span>
+          36 orders detailed (22 new, 14 changed) → <b>89 In Transit, 33 Delivered, zero Ready to Ship</b>. Card states, the event log and every listing counter are untouched — <code>POST /orders/ingest</code> writes <code>ledger.orders</code> and can write nothing else (D63), and that was checked against the store afterwards rather than taken on trust.
+        </div>
+        <p>Across the whole ledger: 315 copies billed, 270 marked sold, and the gap reconciles almost entirely to <b>20 SKUs / 55 copies of hand-listed stock</b> Banchi does not track. What is left is the list below.</p>
+        <p style="margin-top:16px"><b>Eight copies, six SKUs — billed by TCGplayer, never marked sold, still on the shelf, and TCGplayer now holds none of any of them.</b> Left uncorrected, step 5 re-lists eight cards that are not in the boxes.</p>
+        <div class="tbl-wrap" style="margin-top:14px">
+          <table>
+            <thead><tr><th>SKU</th><th>Card</th><th>Where</th><th class="n">Billed</th><th>Order</th></tr></thead>
+            <tbody>
+              <tr><td class="sku">9187594</td><td>Baron Nashor</td><td>Box 3 · RB Epics — idx 58, 613</td><td class="n">3 @ ~$19</td><td>Shipped · In Transit</td></tr>
+              <tr><td class="sku">8926362</td><td>Ekko, Recurrent</td><td>Box 3 · RB Epics — idx 196, 298</td><td class="n">2 @ $1.01</td><td>Shipped · In Transit</td></tr>
+              <tr><td class="sku">9018543</td><td>Spinning Axe</td><td>Box 3 · RB Epics — idx 669</td><td class="n">2 @ $3.21</td><td>Shipped · In Transit</td></tr>
+              <tr><td class="sku">9037737</td><td>Counter Strike</td><td>Box 3 · RB Epics — idx 639</td><td class="n">3 @ $1.05</td><td>Shipped · In Transit</td></tr>
+              <tr><td class="sku">8927407</td><td>Harnessed Dragon</td><td>Box 3 · RB Epics — idx 270</td><td class="n">1 @ $1.99</td><td>Shipped · In Transit</td></tr>
+              <tr><td class="sku">9199564</td><td>Smoke and Mirrors</td><td>Box 1 · UNL Rares — idx 62</td><td class="n">1 @ $0.47</td><td>Shipped · In Transit</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="margin-top:14px"><b>Baron Nashor first.</b> Three copies billed across two orders, both already in transit, and only one marked sold — two copies at ~$19 each are the most valuable thing on this list and Banchi still believes they are in box 3.</p>
+        <div class="trap">
+          <span class="lbl">These are stored indices, not the card number</span>
+          A box closes up behind a departed card (D58), so counting to index 613 by hand lands on the wrong card. Open each from <code>#/inventory</code> instead. And marking them sold is a judgement about what is physically in the box — the one call this runbook cannot make for you.
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="num">02</div>
+      <div>
+        <h3>Read the live book into the store <span class="chip irrev">irreversible</span></h3>
+        <p>This is the step that makes Banchi's <code>live</code> true for all 779 SKUs — including the 43 it has never photographed, which get a record and a first sighting under D109. Preview first; it prints both directions and presses nothing.</p>
+        <pre>./pkmnscan reconcile --live inventory/.live/live-tcgplayer-20260907-234156.csv
+<span class="c"># then, once the preview reads right:</span>
+./pkmnscan reconcile --live inventory/.live/live-tcgplayer-20260907-234156.csv --write</pre>
+        <p style="margin-top:12px">Verified on an isolated copy of your store: 49 listings adopted, 0 kept, 393 unchanged, 43 recorded, 400 first sightings — and afterwards <b>zero SKUs disagree with the export</b>. A second identical pass writes nothing.</p>
+        <div class="trap hard">
+          <span class="lbl">Do not copy the export first</span>
+          The reading time is the file's <b>mtime</b>, not its contents. A <code>cp</code> of a stale export presents as fresh and erases every counted sale — reproduced: copying the 06:47 export printed <i>"caught up 52 SKUs"</i> and zeroed all 84 <code>sold_here</code> counters.
+          <span class="src">store/master.py:933-953 · cli/runs.py:130-153</span>
+        </div>
+        <div class="trap">
+          <span class="lbl">Feed it a My Pricing export, nothing else</span>
+          Nothing checks the file's kind. A Filtered Export has a blank <code>Total Quantity</code>, and running one through this would settle 334 SKUs and write <code>live = 0</code> on 269 of them — erasing 602 live copies.
+          <span class="src">server/pipeline_routes.py:3439-3448 checks only the first line</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="num">03</div>
+      <div>
+        <h3>Kill the 17 phantom copies <span class="chip irrev">no undo</span></h3>
+        <p>Eight rows, negative <code>Add to Quantity</code>, uploaded once. TCGplayer's own documentation: <i>"If you place a negative number in this field, it will remove that amount from your existing quantity… the minimum your quantity can be is 0."</i> <code>TCG Marketplace Price</code> is required on every row — carry each SKU's current price through unchanged so nothing is repriced by accident.</p>
+        <div class="trap">
+          <span class="lbl">This is a hand upload</span>
+          There is no in-app press for a quantity-bearing file. <code>server/tcg_import.py:293-302</code> refuses any non-zero <code>Add to Quantity</code> by name (<code>tcg_import_moves_quantity</code>), and the push/publish buttons on <code>#/pricing</code> are markdown-scoped and price-only. Download it, upload once through Import to Staged, then Move to Live. <b>A second upload doubles the correction</b> — which is the exact mechanism that created this defect on 2026-08-31.
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="num">04</div>
+      <div>
+        <h3>Price the book <span class="chip rev">reversible</span></h3>
+        <p>Open <code>#/pricing</code> → <b>Price my live listings</b>. The lens covers every live row including all 47 Banchi has never photographed, and a sold-out row is not surveyed at all. Your corpus holds 336 answers against 384 on-hand SKUs, and 272 of those answers were written in one pass yesterday morning that has never been published.</p>
+        <div class="trap">
+          <span class="lbl">Do this before step 5, not after</span>
+          <code>emit</code> writes <code>TCG Marketplace Price</code> on every row it adds, so adding stock <b>publishes your pricing answers as a side effect</b>. Simulated on an uncapped emit: 79 SKUs / 309 already-live copies would drop from $0.49–$0.50 to $0.29 — around $57 of asking price cut, on copies you never asked to reprice. Decide those prices deliberately here first.
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="num">05</div>
+      <div>
+        <h3>Close the under-listing <span class="chip irrev">irreversible on write</span></h3>
+        <p>The real prize: 139 SKUs, 403 copies. Box 6 alone is an unemitted run — 11 SKUs / 64 copies that have never been sent. Split by game from the first press.</p>
+        <pre>./pkmnscan emit runs/2026-08-24-box2-01 runs/2026-08-29-box1-01 \
+    runs/2026-08-30-box3-01 runs/2026-08-31-box3-01 \
+    runs/2026-09-01-box3-01 runs/2026-09-01-box4-01 \
+    runs/2026-09-01-box5-01 runs/2026-09-02-box6-01 \
+    --split-games</pre>
+        <p style="margin-top:12px">Eight runs — <code>2026-08-22-box1-03</code> is dead and its cards belong to the box-1 run. All 1,354 on-hand cards are covered.</p>
+        <div class="trap hard">
+          <span class="lbl">Writing the file is the commitment, not uploading it</span>
+          <code>emit</code> has <b>no <code>--dry-run</code></b>, and it raises <code>pushed</code> when the CSV is written — before anything reaches TCGplayer, into a counter with no drawdown. An emit you write and then don't upload strands those copies permanently: <code>copies_out</code> covers them, <code>uncommitted_positions</code> empties, and no future emit will offer them again. Use <code>join --dry-run</code> to see the shape first.
+          <span class="src">cli/cmd_emit.py:669-671 · store/master.py:1994</span>
+        </div>
+        <div class="trap">
+          <span class="lbl">Split games, always</span>
+          Whether Import to Staged accepts a two-Product-Line file has never been established here — only single-line files are proven. Discovering a refusal <i>after</i> emit has run is unrecoverable, because <code>pushed</code> already moved and a re-emit writes nothing.
+        </div>
+        <div class="trap">
+          <span class="lbl">The prices in these runs are 6–9 days old</span>
+          Emit prices from each run's recorded export. Mirror Image (9189757) was captured at $6.61 market on 09-01 and reads $8.75 today — four copies would go out 24% under. 90 of 103 SKUs have moved. Re-fetch each run's Filtered Export and re-join before emitting if that matters to you.
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="num">06</div>
+      <div>
+        <h3>Confirm it converged <span class="chip free">free</span></h3>
+        <p>Fetch a fresh export and reconcile again. Expect the phantom column to read zero and the unoffered count to have collapsed.</p>
+        <div class="trap">
+          <span class="lbl">Wait before you measure</span>
+          Export From Live is not read-your-writes — measured at roughly 40 seconds stale after a confirmed publish, and true convergence has never been timed. Give it a few minutes, or you will reconcile against a book that has not caught up and write a reading that is already wrong.
+          <span class="src">D106</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section>
+  <h2>What this does not fix</h2>
+  <ul class="notfix">
+    <li><b>The <code>pushed</code> ledger stays inflated.</b> Store-wide <code>pushed + staged</code> is 1,181 against 922 verified live copies on managed SKUs. <code>copies_out</code> takes <code>max(live, claim − sold)</code>, so it discards the verified reading wherever the unverified counter is larger — 31 SKUs / 88 copies today. The store-wide drawdown against a verified reading is the missing command behind all of this.</li>
+    <li><b>The <code>claim == 0</code> hole stays open.</b> Step 2 arms it on 43 records. It costs nothing while those SKUs stay in stock; the day one sells out, its stale <code>live</code> becomes unsettleable. Worth a fix in <code>livecheck.py</code> before it bites.</li>
+    <li><b>71 on-hand cards carry no SKU</b> and cannot be listed by any path until they are identified.</li>
+    <li><b>A SKU a card carries but with no listing record</b> is reported under <i>beyond this pipeline</i> and then skipped by the write loop — D109's recording covers unknown rows only. Two such SKUs today, neither live.</li>
+    <li><b>Nothing records that an upload happened.</b> <code>pushed</code> moves when the file is written; there is no history event for a live reconcile either. The receipt is the only trace, and it is terminal output.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>If you still want the clear</h2>
+  <p style="color:var(--ink-2); max-width:64ch; margin:0">It remains available and it is genuinely non-destructive — Delete Inventory on the Pricing tab, scoped by product line and set, gated behind typing your sales contact email, and prices survive. Two conditions have to hold before it is safe:</p>
+  <ul class="notfix" style="margin-top:18px">
+    <li><b>The restore cannot come from <code>emit</code>.</b> It has to be a transform of the pre-clear export — <code>Add to Quantity</code> ← the shelf count for SKUs Banchi knows, ← <code>Total Quantity</code> for the 47 it does not. TCGplayer documents this rename for BinderPOS users. Build and check that file <i>before</i> clearing, so the window where nothing is for sale is minutes.</li>
+    <li><b>Confirm what a post-clear export looks like</b> before relying on a reconcile to follow it. Header-only is refused outright; all-zeros writes nothing. Neither failure is visible until you are already cleared.</li>
+  </ul>
+</section>
+
+<footer>
+  Figures read from a read-only snapshot of <code>inventory/store.sqlite</code> joined against <code>live-tcgplayer-20260907-234156.csv</code>, fetched 23:41Z on 2026-09-07. The reconcile behaviour in step 2 was verified by running the real command against an isolated copy of the store, never the live one. The order-ledger discrepancy in step 1 is reported by the audit and unverified by me. Marketplace mechanics quoted from TCGplayer's own seller documentation.
+</footer>
+
+</div>
+
+</body></html>

@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slabs Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+/* tokens copied from app/src/tokens.css: base light and dark only */
+:root {
+  color-scheme: light;
+  --bn-bg: #f4f5f8;
+  --bn-surface: #ffffff;
+  --bn-surface-2: #eceef2;
+  --bn-surface-3: #f7f8fa;
+  --bn-surface-glass: rgba(255, 255, 255, 0.72);
+  --bn-hover: rgba(15, 18, 23, 0.03);
+  --bn-ink: #0f1217;
+  --bn-ink-2: #3b414b;
+  --bn-ink-3: #666c76;
+  --bn-ink-4: #7f8791;
+  --bn-line: rgba(15, 18, 23, 0.08);
+  --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-line-focus: rgba(61, 90, 241, 0.55);
+  --bn-field-edge: var(--bn-ink-4);
+  --bn-accent: #3d5af1;
+  --bn-accent-hover: #2f4bd9;
+  --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10);
+  --bn-accent-tint-2: rgba(61, 90, 241, 0.18);
+  --bn-on-accent: #ffffff;
+  --bn-mask: #000000;
+  --bn-flash: #ffffff;
+  --bn-live: #d63d2b;
+  --bn-live-tint: rgba(239, 75, 58, 0.12);
+  --bn-ok: #15803d;
+  --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309;
+  --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-danger: #b91c1c;
+  --bn-danger-tint: rgba(220, 38, 38, 0.10);
+  --bn-money: #0f1217;
+  --bn-pill-ink-accent: var(--bn-accent-hover);
+  --bn-pill-ink-ok: #11733a;
+  --bn-pill-ink-warn: #a14b09;
+  --bn-pill-ink-danger: #b3123e;
+  --bn-pill-ink-live: #a53f12;
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18),
+  0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32),
+  0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-shadow-accent: 0 8px 24px -8px rgba(61, 90, 241, 0.55);
+  --bn-btn-bg: var(--bn-surface);
+  --bn-btn-bg-hover: var(--bn-surface-3);
+  --bn-btn-shadow: var(--bn-shadow-1);
+  --bn-font-display: 'Manrope', 'Manrope Fallback', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', 'Inter Fallback', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace, 'SF Mono', Menlo, monospace;
+  --bn-fs-h1: var(--bn-fs-3xl);
+  --bn-fs-h2: var(--bn-fs-xl);
+  --bn-fs-h3: var(--bn-fs-lg);
+  --bn-fs-read: var(--bn-fs-md);
+  --bn-fs-label: var(--bn-fs-xs);
+  --bn-fs-2xs: 10px;
+  --bn-fs-xs: 11px;
+  --bn-fs-sm: 12px;
+  --bn-fs-md: 13px;
+  --bn-fs-base: 14px;
+  --bn-fs-lg: 16px;
+  --bn-fs-xl: 18px;
+  --bn-fs-2xl: 22px;
+  --bn-fs-3xl: 28px;
+  --bn-fs-4xl: 36px;
+  --bn-fs-5xl: 48px;
+  --bn-tracking-caps: 0.06em;
+  --bn-tracking-tight: -0.02em;
+  --bn-lh-tight: 1.1;
+  --bn-lh-snug: 1.25;
+  --bn-lh-base: 1.4;
+  --bn-lh-relaxed: 1.55;
+  --bn-1: 4px;
+  --bn-2: 8px;
+  --bn-3: 12px;
+  --bn-4: 16px;
+  --bn-5: 20px;
+  --bn-6: 24px;
+  --bn-7: 32px;
+  --bn-8: 40px;
+  --bn-9: 48px;
+  --bn-10: 64px;
+  --bn-0-5: 2px;
+  --bn-0-75: 3px;
+  --bn-1-5: 6px;
+  --bn-r-xs: 4px;
+  --bn-r-sm: 6px;
+  --bn-r: 8px;
+  --bn-r-lg: 12px;
+  --bn-r-xl: 16px;
+  --bn-r-2xl-sm: 18px;
+  --bn-r-2xl: 22px;
+  --bn-r-full: 999px;
+  --bn-t-fast: 120ms;
+  --bn-t: 200ms;
+  --bn-t-slow: 280ms;
+  --bn-t-layout: 240ms;
+  --bn-ease: cubic-bezier(0.2, 0, 0, 1);
+  --bn-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --bn-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --bn-ease-spring: cubic-bezier(0.34, 1.4, 0.44, 1);
+  --bn-ease-loop: ease-in-out;
+  --bn-ease-linear: linear;
+  --bn-rise: 6px;
+  --bn-stagger: 30ms;
+  --bn-stagger-cap: 12;
+  --bn-t-flash: 200ms;
+  --bn-t-draw: 480ms;
+  --bn-t-pulse: 1.8s;
+  --bn-t-spin: 0.7s;
+  --bn-t-shimmer: 1.4s;
+  --bn-t-highlight: 700ms;
+  --bn-t-instant: 0.01ms;
+  --bn-disabled: 0.45;
+  --bn-stage-bg: #0c0e12;
+  --bn-stage-bg-2: #171b25;
+  --bn-stage-surface: #1b2029;
+  --bn-stage-ink: #eef0f4;
+  --bn-stage-accent: #7f90ff;
+  --bn-stage-accent-hover: #93a2ff;
+  --bn-stage-accent-press: #6b7dfa;
+  --bn-stage-on-accent: #0c0e12;
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+  --bn-sidebar-w: 236px;
+  --bn-rail-w: 64px;
+  --bn-topbar-h: 52px;
+  --bn-page-w: 1600px;
+  --bn-page-w-rows: 1344px;
+  --bn-empty-w: 960px;
+  --bn-page-top: var(--bn-6);
+  --bn-control-h: 34px;
+  --bn-control-h-lg: 40px;
+  --bn-control-h-sm: 28px;
+  --bn-pill-h: 22px;
+  --bn-pill-h-sm: 18px;
+  --bn-nav-label-2: var(--bn-ink-3);
+  --bn-nav-label-3: var(--bn-ink-3);
+  --bn-nav-label-4: var(--bn-ink-3);
+  --bn-nav-hover-2: var(--bn-ink);
+  --bn-nav-hover-3: var(--bn-ink);
+  --bn-nav-hover-4: var(--bn-ink);
+  --bn-nav-accent-2: var(--bn-accent);
+  --bn-nav-accent-3: var(--bn-accent);
+  --bn-nav-accent-4: var(--bn-accent);
+  --bn-nav-tint-2: var(--bn-accent-tint);
+  --bn-nav-tint-3: var(--bn-accent-tint);
+  --bn-nav-tint-4: var(--bn-accent-tint);
+  --bn-seg-active-ink: var(--bn-ink);
+  --bn-seg-active-bg: var(--bn-surface);
+  --bn-seg-active-bg-2: var(--bn-surface);
+  --bn-page-backdrop: none;
+  --bn-row-stripe: transparent;
+}
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  :root { --bn-control-h-sm: 40px; --bn-control-h: 42px; --bn-control-h-lg: 46px; }
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --bn-bg: #0c0e12;
+  --bn-surface: #14171c;
+  --bn-surface-2: #090b0e;
+  --bn-surface-3: #1b1f26;
+  --bn-surface-glass: rgba(20, 23, 28, 0.72);
+  --bn-hover: rgba(255, 255, 255, 0.04);
+  --bn-ink: #eef0f4;
+  --bn-ink-2: #b9bfc9;
+  --bn-ink-3: #838b98;
+  --bn-ink-4: #707886;
+  --bn-line: rgba(255, 255, 255, 0.08);
+  --bn-line-strong: rgba(255, 255, 255, 0.16);
+  --bn-line-focus: rgba(129, 146, 255, 0.6);
+  --bn-accent: #7f90ff;
+  --bn-accent-hover: #93a2ff;
+  --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14);
+  --bn-accent-tint-2: rgba(127, 144, 255, 0.24);
+  --bn-on-accent: #0c0e12;
+  --bn-live: #ff6a58;
+  --bn-live-tint: rgba(255, 106, 88, 0.16);
+  --bn-ok: #3ddc84;
+  --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524;
+  --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-danger: #ff5c5c;
+  --bn-danger-tint: rgba(255, 92, 92, 0.14);
+  --bn-money: #eef0f4;
+  --bn-pill-ink-accent: var(--bn-accent-hover);
+  --bn-pill-ink-ok: var(--bn-ok);
+  --bn-pill-ink-warn: var(--bn-warn);
+  --bn-pill-ink-danger: #f6799c;
+  --bn-pill-ink-live: #ffab70;
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6),
+  0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75),
+  0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(127, 144, 255, 0.55);
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #262b34;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bn-bg: #0c0e12;
+  --bn-surface: #14171c;
+  --bn-surface-2: #090b0e;
+  --bn-surface-3: #1b1f26;
+  --bn-surface-glass: rgba(20, 23, 28, 0.72);
+  --bn-hover: rgba(255, 255, 255, 0.04);
+  --bn-ink: #eef0f4;
+  --bn-ink-2: #b9bfc9;
+  --bn-ink-3: #838b98;
+  --bn-ink-4: #707886;
+  --bn-line: rgba(255, 255, 255, 0.08);
+  --bn-line-strong: rgba(255, 255, 255, 0.16);
+  --bn-line-focus: rgba(129, 146, 255, 0.6);
+  --bn-accent: #7f90ff;
+  --bn-accent-hover: #93a2ff;
+  --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14);
+  --bn-accent-tint-2: rgba(127, 144, 255, 0.24);
+  --bn-on-accent: #0c0e12;
+  --bn-live: #ff6a58;
+  --bn-live-tint: rgba(255, 106, 88, 0.16);
+  --bn-ok: #3ddc84;
+  --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524;
+  --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-danger: #ff5c5c;
+  --bn-danger-tint: rgba(255, 92, 92, 0.14);
+  --bn-money: #eef0f4;
+  --bn-pill-ink-accent: var(--bn-accent-hover);
+  --bn-pill-ink-ok: var(--bn-ok);
+  --bn-pill-ink-warn: var(--bn-warn);
+  --bn-pill-ink-danger: #f6799c;
+  --bn-pill-ink-live: #ffab70;
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6),
+  0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75),
+  0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(127, 144, 255, 0.55);
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #262b34;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* kit subset, after app/src/kit.css. Press targets raised to 40px for this screen. */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bn-bg);
+  color: var(--bn-ink);
+  font-family: var(--bn-font-ui);
+  font-size: var(--bn-fs-base);
+  line-height: var(--bn-lh-base);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; }
+a { color: var(--bn-accent-hover); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--bn-line-focus); outline-offset: 2px; }
+
+/* ---- shell -------------------------------------------------------------- */
+.bn-shell { display: grid; grid-template-columns: var(--bn-sidebar-w) minmax(0, 1fr); min-height: 100vh; }
+.bn-side {
+  position: sticky; top: 0; height: 100vh;
+  background: var(--bn-surface-2); border-right: 1px solid var(--bn-line);
+  padding: var(--bn-4) var(--bn-3); display: flex; flex-direction: column; gap: var(--bn-1);
+}
+.bn-brand { display: flex; align-items: center; gap: var(--bn-2); padding: var(--bn-2); margin-bottom: var(--bn-3);
+  font-family: var(--bn-font-display); font-weight: 800; letter-spacing: 0.08em; font-size: var(--bn-fs-md); }
+.bn-brand-mark { width: 24px; height: 24px; border: 2px solid var(--bn-ink); display: grid; place-items: center; flex: none; }
+.bn-brand-mark::after { content: ''; width: 6px; height: 6px; border-radius: var(--bn-r-full); background: var(--bn-live); }
+.bn-nav-label { padding: var(--bn-3) var(--bn-3) var(--bn-1); font-size: var(--bn-fs-2xs); font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--bn-ink-3); }
+.bn-nav-link { display: flex; align-items: center; gap: var(--bn-3); height: 36px; padding: 0 var(--bn-3);
+  border-radius: var(--bn-r); color: var(--bn-ink-2); font-size: var(--bn-fs-md); font-weight: 500; white-space: nowrap; }
+.bn-nav-link:hover { background: var(--bn-hover); color: var(--bn-ink); text-decoration: none; }
+.bn-nav-link[aria-current='page'] { color: var(--bn-accent); background: var(--bn-accent-tint); font-weight: 600; }
+.bn-nav-ico { width: 16px; height: 16px; border-radius: var(--bn-r-xs); border: 1.5px solid currentColor; opacity: 0.7; flex: none; }
+.bn-side-foot { margin-top: auto; }
+@media (max-width: 1279px) {
+  .bn-shell { grid-template-columns: var(--bn-rail-w) minmax(0, 1fr); }
+  .bn-side { padding: var(--bn-3) var(--bn-2); align-items: center; }
+  .bn-brand span, .bn-nav-link span, .bn-nav-label { display: none; }
+  .bn-nav-link { width: 40px; height: 40px; justify-content: center; padding: 0; }
+}
+.bn-shell-main { min-width: 0; }
+
+/* ---- page scaffold ------------------------------------------------------ */
+.bn-page { padding: var(--bn-page-top) var(--bn-7) var(--bn-10); max-width: var(--bn-page-w); margin: 0; container: page / inline-size; }
+@media (max-width: 767px) { .bn-page { padding: var(--bn-4) var(--bn-4) var(--bn-10); } }
+.bn-page-head { display: flex; align-items: flex-start; gap: var(--bn-4); margin-bottom: var(--bn-4); flex-wrap: wrap; }
+.bn-page-head-text { flex: 1 1 320px; min-width: 0; }
+.bn-head-actions { display: flex; gap: var(--bn-2); flex-wrap: wrap; margin-top: 19px; }
+.bn-eyebrow { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); font-weight: 500;
+  letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); }
+.bn-eyebrow > *:not(:last-child)::after { content: '\00B7'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
+.bn-title { margin: var(--bn-1) 0 0; font-family: var(--bn-font-display); font-size: var(--bn-fs-h1); font-weight: 800;
+  letter-spacing: var(--bn-tracking-tight); line-height: var(--bn-lh-tight); }
+.bn-lede { margin: var(--bn-2) 0 0; color: var(--bn-ink-2); font-size: var(--bn-fs-base); max-width: 72ch; }
+.bn-verdict { margin: 0 0 var(--bn-4); max-width: 72ch; font-size: var(--bn-fs-lg); font-weight: 600; line-height: var(--bn-lh-base); }
+.bn-toolbar { display: flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; margin-bottom: var(--bn-4); }
+
+/* ---- surfaces ----------------------------------------------------------- */
+.bn-panel { background: var(--bn-surface); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-1); overflow: hidden; min-width: 0; }
+.bn-panel-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3);
+  padding: var(--bn-3) var(--bn-4); border-bottom: 1px solid var(--bn-line); }
+.bn-panel-title { margin: 0; font-family: var(--bn-font-display); font-size: var(--bn-fs-h3); font-weight: 700; }
+.bn-panel-body { padding: var(--bn-4); }
+.bn-well { background: var(--bn-surface-2); border-radius: var(--bn-r); padding: var(--bn-3) var(--bn-4); }
+
+/* ---- controls (40px floor) ---------------------------------------------- */
+.bn-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-2);
+  height: var(--bn-control-h-lg); padding: 0 var(--bn-4); border-radius: var(--bn-r);
+  font-size: var(--bn-fs-md); font-weight: 600; line-height: 1; white-space: nowrap;
+  color: var(--bn-ink); background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease); }
+.bn-btn:hover { background: var(--bn-btn-bg-hover); text-decoration: none; }
+.bn-btn:active { translate: 0 1px; }
+.bn-btn:disabled { opacity: var(--bn-disabled); translate: none; cursor: default; }
+.bn-btn-primary { color: var(--bn-on-accent); background: var(--bn-accent); box-shadow: var(--bn-shadow-1); }
+.bn-btn-primary:hover { background: var(--bn-accent-hover); box-shadow: var(--bn-shadow-accent); }
+.bn-btn-ghost { background: transparent; box-shadow: none; color: var(--bn-ink-2); }
+.bn-btn-ghost:hover { background: var(--bn-accent-tint); color: var(--bn-ink); }
+.bn-btn-tint { color: var(--bn-accent-hover); background: var(--bn-accent-tint); box-shadow: none; }
+.bn-btn-tint:hover { background: var(--bn-accent-tint-2); }
+.bn-btn-icon { width: var(--bn-control-h-lg); padding: 0; }
+.bn-seg { display: inline-flex; gap: var(--bn-0-5); padding: var(--bn-0-75); border-radius: var(--bn-r); background: var(--bn-surface-2); }
+.bn-seg-item { display: inline-flex; align-items: center; gap: var(--bn-1-5); height: 40px; padding: 0 var(--bn-3);
+  border-radius: var(--bn-r-sm); font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); white-space: nowrap;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease); }
+.bn-seg-item:hover { color: var(--bn-ink); }
+.bn-seg-item[aria-pressed='true'] { color: var(--bn-seg-active-ink); background: var(--bn-seg-active-bg); box-shadow: var(--bn-shadow-1); }
+.bn-chip { display: inline-flex; align-items: center; gap: var(--bn-1-5); height: var(--bn-control-h-lg); padding: 0 var(--bn-3);
+  border-radius: var(--bn-r-full); background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow); color: var(--bn-ink-2);
+  font-size: var(--bn-fs-sm); font-weight: 600; white-space: nowrap;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease); }
+.bn-chip:hover { background: var(--bn-btn-bg-hover); color: var(--bn-ink); }
+.bn-chip[aria-pressed='true'] { background: var(--bn-ink); color: var(--bn-bg); box-shadow: none; }
+.bn-count { display: inline-block; min-inline-size: calc(var(--digits, 3) * 1ch); text-align: end; font-variant-numeric: tabular-nums; }
+.bn-search { height: var(--bn-control-h-lg); min-width: 220px; padding: 0 var(--bn-3); border-radius: var(--bn-r);
+  border: 1px solid var(--bn-field-edge); background: var(--bn-surface); color: var(--bn-ink); font: inherit; font-size: var(--bn-fs-md); }
+.bn-check { display: inline-grid; place-items: center; width: 40px; height: 40px; margin: -10px; cursor: pointer; }
+.bn-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--bn-accent); cursor: pointer; }
+
+/* ---- pills, stats, money ----------------------------------------------- */
+.bn-pill { display: inline-flex; align-items: center; gap: var(--bn-1-5); height: var(--bn-pill-h); padding: 0 var(--bn-2);
+  border-radius: var(--bn-r-full); font-size: var(--bn-fs-xs); font-weight: 600; line-height: 1; white-space: nowrap;
+  color: var(--bn-ink-2); background: var(--bn-surface-2); }
+.bn-pill-accent { color: var(--bn-pill-ink-accent); background: var(--bn-accent-tint); }
+.bn-pill-ok { color: var(--bn-pill-ink-ok); background: var(--bn-ok-tint); }
+.bn-pill-warn { color: var(--bn-pill-ink-warn); background: var(--bn-warn-tint); }
+.bn-pill-danger { color: var(--bn-pill-ink-danger); background: var(--bn-danger-tint); }
+.bn-pill-outline { background: transparent; box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+.bn-stat-row { display: flex; flex-wrap: wrap; gap: var(--bn-3) var(--bn-6); }
+.bn-stat { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
+.bn-stat-value { font-family: var(--bn-font-display); font-size: var(--bn-fs-2xl); font-weight: 800; letter-spacing: var(--bn-tracking-tight); line-height: 1; font-variant-numeric: tabular-nums; }
+.bn-stat-value.bn-money { font-family: var(--bn-font-mono); }
+.bn-stat-label { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.bn-money { font-family: var(--bn-font-mono); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-money); }
+.bn-mono { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); }
+.muted { color: var(--bn-ink-3); }
+.ink2 { color: var(--bn-ink-2); }
+.up { color: var(--bn-ok); }
+.down { color: var(--bn-danger); }
+.small { font-size: var(--bn-fs-sm); }
+.nowrap { white-space: nowrap; }
+
+/* ---- table -------------------------------------------------------------- */
+.bn-table { width: 100%; border-collapse: collapse; font-size: var(--bn-fs-md); }
+.bn-table th { text-align: left; font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase; color: var(--bn-ink-3); padding: var(--bn-2) var(--bn-3); border-bottom: 1px solid var(--bn-line);
+  white-space: nowrap; background: var(--bn-surface); position: sticky; top: 0; z-index: 1; }
+.bn-table td { padding: var(--bn-1) var(--bn-3); border-bottom: 1px solid var(--bn-line); vertical-align: middle; height: 44px; }
+.bn-table tbody tr { transition: background-color var(--bn-t-fast) var(--bn-ease); }
+.bn-table tbody tr:hover { background: var(--bn-hover); }
+.bn-table tbody tr[aria-selected='true'] { background: var(--bn-accent-tint); }
+.bn-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.bn-scroll { overflow-x: auto; }
+
+/* ---- the theme switch, mockup only -------------------------------------- */
+.mock-theme { position: fixed; right: var(--bn-4); bottom: var(--bn-4); z-index: 50; }
+
+/* ---- shared slab pieces ------------------------------------------------- */
+.sep > *:not(:last-child)::after { content: '\00B7'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
+.spark { display: inline-flex; align-items: flex-end; gap: 2px; height: 18px; vertical-align: middle; }
+.spark i { display: block; width: 5px; border-radius: 1px; background: var(--bn-ink-4); }
+.spark i:first-child { background: var(--bn-accent); }
+.conf { display: inline-flex; gap: 2px; vertical-align: middle; }
+.conf i { width: 6px; height: 10px; border-radius: 1px; background: var(--bn-line-strong); }
+.conf[data-c='1'] i:nth-child(-n+1), .conf[data-c='2'] i:nth-child(-n+2) { background: var(--bn-warn); }
+.conf[data-c='3'] i:nth-child(-n+3), .conf[data-c='4'] i:nth-child(-n+4), .conf[data-c='5'] i:nth-child(-n+5) { background: var(--bn-ok); }
+.selbar { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; gap: var(--bn-4); flex-wrap: wrap;
+  margin-top: var(--bn-4); padding: var(--bn-3) var(--bn-4); background: var(--bn-surface); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-2); }
+.selbar[data-empty='true'] .selbar-on { visibility: hidden; }
+
+
+.board { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr); gap: var(--bn-4); align-items: start; }
+.lane { background: var(--bn-surface-2); border-radius: var(--bn-r-lg); padding: var(--bn-3); min-width: 0; }
+.lane-head { padding: var(--bn-2) var(--bn-2) var(--bn-3); display: grid; gap: var(--bn-1); }
+.lane-head h2 { margin: 0; font-family: var(--bn-font-display); font-size: var(--bn-fs-h3); font-weight: 800; display: flex; align-items: center; gap: var(--bn-2); }
+.lane-head p { margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+.lane-tone { width: 10px; height: 10px; border-radius: var(--bn-r-full); background: var(--bn-ink-4); }
+.lane[data-k='slab'] .lane-tone { background: var(--bn-ok); }
+.lane[data-k='raw'] .lane-tone { background: var(--bn-warn); }
+.lane-sum { display: flex; align-items: baseline; gap: var(--bn-3); flex-wrap: wrap; }
+.tiles { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--bn-2); max-height: calc(100vh - 330px); overflow: auto; padding: var(--bn-0-5); }
+.tile { background: var(--bn-surface); border-radius: var(--bn-r); box-shadow: var(--bn-shadow-1); padding: var(--bn-3); display: grid; gap: var(--bn-2);
+  transition: box-shadow var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease); }
+.tile[aria-selected='true'] { box-shadow: inset 0 0 0 2px var(--bn-accent); }
+.tile-top { display: flex; gap: var(--bn-3); align-items: flex-start; }
+.tile-name { flex: 1; min-width: 0; }
+.tile-name b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile-ask { text-align: right; }
+.tile-ask .bn-money { font-size: var(--bn-fs-lg); }
+.tile-mid { display: flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; font-size: var(--bn-fs-sm); }
+.tile-note { font-size: var(--bn-fs-sm); color: var(--bn-pill-ink-warn); background: var(--bn-warn-tint); border-radius: var(--bn-r-sm); padding: var(--bn-1) var(--bn-2); }
+.tile-foot { display: flex; align-items: center; gap: var(--bn-2); }
+.tile-foot .bn-btn { height: 40px; }
+.lane-switch { display: none; margin-bottom: var(--bn-3); }
+@container page (max-width: 899px) {
+  .board { grid-template-columns: minmax(0, 1fr); }
+  .lane-switch { display: inline-flex; }
+  .lane:not([data-on]) { display: none; }
+  .tiles { max-height: none; }
+}
+.tray { position: sticky; bottom: 0; z-index: 5; margin-top: var(--bn-4); display: flex; align-items: center; gap: var(--bn-4); flex-wrap: wrap;
+  background: var(--bn-surface); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-2); padding: var(--bn-3) var(--bn-4); }
+.tray-chips { display: flex; gap: var(--bn-1); flex: 1; min-width: 0; overflow: hidden; height: var(--bn-pill-h); }
+
+</style>
+</head>
+<body>
+<script>
+const SLABS = [{"cert":"6144951059","card":"Hearthflame Mask Ogerpon ex","game":"Pokemon","set":"SV06","setFull":"Pokemon Twilight Masquerade - TWM EN","num":"192/167","var":"UR","grader":"CGC","grade":"10P","pop":20,"cl":135.0,"raw":2.51,"graded":268,"rate":0.07462686567164178,"top":0.07462686567164178,"best":0.07462686567164178,"bestGrade":"10P","ladder":"CGC pop, 268 graded. 10P: 20, 10: 142, 9.5: 25, 9: 54, 8.5: 14, 8: 12, 7.5: 1","conf":3,"sales":[{"date":"2026-08-06","price":116.4,"platform":"Alt","type":"Auction","url":"https://app.alt.xyz/browse/sold/4f35cee2-1370-47f6-8f4f-22367b283d6a"},{"date":"2024-09-30","price":26.4,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/5df7d546-6c77-11ef-b51e-0a58a9feac02"}],"clFresh":238,"clUsed":238,"psa10":53.25,"val":238,"mult":94.82071713147411,"act":"slab","ask":238},{"cert":"6144952118","card":"Ditto V","game":"Pokemon","set":"SHF","setFull":"Pokemon Shining Fates","num":"SV118/SV122","var":"Shiny Vault","grader":"CGC","grade":"10P","pop":141,"cl":120.0,"raw":1.78,"graded":2114,"rate":0.06669820245979187,"top":0.06764427625354778,"best":0.000946073793755913,"bestGrade":"10 Perfect","ladder":"CGC pop, 2,114 graded. 10 Perfect: 2, 10P: 141, 10: 831, 9.5: 45, 9: 939, 8.5: 117, 8: 22, 7.5: 6","conf":5,"sales":[{"date":"2026-10-14","price":120,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/158084630717"},{"date":"2026-10-12","price":72,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/0fa8f106-ae2c-11f1-8aa5-0a58a9feac02"},{"date":"2026-10-06","price":135,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/257763008829"},{"date":"2026-07-20","price":149.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/287466972939"},{"date":"2026-06-13","price":240,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/306981260972"}],"clFresh":120,"clUsed":120,"psa10":null,"val":120,"mult":67.41573033707866,"act":"slab","ask":120},{"cert":"6144951179","card":"Dondozo ex","game":"Pokemon","set":"SV10","setFull":"Pokemon Destined Rivals - DRI EN","num":"211/182","var":"UR","grader":"CGC","grade":"10P","pop":66,"cl":46.0,"raw":1.01,"graded":387,"rate":0.17054263565891473,"top":0.17054263565891473,"best":0.17054263565891473,"bestGrade":"10P","ladder":"CGC pop, 387 graded. 10P: 66, 10: 177, 9.5: 26, 9: 82, 8.5: 20, 8: 9, 7.5: 2, 6.5: 4","conf":4,"sales":[{"date":"2026-09-22","price":43,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/f26a7466-7ad8-46d8-bfae-971e979477ee"},{"date":"2026-09-04","price":42,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/3ae65454-1517-47c3-a7c7-0c4defd83783"},{"date":"2026-07-26","price":39.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/137495877799"},{"date":"2026-07-20","price":30,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/71add092-7a79-11f1-b3db-0a58a9feac02"},{"date":"2026-06-30","price":19.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/158022243903"}],"clFresh":56,"clUsed":56,"psa10":43.77,"val":56,"mult":55.445544554455445,"act":"slab","ask":56},{"cert":"6144952070","card":"Irelia","game":"Riftbound","set":"SFD","setFull":"Spiritforged (SFD)","num":"141a/221","var":"","grader":"CGC","grade":"10P","pop":4,"cl":87.0,"raw":1.57,"graded":17,"rate":0.23529411764705882,"top":0.23529411764705882,"best":0.23529411764705882,"bestGrade":"10P","ladder":"CGC pop, 17 graded. 10P: 4, 10: 4, 9: 4, 8.5: 5","conf":4,"sales":[{"date":"2026-09-25","price":80,"platform":"Fanatics-Vault","type":"BestOffer","url":"https://www.fanaticscollect.com/buy-now/6424aeb6-6d59-4786-aa94-e47b1627b42b"}],"clFresh":86,"clUsed":86,"psa10":64.0,"val":86,"mult":54.77707006369427,"act":"slab","ask":86},{"cert":"6144952076","card":"Mega Latias ex","game":"Pokemon","set":"MEP","setFull":"Pokemon Black Star Promos - Mega Evolution MEP EN","num":"011","var":"P","grader":"CGC","grade":"10P","pop":182,"cl":31.99,"raw":0.71,"graded":1050,"rate":0.17333333333333334,"top":0.17333333333333334,"best":0.17333333333333334,"bestGrade":"10P","ladder":"CGC pop, 1,050 graded. 10P: 182, 10: 367, 9.5: 67, 9: 256, 8.5: 84, 8: 59, 7.5: 21, 7: 4","conf":5,"sales":[{"date":"2026-10-18","price":33,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/158144158381"},{"date":"2026-10-16","price":31.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/820226339529"},{"date":"2026-10-11","price":22,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/128123530531"},{"date":"2026-10-11","price":20.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/117440560976"},{"date":"2026-09-21","price":29.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/298387800949"}],"clFresh":33,"clUsed":33,"psa10":35.0,"val":33,"mult":46.47887323943662,"act":"slab","ask":33},{"cert":"6144952077","card":"Mega Latias ex","game":"Pokemon","set":"MEP","setFull":"Pokemon Black Star Promos - Mega Evolution MEP EN","num":"011","var":"P","grader":"CGC","grade":"10P","pop":182,"cl":31.99,"raw":0.71,"graded":1050,"rate":0.17333333333333334,"top":0.17333333333333334,"best":0.17333333333333334,"bestGrade":"10P","ladder":"CGC pop, 1,050 graded. 10P: 182, 10: 367, 9.5: 67, 9: 256, 8.5: 84, 8: 59, 7.5: 21, 7: 4","conf":5,"sales":[{"date":"2026-10-18","price":33,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/158144158381"},{"date":"2026-10-16","price":31.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/820226339529"},{"date":"2026-10-11","price":22,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/128123530531"},{"date":"2026-10-11","price":20.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/117440560976"},{"date":"2026-09-21","price":29.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/298387800949"}],"clFresh":33,"clUsed":33,"psa10":35.0,"val":33,"mult":46.47887323943662,"act":"slab","ask":33},{"cert":"6144952079","card":"Mega Latias ex","game":"Pokemon","set":"MEP","setFull":"Pokemon Black Star Promos - Mega Evolution MEP EN","num":"011","var":"P","grader":"CGC","grade":"10P","pop":182,"cl":31.99,"raw":0.71,"graded":1050,"rate":0.17333333333333334,"top":0.17333333333333334,"best":0.17333333333333334,"bestGrade":"10P","ladder":"CGC pop, 1,050 graded. 10P: 182, 10: 367, 9.5: 67, 9: 256, 8.5: 84, 8: 59, 7.5: 21, 7: 4","conf":5,"sales":[{"date":"2026-10-18","price":33,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/158144158381"},{"date":"2026-10-16","price":31.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/820226339529"},{"date":"2026-10-11","price":22,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/128123530531"},{"date":"2026-10-11","price":20.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/117440560976"},{"date":"2026-09-21","price":29.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/298387800949"}],"clFresh":33,"clUsed":33,"psa10":35.0,"val":33,"mult":46.47887323943662,"act":"slab","ask":33},{"cert":"6144952081","card":"Mega Latias ex","game":"Pokemon","set":"MEP","setFull":"Pokemon Black Star Promos - Mega Evolution MEP EN","num":"011","var":"P","grader":"CGC","grade":"10P","pop":182,"cl":31.99,"raw":0.71,"graded":1050,"rate":0.17333333333333334,"top":0.17333333333333334,"best":0.17333333333333334,"bestGrade":"10P","ladder":"CGC pop, 1,050 graded. 10P: 182, 10: 367, 9.5: 67, 9: 256, 8.5: 84, 8: 59, 7.5: 21, 7: 4","conf":5,"sales":[{"date":"2026-10-18","price":33,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/158144158381"},{"date":"2026-10-16","price":31.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/820226339529"},{"date":"2026-10-11","price":22,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/128123530531"},{"date":"2026-10-11","price":20.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/117440560976"},{"date":"2026-09-21","price":29.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/298387800949"}],"clFresh":33,"clUsed":33,"psa10":35.0,"val":33,"mult":46.47887323943662,"act":"slab","ask":33},{"cert":"6144952083","card":"Mega Latias ex","game":"Pokemon","set":"MEP","setFull":"Pokemon Black Star Promos - Mega Evolution MEP EN","num":"011","var":"P","grader":"CGC","grade":"10P","pop":182,"cl":31.99,"raw":0.71,"graded":1050,"rate":0.17333333333333334,"top":0.17333333333333334,"best":0.17333333333333334,"bestGrade":"10P","ladder":"CGC pop, 1,050 graded. 10P: 182, 10: 367, 9.5: 67, 9: 256, 8.5: 84, 8: 59, 7.5: 21, 7: 4","conf":5,"sales":[{"date":"2026-10-18","price":33,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/158144158381"},{"date":"2026-10-16","price":31.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/820226339529"},{"date":"2026-10-11","price":22,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/128123530531"},{"date":"2026-10-11","price":20.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/117440560976"},{"date":"2026-09-21","price":29.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/298387800949"}],"clFresh":33,"clUsed":33,"psa10":35.0,"val":33,"mult":46.47887323943662,"act":"slab","ask":33},{"cert":"6144952085","card":"Mega Latias ex","game":"Pokemon","set":"MEP","setFull":"Pokemon Black Star Promos - Mega Evolution MEP EN","num":"011","var":"P","grader":"CGC","grade":"10P","pop":182,"cl":31.99,"raw":0.71,"graded":1050,"rate":0.17333333333333334,"top":0.17333333333333334,"best":0.17333333333333334,"bestGrade":"10P","ladder":"CGC pop, 1,050 graded. 10P: 182, 10: 367, 9.5: 67, 9: 256, 8.5: 84, 8: 59, 7.5: 21, 7: 4","conf":5,"sales":[{"date":"2026-10-18","price":33,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/158144158381"},{"date":"2026-10-16","price":31.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/820226339529"},{"date":"2026-10-11","price":22,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/128123530531"},{"date":"2026-10-11","price":20.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/117440560976"},{"date":"2026-09-21","price":29.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/298387800949"}],"clFresh":33,"clUsed":33,"psa10":35.0,"val":33,"mult":46.47887323943662,"act":"slab","ask":33},{"cert":"6144951116","card":"Radiant Charjabug","game":"Pokemon","set":"CRZ","setFull":"Pokemon Crown Zenith","num":"051/159","var":"Holo","grader":"CGC","grade":"10","pop":294,"cl":22.0,"raw":0.66,"graded":775,"rate":0.3793548387096774,"top":0.4761290322580645,"best":0.0012903225806451613,"bestGrade":"10 Perfect","ladder":"CGC pop, 775 graded. 10 Perfect: 1, 10P: 74, 10: 294, 9.5: 62, 9: 242, 8.5: 59, 8: 26, 7.5: 7","conf":5,"sales":[{"date":"2026-10-16","price":30,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/326471502372"},{"date":"2026-09-17","price":9.38,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/168329688587"},{"date":"2026-09-16","price":20,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/1c3941e7-d624-4932-84d7-e592e9a9119f"},{"date":"2026-09-16","price":16,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/0ac4d07a-b0aa-4246-a335-b5ba45b84fc7"},{"date":"2026-09-04","price":16.99,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/178439671078"}],"clFresh":30,"clUsed":30,"psa10":54.37,"val":30,"mult":45.45454545454545,"act":"slab","ask":30},{"cert":"6144951206","card":"Paldean Student","game":"Pokemon","set":"PAF","setFull":"Pokemon Paldean Fates - PAF EN","num":"230/091","var":"UR","grader":"CGC","grade":"10","pop":326,"cl":18.0,"raw":0.64,"graded":737,"rate":0.4423337856173677,"top":0.5264586160108549,"best":0.08412483039348712,"bestGrade":"10P","ladder":"CGC pop, 737 graded. 10P: 62, 10: 326, 9.5: 85, 9: 175, 8.5: 56, 8: 15, 7.5: 11, 7: 4","conf":3,"sales":[{"date":"2026-09-06","price":17,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/227150525358"},{"date":"2026-08-22","price":20,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/db174919-5546-4a2a-9498-791d8df81de3"},{"date":"2026-08-21","price":20.9,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/205437833973"},{"date":"2026-07-27","price":16.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/1a81cc1a-800a-11f1-8bd4-0268fc90a949"},{"date":"2026-07-03","price":19.95,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/157682332226"}],"clFresh":29,"clUsed":29,"psa10":35.58,"val":29,"mult":45.3125,"act":"slab","ask":29},{"cert":"6144951228","card":"Paldean Student","game":"Pokemon","set":"PAF","setFull":"Pokemon Paldean Fates - PAF EN","num":"230/091","var":"UR","grader":"CGC","grade":"9.5","pop":85,"cl":17.0,"raw":0.64,"graded":737,"rate":0.11533242876526459,"top":0.6417910447761194,"best":0.08412483039348712,"bestGrade":"10P","ladder":"CGC pop, 737 graded. 10P: 62, 10: 326, 9.5: 85, 9: 175, 8.5: 56, 8: 15, 7.5: 11, 7: 4","conf":3,"sales":[{"date":"2026-08-22","price":15,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/2d5eba41-679c-4608-8264-36bb64b98d82"},{"date":"2026-08-14","price":15,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/5e8bf246-c2df-40f3-a4d6-1b57de392c97"},{"date":"2026-07-10","price":5.55,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/267707703475"},{"date":"2026-01-29","price":15,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/94d3b036-939f-4fa7-b425-a890d1f9f57e"},{"date":"2025-10-22","price":8,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/fixed/8cb0e610-ae9e-11f0-b14f-0a58a9feac02"}],"clFresh":29,"clUsed":29,"psa10":35.58,"val":29,"mult":45.3125,"act":"slab","ask":29},{"cert":"6144951124","card":"Revavroom ex","game":"Pokemon","set":"SV03","setFull":"Pokemon Obsidian Flames - OBF EN","num":"224/197","var":"SIR","grader":"CGC","grade":"10P","pop":15,"cl":133.0,"raw":4.27,"graded":787,"rate":0.01905972045743329,"top":0.01905972045743329,"best":0.01905972045743329,"bestGrade":"10P","ladder":"CGC pop, 787 graded. 10P: 15, 10: 196, 9.5: 86, 9: 283, 8.5: 114, 8: 52, 7.5: 26, 7: 6","conf":3,"sales":[{"date":"2026-09-18","price":120,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/168683729103"},{"date":"2026-08-31","price":51.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/7ec1db48-8ce4-11f1-81e1-0a58a9feac02"},{"date":"2026-04-21","price":120,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/177494261742"},{"date":"2025-10-08","price":46,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/389035731299"},{"date":"2025-04-16","price":300,"platform":"Heritage","type":"Auction","url":"https://comics.ha.com/itm/memorabilia/trading-cards/pokemon-variety-sets-group-of-4-cgc-trading-card-game-pristine-10-the-pokemon-company-2023-2024-illustration-rare/p/332516-20017.s?type=DA-DMC-CardLadder-TradingCardGames-332516-04092025"}],"clFresh":169,"clUsed":169,"psa10":92.64,"val":169,"mult":39.578454332552695,"act":"slab","ask":169},{"cert":"6144952064","card":"Vinsmoke Reiju","game":"One Piece","set":"EB03","setFull":"One Piece Heroines Edition (EB-03)","num":"EB03-031","var":"","grader":"CGC","grade":"10P","pop":30,"cl":12.0,"raw":0.7,"graded":80,"rate":0.375,"top":0.375,"best":0.375,"bestGrade":"10P","ladder":"CGC pop, 80 graded. 10P: 30, 10: 25, 9.5: 1, 9: 12, 8.5: 5, 8: 4, 7: 1, 6.5: 2","conf":3,"sales":[{"date":"2026-09-14","price":27.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/28d045fa-a682-11f1-b2f6-0a58a9feac02"},{"date":"2026-09-14","price":10.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/28d951e0-a682-11f1-a7c1-02ffd1d1385b"},{"date":"2026-09-14","price":27.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/28db0b3e-a682-11f1-a65c-066ea2b43bcd"},{"date":"2026-09-13","price":61,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/28b90e84-eb74-46fd-9c75-8a0f36bda266"},{"date":"2026-07-22","price":64,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/127978033223"}],"clFresh":27,"clUsed":27,"psa10":38.5,"val":27,"mult":38.57142857142858,"act":"slab","ask":27},{"cert":"6144952068","card":"Vinsmoke Reiju","game":"One Piece","set":"EB03","setFull":"One Piece Heroines Edition (EB-03)","num":"EB03-031","var":"","grader":"CGC","grade":"10P","pop":30,"cl":12.0,"raw":0.7,"graded":80,"rate":0.375,"top":0.375,"best":0.375,"bestGrade":"10P","ladder":"CGC pop, 80 graded. 10P: 30, 10: 25, 9.5: 1, 9: 12, 8.5: 5, 8: 4, 7: 1, 6.5: 2","conf":3,"sales":[{"date":"2026-09-14","price":27.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/28d045fa-a682-11f1-b2f6-0a58a9feac02"},{"date":"2026-09-14","price":10.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/28d951e0-a682-11f1-a7c1-02ffd1d1385b"},{"date":"2026-09-14","price":27.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/28db0b3e-a682-11f1-a65c-066ea2b43bcd"},{"date":"2026-09-13","price":61,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/28b90e84-eb74-46fd-9c75-8a0f36bda266"},{"date":"2026-07-22","price":64,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/127978033223"}],"clFresh":27,"clUsed":27,"psa10":38.5,"val":27,"mult":38.57142857142858,"act":"slab","ask":27},{"cert":"6144952096","card":"Magneton","game":"Pokemon","set":"SVP","setFull":"Pokemon Black Star Promos - Scarlet & Violet SVP EN","num":"159","var":"P","grader":"CGC","grade":"10P","pop":325,"cl":198.0,"raw":5.41,"graded":4209,"rate":0.07721549061534806,"top":0.07721549061534806,"best":0.07721549061534806,"bestGrade":"10P","ladder":"CGC pop, 4,209 graded. 10P: 325, 10: 2,012, 9.5: 426, 9: 1,077, 8.5: 242, 8: 64, 7.5: 34, 7: 17","conf":4,"sales":[{"date":"2026-10-02","price":164,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/389010765488"},{"date":"2026-09-28","price":79.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/7e1cc542-b2c1-11f1-800c-02fff7e318b7"},{"date":"2026-09-22","price":160,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/257740994710"},{"date":"2026-09-16","price":140,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/237055606668"},{"date":"2026-09-07","price":125,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/389001724837"}],"clFresh":198,"clUsed":198,"psa10":156.57,"val":198,"mult":36.5988909426987,"act":"slab","ask":198},{"cert":"6144952066","card":"Uta","game":"One Piece","set":"EB03","setFull":"One Piece Heroines Edition (EB-03)","num":"EB03-003","var":"","grader":"CGC","grade":"10","pop":13,"cl":18.0,"raw":0.57,"graded":39,"rate":0.3333333333333333,"top":0.8974358974358975,"best":0.5641025641025641,"bestGrade":"10P","ladder":"CGC pop, 39 graded. 10P: 22, 10: 13, 9: 3, 7.5: 1","conf":3,"sales":[{"date":"2026-08-22","price":20,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/3809012f-9411-4c60-b9a1-9b2f5ea06515"},{"date":"2026-08-22","price":16,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/66ad0a14-fb20-42d9-ae48-6b965b4cc3f7"},{"date":"2026-08-22","price":19,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/eac9352c-b8dd-4f77-8a05-557d40094f25"},{"date":"2026-08-19","price":18,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/86aa244a-b57d-40d7-94e0-1c5c40899966"},{"date":"2026-06-08","price":16.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/19e9535e-5b16-11f1-8f48-0af1f41e8e2f"}],"clFresh":19,"clUsed":19,"psa10":45.0,"val":19,"mult":33.333333333333336,"act":"slab","ask":19},{"cert":"6144951299","card":"Hop's Zacian ex","game":"Pokemon","set":"SV09","setFull":"Pokemon Journey Together - JTG EN","num":"176/159","var":"UR","grader":"CGC","grade":"8.5","pop":48,"cl":41.0,"raw":1.53,"graded":776,"rate":0.061855670103092786,"top":0.9768041237113402,"best":0.1018041237113402,"bestGrade":"10P","ladder":"CGC pop, 776 graded. 10P: 79, 10: 373, 9.5: 95, 9: 163, 8.5: 48, 8: 11, 7.5: 2, 7: 5","conf":5,"sales":[{"date":"2026-10-09","price":41,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/11b7ac55-8929-451f-8712-94312b6cb27d"},{"date":"2025-11-22","price":10.05,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/406300958148"},{"date":"2025-08-25","price":7.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/49a50f60-772e-11f0-8243-0a58a9feac02"}],"clFresh":44,"clUsed":44,"psa10":42.0,"val":44,"mult":28.758169934640524,"act":"slab","ask":44},{"cert":"6144951300","card":"Hop's Zacian ex","game":"Pokemon","set":"SV09","setFull":"Pokemon Journey Together - JTG EN","num":"176/159","var":"UR","grader":"CGC","grade":"8.5","pop":48,"cl":41.0,"raw":1.53,"graded":776,"rate":0.061855670103092786,"top":0.9768041237113402,"best":0.1018041237113402,"bestGrade":"10P","ladder":"CGC pop, 776 graded. 10P: 79, 10: 373, 9.5: 95, 9: 163, 8.5: 48, 8: 11, 7.5: 2, 7: 5","conf":5,"sales":[{"date":"2026-10-09","price":41,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/11b7ac55-8929-451f-8712-94312b6cb27d"},{"date":"2025-11-22","price":10.05,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/406300958148"},{"date":"2025-08-25","price":7.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/49a50f60-772e-11f0-8243-0a58a9feac02"}],"clFresh":44,"clUsed":44,"psa10":42.0,"val":44,"mult":28.758169934640524,"act":"slab","ask":44},{"cert":"6144951152","card":"Iris's Fighting Spirit","game":"Pokemon","set":"SV09","setFull":"Pokemon Journey Together - JTG EN","num":"180/159","var":"UR","grader":"CGC","grade":"9","pop":91,"cl":18.0,"raw":1.19,"graded":365,"rate":0.2493150684931507,"top":0.9452054794520548,"best":0.10136986301369863,"bestGrade":"10P","ladder":"CGC pop, 365 graded. 10P: 37, 10: 183, 9.5: 34, 9: 91, 8.5: 14, 8: 3, 7: 1, 6.5: 1","conf":3,"sales":[{"date":"2026-08-14","price":16,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/e475dbc0-53d7-400e-b3e3-e7d881d99ee1"},{"date":"2026-08-14","price":15,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/1dd75b07-95b8-4efa-8c37-6b150518d2b4"},{"date":"2026-08-05","price":13,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/ccb9a0c6-1c5e-4686-8803-471a293c43dc"},{"date":"2026-05-18","price":10.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/25ff02a8-4cfa-11f1-b247-0a58a9feac02"},{"date":"2026-05-15","price":12.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/366397225645"}],"clFresh":32,"clUsed":32,"psa10":39.9,"val":32,"mult":26.89075630252101,"act":"slab","ask":32},{"cert":"6144951091","card":"Iono's Bellibolt ex","game":"Pokemon","set":"SV09","setFull":"Pokemon Journey Together - JTG EN","num":"172/159","var":"UR","grader":"CGC","grade":"9.5","pop":71,"cl":22.0,"raw":1.46,"graded":792,"rate":0.08964646464646464,"top":0.6893939393939394,"best":0.13005050505050506,"bestGrade":"10P","ladder":"CGC pop, 792 graded. 10P: 103, 10: 372, 9.5: 71, 9: 190, 8.5: 38, 8: 10, 7.5: 4, 7: 4","conf":3,"sales":[{"date":"2026-08-08","price":19,"platform":"Fanatics-Vault","type":"BestOffer","url":"https://www.fanaticscollect.com/buy-now/cc3f845a-24c6-4bee-9074-4f9534de2d3b"},{"date":"2026-08-05","price":12,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/7037c90c-ba8a-4aa9-a74e-11e206476696"},{"date":"2026-08-04","price":9,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/f2b672a4-d57c-4a50-956a-48c7a4eeae8e"},{"date":"2026-05-25","price":9.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/32a150b0-4ee9-11f1-8de4-0af75b35c92b"},{"date":"2026-04-15","price":19,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/357921911837"}],"clFresh":39,"clUsed":39,"psa10":41.27,"val":39,"mult":26.71232876712329,"act":"slab","ask":39},{"cert":"6144952091","card":"Darkrai VSTAR","game":"Pokemon","set":"SWSH10","setFull":"Pokemon Astral Radiance","num":"099/189","var":"Holo","grader":"CGC","grade":"10P","pop":52,"cl":1035.0,"raw":2.67,"graded":10382,"rate":0.005008668849932576,"top":0.005201309959545367,"best":0.00019264110961279138,"bestGrade":"10 Perfect","ladder":"CGC pop, 10,382 graded. 10 Perfect: 2, 10P: 52, 10: 1,445, 9.5: 1,348, 9: 4,903, 8.5: 1,719, 8: 892, 7.5: 9","conf":1,"sales":[{"date":"2025-10-02","price":45,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/317354199800"},{"date":"2025-02-26","price":56,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/126950015982"}],"clFresh":1035,"clUsed":50.5,"psa10":71.0,"val":50.5,"mult":18.913857677902623,"act":"slab","ask":50.5},{"cert":"6144951274","card":"Flygon ex","game":"Pokemon","set":"SV08","setFull":"Pokemon Surging Sparks - SSP EN","num":"222/191","var":"UR","grader":"CGC","grade":"10P","pop":81,"cl":26.0,"raw":2.29,"graded":635,"rate":0.12755905511811025,"top":0.12755905511811025,"best":0.12755905511811025,"bestGrade":"10P","ladder":"CGC pop, 635 graded. 10P: 81, 10: 267, 9.5: 54, 9: 163, 8.5: 36, 8: 22, 7.5: 5, 7: 3","conf":4,"sales":[{"date":"2026-09-29","price":25,"platform":"Fanatics-Vault","type":"BestOffer","url":"https://www.fanaticscollect.com/buy-now/5a9fcee1-a050-4841-a463-4748b5b21d5c"},{"date":"2026-09-21","price":28.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/bfe4b00c-aef2-11f1-9e6e-0affc11edb49"},{"date":"2026-09-07","price":26.4,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/a6894f52-a108-11f1-a3cb-0a58a9feac02"},{"date":"2026-09-05","price":49.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/307163909975"},{"date":"2026-08-21","price":59.95,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/307079641190"}],"clFresh":30,"clUsed":30,"psa10":62.0,"val":30,"mult":13.100436681222707,"act":"slab","ask":30},{"cert":"6144951158","card":"Ambipom","game":"Pokemon","set":"ME02","setFull":"Pokemon Phantasmal Flames - PFL EN","num":"107/094","var":"IR","grader":"CGC","grade":"10P","pop":220,"cl":25.2,"raw":1.81,"graded":1258,"rate":0.17488076311605724,"top":0.17488076311605724,"best":0.17488076311605724,"bestGrade":"10P","ladder":"CGC pop, 1,258 graded. 10P: 220, 10: 485, 9.5: 81, 9: 304, 8.5: 96, 8: 46, 7.5: 16, 7: 7","conf":5,"sales":[{"date":"2026-10-19","price":20.4,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/a8defe68-c189-11f1-bafb-02ffec72135b"},{"date":"2026-10-12","price":25.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/06b44c86-c1c7-11f1-b837-0a58a9feac02"},{"date":"2026-09-30","price":40,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/3f578db4-dd1f-4c94-8a6a-19b5280218c4"},{"date":"2026-09-28","price":28,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/08fdbc3d-6674-48b2-beae-a495c4b91bea"},{"date":"2026-09-17","price":28.8,"platform":"Alt","type":"Auction","url":"https://app.alt.xyz/browse/sold/7e387f7e-3b2d-4d81-9782-ec0d85bd37db"}],"clFresh":20,"clUsed":20,"psa10":47.5,"val":20,"mult":11.049723756906078,"act":"slab","ask":20},{"cert":"6144951035","card":"Iono's Bellibolt ex","game":"Pokemon","set":"SV09","setFull":"Pokemon Journey Together - JTG EN","num":"172/159","var":"UR","grader":"CGC","grade":"10","pop":372,"cl":15.0,"raw":1.46,"graded":792,"rate":0.4696969696969697,"top":0.5997474747474747,"best":0.13005050505050506,"bestGrade":"10P","ladder":"CGC pop, 792 graded. 10P: 103, 10: 372, 9.5: 71, 9: 190, 8.5: 38, 8: 10, 7.5: 4, 7: 4","conf":5,"sales":[{"date":"2026-10-14","price":15,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/407276735445"},{"date":"2026-10-12","price":16.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/f8c307b0-be66-11f1-af4a-02ffe111f1af"},{"date":"2026-10-09","price":13,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/298721579067"},{"date":"2026-10-05","price":16.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/c42416ae-aefb-11f1-8fa3-0a58a9feac02"},{"date":"2026-10-05","price":22,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/0fa36db8-2a13-4f18-84fa-d4cbf89c1aba"}],"clFresh":15,"clUsed":15,"psa10":41.27,"val":15,"mult":10.273972602739727,"act":"slab","ask":15},{"cert":"6144951291","card":"Litleo","game":"Pokemon","set":"ME01","setFull":"Pokemon Mega Evolution - MEG EN","num":"139/132","var":"IR","grader":"CGC","grade":"10P","pop":216,"cl":22.8,"raw":4.29,"graded":980,"rate":0.22040816326530613,"top":0.22040816326530613,"best":0.22040816326530613,"bestGrade":"10P","ladder":"CGC pop, 980 graded. 10P: 216, 10: 468, 9.5: 71, 9: 163, 8.5: 31, 8: 17, 7.5: 7, 7: 2","conf":5,"sales":[{"date":"2026-10-17","price":39.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/298714202140"},{"date":"2026-10-12","price":22.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/9b8cfe6c-bc12-11f1-ab4e-0a58a9feac02"},{"date":"2026-10-06","price":25,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/189027630482"},{"date":"2026-10-04","price":35.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/237097561245"},{"date":"2026-10-03","price":44.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/366624508420"}],"clFresh":40,"clUsed":40,"psa10":52.5,"val":40,"mult":9.324009324009324,"act":"slab","ask":40},{"cert":"6144952029","card":"Roxanne","game":"Pokemon","set":"SWSH10","setFull":"Pokemon Astral Radiance","num":"188/189","var":"UR","grader":"CGC","grade":"10P","pop":16,"cl":63.0,"raw":4.97,"graded":269,"rate":0.05947955390334572,"top":0.06691449814126393,"best":0.007434944237918215,"bestGrade":"10 Perfect","ladder":"CGC pop, 269 graded. 10 Perfect: 2, 10P: 16, 10: 117, 9.5: 17, 9: 96, 8.5: 13, 8: 4, 7.5: 2","conf":1,"sales":[{"date":"2026-01-19","price":40.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/23d062b8-ebfe-11f0-96dc-0a58a9feac02"}],"clFresh":178,"clUsed":40.8,"psa10":null,"val":40.8,"mult":8.209255533199196,"act":"slab","ask":40.8},{"cert":"6144952063","card":"Monkey D. Luffy","game":"One Piece","set":"OP-PR","setFull":"One Piece Promotional Cards","num":"OP07-109","var":"P","grader":"CGC","grade":"10P","pop":382,"cl":21.5,"raw":2.46,"graded":600,"rate":0.6366666666666667,"top":0.6366666666666667,"best":0.6366666666666667,"bestGrade":"10P","ladder":"CGC pop, 600 graded. 10P: 382, 10: 143, 9.5: 4, 9: 28, 8.5: 12, 8: 16, 7.5: 6, 7: 2","conf":5,"sales":[{"date":"2026-10-19","price":20.4,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/c47984c4-c18c-11f1-ba57-0a58a9feac02"},{"date":"2026-10-19","price":24,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/c48b1ce8-c18c-11f1-8c32-0a58a9feac02"},{"date":"2026-10-19","price":22.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/43d8e940-c1e6-11f1-81a3-02ffd3ab7c77"},{"date":"2026-10-16","price":21.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/137816622676"},{"date":"2026-10-11","price":35,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/398293426859"}],"clFresh":20,"clUsed":20,"psa10":40.5,"val":20,"mult":8.130081300813009,"act":"slab","ask":20},{"cert":"6144951176","card":"Kai'Sa","game":"Riftbound","set":"OGN","setFull":"Origins (OGN)","num":"112a/298","var":"","grader":"CGC","grade":"10P","pop":7,"cl":41.0,"raw":3.7,"graded":21,"rate":0.3333333333333333,"top":0.3333333333333333,"best":0.3333333333333333,"bestGrade":"10P","ladder":"CGC pop, 21 graded. 10P: 7, 10: 7, 9: 6, 8.5: 1","conf":2,"sales":[{"date":"2026-04-27","price":30,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/7dff21da-38e2-11f1-9900-0a58a9feac02"}],"clFresh":40,"clUsed":30,"psa10":91.0,"val":30,"mult":8.108108108108107,"act":"slab","ask":30},{"cert":"6144951237","card":"Mega Latias ex","game":"Pokemon","set":"ME01","setFull":"Pokemon Mega Evolution - MEG EN","num":"163/132","var":"UR","grader":"CGC","grade":"10P","pop":272,"cl":28.0,"raw":4.32,"graded":1400,"rate":0.19428571428571428,"top":0.19428571428571428,"best":0.19428571428571428,"bestGrade":"10P","ladder":"CGC pop, 1,400 graded. 10P: 272, 10: 626, 9.5: 104, 9: 282, 8.5: 66, 8: 26, 7.5: 6, 7: 5","conf":5,"sales":[{"date":"2026-10-11","price":28,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/f9be3327-6446-435b-b498-666d7fc49485"},{"date":"2026-10-02","price":28,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/37f7eeae-f3f5-4448-a79f-0310347c8b76"},{"date":"2026-10-02","price":35,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/188947769481"},{"date":"2026-09-14","price":26.4,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/5c7dfd0e-a68f-11f1-9686-0a58a9feac02"},{"date":"2026-09-14","price":26.4,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/2b6d5954-a7ce-11f1-be11-0a58a9feac02"}],"clFresh":28,"clUsed":28,"psa10":49.5,"val":28,"mult":6.481481481481481,"act":"slab","ask":28},{"cert":"6144952027","card":"Dancer","game":"Pokemon","set":"SWSH08","setFull":"Pokemon Fusion Strike","num":"274/264","var":"Rainbow","grader":"CGC","grade":"10","pop":70,"cl":48.0,"raw":3.77,"graded":183,"rate":0.3825136612021858,"top":0.5245901639344263,"best":0.14207650273224043,"bestGrade":"10P","ladder":"CGC pop, 183 graded. 10P: 26, 10: 70, 9.5: 10, 9: 57, 8.5: 13, 8: 3, 7.5: 1, 6: 1","conf":1,"sales":[{"date":"2026-03-27","price":34.5,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/326463496494"},{"date":"2026-03-16","price":12,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/c109e174-17ed-11f1-9188-0a58a9feac02"}],"clFresh":107,"clUsed":23.25,"psa10":54.58,"val":23.25,"mult":6.16710875331565,"act":"slab","ask":23.25},{"cert":"6144952018","card":"Mega Latias ex","game":"Pokemon","set":"ME01","setFull":"Pokemon Mega Evolution - MEG EN","num":"163/132","var":"UR","grader":"CGC","grade":"10","pop":626,"cl":24.0,"raw":4.32,"graded":1400,"rate":0.4471428571428571,"top":0.6414285714285715,"best":0.19428571428571428,"bestGrade":"10P","ladder":"CGC pop, 1,400 graded. 10P: 272, 10: 626, 9.5: 104, 9: 282, 8.5: 66, 8: 26, 7.5: 6, 7: 5","conf":5,"sales":[{"date":"2026-10-13","price":24,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/267796019456"},{"date":"2026-10-12","price":12,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/4da2b278-bb72-11f1-8b06-02ffe0c2e509"},{"date":"2026-10-11","price":23,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/287624037850"},{"date":"2026-09-29","price":29.49,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/227544859829"},{"date":"2026-09-28","price":16.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/1442b5b6-b1cf-11f1-87ea-0a58a9feac02"}],"clFresh":24,"clUsed":24,"psa10":49.5,"val":24,"mult":5.555555555555555,"act":"slab","ask":24},{"cert":"6144952110","card":"Unown VSTAR","game":"Pokemon","set":"SWSH12","setFull":"Pokemon Silver Tempest","num":"066/195","var":"Holo","grader":"CGC","grade":"8.5","pop":49,"cl":12.0,"raw":1.74,"graded":625,"rate":0.0784,"top":0.944,"best":0.1264,"bestGrade":"10P","ladder":"CGC pop, 625 graded. 10P: 79, 10: 240, 9.5: 44, 9: 178, 8.5: 49, 8: 26, 7.5: 3, 7: 1","conf":2,"sales":[{"date":"2026-06-08","price":9.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/921d34da-59db-11f1-8cb8-06a1b1abe95b"},{"date":"2024-11-12","price":9,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/196731633129"}],"clFresh":24,"clUsed":9.3,"psa10":59.61,"val":9.3,"mult":5.344827586206897,"act":"slab","ask":9.3},{"cert":"6144951282","card":"Toxtricity","game":"Pokemon","set":"ME02","setFull":"Pokemon Phantasmal Flames - PFL EN","num":"103/094","var":"IR","grader":"CGC","grade":"9","pop":287,"cl":12.0,"raw":1.93,"graded":1221,"rate":0.23505323505323505,"top":0.8976248976248976,"best":0.15151515151515152,"bestGrade":"10P","ladder":"CGC pop, 1,221 graded. 10P: 185, 10: 509, 9.5: 115, 9: 287, 8.5: 64, 8: 36, 7.5: 10, 7: 9","conf":5,"sales":[{"date":"2026-10-18","price":9.97,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/800564999231"},{"date":"2026-10-12","price":12,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/9f118ab9-00c9-4fe5-bfa9-338a9929f597"},{"date":"2026-10-12","price":9.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/a26ce1da-c00d-11f1-ba01-0a58a9feac02"},{"date":"2026-09-23","price":16,"platform":"Fanatics-Vault","type":"BestOffer","url":"https://www.fanaticscollect.com/buy-now/f1fa3938-b348-4eea-9871-7219e1bc0e02"},{"date":"2026-09-12","price":19.99,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/298413576378"}],"clFresh":10,"clUsed":10,"psa10":44.99,"val":10,"mult":5.181347150259067,"act":"slab","ask":10},{"cert":"6144952075","card":"Ahri","game":"Riftbound","set":"OGN","setFull":"Origins (OGN)","num":"066a/298","var":"","grader":"CGC","grade":"10","pop":8,"cl":31.0,"raw":5.92,"graded":17,"rate":0.47058823529411764,"top":0.7647058823529411,"best":0.29411764705882354,"bestGrade":"10P","ladder":"CGC pop, 17 graded. 10P: 5, 10: 8, 9.5: 1, 9: 2, 8.5: 1","conf":1,"sales":[{"date":"2026-02-16","price":20.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/117021063436"},{"date":"2025-11-24","price":37,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/116883225479"}],"clFresh":30,"clUsed":28.75,"psa10":null,"val":28.75,"mult":4.856418918918919,"act":"slab","ask":28.75},{"cert":"6144951243","card":"Bulbasaur","game":"Pokemon","set":"ME01","setFull":"Pokemon Mega Evolution - MEG EN","num":"133/132","var":"Stamped","grader":"CGC","grade":"10","pop":1223,"cl":39.0,"raw":15.77,"graded":4297,"rate":0.2846171747730975,"top":0.31533628112636725,"best":0.030719106353269722,"bestGrade":"10P","ladder":"CGC pop, 4,297 graded. 10P: 132, 10: 1,223, 9.5: 526, 9: 1,786, 8.5: 450, 8: 108, 7.5: 25, 7: 16","conf":5,"sales":[{"date":"2026-10-19","price":72.98,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/137849720130"},{"date":"2026-10-15","price":39,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/800787918983"},{"date":"2026-10-15","price":165,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/278300079709"},{"date":"2026-10-14","price":31,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/189047322799"},{"date":"2026-10-13","price":90,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/158378384779"}],"clFresh":73,"clUsed":73,"psa10":672.51,"val":73,"mult":4.629042485732404,"act":"slab","ask":73},{"cert":"6144951041","card":"Team Rocket's Ariana","game":"Pokemon","set":"SV10","setFull":"Pokemon Destined Rivals - DRI EN","num":"224/182","var":"UR","grader":"CGC","grade":"9.5","pop":11,"cl":21.0,"raw":3.34,"graded":265,"rate":0.04150943396226415,"top":0.7433962264150943,"best":0.27547169811320754,"bestGrade":"10P","ladder":"CGC pop, 265 graded. 10P: 73, 10: 113, 9.5: 11, 9: 46, 8.5: 15, 8: 5, 7: 2","conf":2,"sales":[{"date":"2026-05-24","price":15.32,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/227348171255"},{"date":"2025-09-29","price":12,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/3db90156-8d8c-11f0-bca2-0a26ad63ce85"}],"clFresh":40,"clUsed":13.66,"psa10":39.25,"val":13.66,"mult":4.089820359281437,"act":"slab","ask":13.66},{"cert":"6144951004","card":"Yanma","game":"Pokemon","set":"SV10","setFull":"Pokemon Destined Rivals - DRI EN","num":"183/182","var":"IR","grader":"CGC","grade":"9","pop":120,"cl":13.0,"raw":3.28,"graded":423,"rate":0.28368794326241137,"top":0.8936170212765957,"best":0.06619385342789598,"bestGrade":"10P","ladder":"CGC pop, 423 graded. 10P: 28, 10: 174, 9.5: 56, 9: 120, 8.5: 28, 8: 11, 7.5: 5, 6.5: 1","conf":5,"sales":[{"date":"2026-10-15","price":13,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/c5b1e833-593a-41be-9ae5-0d42aa8e3f78"},{"date":"2026-09-28","price":10.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/dea71f48-b1d6-11f1-b6f0-02ffdc615a4f"},{"date":"2026-09-17","price":19.2,"platform":"Alt","type":"Auction","url":"https://app.alt.xyz/browse/sold/80eb4855-d57f-4334-80cb-dab7dcab47e6"},{"date":"2026-09-14","price":19,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/539f2a9c-c5cc-45c0-a741-3ffd9f41b324"},{"date":"2026-09-08","price":15,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/80b88f84-d899-48d7-a6d7-97eb057178e0"}],"clFresh":13,"clUsed":13,"psa10":65.95,"val":13,"mult":3.963414634146342,"act":"slab","ask":13},{"cert":"20475572","card":"Irelia - Fervent SIGNATURE SC","game":"Riftbound","set":"SFD","setFull":"Riftbound: League of Legends TCG Spiritforged","num":"225*","var":"","grader":"BGS","grade":"10P","pop":40,"cl":3666.0,"raw":1572.06,"graded":203,"rate":0.19704433497536947,"top":0.22660098522167488,"best":0.029556650246305417,"bestGrade":"10 Black","ladder":"BECKETT pop, 203 graded. 10 Black: 6, 10P: 40, 9.5: 152, 9: 4, 8.5: 1","conf":3,"sales":[{"date":"2026-09-09","price":5600,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/287564096428"},{"date":"2026-08-28","price":3237.3,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/800544795710"},{"date":"2026-07-07","price":3300,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/358669449635"},{"date":"2026-06-26","price":2499.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/198446432531"},{"date":"2026-06-01","price":1850,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/298372942065"}],"clFresh":6012,"clUsed":6012,"psa10":null,"val":6012,"mult":3.824281515972673,"act":"slab","ask":6012},{"cert":"6144951060","card":"Luxray ex","game":"Pokemon","set":"SV06","setFull":"Pokemon Twilight Masquerade - TWM EN","num":"195/167","var":"UR","grader":"CGC","grade":"8.5","pop":26,"cl":12.0,"raw":2.77,"graded":325,"rate":0.08,"top":0.9569230769230769,"best":0.05846153846153846,"bestGrade":"10P","ladder":"CGC pop, 325 graded. 10P: 19, 10: 176, 9.5: 30, 9: 60, 8.5: 26, 8: 10, 7.5: 4","conf":2,"sales":[{"date":"2026-04-29","price":9,"platform":"Fanatics-Vault","type":"BestOffer","url":"https://www.fanaticscollect.com/buy-now/ae63de03-5de2-4a29-962a-7e56ae2da2d6"},{"date":"2026-04-27","price":6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/d2b85a4e-38ff-11f1-a320-0a58a9feac02"}],"clFresh":26,"clUsed":7.5,"psa10":79.99,"val":7.5,"mult":2.707581227436823,"act":"slab","ask":7.5},{"cert":"20475575","card":"Aphelios - Exalted SIGNATURE SC","game":"Riftbound","set":"SFD","setFull":"Riftbound: League of Legends TCG Spiritforged","num":"224*","var":"","grader":"BGS","grade":"10P","pop":41,"cl":1315.0,"raw":567.87,"graded":127,"rate":0.3228346456692913,"top":0.3464566929133858,"best":0.023622047244094488,"bestGrade":"10 Black","ladder":"BECKETT pop, 127 graded. 10 Black: 3, 10P: 41, 9.5: 77, 9: 3, 8.5: 2, 7.5: 1","conf":4,"sales":[{"date":"2026-10-03","price":1315,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/168725470589"},{"date":"2026-10-01","price":1527.6,"platform":"Alt","type":"Auction","url":"https://app.alt.xyz/browse/sold/73ffc557-ea25-4e71-9b86-18e8518a8ed2"},{"date":"2026-09-06","price":1575,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/287552812305"},{"date":"2026-08-29","price":1500,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/318745854046"},{"date":"2026-08-24","price":1625,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/287524903887"}],"clFresh":1389,"clUsed":1389,"psa10":1275.0,"val":1389,"mult":2.445982355116488,"act":"slab","ask":1389},{"cert":"6144952026","card":"Boss's Orders","game":"Pokemon","set":"SWSD","setFull":"Pokemon Black Star Promos - Sword & Shield","num":"SWSH251","var":"P","grader":"CGC","grade":"10P","pop":47,"cl":31.0,"raw":11.33,"graded":243,"rate":0.1934156378600823,"top":0.1934156378600823,"best":0.1934156378600823,"bestGrade":"10P","ladder":"CGC pop, 243 graded. 10P: 47, 10: 111, 9.5: 23, 9: 41, 8.5: 14, 8: 3, 7.5: 2, 7: 1","conf":2,"sales":[{"date":"2026-06-26","price":24.27,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/377276562876"},{"date":"2026-05-18","price":30,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/700ed734-4ad8-11f1-a6e8-06000869e0ab"},{"date":"2026-02-15","price":14.38,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/198089503640"},{"date":"2024-09-12","price":20,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/256635769219"},{"date":"2024-08-19","price":19.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/77a4e790-4ab7-11ef-83ab-0a58a9feac02"}],"clFresh":52,"clUsed":20,"psa10":null,"val":20,"mult":1.7652250661959399,"act":"slab","ask":20},{"cert":"6144952049","card":"Ahri","game":"Riftbound","set":"SFD","setFull":"Spiritforged (SFD)","num":"227/221","var":"","grader":"CGC","grade":"10P","pop":17,"cl":910.0,"raw":663.31,"graded":27,"rate":0.6296296296296297,"top":0.6296296296296297,"best":0.6296296296296297,"bestGrade":"10P","ladder":"CGC pop, 27 graded. 10P: 17, 10: 8, 9: 2","conf":5,"sales":[{"date":"2026-10-16","price":910,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/800773282934"},{"date":"2026-10-14","price":1279.23,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/178563716957"},{"date":"2026-10-03","price":810,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/318917016078"},{"date":"2026-08-28","price":1330.43,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/178428062272"},{"date":"2026-07-27","price":960,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/188655337335"}],"clFresh":887,"clUsed":887,"psa10":1199.99,"val":887,"mult":1.337232967993849,"act":"slab","ask":887},{"cert":"6144952132","card":"Iono's Bellibolt ex","game":"Pokemon","set":"SV09","setFull":"Pokemon Journey Together - JTG EN","num":"188/159","var":"HR","grader":"CGC","grade":"8.5","pop":61,"cl":16.0,"raw":9.93,"graded":530,"rate":0.11509433962264151,"top":0.960377358490566,"best":0.033962264150943396,"bestGrade":"10P","ladder":"CGC pop, 530 graded. 10P: 18, 10: 162, 9.5: 61, 9: 207, 8.5: 61, 8: 10, 7.5: 4, 7: 4","conf":2,"sales":[{"date":"2026-07-13","price":13.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/5a283abe-74e5-11f1-af4f-0a58a9feac02"},{"date":"2026-02-02","price":19.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/10d54b1a-f66c-11f0-9eb2-0a58a9feac02"},{"date":"2025-11-03","price":12,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/f91d2778-b1fa-11f0-bd94-0a2a6a4b8997"}],"clFresh":28,"clUsed":13.2,"psa10":92.0,"val":13.2,"mult":1.3293051359516617,"act":"slab","ask":13.2},{"cert":"6144951039","card":"Cynthia's Garchomp ex","game":"Pokemon","set":"SVP","setFull":"Pokemon Black Star Promos - Scarlet & Violet SVP EN","num":"204","var":"P","grader":"CGC","grade":"8.5","pop":47,"cl":13.0,"raw":5.41,"graded":691,"rate":0.06801736613603473,"top":0.9536903039073806,"best":0.14182344428364688,"bestGrade":"10P","ladder":"CGC pop, 691 graded. 10P: 98, 10: 306, 9.5: 54, 9: 154, 8.5: 47, 8: 20, 7.5: 4, 7: 2","conf":2,"sales":[{"date":"2026-05-26","price":7,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/188422942976"},{"date":"2026-01-27","price":15,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/af16a9e4-fe9a-4a51-a85f-3982785ac2c0"},{"date":"2026-01-26","price":9.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/0a24e07a-f22d-11f0-bcb7-0a58a9feac02"},{"date":"2025-12-14","price":6.99,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/227077915048"},{"date":"2025-11-10","price":6.99,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/227057184934"}],"clFresh":13,"clUsed":7,"psa10":60.96,"val":7,"mult":1.2939001848428835,"act":"slab","ask":7},{"cert":"6141575003","card":"Boa Hancock","game":"One Piece","set":"OP14","setFull":"One Piece The Azure Sea's Seven (OP14-EB04)","num":"OP14-112","var":"SP","grader":"CGC","grade":"10P","pop":25,"cl":755.0,"raw":527.25,"graded":46,"rate":0.5434782608695652,"top":0.5434782608695652,"best":0.5434782608695652,"bestGrade":"10P","ladder":"CGC pop, 46 graded. 10P: 25, 10: 7, 9.5: 1, 9: 7, 8.5: 1, 8: 4, 7.5: 1","conf":3,"sales":[{"date":"2026-08-31","price":670,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/158237685456"},{"date":"2026-08-23","price":560,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/287524901400"},{"date":"2026-08-17","price":810,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/1e6d984e-8f5b-11f1-b783-0a58a9feac02"},{"date":"2026-06-22","price":1000,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/188094829341"}],"clFresh":645,"clUsed":645,"psa10":599.98,"val":645,"mult":1.2233285917496444,"act":"slab","ask":645},{"cert":"20475586","card":"Boa Hancock SP","game":"One Piece","set":"EB03","setFull":"One Piece Card Game -ONE PIECE Heroines Edition-","num":"EB03026","var":"","grader":"BGS","grade":"9.5","pop":323,"cl":1672.3,"raw":1421.01,"graded":614,"rate":0.5260586319218241,"top":0.9446254071661238,"best":0.014657980456026058,"bestGrade":"10 Black","ladder":"BECKETT pop, 614 graded. 10 Black: 9, 10P: 248, 9.5: 323, 9: 30, 8.5: 3, 8: 1","conf":5,"sales":[{"date":"2026-10-15","price":1672.3,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/307224442430"},{"date":"2026-10-12","price":1263,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/377548850538"},{"date":"2026-08-24","price":1190,"platform":"Goldin","type":"Auction","url":"https://goldin.co/item/2026-one-piece-heroines-edition-026-boa-hancock-bgs-gem-mint-9-52dxd1"},{"date":"2026-08-15","price":1800,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/206493312204"},{"date":"2026-07-30","price":1380,"platform":"Alt","type":"Auction","url":"https://app.alt.xyz/browse/sold/ac8f3dd8-1129-42c3-bbd0-55634a19665c"}],"clFresh":1672,"clUsed":1672,"psa10":1857.85,"val":1672,"mult":1.1766278914293355,"act":"slab","ask":1672},{"cert":"20475582","card":"Buggy SILVER SP/(3rd Anniversary Special Card)","game":"One Piece","set":"OP14","setFull":"One Piece Card Game The Azure Sea's Seven","num":"OP09051","var":"","grader":"BGS","grade":"10P","pop":185,"cl":900.0,"raw":813.94,"graded":422,"rate":0.43838862559241704,"top":0.47393364928909953,"best":0.035545023696682464,"bestGrade":"10 Black","ladder":"BECKETT pop, 422 graded. 10 Black: 15, 10P: 185, 9.5: 212, 9: 8, 8.5: 1, 7.5: 1","conf":5,"sales":[{"date":"2026-10-08","price":900,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/800740521492"},{"date":"2026-09-28","price":910,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/377510010299"},{"date":"2026-09-21","price":960,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/96af236a-ad5e-11f1-9073-0a58a9feac02"},{"date":"2026-09-17","price":1050,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/800638324060"},{"date":"2026-09-11","price":1280,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/407163276005"}],"clFresh":936,"clUsed":936,"psa10":1166.5,"val":936,"mult":1.1499619136545691,"act":"slab","ask":936},{"cert":"6144952111","card":"Origin Forme Palkia V","game":"Pokemon","set":"SWSH10","setFull":"Pokemon Astral Radiance","num":"167/189","var":"UR","grader":"CGC","grade":"8","pop":35,"cl":109.0,"raw":83.41,"graded":1400,"rate":0.025,"top":0.9621428571428572,"best":0.0007142857142857143,"bestGrade":"10 Perfect","ladder":"CGC pop, 1,400 graded. 10 Perfect: 1, 10P: 74, 10: 545, 9.5: 80, 9: 508, 8.5: 104, 8: 35, 7.5: 20","conf":1,"sales":[{"date":"2026-03-29","price":79,"platform":"Fanatics-Vault","type":"BestOffer","url":"https://www.fanaticscollect.com/buy-now/10c5bdbb-5b94-4abe-aeed-47a8f3960537"},{"date":"2025-08-24","price":54.88,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/388862204507"}],"clFresh":246,"clUsed":66.94,"psa10":280.51,"val":66.94,"mult":0.8025416616712624,"act":"raw","ask":83.41},{"cert":"6144951105","card":"Articuno","game":"Pokemon","set":"SV09","setFull":"Pokemon Journey Together - JTG EN","num":"161/159","var":"IR","grader":"CGC","grade":"7","pop":13,"cl":102.0,"raw":13.9,"graded":2791,"rate":0.004657828735220351,"top":0.9967753493371552,"best":0.05446076675026872,"bestGrade":"10P","ladder":"CGC pop, 2,791 graded. 10P: 152, 10: 1,162, 9.5: 314, 9: 879, 8.5: 174, 8: 69, 7.5: 19, 7: 13","conf":1,"sales":[{"date":"2026-01-28","price":10,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/336398639547"}],"clFresh":102,"clUsed":10,"psa10":195.68,"val":10,"mult":0.7194244604316546,"act":"raw","ask":13.9},{"cert":"6144952146","card":"Umbreon ex","game":"Pokemon","set":"SVP","setFull":"Pokemon Black Star Promos - Scarlet & Violet SVP EN","num":"176","var":"P","grader":"CGC","grade":"9.5","pop":374,"cl":32.4,"raw":26.72,"graded":5872,"rate":0.06369209809264305,"top":0.6369209809264306,"best":0.1817098092643052,"bestGrade":"10P","ladder":"CGC pop, 5,872 graded. 10P: 1,067, 10: 2,299, 9.5: 374, 9: 1,330, 8.5: 491, 8: 226, 7.5: 55, 7: 12","conf":5,"sales":[{"date":"2026-10-19","price":19.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/8cd4dbaa-c1ae-11f1-8127-0affecdbdc67"},{"date":"2026-10-18","price":30.09,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/206616973986"},{"date":"2026-10-05","price":32.4,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/70c662c0-ad64-11f1-bb56-0a58a9feac02"},{"date":"2026-10-04","price":32.28,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/206582686427"},{"date":"2026-10-03","price":35,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/287617512882"}],"clFresh":19,"clUsed":19,"psa10":130.0,"val":19,"mult":0.7110778443113773,"act":"raw","ask":26.72},{"cert":"6144951132","card":"Mew ex","game":"Pokemon","set":"MEW","setFull":"Pokemon Scarlet & Violet 151 - MEW EN","num":"205/165","var":"HR","grader":"CGC","grade":"9","pop":1384,"cl":32.15,"raw":24.16,"graded":3975,"rate":0.34817610062893084,"top":0.8130817610062893,"best":0.03974842767295597,"bestGrade":"10P","ladder":"CGC pop, 3,975 graded. 10P: 158, 10: 1,227, 9.5: 463, 9: 1,384, 8.5: 479, 8: 177, 7.5: 50, 7: 16","conf":5,"sales":[{"date":"2026-10-19","price":16.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/2988ea9c-c1d5-11f1-b611-0a58a9feac02"},{"date":"2026-10-17","price":375,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/178555874749"},{"date":"2026-10-16","price":38,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/d54b490c-3fe3-44a0-a7e2-dfe1fb409185"},{"date":"2026-10-08","price":32.15,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/366711078604"},{"date":"2026-10-05","price":17.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/307204031801"}],"clFresh":17,"clUsed":17,"psa10":null,"val":17,"mult":0.7036423841059603,"act":"raw","ask":24.16},{"cert":"6144951208","card":"Mew ex","game":"Pokemon","set":"MEW","setFull":"Pokemon Scarlet & Violet 151 - MEW EN","num":"205/165","var":"HR","grader":"CGC","grade":"9","pop":1384,"cl":32.15,"raw":24.16,"graded":3975,"rate":0.34817610062893084,"top":0.8130817610062893,"best":0.03974842767295597,"bestGrade":"10P","ladder":"CGC pop, 3,975 graded. 10P: 158, 10: 1,227, 9.5: 463, 9: 1,384, 8.5: 479, 8: 177, 7.5: 50, 7: 16","conf":5,"sales":[{"date":"2026-10-19","price":16.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/2988ea9c-c1d5-11f1-b611-0a58a9feac02"},{"date":"2026-10-17","price":375,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/178555874749"},{"date":"2026-10-16","price":38,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/d54b490c-3fe3-44a0-a7e2-dfe1fb409185"},{"date":"2026-10-08","price":32.15,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/366711078604"},{"date":"2026-10-05","price":17.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/307204031801"}],"clFresh":17,"clUsed":17,"psa10":null,"val":17,"mult":0.7036423841059603,"act":"raw","ask":24.16},{"cert":"6144951249","card":"Ivysaur","game":"Pokemon","set":"ME01","setFull":"Pokemon Mega Evolution - MEG EN","num":"134/132","var":"IR","grader":"CGC","grade":"8.5","pop":63,"cl":13.0,"raw":15.78,"graded":1815,"rate":0.03471074380165289,"top":0.9691460055096419,"best":0.22038567493112948,"bestGrade":"10P","ladder":"CGC pop, 1,815 graded. 10P: 400, 10: 876, 9.5: 111, 9: 309, 8.5: 63, 8: 32, 7.5: 6, 7: 11","conf":5,"sales":[{"date":"2026-10-19","price":10.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/8b7c1c46-c1ae-11f1-84a3-02ffd6cae22d"},{"date":"2026-09-19","price":10.69,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/188947580980"},{"date":"2026-09-14","price":18,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/581bb632-a7e0-11f1-8e48-0a58a9feac02"},{"date":"2026-08-03","price":13.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/d7973ace-860e-11f1-9dbf-064783a6ffa1"},{"date":"2026-07-20","price":9.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/b15bab4e-7a77-11f1-b144-0a58a9feac02"}],"clFresh":11,"clUsed":11,"psa10":79.69,"val":11,"mult":0.697084917617237,"act":"raw","ask":15.78},{"cert":"6144951250","card":"Ivysaur","game":"Pokemon","set":"ME01","setFull":"Pokemon Mega Evolution - MEG EN","num":"134/132","var":"IR","grader":"CGC","grade":"8.5","pop":63,"cl":13.0,"raw":15.78,"graded":1815,"rate":0.03471074380165289,"top":0.9691460055096419,"best":0.22038567493112948,"bestGrade":"10P","ladder":"CGC pop, 1,815 graded. 10P: 400, 10: 876, 9.5: 111, 9: 309, 8.5: 63, 8: 32, 7.5: 6, 7: 11","conf":5,"sales":[{"date":"2026-10-19","price":10.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/8b7c1c46-c1ae-11f1-84a3-02ffd6cae22d"},{"date":"2026-09-19","price":10.69,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/188947580980"},{"date":"2026-09-14","price":18,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/581bb632-a7e0-11f1-8e48-0a58a9feac02"},{"date":"2026-08-03","price":13.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/d7973ace-860e-11f1-9dbf-064783a6ffa1"},{"date":"2026-07-20","price":9.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/b15bab4e-7a77-11f1-b144-0a58a9feac02"}],"clFresh":11,"clUsed":11,"psa10":79.69,"val":11,"mult":0.697084917617237,"act":"raw","ask":15.78},{"cert":"6144952119","card":"Mew VMAX","game":"Pokemon","set":"SWSH11","setFull":"Pokemon Lost Origin","num":"TG30/TG30","var":"TG","grader":"CGC","grade":"7","pop":22,"cl":58.0,"raw":27.6,"graded":2502,"rate":0.008792965627498001,"top":0.9908073541167066,"best":0.001199040767386091,"bestGrade":"10 Perfect","ladder":"CGC pop, 2,502 graded. 10 Perfect: 3, 10P: 209, 10: 988, 9.5: 162, 9: 781, 8.5: 183, 8: 98, 7.5: 33","conf":2,"sales":[{"date":"2026-06-29","price":19.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/87847f0e-6cf7-11f1-b06c-02b820b92bc5"}],"clFresh":58,"clUsed":19.2,"psa10":157.75,"val":19.2,"mult":0.6956521739130435,"act":"raw","ask":27.6},{"cert":"6144952038","card":"Alakazam","game":"Pokemon","set":"MEP","setFull":"Pokemon Black Star Promos - Mega Evolution MEP EN","num":"009","var":"P","grader":"CGC","grade":"9","pop":36,"cl":50.4,"raw":71.65,"graded":143,"rate":0.2517482517482518,"top":0.916083916083916,"best":0.09090909090909091,"bestGrade":"10P","ladder":"CGC pop, 143 graded. 10P: 13, 10: 66, 9.5: 16, 9: 36, 8.5: 9, 7.5: 2, 7: 1","conf":5,"sales":[{"date":"2026-10-12","price":50.4,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/c6289568-bba0-11f1-9919-0a58a9feac02"},{"date":"2026-10-05","price":49,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/287610502420"},{"date":"2026-09-15","price":66,"platform":"Fanatics-Vault","type":"FixedPrice","url":"https://www.fanaticscollect.com/buy-now/597ab7ac-63d1-4ea7-a01e-3dc76b77e9d3"},{"date":"2026-05-25","price":51.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/3f7ada7e-4ed8-11f1-b934-0a58a9feac02"},{"date":"2026-05-18","price":67.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/d0c71f20-4e3c-11f1-a8f2-0a58a9feac02"}],"clFresh":48,"clUsed":48,"psa10":null,"val":48,"mult":0.6699232379623168,"act":"raw","ask":71.65},{"cert":"6144952107","card":"Suicune V","game":"Pokemon","set":"CRZ","setFull":"Pokemon Crown Zenith","num":"GG38/GG70","var":"GG","grader":"CGC","grade":"8.5","pop":127,"cl":49.2,"raw":55.52,"graded":2717,"rate":0.04674273095325727,"top":0.9576739050423261,"best":0.09827015090172984,"bestGrade":"10P","ladder":"CGC pop, 2,717 graded. 10P: 267, 10: 1,304, 9.5: 280, 9: 624, 8.5: 127, 8: 59, 7.5: 26, 7: 16","conf":5,"sales":[{"date":"2026-10-19","price":37.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/e95073e4-c1ae-11f1-ba7c-0affecdbdc67"},{"date":"2026-10-05","price":49.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/48d89a60-b5f4-11f1-bd28-02ffd447eac9"},{"date":"2026-03-24","price":36,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/389756889391"},{"date":"2026-02-23","price":25.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/d1b2b952-0761-11f1-822f-0a58a9feac02"},{"date":"2026-02-02","price":27.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/30e0c664-fb08-11f0-8bfb-0a58a9feac02"}],"clFresh":37,"clUsed":37,"psa10":206.32,"val":37,"mult":0.6664265129682997,"act":"raw","ask":55.52},{"cert":"6144952039","card":"Gothorita","game":"Pokemon","set":"WHT","setFull":"Pokemon White Flare - WHT EN","num":"125/086","var":"IR","grader":"CGC","grade":"9","pop":28,"cl":6.0,"raw":17.22,"graded":83,"rate":0.3373493975903614,"top":0.9036144578313253,"best":0.08433734939759036,"bestGrade":"10P","ladder":"CGC pop, 83 graded. 10P: 7, 10: 31, 9.5: 9, 9: 28, 8.5: 6, 8: 2","conf":3,"sales":[{"date":"2026-08-18","price":5.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/178394430197"},{"date":"2026-04-10","price":8.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/188240658566"},{"date":"2026-03-09","price":9.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/28015aa4-120f-11f1-b860-0a58a9feac02"},{"date":"2025-10-20","price":9.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/6ab5b9fe-a3b9-11f0-94a2-06d942d29dab"},{"date":"2025-09-22","price":14.4,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/97d5488a-8836-11f0-8246-0a14a950081f"}],"clFresh":11,"clUsed":11,"psa10":199.19,"val":11,"mult":0.6387921022067364,"act":"raw","ask":17.22},{"cert":"6144951115","card":"Reshiram ex","game":"Pokemon","set":"WHT","setFull":"Pokemon White Flare - WHT EN","num":"173/086","var":"BWR","grader":"CGC","grade":"8","pop":13,"cl":295.0,"raw":467.36,"graded":448,"rate":0.029017857142857144,"top":0.9754464285714286,"best":0.10044642857142858,"bestGrade":"10P","ladder":"CGC pop, 448 graded. 10P: 45, 10: 228, 9.5: 38, 9: 92, 8.5: 21, 8: 13, 7.5: 5, 7: 5","conf":3,"sales":[{"date":"2026-07-20","price":348,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/e67e6dd6-7af2-11f1-b5f2-0a488fc7b005"},{"date":"2025-10-24","price":570,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/167866971092"},{"date":"2025-08-22","price":399,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/177346279912"}],"clFresh":296,"clUsed":296,"psa10":1030.0,"val":296,"mult":0.6333447449503594,"act":"raw","ask":467.36},{"cert":"6144951084","card":"Applin","game":"Pokemon","set":"SV06","setFull":"Pokemon Twilight Masquerade - TWM EN","num":"185/167","var":"IR","grader":"CGC","grade":"8.5","pop":23,"cl":22.0,"raw":16.57,"graded":359,"rate":0.06406685236768803,"top":0.9526462395543176,"best":0.08635097493036212,"bestGrade":"10P","ladder":"CGC pop, 359 graded. 10P: 31, 10: 166, 9.5: 45, 9: 77, 8.5: 23, 8: 12, 7.5: 5","conf":1,"sales":[{"date":"2024-10-01","price":10,"platform":"eBay","type":"FixedPrice","url":"https://www.ebay.com/itm/176603446313"},{"date":"2024-08-28","price":5.51,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/375606957773"}],"clFresh":90,"clUsed":7.755,"psa10":99.99,"val":7.755,"mult":0.468014484007242,"act":"raw","ask":16.57},{"cert":"6144951141","card":"Riolu","game":"Pokemon","set":"MEP","setFull":"Pokemon Black Star Promos - Mega Evolution MEP EN","num":"010","var":"P","grader":"CGC","grade":"9","pop":46,"cl":21.0,"raw":62.58,"graded":125,"rate":0.368,"top":0.888,"best":0.024,"bestGrade":"10P","ladder":"CGC pop, 125 graded. 10P: 3, 10: 39, 9.5: 23, 9: 46, 8.5: 11, 8: 3","conf":4,"sales":[{"date":"2026-09-30","price":19.99,"platform":"eBay","type":"BestOffer","url":"https://www.ebay.com/itm/189014904010"},{"date":"2026-08-03","price":51.6,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/cff6267c-8622-11f1-8238-0a58a9feac02"},{"date":"2026-05-18","price":49.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/10ae26f8-4b66-11f1-9ec0-06376c9e8203"},{"date":"2026-04-27","price":40.8,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/48378cce-27e7-11f1-9dd7-0a58a9feac02"},{"date":"2026-04-27","price":37.2,"platform":"Fanatics-Weekly","type":"Auction","url":"https://www.fanaticscollect.com/weekly/89739c8c-27e7-11f1-b95f-0a58a9feac02"}],"clFresh":24,"clUsed":24,"psa10":null,"val":24,"mult":0.3835091083413231,"act":"raw","ask":62.58},{"cert":"20607087","card":"Monkey.D.Luffy ALT ART L","game":"One Piece","set":"ST-29 JP","setFull":"One Piece Card Game Starter Deck 29 -Egghead- Japanese","num":"ST29001","var":"","grader":"BGS","grade":"9.5","pop":23,"cl":16.0,"raw":105.0,"graded":29,"rate":0.7931034482758621,"top":0.9310344827586207,"best":0.13793103448275862,"bestGrade":"10P","ladder":"BECKETT pop, 29 graded. 10P: 4, 9.5: 23, 9: 2","conf":4,"sales":[{"date":"2026-09-29","price":15.5,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/298692842845"},{"date":"2026-03-29","price":33,"platform":"eBay","type":"Auction","url":"https://www.ebay.com/itm/306833708826"}],"clFresh":16,"clUsed":16,"psa10":105.5,"val":16,"mult":0.1523809523809524,"act":"raw","ask":105.0},{"cert":"6141575001","card":"Aphelios","game":"Riftbound","set":"SFD","setFull":"Spiritforged (SFD)","num":"224*/221","var":"Sig","grader":"CGC","grade":"8.5","pop":1,"cl":144.43,"raw":567.87,"graded":5,"rate":0.2,"top":1.0,"best":0.8,"bestGrade":"10P","ladder":"CGC pop, 5 graded. 10P: 4, 8.5: 1","conf":null,"sales":[],"clFresh":null,"clUsed":null,"psa10":1275.0,"val":null,"mult":null,"act":"none","ask":567.87},{"cert":"6141575002","card":"Bard","game":"Riftbound","set":"SFD","setFull":"Spiritforged (SFD)","num":"228*/221","var":"Sig","grader":"CGC","grade":"10P","pop":2,"cl":144.43,"raw":468.19,"graded":6,"rate":0.3333333333333333,"top":0.3333333333333333,"best":0.3333333333333333,"bestGrade":"10P","ladder":"CGC pop, 6 graded. 10P: 2, 10: 2, 9: 2","conf":null,"sales":[],"clFresh":null,"clUsed":null,"psa10":null,"val":null,"mult":null,"act":"none","ask":468.19},{"cert":"6144952072","card":"Defiant Dance","game":"Riftbound","set":"SFD","setFull":"Spiritforged (SFD)","num":"196/221","var":"","grader":"CGC","grade":"10P","pop":2,"cl":null,"raw":16.86,"graded":3,"rate":0.6666666666666666,"top":0.6666666666666666,"best":0.6666666666666666,"bestGrade":"10P","ladder":"CGC pop, 3 graded. 10P: 2, 10: 1","conf":null,"sales":[],"clFresh":null,"clUsed":null,"psa10":20.5,"val":null,"mult":null,"act":"none","ask":16.86},{"cert":"6144952074","card":"Aphelios","game":"Riftbound","set":"SFD","setFull":"Spiritforged (SFD)","num":"224/221","var":"","grader":"CGC","grade":"10P","pop":5,"cl":null,"raw":77.7,"graded":10,"rate":0.5,"top":0.5,"best":0.5,"bestGrade":"10P","ladder":"CGC pop, 10 graded. 10P: 5, 10: 3, 9: 2","conf":null,"sales":[],"clFresh":null,"clUsed":null,"psa10":null,"val":null,"mult":null,"act":"none","ask":77.7},{"cert":"6144951021","card":"Charizard ex","game":"Pokemon","set":"PAF","setFull":"Pokemon Paldean Fates - PAF EN","num":"054/091","var":"Holo","grader":"CGC","grade":"7.5","pop":19,"cl":null,"raw":4.05,"graded":2230,"rate":0.008520179372197309,"top":0.9887892376681614,"best":0.07623318385650224,"bestGrade":"10P","ladder":"CGC pop, 2,230 graded. 10P: 170, 10: 934, 9.5: 240, 9: 576, 8.5: 191, 8: 75, 7.5: 19, 7: 11","conf":null,"sales":[],"clFresh":null,"clUsed":null,"psa10":92.5,"val":null,"mult":null,"act":"none","ask":4.05},{"cert":"6144951092","card":"Iono's Bellibolt ex","game":"Pokemon","set":"SV09","setFull":"Pokemon Journey Together - JTG EN","num":"172/159","var":"UR","grader":"CGC","grade":"8","pop":10,"cl":null,"raw":1.46,"graded":792,"rate":0.012626262626262626,"top":0.98989898989899,"best":0.13005050505050506,"bestGrade":"10P","ladder":"CGC pop, 792 graded. 10P: 103, 10: 372, 9.5: 71, 9: 190, 8.5: 38, 8: 10, 7.5: 4, 7: 4","conf":null,"sales":[],"clFresh":null,"clUsed":null,"psa10":41.27,"val":null,"mult":null,"act":"none","ask":1.46},{"cert":"6144951110","card":"My Era...Begins!!","game":"One Piece","set":"PRB-02","setFull":"One Piece Premium Booster: The Best Vol.2 (PRB-02)","num":"OP09-096","var":"Alt Art","grader":"CGC","grade":"9","pop":4,"cl":null,"raw":369.76,"graded":16,"rate":0.25,"top":1.0,"best":0.5625,"bestGrade":"10P","ladder":"CGC pop, 16 graded. 10P: 9, 10: 3, 9: 4","conf":null,"sales":[],"clFresh":null,"clUsed":null,"psa10":419.7,"val":null,"mult":null,"act":"none","ask":369.76},{"cert":"6144951224","card":"Black Rose Dragon","game":"Yu-Gi-Oh!","set":"LIOV","setFull":"Yu-Gi-Oh! Lightning Overdrive","num":"LIOV-EN100","var":"1st Ed","grader":"CGC","grade":"9","pop":5,"cl":null,"raw":288.54,"graded":15,"rate":0.3333333333333333,"top":0.8666666666666667,"best":0.5333333333333333,"bestGrade":"10","ladder":"CGC pop, 15 graded. 10: 8, 9: 5, 8.5: 2","conf":null,"sales":[],"clFresh":null,"clUsed":null,"psa10":null,"val":null,"mult":null,"act":"none","ask":288.54},{"cert":"6144951136","card":"Jewelry Bonney","game":"One Piece","set":"OP-PR","setFull":"One Piece Promotional Cards","num":"OP08-105","var":"P","grader":"CGC","grade":"8.5","pop":1,"cl":null,"raw":285.29,"graded":5,"rate":0.2,"top":1.0,"best":0.4,"bestGrade":"10P","ladder":"CGC pop, 5 graded. 10P: 2, 10: 2, 8.5: 1","conf":null,"sales":[],"clFresh":null,"clUsed":null,"psa10":540.0,"val":null,"mult":null,"act":"none","ask":285.29},{"cert":"20607056","card":"Raichu ILLUSTRATION/(Nuzzle Plush Toy Card Display Gift Box)","game":"Pokemon","set":"SVP CN","setFull":"Pokemon TCG Scarlet & Violet SV-P Promos Simplified Chinese","num":"091SVP","var":"","grader":"BGS","grade":"9","pop":3,"cl":null,"raw":null,"graded":3,"rate":1.0,"top":1.0,"best":1.0,"bestGrade":"9","ladder":"BECKETT pop, 3 graded. 9: 3","conf":null,"sales":[],"clFresh":null,"clUsed":null,"psa10":null,"val":null,"mult":null,"act":"none","ask":null}];
+const SUM = {"n": 485, "shown": 74, "slab": 401, "slabAsk": 30986.16, "raw": 47, "rawAsk": 3220.11, "none": 37, "noneAsk": 3145.85, "ask": 37352.12, "rawTotal": 19674.09, "low": 33, "noSales": 37, "pop1": 8, "popUnder10": 39, "over3": 243, "games": {"One Piece": 31, "Pokemon": 425, "Riftbound": 28, "Yu-Gi-Oh!": 1}};
+/* shared helpers for the five Slabs mockups. SLABS and SUM are injected above this. */
+const THEME_ASKED = new URLSearchParams(location.search).get('theme');
+if (THEME_ASKED) document.documentElement.dataset.theme = THEME_ASKED;
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const usd = (x, cents = true) => x == null ? '' : '$' + x.toLocaleString('en-US', { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 });
+const pct = (x) => x == null ? '' : (x < 0.001 ? 'under 0.1' : (x * 100).toFixed(x < 0.1 ? 1 : 0)) + '%';
+const times = (m) => m == null ? '' : (m >= 10 ? m.toFixed(0) : m.toFixed(1)) + '×';
+const GRADE_WORD = { '10P': '10 Pristine', '10B': '10 Black Label', '10': '10' };
+const grade = (s) => `${s.grader} ${GRADE_WORD[s.grade] || s.grade}`;
+const CONF_WORD = { 1: 'Very low', 2: 'Low', 3: 'Fair', 4: 'Good', 5: 'High' };
+const BUCKET = { slab: 'Sell as Slab', raw: 'Price at Raw', none: "Can't Compare" };
+const BUCKET_TONE = { slab: 'ok', raw: 'warn', none: '' };
+const lowConf = (s) => s.conf != null && s.conf <= 2;
+const fmtDate = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.startsWith('2026') ? undefined : 'numeric' });
+/* a slab with no ask has no price to offer, so it never goes on the buyer list */
+const pickable = (s) => s.ask != null;
+const askOf = (s) => s.ask || 0;
+const PLATFORM = (p) => p.replace('Fanatics-Weekly', 'Fanatics Weekly').replace('Fanatics-Vault', 'Fanatics Vault').replace('Fanatics-Premier', 'Fanatics Premier');
+const SALE_TYPE = { Auction: 'auction', FixedPrice: 'buy it now', BestOffer: 'best offer' };
+
+/* where the slab's price comes from, as a sentence */
+function source(s) {
+  if (!s.sales.length) return 'No sales at this grade';
+  if (lowConf(s)) return `Median of the last ${s.sales.length === 1 ? 'sale' : s.sales.length + ' sales'}`;
+  return 'Card Ladder value';
+}
+function confPill(s) {
+  if (s.conf == null) return '<span class="muted small">No sales</span>';
+  return `<span class="nowrap" title="Card Ladder confidence ${s.conf} of 5"><span class="conf" data-c="${s.conf}"><i></i><i></i><i></i><i></i><i></i></span> <span class="small ${lowConf(s) ? 'down' : 'ink2'}">${CONF_WORD[s.conf]}</span></span>`;
+}
+function bucketPill(s) { return `<span class="bn-pill ${BUCKET_TONE[s.act] ? 'bn-pill-' + BUCKET_TONE[s.act] : ''}">${BUCKET[s.act]}</span>`; }
+/* the last five sales at the grade, oldest left, newest right and accented */
+function spark(s) {
+  if (!s.sales.length) return '<span class="muted small">no sales</span>';
+  const sales = [...s.sales].reverse(), max = Math.max(...sales.map((x) => x.price));
+  return `<span class="spark" title="${esc(sales.map((x) => usd(x.price)).join(', '))}" style="transform:scaleX(-1)">${s.sales.map((x) => `<i style="height:${Math.max(3, Math.round((x.price / max) * 18))}px"></i>`).join('')}</span>`;
+}
+function lastSale(s) {
+  const x = s.sales[0];
+  if (!x) return '<span class="muted">No sales</span>';
+  return `<span class="bn-money">${usd(x.price)}</span> <span class="muted small">${fmtDate(x.date)}</span>`;
+}
+function salesList(s) {
+  if (!s.sales.length) return '<p class="muted" style="margin:0">No slab at this grade has sold yet, so there is nothing to price it by.</p>';
+  return `<ol class="sales">${s.sales.map((x) => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener"><span class="bn-money">${usd(x.price)}</span><span class="sep small muted"><span>${fmtDate(x.date)}</span><span>${esc(PLATFORM(x.platform))}</span><span>${SALE_TYPE[x.type] || 'sale'}</span></span></a></li>`).join('')}</ol>`;
+}
+/* the two Card Ladder values, each with its source. A low-confidence or unsold one is not used. */
+function clValues(s) {
+  const used = s.sales.length && !lowConf(s);
+  return `<dl class="clvals">
+    <div><dt>Card Ladder, This Grade</dt><dd>${s.clFresh != null ? `<span class="bn-money ${used ? '' : 'struck'}">${usd(s.clFresh)}</span>` : '<span class="muted">no sales</span>'}</dd><dd class="small muted">From the grade ladder${s.conf != null ? `, confidence ${CONF_WORD[s.conf].toLowerCase()}` : ''}${used ? '' : ', not used'}</dd></div>
+    <div><dt>Card Ladder, Collection</dt><dd>${s.sales.length && s.cl != null ? `<span class="bn-money ${used ? '' : 'struck'}">${usd(s.cl)}</span>` : '<span class="muted">no sales</span>'}</dd><dd class="small muted">From your Card Ladder collection${used ? '' : ', not used'}</dd></div>
+  </dl>`;
+}
+const SLAB_CSS = `
+.sales { list-style: none; margin: 0; padding: 0; }
+.sales li a { display: flex; align-items: center; gap: var(--bn-3); min-height: 40px; padding: 0 var(--bn-2); border-radius: var(--bn-r-sm); color: var(--bn-ink); }
+.sales li a:hover { background: var(--bn-hover); text-decoration: none; }
+.sales li:first-child .bn-money { color: var(--bn-accent-hover); }
+.clvals { display: grid; grid-template-columns: 1fr 1fr; gap: var(--bn-3); margin: 0; }
+.clvals dt { font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-ink-3); letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; }
+.clvals dd { margin: var(--bn-0-5) 0 0; }
+.struck { text-decoration: line-through; color: var(--bn-ink-3); }
+dialog.sheet { border: 0; padding: 0; border-radius: var(--bn-r-xl); background: var(--bn-surface); color: var(--bn-ink); box-shadow: var(--bn-shadow-3); width: min(560px, calc(100vw - 32px)); }
+dialog.sheet::backdrop { background: color-mix(in srgb, var(--bn-mask) 40%, transparent); }
+`;
+
+/* ---- the shell ---------------------------------------------------------- */
+const NAV = [[null, ['Home']], ['Workflow', ['Capture', 'Review', 'Pricing']], ['Sell', ['Orders', 'Shipping', 'Sales']], ['Library', ['Inventory', 'Slabs', 'Codes']]];
+function shell(pageHtml) {
+  const nav = NAV.map(([label, items]) => (label ? `<div class="bn-nav-label">${label}</div>` : '') +
+    items.map((i) => `<a class="bn-nav-link" href="#" ${i === 'Slabs' ? 'aria-current="page"' : ''}><i class="bn-nav-ico"></i><span>${i}</span></a>`).join('')).join('');
+  document.body.innerHTML = `<div class="bn-shell"><aside class="bn-side"><div class="bn-brand"><i class="bn-brand-mark"></i><span>BANCHI</span></div>${nav}
+    <div class="bn-side-foot"><button class="bn-nav-link" style="width:100%" onclick="flipTheme()"><i class="bn-nav-ico"></i><span>Switch Theme</span></button></div></aside><main class="bn-shell-main">${pageHtml}</main></div>
+    <dialog class="sheet" id="exportSheet"></dialog>`;
+  const st = document.createElement('style'); st.textContent = SLAB_CSS; document.head.appendChild(st);
+}
+function flipTheme() {
+  const r = document.documentElement, dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  r.dataset.theme = dark ? 'light' : 'dark';
+}
+
+/* ---- the buyer list ------------------------------------------------------ */
+const BUYER_COLS = ['Card', 'Game', 'Set', 'Number', 'Variation', 'Grader', 'Grade', 'Population', 'Graded Total', 'Grade Rate', 'At or Above', 'Top Grade', 'Top Grade Rate', 'Cert', 'Asking Price'];
+function buyerCsv(list) {
+  const q = (v) => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v;
+  const p2 = (x) => x == null ? '' : (x * 100).toFixed(2) + '%';
+  return [BUYER_COLS.join(','), ...list.map((s) => [s.card, s.game, s.setFull, s.num, s.var, s.grader, s.grade, s.pop, s.graded, p2(s.rate), p2(s.top), s.bestGrade, p2(s.best), s.cert, s.ask?.toFixed(2)].map(q).join(','))].join('\n');
+}
+function openExport(list) {
+  list = list.filter(pickable);
+  const d = $('#exportSheet'), total = list.reduce((a, s) => a + askOf(s), 0);
+  d.innerHTML = `<div class="bn-panel-head"><h2 class="bn-panel-title">Export the Buyer List</h2><button class="bn-btn bn-btn-ghost bn-btn-icon" aria-label="Close" onclick="this.closest('dialog').close()">✕</button></div>
+    <div class="bn-panel-body" style="display:grid;gap:var(--bn-4)">
+      <div class="bn-stat-row"><div class="bn-stat"><span class="bn-stat-value">${list.length}</span><span class="bn-stat-label">slabs</span></div>
+      <div class="bn-stat"><span class="bn-stat-value bn-money">${usd(total, false)}</span><span class="bn-stat-label">asking in all</span></div></div>
+      <p style="margin:0" class="ink2">Each slab goes out with its cert, its population and its asking price. A buyer sees no Card Ladder value and no raw price.</p>
+      <div class="bn-well small muted">${BUYER_COLS.map((c) => `<span class="nowrap">${c}</span>`).join(', ')}</div>
+      <div style="display:flex;gap:var(--bn-2);justify-content:flex-end"><button class="bn-btn bn-btn-ghost" onclick="this.closest('dialog').close()">Cancel</button>
+      <button class="bn-btn bn-btn-primary" id="dl">Download the List</button></div></div>`;
+  $('#dl', d).onclick = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([buyerCsv(list)], { type: 'text/csv' }));
+    a.download = 'buyer-list.csv'; a.click(); d.close();
+  };
+  d.showModal();
+}
+
+
+const sel = new Set();
+let lane = 'slab';
+const LANE = {
+  slab: { p: 'Worth more graded than raw. Sell these as slabs.', sort: (a, b) => b.mult - a.mult },
+  raw: { p: 'The raw card is worth more. Price these at raw near mint.', sort: (a, b) => (a.val - a.raw) - (b.val - b.raw) },
+  none: { p: 'No slab at this grade has sold. Ask raw near mint until one does.', sort: (a, b) => (b.raw || 0) - (a.raw || 0) },
+};
+const head = `<header class="bn-page-head"><div class="bn-page-head-text"><div class="bn-eyebrow"><span>Library</span><span>${SUM.n} slabs</span></div>
+  <h1 class="bn-title">Slabs</h1><p class="bn-lede">Every slab is sorted by what it is worth as a slab against the raw card.</p></div>
+  <div class="bn-head-actions"><button class="bn-btn">Add Slabs</button></div></header>`;
+shell(`<div class="bn-page">${head}
+  <div class="bn-seg lane-switch" id="sw">${Object.keys(LANE).map((k) => `<button class="bn-seg-item" data-k="${k}" aria-pressed="${k === lane}">${BUCKET[k]} <span class="muted">${SUM[k]}</span></button>`).join('')}</div>
+  <div class="board" id="board"></div>
+  <div class="tray" id="tray">
+    <span><b>Buyer List</b> <span class="muted"><span class="bn-count" id="trayN" style="--digits:2">0</span> slabs, asking <span class="bn-money" id="trayAsk" style="display:inline-block;min-width:9ch">$0</span></span></span>
+    <span class="tray-chips" id="trayChips"></span>
+    <button class="bn-btn bn-btn-ghost" id="clear">Clear</button>
+    <button class="bn-btn bn-btn-primary" id="exp" disabled>Export Buyer List</button>
+  </div>
+  <p class="muted small" style="margin-top:var(--bn-3)">This mockup holds ${SUM.shown} of the ${SUM.n} slabs. Each lane's count and total cover all ${SUM.n}.</p>
+</div>`);
+
+function premium(s) {
+  if (s.val == null || s.raw == null) return `<span class="muted">Raw near mint ${s.raw != null ? `<span class="bn-money">${usd(s.raw)}</span>` : 'has no price'}</span>`;
+  const d = s.val - s.raw;
+  return `<span><b>${times(s.mult)}</b> <span class="muted">raw</span></span><span class="bn-money ${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '+' : '−'}${usd(Math.abs(d))}</span>`;
+}
+function tile(s) {
+  const on = sel.has(s.cert);
+  const note = lowConf(s) ? `<div class="tile-note">Card Ladder is not sure of this one, so it is priced by the median of its last ${s.sales.length === 1 ? 'sale' : s.sales.length + ' sales'}.</div>` : '';
+  return `<article class="tile" aria-selected="${on}">
+    <div class="tile-top"><div class="tile-name"><b>${esc(s.card)}</b><span class="small muted sep"><span class="bn-mono">${esc(s.set)} ${esc(s.num)}</span><span>${grade(s)}</span><span>Pop ${s.pop}</span></span></div>
+      <div class="tile-ask">${s.ask != null ? `<span class="bn-money">${usd(s.ask)}</span><div class="small muted">ask</div>` : '<span class="muted">no price</span>'}</div></div>
+    <div class="tile-mid">${premium(s)}<span style="flex:1"></span>${spark(s)} ${s.sales[0] ? `<span class="muted">last ${fmtDate(s.sales[0].date)}</span>` : ''}</div>
+    ${note}
+    <div class="tile-foot">${confPill(s)}<span style="flex:1"></span>
+      <button class="bn-btn ${on ? 'bn-btn-tint' : 'bn-btn-ghost'}" data-pick="${s.cert}" ${pickable(s) ? '' : 'disabled'}>${on ? 'On the List' : 'Add to List'}</button></div>
+  </article>`;
+}
+function render() {
+  const keep = [...document.querySelectorAll('.tiles')].map((t) => t.scrollTop);
+  $('#board').innerHTML = Object.entries(LANE).map(([k, L]) => {
+    const list = SLABS.filter((s) => s.act === k).sort(L.sort);
+    const addAll = k === 'slab' ? `<button class="bn-btn bn-btn-ghost" data-all="${k}">Add Every One</button>` : '';
+    return `<section class="lane" data-k="${k}" ${k === lane ? 'data-on' : ''}><div class="lane-head">
+      <h2><i class="lane-tone"></i>${BUCKET[k]}</h2><p>${L.p}</p>
+      <div class="lane-sum"><span class="bn-stat-value">${SUM[k]}</span><span class="muted small">slabs, asking</span><span class="bn-money">${usd(SUM[k + 'Ask'], false)}</span><span style="flex:1"></span>${addAll}</div></div>
+      <div class="tiles">${list.map(tile).join('')}</div></section>`;
+  }).join('');
+  document.querySelectorAll('.tiles').forEach((t, i) => { t.scrollTop = keep[i] || 0; });
+  const picked = SLABS.filter((s) => sel.has(s.cert));
+  $('#trayN').textContent = picked.length;
+  $('#trayAsk').textContent = usd(picked.reduce((a, s) => a + askOf(s), 0), false);
+  $('#trayChips').innerHTML = picked.length ? picked.slice(0, 6).map((s) => `<span class="bn-pill">${esc(s.card)}</span>`).join('') : '<span class="muted small">Add a slab from any lane.</span>';
+  $('#exp').disabled = !picked.length;
+  document.querySelectorAll('#sw .bn-seg-item').forEach((b) => b.setAttribute('aria-pressed', b.dataset.k === lane));
+}
+document.addEventListener('click', (e) => {
+  const p = e.target.closest('[data-pick]');
+  if (p) { sel.has(p.dataset.pick) ? sel.delete(p.dataset.pick) : sel.add(p.dataset.pick); return render(); }
+  const all = e.target.closest('[data-all]');
+  if (all) { SLABS.filter((s) => s.act === all.dataset.all && pickable(s)).forEach((s) => sel.add(s.cert)); return render(); }
+  const sw = e.target.closest('#sw .bn-seg-item');
+  if (sw) { lane = sw.dataset.k; return render(); }
+  if (e.target.closest('#clear')) { sel.clear(); return render(); }
+  if (e.target.closest('#exp')) openExport(SLABS.filter((s) => sel.has(s.cert)));
+});
+SLABS.filter((s) => s.act === 'slab').slice(0, 3).forEach((s) => sel.add(s.cert));
+render();
+
+</script>
+</body>
+</html>

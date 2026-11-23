@@ -1,0 +1,698 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>Four Screens, Fixed in Place</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=Atkinson+Hyperlegible:wght@400;700&family=Martian+Mono:wght@400;500;600&display=swap">
+
+<style>
+  /* PKMNSCAN's own locked tokens (docs/DESIGN.md, locked 2026-08-12). Not re-chosen here.
+     Light only, deliberately: that file rules out a dark theme and a switcher. */
+  :root {
+    --bg: #FCFCFD; --surface: #FFFFFF; --ink: #08090A; --muted: #4E5157;
+    --line: #E6E7EA; --accent: #1E40AF; --hover: #F4F5F7; --pressed: #17348F;
+    --on-accent: #FFFFFF;
+    --display: 'Archivo', 'Cabinet Grotesk', system-ui, sans-serif;
+    --body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+    --util: 'Martian Mono', ui-monospace, monospace;
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+    --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+    --r: 4px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--body); font-size: 16px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: var(--s6) var(--s4) var(--s8); }
+
+  h1, h2, h3 { font-family: var(--display); font-weight: 700; text-wrap: balance; margin: 0; }
+  h1 { font-size: 40px; line-height: 1.08; letter-spacing: -0.02em; }
+  h2 { font-size: 26px; line-height: 1.15; letter-spacing: -0.01em; }
+  h3 { font-size: 17px; line-height: 1.3; }
+  p { margin: 0; max-width: 68ch; }
+
+  .eyebrow {
+    font-family: var(--util); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+  }
+  .lede { color: var(--muted); font-size: 17px; }
+
+  .masthead {
+    display: flex; flex-direction: column; gap: var(--s3);
+    padding-bottom: var(--s5); border-bottom: 1px solid var(--line);
+  }
+  .masthead-meta {
+    display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4);
+    font-family: var(--util); font-size: 11px; color: var(--muted);
+  }
+
+  section { margin-top: var(--s8); }
+  .sec-head { display: flex; flex-direction: column; gap: var(--s2); margin-bottom: var(--s5); }
+
+  .pull {
+    font-family: var(--display); font-size: 19px; font-weight: 600; line-height: 1.35;
+    padding-left: var(--s4); border-left: 2px solid var(--accent); max-width: 62ch;
+    margin: var(--s5) 0;
+  }
+
+  /* ---- screen numbering: these ARE a sequence, hence the ordinals ---- */
+  .fixhead {
+    display: flex; align-items: baseline; gap: var(--s3); flex-wrap: wrap;
+    padding-bottom: var(--s2); border-bottom: 1px solid var(--line); margin-bottom: var(--s4);
+  }
+  .ord {
+    font-family: var(--util); font-size: 11px; font-weight: 600; color: var(--on-accent);
+    background: var(--accent); border-radius: 2px; padding: 2px var(--s2);
+  }
+  .route { font-family: var(--util); font-size: 13px; color: var(--muted); }
+  .edit {
+    font-family: var(--util); font-size: 11px; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 2px; padding: 1px var(--s2);
+    background: var(--surface); margin-left: auto;
+  }
+
+  /* ---- before/after pair ---- */
+  .ba { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s5); }
+  @media (max-width: 820px) { .ba { grid-template-columns: 1fr; } }
+  figure { margin: 0; display: flex; flex-direction: column; gap: var(--s2); }
+  figcaption { font-family: var(--util); font-size: 11px; color: var(--muted); line-height: 1.5; }
+  figcaption b { color: var(--ink); font-weight: 600; }
+  .tag {
+    font-family: var(--util); font-size: 9px; font-weight: 600; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .tag.now { color: var(--muted); }
+  .tag.next { color: var(--accent); }
+
+  .screen {
+    position: relative; aspect-ratio: 1440 / 900;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--r); overflow: hidden; display: flex; flex-direction: column;
+  }
+  .clip { position: relative; }
+  .clip::after {
+    content: 'fold'; position: absolute; left: 0; right: 0; bottom: 0; height: 14px;
+    background: linear-gradient(transparent, var(--hover));
+    font-family: var(--util); font-size: 7px; color: var(--muted);
+    display: flex; align-items: flex-end; justify-content: center; letter-spacing: 0.1em;
+  }
+
+  .nav {
+    height: 5.05%; flex: 0 0 auto; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: var(--s2); padding: 0 var(--s2);
+    font-family: var(--util); font-size: 8px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .nav .on { color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--accent); }
+  .nav .right { margin-left: auto; display: flex; gap: var(--s2); }
+
+  .head {
+    flex: 0 0 auto; display: flex; align-items: baseline; gap: 5px; padding: 4px 5px;
+    font-family: var(--util); font-size: 8px; color: var(--muted);
+  }
+  .head b { color: var(--ink); font-weight: 600; font-size: 9px; }
+  .head .r { margin-left: auto; }
+
+  .body { flex: 1 1 auto; display: flex; min-height: 0; padding: 4px; gap: 4px; }
+  .col { display: flex; flex-direction: column; min-width: 0; min-height: 0; gap: 3px; }
+
+  .void {
+    background-image: repeating-linear-gradient(45deg, var(--line) 0 1px, transparent 1px 7px);
+  }
+  .voidlab {
+    position: absolute; font-family: var(--util); font-size: 9px; color: var(--muted);
+    background: var(--bg); padding: 1px 4px; border-radius: 2px; letter-spacing: 0.05em;
+  }
+
+  .photo {
+    background: var(--hover); border: 1px solid var(--line); border-radius: 2px;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    font-family: var(--util); font-size: 8px; color: var(--muted); padding: 4px;
+    position: relative;
+  }
+  .inset {
+    position: absolute; right: 4px; bottom: 4px; width: 30%; aspect-ratio: 4/3;
+    border: 1px solid var(--accent); background: var(--surface); border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--util); font-size: 6px; color: var(--accent); text-align: center;
+    padding: 2px; line-height: 1.2;
+  }
+
+  .block {
+    border: 1px solid var(--line); border-radius: 2px; background: var(--bg);
+    font-family: var(--util); font-size: 8px; color: var(--muted); padding: 3px 4px;
+    display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow: hidden;
+  }
+  .block.solid { background: var(--surface); }
+  .block.fill { flex: 1 1 auto; }
+  .block.accent { border-color: var(--accent); }
+  .block .t { color: var(--ink); font-weight: 600; }
+
+  .rows { display: flex; flex-direction: column; gap: 2px; }
+  .row { height: 5px; background: var(--line); border-radius: 1px; }
+  .row.wide { background: var(--hover); border: 1px solid var(--line); height: 7px; }
+  .row.on { background: var(--accent); }
+
+  .keyrow {
+    display: flex; align-items: center; gap: 3px; padding: 2px 0;
+    font-family: var(--util); font-size: 7px; color: var(--muted);
+    border-bottom: 1px solid var(--line);
+  }
+  .keyrow .k {
+    border: 1px solid var(--line); border-radius: 2px; padding: 0 2px;
+    color: var(--ink); font-weight: 600;
+  }
+  .keyrow .v { margin-left: auto; color: var(--ink); }
+  .keyrow.sel { background: var(--hover); }
+
+  /* THE RIG SHOOTS PORTRAIT (D13, side-mounted camera, rotation 90/270).
+     .capture-frame-portrait is aspect-ratio 9/16 and .capture-stage-portrait sizes the pair
+     by HEIGHT then centres it -- 421 x 748 each at 1440x900, 96px of centring slack.
+     HEIGHT BINDS, NOT WIDTH: 748 against a 827 width allowance. */
+  .pairstage { flex: 1 1 auto; display: flex; justify-content: center; align-items: flex-start;
+               gap: 2.9%; min-height: 0; overflow: hidden; }
+  .panel { display: flex; flex-direction: column; gap: 3px; min-width: 0; min-height: 0;
+           flex: 0 0 36%; }
+  .panelcap {
+    font-family: var(--util); font-size: 7px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .panel .photo { flex: 0 0 auto; width: 100%; height: auto; aspect-ratio: 9/16; }
+
+  /* ---- numbers strip under a pair ---- */
+  .delta {
+    display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); margin-top: var(--s3);
+    padding: var(--s3) var(--s4); background: var(--surface);
+    border: 1px solid var(--line); border-radius: var(--r);
+  }
+  .d { display: flex; flex-direction: column; gap: 1px; }
+  .d .lab {
+    font-family: var(--util); font-size: 9px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .d .val { font-family: var(--util); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .d .val .from { color: var(--muted); font-weight: 400; }
+  .d .val .to { color: var(--accent); }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th {
+    font-family: var(--util); font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: var(--hover); }
+  td.d2 { font-family: var(--util); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .costs {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--r); padding: var(--s4);
+  }
+  .costs ul { margin: var(--s2) 0 0; padding-left: var(--s4); display: flex; flex-direction: column; gap: var(--s2); }
+  .costs li { font-size: 15px; }
+  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s5); }
+  @media (max-width: 820px) { .cols2 { grid-template-columns: 1fr; } }
+
+  .ruling {
+    border-left: 2px solid var(--accent); background: var(--hover);
+    padding: var(--s3) var(--s4); border-radius: 0 var(--r) var(--r) 0;
+    font-size: 15px; max-width: 68ch; margin-top: var(--s3);
+  }
+  .ruling b { font-family: var(--util); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); display: block; margin-bottom: 2px; }
+
+  code {
+    font-family: var(--util); font-size: 0.86em; background: var(--hover);
+    border: 1px solid var(--line); border-radius: 2px; padding: 0 3px;
+  }
+  kbd {
+    font-family: var(--util); font-size: 0.8em; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 2px; padding: 0 4px; color: var(--ink);
+  }
+  footer {
+    margin-top: var(--s8); padding-top: var(--s5); border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: var(--s2);
+  }
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">PKMNSCAN &middot; the alternative to the Rig &middot; recorded, not built</p>
+    <h1>Four Screens, Fixed in Place</h1>
+    <p class="lede">If the Rig is not the right way, this is. No frame, no shell rewrite, no
+      new routes &mdash; every measured defect repaired inside the screen that has it. The
+      research's own strongest argument against the frame is the argument for this page.</p>
+    <div class="masthead-meta">
+      <span>0 new routes</span>
+      <span>0 shell changes</span>
+      <span>4 screens edited</span>
+      <span>measured 1440 &times; 900</span>
+    </div>
+  </header>
+
+  <!-- ============ THESIS ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Why the frame was the wrong unit of change</p>
+      <h2>Two of the Rig's three zones already exist &mdash; and the defects happened inside them</h2>
+    </div>
+
+    <p>Verified in the tree: <code>CaptureScreen.css:151</code> is already
+      <code>grid-template-columns: var(--side-w) minmax(0, 1fr)</code>, and
+      <code>BoxBrowse.css:137</code> is already
+      <code>minmax(300px, 380px) minmax(0, 1fr)</code>. Both are rail-and-stage layouts today.
+      The 240px header and the y=482 photograph happened <em>inside</em> them.</p>
+
+    <p class="pull">A frame cannot fix a stacking order. Every one of the four measured
+      defects is a decision about what sits above what, inside a column that already
+      exists.</p>
+
+    <p>So the unit of change is the screen, not the shell. What the Rig was right about
+      survives as <em>convention</em> rather than as architecture &mdash; each route declares
+      its own layout and never reflows; deep operations push rather than cover; the URL
+      addresses the subject. Those cost nothing here because the routes already exist.</p>
+  </section>
+
+  <!-- ============ 1. REVIEW ============ -->
+  <section>
+    <div class="fixhead">
+      <span class="ord">1</span>
+      <h2>The review queue</h2>
+      <span class="route">#/review</span>
+      <span class="edit">split the column &middot; move the worklist &middot; retire the cap</span>
+    </div>
+
+    <p class="lede">The largest measured harm in the product, and the one screen
+      <code>docs/DESIGN.md</code> specifies hardest.</p>
+
+    <div class="ba" style="margin-top: var(--s4)">
+      <figure>
+        <p class="tag now">Now</p>
+        <div class="screen clip">
+          <div class="nav"><span>Capture</span><span class="on">Review queue</span><span>Inventory</span>
+            <span class="right"><span>Fulfillment</span><span>Gallery</span></span></div>
+          <div class="head"><b>Review queue</b><span>47 to review &middot; 0 parked</span></div>
+          <div class="body" style="padding: 0 5px;">
+            <div class="col" style="flex: 0 0 47.8%;">
+              <div class="photo" style="flex: 0 0 55%; width: 62%;">244 &times; 432<br>capped at 48vh</div>
+              <div class="block"><span class="t">Box 2 &middot; S1 &middot; C7</span><span>no_catalog_row</span></div>
+              <div class="block"><span>the sentence</span>
+                <div class="rows"><div class="row"></div><div class="row"></div></div></div>
+              <div class="block"><span class="t">Skip</span></div>
+              <div class="block fill"><span>facts &middot; 7 rows</span></div>
+            </div>
+            <div class="col void" style="flex: 1 1 auto; position: relative;">
+              <span class="voidlab" style="top: 42%; left: 50%; transform: translate(-50%,-50%);">752px unused</span>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>The card is 10.3% of the viewport.</b> The 47-entry worklist starts
+          at y=1134, 234px below the fold. Total scroll 4,018px &mdash; 4.5 screens, for one
+          card.</figcaption>
+      </figure>
+
+      <figure>
+        <p class="tag next">Fixed</p>
+        <div class="screen">
+          <div class="nav"><span>Capture</span><span class="on">Review queue</span><span>Inventory</span>
+            <span class="right"><span>Fulfillment</span><span>Gallery</span></span></div>
+          <div class="head"><b>Review queue</b><span>47 waiting</span>
+            <span>no_catalog_row 47</span><span class="r">$12 &middot; 3 left</span></div>
+          <div class="body">
+            <div class="col" style="flex: 0 0 17%;">
+              <div class="block" style="flex: 0 0 auto;"><span class="t">Just done</span></div>
+              <div class="rows">
+                <div class="row wide"></div><div class="row wide"></div><div class="row wide"></div>
+                <div class="row wide"></div><div class="row wide"></div>
+              </div>
+              <div class="block fill"><span>bands</span>
+                <div class="rows" style="margin-top:2px"><div class="row on"></div><div class="row"></div><div class="row"></div></div></div>
+            </div>
+            <div class="col" style="flex: 0 0 44%;">
+              <div class="photo" style="flex: 1 1 auto;">551 &times; 769
+                <span class="inset">1:1 sheen<br>400&times;300 native</span></div>
+            </div>
+            <div class="col" style="flex: 1 1 auto;">
+              <div class="block solid" style="flex: 0 0 auto;"><span class="t">Box 2 &middot; S1 &middot; C7</span><span>no_catalog_row</span></div>
+              <div class="keyrow sel"><span class="k">1</span><span>Stonjourner</span><span class="v">$0.12</span></div>
+              <div class="keyrow"><span class="k">2</span><span>Stonjourner RH</span><span class="v">$0.40</span></div>
+              <div class="keyrow"><span class="k">3</span><span>Stonjourner holo</span><span class="v">$1.10</span></div>
+              <div class="block fill" style="margin-top:3px"><span>facts</span>
+                <div class="rows"><div class="row"></div><div class="row"></div><div class="row"></div></div></div>
+              <div class="block"><span class="t">S skip &middot; U undo &times;10</span></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>The card is 32.7% of the viewport &mdash; 3.17&times; the area.</b>
+          Nothing scrolls. What sits beside the card is what is <em>behind</em> you, not
+          ahead of you.</figcaption>
+      </figure>
+    </div>
+
+    <div class="delta">
+      <div class="d"><span class="lab">card area</span><span class="val"><span class="from">10.3%</span> &rarr; <span class="to">32.7%</span></span></div>
+      <div class="d"><span class="lab">scroll per card</span><span class="val"><span class="from">4,018px</span> &rarr; <span class="to">0</span></span></div>
+      <div class="d"><span class="lab">width used</span><span class="val"><span class="from">45.6%</span> &rarr; <span class="to">100%</span></span></div>
+      <div class="d"><span class="lab">per session &times;47</span><span class="val"><span class="to">&minus;188,846px</span></span></div>
+    </div>
+
+    <div class="ruling">
+      <b>Why the worklist leaves rather than moves</b>
+      No high-throughput annotation tool puts the pending queue beside the item. Prodigy shows
+      one card and the <em>last ten decisions</em>; Label Studio separates its Data Manager
+      from the Label Stream entirely; Zendesk removes the queue at work time so agents
+      "spend their mental energy on solving tickets rather than combing through the queue."
+      The price-band sort is not lost &mdash; <code>store/queues.py:sort_key</code> already
+      orders expensive-first server-side, so the operator gets the benefit without paying
+      3,318px to look at it.
+    </div>
+
+    <div class="ruling" style="margin-top: var(--s3)">
+      <b>The 1:1 inset is the one change that raises accuracy</b>
+      FADGI requires evaluation "at a 1 to 1 pixel ratio or 100% magnification"; Metamorfoze
+      says the same. The human on this screen is the appeal court for a detector that was
+      wrong on <b>230 of 544 cards</b>, and <b>19 of 40 frames disagreed with themselves</b>
+      between max-edge 900 and 1200 &mdash; direct evidence sheen does not survive
+      downscaling. Judging foil from a 5.8:1 fit-to-box render asks a person to rule on
+      evidence the standards say has been destroyed. Costs 400&times;300 CSS px and no
+      keystroke.
+    </div>
+  </section>
+
+  <!-- ============ 2. INVENTORY ============ -->
+  <section>
+    <div class="fixhead">
+      <span class="ord">2</span>
+      <h2>The inventory walk</h2>
+      <span class="route">#/inventory</span>
+      <span class="edit">reorder one column</span>
+    </div>
+
+    <p class="lede">The cheapest fix in the product. Not a layout change at all &mdash; a
+      stacking order.</p>
+
+    <div class="ba" style="margin-top: var(--s4)">
+      <figure>
+        <p class="tag now">Now</p>
+        <div class="screen clip">
+          <div class="nav"><span>Capture</span><span>Review queue</span><span class="on">Inventory</span>
+            <span class="right"><span>Fulfillment</span><span>Gallery</span></span></div>
+          <div class="head"><b>Inventory</b><span>682 cards</span></div>
+          <div class="body">
+            <div class="col void" style="flex: 0 0 6.9%;"></div>
+            <div class="col" style="flex: 0 0 26.4%;">
+              <div class="block"><span>search</span></div>
+              <div class="block"><span>box 1 &middot; 2 &middot; 95</span></div>
+              <div class="block fill"><span>sections, collapsed</span>
+                <div class="rows"><div class="row wide"></div><div class="row wide"></div><div class="row wide"></div></div></div>
+            </div>
+            <div class="col" style="flex: 0 0 55.8%;">
+              <div class="block solid" style="flex: 0 0 21%;"><span class="t">Box 1 &middot; 53 so far</span><span>fill bar</span></div>
+              <div class="block"><span>&#9656; Layout and controls</span></div>
+              <div class="block"><span>&#9656; Runs</span></div>
+              <div class="block accent fill"><span class="t">Box 1 &middot; S1 &middot; C1</span>
+                <div class="photo" style="flex:1 1 auto; margin-top:2px;">photo starts y=482</div></div>
+            </div>
+            <div class="col void" style="flex: 1 1 auto;"></div>
+          </div>
+        </div>
+        <figcaption><b>266px of rent above the card you clicked.</b> Its photo opens at
+          y=482 of 900 and runs to y=917 &mdash; cut off.</figcaption>
+      </figure>
+
+      <figure>
+        <p class="tag next">Fixed</p>
+        <div class="screen">
+          <div class="nav"><span>Capture</span><span>Review queue</span><span class="on">Inventory</span>
+            <span class="right"><span>Fulfillment</span><span>Gallery</span></span></div>
+          <div class="head"><b>Inventory</b><span>682 cards</span><span>Box 1 &middot; 53 so far</span>
+            <span class="r">&#9656; Layout &middot; &#9656; Runs</span></div>
+          <div class="body">
+            <div class="col" style="flex: 0 0 26%;">
+              <div class="block"><span>search</span></div>
+              <div class="block"><span>box 1 &middot; 2 &middot; 95</span></div>
+              <div class="block fill"><span>sections</span>
+                <div class="rows">
+                  <div class="row wide"></div><div class="row on"></div><div class="row wide"></div>
+                  <div class="row wide"></div><div class="row wide"></div><div class="row wide"></div>
+                </div></div>
+            </div>
+            <div class="col" style="flex: 0 0 40%;">
+              <div class="block solid" style="flex: 0 0 auto;"><span class="t">Box 1 &middot; S1 &middot; C1</span></div>
+              <div class="photo" style="flex: 1 1 auto;">photo starts y=115</div>
+            </div>
+            <div class="col" style="flex: 1 1 auto;">
+              <div class="keyrow"><span>Card</span><span class="v">Thievul</span></div>
+              <div class="keyrow"><span>Number</span><span class="v">090/132</span></div>
+              <div class="keyrow"><span>State</span><span class="v">identified</span></div>
+              <div class="keyrow"><span>Finish</span><span class="v">normal</span></div>
+              <div class="block fill" style="margin-top:3px"><span class="t">4 copies</span>
+                <div class="rows"><div class="row wide"></div><div class="row wide"></div><div class="row wide"></div></div></div>
+              <div class="block"><span class="t">M sold &middot; E re-shoot &middot; X retire</span></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>The card is first.</b> The two folds move onto the head line, where
+          they cost a row of text instead of a third of the viewport.</figcaption>
+      </figure>
+    </div>
+
+    <div class="delta">
+      <div class="d"><span class="lab">photo top</span><span class="val"><span class="from">y=482</span> &rarr; <span class="to">y=115</span></span></div>
+      <div class="d"><span class="lab">cut off</span><span class="val"><span class="from">yes</span> &rarr; <span class="to">no</span></span></div>
+      <div class="d"><span class="lab">dead margin</span><span class="val"><span class="from">200px</span> &rarr; <span class="to">0</span></span></div>
+      <div class="d"><span class="lab">code touched</span><span class="val"><span class="to">one column's order</span></span></div>
+    </div>
+  </section>
+
+  <!-- ============ 3. CAPTURE ============ -->
+  <section>
+    <div class="fixhead">
+      <span class="ord">3</span>
+      <h2>The capture screen</h2>
+      <span class="route">#/</span>
+      <span class="edit">WITHDRAWN &middot; nothing to change here</span>
+    </div>
+
+    <p class="lede">I had this wrong, and the owner caught it: <b>the rig shoots PORTRAIT.</b>
+      Redrawing it to 9/16 does not just fix the picture &mdash; it removes the reason for the
+      change I proposed.</p>
+
+    <div class="ba" style="margin-top: var(--s4)">
+      <figure>
+        <p class="tag now">Now &mdash; and correct for setup</p>
+        <div class="screen">
+          <div class="nav"><span class="on">Capture</span><span>Review queue</span><span>Inventory</span>
+            <span class="right"><span>Fulfillment</span><span>Gallery</span></span></div>
+          <div class="body">
+            <div class="col" style="flex: 0 0 26%;">
+              <div class="keyrow"><span class="k">B</span><span>Box</span><span class="v">96</span></div>
+              <div class="keyrow"><span class="k">S</span><span>Set hint</span><span class="v">ME01</span></div>
+              <div class="keyrow"><span class="k">F</span><span>Finish</span><span class="v">normal</span></div>
+              <div class="keyrow"><span class="k">T</span><span>Trigger</span><span class="v">manual</span></div>
+              <div class="block" style="margin-top:4px"><span class="t">Capture card</span></div>
+            </div>
+            <div class="pairstage">
+              <div class="panel"><p class="panelcap">Live</p><div class="photo">9:16<br>421&times;748</div></div>
+              <div class="panel"><p class="panelcap">Last capture</p><div class="photo">9:16<br>421&times;748</div>
+                <div class="block" style="margin-top:2px"><span class="t">B96 &middot; S2 &middot; C41</span></div></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Coequal 9/16, sized by height and centred.</b> 421 &times; 748 each,
+          96px of centring slack in a 970px stage. This is correct as it stands.</figcaption>
+      </figure>
+
+      <figure>
+        <p class="tag next">Armed &mdash; the only surviving change</p>
+        <div class="screen">
+          <div class="nav"><span class="on">Capture</span><span>Review queue</span><span>Inventory</span>
+            <span class="right"><span>Fulfillment</span><span>Gallery</span></span></div>
+          <div class="body">
+            <div class="col" style="flex: 0 0 26%;">
+              <div class="keyrow"><span class="k">B</span><span>Box</span><span class="v">96</span></div>
+              <div class="keyrow"><span class="k">F</span><span>Finish</span><span class="v">normal</span></div>
+              <div class="keyrow"><span class="k">T</span><span>Trigger</span><span class="v">motion</span></div>
+              <div class="block accent" style="margin-top:4px"><span class="t">41 captured</span>
+                <span>0 gaps &middot; 41 ids &middot; 623ms</span></div>
+              <div class="block fill"><span>declined 0</span></div>
+            </div>
+            <div class="pairstage">
+              <div class="panel"><p class="panelcap">Live</p><div class="photo">unchanged</div></div>
+              <div class="panel"><p class="panelcap">Last capture</p><div class="photo">unchanged</div>
+                <div class="block" style="margin-top:2px"><span class="t">B96 &middot; S2 &middot; C41</span></div></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>The panes do not move. Only the counter is new.</b> A gap-and-id count
+          in the claim bar, which is the thing that actually verifies a write at 623ms.</figcaption>
+      </figure>
+    </div>
+
+    <div class="ruling">
+      <b>Why the pane-ratio change is withdrawn, not deferred</b>
+      I proposed collapsing Live to a strip so Last Capture could grow. In portrait that
+      <b>buys nothing</b>, and the arithmetic is the proof: <code>--portrait-h</code> is
+      <code>min(by-height, by-width)</code>, and at 1440&times;900 those are <b>748px and
+      827px</b> &mdash; <b>height binds</b>. The frame is already as tall as the stage
+      allows, so freeing width beside it cannot make the stored photo any bigger. My
+      "recover ~485px" claim was landscape arithmetic applied to a portrait rig.
+    </div>
+
+    <div class="ruling" style="margin-top: var(--s3)">
+      <b>What survives, and it is not a layout change</b>
+      The verification argument stands on its own: at 623ms &mdash; 5,778 cards/hour &mdash;
+      nobody confirms a write by looking at an image, and the panel's stated job of making a
+      failed write visible is a counter's job being done badly by a photograph. Capture One
+      owns a counter for exactly this reason. The repo already computes the right instrument
+      &mdash; "85 records at indices 1..85, zero gaps, 85 distinct capture_ids" &mdash; it
+      just never puts it on the screen. That is the whole of item 6 now.
+    </div>
+
+    <div class="ruling" style="margin-top: var(--s3)">
+      <b>The lesson, since this is the second time on this screen</b>
+      First I drew one photo where there are two. Then I drew both landscape where the rig is
+      portrait. Both times the source said so plainly &mdash;
+      <code>.capture-frame-portrait</code> has been in the file since 2026-08-23, and the
+      research pass even flagged that "the 16:9 waste is real only at rotation 0". I had it
+      and did not use it. The capture screen is the one screen whose geometry I should read
+      before drawing, not after.
+    </div>
+  </section>
+
+  <!-- ============ 4. FULFILLMENT ============ -->
+  <section>
+    <div class="fixhead">
+      <span class="ord">4</span>
+      <h2>The Fulfiller's view</h2>
+      <span class="route">#/fulfillment</span>
+      <span class="edit">stop rendering the whole store</span>
+    </div>
+
+    <p class="lede">Not a navigation question. A scaling defect in the one view whose whole
+      design is a floor.</p>
+
+    <div class="ba" style="margin-top: var(--s4)">
+      <figure>
+        <p class="tag now">Now</p>
+        <div class="screen clip">
+          <div class="body" style="padding: 8px; flex-direction: column;">
+            <div class="block solid" style="flex: 0 0 auto;"><span class="t" style="font-size:11px">Cards to pull</span></div>
+            <div class="block" style="flex: 0 0 auto;"><span>Type the name of the card</span></div>
+            <div class="rows" style="margin-top:4px">
+              <div class="row wide" style="height:11px"></div><div class="row wide" style="height:11px"></div>
+              <div class="row wide" style="height:11px"></div><div class="row wide" style="height:11px"></div>
+              <div class="row wide" style="height:11px"></div><div class="row wide" style="height:11px"></div>
+              <div class="row wide" style="height:11px"></div><div class="row wide" style="height:11px"></div>
+              <div class="row wide" style="height:11px"></div><div class="row wide" style="height:11px"></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>All 682 records, every time.</b> A measured scroll height of
+          <b>124,348px</b> &mdash; 138 viewports. At 5,000 cards it is over 1,000.</figcaption>
+      </figure>
+
+      <figure>
+        <p class="tag next">Fixed</p>
+        <div class="screen">
+          <div class="body" style="padding: 8px; flex-direction: column;">
+            <div class="block solid" style="flex: 0 0 auto;"><span class="t" style="font-size:11px">Cards to pull</span></div>
+            <div class="block accent" style="flex: 0 0 auto; padding: 6px;"><span class="t" style="font-size:10px">Type the name of the card</span></div>
+            <div class="block" style="flex: 0 0 auto; margin-top: 4px;"><span>Nothing to pull right now.</span></div>
+            <div class="block fill" style="border: 0; background: transparent;"></div>
+          </div>
+        </div>
+        <figcaption><b>Search first, results only.</b> The list was never the task &mdash;
+          the order names a card, and he types it.</figcaption>
+      </figure>
+    </div>
+
+    <div class="delta">
+      <div class="d"><span class="lab">scroll height</span><span class="val"><span class="from">124,348px</span> &rarr; <span class="to">1 screen</span></span></div>
+      <div class="d"><span class="lab">at 5,000 cards</span><span class="val"><span class="from">~1,000 vp</span> &rarr; <span class="to">1 screen</span></span></div>
+      <div class="d"><span class="lab">nine floors</span><span class="val"><span class="to">all still pass</span></span></div>
+    </div>
+  </section>
+
+  <!-- ============ WHAT SURVIVES ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">What the Rig was right about</p>
+      <h2>Kept as convention, not as architecture</h2>
+    </div>
+    <div class="cols2">
+      <div class="costs">
+        <h3>Adopted here, costing nothing</h3>
+        <ul>
+          <li><b>Each route declares its layout and never reflows.</b> This is radiology's
+            hanging protocol, applied per screen instead of globally &mdash; the fix is that
+            the width is <em>declared</em>, not that every screen shares one.</li>
+          <li><b>Deep operations push, never cover.</b> The two inventory folds move to the
+            head line rather than becoming overlays.</li>
+          <li><b>The URL addresses the subject.</b> Already true; the repo depends on it
+            structurally.</li>
+          <li><b>One key per candidate, no modifier, no confirm</b> &mdash; unchanged, and
+            now vindicated by Prodigy's ~2.9s/item against Label Studio's Ctrl+Enter.</li>
+        </ul>
+      </div>
+      <div class="costs">
+        <h3>Dropped, and why</h3>
+        <ul>
+          <li><b>The global frame.</b> It fixes none of the four defects and rewrites every
+            selector outside the Fulfilment spec.</li>
+          <li><b>The box rail as primary navigator.</b> Past ~15 boxes it scrolls, its items
+            move, and the stable-coordinate claim &mdash; the frame's whole case &mdash;
+            is gone.</li>
+          <li><b>"One frame for the entire app."</b> Withdrawn outright: it fails four rows
+            of the Fulfilment constraints table at once.</li>
+          <li><b>Zone collapse on <kbd>[</kbd> / <kbd>]</kbd>.</b> Nothing to collapse once
+            each screen is sized for its own task. Revisit if a screen grows a zone.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ORDER ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Sequencing</p>
+      <h2>Order, and how each one is checked</h2>
+      <p class="lede">Largest measured harm first, so the first edit is also the one that
+        proves whether the reasoning holds.</p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>#</th><th>Change</th><th>Acceptance test</th><th>Size</th></tr></thead>
+        <tbody>
+          <tr><td class="d2">1</td><td>Review: split the column, worklist out, retire <code>--photo-cap</code></td><td class="d2">card area &ge;25% of viewport; scroll &le;900px</td><td class="d2">M</td></tr>
+          <tr><td class="d2">2</td><td>Review: 1:1 sheen inset, prefetched with the next card</td><td class="d2">inset renders native pixels, not a downscale</td><td class="d2">S</td></tr>
+          <tr><td class="d2">3</td><td>Inventory: card detail above the two folds</td><td class="d2">first content &le;150px on all four owner routes</td><td class="d2">S</td></tr>
+          <tr><td class="d2">4</td><td>Fulfilment: search-first, no default full list</td><td class="d2">scroll height &le; 3 viewports at 682 cards; nine floors green</td><td class="d2">S</td></tr>
+          <tr><td class="d2">5</td><td>Review undo to depth 10, no timer</td><td class="d2">tenth-back answer still reversible</td><td class="d2">S</td></tr>
+          <tr><td class="d2">6</td><td>Capture: a gap-and-id counter in the claim bar <em>(pane ratio withdrawn)</em></td><td class="d2">counter shows 0 gaps and N distinct ids during a run</td><td class="d2">XS</td></tr>
+          <tr><td class="d2">7</td><td>Grey patch on the tray <em>(not a UI change)</em></td><td class="d2">per-card sheen number, computed locally</td><td class="d2">XS</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="pull">If item 1 does not deliver the measured win, nothing after it is worth
+      building &mdash; and no frame was rewritten to find out.</p>
+  </section>
+
+  <footer>
+    <p>Tokens, spacing and faces are PKMNSCAN's own, locked 2026-08-12. Archivo stands in for
+      Cabinet Grotesk, which is Fontshare-hosted and cannot load on this host.</p>
+    <p>"Now" figures were measured in a browser at 1440&times;900 against the live store on
+      2026-08-24 &mdash; 682 cards, 47 review entries. "Fixed" figures are projections and are
+      labelled as such in <code>docs/specs/ui-research.md</code>.</p>
+    <p>Companion to <code>docs/specs/ui-redesign-options.md</code> and
+      <code>docs/specs/ui-research.md</code>. RECORDED, not built.</p>
+  </footer>
+
+</div>
+
+</body></html>

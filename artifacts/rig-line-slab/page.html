@@ -1,0 +1,923 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>Rig, Line, Slab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=Atkinson+Hyperlegible:wght@400;700&family=Martian+Mono:wght@400;500;600&display=swap">
+
+<style>
+  /* PKMNSCAN's own locked tokens (docs/DESIGN.md, locked 2026-08-12). Not re-chosen here.
+     Light only, deliberately: that file rules out a dark theme and a switcher, so this page
+     paints its ground explicitly and carries no prefers-color-scheme block. */
+  :root {
+    --bg: #FCFCFD;
+    --surface: #FFFFFF;
+    --ink: #08090A;
+    --muted: #4E5157;
+    --line: #E6E7EA;
+    --accent: #1E40AF;
+    --hover: #F4F5F7;
+    --pressed: #17348F;
+    --on-accent: #FFFFFF;
+
+    /* Cabinet Grotesk is Fontshare-hosted and the Artifact CSP admits only Google Fonts,
+       so the display role falls to Archivo here. Named so the substitution is visible. */
+    --display: 'Archivo', 'Cabinet Grotesk', system-ui, sans-serif;
+    --body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+    --util: 'Martian Mono', ui-monospace, monospace;
+
+    /* One scale, no other values &mdash; the project's own names, s1..s8. */
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+    --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+    --r: 4px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: var(--s6) var(--s4) var(--s8);
+  }
+
+  /* ---- type ---- */
+  h1, h2, h3 { font-family: var(--display); font-weight: 700; text-wrap: balance; margin: 0; }
+  h1 { font-size: 40px; line-height: 1.08; letter-spacing: -0.02em; }
+  h2 { font-size: 26px; line-height: 1.15; letter-spacing: -0.01em; }
+  h3 { font-size: 17px; line-height: 1.3; }
+
+  p { margin: 0; max-width: 68ch; }
+
+  .eyebrow {
+    font-family: var(--util);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .lede { color: var(--muted); font-size: 17px; }
+  .mono { font-family: var(--util); font-variant-numeric: tabular-nums; }
+  .num { font-family: var(--util); font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  /* ---- masthead ---- */
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
+    padding-bottom: var(--s5);
+    border-bottom: 1px solid var(--line);
+  }
+  .masthead-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s2) var(--s4);
+    font-family: var(--util);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .masthead-meta span { white-space: nowrap; }
+
+  /* ---- sections ---- */
+  section { margin-top: var(--s8); }
+  .sec-head { display: flex; flex-direction: column; gap: var(--s2); margin-bottom: var(--s5); }
+
+  /* ---- measured table ---- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  caption { text-align: left; padding: var(--s3) var(--s4); color: var(--muted); font-size: 13px; border-bottom: 1px solid var(--line); }
+  th, td { text-align: left; padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th {
+    font-family: var(--util); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: var(--hover); }
+  td.d { font-family: var(--util); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bad { font-weight: 600; }
+  .bad::after {
+    content: '';
+    display: inline-block;
+    width: 6px; height: 6px;
+    margin-left: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    vertical-align: 0.1em;
+  }
+
+  /* ---- the to-scale screen diagrams ---- */
+  .screens { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s5); }
+  @media (max-width: 760px) { .screens { grid-template-columns: 1fr; } }
+
+  figure { margin: 0; display: flex; flex-direction: column; gap: var(--s2); }
+  figcaption { font-family: var(--util); font-size: 11px; color: var(--muted); }
+  figcaption b { color: var(--ink); font-weight: 600; }
+
+  /* A screen is drawn at the real 1440x900 aspect so proportions are honest. */
+  .screen {
+    position: relative;
+    aspect-ratio: 1440 / 900;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* void = space the screen does not use. Hatched rather than coloured, so the palette
+     stays the project's and "empty" reads as empty rather than as a warning. */
+  .void {
+    background-image: repeating-linear-gradient(
+      45deg, var(--line) 0 1px, transparent 1px 7px
+    );
+  }
+  .void-label {
+    position: absolute;
+    font-family: var(--util);
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    background: var(--bg);
+    padding: 1px 4px;
+    border-radius: 2px;
+  }
+
+  .nav {
+    height: 5.05%;                 /* 45.5px of 900 */
+    flex: 0 0 auto;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    padding: 0 var(--s2);
+    font-family: var(--util);
+    font-size: 8px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .nav .on { color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--accent); }
+  .nav .right { margin-left: auto; display: flex; gap: var(--s2); }
+
+  .body { flex: 1 1 auto; display: flex; min-height: 0; }
+
+  .col { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+  .block {
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    background: var(--bg);
+    font-family: var(--util);
+    font-size: 8px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    padding: 3px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .block.solid { background: var(--surface); }
+  .block.fill { flex: 1 1 auto; }
+  .block .t { color: var(--ink); font-weight: 600; }
+
+  .photo {
+    background: var(--hover);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--util); font-size: 8px; color: var(--muted);
+  }
+
+  /* The capture stage's real shape: two coequal 16:9 panels, Live and Last capture.
+     CaptureScreen.css states the rule itself -- "neither being the small one". */
+  .pairstage { flex: 1 1 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; min-height: 0; }
+  .panel { display: flex; flex-direction: column; gap: 3px; min-width: 0; min-height: 0; }
+  .panelcap {
+    font-family: var(--util); font-size: 7px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .panel .photo { flex: 0 0 auto; width: 100%; aspect-ratio: 16/9; text-align: center; padding: 3px; }
+  .capsaid { display: flex; flex-direction: column; gap: 2px; }
+  .capsaid .poslabel { font-family: var(--util); font-size: 10px; font-weight: 600; color: var(--ink); }
+  .capsaid .metarow {
+    display: flex; flex-wrap: wrap; gap: 3px;
+    font-family: var(--util); font-size: 7px; color: var(--muted);
+  }
+  .capsaid .metarow .flag { border: 1px solid var(--line); border-radius: 2px; padding: 0 3px; color: var(--ink); }
+  .notefield {
+    display: flex; align-items: center; gap: 3px;
+    border: 1px solid var(--line); border-radius: 2px; padding: 2px 3px;
+    font-family: var(--util); font-size: 7px; color: var(--muted); background: var(--bg);
+  }
+  .notefield .go { margin-left: auto; color: var(--ink); }
+
+  .rows { display: flex; flex-direction: column; gap: 2px; }
+  .row {
+    height: 5px;
+    background: var(--line);
+    border-radius: 1px;
+  }
+  .row.wide { background: var(--hover); border: 1px solid var(--line); height: 7px; }
+
+  .keyrow {
+    display: flex; align-items: center; gap: 3px;
+    font-family: var(--util); font-size: 7px; color: var(--muted);
+    border-bottom: 1px solid var(--line);
+    padding: 2px 0;
+  }
+  .keyrow .k {
+    border: 1px solid var(--line); border-radius: 2px;
+    padding: 0 2px; color: var(--ink); font-weight: 600;
+  }
+  .keyrow .v { margin-left: auto; color: var(--ink); }
+
+  .stagebar {
+    display: flex; align-items: center; gap: 0;
+    height: 4.9%;
+    flex: 0 0 auto;
+    border-bottom: 1px solid var(--line);
+    font-family: var(--util); font-size: 8px;
+    background: var(--surface);
+  }
+  .stop {
+    display: flex; align-items: baseline; gap: 3px;
+    padding: 0 6px;
+    height: 100%;
+    border-right: 1px solid var(--line);
+    color: var(--muted);
+  }
+  .stop .n { color: var(--ink); font-weight: 600; }
+  .stop.live { background: var(--accent); color: var(--on-accent); }
+  .stop.live .n { color: var(--on-accent); }
+  .stop.dim { opacity: 0.45; }
+
+  .subjectline {
+    height: 4.4%;
+    flex: 0 0 auto;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 4px;
+    padding: 0 6px;
+    font-family: var(--util); font-size: 8px;
+    background: var(--surface);
+  }
+  .subjectline .caret { color: var(--accent); font-weight: 600; }
+  .subjectline .crumb { color: var(--muted); }
+  .subjectline .crumb b { color: var(--ink); font-weight: 600; }
+  .subjectline .cursor {
+    width: 1px; height: 9px; background: var(--ink); display: inline-block;
+  }
+
+  .bead {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent); flex: 0 0 auto;
+  }
+  .bead.hollow { background: transparent; border: 1px solid var(--muted); }
+
+  .railrow {
+    display: flex; align-items: center; gap: 3px;
+    padding: 2px 3px;
+    font-family: var(--util); font-size: 7px; color: var(--muted);
+    border-bottom: 1px solid var(--line);
+  }
+  .railrow.on { background: var(--hover); color: var(--ink); font-weight: 600; }
+  .railrow .c { margin-left: auto; }
+
+  /* ---- proposal cards ---- */
+  .proposal { border-top: 1px solid var(--line); padding-top: var(--s5); margin-top: var(--s7); }
+  .proposal-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s3); margin-bottom: var(--s2); }
+  .tag {
+    font-family: var(--util); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--on-accent); background: var(--accent);
+    padding: 2px var(--s2); border-radius: 2px;
+  }
+  .principle {
+    font-family: var(--display); font-size: 19px; font-weight: 600;
+    line-height: 1.3; margin: var(--s3) 0 var(--s4);
+    padding-left: var(--s4); border-left: 2px solid var(--accent);
+    max-width: 62ch;
+  }
+  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s5); margin-top: var(--s5); }
+  @media (max-width: 760px) { .cols2 { grid-template-columns: 1fr; } .screens { grid-template-columns: 1fr; } }
+
+  .list { display: flex; flex-direction: column; gap: var(--s3); }
+  .item { display: flex; flex-direction: column; gap: 2px; }
+  .item .h { font-family: var(--util); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .item p { font-size: 15px; }
+
+  .costs { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: var(--s4); }
+  .costs ul { margin: var(--s2) 0 0; padding-left: var(--s4); display: flex; flex-direction: column; gap: var(--s2); }
+  .costs li { font-size: 15px; }
+
+  .note {
+    border-left: 2px solid var(--line);
+    padding-left: var(--s4);
+    color: var(--muted);
+    font-size: 15px;
+    max-width: 68ch;
+  }
+
+  .verdict {
+    margin-top: var(--s5);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: var(--s5);
+    display: flex; flex-direction: column; gap: var(--s3);
+  }
+
+  code {
+    font-family: var(--util); font-size: 0.86em;
+    background: var(--hover); border: 1px solid var(--line);
+    border-radius: 2px; padding: 0 3px;
+  }
+
+  footer {
+    margin-top: var(--s8); padding-top: var(--s5);
+    border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 14px;
+    display: flex; flex-direction: column; gap: var(--s2);
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">PKMNSCAN &middot; owner-side navigation &middot; proposal, not a decision</p>
+    <h1>Rig, Line, Slab</h1>
+    <p class="lede">Three ways to re-do the platform's navigation and process surface, from first
+      principles. They differ in what the top-level unit of navigation <em>is</em> &mdash; a place, a
+      stage, or a subject &mdash; and that one choice decides everything below it.</p>
+    <div class="masthead-meta">
+      <span>measured 2026-08-24</span>
+      <span>1440 &times; 900</span>
+      <span>682 cards &middot; 47 in review &middot; 3 boxes</span>
+      <span>status: RECORDED, NOT BUILT</span>
+    </div>
+  </header>
+
+  <!-- ================= THE MEASUREMENT ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">What was measured first</p>
+      <h2>The three owner screens do not agree on how wide a screen is</h2>
+      <p class="lede">Taken in a browser against the real store &mdash; the first populated
+        measurements this repo has had, since <code>scripts/views.txt</code> notes no run had
+        ever produced one.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Live measurement, three owner routes, one viewport.</caption>
+        <thead>
+          <tr>
+            <th>Route</th>
+            <th>max-width</th>
+            <th>Unused width</th>
+            <th>Chrome above content</th>
+            <th>Scroll for one task</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="d">#/ capture</td>
+            <td class="d">1400px</td>
+            <td class="d">20px &middot; 1.4%</td>
+            <td class="d">46px &mdash; nav only</td>
+            <td class="d">0 &middot; fits exactly</td>
+          </tr>
+          <tr>
+            <td class="d">#/inventory</td>
+            <td class="d">1240px</td>
+            <td class="d">200px &middot; 13.9%</td>
+            <td class="d bad">482px to the card's photo</td>
+            <td class="d">1278px &middot; 1.4 vp</td>
+          </tr>
+          <tr>
+            <td class="d">#/review</td>
+            <td class="d">688px</td>
+            <td class="d bad">752px &middot; 52.2%</td>
+            <td class="d">146px</td>
+            <td class="d bad">4018px &middot; 4.5 vp</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="screens" style="margin-top: var(--s5)">
+
+      <!-- TODAY: review queue -->
+      <figure>
+        <div class="screen">
+          <div class="nav">
+            <span>Capture</span><span class="on">Review queue</span><span>Inventory</span>
+            <span class="right"><span>Fulfillment</span><span>Gallery</span></span>
+          </div>
+          <div class="body">
+            <div class="col" style="flex: 0 0 47.8%; padding: 4px; gap: 3px;">
+              <div class="block" style="flex:0 0 auto">
+                <span class="t">Review queue &middot; 47 to review</span>
+                <span>One card at a time, worked expensive first.</span>
+              </div>
+              <div class="photo" style="flex: 0 0 48%; width: 37%;">photo 244&times;432</div>
+              <div class="block" style="flex:0 0 auto"><span class="t">Box 2 &middot; Section 1 &middot; Card 7</span><span>no_catalog_row</span></div>
+              <div class="block" style="flex:0 0 auto"><span>the sentence, 4 lines of prose</span><div class="rows"><div class="row"></div><div class="row"></div><div class="row"></div></div></div>
+              <div class="block" style="flex:0 0 auto"><span class="t">Skip</span></div>
+              <div class="block fill"><span>facts &middot; 7 rows</span></div>
+            </div>
+            <div class="col void" style="flex: 1 1 auto; position: relative;">
+              <span class="void-label" style="top: 44%; left: 50%; transform: translate(-50%,-50%);">752px unused &middot; 52%</span>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Today &mdash; #/review.</b> The 47-entry worklist is not here: it begins
+          234px below the fold, beneath the facts. Total scroll 4018px.</figcaption>
+      </figure>
+
+      <!-- TODAY: inventory -->
+      <figure>
+        <div class="screen">
+          <div class="nav">
+            <span>Capture</span><span>Review queue</span><span class="on">Inventory</span>
+            <span class="right"><span>Fulfillment</span><span>Gallery</span></span>
+          </div>
+          <div class="body">
+            <div class="col void" style="flex: 0 0 6.9%;"></div>
+            <div class="col" style="flex: 0 0 26.4%; padding: 4px; gap: 3px;">
+              <div class="block" style="flex:0 0 auto"><span class="t">Inventory</span></div>
+              <div class="block" style="flex:0 0 auto"><span>search &middot; 380px</span></div>
+              <div class="block" style="flex:0 0 auto"><span>box 1 &middot; 2 &middot; 95</span></div>
+              <div class="block fill"><span>3 section heads, collapsed</span><div class="rows"><div class="row wide"></div><div class="row wide"></div><div class="row wide"></div></div></div>
+            </div>
+            <div class="col" style="flex: 0 0 55.8%; padding: 4px; gap: 3px;">
+              <div class="block solid" style="flex: 0 0 21%;"><span class="t">Box 1 &middot; 53 cards so far</span><span>fill bar</span></div>
+              <div class="block" style="flex:0 0 auto"><span>&#9656; Layout and controls &nbsp;(fold)</span></div>
+              <div class="block" style="flex:0 0 auto"><span>&#9656; Runs &nbsp;identify &middot; join &middot; emit &nbsp;(fold)</span></div>
+              <div class="block fill" style="border-color: var(--accent);"><span class="t">Box 1 &middot; Section 1 &middot; Card 1</span><div class="photo" style="flex:1 1 auto; margin-top:2px;">photo starts at y=482 &mdash; cut off</div></div>
+            </div>
+            <div class="col void" style="flex: 1 1 auto;"></div>
+          </div>
+        </div>
+        <figcaption><b>Today &mdash; #/inventory.</b> Two collapsed folds and a box header pay 266px
+          of rent above the card you clicked. 200px of the page is margin.</figcaption>
+      </figure>
+    </div>
+
+    <p class="note" style="margin-top: var(--s5)">
+      The loop crosses routes three times for one box: shoot on <code>#/</code>, open the Runs
+      fold on <code>#/inventory</code>, answer on <code>#/review</code>, return to the fold for
+      the CSVs, out to TCGplayer, back to the fold to reconcile. The screen the owner returns
+      to three times per box is named after a different question &mdash; and the process itself has
+      no surface anywhere in the app. <code>scripts/status.py</code> answers "where am I" in a
+      terminal; nothing answers it on screen.
+    </p>
+  </section>
+
+  <!-- ================= A &middot; THE RIG ================= -->
+  <section class="proposal">
+    <div class="proposal-head">
+      <span class="tag">A</span>
+      <h2>The Rig</h2>
+      <span class="mono" style="color: var(--muted); font-size: 12px;">unit: a place &middot; 1 route &middot; reopens nothing</span>
+    </div>
+    <p class="principle">A tool you spend hours in should never change address. Navigation is
+      replaced by focus.</p>
+
+    <div class="screens">
+      <figure>
+        <div class="screen">
+          <div class="body">
+            <div class="col" style="flex: 0 0 19.4%; border-right: 1px solid var(--line); padding: 3px;">
+              <div class="eyebrow" style="font-size: 7px; padding: 2px;">Boxes</div>
+              <div class="railrow on"><span class="bead"></span><span>Box 1</span><span class="c">53</span></div>
+              <div class="railrow"><span class="bead"></span><span>Box 2</span><span class="c">544</span></div>
+              <div class="railrow"><span class="bead hollow"></span><span>Box 95</span><span class="c">85</span></div>
+              <div class="eyebrow" style="font-size: 7px; padding: 6px 2px 2px;">Waiting</div>
+              <div class="railrow"><span>Review</span><span class="c">47</span></div>
+              <div class="railrow"><span>Runs</span><span class="c">2</span></div>
+            </div>
+            <div class="col" style="flex: 1 1 auto; padding: 4px;">
+              <div class="photo" style="flex: 1 1 auto;">STAGE &mdash; photo at full viewport height, 854px</div>
+            </div>
+            <div class="col" style="flex: 0 0 23.6%; border-left: 1px solid var(--line); padding: 3px;">
+              <div class="eyebrow" style="font-size: 7px; padding: 2px;">Dock</div>
+              <div class="keyrow"><span class="k">1</span><span>Thievul</span><span class="v">$0.12</span></div>
+              <div class="keyrow"><span class="k">2</span><span>Thievul RH</span><span class="v">$0.40</span></div>
+              <div class="keyrow"><span class="k">3</span><span>Thievul holo</span><span class="v">$1.10</span></div>
+              <div class="keyrow"><span class="k">S</span><span>Skip</span></div>
+              <div class="keyrow"><span class="k">U</span><span>Undo</span></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Answering.</b> Rail 280px &middot; stage fluid &middot; dock 340px. Nothing scrolls,
+          nothing reflows between cards.</figcaption>
+      </figure>
+
+      <figure>
+        <div class="screen">
+          <div class="body">
+            <div class="col" style="flex: 0 0 19.4%; border-right: 1px solid var(--line); padding: 3px;">
+              <div class="eyebrow" style="font-size: 7px; padding: 2px;">Boxes</div>
+              <div class="railrow"><span class="bead"></span><span>Box 1</span><span class="c">53</span></div>
+              <div class="railrow"><span class="bead"></span><span>Box 2</span><span class="c">544</span></div>
+              <div class="railrow on"><span class="bead hollow"></span><span>Box 96</span><span class="c">0</span></div>
+              <div class="eyebrow" style="font-size: 7px; padding: 6px 2px 2px;">Waiting</div>
+              <div class="railrow"><span>Review</span><span class="c">47</span></div>
+            </div>
+            <div class="col" style="flex: 1 1 auto; padding: 4px;">
+              <div class="pairstage">
+                <div class="panel">
+                  <p class="panelcap">Live</p>
+                  <div class="photo">camera feed 16:9</div>
+                </div>
+                <div class="panel">
+                  <p class="panelcap">Last capture</p>
+                  <div class="photo">the STORED bytes</div>
+                  <div class="capsaid">
+                    <p class="poslabel">Box 96 &middot; S2 &middot; C41</p>
+                    <p class="metarow"><span>pokemon</span><span>ME01</span><span class="flag">new box</span></p>
+                    <div class="notefield"><span>note&hellip;</span><span class="go">&crarr;</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col" style="flex: 0 0 23.6%; border-left: 1px solid var(--line); padding: 3px;">
+              <div class="eyebrow" style="font-size: 7px; padding: 2px;">Claims</div>
+              <div class="keyrow"><span class="k">B</span><span>Box</span><span class="v">96</span></div>
+              <div class="keyrow"><span class="k">S</span><span>Set hint</span><span class="v">ME01</span></div>
+              <div class="keyrow"><span class="k">R</span><span>Rarity</span><span class="v">Common</span></div>
+              <div class="keyrow"><span class="k">F</span><span>Finish</span><span class="v">normal</span></div>
+              <div class="keyrow"><span class="k">T</span><span>Trigger</span><span class="v">motion</span></div>
+              <div class="keyrow"><span class="k">C</span><span>Capture</span></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Shooting &mdash; same frame, same coordinates.</b> Only the dock's contents
+          and the stage's subject changed. The stage carries the real capture pair &mdash; Live
+          and Last capture, coequal at 16:9, which is <code>CaptureScreen.css</code>'s own rule
+          &mdash; and the per-card note stays on the photo it describes.</figcaption>
+      </figure>
+    </div>
+
+    <div class="cols2">
+      <div class="list">
+        <div class="item">
+          <span class="h">The bead is the process surface</span>
+          <p>Every box row carries one bead &mdash; open, shot, identified, answering, priced,
+            emitted, staged, live &mdash; computed from what the store and <code>runs/</code> already
+            say. Clicking a box points all three zones at whatever that box needs next. That is
+            the terminal's <code>status</code> output, rendered where the work happens.</p>
+        </div>
+        <div class="item">
+          <span class="h">The dock generalises the best pattern already in the app</span>
+          <p>The capture screen's 32px collapsed row &mdash; key, label, right-aligned value, opens
+            in place &mdash; is the densest, calmest control in the product and it is used on exactly
+            one screen. In the Rig it carries claims, candidates, facts and run steps.</p>
+        </div>
+        <div class="item">
+          <span class="h">Zero page titles, zero nav strip, zero folds</span>
+          <p>The rail says where you are and the dock says what is true of it, so a title
+            repeating either is chrome with no reader. Content starts at y=0.</p>
+        </div>
+      </div>
+      <div class="costs">
+        <h3>What it costs</h3>
+        <ul>
+          <li>One large component tree. Every Playwright selector except the Fulfilment
+            spec's would be rewritten.</li>
+          <li>620px of 1440 is committed before any content &mdash; correct at 1440, wrong at 1100.
+            The rail and dock need collapse behaviour, and that is the one fold this
+            proposal grows.</li>
+          <li><b>Reopens no decision.</b> D31's box-walk spine survives inside the stage; D33's
+            run panel becomes a dock state. But <code>DESIGN.md</code>'s page-chrome numbers
+            become unreachable as written &mdash; there are no pages &mdash; so that section needs
+            re-arguing as frame chrome.</li>
+          <li>The Fulfiller cannot use it and must not: he keeps his own route, unmerged,
+            exactly as D5 and D31 already require.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= B &middot; THE LINE ================= -->
+  <section class="proposal">
+    <div class="proposal-head">
+      <span class="tag">B</span>
+      <h2>The Line</h2>
+      <span class="mono" style="color: var(--muted); font-size: 12px;">unit: a stage &middot; 1 route &middot; reopens D31 + D33</span>
+    </div>
+    <p class="principle">The product is a conveyor, so the interface should be the conveyor.
+      Cards are the units; stages are the addresses.</p>
+
+    <div class="screens">
+      <figure>
+        <div class="screen">
+          <div class="stagebar">
+            <span class="stop"><span>Shoot</span><span class="n">85</span></span>
+            <span class="stop dim"><span>Identify</span><span class="n">0</span></span>
+            <span class="stop live"><span>Answer</span><span class="n">47</span></span>
+            <span class="stop"><span>Price</span><span class="n">3</span></span>
+            <span class="stop"><span>Emit</span><span class="n">2</span></span>
+            <span class="stop"><span>Import</span><span class="n">1</span></span>
+            <span class="stop"><span>Sell</span><span class="n">597</span></span>
+          </div>
+          <div class="body" style="padding: 4px; gap: 4px;">
+            <div class="col" style="flex: 0 0 46%;">
+              <div class="photo" style="flex: 1 1 auto;">card photo, full height</div>
+            </div>
+            <div class="col" style="flex: 1 1 auto; gap: 3px;">
+              <div class="block" style="flex:0 0 auto"><span class="t">Box 2 &middot; Section 1 &middot; Card 7 &mdash; no_catalog_row</span></div>
+              <div class="block" style="flex:0 0 auto">
+                <div class="keyrow"><span class="k">1</span><span>Stonjourner</span><span class="v">$0.12</span></div>
+                <div class="keyrow"><span class="k">2</span><span>Stonjourner RH</span><span class="v">$0.40</span></div>
+              </div>
+              <div class="block fill">
+                <span class="t">Worklist &middot; 47</span>
+                <div class="rows" style="margin-top:2px">
+                  <div class="row wide"></div><div class="row wide"></div><div class="row wide"></div>
+                  <div class="row wide"></div><div class="row wide"></div><div class="row wide"></div>
+                  <div class="row wide"></div><div class="row wide"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>ANSWER.</b> Two columns &mdash; the card, and the worklist that was 234px
+          below the fold. The 752px void becomes the queue.</figcaption>
+      </figure>
+
+      <figure>
+        <div class="screen">
+          <div class="stagebar">
+            <span class="stop"><span>Shoot</span><span class="n">85</span></span>
+            <span class="stop live"><span>Identify</span><span class="n">85</span></span>
+            <span class="stop dim"><span>Answer</span><span class="n">0</span></span>
+            <span class="stop dim"><span>Price</span><span class="n">0</span></span>
+            <span class="stop dim"><span>Emit</span><span class="n">0</span></span>
+            <span class="stop dim"><span>Import</span><span class="n">0</span></span>
+            <span class="stop"><span>Sell</span><span class="n">597</span></span>
+          </div>
+          <div class="body" style="padding: 6px; gap: 5px; flex-direction: column;">
+            <div class="block solid" style="flex: 0 0 auto;">
+              <span class="t">Preflight &middot; box 95 &middot; 85 cards &middot; free, creates no run</span>
+            </div>
+            <div class="block solid" style="flex: 0 0 32%;">
+              <span class="t" style="font-size: 14px;">85 cards &middot; $0.11 estimated</span>
+              <span>1,315,698 in &middot; 20,698 out &middot; claude-haiku-4-5 &middot; crop @1200</span>
+              <div class="rows" style="margin-top: 4px"><div class="row"></div><div class="row"></div></div>
+            </div>
+            <div class="block" style="flex: 0 0 auto; border-color: var(--accent); background: var(--accent); color: var(--on-accent);">
+              <span class="t" style="color: var(--on-accent);">Start the run &mdash; this spends money</span>
+            </div>
+            <div class="block fill"><span>console, verbatim</span></div>
+          </div>
+        </div>
+        <figcaption><b>IDENTIFY.</b> The money gate is a stage, not a fold. Two steps, no
+          typing &mdash; the confirm does not exist until the preflight has answered.</figcaption>
+      </figure>
+    </div>
+
+    <div class="cols2">
+      <div class="list">
+        <div class="item">
+          <span class="h">The count is the navigation and the to-do list at once</span>
+          <p>A session opens, reads one 44px strip, and knows the state of the business: 85
+            shot and unidentified, 47 waiting on a human, 3 needing a price. This is the single
+            largest thing missing from the product today.</p>
+        </div>
+        <div class="item">
+          <span class="h">Four stages currently share one &lt;details&gt; element</span>
+          <p>Identify, price, emit and import all live inside the <em>Runs</em> fold. The
+            Line's whole claim is that they are stages, not a panel &mdash; and that a fold visited
+            three times per box is the evidence.</p>
+        </div>
+        <div class="item">
+          <span class="h">Finishing becomes visible</span>
+          <p>Clearing a stage drops its count to zero and dims the stop; the next lights. "Am
+            I done with this box" stops being a question answered by remembering.</p>
+        </div>
+      </div>
+      <div class="costs">
+        <h3>What it costs</h3>
+        <ul>
+          <li><b>It demotes the box axis, and D31 is explicit that the box walk is the
+            spine</b> &mdash; the owner ruled that finding a card is "basically find a card in a
+            box-based system if anything". The Line makes the box a filter chip and the stage
+            the place. That is the opposite cut, and building it means reopening D31.</li>
+          <li>It contradicts D33's placement argument, that a run is "something done to the box
+            being walked". The Line's answer is the fold; that is an argument to have, not a
+            fact to assume.</li>
+          <li>Seven stops is six dead controls on a quiet day, and a bar that is mostly dim
+            stops being read.</li>
+          <li><b>PRICE is a stage nobody has built.</b> D9's sub-threshold disposition is
+            answered by editing text today. A workbench for it is new surface area and needs
+            its own argument.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= C &middot; THE SLAB ================= -->
+  <section class="proposal">
+    <div class="proposal-head">
+      <span class="tag">C</span>
+      <h2>The Slab</h2>
+      <span class="mono" style="color: var(--muted); font-size: 12px;">unit: a subject &middot; 0 routes &middot; 40px of chrome, forever</span>
+    </div>
+    <p class="principle">Navigation is overhead; addressing is not. Delete the nav, the routes,
+      the titles and the folds &mdash; keep one line that is the address bar, the search field and
+      the verb entry at once.</p>
+
+    <div class="screens">
+      <figure>
+        <div class="screen">
+          <div class="subjectline">
+            <span class="caret">&gt;</span>
+            <span class="crumb">box 2 &rsaquo; <b>card 17</b></span>
+            <span class="cursor"></span>
+          </div>
+          <div class="body" style="padding: 5px; gap: 5px;">
+            <div class="col" style="flex: 0 0 44%;">
+              <div class="photo" style="flex: 1 1 auto;">photo, 95% of viewport height</div>
+            </div>
+            <div class="col" style="flex: 1 1 auto; gap: 3px;">
+              <div class="block" style="flex:0 0 auto"><span class="t" style="font-size:11px">Box 2 &middot; Section 1 &middot; Card 17</span><span>#17 of 544 &middot; 3% in &middot; before Makuhita</span></div>
+              <div class="keyrow"><span>Card</span><span class="v">Thievul</span></div>
+              <div class="keyrow"><span>Number</span><span class="v">090/132</span></div>
+              <div class="keyrow"><span>State</span><span class="v">identified</span></div>
+              <div class="keyrow"><span>Finish</span><span class="v">normal</span></div>
+              <div class="keyrow"><span>SKU</span><span class="v">8937370</span></div>
+              <div class="block fill" style="margin-top:3px"><span class="t">4 copies &middot; listed 4 of 4</span><div class="rows" style="margin-top:2px"><div class="row wide"></div><div class="row wide"></div><div class="row wide"></div><div class="row wide"></div></div></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Typed <code>2/17</code>.</b> One line of chrome. The breadcrumb is the
+          history, so back is one keystroke.</figcaption>
+      </figure>
+
+      <figure>
+        <div class="screen">
+          <div class="subjectline">
+            <span class="caret">&gt;</span>
+            <span class="crumb"><b>identify box 95</b></span>
+            <span class="cursor"></span>
+            <span style="margin-left:auto; border:1px solid var(--accent); color: var(--accent); padding: 0 3px; border-radius:2px;">press &#9166; to spend $0.11</span>
+          </div>
+          <div class="body" style="padding: 6px; gap: 5px; flex-direction: column;">
+            <div class="block solid" style="flex: 0 0 40%;">
+              <span class="t" style="font-size: 15px;">85 cards &middot; $0.11 &middot; 0 refused by detect_card</span>
+              <span>crop @1200 &middot; claude-haiku-4-5 &middot; prompt 1ef974bf</span>
+              <div class="rows" style="margin-top: 5px"><div class="row"></div><div class="row"></div><div class="row"></div></div>
+            </div>
+            <div class="block fill"><span class="t">? &mdash; every verb</span>
+              <div class="keyrow"><span>box N</span><span class="v">walk it</span></div>
+              <div class="keyrow"><span>answer</span><span class="v">the queue</span></div>
+              <div class="keyrow"><span>run NAME</span><span class="v">console + files</span></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Typed <code>identify box 95</code>.</b> The preflight fills the slab; the
+          confirm appears on the line. The number is impossible not to have seen.</figcaption>
+      </figure>
+    </div>
+
+    <div class="cols2">
+      <div class="list">
+        <div class="item">
+          <span class="h">It is two sentences the repo already wrote, taken literally</span>
+          <p><code>DESIGN.md</code>: "an hour in the queue is a keyboard and not a mouse."
+            <code>App.tsx</code>: the owner "knows every route in this app by name." The Slab
+            is those two facts as an architecture.</p>
+        </div>
+        <div class="item">
+          <span class="h">It dissolves the key collisions for free</span>
+          <p>Today <code>r</code> is rarity on capture and reload on review; <code>c</code> is
+            capture and clear-filter; <code>u</code> is undo on both. With one surface consuming
+            keys there is no second screen for a letter to mean something else on &mdash; and the
+            <code>,</code>-leader chord stops being the only global key.</p>
+        </div>
+        <div class="item">
+          <span class="h">The money gate survives intact and gets better</span>
+          <p>D33 requires two steps and no typing. Typing the verb renders the preflight as the
+            whole slab; the confirm appears on the line and does not exist before the preflight
+            has answered &mdash; which is D33's own stated cheapest honest gate.</p>
+        </div>
+      </div>
+      <div class="costs">
+        <h3>What it costs</h3>
+        <ul>
+          <li><b>Discoverability is the whole risk.</b> A verb you do not know is a verb you
+            cannot reach. <code>?</code> is the mitigation and it is not a complete one &mdash; the
+            honest version ships it as a persistent affordance, not a hidden key.</li>
+          <li>It is furthest from what exists and most likely to be half-built. A Slab with
+            three verbs and a fallback nav strip is worse than either end.</li>
+          <li>It cannot be the Fulfiller's under any reading of the constraints table &mdash; a
+            command line is the opposite of self-evident. He keeps his route, again unmerged.</li>
+          <li>Like the Rig, it makes <code>DESIGN.md</code>'s page-chrome section
+            inapplicable rather than violated. There are no pages to title.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= COMPARISON ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Side by side</p>
+      <h2>They are not equally safe</h2>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>&nbsp;</th>
+            <th>Today</th>
+            <th>A &middot; Rig</th>
+            <th>B &middot; Line</th>
+            <th>C &middot; Slab</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Top-level unit</td><td>screen</td><td>box &mdash; a place</td><td>stage &mdash; a process</td><td>subject &mdash; an address</td></tr>
+          <tr><td>Chrome above content</td><td class="d">46 / 482 / 146px</td><td class="d">0px</td><td class="d">44px</td><td class="d">40px</td></tr>
+          <tr><td>Width used, review task</td><td class="d">45.6%</td><td class="d">100%</td><td class="d">100%</td><td class="d">100%</td></tr>
+          <tr><td>Scroll, one review card</td><td class="d">4.5 vp</td><td class="d">0</td><td class="d">0</td><td class="d">0</td></tr>
+          <tr><td>Routes</td><td class="d">5</td><td class="d">1 + Fulfiller</td><td class="d">1 + Fulfiller</td><td class="d">0 + Fulfiller</td></tr>
+          <tr><td>Shoot &rarr; CSVs in hand</td><td class="d">3 route changes, 3 folds</td><td class="d">0 changes, 0 folds</td><td class="d">6 stop clicks</td><td class="d">4 typed subjects</td></tr>
+          <tr><td>"What do I do next"</td><td>terminal only</td><td>bead colour</td><td>the counts</td><td><code>?</code>, or a stale breadcrumb</td></tr>
+          <tr><td>Decisions reopened</td><td>&mdash;</td><td>none</td><td class="bad">D31, D33</td><td>D31 softened</td></tr>
+          <tr><td>Principal risk</td><td>&mdash;</td><td>one big tree</td><td>demotes the box axis</td><td>discoverability</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="verdict">
+      <p class="eyebrow">A recommendation, not a decision</p>
+      <h3>Build A first, and steal B's stage bar into its rail.</h3>
+      <p>The Rig is the largest layout change with the smallest argument to have &mdash; it reopens
+        no decision entry, because it keeps the box as the unit and only stops paginating it.
+        The Line is the largest <em>claim about the product</em> and needs two entries reopened
+        before a line is written. The Slab has the highest ceiling and the sharpest failure
+        mode.</p>
+      <p>A rail of boxes with beads and a bar of stages with counts are the same information at
+        two orientations. The Rig's rail can carry the stage counts as rows &mdash; which is most of
+        the Line's benefit without touching D31.</p>
+    </div>
+  </section>
+
+  <!-- ================= FOUND WHILE MEASURING ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Not proposals</p>
+      <h2>Two defects found while measuring</h2>
+      <p class="lede">Both are true in the tree today, independent of everything above.</p>
+    </div>
+    <div class="cols2">
+      <div class="costs">
+        <h3>#/fulfillment renders all 682 records</h3>
+        <p style="margin-top: var(--s2)">A measured scroll height of <span class="num">124,348px</span>
+          &mdash; 138 viewports &mdash; because the default list is every card in the store at his 20px
+          floor. The store is designed for tens of thousands. The Fulfilment spec cannot see it:
+          every constraint it asserts is still met, on each of the 682 rows.</p>
+      </div>
+      <div class="costs">
+        <h3>#/inventory cuts off the card you clicked</h3>
+        <p style="margin-top: var(--s2)">Its photograph opens at <span class="num">y=482</span>
+          of a 900px viewport and runs 540px tall. Both folds above it are correctly collapsed
+          and still pay 266px of vertical rent above the screen's subject. Re-ordering that
+          column costs nothing and is independent of every proposal here.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Tokens, spacing and faces are PKMNSCAN's own, locked 2026-08-12 &mdash; not re-chosen here.
+      Cabinet Grotesk is Fontshare-hosted and this page's host admits only Google Fonts, so
+      Archivo stands in for the display role; every other value is the repo's.</p>
+    <p>Light only, and deliberately: <code>docs/DESIGN.md</code> rules out a dark theme and a
+      switcher for a surface with one user working under a desk lamp.</p>
+    <p>The full written argument, with the costs and the entries each proposal would reopen,
+      is in <code>docs/specs/ui-redesign-options.md</code>.</p>
+  </footer>
+
+</div>
+
+</body></html>

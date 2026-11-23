@@ -1,0 +1,128 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Where price history shows</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* One column of options; each option is a heading, its gain and loss, then the mockup frame. */
+:root{
+  --bg:#f4f5f8; --surface:#ffffff; --ink:#0f1217; --muted:#5b6270;
+  --line:rgba(15,18,23,.10); --accent:#3d5af1; --accent-tint:rgba(61,90,241,.10);
+  --gain:#1f7a4d; --loss:#b4372f;
+  --font-display:"Manrope",system-ui,sans-serif; --font-ui:"Inter",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0c0e12; --surface:#14171c; --ink:#eef0f4; --muted:#9aa1ad;
+  --line:rgba(255,255,255,.10); --accent:#7f90ff; --accent-tint:rgba(127,144,255,.14);
+  --gain:#5fd39a; --loss:#ff8a80; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0c0e12; --surface:#14171c; --ink:#eef0f4; --muted:#9aa1ad;
+  --line:rgba(255,255,255,.10); --accent:#7f90ff; --accent-tint:rgba(127,144,255,.14);
+  --gain:#5fd39a; --loss:#ff8a80; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--font-ui)}
+.wrap{max-width:1180px;margin:0 auto;padding-block:32px 64px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:grid;gap:28px}
+h1,h2{font-family:var(--font-display);text-wrap:balance;margin:0}
+h1{font-size:28px;letter-spacing:-.01em}
+.lede{color:var(--muted);max-width:68ch;margin:6px 0 0}
+.controls{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);
+  padding-block:10px;display:flex;flex-wrap:wrap;gap:16px;border-bottom:1px solid var(--line)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{font:inherit;border:0;background:none;color:var(--ink);padding:8px 14px;min-height:40px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent-tint);color:var(--accent);font-weight:600}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.lab{align-self:center;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.opt{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;display:grid;gap:14px;min-width:0}
+.opt header{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px}
+.tag{font-size:12px;color:var(--muted)}
+.pick{font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-tint);padding:2px 8px;border-radius:99px}
+.what{margin:0;max-width:72ch}
+.gl{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin:0}
+.gl div{min-width:0}
+.gl dt{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.gl dd{margin:2px 0 0}
+.g dt{color:var(--gain)} .l dt{color:var(--loss)}
+.frame{border:1px solid var(--line);border-radius:8px;overflow:auto;max-height:80vh;background:var(--bg)}
+.frame img{display:block;max-width:100%;height:auto;margin:0 auto}
+.frame.w820 img{max-width:min(100%,820px)}
+.open{font-size:13px;color:var(--accent)}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Manrope:wght@700&display=swap">
+
+<div class="wrap">
+  <div>
+    <h1>Where price history shows</h1>
+    <p class="lede">Each option draws the same pricing list with Gardevoir ex's history open. The chart and numbers are samples. Pick the one you want to use while you price.</p>
+  </div>
+
+  <div class="controls">
+    <span class="lab">Width</span>
+    <span class="seg" role="group" aria-label="Width">
+      <button id="w1440" data-w="1440" aria-pressed="true">Desktop 1440</button>
+      <button id="w820" data-w="820" aria-pressed="false">Tablet 820</button>
+    </span>
+    <span class="lab">Theme</span>
+    <span class="seg" role="group" aria-label="Theme">
+      <button id="tlight" data-t="light" aria-pressed="true">Light</button>
+      <button id="tdark" data-t="dark" aria-pressed="false">Dark</button>
+    </span>
+  </div>
+
+  <section class="opt" data-key="sheet">
+    <header><h2>1. Keep the sheet</h2><span class="tag">Today's history sheet slides in from the right and dims the list.</span></header>
+    <dl class="gl">
+      <div class="g"><dt>Gain</dt><dd>Nothing new to build. It is today's sheet plus two marks: your asking price and the suggestion.</dd></div>
+      <div class="l"><dt>Loss</dt><dd>The list is covered. You cannot see the row's price, its tick or the next row while the history is open.</dd></div>
+    </dl>
+    <div class="frame"><img alt="Option 1 mockup"></div>
+    <a class="open" target="_blank">Open full size</a>
+  </section>
+
+  <section class="opt" data-key="inline">
+    <header><h2>2. The row opens in place</h2><span class="tag">A panel opens under the row and pushes the rows below down.</span></header>
+    <dl class="gl">
+      <div class="g"><dt>Gain</dt><dd>The history sits right beside the price it explains, and the rest of the list stays in view.</dd></div>
+      <div class="l"><dt>Loss</dt><dd>The rows below move down when you press it. The list gets longer. The daily copies-sold bars are not drawn.</dd></div>
+    </dl>
+    <div class="frame"><img alt="Option 2 mockup"></div>
+    <a class="open" target="_blank">Open full size</a>
+  </section>
+
+  <section class="opt" data-key="panel">
+    <header><h2>3. A side panel follows your row</h2><span class="tag">At 1440 a panel beside the list shows whichever row is selected.</span></header>
+    <dl class="gl">
+      <div class="g"><dt>Gain</dt><dd>The history changes as you move down the list with the arrow keys. No press per row.</dd></div>
+      <div class="l"><dt>Loss</dt><dd>The list loses its trend column to make room. At 820 there is no room, so it falls back to the sheet. No daily copies-sold bars at 1440.</dd></div>
+    </dl>
+    <div class="frame"><img alt="Option 3 mockup"></div>
+    <a class="open" target="_blank">Open full size</a>
+  </section>
+
+  <section class="opt" data-key="float">
+    <header><h2>4. A card floats over the list</h2><span class="pick">Your pick</span><span class="tag">It opens by itself when a price box takes focus, above that row, so the next price stays clear. Nothing dims, and nothing moves.</span></header>
+    <dl class="gl">
+      <div class="g"><dt>Gain</dt><dd>The list never moves and stays visible. You can press another row and the card follows it. Its chart is wider than the sheet's, and it works the same at both widths.</dd></div>
+      <div class="l"><dt>Loss</dt><dd>While open, it covers the right side of the few rows under it: their prices and buttons, never their names. No daily copies-sold bars. The sold range stays on the row.</dd></div>
+    </dl>
+    <div class="frame"><img alt="Option 4 mockup"></div>
+    <a class="open" target="_blank">Open full size</a>
+  </section>
+</div>
+
+<script>
+let w = "1440", t = "light";
+function render(){
+  document.querySelectorAll(".opt").forEach(s=>{
+    const src = `history-${s.dataset.key}-${w}-${t}.png`;
+    const img = s.querySelector("img"); img.src = src;
+    s.querySelector(".frame").classList.toggle("w820", w==="820");
+    s.querySelector(".open").href = src;
+  });
+  document.querySelectorAll("[data-w]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.w===w));
+  document.querySelectorAll("[data-t]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.t===t));
+}
+document.querySelectorAll("[data-w]").forEach(b=>b.onclick=()=>{w=b.dataset.w;render()});
+document.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{t=b.dataset.t;render()});
+render();
+</script>
+
+</body></html>
