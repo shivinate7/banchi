@@ -1,1 +1,1 @@
-- pull-status-f11: Pull-status finding F11. Detail unrecorded: pull request 1128 has no review comments, and no other record holds this finding's text. Why unfixed: detail unrecorded. Seen: 2026-11-22 x1
+- pull-status-f11: Pull-status finding F11. The order_canceled sentence "Put back any card you took for it." could be shorter. The sentence is in `_ORDER_CANCELED_WORDS` in server/capture_server.py. This code is in PR 1128 (not merged), so main does not have it yet. Why unfixed: not recorded. Seen: 2026-11-22 x1

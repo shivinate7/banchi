@@ -1,1 +1,1 @@
-- pull-status-f5-label-gate: Pull-status finding F5. The label gate reads ledger status only. Where and what a person sees: detail unrecorded, because pull request 1128 has no review comments. Why unfixed: detail unrecorded. Seen: 2026-11-22 x1
+- pull-status-f5-label-gate: Pull-status finding F5. The label gate reads only ledger status. An order not yet ingested after its cancel still gets postage. The gap is on main today, and PR 1128 (not merged) does not change it. Why unfixed: not recorded. Seen: 2026-11-22 x1

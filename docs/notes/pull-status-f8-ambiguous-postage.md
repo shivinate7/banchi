@@ -1,1 +1,1 @@
-- pull-status-f8-ambiguous-postage: Pull-status finding F8. Postage on an ambiguous order number. Where and what a person sees: detail unrecorded, because pull request 1128 has no review comments. Why unfixed: detail unrecorded. Seen: 2026-11-22 x1
+- pull-status-f8-ambiguous-postage: Pull-status finding F8. `canceled_numbers` in store/orders.py fails open when two records spell one order number. A canceled order could then get postage. This code is in PR 1128 (not merged), so main does not have it yet. Why unfixed: not recorded. Seen: 2026-11-22 x1

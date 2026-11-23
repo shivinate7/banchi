@@ -1,1 +1,1 @@
-- pull-status-block-11b: Pull-status block 11b. Detail unrecorded: pull request 1128 has no review comments, and no other record holds this block's text. Why unfixed: detail unrecorded. Seen: 2026-11-22 x1
+- pull-status-block-11b: Pull-status block 11b. The T7 check `check_order_ledger` should be reordered so `declare_kind` refuses by itself before `close_line`. This check is in PR 1128 (not merged), so main does not have the reorder yet. Why unfixed: for now the line-kind route calls `writable_line`. Seen: 2026-11-22 x1
