@@ -1,0 +1,484 @@
+{
+ "readAt": "2026-11-23T03:49:49Z",
+ "pulls": [
+  {
+   "branch": "lane/orders-pull-status",
+   "createdAt": "2026-11-23T03:21:40Z",
+   "draft": true,
+   "number": 1128,
+   "title": "Refuse sales, fills, kinds and labels on canceled orders (bug 4)",
+   "url": "https://github.com/shivinate7/banchi/pull/1128"
+  },
+  {
+   "branch": "revert-guard-skip-record-branch",
+   "createdAt": "2026-11-23T02:20:30Z",
+   "draft": false,
+   "number": 1125,
+   "title": "Skip the revert guard on the record branch; pass a head with no shared history",
+   "url": "https://github.com/shivinate7/banchi/pull/1125"
+  }
+ ],
+ "branches": [
+  {
+   "name": "allow-install-refresh"
+  },
+  {
+   "name": "archive/backup/orders-blockers-premerge"
+  },
+  {
+   "name": "archive/batch/881-882"
+  },
+  {
+   "name": "archive/ci/chromium-retry-proof"
+  },
+  {
+   "name": "archive/claude/banchi-waiting-data-home"
+  },
+  {
+   "name": "archive/claude/docs-audit-line-refs-1bc6c4"
+  },
+  {
+   "name": "archive/claude/dreamy-swanson-c1b224"
+  },
+  {
+   "name": "archive/fix/batch-38-ci"
+  },
+  {
+   "name": "archive/inventory-red-nov11"
+  },
+  {
+   "name": "archive/keepfix"
+  },
+  {
+   "name": "archive/lane/network-signatures"
+  },
+  {
+   "name": "archive/mock/graveyard-rethink"
+  },
+  {
+   "name": "archive/mock/orders-card"
+  },
+  {
+   "name": "archive/mock/posted-price-view"
+  },
+  {
+   "name": "archive/one-list-wire-2"
+  },
+  {
+   "name": "archive/own-820-c-merge-text-runner"
+  },
+  {
+   "name": "archive/primary-index-tests-per-file"
+  },
+  {
+   "name": "archive/scratch/banner-bottom"
+  },
+  {
+   "name": "archive/scratch/banner-corner"
+  },
+  {
+   "name": "archive/scratch/l3-2"
+  },
+  {
+   "name": "archive/scratch/l3-3"
+  },
+  {
+   "name": "archive/scratch/l3-options"
+  },
+  {
+   "name": "archive/scratch/motion-previews"
+  },
+  {
+   "name": "archive/scratch/neighbour-mark"
+  },
+  {
+   "name": "archive/scratch/nightly-forced-fail"
+  },
+  {
+   "name": "archive/scratch/notes-design"
+  },
+  {
+   "name": "archive/scratch/orders-pass-b"
+  },
+  {
+   "name": "archive/test/send-fresh-prices-gate"
+  },
+  {
+   "name": "archive/ux/pr4b-D-plan"
+  },
+  {
+   "name": "archive/ux/search-server"
+  },
+  {
+   "name": "archive/verify-92"
+  },
+  {
+   "name": "archive/verify-eb"
+  },
+  {
+   "name": "archive/waiting-page-export"
+  },
+  {
+   "name": "archive/worktree-agent-a184713aa19ea527b"
+  },
+  {
+   "name": "archive/worktree-agent-a2186c304b53ad469"
+  },
+  {
+   "name": "archive/worktree-agent-a248d88c44bdaeb36"
+  },
+  {
+   "name": "archive/worktree-agent-a30a316d56674b266"
+  },
+  {
+   "name": "archive/worktree-agent-a3e4bb9b345ee5b68"
+  },
+  {
+   "name": "archive/worktree-agent-a4922adced3399578"
+  },
+  {
+   "name": "archive/worktree-agent-a59a49014fd241e14"
+  },
+  {
+   "name": "archive/worktree-agent-a5f4ae6d7cc593381"
+  },
+  {
+   "name": "archive/worktree-agent-a613f1c0572f2654d"
+  },
+  {
+   "name": "archive/worktree-agent-a76a969d8a3eed803"
+  },
+  {
+   "name": "archive/worktree-agent-a8c915489b80d39f1"
+  },
+  {
+   "name": "archive/worktree-agent-aab09791766d0c0e0"
+  },
+  {
+   "name": "archive/worktree-agent-ab69b8f026c3cb7fc"
+  },
+  {
+   "name": "archive/worktree-agent-abf75e719f1681892"
+  },
+  {
+   "name": "archive/worktree-agent-abfe8d0ebcb12e049"
+  },
+  {
+   "name": "archive/worktree-agent-aea9c025be69ecae2"
+  },
+  {
+   "name": "archive/worktree-agent-afa23a84c91fb29bd"
+  },
+  {
+   "name": "archive/worktree-agent-affd5cfeb1b6968a8"
+  },
+  {
+   "name": "artifact-pages-export"
+  },
+  {
+   "name": "artifact-pages-other-account"
+  },
+  {
+   "name": "c174-guard-skip-tree"
+  },
+  {
+   "name": "claude/banchi-waiting-data-home"
+  },
+  {
+   "name": "claude/browser-spec-allow-list"
+  },
+  {
+   "name": "claude/checkout-screens-ux-review-f97777"
+  },
+  {
+   "name": "claude/ci-harness-back-out"
+  },
+  {
+   "name": "claude/inventory-copies-flicker"
+  },
+  {
+   "name": "claude/order-transport-verified-4c1e90"
+  },
+  {
+   "name": "claude/review-pricing-fast-forward-57d883"
+  },
+  {
+   "name": "claude/tcgtracking-in-house-a7cb43"
+  },
+  {
+   "name": "claude/thumb-floor-intercept"
+  },
+  {
+   "name": "claude/walk-no-so-far"
+  },
+  {
+   "name": "claude/walk-stop-client"
+  },
+  {
+   "name": "claude/walk-wire"
+  },
+  {
+   "name": "claude/zealous-archimedes-617174"
+  },
+  {
+   "name": "design-mock/feature-ideas"
+  },
+  {
+   "name": "design-mock/gallery"
+  },
+  {
+   "name": "design-mock/phone-pull-blind-1"
+  },
+  {
+   "name": "design-mock/phone-pull-directed-1"
+  },
+  {
+   "name": "design-mock/phone-pull-directed-2"
+  },
+  {
+   "name": "design-mock/phone-pull-informed-1"
+  },
+  {
+   "name": "design-mock/pricing-blind-1"
+  },
+  {
+   "name": "design-mock/pricing-directed-1"
+  },
+  {
+   "name": "design-mock/pricing-informed-1"
+  },
+  {
+   "name": "design-mock/pull-blind-1"
+  },
+  {
+   "name": "design-mock/pull-directed-1"
+  },
+  {
+   "name": "design-mock/pull-directed-2"
+  },
+  {
+   "name": "design-mock/pull-informed-1"
+  },
+  {
+   "name": "design-mock/review-blind-1"
+  },
+  {
+   "name": "design/card-header"
+  },
+  {
+   "name": "design/tcgt-labels"
+  },
+  {
+   "name": "docs/glossary"
+  },
+  {
+   "name": "fix/dry-run-decode"
+  },
+  {
+   "name": "fix/ux-integration-send"
+  },
+  {
+   "name": "fix/walk-live-figure"
+  },
+  {
+   "name": "glossary-rework"
+  },
+  {
+   "name": "handoff/c174"
+  },
+  {
+   "name": "handoff/o3"
+  },
+  {
+   "name": "int-batch-banchi-1"
+  },
+  {
+   "name": "integration/todo-audit"
+  },
+  {
+   "name": "lane/banchi-push-guard-copies"
+  },
+  {
+   "name": "lane/fix-market-latest"
+  },
+  {
+   "name": "lane/fix-pick-chip"
+  },
+  {
+   "name": "lane/fix-shipped-panel"
+  },
+  {
+   "name": "lane/fix-undo-preshipped"
+  },
+  {
+   "name": "lane/fix-walk-head-sold"
+  },
+  {
+   "name": "lane/hand-fed-rail-flat-design"
+  },
+  {
+   "name": "lane/market-reads-latest"
+  },
+  {
+   "name": "lane/network-signatures"
+  },
+  {
+   "name": "lane/network-signatures-docs"
+  },
+  {
+   "name": "lane/orders-plumbing-notes"
+  },
+  {
+   "name": "lane/orders-pull-status"
+  },
+  {
+   "name": "lane/orders-undo-plumbing"
+  },
+  {
+   "name": "lane/shipped-order-walk"
+  },
+  {
+   "name": "lane/walk-pane-tally-focus"
+  },
+  {
+   "name": "lane/walk-sales-queue"
+  },
+  {
+   "name": "main"
+  },
+  {
+   "name": "notes/bash-branch-delete-refused"
+  },
+  {
+   "name": "o3-claude-md-rules"
+  },
+  {
+   "name": "one-list-wire-2"
+  },
+  {
+   "name": "own-820-c-merge-text-runner"
+  },
+  {
+   "name": "perf/launch-interactive"
+  },
+  {
+   "name": "perf/photo-lane-probe"
+  },
+  {
+   "name": "revert-guard-skip-record-branch"
+  },
+  {
+   "name": "roadmap"
+  },
+  {
+   "name": "seed/banchi-roadmap"
+  },
+  {
+   "name": "ux/pr4b-D-plan"
+  },
+  {
+   "name": "worktree-actions-node24"
+  },
+  {
+   "name": "worktree-agent-a7fd361bea7a504e3"
+  }
+ ],
+ "sessions": [
+  {
+   "id": "local_4b9a5874-466e-45fe-9f26-825f678b757c",
+   "tags": [],
+   "session_status": "active"
+  },
+  {
+   "id": "local_320f9051-c813-4936-a2ad-124c423394c2",
+   "tags": [],
+   "session_status": "active"
+  }
+ ],
+ "items": [
+  {
+   "n": 94,
+   "status": "open",
+   "home": "a new decision record for the retired words",
+   "lane": null
+  },
+  {
+   "n": 95,
+   "status": "open",
+   "home": "a new decision record for the retired words",
+   "lane": null
+  },
+  {
+   "n": 21,
+   "status": "open",
+   "home": "the value report lane's brief",
+   "lane": null
+  },
+  {
+   "n": 114,
+   "status": "open",
+   "home": "the value report lane's brief",
+   "lane": null
+  },
+  {
+   "n": 120,
+   "status": "open",
+   "home": "docs/specs/order-pipeline.md (Screens paragraph)",
+   "lane": null
+  },
+  {
+   "n": 122,
+   "status": "open",
+   "home": "orders-plumbing-fixes",
+   "lane": "orders-undo-plumbing"
+  },
+  {
+   "n": 124,
+   "status": "open",
+   "home": "orders-plumbing-fixes",
+   "lane": null
+  },
+  {
+   "n": 32,
+   "status": "open",
+   "home": "docs/specs/pricing-suggest.md section 9",
+   "lane": null
+  },
+  {
+   "n": 116,
+   "status": "open",
+   "home": "docs/specs/pricing-suggest.md",
+   "lane": null
+  },
+  {
+   "n": 118,
+   "status": "open",
+   "home": "docs/specs/pricing-suggest.md",
+   "lane": null
+  },
+  {
+   "n": 123,
+   "status": "open",
+   "home": "orders-plumbing-fixes",
+   "lane": null
+  },
+  {
+   "n": 127,
+   "status": "open",
+   "home": "orders-plumbing-fixes",
+   "lane": null
+  },
+  {
+   "n": 113,
+   "status": "open",
+   "home": "D326, the TCGTracking pipe",
+   "lane": null
+  },
+  {
+   "n": 126,
+   "status": "open",
+   "home": "the triage handoff",
+   "lane": null
+  }
+ ]
+}
