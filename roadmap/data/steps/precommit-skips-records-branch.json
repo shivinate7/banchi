@@ -3,8 +3,8 @@
   "status": "todo",
   "phase": "Guards to build",
   "why": "Every commit on the roadmap branch prints 'cd: scripts/githooks: No such file or directory'. The check then fails open, so nothing is blocked, but the false error teaches readers to skip hook output.",
-  "note": "Fix: add [ -d scripts/githooks ] to the opening if of the freshness block in scripts/githooks/pre-commit. Also sent to the claude-settings gripes tracker.",
+  "note": "Fix: add [ -d scripts/githooks ] to the opening if of the freshness block in scripts/githooks/pre-commit. Also sent to the claude-settings gripes tracker. Still true on origin/main 2026-11-23 13:15 CST: scripts/githooks/pre-commit:126 runs `cd scripts/githooks` with no -d test (read by triage and by Sim Manager).",
   "ask": null,
-  "updatedAt": "2026-11-22T06:36:00Z",
+  "updatedAt": "2026-11-23T13:15:18-06:00",
   "order": 999
 }

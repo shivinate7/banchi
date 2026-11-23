@@ -1,0 +1,10 @@
+{
+  "title": "The daily demo-mirror job has no time limit",
+  "status": "todo",
+  "phase": "Machine load",
+  "why": "scripts/demo-mirror-daily.py (D295) has timeouts only on its gh and lsof calls, none on the job. Reported by Sim Manager 2026-11-23 13:14 CST: launchd started it at 04:30 CST and nine workers ran at about 51% CPU each for 5 h 54 min, with Mac load 69 to 80, holding Degen's lanes and a Duo lease.",
+  "note": "Fix: a wall-clock limit on the job that kills its workers and says so. The reporter's figures are unmeasured by triage; no launchd job for it was listed at 13:15 CST.",
+  "ask": null,
+  "updatedAt": "2026-11-23T13:15:18-06:00",
+  "order": 999
+}

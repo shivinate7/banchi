@@ -1,0 +1,10 @@
+{
+  "title": "Worktree create gives up before a loaded machine finishes the add",
+  "status": "todo",
+  "phase": "Machine load",
+  "why": "scripts/worktree-create.sh gives up after BANCHI_WORKTREE_LOCK_WAIT (120 s default, line 65), but under load one `git worktree add` took about 2:40. Reported by Sim Manager 2026-11-23 13:14 CST: 7 of 16 designer spawns timed out in one session, 6 of about 20 in another. The earlier step lane-worktree-add-lock (PR 1033, Nov 4) added the lock and is stale at active.",
+  "note": "Fix: size the wait to a measured add time, or queue the adds. Related: docs/debts notes lines 44-46. Not measured by triage; the figures are the reporter's.",
+  "ask": null,
+  "updatedAt": "2026-11-23T13:15:18-06:00",
+  "order": 999
+}
