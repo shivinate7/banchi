@@ -165,28 +165,24 @@ function walkPlanOf(stops: readonly WalkPlanStop[], shortfall: readonly WalkPlan
  *  `CardLocations` panel at once, which is what every case below needs: `wanted: 2` keeps the
  *  walk on this take after the first pull (`advanceAfter` only leaves a take once it is
  *  satisfied), so the second copy's row is still on screen to compare against the first. */
-function twoCopyPlan(): WalkPlan {
-  return walkPlanOf([
-    walkPlanStop({
-      takes: [
-        walkPlanTake({
-          wanted: 2,
-          copies: [
-            walkPlanCopy({ box: 3, index: 21, capture_id: 'cap-a', key: '3/21' }),
-            walkPlanCopy({
-              box: 5,
-              index: 22,
-              capture_id: 'cap-b',
-              key: '5/22',
-              slot: 18,
-              card: 18,
-              label: 'Box 5, Section 2, Card 18',
-            }),
-          ],
-        }),
-      ],
+function twoCopyPlan(gone: ReadonlySet<string> = new Set()): WalkPlan {
+  /* `gone` names the copies a sale has taken off the server's plan: a sold copy leaves `copies`, and `wanted` and the
+     order's `owed` both fall by it (`docs/specs/order-walk-plan.md` §8, the ledger's `outstanding`). With none named the
+     plan is exactly the one every existing case is built on. */
+  const copies = [
+    walkPlanCopy({ box: 3, index: 21, capture_id: 'cap-a', key: '3/21' }),
+    walkPlanCopy({
+      box: 5,
+      index: 22,
+      capture_id: 'cap-b',
+      key: '5/22',
+      slot: 18,
+      card: 18,
+      label: 'Box 5, Section 2, Card 18',
     }),
-  ])
+  ].filter((copy) => !gone.has(copy.key))
+  if (copies.length === 0) return walkPlanOf([])
+  return walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ wanted: copies.length, copies })] })])
 }
 
 /** The place the plan's copy stands at for one pulled target, matched on box, index and capture id.
@@ -1116,4 +1112,118 @@ test('three digit presses on copies at three places give three receipts, each na
   await expect(receipts, 'one receipt per digit press').toHaveCount(3)
   const cardsNamed = async () => (await receipts.allTextContents()).map((text) => text.match(/Card \d+/)?.[0] ?? text).sort()
   await expect.poll(cardsNamed, 'the three receipts name three different cards, each its own copy\'s place').toEqual(['Card 17', 'Card 18', 'Card 19'])
+})
+
+/* -------------------------------------------------------------------------------------- 6 */
+
+/* THE RETURN READ AND THE TALLY IT LEAVES (finding 2). `useOrderWalk`'s `reread` puts the server's plan in place
+ * whenever the window regains focus or the tab becomes visible. That plan already nets the walk's own sales out of
+ * `owed`, while `tallyRef` still counts them, so `pickOrderFor` takes each sale away twice. With one copy sold the
+ * order's `owed` is 1 and the tally is 1, so `remaining` is 0 and the next press is refused, though the order still
+ * wants a copy. The control below is the same walk with no return read, which is green on main. */
+
+/** The copies in the order the rows draw them: row 0 is `3/21`, and a press takes them in this order. */
+const PRESS_ORDER = ['3/21', '5/22'] as const
+
+/** Every `/orders/pull` on the wire, in the order it was sent. */
+function pullsOf(wire: readonly Wire[]): Wire[] {
+  return wire.filter((one) => one.path.endsWith('/orders/pull'))
+}
+
+/** The class of the element that holds focus, or its tag when focus has dropped to the page (`BODY`). */
+function focusedOn(page: Page): Promise<string> {
+  return page.evaluate(() => document.activeElement?.getAttribute('class') ?? document.activeElement?.tagName ?? '')
+}
+
+test('a return read after a sale does not refuse the next sale of the same order', async ({ page }) => {
+  let pressed = 0
+  const wire = await open(page, {
+    plan: () => twoCopyPlan(new Set(PRESS_ORDER.slice(0, pressed))),
+    onPull: () => {
+      pressed += 1
+    },
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  await expect(rows, 'before the return read the pane holds both copies').toHaveCount(2)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length, 'the first sale reaches the server').toBe(1)
+
+  // A real return fires both events, and the walk's 300ms debounce makes them one read.
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('focus'))
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await expect(rows, 'the return read drops the sold copy from the pane').toHaveCount(1)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  const refusal = page.locator('.bn-toast', { hasText: 'Nobody here still owes a copy' })
+  await expect(rows.nth(0).getByRole('button', { name: 'Undo' }).or(refusal), 'the second press answers with a sale or a refusal').toBeVisible()
+  expect(await refusal.count(), 'after a return read the next press is refused: pickOrderFor subtracts the sold copy a second time').toBe(0)
+
+  await expect.poll(() => pullsOf(wire).length, 'the second sale reaches the server').toBe(2)
+  expect(pullsOf(wire).map((one) => (one.body as { targets?: unknown }).targets)).toEqual([
+    [{ box: 3, index: 21, capture_id: 'cap-a' }],
+    [{ box: 5, index: 22, capture_id: 'cap-b' }],
+  ])
+  await expect(page.locator('.orders-pick-chip .orders-pick-live'), 'both copies are picked, so the chip reads Picked').toHaveText(/^Picked/)
+})
+
+test('control: with no return read, the next sale of the same order is accepted', async ({ page }) => {
+  let pressed = 0
+  const wire = await open(page, {
+    plan: () => twoCopyPlan(new Set(PRESS_ORDER.slice(0, pressed))),
+    onPull: () => {
+      pressed += 1
+    },
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  await expect(rows, 'before any sale the pane holds both copies').toHaveCount(2)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length, 'the first sale reaches the server').toBe(1)
+  await expect(rows, 'with no return read the pane still holds both copies').toHaveCount(2)
+
+  await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length, 'the second sale reaches the server').toBe(2)
+  expect(await page.locator('.bn-toast', { hasText: 'Nobody here still owes a copy' }).count(), 'no refusal is raised').toBe(0)
+  await expect(page.locator('.orders-pick-chip .orders-pick-live'), 'both copies are picked, so the chip reads Picked').toHaveText(/^Picked/)
+})
+
+/* -------------------------------------------------------------------------------------- 7 */
+
+/* FOCUS AFTER A SWAP (finding 6). `RowAction` replaces `MarkSoldButton` with `UndoSaleButton` on a press, and back
+ * again on an Undo. The button that is removed held focus, so focus drops to the page unless the button that
+ * replaces it takes it. Each case waits for the write to settle before it reads focus, because the write disables
+ * the button while it is out. */
+
+test('a Mark sold press leaves focus on the Undo that replaces it, never on the body', async ({ page }) => {
+  const wire = await open(page)
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length, 'the sale reaches the server').toBe(1)
+  await expect(rows.nth(0).locator('.card-locations-undo'), 'the row draws Undo after the sale').toHaveCount(1)
+  await expect(rows.nth(0).locator('.card-locations-undo'), 'the Undo is enabled again once its write lands').toBeEnabled()
+
+  expect(await focusedOn(page), 'focus lands on the Undo that replaced Mark sold').toContain('card-locations-undo')
+})
+
+test('an Undo press leaves focus on the Mark sold that replaces it, never on the body', async ({ page }) => {
+  const wire = await open(page)
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length, 'the sale reaches the server').toBe(1)
+  const undo = rows.nth(0).locator('.card-locations-undo')
+  await expect(undo, 'the row draws Undo after the sale').toHaveCount(1)
+  await expect(undo, 'the Undo is enabled before it is pressed').toBeEnabled()
+
+  await undo.click()
+  await expect.poll(() => pullsOf(wire).length, 'the undo reaches the server').toBe(2)
+  const sell = rows.nth(0).locator('.card-locations-sell')
+  await expect(sell, 'the row draws Mark sold again after the undo').toHaveCount(1)
+  await expect(sell, 'the Mark sold is enabled once the undo lands').toBeEnabled()
+
+  expect(await focusedOn(page), 'focus lands on the Mark sold that replaced Undo').toContain('card-locations-sell')
 })
