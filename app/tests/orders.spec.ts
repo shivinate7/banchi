@@ -764,6 +764,53 @@ test('a line no pull can reach offers the two presses that can, and each sends i
   expect(Object.keys(fill)).not.toContain('capture_id')
 })
 
+test('a refused Undo on a hand fill’s toast re-reads the store, as every other refused write does', async ({ page }) => {
+  /* D73 as the owner ruled it: a screen re-reads after every write the server answers, a refusal included. The toast's Undo
+     of a hand fill calls `undoFill` outside `afterWrite` (`Orders.tsx`, the receipt's `onPress`), so a refusal it gets back
+     re-reads nothing and the screen keeps the figure the refused write was meant to move. */
+  const unseen = line({ reason: 'sku_unseen', fulfilled: 0, outstanding: 1, on_hand: 0, picks: [] })
+  const wire = await open(page, {
+    orders: payloadOf(
+      [order()],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [unseen] }],
+    ),
+  })
+  /* Registered after `open`, so it answers the reversal, and passes the fill itself on to `open`'s own stub. */
+  await page.route(/\/orders\/fill$/, async (route) => {
+    const body = route.request().postDataJSON() as { undo?: boolean }
+    if (body.undo !== true) return route.fallback()
+    wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body })
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'count_too_large', message: 'That fill cannot be reversed: the line no longer holds it.' } }),
+    })
+  })
+  const getsOf = () => wire.filter((one) => one.path === '/orders' && one.method === 'GET').length
+  const fillsOf = (undo: boolean) =>
+    wire.filter((one) => one.path === '/orders/fill' && ((one.body as { undo?: boolean }).undo === true) === undo).length
+
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  const beforeKind = getsOf()
+  await stand.getByRole('button', { name: 'Sealed Product' }).click()
+  await expect.poll(getsOf, 'the classification re-reads the store').toBeGreaterThan(beforeKind)
+
+  const beforeFill = getsOf()
+  await stand.getByRole('button', { name: /shipped/i }).click()
+  await expect.poll(() => fillsOf(false), 'the hand fill reaches the server').toBe(1)
+  await expect.poll(getsOf, 'the fill’s own answer re-reads the store').toBeGreaterThan(beforeFill)
+  const settled = getsOf()
+
+  const undo = page.locator('.bn-toast-receipt button.bn-toast-action')
+  await expect(undo, 'the fill’s toast offers its Undo').toHaveCount(1)
+  await undo.click()
+  await expect.poll(() => fillsOf(true), 'the toast’s Undo reaches the server').toBe(1)
+  await expect(page.locator('.bn-toast', { hasText: 'That fill cannot be reversed' }), 'the refusal says why in its own words').toBeVisible()
+  await expect.poll(getsOf, 'the refused Undo re-reads the store, as every other refused write does').toBeGreaterThan(settled)
+})
+
 test('a copy that left by the sale door can be recorded, and a line that will not ship can be closed', async ({
   page,
 }) => {
