@@ -1237,7 +1237,7 @@ test('an Undo press leaves focus on the Mark sold that replaces it, never on the
  * sale. Neither passes through a button's own press, so neither reaches the note a press leaves for the button that
  * replaces it. */
 
-test('a digit-key sale puts focus on the Undo it drew, even when a pick row held focus', async ({ page }) => {
+test('a digit-key sale leaves focus on the pick row that held it, and does not take it for the Undo', async ({ page }) => {
   const wire = await open(page)
   const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
   await expect(rows, 'the pane holds both copies').toHaveCount(2)
@@ -1250,7 +1250,7 @@ test('a digit-key sale puts focus on the Undo it drew, even when a pick row held
   await expect(rows.nth(0).locator('.card-locations-undo'), 'the copy the digit sold draws Undo').toHaveCount(1)
   await expect(rows.nth(0).locator('.card-locations-undo'), 'the Undo is enabled once its write lands').toBeEnabled()
 
-  expect(await heldFocus(page), 'focus lands on the Undo the digit drew, not on the pick row').toContain('card-locations-undo')
+  expect(await heldFocus(page), 'a digit sale does not take focus from the control that holds it').toContain('orders-walk-press')
 })
 
 test('control: a digit-key sale with no control holding focus draws focus onto its Undo', async ({ page }) => {
