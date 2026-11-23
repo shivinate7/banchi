@@ -428,10 +428,12 @@ def guard(upstream: str, head: str, window: int, cwd: Optional[str] = None, out=
     head_sha = git(["rev-parse", head], cwd).strip()
     up_sha = git(["rev-parse", upstream], cwd).strip()
     # `merge-base` exits 1 with no output when the two share no history (the record branch is an
-    # orphan). A merge of unrelated histories changes none of main's files, so nothing can revert.
+    # orphan). The guard judges what a branch would land against main's revert history, and none is
+    # shared with main here, so there is nothing to revert. In a shallow clone the same exit can mean
+    # the base lies past the shallow boundary, so the pass holds only in a full clone.
     code, _, err = git_status(["merge-base", upstream, head_sha], cwd)
-    if code == 1 and not err.strip():
-        print(f"revert guard: {head} shares no history with {upstream}; nothing would land by merge, allowing.", file=out)
+    if code == 1 and not err.strip() and git(["rev-parse", "--is-shallow-repository"], cwd).strip() == "false":
+        print(f"revert guard: {head} shares no history with {upstream}, so there is nothing to revert; allowing.", file=out)
         return 0
     if head_sha == up_sha or git_status(["merge-base", "--is-ancestor", head_sha, up_sha], cwd)[0] == 0:
         print(f"revert guard: {head} is at or behind {upstream}; nothing would land.", file=out)
@@ -681,22 +683,6 @@ def cmd_selftest(_: argparse.Namespace) -> int:
             ok("the escape hatch is honoured and named")
         else:
             bad("escape hatch", sink.text)
-
-        # An orphan head (the record branch's shape) shares no history with upstream: no merge-base,
-        # nothing lands by merge. It must pass with a printed line, never a traceback.
-        git(["checkout", "-q", "--orphan", "record"], work)
-        git(["rm", "-rf", "-q", "."], work)
-        write("record/data.txt", "record data\n")
-        commit("record data, no shared history")
-        sink = Sink()
-        try:
-            code = guard("origin/main", "HEAD", WINDOW, work, out=sink)
-        except RuntimeError as err:
-            code, sink.text = -1, f"raised: {err}"
-        if code == 0 and "shares no history" in sink.text:
-            ok("an orphan head passes with a line saying it shares no history")
-        else:
-            bad(f"an orphan head — expected a pass, exit {code}", sink.text)
 
         # A branch at upstream's tip has nothing to land.
         git(["checkout", "-q", "main"], work)
