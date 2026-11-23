@@ -2454,10 +2454,10 @@ test('ux-w2 R19: a dismissed banner shows again when a later re-read fails', asy
 test('ux-w2: a failed refresh on the card view moves nothing once the stale notice arrives', async ({ page }) => {
   await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
   await openCard(page, 'Charizard ex')
-  // Code reason (Fulfillment.tsx, `doSell`): the refusal path re-reads the screen only for ALREADY_SOLD, a PULL_STALE
-  // code, or a success. Any other refusal sets trouble and returns without `reread()`, so no notice can follow it.
-  // A PULL_STALE refusal (`over_fulfilled`) keeps the card open (no `drop`) and calls `reread()`. The re-read's orders
-  // read fails, so `ordersFailed` is set while `cards` is still loaded, and the notice draws on the open card.
+  // A PULL_STALE refusal (`over_fulfilled`) keeps the card open and sets the trouble line. Every write re-reads through
+  // `afterWrite`, a refusal included. The re-read's orders read fails while `cards` stays loaded, so `ordersFailed` is set
+  // and the stale notice draws on the open card. The case checks that the photograph keeps its box as the notice arrives,
+  // because the person is looking at that card and a shift there moves what they are looking at.
   let failNow = false
   await page.route(/\/orders$/, async (route) => {
     if (!failNow) return route.fallback()
