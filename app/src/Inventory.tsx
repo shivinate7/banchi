@@ -26,11 +26,12 @@ import {
   undoRetire,
   undoSale,
   failureTone,
+  ALREADY_SOLD,
 } from './server'
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
 import { useViewParam } from './kit/viewState'
-import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton, UndoSaleButton, clearFreshSale, markFreshSale } from './CardLocations'
+import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton, UndoSaleButton, askFocusBack, clearFreshSale, markFreshSale } from './CardLocations'
 import { inTopTenth, useMarketRead, type HeroFigures } from './CardHero'
 import { InventorySets } from './InventorySets'
 import { TakeOffLine } from './TakeOffLine'
@@ -56,7 +57,7 @@ import {
 } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { markFor } from './kit/rarityMarks'
-import { dismissToast, toast } from './kit/toast'
+import { clearToastAction, dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
 import { RANK_IS_CURRENT, stalenessSentence, type FrozenRank } from './frozenRank'
 import { Dialog as Overlay } from './kit/overlay'
@@ -91,7 +92,6 @@ const UNDO_WINDOW_MS = 20_000
  * (`sold_origin_unknown`, `retired_origin_unknown`) stays off the screen. */
 const NO_UNDO = 'No undo for this one.'
 
-const ALREADY_SOLD = 'already_sold'
 const NOT_SOLD = 'not_sold'
 const ALREADY_RETIRED = 'already_retired'
 const NOT_RETIRED = 'not_retired'
@@ -433,6 +433,10 @@ function InventoryWalk({
     setReceipts((held) => [receipt, ...held.filter((standing) => standing.key !== receipt.key)])
     const previous = toasts.current.get(receipt.key)
     if (previous !== undefined) dismissToast(previous)
+    /* A toast's Undo reaches only the newest reversible write (`docs/specs/undo.md` §3): every receipt before this one
+       stops offering it, and its label keeps its box so no toast moves (D313). A receipt with no Undo is not a write
+       to reverse, so it takes nothing from the ones before it. */
+    if (receipt.canUndo) for (const [key, older] of toasts.current) if (key !== receipt.key) clearToastAction(older)
     const toastId = { current: 0 }
     const id = toast({
       kind: receipt.canUndo ? 'receipt' : 'status',
@@ -1246,7 +1250,19 @@ function Action({
           sticky action bar (ICONOGRAPHY). The row form is the icon vocabulary's own `sold`
           glyph — a round seal, never confused with Retire's box. */}
       {primary ? (
-        <Button variant="primary" size="lg" icon="check" busy={busy} disabled={busyKey !== null && !busy} onClick={() => onSell(copy)}>
+        /* THE STICKY BAR'S PRESS ASKS FOR FOCUS BACK like the row's (`MarkSoldButton`): a sale the server
+           refuses as already made leaves no button here, and `OwnerRows` lands it on this copy's row. */
+        <Button
+          variant="primary"
+          size="lg"
+          icon="check"
+          busy={busy}
+          disabled={busyKey !== null && !busy}
+          onClick={(event) => {
+            askFocusBack(copy.key, 'sell', event.currentTarget)
+            onSell(copy)
+          }}
+        >
           Mark Sold
         </Button>
       ) : (

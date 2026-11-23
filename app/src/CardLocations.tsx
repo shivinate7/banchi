@@ -304,6 +304,106 @@ export function hiddenCopies(
   ).length
 }
 
+/* FOCUS FOLLOWS THE SWAP. Mark sold and Undo replace each other in one slot, so the button that held focus
+   leaves the page and focus would drop to the body. A press, or an Undo that held focus when it left, notes
+   the class of the button that replaces it, by copy key. That button takes focus once it can: a disabled
+   button cannot, and the replacement is disabled while the press's write is out. A re-read that remounts the
+   row finds the same note. There is one note: the next press replaces it, a failed sale clears it
+   (`clearFreshSale`), and a button that finds focus anywhere else drops it.
+
+   FOCUS COMES BACK AFTER A REFUSAL. A refused write leaves the row drawing the button that was pressed, and
+   that button was disabled while the write was out, so focus fell to the body. A press that held focus keeps
+   a second note, `FOCUS_RESTORE`, naming its own class. A button of that class that has just become enabled
+   (a disabled button turning enabled, or a remount) takes focus, and only from the body. The swap's note
+   taken or dropped ends the restore: a sale that stood needs no return.
+
+   A REFUSAL THAT TAKES THE BUTTON AWAY (already sold elsewhere) leaves no button to come back. The ask is then
+   stranded: no button of its class stands for its copy and no swap is in flight. `OwnerRows` lands that
+   focus on the copy's own row (`landStrandedFocus`), the Mark sold of the phone's sticky bar included, since
+   `askFocusBack` raises the same ask. Landing or not, the ask ends there, so it never fires on a later mount. */
+type FocusNote = { readonly key: string; readonly to: 'sell' | 'undo' }
+let FOCUS_NOTE: FocusNote | null = null
+let FOCUS_RESTORE: FocusNote | null = null
+function noteFocusFor(saleKey: string | undefined, to: FocusNote['to']): void {
+  if (saleKey !== undefined) FOCUS_NOTE = { key: saleKey, to }
+}
+/** The swap's note is over (taken, or dropped for focus held elsewhere), so the press it came from stood. */
+function endFocusNote(): void {
+  if (FOCUS_NOTE !== null && FOCUS_RESTORE?.key === FOCUS_NOTE.key) FOCUS_RESTORE = null
+  FOCUS_NOTE = null
+}
+type FocusButton = { readonly current: HTMLButtonElement | HTMLAnchorElement | null }
+/** The buttons standing now, `<class>:<copy key>` to how many, so a stranded ask can tell its button is gone. */
+const LIVE_BUTTONS = new Map<string, number>()
+/** A press that holds focus asks for it back, should the write be refused. Every press replaces the last ask. */
+export function askFocusBack(saleKey: string | undefined, as: FocusNote['to'], pressed: Element | null): void {
+  const held = pressed !== null && document.activeElement === pressed
+  FOCUS_RESTORE = saleKey !== undefined && held ? { key: saleKey, to: as } : null
+}
+function noteRestoreFor(saleKey: string | undefined, as: FocusNote['to'], button: FocusButton): void {
+  askFocusBack(saleKey, as, button.current)
+}
+/** The ask has no button left to return to: put focus on the copy's row, from the body only, and end the ask. */
+function landStrandedFocus(list: HTMLElement | null): void {
+  const ask = FOCUS_RESTORE
+  if (ask === null || list === null || FOCUS_NOTE !== null || (LIVE_BUTTONS.get(`${ask.to}:${ask.key}`) ?? 0) > 0) return
+  const row = list.querySelector<HTMLElement>(`[data-copy-key="${CSS.escape(ask.key)}"]`)
+  if (row === null) return
+  FOCUS_RESTORE = null
+  const held = document.activeElement
+  if (held !== null && held !== document.body) return
+  /* A row takes focus only by script, and only for this landing: it is not a stop in the tab order. */
+  if (!row.hasAttribute('tabindex')) {
+    row.tabIndex = -1
+    row.addEventListener('blur', () => row.removeAttribute('tabindex'), { once: true })
+  }
+  row.focus({ preventScroll: true })
+}
+function isDisabledButton(el: HTMLButtonElement | HTMLAnchorElement): boolean {
+  return (el instanceof HTMLButtonElement && el.disabled) || el.getAttribute('aria-disabled') === 'true'
+}
+function useTakesFocusNote(saleKey: string | undefined, as: FocusNote['to'], button: FocusButton): void {
+  useLayoutEffect(() => {
+    const note = FOCUS_NOTE
+    if (saleKey === undefined || note === null || note.key !== saleKey || note.to !== as) return
+    const held = document.activeElement
+    const el = button.current
+    if (held !== null && held !== document.body && held !== el) {
+      endFocusNote()
+      return
+    }
+    if (el === null || isDisabledButton(el)) return
+    el.focus({ preventScroll: true })
+    endFocusNote()
+  })
+  useLayoutEffect(() => {
+    if (saleKey === undefined) return
+    const id = `${as}:${saleKey}`
+    LIVE_BUTTONS.set(id, (LIVE_BUTTONS.get(id) ?? 0) + 1)
+    return () => {
+      const left = (LIVE_BUTTONS.get(id) ?? 1) - 1
+      if (left > 0) LIVE_BUTTONS.set(id, left)
+      else LIVE_BUTTONS.delete(id)
+    }
+  }, [as, saleKey])
+  const wasDisabled = useRef(true)
+  useLayoutEffect(() => {
+    const el = button.current
+    if (el === null) return
+    const disabled = isDisabledButton(el)
+    const arrived = wasDisabled.current && !disabled
+    wasDisabled.current = disabled
+    const ask = FOCUS_RESTORE
+    if (!arrived || saleKey === undefined || ask === null || ask.key !== saleKey || ask.to !== as) return
+    FOCUS_RESTORE = null
+    const held = document.activeElement
+    if (held === el) return
+    if (held !== null && held !== document.body) return
+    if (FOCUS_NOTE?.key === saleKey) FOCUS_NOTE = null
+    el.focus({ preventScroll: true })
+  })
+}
+
 /** THE ONE MARK SOLD PRESS, on every copy row in the product (owner ruling, card-detail spec): the
  *  vocabulary's `sold` seal with no visible words, 40px tall in a fixed 128px box (D195) and the
  *  kit's solid accent, so it reads as the one primary beside Retire and Move, which are bare
@@ -331,6 +431,8 @@ export function MarkSoldButton({
   readonly onClick: () => void
 }) {
   const [back, setBack] = useState(false)
+  const button = useRef<HTMLButtonElement | HTMLAnchorElement>(null)
+  useTakesFocusNote(saleKey, 'sell', button)
   /* READ IN AN EFFECT, NOT A RENDER: the Undo's own cleanup (which stamps the undo) runs in the same
      commit that mounts this, after this renders. A layout effect runs after it, before paint. */
   useLayoutEffect(() => {
@@ -346,6 +448,7 @@ export function MarkSoldButton({
       size="xl"
       className="card-locations-sell"
       style={SALE_FACE}
+      ref={button}
       busy={busy}
       disabled={disabled}
       kbd={kbd}
@@ -354,6 +457,8 @@ export function MarkSoldButton({
         /* A press on the button is a sale like any other. `markFreshSale` is idempotent, so the
            sell path that follows (`onSell`) may note it again. */
         if (saleKey !== undefined) markFreshSale(saleKey)
+        noteRestoreFor(saleKey, 'sell', button)
+        noteFocusFor(saleKey, 'undo')
         onClick()
       }}
     />
@@ -379,6 +484,7 @@ export function markFreshSale(key: string): void {
 export function clearFreshSale(key: string): void {
   FRESH_SALES.delete(key)
   SALE_AT.delete(key)
+  if (FOCUS_NOTE?.key === key) FOCUS_NOTE = null
 }
 /** The sale's burst window, and the window in which an undo plays it backwards. */
 const FRESH_MS = 15000
@@ -457,20 +563,25 @@ export function UndoSaleButton({
   useEffect(() => {
     FRESH_SALES.delete(saleKey)
     UNDONE_AT.delete(saleKey)
-    /* The Mark sold that held focus is gone, so focus would drop to the body: a sale hands it to
-       the Undo, and a keyboard user can take it back at once. */
-    if (wasFresh) button.current?.focus({ preventScroll: true })
+  }, [saleKey])
+  /* A sale by any path (a press, a digit key) hands focus to the Undo, and a keyboard user can take it
+     back at once. Noted before `useTakesFocusNote` reads it, and it waits out a disabled Undo. */
+  useLayoutEffect(() => {
+    if (wasFresh) noteFocusFor(saleKey, 'undo')
   }, [saleKey, wasFresh])
+  useTakesFocusNote(saleKey, 'undo', button)
   /* THE UNDO LEAVING, BY ANY PATH (a click, `U`, a toast), inside the sale's window: the Mark sold that
      stands here next plays the burst backwards. A LAYOUT cleanup, so it runs before that Mark sold's
-     own layout effect reads it in the same commit. */
-  useLayoutEffect(
-    () => () => {
+     own layout effect reads it in the same commit. An Undo that held focus as it left hands it to that
+     Mark sold, so `U` and a toast keep focus where a press does. */
+  useLayoutEffect(() => {
+    const node = button.current
+    return () => {
       const at = SALE_AT.get(saleKey)
       if (at !== undefined && Date.now() - at < FRESH_MS) UNDONE_AT.set(saleKey, Date.now())
-    },
-    [saleKey],
-  )
+      if (node !== null && document.activeElement === node) noteFocusFor(saleKey, 'sell')
+    }
+  }, [saleKey])
   return (
     <span className="card-locations-undo-wrap">
       <IconButton
@@ -484,7 +595,11 @@ export function UndoSaleButton({
         busy={busy}
         disabled={disabled}
         kbd={kbd}
-        onClick={onClick}
+        onClick={() => {
+          noteRestoreFor(saleKey, 'undo', button)
+          noteFocusFor(saleKey, 'sell')
+          onClick()
+        }}
       />
       {fresh ? <SaleBills onDone={() => setFresh(false)} /> : null}
     </span>
@@ -538,6 +653,9 @@ function OwnerRows({
   glint = false,
   className,
 }: Omit<CardLocationsProps, 'persona'>) {
+  const list = useRef<HTMLElement>(null)
+  /* EVERY COMMIT: a refusal that removed the pressed button is only seen once the row has been redrawn without it. */
+  useLayoutEffect(() => landStrandedFocus(list.current))
   /* WHICH COPIES ARE DRAWN, AND IN WHAT ORDER (D132). Rule 1 below used to say no copy is
      dropped for being sold; the owner amended that on 2026-09-10 — a sold copy is not a place
      a hand can go, and scrolling past them to find the live ones was the whole complaint. What
@@ -598,7 +716,7 @@ function OwnerRows({
      `CardHero.tsx`'s Details draw every one of those facts. */
 
   return (
-    <section className={['card-locations', 'card-locations-owner', className ?? ''].filter(Boolean).join(' ')}>
+    <section ref={list} className={['card-locations', 'card-locations-owner', className ?? ''].filter(Boolean).join(' ')}>
       <ul className="card-locations-rows bn-stagger">
         {drawn.map((copy, i) => {
           const sold = isSold(copy, soldKeys)
@@ -639,6 +757,7 @@ function OwnerRows({
                 .filter(Boolean)
                 .join(' ')}
               key={copy.key}
+              data-copy-key={copy.key}
               style={{ ['--i' as string]: i }}
               aria-current={current ? 'true' : undefined}
             >

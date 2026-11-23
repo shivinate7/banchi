@@ -1700,6 +1700,7 @@ img.bn-crop[data-cropped='true'] {
   flex: none;
 }
 .bn-toast-action:hover { background: rgba(255, 255, 255, 0.24); }
+.bn-toast-action[data-spent] { visibility: hidden; }
 :root[data-theme='dark'] .bn-toast-action { background: var(--bn-accent-tint); }
 .bn-toast-action .bn-kbd { background: transparent; color: inherit; border-color: rgba(255, 255, 255, 0.3); }
 /* It is an IconButton now (D288), `size="sm"`: its own box is `.bn-icon-btn` in

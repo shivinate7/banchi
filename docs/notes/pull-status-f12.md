@@ -1,0 +1,1 @@
+- pull-status-f12: Pull-status finding F12. `shipping_routes._OrderCanceled` and the store-side `OrderCanceled` in store/orders.py name one fact twice. Both are in PR 1128 (not merged), so main does not have them yet. Why unfixed: not recorded. Seen: 2026-11-22 x1

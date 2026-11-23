@@ -308,6 +308,20 @@ export type Failure = {
   data?: unknown
 }
 
+/** The refusal codes a screen branches on instead of showing the server's sentence. `ALREADY_SOLD` on a sale means
+ *  another device sold that copy; `SALE_BUILT_ON` on an undo means the order has moved on and the sale can no
+ *  longer be reversed. Codes, never messages. */
+export const ALREADY_SOLD = 'already_sold'
+export const SALE_BUILT_ON = 'sale_built_on'
+/** A pull refused because another client already pulled that copy (`_ledger_pull`). */
+export const COPY_ALREADY_PULLED = 'copy_already_pulled'
+/** Did the server answer an undo with a refusal (a 4xx) rather than fail or time out? The same press can clear a
+ *  network failure, a 5xx, or a busy store (a `retry` failure), so those keep the pull for another try. Any other
+ *  refusal drops the pull from the screen's undo list, whatever its code. */
+export function isFinalUndoRefusal(failure: Failure): boolean {
+  return failure.kind === 'refusal' && failure.status !== undefined && failure.status >= 400 && failure.status < 500
+}
+
 /** The codes a second press can clear: nothing answered, or the store was mid-write. */
 const RETRY_CODES: ReadonlySet<string> = new Set(['unreachable', 'bad_response', 'store_busy'])
 

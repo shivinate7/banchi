@@ -58,6 +58,7 @@ The Playwright specs and unit tests of the app, and the helpers they share.
   - Decisions: `D132`, `D5`
 - `app/tests/filters/index.html` — A test page the dev server serves and the build never ships: it mounts `FilterSpecimens` and a small view-state demo, so `filters.spec.ts` does not wait on a real screen to mount either.
   - Decisions: `D5`
+- `app/tests/focusHeld.ts` — One helper, `heldFocus`, the one way a test reads which element holds focus: the held element's class, or its tag (`BODY`) once focus has dropped.
 - `app/tests/fontsReady.ts` — One helper, `settleFonts`, awaited after every `page.goto` in the seven specs that measure type — it said FOUR, and the three that joined since arrived with nothing reading the sentence.
   - Decisions: `D124`, `D16`, `D38`, `D50`
 - `app/tests/fulfillment.spec.ts` — All nine rows of the Fulfillment constraints table against the rendered view, with every contrast ratio computed from the colors the page actually painted rather than from a number published in docs/DESIGN.md.
@@ -120,7 +121,7 @@ The Playwright specs and unit tests of the app, and the helpers they share.
   - Decisions: `D20`, `D43`, `D51`, `D70`, `D86`, `D105`, `D134`, `D192`, `D298`, `D174`, `D291`, `D109`, `D275`, `D276`, `D95`, `D5`, `D31`, `D39`, `D69`, `D100`
 - `app/tests/ordersFilterSheet.ts` — The Orders page's Filters sheet picks (open, close, pick a facet option, Open only, Done only), shared by `orders.spec.ts` and `order-walk.spec.ts` so neither copies them.
 - `app/tests/order-walk.spec.ts` — `OrdersWalkPane.tsx`'s OWN undo, and nothing else `tests/orders.spec.ts` already covers (that file's own docstring names this file so a reader is not sent looking for two copies of the same case).
-  - Decisions: `D118`, `D136`, `D164`, `D252`, `D304`, `D313`, `D57`, `D58`, `D113`, `D212`, `D220`, `D196`
+  - Decisions: `D118`, `D136`, `D164`, `D252`, `D304`, `D313`, `D57`, `D58`, `D113`, `D212`, `D220`, `D196`, `D171`
 - `app/tests/orders.spec.ts` — The order screen in a browser: that the six-way counts render including the zeros, that a pick already held by another line is drawn as spoken for, that the pull sends the row's own capture_id, and that the receipt reads the pre-write place rather than the sale's departed label.
   - Decisions: `D91`, `D97`, `D113`, `D118`, `D132`, `D193`, `D203`, `D58`, `D63`, `D304`, `D57`, `D263`, `D218`, `D24`, `D90`, `D123`, `D296`, `D285`, `D181`, `D171`, `D212`, `D50`, `D221`, `D274`, `D270`, `D20`, `D27`, `D28`, `D36`, `D86`, `D69`, `D73`, `D93`, `D103`, `D284`, `D196`, `D220`, `D289`
 - `app/tests/page-edge.spec.ts` — One left edge for every screen (`D197`): `.bn-page`'s `margin: 0 auto` centered a screen with a lower `--bn-page-max` inside the shell's own column instead of anchoring it, so the gutter grew with the window and differed between routes — `#/pricing`'s content sat roughly `330px` right of `#/review`'s at the same width, the owner's own report.

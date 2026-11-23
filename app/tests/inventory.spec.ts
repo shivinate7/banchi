@@ -6,6 +6,7 @@ import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 import { afterPaint, sameBox, settleMotion, settled, whatMoved } from './motionSettled'
 import { iconTip } from './iconTooltip'
+import { heldFocus } from './focusHeld'
 import { phoneOff, setViewport } from './phoneSwitch'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
 
@@ -716,10 +717,11 @@ const SALE: SaleStub = (box, index, undo) => ({
  *  press first, so nothing re-reads between the move and the click.
  *
  *  `move` IS HANDED THE DIRECTION, because a reversal is a move too: a stub that stayed sold
- *  through an undo answers the re-read with a card the server has just put back. */
-function movesOnSale(move: (undo: boolean) => void, answers: SaleStub = SALE): SaleStub {
+ *  through an undo answers the re-read with a card the server has just put back. It is handed
+ *  the copy's store key as well, for a case that sells two copies and must move each one. */
+function movesOnSale(move: (undo: boolean, key: string) => void, answers: SaleStub = SALE): SaleStub {
   return (box, index, undo) => {
-    move(undo)
+    move(undo, `${box}/${index}`)
     return answers(box, index, undo)
   }
 }
@@ -1711,6 +1713,8 @@ function sellableStore(): {
 
 /** The first card of the walked box, as `pipeline/join.py:Position.label` spells it. */
 const CARD_1 = 'Box 2, Section 1, Card 1'
+/** The second copy of the same SKU in that section, `2/3` in the fixture. */
+const CARD_3 = 'Box 2, Section 1, Card 3'
 
 /** THE WAY BACK THAT OUTLIVES THE WALK. A write now leaves two things: the slot in the copy
  *  row turns into a RECEIPT for the window — its sentence, its draining clock and its `Undo`,
@@ -2282,6 +2286,178 @@ test('the row that sold the copy becomes the way to take it back', async ({ page
   await expect(page.locator('.inventory-receipt')).toHaveCount(0)
   await expect(receiptToast(page).getByRole('button', { name: 'Undo' })).toHaveCount(0)
 })
+
+/* A RECEIPT'S UNDO REACHES ONLY THE NEWEST WRITE (D57, undo spec section 3), on Inventory as on Orders. Each Marked
+ * sold posts its own receipt toast. A newer sale takes the Undo off the older toast, and the spent label keeps its
+ * box, hidden, so the older toast does not move (D313). Orders asserts the same shape in `order-walk.spec.ts`. */
+test('a newer sale takes the Undo off the older Marked sold receipt, and that toast keeps its box (D57, D313)', async ({
+  page,
+}) => {
+  const { store, sell, unsell } = sellableStore()
+  await open(page, BOXES, store, () => PRICING,
+    movesOnSale((undo, key) => (undo ? unsell(key) : sell(key))))
+
+  await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
+  const older = receiptToast(page).filter({ hasText: CARD_1 })
+  await expect(older.locator('button.bn-toast-action'), 'the older receipt has its Undo first').toHaveCount(1)
+  /* The entrance is scaled and shifted until it settles, so the box is read once the motion has finished. */
+  await afterPaint(page)
+  await settleMotion(page)
+  const before = await older.boundingBox()
+
+  await copyRow(page, CARD_3).getByRole('button', { name: /^Mark Sold/ }).click()
+  const newer = receiptToast(page).filter({ hasText: CARD_3 })
+  await expect(newer.locator('button.bn-toast-action'), 'the newest receipt has its Undo').toHaveCount(1)
+  await expect(older.locator('button.bn-toast-action'), 'the older receipt has lost its Undo to the newer sale').toHaveCount(0)
+  await expect.soft(older.locator('span.bn-toast-action[data-spent]'), 'the spent Undo stays in the toast, to hold its box').toHaveCount(1)
+  await expect.soft(older.locator('span.bn-toast-action[data-spent]'), 'the spent Undo is not visible').toBeHidden()
+  await settleMotion(page)
+  const after = await older.boundingBox()
+
+  expect.soft(after?.height, 'the older receipt changed height when a newer sale took its Undo').toBe(before?.height)
+  expect.soft(after?.y, 'the older receipt moved its top edge when a newer sale took its Undo').toBe(before?.y)
+})
+
+test('undoing the newer sale leaves the older Marked sold receipt\'s Undo spent (D57, undo spec section 3)', async ({
+  page,
+}) => {
+  const { store, sell, unsell } = sellableStore()
+  const wire = await open(page, BOXES, store, () => PRICING,
+    movesOnSale((undo, key) => (undo ? unsell(key) : sell(key))))
+
+  await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
+  const older = receiptToast(page).filter({ hasText: CARD_1 })
+  await copyRow(page, CARD_3).getByRole('button', { name: /^Mark Sold/ }).click()
+  const newer = receiptToast(page).filter({ hasText: CARD_3 })
+  await expect(newer.locator('button.bn-toast-action'), 'the newest receipt has its Undo first').toHaveCount(1)
+
+  /* THE NEWEST RECEIPT'S UNDO STILL REVERSES ITS OWN SALE. This is the control: it holds on main, and it is the
+     press the older receipt's state is measured against. */
+  await newer.locator('button.bn-toast-action').click()
+  await expect.poll(() => wire.filter((call) => call.path.endsWith('/sold')).map((call) => call.body)).toEqual([
+    {},
+    {},
+    { undo: true },
+  ])
+
+  await expect(older.locator('button.bn-toast-action'), 'the older receipt\'s Undo is still spent after the newer sale is undone').toHaveCount(0)
+  await expect.soft(older.locator('span.bn-toast-action[data-spent]'), 'the spent Undo stays in the toast, to hold its box').toHaveCount(1)
+})
+
+/* FOCUS ACROSS THE UNDO. A desktop row's Undo is `UndoSaleButton`, and the Mark sold that replaces it is `MarkSoldButton`,
+ * both from `CardLocations.tsx`. The pressed Undo leaves the page, so focus must land on the Mark sold that replaces it.
+ * The case reads focus once the box re-read that the undo causes has landed, because a re-read that remounts the row
+ * would move focus after the press looked settled. The other direction (Mark sold, then Undo) is asserted by
+ * `Undo stands in Mark sold's own frame`, so it has no case here. */
+
+test('after Undo, focus lands on the Mark sold that replaces it, never on the body', async ({ page }) => {
+  const { store, sell, unsell } = sellableStore()
+  await open(page, BOXES, store, () => PRICING, movesOnSale((undo) => (undo ? unsell('2/1') : sell('2/1'))))
+  const row = copyRow(page, CARD_1)
+
+  const saleReread = page.waitForResponse(/\/inventory\/\d+(\?|$)/)
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
+  await saleReread
+  const undo = row.locator('.card-locations-undo')
+  await expect(undo, 'the row draws Undo after the sale').toHaveCount(1)
+
+  const undoReread = page.waitForResponse(/\/inventory\/\d+(\?|$)/)
+  await undo.click()
+  await undoReread
+
+  await expect(row.locator('.card-locations-sell'), 'the row draws Mark sold again after the undo').toHaveCount(1)
+  expect(await heldFocus(page), 'focus lands on the Mark sold that replaced Undo').toContain('card-locations-sell')
+})
+
+test('U after a Mark sold leaves focus on the Mark sold that replaces the Undo, never on the body', async ({ page }) => {
+  const { store, sell, unsell } = sellableStore()
+  await open(page, BOXES, store, () => PRICING, movesOnSale((undo) => (undo ? unsell('2/1') : sell('2/1'))))
+  const row = copyRow(page, CARD_1)
+
+  const saleReread = page.waitForResponse(/\/inventory\/\d+(\?|$)/)
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
+  await saleReread
+  await expect(row.locator('.card-locations-undo'), 'the row draws Undo after the sale').toHaveCount(1)
+  expect(await heldFocus(page), 'the Undo holds focus before U is pressed').toContain('card-locations-undo')
+
+  const undoReread = page.waitForResponse(/\/inventory\/\d+(\?|$)/)
+  await page.keyboard.press('u')
+  await undoReread
+
+  await expect(row.locator('.card-locations-sell'), 'the row draws Mark sold again after U').toHaveCount(1)
+  expect(await heldFocus(page), 'focus lands on the Mark sold that replaces the Undo, never on the body').toContain('card-locations-sell')
+})
+
+/* FOCUS AFTER A REFUSED SALE. The server answers `already_sold` when another device sold the copy first. The press that held
+ * focus is gone, and nothing on the row takes focus back, so focus falls to the body. It must stay on the row. */
+
+test('a Mark sold the server refuses as already sold leaves focus on its row, never on the body', async ({ page }) => {
+  const { store, sell } = sellableStore()
+  await open(page, BOXES, store, () => PRICING, () => {
+    sell('2/1')
+    return { status: 409, body: { error: { code: 'already_sold', message: 'Box 2, card 1 is already sold.' } } }
+  })
+  const row = copyRow(page, CARD_1)
+
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect(receiptToast(page), 'the refusal reaches the person as a receipt').toContainText('Already sold')
+  await expect(row.getByRole('button', { name: /^(Mark Sold|Undo)/ }), 'no Mark sold or Undo returns to the row').toHaveCount(0)
+
+  await expect(row, 'focus lands on the row itself after the refused sale').toBeFocused()
+})
+
+test('a Mark sold refused as already sold keeps focus on the search box the person moved to, while the write is out', async ({ page }) => {
+  const { store, sell } = sellableStore()
+  await open(page, BOXES, store, () => PRICING, () => {
+    sell('2/1')
+    return { status: 409, body: { error: { code: 'already_sold', message: 'Box 2, card 1 is already sold.' } } }
+  })
+  let answer!: () => void
+  const held = new Promise<void>((done) => {
+    answer = done
+  })
+  /* Registered after `open`, so it answers first: it holds the sale until released, then hands it on to `open`'s own stub. */
+  await page.route(/\/inventory\/\d+\/\d+\/sold$/, async (route) => {
+    await held
+    await route.fallback()
+  })
+  const row = copyRow(page, CARD_1)
+
+  const sent = page.waitForRequest(/\/inventory\/\d+\/\d+\/sold$/)
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
+  await sent
+
+  const search = page.getByRole('searchbox')
+  await search.focus()
+  answer()
+  await expect(receiptToast(page), 'the refusal reaches the person as a receipt').toContainText('Already sold')
+  await expect(row.getByRole('button', { name: /^(Mark Sold|Undo)/ }), 'no Mark sold or Undo returns to the row').toHaveCount(0)
+  await expect(search, 'focus stays on the search box the person moved to, not taken back by the refused sale').toBeFocused()
+})
+
+test('a phone sticky Mark sold the server refuses as already sold leaves focus off the page body', async ({ page }) => {
+  await setViewport(page, { width: 390, height: 844 })
+  const cards: Cards = {
+    ...CARDS,
+    '2/1': card({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, cid: 'thievul-cid' }),
+  }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  await open(page, BOXES, store, () => PRICING, () => {
+    const held = cards['2/1']
+    if (held !== undefined) held.state = 'sold'
+    return { status: 409, body: { error: { code: 'already_sold', message: 'Box 2, card 1 is already sold.' } } }
+  }, { settle: '.card-locations-owner', route: '/#/inventory?box=2&card=thievul-cid' })
+  const bar = page.locator('.browse-actionbar-slot')
+
+  await bar.getByRole('button', { name: /^Mark Sold/ }).focus()
+  await page.keyboard.press('Enter')
+  await expect(receiptToast(page), 'the refusal reaches the person as a receipt').toContainText('Already sold')
+  await expect(bar.getByRole('button', { name: /^(Mark Sold|Undo)/ }), 'no Mark sold or Undo returns to the sticky bar').toHaveCount(0)
+
+  const onBody = await page.evaluate(() => document.activeElement === document.body)
+  expect(onBody, 'focus fell to the page body after the refused sticky Mark sold').toBe(false)
+})
+
 
 /* D218: A TYPED DOT IS A DEFECT WHEREVER IT IS TYPED. `Position.label` reaches this screen as
  * `Box 2, Section 1, Card 1` — real, server-composed, and never edited here — but the toast

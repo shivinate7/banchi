@@ -26,6 +26,7 @@ import {
   undoPull,
   undoSale,
   walkPlan,
+  ALREADY_SOLD,
 } from './server'
 import { PullConfirm } from './PullConfirm'
 import { shipToOf } from './orderBuyers'
@@ -87,7 +88,6 @@ const SHOWN_OWED = 6
 /** The same words CardLocations uses for the same card, so one route says it one way. */
 const NO_NAME = 'This card has no name yet'
 
-const ALREADY_SOLD = 'already_sold'
 const NOT_SOLD = 'not_sold'
 const NO_ORIGIN = 'sold_origin_unknown'
 /** `POST /orders/pull`'s own refusals: the copy is already on the ledger, or the list he is

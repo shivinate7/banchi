@@ -855,7 +855,7 @@ screen-freshness-selftest:
 	if [ $$rc -ne $(SKIP_CODE) ]; then \
 		node scripts/screen-freshness.mjs --self-test; \
 	else \
-		echo "screen-freshness-selftest: SKIPPED — this branch does not touch scripts/screen-freshness.mjs. BANCHI_GUARD_SCOPE=all runs it anyway."; \
+		echo "screen-freshness-selftest: SKIPPED — this branch touches nothing it reads (guard-scope.py list --target screen-freshness-selftest names what it reads). BANCHI_GUARD_SCOPE=all runs it anyway."; \
 	fi
 
 # NOT IN `check`, AND NOT IN THE GIT HOOK. This is a target that can delete a file, and D18 forbids a writer on the path that decides

@@ -341,6 +341,8 @@ const RECORDED = {
     // Plain-words helpers: `failureTone` maps a failure to a tone, `refusalToast` builds a
     // toast from an error already in hand. Neither makes a request.
     'failureTone', 'refusalToast',
+    // A pure helper in app/src/server.ts that sorts an undo refusal as final or retryable, like `failureTone`; it makes no request.
+    'isFinalUndoRefusal',
     // The card preview's address: `photoUrl` plus `crop=card`. A string, no request.
     'previewUrl',
   ],

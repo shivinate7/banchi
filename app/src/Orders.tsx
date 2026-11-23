@@ -41,7 +41,7 @@ import {
 } from './kit'
 import { absoluteDate, relativeDate, utcDay } from './dates'
 import { count as countOf } from './kit/dataRules'
-import { toast } from './kit/toast'
+import { clearToastAction, toast } from './kit/toast'
 import { boxTitle } from './kit/data'
 import { CardPane, gameWord, photoSrc, type HeroFigures, type Row } from './CardHero'
 import { CardLocations, layoutsOf } from './CardLocations'
@@ -49,7 +49,7 @@ import { Dialog as Overlay } from './kit/overlay'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { orderReasonLabel, orderReasonRemedy } from './orderReasons'
 import { rememberHideSold, rememberOrderFilter, storedHideSold, storedOrderFilter, type OrderFetchFilter } from './deviceMemory'
-import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore'
+import { hubState, setHub, touchHub, useHub, type PullNote, type Stage } from './OrdersHubStore'
 import { PositionLabel } from './PositionLabel'
 import { RailFrame } from './RailFrame'
 import { sayPlace } from './position'
@@ -94,6 +94,10 @@ import {
   walkPlan,
   failureTone,
   refusalToast,
+  ALREADY_SOLD,
+  isFinalUndoRefusal,
+  COPY_ALREADY_PULLED,
+  SALE_BUILT_ON,
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
@@ -982,6 +986,63 @@ function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]
  *  carries the same constant for its own fallback. */
 const PULL_NOT_RECORDED = 'pull_not_recorded'
 
+/** The server's `already_sold` and `copy_already_pulled` refusals of a sale. The first tells an API caller to send
+ *  `{"undo": true}`; the second names the order key and SKU. Neither is for a person at this screen, so a sale refused
+ *  either way is said in this screen's own words. Every other refusal keeps the server's sentence. */
+function pullFailure(err: unknown, place: string | null): Failure {
+  const trouble = describeFailure(err)
+  if (trouble.code !== ALREADY_SOLD && trouble.code !== COPY_ALREADY_PULLED) return trouble
+  return { ...trouble, message: `${place === null ? 'That copy' : sayPlace(place)} was already sold.` }
+}
+
+/** The server's `sale_built_on` refusal of an undo says where to go on another screen ("This card is still here") and
+ *  quotes the order's status. This screen has neither control, so it says only what holds. */
+function undoFailure(err: unknown, place: string): Failure {
+  const trouble = describeFailure(err)
+  if (trouble.code !== SALE_BUILT_ON) return trouble
+  return { ...trouble, message: `${sayPlace(place)} stays sold: its order has moved on.` }
+}
+
+/** A pull is recorded: it becomes the newest standing pull, taking the rank from the one before it. */
+function notePull(note: PullNote): void {
+  /* Every receipt before this one stops offering Undo: a toast's Undo reaches only the newest reversible write. */
+  for (const older of hubState().pulls) if (older.receipt !== undefined) clearToastAction(older.receipt)
+  setHub((current) => ({ pulls: [...current.pulls.filter((one) => one.target.capture_id !== note.target.capture_id), note] }))
+}
+
+/** Pulls whose reversal this screen has queued or sent from a toast or `U`, until it answers. The walk's own reversals
+ *  are the line's (`walkReversalHeld`). */
+const reversalsHeld = new Set<string>()
+
+/** Is a reversal of this copy already queued or out, by any route? */
+const reversalHeld = (captureId: string): boolean => reversalsHeld.has(captureId) || walkReversalHeld(captureId)
+
+/** A pull is no longer standing, undone by any route: the pull before it takes the rank back, and its own receipt
+ *  keeps no Undo. */
+function forgetPull(captureId: string): void {
+  const gone = hubState().pulls.find((one) => one.target.capture_id === captureId)
+  if (gone?.receipt !== undefined) clearToastAction(gone.receipt)
+  setHub((current) => ({ pulls: current.pulls.filter((one) => one.target.capture_id !== captureId) }))
+}
+
+/** The newest pull that still stands, unless its reversal is already queued or out. While it is held `U` waits, so it
+ *  never queues a second reversal of one copy and never reaches past the held pull to an older one. */
+function newestUndoablePull(): PullNote | null {
+  const newest = hubState().pulls.at(-1)
+  if (newest === undefined || reversalHeld(newest.target.capture_id)) return null
+  return newest
+}
+
+/** A receipt toast's own Undo reaches only the newest reversible write (`docs/specs/undo.md` §3): a newer pull takes
+ *  the control off the older receipts (`notePull`), and a press on one already reversing queues nothing. A sale still
+ *  queued or out is not yet a pull that stands, so a receipt pressed behind it still queues its reversal behind
+ *  that write. */
+function undoFromReceipt(target: PullTarget, place: string, name: string): void {
+  const newest = hubState().pulls.at(-1)
+  if (newest?.target.capture_id !== target.capture_id || reversalHeld(target.capture_id)) return
+  void undoFromToast(target, place, name)
+}
+
 /** The undo, pressed on a toast after the hub may have unmounted. It sends the target and
  *  nothing else — the server finds whoever holds the `capture_id` — and bumps the hub so any
  *  mounted screen re-reads. */
@@ -990,6 +1051,7 @@ function undoFromToast(target: PullTarget, place: string, name: string): Promise
      is mounted by the time the undo answers must see every Pull disabled until it does. It is taken now, while
      the undo waits for its turn in the walk's line, so nothing else starts beside it. */
   setHub({ busy: `undo/${target.capture_id}` })
+  reversalsHeld.add(target.capture_id)
   /* THE WALK'S LINE, so this write never runs beside a sale that is still queued or out. */
   return inWalkLine(() => undoPullNow(target, place, name))
 }
@@ -998,6 +1060,7 @@ async function undoPullNow(target: PullTarget, place: string, name: string): Pro
   try {
     await undoPull([target])
     toast({ kind: 'ok', icon: 'undo', title: 'Pull undone', body: `${place} holds ${name} again.` })
+    forgetPull(target.capture_id)
     /* `undoneTarget`/`undoneAt` are how a MOUNTED walk's own tally hears about this — this
        write never goes through `useOrderWalk` at all, so without this the walk kept believing
        the copy this pull put back was still recorded (the review round's finding 2, D171).
@@ -1011,17 +1074,17 @@ async function undoPullNow(target: PullTarget, place: string, name: string): Pro
      * The old "not put back" refusal was actively wrong here: the card WAS already back. */
     if (describeFailure(err).code === PULL_NOT_RECORDED) {
       toast({ kind: 'ok', icon: 'undo', title: 'Already undone', body: `${place} holds it, from somewhere else.` })
+      forgetPull(target.capture_id)
     } else {
-      const trouble = describeFailure(err)
+      const trouble = undoFailure(err, place)
       toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
+      /* The server refused the undo: a second press gets the same answer, so `U` moves to the pull before it. */
+      if (isFinalUndoRefusal(trouble)) forgetPull(target.capture_id)
     }
   } finally {
-    /* Clear `lastPull` only if this is still the pull it names — a later pull may already
-       have replaced it, and undoing THIS one must not erase THAT one's own way back. */
-    setHub((current) => ({
-      busy: null,
-      lastPull: current.lastPull?.target.capture_id === target.capture_id ? null : current.lastPull,
-    }))
+    reversalsHeld.delete(target.capture_id)
+    /* A refused undo leaves the pull standing and keeps it in `pulls`: it is still the one `U` reverses next. */
+    setHub({ busy: null })
     touchHub()
   }
 }
@@ -1380,24 +1443,21 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   }, [])
 
   /* THE SHARED HOOK (`docs/specs/undo.md` §11.3, UN-10) — the newest pull this screen made
-   * that `hub.lastPull` still holds. Read live off `hubState()` rather than a closed-over
+   * that `hub.pulls` still holds. Read live off `hubState()` rather than a closed-over
    * value, the same reason the hook itself keeps a ref: a listener registered once on mount
    * never goes stale; `undoFromToast` is the same function the toast's own Undo button calls,
    * so a key press and a mouse click do exactly the same write. Scoped to the Pull stage — `U`
    * on `#/shipping` does nothing, because nothing is pulled there. Yields to a write already in
-   * flight, and NO CLOCK (UN-5): rank, not a deadline — `lastPull` holds until the next pull or
-   * its own undo clears it. */
+   * flight, and NO CLOCK (UN-5): rank, not a deadline — a pull stays in `pulls` until its own undo, by any route,
+   * removes it, and then the pull before it is the newest. */
   useUndoHotkey(() => {
     if (stage !== 'pull') return null
-    /* `U` UNDOES THE NEWEST PRESS. A sale still in the walk's line is newer than `lastPull` (the newest the server
-       holds): queued, it is cancelled and the server never hears of it; out, its reversal waits behind it. */
+    /* `U` UNDOES THE NEWEST PRESS. A sale still in the walk's line is newer than every pull in `pulls` (the server holds them): queued, it is cancelled and the server never hears of it; out, its reversal waits behind it. */
     const sale = newestWalkSale()
     if (sale !== null) return () => undoWalkSale(sale)
-    const pull = hubState().lastPull
-    if (pull === null) return null
     if (hubState().busy !== null) return null
-    /* Its reversal is already in the walk's line: a second press does nothing, never a second reversal of one copy. */
-    if (walkReversalHeld(pull.target.capture_id)) return null
+    const pull = newestUndoablePull()
+    if (pull === null) return null
     return () => void undoFromToast(pull.target, pull.place, pull.name)
   })
 
@@ -1845,32 +1905,31 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         const rawPlace = done.places[0]?.label ?? pick.place.label ?? `box ${target.box}, index ${target.index}`
         const place = sayPlace(rawPlace)
         const name = pick.card_name ?? line.line.name ?? line.sku
-        toast({
+        const receipt = toast({
           kind: 'receipt',
           icon: 'hand',
           title: `Marked sold: ${name}`,
           body: `from ${place}, order ${order.number}`,
           ttlMs: UNDO_WINDOW_MS,
-          action: { label: 'Undo', onPress: () => void undoFromToast(target, place, name) },
+          action: { label: 'Undo', onPress: () => undoFromReceipt(target, place, name) },
         })
-        /* THE NEWEST PULL THIS SCREEN MADE THAT IS STILL UNDOABLE — `docs/specs/undo.md` §3's
-           fast path, reached by `U`. Overwrites whatever `lastPull` held before, because a
-           second pull inside the first one's window makes the first one the slow path's job. */
-        setHub({ lastPull: { target, place, name } })
+        /* THE NEWEST PULL THIS SCREEN MADE — `docs/specs/undo.md` §3's fast path, reached by `U`. It takes the
+           rank from the pull before it, which `U` reaches again once this one is undone. */
+        notePull({ target, place, name, receipt })
         /* BOTH READS, because the card this press sold has to leave every other line's map at the
            same moment it leaves this one. The undo goes the other way through `touchHub`, which
            bumps the version the effect above watches, so it re-reads both as well. */
         await Promise.all([reread(), rereadStore()])
       } catch (err) {
         if (!live.current) return
-        setFailure(describeFailure(err))
+        setFailure(pullFailure(err, pick.place.label ?? null))
       } finally {
         if (live.current) setBusy(null)
       }
     })()
   }
 
-  /* THE WALK'S OWN PULL — same write (`pullCopy`), same toast, same `lastPull` fast-undo path,
+  /* THE WALK'S OWN PULL — same write (`pullCopy`), same toast, same `pulls` fast-undo path,
      over the walk plan's OWN shape rather than a `ResolvedLine`/`PickRow` built to satisfy a
      type the plan does not fill honestly (`OrdersWalk.tsx`'s own header has the argument).
      Returns the outcome rather than throwing, because a walk row needs to know a `gone` copy
@@ -1887,7 +1946,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
          route in the same request, and `refreshed` comes back POST-write. `places` below is
          still the PRE-write receipt and the two are never confused. */
       const done = await pullCopy({ source: order.source, number: order.number, sku }, [target], refresh)
-      /* NO `live` CHECK: the toast and `lastPull` are the hub's, not this mount's. The write is made, and the way back to it must be
+      /* NO `live` CHECK: the toast and `pulls` are the hub's, not this mount's. The write is made, and the way back to it must be
          recorded even if the screen was left while it was out. */
       /* D218: same read as `onPull` above — the toast body carries this as plain text. */
       const resolvedPlace = sayPlace(done.places[0]?.label ?? place ?? `box ${target.box}, index ${target.index}`)
@@ -1897,19 +1956,19 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
          refusal. The buyer's name, when the order carries one; nothing beyond the place when
          it does not. */
       const buyer = order.buyer?.trim()
-      toast({
+      const receipt = toast({
         kind: 'receipt',
         icon: 'hand',
         title: `Marked sold: ${name}`,
         body: buyer ? `from ${resolvedPlace}, for ${buyer}` : `from ${resolvedPlace}`,
         ttlMs: UNDO_WINDOW_MS,
-        action: { label: 'Undo', onPress: () => void undoFromToast(target, resolvedPlace, name) },
+        action: { label: 'Undo', onPress: () => undoFromReceipt(target, resolvedPlace, name) },
       })
-      setHub({ lastPull: { target, place: resolvedPlace, name } })
+      notePull({ target, place: resolvedPlace, name, receipt })
       await Promise.all([reread(), rereadStore()])
       return { ok: true, place: resolvedPlace, refreshed: done.refreshed ?? [] }
     } catch (err) {
-      const trouble = describeFailure(err)
+      const trouble = pullFailure(err, place ?? null)
       if (live.current) setFailure(trouble)
       return { ok: false, failure: trouble }
     } finally {
@@ -1927,20 +1986,23 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
          numbers back too — the same `refresh` list the pull sent, answered the other way. */
       const done = await undoPull([target], refresh)
       toast({ kind: 'ok', icon: 'undo', title: 'Pull undone', body: `${place} holds ${name} again.` })
+      forgetPull(target.capture_id)
       await Promise.all([reread(), rereadStore()])
       return { ok: true, refreshed: done.refreshed ?? [] }
     } catch (err) {
       /* FINDING #8: the same "already reversed elsewhere" case `undoFromToast` reads. */
       if (describeFailure(err).code === PULL_NOT_RECORDED) {
         toast({ kind: 'ok', icon: 'undo', title: 'Already undone', body: `${place} holds it, from somewhere else.` })
+        forgetPull(target.capture_id)
         await Promise.all([reread(), rereadStore()])
         return { ok: true, refreshed: [] }
       }
-      const trouble = describeFailure(err)
+      const trouble = undoFailure(err, place)
       toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
+      if (isFinalUndoRefusal(trouble)) forgetPull(target.capture_id)
       return { ok: false }
     } finally {
-      setHub((current) => ({ busy: null, lastPull: current.lastPull?.target.capture_id === target.capture_id ? null : current.lastPull }))
+      setHub({ busy: null })
       touchHub()
     }
   }

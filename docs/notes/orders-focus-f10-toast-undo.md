@@ -1,0 +1,1 @@
+- orders-focus-f10-toast-undo: Focus finding F10. The toast-click path skips the focus note, and no comment says why. The path is undoFromReceipt in app/src/Orders.tsx, which the toast's Undo action calls. A reader cannot tell a deliberate skip from an omission. Why unfixed: not recorded. Seen: 2026-11-22 x1

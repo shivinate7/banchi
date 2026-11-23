@@ -1,0 +1,1 @@
+- walkplan-f1-zero-entry-wanted: Walkplan finding F1. A zero-entry wanted map reaches plan in pipeline/walkplan.py. The record names only this input. Its effect on a walk is not recorded. Why unfixed: not recorded. Seen: 2026-11-22 x1
