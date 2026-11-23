@@ -158,6 +158,21 @@ printf '#!/usr/bin/env python3\nimport sys\nprint("REFUSED: stub revert guard", 
 expect refuse "a branch push the revert guard fails is refused" git push origin guard-probe
 printf '#!/usr/bin/env python3\n' > scripts/revert-audit.py
 expect allow "control: the same push passes when the guard passes" git push -q origin guard-probe
+
+echo "  -- the record branch is not judged by the revert guard --"
+# The record branch is an orphan: it shares no history with main, so the guard's merge-base read
+# has nothing to read. The skip is for that one branch only. A stub that fails stands in for the
+# guard in both cases, so the allow below can only be the skip, and the refusal of the look-alike
+# name below can only be the skip being exact.
+printf '#!/usr/bin/env python3\nimport sys\nprint("REFUSED: stub revert guard", file=sys.stderr)\nsys.exit(1)\n' \
+  > scripts/revert-audit.py
+git switch -q --orphan roadmap
+echo record > record.md
+git add record.md
+git commit -qm "record: first commit on an orphan branch"
+expect allow "an orphan commit pushed to the record branch is allowed while the guard fails" git push -q origin roadmap
+expect refuse "a push to roadmap-two is still refused: the skip matches the exact record branch" git push -q origin roadmap:roadmap-two
+git switch -q main
 rm -rf scripts
 
 echo "  -- a fresh clone is not a violation --"
