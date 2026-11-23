@@ -41,7 +41,7 @@ import {
 } from './kit'
 import { absoluteDate, relativeDate, utcDay } from './dates'
 import { count as countOf } from './kit/dataRules'
-import { toast } from './kit/toast'
+import { clearToastAction, toast } from './kit/toast'
 import { boxTitle } from './kit/data'
 import { CardPane, gameWord, photoSrc, type HeroFigures, type Row } from './CardHero'
 import { CardLocations, layoutsOf } from './CardLocations'
@@ -94,6 +94,8 @@ import {
   walkPlan,
   failureTone,
   refusalToast,
+  ALREADY_SOLD,
+  SALE_BUILT_ON,
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
@@ -985,8 +987,6 @@ const PULL_NOT_RECORDED = 'pull_not_recorded'
 /** The server's `already_sold` refusal on a sale. Its sentence tells an API caller to send `{"undo": true}`, which is no
  *  instruction for a person at this screen, so a sale refused this way is said in this screen's own words. Every other
  *  refusal keeps the server's sentence. */
-const ALREADY_SOLD = 'already_sold'
-
 function pullFailure(err: unknown, place: string | null): Failure {
   const trouble = describeFailure(err)
   if (trouble.code !== ALREADY_SOLD) return trouble
@@ -995,31 +995,38 @@ function pullFailure(err: unknown, place: string | null): Failure {
 
 /** A pull is recorded: it becomes the newest standing pull, taking the rank from the one before it. */
 function notePull(note: PullNote): void {
+  /* Every receipt before this one stops offering Undo: a toast's Undo reaches only the newest reversible write. */
+  for (const older of hubState().pulls) if (older.receipt !== undefined) clearToastAction(older.receipt)
   setHub((current) => ({ pulls: [...current.pulls.filter((one) => one.target.capture_id !== note.target.capture_id), note] }))
 }
+
+/** Pulls whose reversal this screen has queued or sent from a toast or `U`, until it answers. The walk's own reversals
+ *  are the line's (`walkReversalHeld`). */
+const reversalsHeld = new Set<string>()
+
+/** Is a reversal of this copy already queued or out, by any route? */
+const reversalHeld = (captureId: string): boolean => reversalsHeld.has(captureId) || walkReversalHeld(captureId)
 
 /** A pull is no longer standing, undone by any route: the pull before it takes the rank back. */
 function forgetPull(captureId: string): void {
   setHub((current) => ({ pulls: current.pulls.filter((one) => one.target.capture_id !== captureId) }))
 }
 
-/** The newest pull that still stands and has no reversal queued or out. A pull whose reversal is already in the
- *  walk's line is skipped, so `U` never queues a second reversal of one copy. */
+/** The newest pull that still stands, unless its reversal is already queued or out. While it is held `U` waits, so it
+ *  never queues a second reversal of one copy and never reaches past the held pull to an older one. */
 function newestUndoablePull(): PullNote | null {
-  const standing = hubState().pulls
-  for (let at = standing.length - 1; at >= 0; at -= 1) {
-    const note = standing[at]
-    if (note !== undefined && !walkReversalHeld(note.target.capture_id)) return note
-  }
-  return null
+  const newest = hubState().pulls.at(-1)
+  if (newest === undefined || reversalHeld(newest.target.capture_id)) return null
+  return newest
 }
 
-/** A receipt toast's own Undo reaches only the newest reversible write (`docs/specs/undo.md` §3). Once a newer pull
- *  stands, this receipt's pull is older and its Undo does nothing. A sale still queued or out is not yet a pull that
- *  stands, so a receipt pressed behind it still queues its reversal behind that write. */
+/** A receipt toast's own Undo reaches only the newest reversible write (`docs/specs/undo.md` §3): a newer pull takes
+ *  the control off the older receipts (`notePull`), and a press on one already reversing queues nothing. A sale still
+ *  queued or out is not yet a pull that stands, so a receipt pressed behind it still queues its reversal behind
+ *  that write. */
 function undoFromReceipt(target: PullTarget, place: string, name: string): void {
   const newest = hubState().pulls.at(-1)
-  if (newest?.target.capture_id !== target.capture_id) return
+  if (newest?.target.capture_id !== target.capture_id || reversalHeld(target.capture_id)) return
   void undoFromToast(target, place, name)
 }
 
@@ -1031,6 +1038,7 @@ function undoFromToast(target: PullTarget, place: string, name: string): Promise
      is mounted by the time the undo answers must see every Pull disabled until it does. It is taken now, while
      the undo waits for its turn in the walk's line, so nothing else starts beside it. */
   setHub({ busy: `undo/${target.capture_id}` })
+  reversalsHeld.add(target.capture_id)
   /* THE WALK'S LINE, so this write never runs beside a sale that is still queued or out. */
   return inWalkLine(() => undoPullNow(target, place, name))
 }
@@ -1057,8 +1065,11 @@ async function undoPullNow(target: PullTarget, place: string, name: string): Pro
     } else {
       const trouble = describeFailure(err)
       toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
+      /* The order has moved on: this pull can never be reversed, so `U` moves to the pull before it. */
+      if (trouble.code === SALE_BUILT_ON) forgetPull(target.capture_id)
     }
   } finally {
+    reversalsHeld.delete(target.capture_id)
     /* A refused undo leaves the pull standing and keeps it in `pulls`: it is still the one `U` reverses next. */
     setHub({ busy: null })
     touchHub()
@@ -1881,7 +1892,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         const rawPlace = done.places[0]?.label ?? pick.place.label ?? `box ${target.box}, index ${target.index}`
         const place = sayPlace(rawPlace)
         const name = pick.card_name ?? line.line.name ?? line.sku
-        toast({
+        const receipt = toast({
           kind: 'receipt',
           icon: 'hand',
           title: `Marked sold: ${name}`,
@@ -1891,7 +1902,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
         /* THE NEWEST PULL THIS SCREEN MADE — `docs/specs/undo.md` §3's fast path, reached by `U`. It takes the
            rank from the pull before it, which `U` reaches again once this one is undone. */
-        notePull({ target, place, name })
+        notePull({ target, place, name, receipt })
         /* BOTH READS, because the card this press sold has to leave every other line's map at the
            same moment it leaves this one. The undo goes the other way through `touchHub`, which
            bumps the version the effect above watches, so it re-reads both as well. */
@@ -1932,7 +1943,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
          refusal. The buyer's name, when the order carries one; nothing beyond the place when
          it does not. */
       const buyer = order.buyer?.trim()
-      toast({
+      const receipt = toast({
         kind: 'receipt',
         icon: 'hand',
         title: `Marked sold: ${name}`,
@@ -1940,7 +1951,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         ttlMs: UNDO_WINDOW_MS,
         action: { label: 'Undo', onPress: () => undoFromReceipt(target, resolvedPlace, name) },
       })
-      notePull({ target, place: resolvedPlace, name })
+      notePull({ target, place: resolvedPlace, name, receipt })
       await Promise.all([reread(), rereadStore()])
       return { ok: true, place: resolvedPlace, refreshed: done.refreshed ?? [] }
     } catch (err) {
@@ -1975,6 +1986,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       }
       const trouble = describeFailure(err)
       toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
+      if (trouble.code === SALE_BUILT_ON) forgetPull(target.capture_id)
       return { ok: false }
     } finally {
       setHub({ busy: null })

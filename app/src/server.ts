@@ -308,6 +308,12 @@ export type Failure = {
   data?: unknown
 }
 
+/** The refusal codes a screen branches on instead of showing the server's sentence. `ALREADY_SOLD` on a sale means
+ *  another device sold that copy; `SALE_BUILT_ON` on an undo means the order has moved on and the sale can no
+ *  longer be reversed. Codes, never messages. */
+export const ALREADY_SOLD = 'already_sold'
+export const SALE_BUILT_ON = 'sale_built_on'
+
 /** The codes a second press can clear: nothing answered, or the store was mid-write. */
 const RETRY_CODES: ReadonlySet<string> = new Set(['unreachable', 'bad_response', 'store_busy'])
 

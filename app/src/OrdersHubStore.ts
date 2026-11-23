@@ -22,7 +22,13 @@ export type Stage = 'pull' | 'ship'
 export const SHIP_LANES: readonly ShippingLane[] = ['envelope', 'parcel', 'unjudged']
 
 /** One recorded pull: the copy it took, and the words its toast and its undo say. */
-export type PullNote = { readonly target: PullTarget; readonly place: string; readonly name: string }
+export type PullNote = {
+  readonly target: PullTarget
+  readonly place: string
+  readonly name: string
+  /** The id of this pull's receipt toast, so a newer pull can take its Undo away. */
+  readonly receipt?: number
+}
 
 export type HubState = {
   readonly payload: OrdersPayload | null

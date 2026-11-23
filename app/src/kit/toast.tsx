@@ -90,6 +90,15 @@ export function holdToast(id: number, held: boolean): void {
   } else startClock(id, hit.ttlMs)
 }
 
+/** Take the action off a standing toast (a receipt whose Undo is no longer the newest write's): the toast stays,
+ *  its control goes, so no press is left that does nothing. */
+export function clearToastAction(id: number): void {
+  const hit = toasts.find((t) => t.id === id)
+  if (hit === undefined || hit.action === undefined) return
+  toasts = toasts.map((t) => (t.id === id ? { ...t, action: undefined } : t))
+  emit()
+}
+
 export function useToasts(): readonly Toast[] {
   const [list, setList] = useState<readonly Toast[]>(toasts)
   useEffect(() => {
