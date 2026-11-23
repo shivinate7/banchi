@@ -1773,14 +1773,17 @@ def _still_here_recovery(checks: Checks, number: str, cause: str) -> None:
 def check_undo_still_here_on_refused_holder(checks: Checks) -> None:
     """The still-here recovery on a holder the ledger now refuses to write to answers as main does.
 
-    Two holders, each built on: an order the feed cancels after the sale, and a shipped order whose
-    line is stood down after the sale. Both reach `record_fill` under the recovery. The red is the
-    regression the review named: a refusal escaping as a 500, where main answers success.
+    Two holders, each built on: an order the feed ships and then cancels after the sale, and a
+    shipped order whose line is stood down after the sale. Both reach `record_fill` under the
+    recovery. The red is the regression the review named: a refusal escaping as a 500, where main
+    answers success. The canceled holder ships first: owner ruling (page item 124, a, 10:21 CST
+    Nov 23) allows the undo of a canceled order that never shipped, so only a shipped one refuses.
     """
     checks.note("")
     checks.note("UN-7, still here: the recovery on a canceled or stood-down holder answers, as main does")
     with isolated_home():
         _sold_to_order("sh-cancel", "SH-CANCEL", "Ready to Ship")
+        _feed_order("SH-CANCEL", "Shipped - In Transit")
         _feed_order("SH-CANCEL", "Canceled")
         _still_here_recovery(checks, "SH-CANCEL", "a canceled order")
     with isolated_home():
