@@ -1345,13 +1345,24 @@ def _feed_order(number: str, status: str, quantity: int = 1) -> None:
         ])
 
 
-def _sold_to_order(capture_id: str, number: str, status: str, quantity: int = 1) -> None:
-    """Card 4/1, identified, pulled to one order that the feed reports at `status`."""
+def _held_before_the_flag(number: str) -> None:
+    """The row a store wrote before `OrderRecord.seen_shipped` existed. Its payload has no flag, and
+    `Ledger.parse` reads a missing key back as None, so the flag reads None here."""
+    with Store().write() as snapshot:
+        snapshot.ledger.orders[order_store.order_key("TCGplayer", number)].seen_shipped = None
+
+
+def _sold_to_order(capture_id: str, number: str, status: str, quantity: int = 1,
+                   legacy: bool = False) -> None:
+    """Card 4/1, identified, pulled to one order that the feed reports at `status`. `legacy` holds the
+    order as a row from before the flag existed."""
     capture_server.do_capture(capture_payload(4, capture_id=capture_id))
     with Store().write() as snapshot:
         snapshot.inventory.set_state("4/1", master.IDENTIFIED)
         _bind(snapshot, "4/1", "9191486")
     _feed_order(number, status, quantity)
+    if legacy:
+        _held_before_the_flag(number)
     target = [{"box": 4, "index": 1, "capture_id": capture_id}]
     capture_server.do_order_pull({"source": "TCGplayer", "number": number, "sku": "9191486", "targets": target})
 
@@ -1396,9 +1407,10 @@ def check_undo_order_shipped_before_sale(checks: Checks) -> None:
         )
 
 
-def _label_made(snapshot, key: str) -> bool:
-    """Whether a label is bought for this order: `LabelRow.made`, read from the ledger's own map."""
-    row = snapshot.ledger.labels.get(key)
+def _label_made(snapshot, order: str) -> bool:
+    """Whether a label is bought for this order, read the way the label path keys it: by the BARE
+    order number (`shipping_routes`'s `row["order"]`, `LabelRow.order`), never the ledger key."""
+    row = snapshot.ledger.labels.get(order)
     return row is not None and row.made
 
 
@@ -1423,7 +1435,7 @@ def check_undo_after_cancel_unshipped(checks: Checks) -> None:
             before.ledger.get(key) is not None and before.ledger.get(key).status == "Canceled",
             "precondition: the order reads Canceled, and the sale is recorded against it",
         )
-        checks.ok(not _label_made(before, key), "precondition: no label is bought for the order")
+        checks.ok(not _label_made(before, "CANCEL-FREE"), "precondition: no label is bought for the order")
         back = answers(
             checks,
             lambda: capture_server.do_mark_sold(4, 1, {"undo": True}),
@@ -1484,11 +1496,11 @@ def check_undo_after_cancel_built_on(checks: Checks) -> None:
 
     with isolated_home():
         _sold_to_order("cancel-label", "CANCEL-LABEL", "Ready to Ship")
-        key = order_store.order_key("TCGplayer", "CANCEL-LABEL")
         with Store().write() as snapshot:
-            snapshot.ledger.record_label(key, {"order_id": "CANCEL-LABEL"}, None, False)
+            # Keyed by the bare order number, as `shipping_routes` keys it (`LabelRow.order`).
+            snapshot.ledger.record_label("CANCEL-LABEL", {"order_id": "CANCEL-LABEL"}, None, False)
         _feed_order("CANCEL-LABEL", "Canceled")
-        checks.ok(_label_made(Store().read(), key), "precondition: a label is bought for the order")
+        checks.ok(_label_made(Store().read(), "CANCEL-LABEL"), "precondition: a label is bought for the order")
         refusal(
             checks,
             lambda: capture_server.do_mark_sold(4, 1, {"undo": True}),
@@ -1506,7 +1518,7 @@ def _order_shape(checks: Checks, number: str, capture_id: str, fulfilled: int, b
     record = snapshot.ledger.get(key)
     line = snapshot.ledger.recorded(key, "9191486")
     checks.equal(
-        (record.status if record is not None else None, _label_made(snapshot, key)),
+        (record.status if record is not None else None, _label_made(snapshot, number)),
         ("Canceled", False),
         "precondition: the order reads Canceled, and no label is bought for it",
     )
@@ -1615,6 +1627,109 @@ def check_undo_refused_after_shipped_elsewhere_then_canceled(checks: Checks) -> 
     )
 
 
+def check_undo_refused_legacy_order_canceled(checks: Checks) -> None:
+    """An order held before `OrderRecord.seen_shipped` existed reads it back None. Its history is
+    unknown, and "cannot tell" refuses, so a cancel alone does not allow the undo. Green on the head.
+    The mutant that reads None as never shipped turns it red: that is the proof this case is real."""
+    checks.note("")
+    checks.note("UN-7 after a cancel: a legacy order, with no seen_shipped flag, refuses the undo")
+
+    def legacy_canceled():
+        _sold_to_order("legacy-cancel", "LEGACY-CANCEL", "Ready to Ship", legacy=True)
+        _feed_order("LEGACY-CANCEL", "Canceled")
+
+    def shape(c):
+        _order_shape(c, "LEGACY-CANCEL", "legacy-cancel", fulfilled=1)
+        flag = Store().read().ledger.get(order_store.order_key("TCGplayer", "LEGACY-CANCEL")).seen_shipped
+        c.equal(flag, None, "precondition: the flag reads None, as a row from before it existed")
+
+    _refused_on_both_routes(
+        checks, "legacy-cancel", "a legacy order, canceled", legacy_canceled, shape,
+    )
+
+
+def check_undo_refused_unknown_status_then_canceled(checks: Checks) -> None:
+    """A status word the store does not know is not evidence that nothing shipped. An unknown word
+    counts as shipped, so a sale on the order refuses its undo once the order is canceled."""
+    checks.note("")
+    checks.note("UN-7 after a cancel: an order seen at an unknown status, then canceled, refuses the undo")
+
+    def unknown_then_canceled():
+        _sold_to_order("unknown-word", "UNKNOWN-WORD", "Held For Review")
+        _feed_order("UNKNOWN-WORD", "Canceled")
+
+    _refused_on_both_routes(
+        checks, "unknown-word", "an order seen at an unknown status, then canceled",
+        unknown_then_canceled,
+        lambda c: _order_shape(c, "UNKNOWN-WORD", "unknown-word", fulfilled=1),
+    )
+
+
+def check_undo_refused_claimed_label_then_canceled(checks: Checks) -> None:
+    """A label row that is only a claim, with no answer, is no label bought. TCGTracking may still
+    have made one: the create went out and its answer never came back. Until the row holds an answer
+    the sale stays built on, so the undo refuses."""
+    checks.note("")
+    checks.note("UN-7 after a cancel: a claimed label with no answer, then canceled, refuses the undo")
+
+    def claimed_then_canceled():
+        _sold_to_order("claim-only", "CLAIM-ONLY", "Ready to Ship")
+        with Store().write() as snapshot:
+            snapshot.ledger.claim_label("CLAIM-ONLY", "test-claim", in_flight=())
+        _feed_order("CLAIM-ONLY", "Canceled")
+
+    def shape(c):
+        _order_shape(c, "CLAIM-ONLY", "claim-only", fulfilled=1)
+        row = Store().read().ledger.labels.get("CLAIM-ONLY")
+        c.equal(
+            (row is not None and row.claim is not None, row.answer if row is not None else None),
+            (True, None),
+            "precondition: the label row is a claim, and it holds no answer",
+        )
+
+    _refused_on_both_routes(
+        checks, "claim-only", "a claimed label with no answer, then canceled", claimed_then_canceled, shape,
+    )
+
+
+def check_undo_allowed_reingested_pre_ship_then_canceled(checks: Checks) -> None:
+    """An order held before the flag existed, re-read at a known pre-ship status, then canceled, with
+    no label. The feed said "Ready to Ship" after the field existed and never said it shipped, so
+    the undo is allowed on both routes. Red on the head: `Ledger.ingest` keeps the None the row was
+    stored with, so the cancel still reads as unknown."""
+    checks.note("")
+    checks.note("UN-7 after a cancel: a legacy order re-read at a pre-ship status, then canceled, undoes")
+
+    with isolated_home():
+        _sold_to_order("legacy-reingest", "LEGACY-REINGEST", "Ready to Ship", legacy=True)
+        _feed_order("LEGACY-REINGEST", "Ready to Ship")
+        _feed_order("LEGACY-REINGEST", "Canceled")
+        back = answers(
+            checks,
+            lambda: capture_server.do_mark_sold(4, 1, {"undo": True}),
+            "UN-7 after a cancel: the card's own undo of a legacy order re-read pre-ship answers",
+        )
+        if isinstance(back, dict):
+            checks.equal(
+                (back.get("undone"), back.get("state")),
+                (True, master.IDENTIFIED),
+                "and the copy is back in place at identified",
+            )
+
+    with isolated_home():
+        _sold_to_order("legacy-reingest-walk", "LEGACY-REINGEST-WALK", "Ready to Ship", legacy=True)
+        _feed_order("LEGACY-REINGEST-WALK", "Ready to Ship")
+        _feed_order("LEGACY-REINGEST-WALK", "Canceled")
+        target = [{"box": 4, "index": 1, "capture_id": "legacy-reingest-walk"}]
+        back = answers(
+            checks,
+            lambda: capture_server.do_order_pull({"undo": True, "targets": target}),
+            "UN-7 after a cancel: the walk's undo of a legacy order re-read pre-ship answers",
+        )
+        if isinstance(back, dict):
+            checks.equal(back.get("undone"), True, "and reports the pull undone")
+
+
 CHECKS = (
     check_undo_until_built_on,
     check_undo_order_shipped_before_sale,
@@ -1623,4 +1738,8 @@ CHECKS = (
     check_undo_refused_after_shipped_then_canceled,
     check_undo_refused_after_hand_fill_then_canceled,
     check_undo_refused_after_shipped_elsewhere_then_canceled,
+    check_undo_refused_legacy_order_canceled,
+    check_undo_refused_unknown_status_then_canceled,
+    check_undo_refused_claimed_label_then_canceled,
+    check_undo_allowed_reingested_pre_ship_then_canceled,
 )
