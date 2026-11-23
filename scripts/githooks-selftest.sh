@@ -186,6 +186,55 @@ expect allow "an orphan commit pushed to the record branch is allowed by the rea
 git switch -q main
 rm -rf scripts
 
+echo "  -- a shallow clone is judged by the guard, not passed --"
+# A shallow clone can hold a head whose merge-base lies past its boundary. git then finds no shared
+# history, and the guard passes that only in a full clone. The head reverts main's last edit to
+# app.txt, so a pass would let that revert land. The full clone is the control: the same head must
+# be REFUSED there, which shows the revert is real.
+src="$tmp/shallow-src"
+git init -q -b main "$src"
+git -C "$src" config user.email selftest@example.com
+git -C "$src" config user.name selftest
+git -C "$src" config commit.gpgsign false
+echo one > "$src/app.txt"
+git -C "$src" add app.txt
+git -C "$src" commit -qm "app one"
+echo two > "$src/app.txt"
+git -C "$src" commit -qam "app two"
+git -C "$src" switch -q -c stale
+echo one > "$src/app.txt"
+git -C "$src" commit -qam "stale branch: app back to one"
+git -C "$src" switch -q main
+
+control_out="$(cd "$src" && env -u BANCHI_REVERT python3 "$REPO_ROOT/scripts/revert-audit.py" branch --upstream main --head stale 2>&1)"
+case "$control_out" in
+  *REFUSED:*) ok "control: the full clone refuses the reverting head, with the guard's own line" ;;
+  *) bad "control: the full clone did not refuse the reverting head — the fixture does not revert app.txt"
+     printf '%s\n' "$control_out" | sed 's/^/         /' ;;
+esac
+
+sh="$tmp/shallow"
+git clone -q --depth 1 "file://$src" "$sh"
+git -C "$sh" fetch -q --depth 1 origin stale:refs/heads/stale
+if git -C "$sh" merge-base origin/main stale >/dev/null 2>&1; then
+  bad "fixture not armed: the shallow clone still finds a merge-base for the head"
+else
+  ok "fixture armed: the shallow clone has no merge-base for the head"
+fi
+
+shallow_out="$(cd "$sh" && env -u BANCHI_REVERT python3 "$REPO_ROOT/scripts/revert-audit.py" branch --upstream origin/main --head stale 2>&1)"
+shallow_status=$?
+if [ "$shallow_status" -eq 0 ]; then
+  bad "a shallow clone's head that reverts app.txt was let through (exit 0)"
+  printf '%s\n' "$shallow_out" | sed 's/^/         /'
+else
+  case "$shallow_out" in
+    *REFUSED:*|*revert-audit.py*) ok "a shallow clone's head that reverts app.txt is refused by the real guard" ;;
+    *) bad "a shallow clone's head is refused, but not by the guard (no REFUSED: and no revert-audit.py in the output)"
+       printf '%s\n' "$shallow_out" | sed 's/^/         /' ;;
+  esac
+fi
+
 echo "  -- a fresh clone is not a violation --"
 # Rule 2, which the header calls out and nothing else here reaches: cloning CREATES main, and
 # a guard that refuses that refuses `git clone`. Cheap to prove, and the alternative is
