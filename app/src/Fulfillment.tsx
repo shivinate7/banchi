@@ -1,4 +1,5 @@
 import { count } from './kit/dataRules'
+import { afterWrite, useRereadOnWrite } from './afterWrite'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 import type {
@@ -108,6 +109,12 @@ const PULL_NOT_RECORDED = 'pull_not_recorded'
 
 function refusalCode(err: unknown): string {
   return err instanceof ServerError ? err.code : ''
+}
+
+/** The write got no answer, or the server failed (a 5xx, a lost connection, a body that did not parse), so it may still
+ *  have committed. A 4xx is the server's "no" and wrote nothing. */
+function gotNoAnswer(err: unknown): boolean {
+  return !(err instanceof ServerError && err.status >= 400 && err.status < 500)
 }
 
 /** Reverse a sale; a `not_sold` refusal means it already is, which is the outcome he wanted. */
@@ -600,6 +607,10 @@ export function Fulfillment() {
   const zoomOverlay = useRef<HTMLButtonElement>(null)
 
   const reread = useCallback(() => setReads((n) => n + 1), [])
+  /* EVERY WRITE'S RE-READ (`afterWrite`, D73): a sale or an undo re-reads the cards and the orders whatever it came to,
+   * a refusal and a 5xx included, because a write that got no answer may still have committed. The counter bump is
+   * the whole re-read: both reads below depend on `reads`. */
+  useRereadOnWrite(async () => reread())
 
   /* THIS IS THE FULFILLER'S WHOLE-STORE BROWSE (D5/D6) — every sellable card across every
    * box, for when he has no order in hand to walk instead. It is store-wide by design and
@@ -860,13 +871,11 @@ export function Fulfillment() {
       setBusyKey(card.key)
       setTrouble(null)
       try {
-        let reversible: boolean
-        if (card.order === null) {
-          reversible = canTakeBack(await markSold(card.box, card.index))
-        } else {
+        const reversible = await afterWrite(async () => {
+          if (card.order === null) return canTakeBack(await markSold(card.box, card.index))
           const pulled = await pullCopy(card.order, [aimAt(card, card.order)])
-          reversible = pulled.sales.every(canTakeBack)
-        }
+          return pulled.sales.every(canTakeBack)
+        })
         drop(card)
         remember({
           card,
@@ -876,7 +885,6 @@ export function Fulfillment() {
             ? null
             : 'You cannot take this one back here. Ask for help if it is wrong.',
         })
-        reread()
       } catch (err) {
         const code = refusalCode(err)
         if (code === ALREADY_SOLD || code === ALREADY_PULLED) {
@@ -887,27 +895,30 @@ export function Fulfillment() {
             canUndo: false,
             note: 'Somebody else sold this card, so it has come off your list.',
           })
-          reread()
           return
         }
         if (NO_LONGER_NEEDED.has(code)) {
           setTrouble('This card is no longer needed for this order. Put it back where you found it.')
           setNotNeededKey(card.key)
           setPulledKey(null)
-          reread()
           return
         }
         if (PULL_STALE.has(code)) {
           setTrouble('The list has changed since it was opened. Go back to the cards and try again.')
-          reread()
           return
         }
-        setTrouble('Nothing was saved. Press Mark it sold again.')
+        /* A 5xx or a lost connection may still have committed the sale, so it does not say nothing was saved: the
+         * re-read `afterWrite` started shows where the card stands. A 4xx refusal wrote nothing, so it still says so. */
+        setTrouble(
+          gotNoAnswer(err)
+            ? 'The store did not confirm the sale. The list shows where this card stands.'
+            : 'Nothing was saved. Press Mark it sold again.',
+        )
       } finally {
         setBusyKey(null)
       }
     },
-    [busyKey, drop, remember, reread],
+    [busyKey, drop, remember],
   )
 
   const doUndo = useCallback(
@@ -916,9 +927,11 @@ export function Fulfillment() {
       setBusyKey(card.key)
       setTrouble(null)
       try {
-        if (card.order === null) {
-          await unsell(card.box, card.index)
-        } else {
+        await afterWrite(async () => {
+          if (card.order === null) {
+            await unsell(card.box, card.index)
+            return
+          }
           try {
             await undoPull([aimAt(card, card.order)])
           } catch (err) {
@@ -926,13 +939,12 @@ export function Fulfillment() {
             if (refusalCode(err) !== PULL_NOT_RECORDED) throw err
             await unsell(card.box, card.index)
           }
-        }
+        })
         setCards((prev) =>
           prev === null ? prev : inWalkOrder([...prev.filter((row) => row.key !== card.key), card]),
         )
         setSoldHere((held) => held.filter((key) => key !== card.key))
         setSales((held) => held.filter((standing) => standing.card.key !== card.key))
-        reread()
       } catch (err) {
         const dead = refusalCode(err) === NO_ORIGIN
         setSales((held) =>
@@ -944,7 +956,9 @@ export function Fulfillment() {
                   canUndo: dead ? false : standing.canUndo,
                   note: dead
                     ? 'This card stays sold. Ask for help to put it back.'
-                    : 'The card did not come back. Press Undo again.',
+                    : gotNoAnswer(err)
+                      ? 'The store did not confirm the undo. The list shows where this card stands.'
+                      : 'The card did not come back. Press Undo again.',
                 },
           ),
         )
@@ -952,7 +966,7 @@ export function Fulfillment() {
         setBusyKey(null)
       }
     },
-    [busyKey, reread],
+    [busyKey],
   )
 
   const doSellCopy = useCallback(
