@@ -304,6 +304,39 @@ export function hiddenCopies(
   ).length
 }
 
+/* FOCUS FOLLOWS THE SWAP. Mark sold and Undo replace each other in one slot, so the pressed button leaves the
+   page and focus would drop to the body. A press names the class of the button that replaces it, by copy key.
+   Whichever button of that class mounts for the key takes focus once it can: a disabled button cannot, and
+   the replacement is disabled while the press's write is out. A re-read that remounts the row finds the same
+   note, so it holds across remounts. The note is dropped when focus has gone anywhere else, or when it is
+   older than `HAND_OFF_MS`. */
+type HandOff = { readonly to: 'sell' | 'undo'; readonly at: number }
+const HAND_OFFS = new Map<string, HandOff>()
+const HAND_OFF_MS = 15000
+function handFocusTo(saleKey: string | undefined, to: HandOff['to']): void {
+  if (saleKey !== undefined) HAND_OFFS.set(saleKey, { to, at: Date.now() })
+}
+function useTakesHandOff(
+  saleKey: string | undefined,
+  as: HandOff['to'],
+  button: { readonly current: HTMLButtonElement | HTMLAnchorElement | null },
+): void {
+  useLayoutEffect(() => {
+    if (saleKey === undefined) return
+    const note = HAND_OFFS.get(saleKey)
+    if (note === undefined || note.to !== as) return
+    const held = document.activeElement
+    if (Date.now() - note.at > HAND_OFF_MS || (held !== null && held !== document.body && held !== button.current)) {
+      HAND_OFFS.delete(saleKey)
+      return
+    }
+    const el = button.current
+    if (el === null || (el instanceof HTMLButtonElement && el.disabled) || el.getAttribute('aria-disabled') === 'true') return
+    el.focus({ preventScroll: true })
+    HAND_OFFS.delete(saleKey)
+  })
+}
+
 /** THE ONE MARK SOLD PRESS, on every copy row in the product (owner ruling, card-detail spec): the
  *  vocabulary's `sold` seal with no visible words, 40px tall in a fixed 128px box (D195) and the
  *  kit's solid accent, so it reads as the one primary beside Retire and Move, which are bare
@@ -331,6 +364,8 @@ export function MarkSoldButton({
   readonly onClick: () => void
 }) {
   const [back, setBack] = useState(false)
+  const button = useRef<HTMLButtonElement | HTMLAnchorElement>(null)
+  useTakesHandOff(saleKey, 'sell', button)
   /* READ IN AN EFFECT, NOT A RENDER: the Undo's own cleanup (which stamps the undo) runs in the same
      commit that mounts this, after this renders. A layout effect runs after it, before paint. */
   useLayoutEffect(() => {
@@ -346,6 +381,7 @@ export function MarkSoldButton({
       size="xl"
       className="card-locations-sell"
       style={SALE_FACE}
+      ref={button}
       busy={busy}
       disabled={disabled}
       kbd={kbd}
@@ -354,6 +390,7 @@ export function MarkSoldButton({
         /* A press on the button is a sale like any other. `markFreshSale` is idempotent, so the
            sell path that follows (`onSell`) may note it again. */
         if (saleKey !== undefined) markFreshSale(saleKey)
+        handFocusTo(saleKey, 'undo')
         onClick()
       }}
     />
@@ -457,10 +494,13 @@ export function UndoSaleButton({
   useEffect(() => {
     FRESH_SALES.delete(saleKey)
     UNDONE_AT.delete(saleKey)
-    /* The Mark sold that held focus is gone, so focus would drop to the body: a sale hands it to
-       the Undo, and a keyboard user can take it back at once. */
-    if (wasFresh) button.current?.focus({ preventScroll: true })
+  }, [saleKey])
+  /* A sale by any path (a press, a digit key) hands focus to the Undo, and a keyboard user can take it
+     back at once. Noted before `useTakesHandOff` reads it, and it waits out a disabled Undo. */
+  useLayoutEffect(() => {
+    if (wasFresh) handFocusTo(saleKey, 'undo')
   }, [saleKey, wasFresh])
+  useTakesHandOff(saleKey, 'undo', button)
   /* THE UNDO LEAVING, BY ANY PATH (a click, `U`, a toast), inside the sale's window: the Mark sold that
      stands here next plays the burst backwards. A LAYOUT cleanup, so it runs before that Mark sold's
      own layout effect reads it in the same commit. */
@@ -484,7 +524,10 @@ export function UndoSaleButton({
         busy={busy}
         disabled={disabled}
         kbd={kbd}
-        onClick={onClick}
+        onClick={() => {
+          handFocusTo(saleKey, 'sell')
+          onClick()
+        }}
       />
       {fresh ? <SaleBills onDone={() => setFresh(false)} /> : null}
     </span>
