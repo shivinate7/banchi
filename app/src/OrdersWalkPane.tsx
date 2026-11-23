@@ -408,11 +408,11 @@ type Job =
   | { readonly kind: 'undo'; readonly sale: LineSale }
   | { readonly kind: 'run'; readonly run: () => Promise<void> }
 
-/** The owed count a write's reply carried for one order's line (`PullResult.owed`). */
-type OwedNote = { readonly sku: string; readonly orderKey: string; readonly owed: number }
+/** What one write's reply says of an order's line: the owed count it carried (`PullResult.owed`), or, from an older
+ *  server that sends none, the one copy it moved (`delta`: -1 for a sale, +1 for its undo). */
+type OwedNote = { readonly sku: string; readonly orderKey: string; readonly owed: number | undefined; readonly delta: -1 | 1 }
 
-const owedNoteOf = (sale: LineSale, owed: number | undefined): OwedNote | undefined =>
-  owed === undefined ? undefined : { sku: sale.sku, orderKey: sale.orderKey, owed }
+const owedNoteOf = (sale: LineSale, owed: number | undefined, delta: -1 | 1): OwedNote => ({ sku: sale.sku, orderKey: sale.orderKey, owed, delta })
 
 /** What a mounted walk hears from the line, to keep its own rows and owed figures in step. */
 type LineEvent =
@@ -462,10 +462,10 @@ const receiptOf = (sale: LineSale): Receipt => ({
 })
 
 /** A sale that does not stand leaves the line, and every walk is told so its row goes back. */
-function dropLineSale(sale: LineSale, refreshed?: readonly Place[], owed?: number): void {
+function dropLineSale(sale: LineSale, refreshed?: readonly Place[], undone?: { readonly owed: number | undefined }): void {
   sale.gone = true
   if (lineSales.get(sale.copyKey) === sale) lineSales.delete(sale.copyKey)
-  emitLine({ type: 'drop', copyKey: sale.copyKey, refreshed, owed: owedNoteOf(sale, owed) })
+  emitLine({ type: 'drop', copyKey: sale.copyKey, refreshed, owed: undone === undefined ? undefined : owedNoteOf(sale, undone.owed, 1) })
 }
 
 /** A sale the server refused because the copy is no longer this tab's to sell: the row keeps its sold look and loses
@@ -520,7 +520,7 @@ async function runSell(job: Extract<Job, { kind: 'sell' }>): Promise<void> {
       sale.phase = 'recorded'
       if (lineSales.get(sale.copyKey) === sale) lineSales.delete(sale.copyKey)
     }
-    emitLine({ type: 'phase', copyKey: sale.copyKey, phase: sale.phase, place: outcome.place, refreshed: outcome.refreshed, owed: owedNoteOf(sale, outcome.owed) })
+    emitLine({ type: 'phase', copyKey: sale.copyKey, phase: sale.phase, place: outcome.place, refreshed: outcome.refreshed, owed: owedNoteOf(sale, outcome.owed, -1) })
   }
   setLineBusy(null)
 }
@@ -538,7 +538,7 @@ async function runUndo(job: Extract<Job, { kind: 'undo' }>): Promise<void> {
   }
   if (lineSales.get(sale.copyKey) === sale) lineSales.delete(sale.copyKey)
   if (outcome.ok) {
-    dropLineSale(sale, outcome.refreshed, outcome.owed)
+    dropLineSale(sale, outcome.refreshed, { owed: outcome.owed })
   } else if (outcome.failure?.code === SALE_BUILT_ON) {
     /* THE ORDER HAS MOVED ON: no control here can undo this sale, so its row keeps no Undo (undo.md §3). */
     strandLineSale(sale, 'spent')
@@ -707,6 +707,18 @@ function withOwed(held: WalkPlan, sku: string, orderKey: string, owed: number): 
     return { ...stop, takes }
   })
   return changed ? { ...held, stops } : held
+}
+
+/** The owed figure the plan holds for an order's line, or null when it names none. */
+function owedOf(held: WalkPlan, sku: string, orderKey: string): number | null {
+  for (const stop of held.stops) {
+    for (const take of stop.takes) {
+      if (take.sku !== sku) continue
+      const ref = take.for.find((one) => one.key === orderKey)
+      if (ref !== undefined) return ref.owed
+    }
+  }
+  return null
 }
 
 /** A plan read that landed, with each order's owed figure the newer answers already set kept: `answered` maps a ref to the
@@ -1061,7 +1073,9 @@ export function useOrderWalk({
     answeredAt.current.set(owedKeyOf(note.sku, note.orderKey), writes.current)
     const held = planNow.current
     if (held === null) return
-    const next = withOwed(held, note.sku, note.orderKey, note.owed)
+    const was = owedOf(held, note.sku, note.orderKey)
+    if (was === null) return
+    const next = withOwed(held, note.sku, note.orderKey, note.owed ?? Math.max(0, was + note.delta))
     if (next === held) return
     planNow.current = next
     setPlan(next)

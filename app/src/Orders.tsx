@@ -1460,6 +1460,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
 
   /* ONE CALL FOR BOTH HALVES. Every write ends by calling this again, because a pull changes the
      resolution of every OTHER line that wanted the same SKU. */
+  const readFailure = useRef<Failure | null>(null)
   const reread = useCallback(async () => {
     try {
       const answer = await getOrders()
@@ -1467,10 +1468,16 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         payload: answer,
         arriving: was.arriving === null ? answer.orders.length === 0 : was.arriving,
       }))
-      if (live.current) setFailure(null)
+      /* A GOOD READ CLEARS ONLY THE FAILURE A READ LEFT. A refused write re-reads too (`afterWrite`), and its sentence
+         must stay on screen until the next write or the person moves on. */
+      const stale = readFailure.current
+      readFailure.current = null
+      if (live.current && stale !== null) setFailure((was) => (was === stale ? null : was))
     } catch (err) {
       if (!live.current) return
-      setFailure(describeFailure(err))
+      const trouble = describeFailure(err)
+      readFailure.current = trouble
+      setFailure(trouble)
     }
   }, [])
 
