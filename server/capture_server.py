@@ -10761,6 +10761,12 @@ def _order_built_on(snapshot, held_key: str, position_key: Optional[str] = None)
     later than the sale's `sold` event shipped before it. Any other content change also
     restamps `changed_at`, which can only make this refuse more, never less.
 
+    A CANCELED ORDER IS NOT BUILT ON BY ITS CANCEL (owner ruling, `docs/specs/undo.md`
+    section 11.1): nothing shipped, so the sale undoes. The cancel is no shipment, and it
+    restamps `changed_at`, which the rule below would read as one. A label bought for the
+    order (`LabelRow.made`) still builds the sale on, since the label is the one trace of a
+    shipment a canceled status hides.
+
     FAILS SAFE: a missing `position_key`, a missing sale event, a missing `changed_at` or
     either stamp that will not parse refuses, because "cannot tell" must not read as
     "shipped first".
@@ -10768,6 +10774,10 @@ def _order_built_on(snapshot, held_key: str, position_key: Optional[str] = None)
     record = snapshot.ledger.get(held_key)
     if record is None or not order_store.is_terminal_status(record.status):
         return None
+    if order_store.is_canceled_status(record.status):
+        label = snapshot.ledger.labels.get(held_key)
+        if label is None or not label.made:
+            return None
     sold = _instant(_sold_at(snapshot, position_key)) if position_key else None
     changed = _instant(record.changed_at)
     if sold is not None and changed is not None and changed <= sold:

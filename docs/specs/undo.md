@@ -153,7 +153,7 @@ an ordinary action.
 |---|---|---|
 | Capture | Its sitting ends, or a run identifies it. A sitting ends at a 30-minute gap (`SITTING_GAP_MINUTES`, D121, D164). "Undo just N" is permanent and asks first (Q2). | Manage box removes the card (D10 ruling 1). |
 | Sale on Inventory | Its photograph is reclaimed (D89), or its box is buried (D134). | "This card is still here" puts the card back. A shipped order re-points (§11.8). |
-| Sale on Orders | Its order ships or closes after the sale (`is_terminal_status` in `store/orders.py`, and the order's `changed_at` later than the sale), or as for Inventory. An order whose shipment Banchi observed before the sale does not build on the sale. | The same "still here" press. The order keeps its count, and its line becomes a hand-fill (§11.8). |
+| Sale on Orders | Its order ships or closes after the sale (`is_terminal_status` in `store/orders.py`, and the order's `changed_at` later than the sale), or as for Inventory. An order whose shipment Banchi observed before the sale does not build on the sale. A cancel alone does not build on it: a canceled order builds on the sale only once a label is bought for it. | The same "still here" press. The order keeps its count, and its line becomes a hand-fill (§11.8). |
 | Sale on Cards to pull | The same as Orders. The Fulfiller keeps the fast path only (D5, D31). | The owner's press on Inventory. |
 | Retire | Its box is buried (D134). | None needed. Nothing downstream reads a retirement. |
 | Move | Either box changes: a capture, a sale, a retire or a move in either box. | A new move. |
