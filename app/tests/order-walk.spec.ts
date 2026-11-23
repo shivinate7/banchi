@@ -19,6 +19,7 @@ import type {
   WalkPlanCopy,
   WalkPlanRef,
   WalkPlanShort,
+  PullRefresh,
   WalkPlanStop,
   WalkPlanTake,
 } from '../src/types'
@@ -292,6 +293,12 @@ async function open(
     cards?: Served<Record<string, object>>
     /** Runs when the walk posts a pull, before the answer goes back: a test counts its own sales here. */
     onPull?: () => void
+    /** `PullResult.refreshed` for the cards a press asked the server to refresh (`body.refresh`). Absent: the answer has none. */
+    refreshed?: (refresh: readonly PullRefresh[], undone: boolean) => Place[]
+    /** A refusal the server gives this pull or undo, as `{ error: { code, message } }` at `status`. Null: the write goes through. */
+    refuse?: (body: { undo?: boolean; targets?: PullTarget[] }) => { status: number; code: string; message: string } | null
+    /** Holds the two re-reads a write ends with (`GET /orders`, `GET /inventory/copies`) until the promise it returns resolves. */
+    holdReads?: () => Promise<void> | null
   } = {},
 ): Promise<Wire[]> {
   const planAt = () => served(options.plan, twoCopyPlan)
@@ -300,15 +307,29 @@ async function open(
   const wire: Wire[] = []
 
   await page.route(/\/orders\/pull$/, async (route) => {
-    const body = route.request().postDataJSON() as { undo?: boolean; targets?: PullTarget[] }
+    const body = route.request().postDataJSON() as { undo?: boolean; targets?: PullTarget[]; refresh?: PullRefresh[] }
     wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body })
-    // The places are read before the write, as the server answers them: a sale takes its copy out of the plan.
-    const answer = pullResult({ undone: body.undo === true }, body.targets ?? [], planAt())
     if (body.undo !== true) options.onPull?.()
+    const refusal = options.refuse?.(body) ?? null
+    if (refusal !== null) {
+      await route.fulfill({
+        status: refusal.status,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: refusal.code, message: refusal.message } }),
+      })
+      return
+    }
+    // The places are read before the write, as the server answers them: a sale takes its copy out of the plan.
+    const answer = {
+      ...pullResult({ undone: body.undo === true }, body.targets ?? [], planAt()),
+      refreshed: options.refreshed?.(body.refresh ?? [], body.undo === true),
+    }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
   })
 
   await page.route(/\/inventory\/copies$/, async (route) => {
+    const hold = options.holdReads?.()
+    if (hold) await hold
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1116,4 +1137,218 @@ test('three digit presses on copies at three places give three receipts, each na
   await expect(receipts, 'one receipt per digit press').toHaveCount(3)
   const cardsNamed = async () => (await receipts.allTextContents()).map((text) => text.match(/Card \d+/)?.[0] ?? text).sort()
   await expect.poll(cardsNamed, 'the three receipts name three different cards, each its own copy\'s place').toEqual(['Card 17', 'Card 18', 'Card 19'])
+})
+
+/* -------------------------------------------------------------------------------------- undo and the walk's positions */
+
+/* `docs/specs/undo.md` §10 and D58: a pull renumbers every card behind it in the drawer, so a walk row
+   still holding that card must be told where it now stands. A press asks for those positions
+   (`refresh`) and the answer carries them (`refreshed`). The walk's own row Undo asks; `U` and a
+   toast's own Undo go through `undoFromToast` and do not. */
+
+/** One card in box 3, section 2, counted as the server counts it (D58): `card` of `total` cards in the section. */
+function cardPlace(card: number, total: number, index: number): Place {
+  return place({
+    box: 3,
+    index,
+    slot: card,
+    card,
+    label: `Box 3, Section 2, Card ${card}`,
+    section: 2,
+    section_start: 1,
+    section_end: null,
+    box_total: total,
+    box_name: 'RB Epics',
+    fraction: 0.2,
+    neighbors: null,
+  })
+}
+
+const COPY_A = { box: 3, index: 21, capture_id: 'cap-a' }
+const COPY_B = { box: 3, index: 22, capture_id: 'cap-b' }
+
+/** Copy A sits ahead of copy B in one section: a sale of A moves B from card 15 of 34 to card 14 of 33. */
+function renumberPlan(): WalkPlan {
+  return walkPlanOf([
+    walkPlanStop({
+      takes: [
+        walkPlanTake({
+          wanted: 2,
+          copies: [
+            walkPlanCopy({ box: 3, index: 21, capture_id: 'cap-a', key: '3/21', place: cardPlace(14, 34, 21) }),
+            walkPlanCopy({ box: 3, index: 22, capture_id: 'cap-b', key: '3/22', place: cardPlace(15, 34, 22) }),
+          ],
+        }),
+      ],
+    }),
+  ])
+}
+
+/** What the server answers for the copy a press asked it to refresh: B, renumbered by A's sale, and back by A's undo.
+ *  A press that did not ask for it gets none. */
+function renumbered(refresh: readonly PullRefresh[], undone: boolean): Place[] {
+  if (!refresh.some((one) => one.box === COPY_B.box && one.index === COPY_B.index)) return []
+  return [undone ? cardPlace(15, 34, 22) : cardPlace(14, 33, 22)]
+}
+
+const pullsOf = (wire: Wire[]) => wire.filter((one) => one.path.endsWith('/orders/pull'))
+
+test('the walk row’s own Undo puts the next copy back at its own place (control)', async ({ page }) => {
+  const wire = await open(page, { plan: renumberPlan(), refreshed: renumbered })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(1)
+  await expect(rows.nth(1)).toContainText('Card 14')
+
+  await rows.nth(0).getByRole('button', { name: 'Undo' }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(2)
+  await expect(rows.nth(1), 'the row’s own Undo sends the refresh list, so the next copy reads its restored place').toContainText('Card 15')
+})
+
+test('U puts the next copy back at its own place, as the row’s own Undo does', async ({ page }) => {
+  const wire = await open(page, { plan: renumberPlan(), refreshed: renumbered })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(1)
+  await expect(rows.nth(1)).toContainText('Card 14')
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => pullsOf(wire).length).toBe(2)
+  expect(pullsOf(wire)[1]?.body).toEqual({ undo: true, targets: [COPY_A] })
+  await expect(rows.nth(1), '`U` names no refresh list, so the answer restores nothing and the next copy still reads the sale’s place').toContainText('Card 15')
+})
+
+test('a receipt toast’s Undo puts the next copy back at its own place, as the row’s own Undo does', async ({ page }) => {
+  const wire = await open(page, { plan: renumberPlan(), refreshed: renumbered })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(1)
+  await expect(rows.nth(1)).toContainText('Card 14')
+
+  await page.locator('.bn-toast-receipt button.bn-toast-action').click()
+  await expect.poll(() => pullsOf(wire).length).toBe(2)
+  expect(pullsOf(wire)[1]?.body).toEqual({ undo: true, targets: [COPY_A] })
+  await expect(rows.nth(1), 'a toast’s Undo names no refresh list either, so the next copy keeps the sale’s place').toContainText('Card 15')
+})
+
+test('an older receipt’s Undo reverses the newest pull, not the older one (undo.md §3)', async ({ page }) => {
+  /* `docs/specs/undo.md` §3: "`U` and a toast's own Undo reach only the newest reversible write", and
+     "the fast path undoes the newest pull. Anything older belongs to the slow path." So the older receipt's
+     Undo never reverses A: the one reversal it may make is the newest pull, B. */
+  const wire = await open(page, { plan: renumberPlan(), refreshed: renumbered })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(1)
+  await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(2)
+
+  const olderReceipt = page.locator('.bn-toast-receipt', { hasText: 'Card 14' })
+  await expect(olderReceipt).toBeVisible()
+  await olderReceipt.locator('button.bn-toast-action').click()
+
+  await expect.poll(() => pullsOf(wire).filter((one) => (one.body as { undo?: boolean }).undo === true).length).toBe(1)
+  expect(pullsOf(wire)[2]?.body, 'the older receipt reverses the newest pull, copy B').toEqual({ undo: true, targets: [COPY_B] })
+})
+
+/* -------------------------------------------------------------------------------------- a refused sale */
+
+const ALREADY_SOLD =
+  'Box 3, Section 2, Card 14 is already sold. Send {"undo": true} to reverse that sale; marking it again would record a second sale of one physical card.'
+
+/** The sale the server refuses as `already_sold` (a second tab sold it first), then copy A is no longer on the shelf. */
+function soldElsewhereAfterRefusal(): { refuse: (body: { undo?: boolean }) => { status: number; code: string; message: string } | null; plan: () => WalkPlan } {
+  let refused = false
+  return {
+    refuse: (body) => {
+      if (body.undo === true || refused) return null
+      refused = true
+      return { status: 409, code: 'already_sold', message: ALREADY_SOLD }
+    },
+    plan: () =>
+      refused
+        ? walkPlanOf([
+            walkPlanStop({
+              takes: [walkPlanTake({ wanted: 2, copies: [walkPlanCopy({ box: 3, index: 22, capture_id: 'cap-b', key: '3/22', place: cardPlace(15, 34, 22) })] })],
+            }),
+          ])
+        : renumberPlan(),
+  }
+}
+
+test('a sale refused as already sold leaves its copy sold on the walk, not offered Mark sold again', async ({ page }) => {
+  /* The losing tab re-reads after a 409: the copy another tab sold is not offered for sale here. On main the
+     catch in `onWalkPull` never re-reads, and the row falls back to Mark Sold over a card that is gone. */
+  const sold = soldElsewhereAfterRefusal()
+  const wire = await open(page, { plan: sold.plan, refuse: sold.refuse })
+
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold: .*Card 14/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(1)
+  await expect(page.locator('.bn-toast', { hasText: 'Not marked sold' })).toBeVisible()
+
+  await expect(page.getByRole('button', { name: /^Mark Sold: .*Card 14/ }), 'the copy another tab sold is not offered for sale again').toHaveCount(0)
+})
+
+test('a refused sale says why in plain words, with no JSON in the toast', async ({ page }) => {
+  const sold = soldElsewhereAfterRefusal()
+  const wire = await open(page, { plan: sold.plan, refuse: sold.refuse })
+
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold: .*Card 14/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(1)
+  const toast = page.locator('.bn-toast', { hasText: 'Not marked sold' })
+  await expect(toast).toBeVisible()
+
+  expect(await toast.innerText(), 'the server’s sentence carries a raw JSON instruction, which a person does not type').not.toMatch(/[{}]|"undo"|Send \{/)
+})
+
+/* -------------------------------------------------------------------------------------- the row's Undo while the re-reads run */
+
+test('the row’s Undo is enabled once the sale is written, before its re-reads finish', async ({ page }) => {
+  /* `onWalkPull` awaits both re-reads before it returns, and the row stays `sending` until it does, so its
+     Undo is disabled for as long as the reads take. The reads are held here, so only the write can end it. */
+  let holding = false
+  let release: () => void = () => {}
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const wire = await open(page, { plan: renumberPlan(), refreshed: renumbered, holdReads: () => (holding ? gate : null) })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+
+  holding = true
+  try {
+    await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+    await expect.poll(() => pullsOf(wire).length).toBe(1)
+    await expect(rows.nth(0).getByRole('button', { name: 'Undo' }), 'the write has answered and its re-reads are still held').toBeEnabled()
+  } finally {
+    release()
+  }
+})
+
+test('U after an undo reverses the sale still standing before it, the newest one left', async ({ page }) => {
+  /* `docs/specs/undo.md` §10: "Undoing the newest pull hands the rank back to the pull before it, if one still stands."
+     Two sales stand, A then B on the next row. U takes B; the next U must take A, the newest sale still standing.
+     Today `undoPullNow`'s `finally` clears `lastPull`, so a second U finds nothing and A stays sold. */
+  const wire = await open(page, { plan: renumberPlan(), refreshed: renumbered })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  const undos = () => pullsOf(wire).filter((one) => (one.body as { undo?: boolean }).undo === true)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(1)
+  await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(2)
+  await expect(rows.nth(1).getByRole('button', { name: 'Undo' })).toBeEnabled()
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => undos().length).toBe(1)
+  expect(undos()[0]?.body).toEqual({ undo: true, targets: [COPY_B] })
+  await expect(rows.nth(1).getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
+
+  await page.keyboard.press('u')
+  await expect.poll(() => undos().length, 'the second U finds the sale still standing, A, and reverses it').toBe(2)
+  expect(undos()[1]?.body).toEqual({ undo: true, targets: [COPY_A] })
 })
