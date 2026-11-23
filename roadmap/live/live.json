@@ -1,6 +1,14 @@
 {
- "readAt": "2026-11-23T03:49:49Z",
+ "readAt": "2026-11-23T04:56:55Z",
  "pulls": [
+  {
+   "branch": "lane/orders-undo-u",
+   "createdAt": "2026-11-23T04:10:36Z",
+   "draft": false,
+   "number": 1129,
+   "title": "U undoes the newest standing sale; receipts never reverse the wrong copy (bug 7)",
+   "url": "https://github.com/shivinate7/banchi/pull/1129"
+  },
   {
    "branch": "lane/orders-pull-status",
    "createdAt": "2026-11-23T03:21:40Z",
@@ -8,14 +16,6 @@
    "number": 1128,
    "title": "Refuse sales, fills, kinds and labels on canceled orders (bug 4)",
    "url": "https://github.com/shivinate7/banchi/pull/1128"
-  },
-  {
-   "branch": "revert-guard-skip-record-branch",
-   "createdAt": "2026-11-23T02:20:30Z",
-   "draft": false,
-   "number": 1125,
-   "title": "Skip the revert guard on the record branch; pass a head with no shared history",
-   "url": "https://github.com/shivinate7/banchi/pull/1125"
   }
  ],
  "branches": [
@@ -335,6 +335,9 @@
    "name": "lane/orders-undo-plumbing"
   },
   {
+   "name": "lane/orders-undo-u"
+  },
+  {
    "name": "lane/shipped-order-walk"
   },
   {
@@ -363,9 +366,6 @@
   },
   {
    "name": "perf/photo-lane-probe"
-  },
-  {
-   "name": "revert-guard-skip-record-branch"
   },
   {
    "name": "roadmap"
