@@ -100,6 +100,9 @@ const PULL_STALE = new Set([
   'over_fulfilled',
   'copy_not_identifiable',
 ])
+/** The order was canceled, or its line stood down, after this list was read: no copy is owed for it any more,
+ *  so pressing again is refused again. The list re-reads and the card leaves it. */
+const NO_LONGER_NEEDED = new Set(['order_canceled', 'line_stood_down'])
 /** The ledger never recorded this pull, so the way back is the plain sale undo. */
 const PULL_NOT_RECORDED = 'pull_not_recorded'
 
@@ -569,6 +572,10 @@ export function Fulfillment() {
   /** A request in flight. Guards instead of disabling — his controls never grey out. */
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [trouble, setTrouble] = useState<string | null>(null)
+  /** The copy whose order was canceled, or whose line stood down, after the list was read. Its card offers no
+   *  press: after the re-read the box listing still holds the copy, and without this a second press would sell it
+   *  plain, as though nothing had changed. Cleared when another card opens. */
+  const [notNeededKey, setNotNeededKey] = useState<string | null>(null)
   /* THE ONE LIST (finding #1): `sales[0]` is the sheet's own receipt, `sales.slice(1)` is
      "Pulled today" below — no second, parallel `done` array that the sheet's Undo never
      reached. */
@@ -834,6 +841,7 @@ export function Fulfillment() {
   const openCard = useCallback((card: Sellable) => {
     setChosenKey(card.key)
     setPulledKey(null)
+    setNotNeededKey(null)
     setTrouble(null)
     setPhotoReady(null)
   }, [])
@@ -879,6 +887,13 @@ export function Fulfillment() {
             canUndo: false,
             note: 'Somebody else sold this card, so it has come off your list.',
           })
+          reread()
+          return
+        }
+        if (NO_LONGER_NEEDED.has(code)) {
+          setTrouble('This card is no longer needed for this order. Put it back where you found it.')
+          setNotNeededKey(card.key)
+          setPulledKey(null)
           reread()
           return
         }
@@ -1286,7 +1301,7 @@ export function Fulfillment() {
 
           <div className="fulfillment-action ff-action">
             {trouble === null ? null : <p className="fulfillment-say ff-trouble">{trouble}</p>}
-            {pulledKey === chosen.key ? (
+            {notNeededKey === chosen.key ? null : pulledKey === chosen.key ? (
               <>
                 <p className="fulfillment-pulled ff-pulled">
                   <span className="ff-pulled-icon">

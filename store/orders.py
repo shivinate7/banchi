@@ -131,7 +131,7 @@ from __future__ import annotations
 import secrets
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Any, ClassVar, Container, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, ClassVar, Container, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from store.rows import Rows, TableSpec
 
@@ -257,6 +257,11 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
 
+def fold_number(number: Any) -> str:
+    """An order number folded to compare, as `name_ship_tos_by_number` folds it."""
+    return str(number or "").strip().casefold()
+
+
 def today() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -300,6 +305,20 @@ class CopyNotIdentifiable(ValueError):
 
 class OverFulfilled(ValueError):
     """A pull that would record more copies against a line than the buyer ordered."""
+
+
+class LineNotOwed(ValueError):
+    """A write against a line this store owes nothing on: its order is canceled, or the line is
+    stood down. `Ledger.writable_line` raises one of the two subclasses; a caller that maps
+    refusals catches this base and reads the subclass for the reason."""
+
+
+class OrderCanceled(LineNotOwed):
+    """The feed says the order is canceled, so no buyer will receive a copy recorded against it."""
+
+
+class LineStoodDown(LineNotOwed):
+    """The operator stood this line down (D113): the store has stopped accounting for it."""
 
 
 def order_key(source: str, number: str) -> str:
@@ -917,11 +936,11 @@ class Ledger:
         """
         by_number: Dict[str, Optional[OrderRecord]] = {}
         for record in self.orders.values():
-            folded = str(record.number or "").strip().casefold()
+            folded = fold_number(record.number)
             by_number[folded] = None if folded in by_number else record
         report = NameReport()
         for number, ship_to in names:
-            record = by_number.get(str(number or "").strip().casefold())
+            record = by_number.get(fold_number(number))
             if record is None:
                 report.unknown += 1
                 continue
@@ -1027,7 +1046,11 @@ class Ledger:
         the same way — by the operation being unable to do the wrong thing rather than by a
         flag saying it must not.
 
-        FOUR REFUSALS, EACH OF WHICH IS A DIFFERENT WAY TO SHIP THE WRONG CARD:
+        FIVE REFUSALS, EACH OF WHICH IS A DIFFERENT WAY TO SHIP THE WRONG CARD:
+
+          `OrderCanceled`,      the order is canceled or the line is stood down, so a copy
+          `LineStoodDown`       recorded against it would go to a buyer who will never
+                                receive it. See `writable_line`; `forget_pull` reads neither.
 
           `UnknownOrder`        nothing to fulfil. A pull against an order the ledger has
                                 never ingested is a screen and a store that disagree, and
@@ -1056,15 +1079,7 @@ class Ledger:
         and the ledger would then be the only record that they had gone.
         """
         key = str(key)
-        record = self.orders.get(key)
-        if record is None:
-            raise UnknownOrder(f"{key!r} is not in this ledger")
-        line = record.line_for(sku)
-        if line is None:
-            raise UnknownOrderLine(
-                f"Order {key} has no line for SKU {str(sku).strip()!r}; it ordered "
-                f"{', '.join(str(each.sku) for each in record.lines) or 'nothing'}"
-            )
+        line = self.writable_line(key, sku)
 
         row = self.recorded(key, sku)
         fresh: List[str] = []
@@ -1153,7 +1168,50 @@ class Ledger:
             )
         return line
 
-    def record_fill(self, key: str, sku: Any, count: int, reason: str) -> int:
+    def writable_line(self, key: str, sku: Any) -> OrderLine:
+        """The line a write that RECORDS something may touch, or the refusal saying why not.
+
+        THE ONE HOME OF "THIS STORE OWES NOTHING ON IT". `record_pull` and `record_fill` call it,
+        and so does the line-kind route (`do_order_line_kind`); the label route asks
+        `canceled_numbers` for the order half.
+        It is `_line_or_raise`'s two refusals, then `OrderCanceled` (the feed's own word, by
+        `is_canceled_status`), then `LineStoodDown` (`closed`, the stamp D113 sets).
+
+        THE REVERSALS DO NOT CALL IT. `forget_pull`, `forget_fill` and `reopen_line` read no
+        status, so the way back never depends on the state it recovers. `close_line` does not
+        either: standing a canceled order's lines down is how it stops being owed.
+        """
+        line = self._line_or_raise(key, sku)
+        record = self.orders[str(key)]
+        if is_canceled_status(record.status):
+            raise OrderCanceled(
+                f"Order {key} is canceled, so nothing more is recorded against it. A copy "
+                f"recorded now would be counted as going to a buyer who will never receive it."
+            )
+        if self.recorded(key, sku).closed:
+            raise LineStoodDown(
+                f"SKU {line.sku} on order {key} is stood down, so this store has stopped "
+                f"accounting for it. Reopen the line first if it should take a copy again."
+            )
+        return line
+
+    def canceled_numbers(self) -> Set[str]:
+        """The folded numbers (`fold_number`) of orders the feed says are canceled, for a caller
+        holding a number alone (a shipping export names no marketplace).
+
+        THE SAME MATCH AS `name_ship_tos_by_number`: a number is matched only when exactly one
+        record spells it. Two records that spell it are not matched, because the row cannot be
+        told to a sale, so the number is left out and no label is refused on a guess.
+        """
+        spelled: Dict[str, List[OrderRecord]] = {}
+        for record in self.orders.values():
+            spelled.setdefault(fold_number(record.number), []).append(record)
+        return {
+            number for number, records in spelled.items()
+            if len(records) == 1 and is_canceled_status(records[0].status)
+        }
+
+    def record_fill(self, key: str, sku: Any, count: int, reason: str, recovering: bool = False) -> int:
         """Close `count` copies of a line with NO physical card behind them. Returns `count`.
 
         THE WRITE `record_pull` CANNOT MAKE, AND THE ONE THREE REAL ORDERS NEEDED. That
@@ -1173,7 +1231,7 @@ class Ledger:
         that wants press-once semantics gets them by showing what is already recorded, which
         `_order_progress` already ships.
 
-        THREE REFUSALS:
+        FIVE REFUSALS, the last two being `writable_line`'s `OrderCanceled` and `LineStoodDown`:
 
           `UnknownOrder`      nothing to fill. Inventing the order here would put a shipment
                               on record for a purchase nobody can produce — `record_pull`'s
@@ -1182,6 +1240,11 @@ class Ledger:
           `OverFulfilled`     recording more than the line ordered. NOT CLAMPED, for
                               `record_pull`'s reason: you cannot ship the fourth.
 
+        `recovering` IS FOR THE STILL-HERE RECOVERY ONLY (`do_mark_sold`). It records that a copy
+        which already left for a buyer is no longer a pulled card, so it reads no cancellation
+        and no stand-down: a recovery must not depend on the state it recovers. Every new
+        write leaves it False.
+
         A count of zero or less is refused too, and as a `ValueError` rather than a silent
         no-op: nothing on a screen should ever ask for it, so one arriving is a caller bug
         and swallowing it would hide the bug rather than the press.
@@ -1189,7 +1252,7 @@ class Ledger:
         count = int(count)
         if count <= 0:
             raise ValueError(f"a hand-fill records at least one copy; got {count}")
-        line = self._line_or_raise(key, sku)
+        line = self._line_or_raise(key, sku) if recovering else self.writable_line(key, sku)
 
         row = self.recorded(key, sku)
         if int(row.fulfilled) + count > int(line.quantity):
@@ -1253,6 +1316,11 @@ class Ledger:
         same one: a closed vocabulary in a document refuses a feed that learned a new product
         category, while an unknown kind stored through the server raises at RESOLVE time and
         takes the whole order screen down for one bad write.
+
+        THIS METHOD REFUSES NEITHER A CANCELED ORDER NOR A STOOD-DOWN LINE, and `writable_line`
+        is where those are. The route asks it before a claim (`do_order_line_kind`); a store-level
+        caller that declares a kind on a stood-down line is a test's own setup (T7 `check_order_ledger`,
+        block 11b), so the refusal is not made here.
 
         A ROW THAT EXISTS ONLY FOR THIS CLAIMS NO PULL. `progress`'s docstring warns that a
         row created by somebody looking at it is a row claiming a pull that never happened —

@@ -2474,6 +2474,91 @@ test('ux-w2: a failed refresh on the card view moves nothing once the stale noti
   await expectInViewport(page, view(page).locator('.ff-notice'), 'the stale notice on the card view')
 })
 
+/* A pull the server refuses because the order was canceled, or its line stood down, after the list was
+   read. The server answers 409 with that code and its own words, which name neither the order key nor the
+   SKU (`server/capture_server.py`'s `_ORDER_CANCELED_WORDS` and `_LINE_STOOD_DOWN_WORDS`, copied here as test
+   data). The screen says the card is no longer needed for the order and to put it back: never "try again",
+   never "press again". The re-read then answers the order as it now stands, with no copy owed, so the card
+   must not offer "Mark it sold" any more. */
+const NO_LONGER_NEEDED = 'This card is no longer needed for this order. Put it back where you found it.'
+const STOOD_AT = '2026-11-21T10:00:00+00:00'
+const REFUSALS = [
+  {
+    code: 'order_canceled',
+    message: 'This order was canceled. Put back any card you took for it.',
+    after: {
+      ...ONE_OPEN_ORDER,
+      orders: ONE_OPEN_ORDER.orders.map((one) => ({ ...one, status: 'Canceled', open: false })),
+    },
+  },
+  {
+    code: 'line_stood_down',
+    message: 'This card is no longer needed for this order. Put it back where you found it.',
+    after: {
+      ...ONE_OPEN_ORDER,
+      orders: ONE_OPEN_ORDER.orders.map((one) => ({
+        ...one,
+        lines: one.lines.map((line) => ({ ...line, closed_at: STOOD_AT })),
+      })),
+    },
+  },
+]
+for (const refusal of REFUSALS) {
+  test(`a pull refused as ${refusal.code} says the card is no longer needed, never to try again, and offers no Mark it sold after the re-read`, async ({ page }) => {
+    await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+    /* Once the server has refused, its next answers are the order as the refusal left it. Routes
+       registered later take precedence over `stubServer`'s, so these override the open-order answers. */
+    let refused = false
+    await page.route(/\/orders\/pull$/, (route) => {
+      refused = true
+      return route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: refusal.code, message: refusal.message } }),
+      })
+    })
+    await page.route(/\/orders$/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(refused ? refusal.after : ONE_OPEN_ORDER),
+      }),
+    )
+    await page.route(/\/orders\/walk-plan$/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(refused ? EMPTY_PLAN : ONE_OPEN_ORDER_PLAN),
+      }),
+    )
+    let reads = 0
+    page.on('request', (request) => {
+      if (request.method() === 'GET' && /\/orders$/.test(request.url())) reads += 1
+    })
+    await openCard(page, 'Charizard ex')
+    await page.getByRole('button', { name: 'Pull' }).click()
+    await expect(view(page)).toContainText('Pulled.')
+    const readsBefore = reads
+    await page.getByRole('button', { name: 'Mark it sold' }).click()
+    await expect(
+      view(page).locator('.ff-trouble'),
+      `the ${refusal.code} refusal draws the card-no-longer-needed sentence`,
+    ).toHaveText(NO_LONGER_NEEDED)
+    await expect(
+      view(page),
+      `the ${refusal.code} refusal never tells him to try again or to press again`,
+    ).not.toContainText(/try again|press mark it sold again/i)
+    await expect.poll(
+      () => reads,
+      { message: `the list re-reads after the ${refusal.code} refusal` },
+    ).toBeGreaterThan(readsBefore)
+    await expect(
+      view(page).getByRole('button', { name: 'Mark it sold' }),
+      `after the re-read the ${refusal.code} card offers no Mark it sold`,
+    ).toHaveCount(0)
+  })
+}
+
 /* ux-w2 gap-check self-proof. Two plain buttons that overlap are NOT a covered pair: the gap floor must fail them. The
    covered skip applies only when a fixed or sticky layer is on top of a control. */
 test('ux-w2 gap check: two overlapping plain buttons fail the gap floor', async ({ page }) => {
