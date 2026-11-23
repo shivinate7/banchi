@@ -1396,7 +1396,110 @@ def check_undo_order_shipped_before_sale(checks: Checks) -> None:
         )
 
 
+def _label_made(snapshot, key: str) -> bool:
+    """Whether a label is bought for this order: `LabelRow.made`, read from the ledger's own map."""
+    row = snapshot.ledger.labels.get(key)
+    return row is not None and row.made
+
+
+def check_undo_after_cancel_unshipped(checks: Checks) -> None:
+    """`docs/specs/undo.md` section 11.1, the Sale on Orders row, as the owner ruled it: a sale on a
+    canceled order is not built on while nothing has shipped and no label is bought. Its undo
+    reverses the sale, puts the copy back, and reverses the pull, on both routes: the card's own
+    undo on the Inventory screen and the pull's undo the order walk sends.
+
+    Today `_order_built_on` refuses both. A Canceled order is terminal, and its `changed_at` is
+    later than the sale, so the refusal reads a cancel as a shipment. That refusal is the red.
+    `check_undo_after_cancel_built_on` is the control: a bought label still refuses."""
+    checks.note("")
+    checks.note("UN-7 after a cancel: a sale on a canceled order, nothing shipped, undoes")
+
+    with isolated_home():
+        _sold_to_order("cancel-free", "CANCEL-FREE", "Ready to Ship")
+        _feed_order("CANCEL-FREE", "Canceled")
+        key = order_store.order_key("TCGplayer", "CANCEL-FREE")
+        before = Store().read()
+        checks.ok(
+            before.ledger.get(key) is not None and before.ledger.get(key).status == "Canceled",
+            "precondition: the order reads Canceled, and the sale is recorded against it",
+        )
+        checks.ok(not _label_made(before, key), "precondition: no label is bought for the order")
+        back = answers(
+            checks,
+            lambda: capture_server.do_mark_sold(4, 1, {"undo": True}),
+            "UN-7 after a cancel: the card's own undo of the sale answers",
+        )
+        if isinstance(back, dict):
+            checks.equal(
+                (back.get("undone"), back.get("state")),
+                (True, master.IDENTIFIED),
+                "and the copy is back in place at identified",
+            )
+            after = Store().read()
+            checks.equal(
+                after.ledger.holder_of("cancel-free"),
+                None,
+                "and the ledger shows the pull reversed: no order holds the copy",
+            )
+            checks.equal(
+                after.ledger.fulfilled(key, "9191486"),
+                0,
+                "and the line counts no copy as fulfilled",
+            )
+
+    with isolated_home():
+        _sold_to_order("cancel-walk", "CANCEL-WALK", "Ready to Ship")
+        _feed_order("CANCEL-WALK", "Canceled")
+        key = order_store.order_key("TCGplayer", "CANCEL-WALK")
+        target = [{"box": 4, "index": 1, "capture_id": "cancel-walk"}]
+        back = answers(
+            checks,
+            lambda: capture_server.do_order_pull({"undo": True, "targets": target}),
+            "UN-7 after a cancel: the walk's undo of the pull answers",
+        )
+        if isinstance(back, dict):
+            checks.equal(back.get("undone"), True, "and reports the pull undone")
+            after = Store().read()
+            checks.equal(
+                after.ledger.holder_of("cancel-walk"),
+                None,
+                "and the ledger shows the pull reversed: no order holds the copy",
+            )
+            checks.equal(
+                after.inventory.cards["4/1"].state,
+                master.IDENTIFIED,
+                "and the card is back at identified",
+            )
+
+
+def check_undo_after_cancel_built_on(checks: Checks) -> None:
+    """The control for `check_undo_after_cancel_unshipped`: a label bought for the order still
+    builds the sale on, so its undo refuses with `sale_built_on` after the order is canceled. It
+    is green on main, and it must stay green when the unshipped case goes green.
+
+    The label is asserted on record before the cancel. Without that, a refusal for any other
+    reason would pass this control and hide a label that was never written."""
+    checks.note("")
+    checks.note("UN-7 after a cancel: a label bought for the order still builds the sale on")
+
+    with isolated_home():
+        _sold_to_order("cancel-label", "CANCEL-LABEL", "Ready to Ship")
+        key = order_store.order_key("TCGplayer", "CANCEL-LABEL")
+        with Store().write() as snapshot:
+            snapshot.ledger.record_label(key, {"order_id": "CANCEL-LABEL"}, None, False)
+        _feed_order("CANCEL-LABEL", "Canceled")
+        checks.ok(_label_made(Store().read(), key), "precondition: a label is bought for the order")
+        refusal(
+            checks,
+            lambda: capture_server.do_mark_sold(4, 1, {"undo": True}),
+            "sale_built_on",
+            "UN-7 after a cancel: a label bought for the order still refuses that sale's undo",
+        )
+
+
 CHECKS = (
     check_undo_until_built_on,
     check_undo_order_shipped_before_sale,
+    check_undo_after_cancel_unshipped,
+    check_undo_after_cancel_built_on,
 )
