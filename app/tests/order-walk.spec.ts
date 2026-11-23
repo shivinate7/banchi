@@ -1410,6 +1410,10 @@ function sectionOrders(count: number): OrdersPayload {
 
 const undosOf = (wire: Wire[]) => pullsOf(wire).filter((one) => (one.body as { undo?: boolean }).undo === true)
 
+/* Store reads (`GET /orders`) the wire holds after the entry at `at`: a read the screen sends after the write it names. */
+const storeReadsAfter = (wire: Wire[], at: number) =>
+  wire.slice(at + 1).filter((one) => one.method === 'GET' && one.path.endsWith('/orders')).length
+
 test('an older receipt offers no Undo once a newer pull lands (undo.md §3, D171)', async ({ page }) => {
   /* `docs/specs/undo.md` §3: a toast's own Undo reaches only the newest reversible write. Once B is sold, A's receipt
      has no Undo to offer: a press that silently does nothing would break D171, so the control is gone. */
@@ -1874,6 +1878,39 @@ test('an undo the server fails with a 5xx keeps the pull: the next U retries the
     (undosOf(wire)[1]?.body as { targets: PullTarget[] }).targets[0]?.capture_id,
     'the next U retries the same copy, copy B',
   ).toBe('cap-b')
+})
+
+test('an undo the server fails with a 5xx is followed by a store re-read, as a refused undo is', async ({ page }) => {
+  /* `afterWrite` re-reads after every write that settles. A 5xx may still have committed, so the screen cannot know the
+     store is unchanged; the re-read is what tells it. A write that got no answer at all re-reads too. */
+  let failed = false
+  const wire = await open(page, {
+    plan: renumberPlan(),
+    refreshed: renumbered,
+    refuse: (body) => {
+      if (body.undo !== true || body.targets?.[0]?.capture_id !== 'cap-b' || failed) return null
+      failed = true
+      return { status: 503, code: 'store_unavailable', message: 'The store did not answer. Try again.' }
+    },
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(1)
+  await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(2)
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => undosOf(wire).length).toBe(1)
+  const undoAt = wire.indexOf(undosOf(wire)[0] as Wire)
+  await expect(page.locator('.bn-toast', { hasText: 'The card was not put back' })).toBeVisible()
+
+  await expect
+    .poll(() => storeReadsAfter(wire, undoAt), {
+      message: 'the 5xx undo is followed by a store re-read: no GET /orders reached the server after the undo',
+    })
+    .toBeGreaterThan(0)
 })
 
 /* ------------------------------------------------------------------ focus after a swap */
