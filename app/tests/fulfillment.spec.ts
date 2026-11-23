@@ -2474,6 +2474,47 @@ test('ux-w2: a failed refresh on the card view moves nothing once the stale noti
   await expectInViewport(page, view(page).locator('.ff-notice'), 'the stale notice on the card view')
 })
 
+/* A pull the server refuses because the order was canceled, or its line stood down after the list was
+   read. The server answers 409 with that code. Pressing "Mark it sold" again is refused again, so the
+   screen names the change instead: the list-changed sentence that `PULL_STALE` gives, and a re-read. */
+const LIST_CHANGED = 'The list has changed since it was opened. Go back to the cards and try again.'
+for (const refusal of [
+  { code: 'order_canceled', message: 'This order was canceled, so nothing can be pulled from it.' },
+  { code: 'line_stood_down', message: 'This line was stood down, so nothing can be pulled from it.' },
+]) {
+  test(`a pull refused as ${refusal.code} says the list changed, never to press again, and re-reads the list`, async ({ page }) => {
+    await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
+    await page.route(/\/orders\/pull$/, (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: refusal.code, message: refusal.message } }),
+      }),
+    )
+    let reads = 0
+    page.on('request', (request) => {
+      if (request.method() === 'GET' && /\/orders$/.test(request.url())) reads += 1
+    })
+    await openCard(page, 'Charizard ex')
+    await page.getByRole('button', { name: 'Pull' }).click()
+    await expect(view(page)).toContainText('Pulled.')
+    const readsBefore = reads
+    await page.getByRole('button', { name: 'Mark it sold' }).click()
+    await expect(
+      view(page).locator('.ff-trouble'),
+      `the ${refusal.code} refusal draws the list-changed sentence`,
+    ).toHaveText(LIST_CHANGED)
+    await expect(
+      view(page),
+      `the ${refusal.code} refusal never tells him to press Mark it sold again`,
+    ).not.toContainText('Press Mark it sold again.')
+    await expect.poll(
+      () => reads,
+      { message: `the list re-reads after the ${refusal.code} refusal` },
+    ).toBeGreaterThan(readsBefore)
+  })
+}
+
 /* ux-w2 gap-check self-proof. Two plain buttons that overlap are NOT a covered pair: the gap floor must fail them. The
    covered skip applies only when a fixed or sticky layer is on top of a control. */
 test('ux-w2 gap check: two overlapping plain buttons fail the gap floor', async ({ page }) => {
