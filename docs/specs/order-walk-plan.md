@@ -285,7 +285,7 @@ changes, and never on a press. On a return (window focus, or the tab becoming vi
 once more, after a 300 ms debounce and silently. That read keeps any figure a write answered since
 the read was issued (`keepNewerOwed`). A write's answer sets its own order's `owed` (`applyOwed`),
 and nothing else on the plan moves. The screen's re-reads after a write (`useRereadOnWrite` in
-`app/src/Orders.tsx`, a refused write included) re-read the orders and the store, not the plan. An
+`app/src/Orders.tsx`, whatever the write's outcome) re-read the orders and the store, not the plan. An
 answer for any other key set is dropped, whenever it lands. There is no `Re-plan` control. A new order that arrives is not in the walked set, so it does not touch the
 walk. A copy that goes while the walk is open marks its own row and moves nothing around it (D118).
 The stop stays in the list even when every row in it has gone, because removing it would move the
