@@ -2309,6 +2309,25 @@ test('after Undo, focus lands on the Mark sold that replaces it, never on the bo
   expect(await heldFocus(page), 'focus lands on the Mark sold that replaced Undo').toContain('card-locations-sell')
 })
 
+test('U after a Mark sold leaves focus on the Mark sold that replaces the Undo, never on the body', async ({ page }) => {
+  const { store, sell, unsell } = sellableStore()
+  await open(page, BOXES, store, () => PRICING, movesOnSale((undo) => (undo ? unsell('2/1') : sell('2/1'))))
+  const row = copyRow(page, CARD_1)
+
+  const saleReread = page.waitForResponse(/\/inventory\/\d+(\?|$)/)
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
+  await saleReread
+  await expect(row.locator('.card-locations-undo'), 'the row draws Undo after the sale').toHaveCount(1)
+  expect(await heldFocus(page), 'the Undo holds focus before U is pressed').toContain('card-locations-undo')
+
+  const undoReread = page.waitForResponse(/\/inventory\/\d+(\?|$)/)
+  await page.keyboard.press('u')
+  await undoReread
+
+  await expect(row.locator('.card-locations-sell'), 'the row draws Mark sold again after U').toHaveCount(1)
+  expect(await heldFocus(page), 'focus lands on the Mark sold that replaces the Undo, never on the body').toContain('card-locations-sell')
+})
+
 /* D218: A TYPED DOT IS A DEFECT WHEREVER IT IS TYPED. `Position.label` reaches this screen as
  * `Box 2, Section 1, Card 1` — real, server-composed, and never edited here — but the toast
  * body has no CSS to draw a separator with, so retyping the server's `' · '` into that plain

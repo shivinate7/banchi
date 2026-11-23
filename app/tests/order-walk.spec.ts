@@ -289,6 +289,8 @@ async function open(
     cards?: Served<Record<string, object>>
     /** Runs when the walk posts a pull, before the answer goes back: a test counts its own sales here. */
     onPull?: () => void
+    /** Answers a sale's pull with this failure while it returns non-null: the write did not stand, so the walk drops it. */
+    pullFailure?: () => { status: number; body: unknown } | null
   } = {},
 ): Promise<Wire[]> {
   const planAt = () => served(options.plan, twoCopyPlan)
@@ -299,6 +301,11 @@ async function open(
   await page.route(/\/orders\/pull$/, async (route) => {
     const body = route.request().postDataJSON() as { undo?: boolean; targets?: PullTarget[] }
     wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body })
+    const failure = body.undo === true ? null : (options.pullFailure?.() ?? null)
+    if (failure !== null) {
+      await route.fulfill({ status: failure.status, contentType: 'application/json', body: JSON.stringify(failure.body) })
+      return
+    }
     // The places are read before the write, as the server answers them: a sale takes its copy out of the plan.
     const answer = pullResult({ undone: body.undo === true }, body.targets ?? [], planAt())
     if (body.undo !== true) options.onPull?.()
@@ -1222,4 +1229,88 @@ test('an Undo press leaves focus on the Mark sold that replaces it, never on the
   await expect(sell, 'the Mark sold is enabled once the undo lands').toBeEnabled()
 
   expect(await heldFocus(page), 'focus lands on the Mark sold that replaced Undo').toContain('card-locations-sell')
+})
+
+/* -------------------------------------------------------------------------------------- 8 */
+
+/* FOCUS ACROSS THE KEYS (round 1 review of the focus fix). A digit key sells the current pick and `U` undoes the newest
+ * sale. Neither passes through a button's own press, so neither reaches the note a press leaves for the button that
+ * replaces it. */
+
+test('a digit-key sale puts focus on the Undo it drew, even when a pick row held focus', async ({ page }) => {
+  const wire = await open(page)
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  await expect(rows, 'the pane holds both copies').toHaveCount(2)
+
+  await page.locator('.orders-walk-line .orders-walk-press').first().click()
+  expect(await heldFocus(page), 'a pick row holds focus before the digit').toContain('orders-walk-press')
+
+  await page.keyboard.press('1')
+  await expect.poll(() => pullsOf(wire).length, 'the digit sends its sale').toBe(1)
+  await expect(rows.nth(0).locator('.card-locations-undo'), 'the copy the digit sold draws Undo').toHaveCount(1)
+  await expect(rows.nth(0).locator('.card-locations-undo'), 'the Undo is enabled once its write lands').toBeEnabled()
+
+  expect(await heldFocus(page), 'focus lands on the Undo the digit drew, not on the pick row').toContain('card-locations-undo')
+})
+
+test('control: a digit-key sale with no control holding focus draws focus onto its Undo', async ({ page }) => {
+  const wire = await open(page)
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  await expect(rows, 'the pane holds both copies').toHaveCount(2)
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  expect(await heldFocus(page), 'nothing holds focus before the digit').toBe('BODY')
+
+  await page.keyboard.press('1')
+  await expect.poll(() => pullsOf(wire).length, 'the digit sends its sale').toBe(1)
+  await expect(rows.nth(0).locator('.card-locations-undo'), 'the copy the digit sold draws Undo').toHaveCount(1)
+  await expect(rows.nth(0).locator('.card-locations-undo'), 'the Undo is enabled once its write lands').toBeEnabled()
+
+  expect(await heldFocus(page), 'focus lands on the Undo the digit drew').toContain('card-locations-undo')
+})
+
+test('U after a Mark sold leaves focus on the Mark sold that replaces the Undo, never on the body', async ({ page }) => {
+  const wire = await open(page)
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length, 'the sale reaches the server').toBe(1)
+  const undo = rows.nth(0).locator('.card-locations-undo')
+  await expect(undo, 'the row draws Undo after the sale').toHaveCount(1)
+  await expect(undo, 'the Undo is enabled once its write lands').toBeEnabled()
+  expect(await heldFocus(page), 'the Undo holds focus before U is pressed').toContain('card-locations-undo')
+
+  await page.keyboard.press('u')
+  await expect.poll(() => pullsOf(wire).length, 'U sends the reversal').toBe(2)
+  const sell = rows.nth(0).locator('.card-locations-sell')
+  await expect(sell, 'the row draws Mark sold again after U').toHaveCount(1)
+  await expect(sell, 'the Mark sold is enabled once the reversal lands').toBeEnabled()
+
+  expect(await heldFocus(page), 'focus lands on the Mark sold that replaced the Undo, never on the body').toContain('card-locations-sell')
+})
+
+test('a failed sale leaves no focus note: a later re-render does not move focus', async ({ page }) => {
+  let failing = true
+  const wire = await open(page, {
+    pullFailure: () => (failing ? { status: 500, body: { error: 'the write did not stand' } } : null),
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length, 'the failed sale reaches the server').toBe(1)
+  await expect(page.locator('.bn-toast', { hasText: 'Not marked sold' }), 'the refusal says the sale did not stand').toBeVisible()
+  failing = false
+  await expect(rows.nth(0).locator('.card-locations-sell'), 'the row is back to Mark sold after the failure').toHaveCount(1)
+
+  await page.locator('.orders-walk-line .orders-walk-press').first().click()
+  expect(await heldFocus(page), 'a pick row holds focus after the failure').toContain('orders-walk-press')
+
+  // A LATER RE-RENDER: the return read re-plans the walk, and the answer is the same plan.
+  const reread = page.waitForResponse(/\/orders\/walk-plan$/)
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('focus'))
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await reread
+
+  expect(await heldFocus(page), 'focus stays on the pick row: nothing from the failed sale takes it').toContain('orders-walk-press')
 })
