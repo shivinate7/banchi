@@ -1421,7 +1421,7 @@ test('the receipt names where the card just was, never the departed label the sa
 })
 
 /* `docs/specs/undo.md` §3: `U` IS THE ONE KEY FOR THE NEWEST REVERSIBLE WRITE — here, the
- * newest pull this screen made, held in `OrdersHubStore.lastPull` and reached by
+ * newest pull this screen made, held in `OrdersHubStore.pulls` and reached by
  * `undoFromToast`, the same function the toast's own Undo button calls. `page.keyboard.press`
  * is what dispatches a real `keydown` a window listener can see; `.fill()` elsewhere in this
  * file does not. */
