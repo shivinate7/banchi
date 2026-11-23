@@ -1,22 +1,6 @@
 {
- "readAt": "2026-11-23T06:42:41Z",
+ "readAt": "2026-11-23T07:28:25Z",
  "pulls": [
-  {
-   "number": 1132,
-   "title": "Return focus after a refused Mark sold or Undo",
-   "branch": "lane/walk-refusal-focus",
-   "draft": false,
-   "createdAt": "2026-11-23T05:55:58Z",
-   "url": "https://github.com/shivinate7/banchi/pull/1132"
-  },
-  {
-   "number": 1130,
-   "title": "Record the Orders plumbing notes and one debt",
-   "branch": "lane/orders-notes",
-   "draft": false,
-   "createdAt": "2026-11-23T05:39:08Z",
-   "url": "https://github.com/shivinate7/banchi/pull/1130"
-  },
   {
    "number": 1128,
    "title": "Refuse sales, fills, kinds and labels on canceled orders (bug 4)",
@@ -334,9 +318,6 @@
    "name": "lane/network-signatures-docs"
   },
   {
-   "name": "lane/orders-notes"
-  },
-  {
    "name": "lane/orders-plumbing-notes"
   },
   {
@@ -350,9 +331,6 @@
   },
   {
    "name": "lane/walk-pane-tally-focus"
-  },
-  {
-   "name": "lane/walk-refusal-focus"
   },
   {
    "name": "lane/walk-sales-queue"
