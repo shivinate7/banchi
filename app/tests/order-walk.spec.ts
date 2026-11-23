@@ -1114,9 +1114,9 @@ test('three digit presses on copies at three places give three receipts, each na
   await expect.poll(cardsNamed, 'the three receipts name three different cards, each its own copy\'s place').toEqual(['Card 17', 'Card 18', 'Card 19'])
 })
 
-/* -------------------------------------------------------------------------------------- 6 */
+/* ------------------------------------------------------------------ the return read and its tally */
 
-/* THE RETURN READ AND THE TALLY IT LEAVES (finding 2). `useOrderWalk`'s `reread` puts the server's plan in place
+/* THE RETURN READ AND THE TALLY IT LEAVES. `useOrderWalk`'s `reread` puts the server's plan in place
  * whenever the window regains focus or the tab becomes visible. That plan already nets the walk's own sales out of
  * `owed`, while `tallyRef` still counts them, so `pickOrderFor` takes each sale away twice. With one copy sold the
  * order's `owed` is 1 and the tally is 1, so `remaining` is 0 and the next press is refused, though the order still
@@ -1190,9 +1190,9 @@ test('control: with no return read, the next sale of the same order is accepted'
   await expect(page.locator('.orders-pick-chip .orders-pick-live'), 'both copies are picked, so the chip reads Picked').toHaveText(/^Picked/)
 })
 
-/* -------------------------------------------------------------------------------------- 7 */
+/* ------------------------------------------------------------------ focus after a swap */
 
-/* FOCUS AFTER A SWAP (finding 6). `RowAction` replaces `MarkSoldButton` with `UndoSaleButton` on a press, and back
+/* FOCUS AFTER A SWAP. `RowAction` replaces `MarkSoldButton` with `UndoSaleButton` on a press, and back
  * again on an Undo. The button that is removed held focus, so focus drops to the page unless the button that
  * replaces it takes it. Each case waits for the write to settle before it reads focus, because the write disables
  * the button while it is out. */
