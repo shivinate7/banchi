@@ -4017,10 +4017,11 @@ def check_order_screen(checks: Checks) -> None:
         row = Store().read().ledger.recorded(order_store.order_key("TCGplayer", number), "9191486")
         return (int(row.fulfilled), list(row.copies), Store().read().inventory.cards["3/1"].state)
 
-    def refused_and_unchanged(act, state, words: tuple, subject: str) -> None:
+    def refused_and_unchanged(act, state, words: tuple, subject: str, number: str) -> None:
         """`act()` refuses as a 4xx with a named code whose message contains one of `words`, and
-        `state()` is what it leaves alone. `subject` names the request and its cause, such as
-        "a pull against a canceled order"."""
+        `state()` is what it leaves alone. The message names neither the order key nor the SKU of
+        `number`'s line: a screen shows it as it stands (D196). `subject` names the request and its
+        cause, such as "a pull against a canceled order"."""
         before = state()
         _, caught = attempt(act)
         refused = isinstance(caught, capture_server.BadRequest)
@@ -4047,6 +4048,15 @@ def check_order_screen(checks: Checks) -> None:
                 f"away ({subject})",
                 f"the message was: {caught}",
             )
+            for label, leaked in (
+                ("order key", order_store.order_key("TCGplayer", number)),
+                ("SKU", "9191486"),
+            ):
+                checks.ok(
+                    leaked.lower() not in str(caught).lower(),
+                    f"and the message names no {label}, which a screen would show as it stands ({subject})",
+                    f"the message was: {caught}",
+                )
         checks.equal(state(), before, f"AND NOTHING IS WRITTEN ({subject})")
 
     def refused_pull_and_unchanged(number: str, capture_id: str, words: tuple, cause: str) -> None:
@@ -4059,6 +4069,7 @@ def check_order_screen(checks: Checks) -> None:
             lambda: pull_state(number),
             words,
             f"a pull against {cause}",
+            number,
         )
 
     def canceled_order(number: str) -> None:
@@ -4137,28 +4148,28 @@ def check_order_screen(checks: Checks) -> None:
         canceled_order("CF-1")
         refused_and_unchanged(
             lambda: capture_server.do_order_fill(fill_body("CF-1")),
-            fulfilment_rows, ("cancel",), "a fill against a canceled order",
+            fulfilment_rows, ("cancel",), "a fill against a canceled order", "CF-1",
         )
 
     with isolated_home():
         stood_down_line("SF-1")
         refused_and_unchanged(
             lambda: capture_server.do_order_fill(fill_body("SF-1")),
-            fulfilment_rows, stood_down_words, "a fill against a stood-down line",
+            fulfilment_rows, stood_down_words, "a fill against a stood-down line", "SF-1",
         )
 
     with isolated_home():
         canceled_order("CK-1")
         refused_and_unchanged(
             lambda: capture_server.do_order_line_kind(kind_body("CK-1")),
-            fulfilment_rows, ("cancel",), "a line kind declared on a canceled order",
+            fulfilment_rows, ("cancel",), "a line kind declared on a canceled order", "CK-1",
         )
 
     with isolated_home():
         stood_down_line("SK-1")
         refused_and_unchanged(
             lambda: capture_server.do_order_line_kind(kind_body("SK-1")),
-            fulfilment_rows, stood_down_words, "a line kind declared on a stood-down line",
+            fulfilment_rows, stood_down_words, "a line kind declared on a stood-down line", "SK-1",
         )
 
 
