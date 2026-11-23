@@ -299,6 +299,8 @@ async function open(
     refuse?: (body: { undo?: boolean; targets?: PullTarget[] }) => { status: number; code: string; message: string } | null
     /** Holds the two re-reads a write ends with (`GET /orders`, `GET /inventory/copies`) until the promise it returns resolves. */
     holdReads?: () => Promise<void> | null
+    /** Holds a pull or undo's answer, by the body it was posted with, until the promise it returns resolves. */
+    holdPull?: (body: { undo?: boolean; targets?: PullTarget[] }) => Promise<void> | null
   } = {},
 ): Promise<Wire[]> {
   const planAt = () => served(options.plan, twoCopyPlan)
@@ -310,6 +312,8 @@ async function open(
     const body = route.request().postDataJSON() as { undo?: boolean; targets?: PullTarget[]; refresh?: PullRefresh[] }
     wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body })
     if (body.undo !== true) options.onPull?.()
+    const held = options.holdPull?.(body)
+    if (held) await held
     const refusal = options.refuse?.(body) ?? null
     if (refusal !== null) {
       await route.fulfill({
@@ -1235,34 +1239,45 @@ test('a receipt toast’s Undo puts the next copy back at its own place, as the 
   await expect(rows.nth(1), 'a toast’s Undo names no refresh list either, so the next copy keeps the sale’s place').toContainText('Card 15')
 })
 
-/** Three copies in one section, A, B and C at cards 14, 15 and 16, and an order that owes all three. */
-function threeCopyPlan(): WalkPlan {
+/** `count` copies in one section, A, B, C, ... at cards 14, 15, 16, ... (index 21, 22, 23, ...), and an order that owes
+ *  all of them. A sale of the first renumbers the rest (D58), and a fixture of four or five copies reaches a sentinel
+ *  sale after every write the case queued. */
+const COPY_NAMES = ['a', 'b', 'c', 'd', 'e'] as const
+
+function sectionPlan(count: number): WalkPlan {
   return walkPlanOf([
     walkPlanStop({
       takes: [
         walkPlanTake({
-          wanted: 3,
-          copies: [
-            walkPlanCopy({ box: 3, index: 21, capture_id: 'cap-a', key: '3/21', place: cardPlace(14, 34, 21) }),
-            walkPlanCopy({ box: 3, index: 22, capture_id: 'cap-b', key: '3/22', place: cardPlace(15, 34, 22) }),
-            walkPlanCopy({ box: 3, index: 23, capture_id: 'cap-c', key: '3/23', place: cardPlace(16, 34, 23) }),
-          ],
+          wanted: count,
+          copies: COPY_NAMES.slice(0, count).map((name, at) =>
+            walkPlanCopy({ box: 3, index: 21 + at, capture_id: `cap-${name}`, key: `3/${21 + at}`, place: cardPlace(14 + at, 34, 21 + at) }),
+          ),
         }),
       ],
     }),
   ])
 }
 
-function threeCopyOrders(): OrdersPayload {
+function sectionOrders(count: number): OrdersPayload {
   return payloadOf(
-    [order({ wanted: 3 })],
+    [order({ wanted: count })],
     [
       {
         key: `TCGplayer:${ORDER_NUMBER}`,
         number: ORDER_NUMBER,
         complete: false,
-        outstanding: 3,
-        lines: [line({ wanted: 3, owed: 3, fulfilled: 0, outstanding: 3, on_hand: 3, picks: [pick(), pick({ index: 22 }), pick({ index: 23 })] })],
+        outstanding: count,
+        lines: [
+          line({
+            wanted: count,
+            owed: count,
+            fulfilled: 0,
+            outstanding: count,
+            on_hand: count,
+            picks: COPY_NAMES.slice(0, count).map((_, at) => pick({ index: 21 + at })),
+          }),
+        ],
       },
     ],
   )
@@ -1270,12 +1285,10 @@ function threeCopyOrders(): OrdersPayload {
 
 const undosOf = (wire: Wire[]) => pullsOf(wire).filter((one) => (one.body as { undo?: boolean }).undo === true)
 
-test('an older receipt’s Undo reverses nothing once a newer pull stands (undo.md §3)', async ({ page }) => {
-  /* `docs/specs/undo.md` §3: a toast's own Undo reaches only the newest reversible write, and "anything older belongs
-     to the slow path". So once B is sold, the receipt for A may not reverse A or B: its Undo is gone, or it does
-     nothing, and both copies stay sold. C is sold last as a marker. The walk line sends its writes in the order they
-     were pressed, so any reversal the receipt queued reaches the server before C's pull does. */
-  const wire = await open(page, { plan: threeCopyPlan(), orders: threeCopyOrders(), refreshed: renumbered })
+test('an older receipt offers no Undo once a newer pull lands (undo.md §3, D171)', async ({ page }) => {
+  /* `docs/specs/undo.md` §3: a toast's own Undo reaches only the newest reversible write. Once B is sold, A's receipt
+     has no Undo to offer: a press that silently does nothing would break D171, so the control is gone. */
+  const wire = await open(page, { plan: renumberPlan(), refreshed: renumbered })
   const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
 
   await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
@@ -1285,16 +1298,8 @@ test('an older receipt’s Undo reverses nothing once a newer pull stands (undo.
 
   const olderReceipt = page.locator('.bn-toast-receipt', { hasText: 'Card 14' })
   await expect(olderReceipt).toBeVisible()
-  const olderUndo = olderReceipt.locator('button.bn-toast-action')
-  if ((await olderUndo.count()) > 0) await olderUndo.click()
-
-  await rows.nth(2).getByRole('button', { name: /^Mark Sold/ }).click()
-  await expect
-    .poll(() => pullsOf(wire).some((one) => (one.body as { targets?: PullTarget[] }).targets?.[0]?.capture_id === 'cap-c'))
-    .toBe(true)
-  expect(undosOf(wire), 'the older receipt sent a reversal once a newer pull stood').toEqual([])
-  await expect(rows.nth(0).locator('.bn-pill', { hasText: 'Sold' })).toBeVisible()
-  await expect(rows.nth(1).locator('.bn-pill', { hasText: 'Sold' })).toBeVisible()
+  await expect(olderReceipt.locator('button.bn-toast-action'), 'the older receipt keeps no Undo control').toHaveCount(0)
+  expect(undosOf(wire), 'nothing was reversed').toEqual([])
 })
 
 /* -------------------------------------------------------------------------------------- a refused sale */
@@ -1373,7 +1378,7 @@ test('the row’s Undo is enabled once the sale is written, before its re-reads 
 test('U after an undo reverses the sale still standing before it, the newest one left', async ({ page }) => {
   /* `docs/specs/undo.md` §10: "Undoing the newest pull hands the rank back to the pull before it, if one still stands."
      Two sales stand, A then B on the next row. U takes B; the next U must take A, the newest sale still standing.
-     Today `undoPullNow`'s `finally` clears `lastPull`, so a second U finds nothing and A stays sold. */
+     Once B is undone, the pull before it is the newest standing pull, and the second U reverses A. */
   const wire = await open(page, { plan: renumberPlan(), refreshed: renumbered })
   const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
   const undos = () => undosOf(wire)
@@ -1393,4 +1398,178 @@ test('U after an undo reverses the sale still standing before it, the newest one
   await page.keyboard.press('u')
   await expect.poll(() => undos().length, 'the second U finds the sale still standing, A, and reverses it').toBe(2)
   expect(undos()[1]?.body).toEqual({ undo: true, targets: [COPY_A] })
+})
+
+const BUILT_ON =
+  'Its order now reads \'Shipped\', so the sale can no longer be undone. If the card is still in the box, use "This card is still here".'
+
+/** A gate a case holds open: `open` waits on it, the case lets it through by calling `release`. */
+function gate(): { promise: Promise<void>; release: () => void } {
+  let release: () => void = () => {}
+  const promise = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  return { promise, release }
+}
+
+test('U does nothing while the newest standing pull’s undo is in flight, even after a sale is queued behind it', async ({ page }) => {
+  /* `docs/specs/undo.md` §10: while the newest standing pull is held (its undo or sale is in flight), `U` does nothing.
+     Sale C is in flight. U reverses C, which is the newest press, and B's toast Undo queues B's reversal behind it. Once
+     C's own reversal has gone out, B's reversal is in flight, and a second U must not queue a second one of B. */
+  const sale = gate()
+  const undoB = gate()
+  const wire = await open(page, {
+    plan: sectionPlan(4),
+    orders: sectionOrders(4),
+    refreshed: renumbered,
+    holdPull: (body) => {
+      if (body.undo !== true && body.targets?.[0]?.capture_id === 'cap-c') return sale.promise
+      if (body.undo === true && body.targets?.[0]?.capture_id === 'cap-b') return undoB.promise
+      return null
+    },
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  const undoTargets = () => undosOf(wire).map((one) => (one.body as { targets: PullTarget[] }).targets[0]?.capture_id)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(1)
+  await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(2)
+  await rows.nth(2).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(3)
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+  await page.locator('.bn-toast-receipt', { hasText: 'Card 15' }).locator('button.bn-toast-action').click()
+
+  sale.release()
+  await expect.poll(undoTargets).toEqual(['cap-c', 'cap-b'])
+  await expect.poll(() => pullsOf(wire).some((one) => (one.body as { targets?: PullTarget[] }).targets?.[0]?.capture_id === 'cap-b')).toBe(true)
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+
+  undoB.release()
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('4')
+  await expect.poll(() => pullsOf(wire).some((one) => (one.body as { targets?: PullTarget[] }).targets?.[0]?.capture_id === 'cap-d')).toBe(true)
+  expect(undoTargets(), 'the second U queued no reversal of B, and never reached A').toEqual(['cap-c', 'cap-b'])
+})
+
+test('U does nothing while the row’s Undo on B is in flight, with sale C queued behind it (control)', async ({ page }) => {
+  /* The row's own Undo on B is in flight and held. Sale C queues behind it and `U` twice must not reach A: the first U
+     cancels C, which the server never hears of, and the second finds B's reversal in flight. */
+  const undoB = gate()
+  const wire = await open(page, {
+    plan: sectionPlan(4),
+    orders: sectionOrders(4),
+    refreshed: renumbered,
+    holdPull: (body) => (body.undo === true && body.targets?.[0]?.capture_id === 'cap-b' ? undoB.promise : null),
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  const undoTargets = () => undosOf(wire).map((one) => (one.body as { targets: PullTarget[] }).targets[0]?.capture_id)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(1)
+  await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(2)
+  await rows.nth(1).getByRole('button', { name: 'Undo' }).click()
+  await expect.poll(undoTargets).toEqual(['cap-b'])
+  await rows.nth(2).getByRole('button', { name: /^Mark Sold/ }).click()
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+
+  undoB.release()
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('4')
+  await expect.poll(() => pullsOf(wire).some((one) => (one.body as { targets?: PullTarget[] }).targets?.[0]?.capture_id === 'cap-d')).toBe(true)
+  expect(undoTargets(), 'the two U presses reversed nothing else, and never reached A').toEqual(['cap-b'])
+})
+
+test('a receipt toast’s Undo does nothing while the same pull’s reversal, begun by U, is in flight', async ({ page }) => {
+  /* The newest pull's reversal is in flight: `U` began it. Its own receipt's Undo has the same held check as `U`, so
+     pressing that receipt's Undo queues no second reversal of the same copy. The sentinel sale C is pressed last, so
+     every write queued before it has reached the server. */
+  const undoB = gate()
+  const wire = await open(page, {
+    plan: sectionPlan(4),
+    orders: sectionOrders(4),
+    refreshed: renumbered,
+    holdPull: (body) => (body.undo === true && body.targets?.[0]?.capture_id === 'cap-b' ? undoB.promise : null),
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(1)
+  await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(2)
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => undosOf(wire).length).toBe(1)
+  await page.locator('.bn-toast-receipt', { hasText: 'Card 15' }).locator('button.bn-toast-action').click()
+
+  undoB.release()
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('3')
+  await expect.poll(() => pullsOf(wire).some((one) => (one.body as { targets?: PullTarget[] }).targets?.[0]?.capture_id === 'cap-c')).toBe(true)
+  expect(undosOf(wire).map((one) => (one.body as { targets: PullTarget[] }).targets[0]?.capture_id), 'the receipt’s Undo queued no second reversal of B').toEqual(['cap-b'])
+})
+
+test('a refused undo of the newest pull leaves U’s list, and the next U reaches the pull before it', async ({ page }) => {
+  /* `docs/specs/undo.md` §3: the fast path undoes the newest pull. When the server refuses that undo as `sale_built_on`,
+     the refused pull is no longer one U can take: the next U reaches the standing pull before it, A. */
+  const wire = await open(page, {
+    plan: renumberPlan(),
+    refreshed: renumbered,
+    refuse: (body) =>
+      body.undo === true && body.targets?.[0]?.capture_id === 'cap-b'
+        ? { status: 409, code: 'sale_built_on', message: BUILT_ON }
+        : null,
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(1)
+  await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(2)
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => undosOf(wire).length).toBe(1)
+  await expect(page.locator('.bn-toast', { hasText: 'The card was not put back' })).toBeVisible()
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => undosOf(wire).length).toBe(2)
+  expect(
+    (undosOf(wire)[1]?.body as { targets: PullTarget[] }).targets[0]?.capture_id,
+    'the next U reaches copy A, the pull before the refused one',
+  ).toBe('cap-a')
+})
+
+test('a refused undo says why in words the person reads: the order can no longer be undone', async ({ page }) => {
+  const wire = await open(page, {
+    plan: renumberPlan(),
+    refreshed: renumbered,
+    refuse: (body) =>
+      body.undo === true && body.targets?.[0]?.capture_id === 'cap-b'
+        ? { status: 409, code: 'sale_built_on', message: BUILT_ON }
+        : null,
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(1)
+  await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(2)
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+  const refusal = page.locator('.bn-toast', { hasText: 'The card was not put back' })
+  await expect(refusal).toContainText('can no longer be undone')
+  expect(await refusal.innerText(), 'the refusal names its code to nobody').not.toMatch(/sale_built_on|\{/)
 })
