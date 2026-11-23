@@ -1,13 +1,13 @@
 {
- "readAt": "2026-11-23T19:59:54Z",
+ "readAt": "2026-11-23T21:23:35Z",
  "pulls": [
   {
-   "number": 1137,
-   "title": "Orders: re-read after every write; the walk takes owed from the reply",
-   "branch": "lane/orders-reread",
+   "number": 1138,
+   "title": "Add review-finding notes from PRs 1135 and 1137",
+   "branch": "lane/notes-reread-cancel",
    "draft": false,
-   "createdAt": "2026-11-23T16:52:21Z",
-   "url": "https://github.com/shivinate7/banchi/pull/1137"
+   "createdAt": "2026-11-23T20:55:41Z",
+   "url": "https://github.com/shivinate7/banchi/pull/1138"
   }
  ],
  "branches": [
@@ -318,10 +318,10 @@
    "name": "lane/network-signatures-docs"
   },
   {
-   "name": "lane/orders-plumbing-notes"
+   "name": "lane/notes-reread-cancel"
   },
   {
-   "name": "lane/orders-reread"
+   "name": "lane/orders-plumbing-notes"
   },
   {
    "name": "lane/orders-undo-plumbing"
@@ -416,12 +416,6 @@
    "lane": null
   },
   {
-   "n": 122,
-   "status": "open",
-   "home": "orders-plumbing-fixes",
-   "lane": "orders-undo-plumbing"
-  },
-  {
    "n": 32,
    "status": "open",
    "home": "docs/specs/pricing-suggest.md section 9",
@@ -441,12 +435,6 @@
   },
   {
    "n": 123,
-   "status": "open",
-   "home": "orders-plumbing-fixes",
-   "lane": null
-  },
-  {
-   "n": 127,
    "status": "open",
    "home": "orders-plumbing-fixes",
    "lane": null
