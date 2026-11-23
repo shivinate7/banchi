@@ -1,0 +1,1 @@
+- u-lane-f2-toast-input-omit: U-lane finding F2. ToastInput in app/src/kit/toast.tsx omits id, ttlMs, leaving, held and run from Toast, but not spent. Only clearToastAction sets spent. A caller could pass spent when it makes a toast, and the type would accept it. No caller in app/src passes it today. Why unfixed: not recorded. Seen: 2026-11-22 x1

@@ -1,0 +1,1 @@
+- walkplan-f4-sparse-exact-false: Walkplan finding F4. A sparse walk can end with exact set to false. The docstring of _greedy in pipeline/walkplan.py says its result is a valid cover, only a longer one, and solve flags the plan inexact. The record does not say which sparse case reaches it. Why unfixed: not recorded. Seen: 2026-11-22 x1

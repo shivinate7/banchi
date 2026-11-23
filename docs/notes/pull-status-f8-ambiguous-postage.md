@@ -1,0 +1,1 @@
+- pull-status-f8-ambiguous-postage: Pull-status finding F8. Postage on an ambiguous order number. Where and what a person sees: detail unrecorded, because pull request 1128 has no review comments. Why unfixed: detail unrecorded. Seen: 2026-11-22 x1

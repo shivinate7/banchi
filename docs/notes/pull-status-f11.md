@@ -1,0 +1,1 @@
+- pull-status-f11: Pull-status finding F11. Detail unrecorded: pull request 1128 has no review comments, and no other record holds this finding's text. Why unfixed: detail unrecorded. Seen: 2026-11-22 x1

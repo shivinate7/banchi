@@ -115,19 +115,19 @@ same drawers changes what a resurrect means to the other person.
 "Newest" is a position, not a countdown. A pull is newest until a later pull replaces it. Undoing the newest
 pull hands the rank back to the pull before it, if one still stands. Only one row ever carries `Undo`, so a
 walk never piles up open buttons. An older sold copy is a dead end in this row on purpose. Its way back is the
-card on `#/inventory` (§4). A test fakes the clock and advances it past the old window. `Undo` on the newest pull survives.
+card on `#/inventory` (§4). A test fakes the clock and advances it past the old window. `Undo` on the newest pull survives. The row's one `Undo` is picked by `newestOf` in `app/src/OrdersWalkPane.tsx`.
 
 The `U` key on the Pull stage undoes the newest press. A sale still queued in the walk's line is canceled, and the
 server is never called. A sale whose write is in flight gets its reversal queued behind it. Otherwise `U` reverses
 the newest pull that still stands, whatever was clicked since. Once that pull is undone, the next `U` reverses the
 pull now newest. While the newest pull's reversal is queued or out, `U` waits and does nothing, so it never queues
-a second reversal of the same copy and never reaches past it to an older pull. A pull leaves the list, and its receipt loses its `Undo`, once it is undone by any route, once the ledger says it is
+a second reversal of the same copy and never reaches past it to an older pull. `U` runs the callback of `useUndoHotkey` in `app/src/Orders.tsx`: `newestWalkSale` finds the newest sale still in the walk's line, which `undoWalkSale` cancels or reverses, and `newestUndoablePull` returns null while `reversalHeld` is true. `undoFromToast` queues its reversal with `inWalkLine` in `app/src/OrdersWalkPane.tsx`, so it runs behind any write in flight. A pull leaves the list, and its receipt loses its `Undo`, once it is undone by any route, once the ledger says it is
 no longer recorded (`pull_not_recorded`), or once the server answers its reversal with any refusal (a 4xx, such as
-`sale_built_on`, whose order has moved on, or `pull_entry_refused`). The next `U` then reaches the pull before it. A
+`sale_built_on`, whose order has moved on, or `pull_entry_refused`). The next `U` then reaches the pull before it. `forgetPull` in `app/src/Orders.tsx` takes the pull off the list. `undoPullNow` calls it on success, on `pull_not_recorded` and on a final refusal, and `isFinalUndoRefusal` in `app/src/server.ts` is true only for a refusal with a 4xx status. A
 network failure, a server fault (5xx) or a busy store leaves the pull in the list, so `U` retries it. A receipt
 toast's `Undo` follows the same rank: a newer recorded pull takes the control off every older receipt, and a press on
 the newest receipt while its reversal is queued or out does nothing. A sale still queued or in flight is not yet a pull
-that stands, so during that window an older receipt still reverses its own copy, behind the write in flight.
+that stands, so during that window an older receipt still reverses its own copy, behind the write in flight. `undoFromReceipt` in `app/src/Orders.tsx` does nothing unless the receipt's pull is the newest and its reversal is not held. `notePull` in the same file calls `clearToastAction` in `app/src/kit/toast.tsx` on every older receipt, which takes its Undo control off.
 
 ## 11. The undo rules
 
