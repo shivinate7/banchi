@@ -10761,9 +10761,10 @@ def _order_built_on(snapshot, held_key: str, position_key: Optional[str] = None)
     later than the sale's `sold` event shipped before it. Any other content change also
     restamps `changed_at`, which can only make this refuse more, never less.
 
-    A CANCELED ORDER IS NOT BUILT ON BY ITS CANCEL ALONE (owner ruling, `docs/specs/undo.md`
-    section 11.1): the sale undoes only while nothing has shipped. `Ledger.ingest` overwrites
-    the status, so a canceled order's own word says nothing about an earlier shipment. The
+    A CANCELED ORDER IS NOT BUILT ON BY ITS CANCEL ALONE (`docs/specs/undo.md` section 11.1
+    and UN-7): a cancel is not a shipment, so the sale undoes only when the store knows the
+    order never shipped. `Ledger.ingest` overwrites the status, so a canceled order's own word says
+    nothing about an earlier shipment, and the cancel cannot stand in for proof. The
     order counts as never shipped only when `Ledger.never_shipped` knows it: `seen_shipped` False
     (a known pre-ship status was read, none read as shipped since), no label row for the order's
     number (a claim counts), no hand fill, and no line closed as shipped elsewhere. An order held
