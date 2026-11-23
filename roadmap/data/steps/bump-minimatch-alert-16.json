@@ -1,0 +1,10 @@
+{
+  "title": "Bump minimatch in app/package-lock.json (Dependabot alert 16)",
+  "status": "todo",
+  "phase": "Machine load",
+  "why": "GitHub Dependabot alert 16, medium, open since 2026-11-05: minimatch >= 7.0.0 and < 11.0.1 can be slowed by a crafted glob (denial of service). Read by triage 2026-11-23 17:23 CST: npm package in app/package-lock.json, scope development, patched in 11.0.1.",
+  "note": "Fix: raise minimatch to 11.0.1 or later in app/package-lock.json, and run the app's checks. It is a dev tool, so it reaches no running server. Not queued as a lane: ask the Orders session or a new lane to take it when free.",
+  "ask": null,
+  "updatedAt": "2026-11-23T17:22:47-06:00",
+  "order": 999
+}
