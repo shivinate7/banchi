@@ -1,36 +1,28 @@
 {
- "readAt": "2026-11-23T06:14:52Z",
+ "readAt": "2026-11-23T06:42:41Z",
  "pulls": [
   {
-   "branch": "lane/inventory-receipt-undo",
-   "createdAt": "2026-11-23T05:57:02Z",
-   "draft": false,
-   "number": 1133,
-   "title": "Inventory: a newer receipt spends the older receipts' Undo",
-   "url": "https://github.com/shivinate7/banchi/pull/1133"
-  },
-  {
-   "branch": "lane/walk-refusal-focus",
-   "createdAt": "2026-11-23T05:55:58Z",
-   "draft": true,
    "number": 1132,
    "title": "Return focus after a refused Mark sold or Undo",
+   "branch": "lane/walk-refusal-focus",
+   "draft": false,
+   "createdAt": "2026-11-23T05:55:58Z",
    "url": "https://github.com/shivinate7/banchi/pull/1132"
   },
   {
-   "branch": "lane/orders-notes",
-   "createdAt": "2026-11-23T05:39:08Z",
-   "draft": false,
    "number": 1130,
    "title": "Record the Orders plumbing notes and one debt",
+   "branch": "lane/orders-notes",
+   "draft": false,
+   "createdAt": "2026-11-23T05:39:08Z",
    "url": "https://github.com/shivinate7/banchi/pull/1130"
   },
   {
-   "branch": "lane/orders-pull-status",
-   "createdAt": "2026-11-23T03:21:40Z",
-   "draft": true,
    "number": 1128,
    "title": "Refuse sales, fills, kinds and labels on canceled orders (bug 4)",
+   "branch": "lane/orders-pull-status",
+   "draft": true,
+   "createdAt": "2026-11-23T03:21:40Z",
    "url": "https://github.com/shivinate7/banchi/pull/1128"
   }
  ],
@@ -331,9 +323,6 @@
   },
   {
    "name": "lane/hand-fed-rail-flat-design"
-  },
-  {
-   "name": "lane/inventory-receipt-undo"
   },
   {
    "name": "lane/market-reads-latest"
