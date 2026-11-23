@@ -17,9 +17,10 @@ export { count }
 
 /** One write at a time, with its refusal handling and its re-read in one place. `write` runs the
  *  call and returns the answer, or null for a refusal, so a caller can close its own editor on
- *  success and leave it open on a refusal. `onChanged` is the screen's own re-read, called after a
- *  write that landed. The screen supplies what is written; this knows nothing of it. */
-export function useSheetWrite(onChanged: () => void): {
+ *  success and leave it open on a refusal. `onChanged`, when a screen gives one, is called after a
+ *  write that landed; a screen that re-reads through `afterWrite` inside the write it passes gives none.
+ *  The screen supplies what is written; this knows nothing of it. */
+export function useSheetWrite(onChanged?: () => void): {
   busy: boolean
   trouble: Failure | null
   write: <T>(run: () => Promise<T>) => Promise<T | null>
@@ -34,7 +35,7 @@ export function useSheetWrite(onChanged: () => void): {
       setTrouble(null)
       try {
         const answer = await run()
-        onChanged()
+        onChanged?.()
         return answer
       } catch (err) {
         setTrouble(describeFailure(err))

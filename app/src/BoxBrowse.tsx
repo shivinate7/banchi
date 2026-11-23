@@ -43,6 +43,7 @@ import {
 } from './server'
 import { BoxIdentity, BoxOps, ClaimEditor, type ClaimPatch } from './BoxOps'
 import { reasonLabel } from './reasons'
+import { afterWrite, rereadNow, useRereadOnWrite } from './afterWrite'
 import { RailFrame } from './RailFrame'
 import {
   CardDetailsSection,
@@ -511,10 +512,6 @@ type BoxBrowseProps = {
 
   /** Bumped by the caller after it writes a card, to force the same re-read the Reload does. */
   reloadToken?: number
-  /** The part of `reloadToken` that is not a sale: a write that can move the review queues, the buried
-   *  boxes or a price. Defaults to `reloadToken`, so a caller that does not tell sales apart re-reads
-   *  all of it. */
-  heavyToken?: number
 
   /** Walk to one card, by store key. `at` is the request; a request already answered is
    *  ignored. `box` (D192, item 2) is the target's box, when known — `rows` is
@@ -785,7 +782,6 @@ export function BoxBrowse({
   onListings,
   goTo,
   reloadToken = 0,
-  heavyToken = reloadToken,
   hideSold = false,
   onHideSold,
   frozen = RANK_IS_CURRENT,
@@ -877,6 +873,9 @@ export function BoxBrowse({
   const [priced, setPriced] = useState<Record<string, MarketRead>>({})
   const asked = useRef<Set<string>>(new Set())
   const [reloads, setReloads] = useState(0)
+  /* EVERY WRITE'S RE-READ (`afterWrite`, D73): a card write made here, in the box sheet or on the screen above re-reads
+     this walk, its pricing and its box counts, whatever the write came to. This counter is what the reads below depend on. */
+  useRereadOnWrite(async () => setReloads((n) => n + 1))
   /* Each re-shot card's NEW capture id, by row key — the cache nonce the photo appends. */
   const [reshot, setReshot] = useState<Record<string, string>>({})
   const [reshootBusy, setReshootBusy] = useState<string | null>(null)
@@ -1182,7 +1181,7 @@ export function BoxBrowse({
   /* THE DELETED BOXES SHELF CLOSES THE LIST, AND ONLY WHEN NOTHING NARROWS IT. A search and a
    * facet pick name live cards, which a buried record is not, so under either the shelf is not
    * offered and a walk standing on it moves on like any shelf the answer leaves out. */
-  const { buried, failure: buriedFailure, retry: retryBuried } = useBuried(reloads + heavyToken)
+  const { buried, failure: buriedFailure, retry: retryBuried } = useBuried(reloads + reloadToken)
   const [deletedKey, setDeletedKey] = useState<string | null>(null)
   /* THE WALK AND THE PANE READ ONE ANSWER: the record picked, else the first. The arrow keys step it
    * as they step a box's walk, and the row in view is kept in view within the rail. */
@@ -1324,12 +1323,11 @@ export function BoxBrowse({
       const url = String(reader.result)
       const imageBase64 = url.slice(url.indexOf(',') + 1)
       const captureId = newCaptureId()
-      reshootPhoto(row.card.box, row.card.index, imageBase64, captureId)
+      afterWrite(() => reshootPhoto(row.card.box, row.card.index, imageBase64, captureId))
         .then(() => {
           setReshot((held) => ({ ...held, [row.key]: captureId }))
           setReshootBusy(null)
           setReshootFailure(null)
-          setReloads((n) => n + 1)
           toast({ kind: 'ok', title: 'Photo replaced', body: row.key, icon: 'camera' })
         })
         .catch((err: unknown) => {
@@ -2816,7 +2814,6 @@ export function BoxBrowse({
                       <CardOps
                         key={panelRow.key}
                         row={panelRow}
-                        onChanged={() => setReloads((n) => n + 1)}
                         reshoot={
                           <ReshootControl
                             row={panelRow}
@@ -2918,7 +2915,6 @@ export function BoxBrowse({
           listings={listings}
           open={manage}
           onClose={() => setManage(false)}
-          onChanged={() => setReloads((n) => n + 1)}
         />
       )}
 
@@ -2981,11 +2977,9 @@ function ReshootControl({ row, busy, failure, onPick }: ReshootControlProps) {
  * word for a different write. */
 function CardOps({
   row,
-  onChanged,
   reshoot,
 }: {
   row: Row
-  onChanged: () => void
   reshoot?: ReactNode
 }) {
   const [menu, setMenu] = useState(false)
@@ -3017,10 +3011,9 @@ function CardOps({
     setBusy(true)
     setTrouble(null)
     try {
-      await updateCard(row.card.box, row.card.index, patch)
+      await afterWrite(() => updateCard(row.card.box, row.card.index, patch))
       toast({ kind: 'ok', icon: 'wand', title: 'Claims written', body: `${row.key}: ${Object.keys(patch).join(', ')}` })
       setOpen(null)
-      onChanged()
     } catch (err) {
       setTrouble(describeFailure(err))
     } finally {
@@ -3034,7 +3027,9 @@ function CardOps({
     setTrouble(null)
     try {
       /* The capture id is the aim, sent exactly as the record holds it, null included. */
-      const result: RemoveResult = await removeCardInPlace(row.card.box, row.card.index, row.card.capture_id)
+      const result: RemoveResult = await afterWrite(() =>
+        removeCardInPlace(row.card.box, row.card.index, row.card.capture_id),
+      )
       toast({
         kind: 'ok',
         icon: 'trash',
@@ -3046,7 +3041,6 @@ function CardOps({
         ttlMs: 12000,
       })
       setOpen(null)
-      onChanged()
     } catch (err) {
       setTrouble(describeFailure(err))
     } finally {
@@ -3076,7 +3070,7 @@ function CardOps({
        * §11.9): a true reversal is always "<what it undid> undone", the same words
        * `Inventory.tsx` uses for the identical write reached from its own screen. */
       if (row.card.state === 'sold') {
-        const result: SaleResult = await undoSale(row.card.box, row.card.index)
+        const result: SaleResult = await afterWrite(() => undoSale(row.card.box, row.card.index))
         toast({
           kind: 'ok',
           icon: 'undo',
@@ -3087,7 +3081,7 @@ function CardOps({
           ttlMs: 12000,
         })
       } else {
-        await undoRetire(row.card.box, row.card.index)
+        await afterWrite(() => undoRetire(row.card.box, row.card.index))
         toast({
           kind: 'ok',
           icon: 'undo',
@@ -3097,7 +3091,6 @@ function CardOps({
         })
       }
       setMenu(false)
-      onChanged()
     } catch (err) {
       const failure = describeFailure(err)
       if (failure.code === 'sold_origin_unknown' || failure.code === 'retired_origin_unknown') {
@@ -3131,7 +3124,7 @@ function CardOps({
       // sigil-ok: a store key, the same shape `resurrect`'s own label above draws and the
       // same reason (D92) — this card is not in a slot to count, same as that one.
       const label = `${row.card.place?.box_name ?? UNNAMED_BOX} #${row.card.index}`
-      const result = await saleStillHere(row.card.box, row.card.index)
+      const result = await afterWrite(() => saleStillHere(row.card.box, row.card.index))
       const orderNote =
         result.order_effect === 'filled_by_hand'
           ? ' The order it was pulled for is now marked filled by hand.'
@@ -3147,7 +3140,6 @@ function CardOps({
       })
       setMenu(false)
       setBuiltOn(false)
-      onChanged()
     } catch (err) {
       setTrouble(describeFailure(err))
     } finally {
@@ -3187,7 +3179,7 @@ function CardOps({
             className="bn-menu-item"
             onClick={() => {
               setMenu(false)
-              onChanged()
+              rereadNow()
             }}
           >
             <Icon name="refresh" size={16} /> Reread
