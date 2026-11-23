@@ -94,7 +94,7 @@ export function holdToast(id: number, held: boolean): void {
  *  its control goes, so no press is left that does nothing. */
 export function clearToastAction(id: number): void {
   const hit = toasts.find((t) => t.id === id)
-  if (hit === undefined || hit.action === undefined) return
+  if (hit === undefined || hit.leaving || hit.action === undefined) return
   toasts = toasts.map((t) => (t.id === id ? { ...t, action: undefined } : t))
   emit()
 }

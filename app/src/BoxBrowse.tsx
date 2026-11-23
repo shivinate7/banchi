@@ -39,6 +39,7 @@ import {
   undoRetire,
   undoSale,
   failureTone,
+  SALE_BUILT_ON,
 } from './server'
 import { BoxIdentity, BoxOps, ClaimEditor, type ClaimPatch } from './BoxOps'
 import { reasonLabel } from './reasons'
@@ -3102,7 +3103,7 @@ function CardOps({
       if (failure.code === 'sold_origin_unknown' || failure.code === 'retired_origin_unknown') {
         setOriginUnknown(true)
       }
-      if (failure.code === 'sale_built_on') setBuiltOn(true)
+      if (failure.code === SALE_BUILT_ON) setBuiltOn(true)
       setTrouble(failure)
     } finally {
       setBusy(false)

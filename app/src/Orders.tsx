@@ -95,7 +95,7 @@ import {
   failureTone,
   refusalToast,
   ALREADY_SOLD,
-  SALE_BUILT_ON,
+  UNDO_NEVER_CODES,
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
@@ -1007,8 +1007,11 @@ const reversalsHeld = new Set<string>()
 /** Is a reversal of this copy already queued or out, by any route? */
 const reversalHeld = (captureId: string): boolean => reversalsHeld.has(captureId) || walkReversalHeld(captureId)
 
-/** A pull is no longer standing, undone by any route: the pull before it takes the rank back. */
+/** A pull is no longer standing, undone by any route: the pull before it takes the rank back, and its own receipt
+ *  keeps no Undo. */
 function forgetPull(captureId: string): void {
+  const gone = hubState().pulls.find((one) => one.target.capture_id === captureId)
+  if (gone?.receipt !== undefined) clearToastAction(gone.receipt)
   setHub((current) => ({ pulls: current.pulls.filter((one) => one.target.capture_id !== captureId) }))
 }
 
@@ -1065,8 +1068,8 @@ async function undoPullNow(target: PullTarget, place: string, name: string): Pro
     } else {
       const trouble = describeFailure(err)
       toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
-      /* The order has moved on: this pull can never be reversed, so `U` moves to the pull before it. */
-      if (trouble.code === SALE_BUILT_ON) forgetPull(target.capture_id)
+      /* A refusal no second press clears: this pull can never be reversed, so `U` moves to the pull before it. */
+      if (UNDO_NEVER_CODES.has(trouble.code ?? '')) forgetPull(target.capture_id)
     }
   } finally {
     reversalsHeld.delete(target.capture_id)
@@ -1986,7 +1989,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       }
       const trouble = describeFailure(err)
       toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
-      if (trouble.code === SALE_BUILT_ON) forgetPull(target.capture_id)
+      if (UNDO_NEVER_CODES.has(trouble.code ?? '')) forgetPull(target.capture_id)
       return { ok: false }
     } finally {
       setHub({ busy: null })
