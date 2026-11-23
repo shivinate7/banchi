@@ -911,7 +911,7 @@ export function Fulfillment() {
          * re-read `afterWrite` started shows where the card stands. A 4xx refusal wrote nothing, so it still says so. */
         setTrouble(
           gotNoAnswer(err)
-            ? 'The store did not answer. The list is checking where this card stands.'
+            ? 'The store did not confirm the sale. The list shows where this card stands.'
             : 'Nothing was saved. Press Mark it sold again.',
         )
       } finally {
@@ -956,7 +956,9 @@ export function Fulfillment() {
                   canUndo: dead ? false : standing.canUndo,
                   note: dead
                     ? 'This card stays sold. Ask for help to put it back.'
-                    : 'The card did not come back. Press Undo again.',
+                    : gotNoAnswer(err)
+                      ? 'The store did not confirm the undo. The list shows where this card stands.'
+                      : 'The card did not come back. Press Undo again.',
                 },
           ),
         )
