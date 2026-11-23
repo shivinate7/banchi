@@ -159,19 +159,30 @@ expect refuse "a branch push the revert guard fails is refused" git push origin 
 printf '#!/usr/bin/env python3\n' > scripts/revert-audit.py
 expect allow "control: the same push passes when the guard passes" git push -q origin guard-probe
 
-echo "  -- the record branch is not judged by the revert guard --"
-# The record branch is an orphan: it shares no history with main, so the guard's merge-base read
-# has nothing to read. The skip is for that one branch only. A stub that fails stands in for the
-# guard in both cases, so the allow below can only be the skip, and the refusal of the look-alike
-# name below can only be the skip being exact.
+echo "  -- the record branch is judged by the revert guard --"
+# pre-push keeps no skip for the record branch. A commit that shares history with main is judged
+# like any branch: a stub that fails refuses its push to that name.
+mkdir -p scripts
 printf '#!/usr/bin/env python3\nimport sys\nprint("REFUSED: stub revert guard", file=sys.stderr)\nsys.exit(1)\n' \
   > scripts/revert-audit.py
+git switch -q -c shares-history main
+echo six > file.txt
+git add file.txt
+git commit -qm "a commit that shares history with main"
+expect refuse "a commit sharing history with main, pushed to the record branch, is refused by a failing guard" \
+  git push -q origin shares-history:roadmap
+git switch -q main
+# An orphan head (the record branch's shape) has no merge-base with main, so revert-audit.py's own
+# pass allows it. The REAL script is copied in: a stub here would prove the hook, not the guard.
+# guard_branch skips a fixture with no revert-audit.py, so the copy is what makes this case bite.
+cp "$REPO_ROOT/scripts/revert-audit.py" scripts/revert-audit.py
 git switch -q --orphan roadmap
 echo record > record.md
 git add record.md
 git commit -qm "record: first commit on an orphan branch"
-expect allow "an orphan commit pushed to the record branch is allowed while the guard fails" git push -q origin roadmap
-expect refuse "a push to roadmap-two is still refused: the skip matches the exact record branch" git push -q origin roadmap:roadmap-two
+# -f: the verdict must be the guard's alone. A roadmap left by the push above would reject this one
+# as non-fast-forward, which is not the guard's answer.
+expect allow "an orphan commit pushed to the record branch is allowed by the real revert guard" git push -q -f origin roadmap
 git switch -q main
 rm -rf scripts
 
