@@ -129,33 +129,65 @@ Treating it as set cover would send the operator to a drawer for a copy that is 
 
 ### Algorithm
 
-Exact branch and bound, pure Python, in `pipeline/walkplan.py`. Four parts:
+`solve` in `pipeline/walkplan.py` is exact branch and bound in pure Python. It finds the fewest
+stops that hold every demanded copy. Its steps run in this order, and each reduction keeps at
+least one optimal cover.
 
-1. **Restrict.** Drop every section that holds no demanded SKU. Clip each section's supply vector
-   to the demand (`min(demand[k], supply[s][k])`). Surplus copies never change the answer.
-2. **Dominance reduction** (`_dominated`). Drop section *B* when some section *A* covers it
-   componentwise on the clipped vectors. This is safe for a min-cardinality objective under a
-   constant cost, and it removes most of the search space. A cost that is not constant breaks it.
-3. **Greedy upper bound** (`_greedy`). Repeatedly take the section that covers the most
-   outstanding copies. This is the incumbent the search improves on.
-4. **Branch on the scarcest SKU** in `solve`, never on section index. Pick the outstanding SKU
-   with the fewest usable suppliers. Try each supplier in turn, and ban the siblings already
-   tried. The bound `|chosen| + ⌈outstanding / best single-section coverage⌉ ≥ |incumbent|`
-   prunes.
+1. **Clip** (`_clip`). Drop each stop that holds no demanded SKU. Cap each stop's count of a SKU
+   at that SKU's demand. Surplus copies never change the answer.
+2. **Refuse the uncoverable** (`Uncoverable`). If the stops together hold less than the demand of
+   some SKU, `solve` raises and names that SKU. `plan` caps demand at on-hand copies first, so a
+   real store never reaches this.
+3. **Dominance** (`_dominated`). Drop stop *B* when another stop *A* holds every SKU *B* holds,
+   and holds the whole demand of each. A stop can be walked to only once, so covering *B*'s
+   copies is not enough: *A* must hold the demand itself. This is safe only because the cost is a
+   constant per stop. A non-constant cost must revisit this step. Of two identical stops that
+   both pass, the one earlier in walk order survives.
+4. **Forced stops** (`_reduce`). A stop is forced when the other stops cannot supply what the walk
+   still wants of some SKU it holds. Take every forced stop, subtract what it supplies from the
+   demand, and clip the rest to the smaller demand. Repeat, re-running dominance each round, until
+   no stop is forced.
+5. **Components** (`_components`). Split what is left into groups that share no SKU. A group
+   cannot help another, so each is searched alone and the covers are added.
+6. **Search** (`_search`). Within each group, branch on the SKU with the fewest usable suppliers,
+   and try each supplier in turn. Once a supplier's branch is searched, later siblings ban it.
+   Identical stops are tried once: a stop is skipped when its earlier twin is already banned. A
+   branch is pruned when `chosen + ceil(outstanding / best single-stop coverage)` is at least the
+   incumbent's size.
 
-**Exact is cheap, so no heuristic is taken and no dependency is added.** Branching on the section
-index did not finish a real 275-order instance. Branching on the scarcest SKU with dominance
-reduction solves it in milliseconds. The difference is the formulation, not the language. No
+**Incumbent** (`_greedy`). Greedy takes the stop that covers the most outstanding copies, one at
+a time. It keeps a heap of last-seen coverages, so it rescores only the top stop. Past its
+deadline it stops choosing the best stop and takes, in walk order, each stop that still helps.
+Its deadline is the solve budget, with a floor of 0.5 s.
+
+**Budget.** The solve budget is 2 s (`DEFAULT_BUDGET_S`). The search checks the clock at every
+node. When the budget runs out, it returns the incumbent flagged as not exact. A budget spent
+before the search starts returns the greedy cover, flagged the same way.
+
+**Exactness.** A cover is `exact` only when every group's search finishes inside the budget and
+the cover meets the demand. A cover short of demand is never exact.
+
+**Plan.** `plan` caps each SKU's demand at its on-hand copies before the solve. Every owed copy is
+then walked or listed in `shortfall`. A SKU whose chosen stops do not reach all its on-hand
+copies is listed with `on_hand` set to the count walked.
+
+### Why this formulation, and what it costs
+
+Branching on section index did not finish a full-ledger instance in 30 s. Branching on the scarcest
+SKU, over dominance-reduced stops, does. The difference is the formulation, not the language. No
 solver library is used. `requirements.txt` argues every dependency it carries, and a millisecond
 solve does not earn a new one.
 
-### What the plan is worth
+The solver earns its place on the ticked subsets the owner walks. A design argued on the whole
+ledger would be argued on a number that shrinks as the tick list grows. On the owner's store,
+greedy has matched the optimum at every size measured.
 
-The plan is worth most on the ticked subsets the owner actually walks. At full walkable scale the
-demand spreads so wide that the plan selects every candidate section, and greedy equals the
-optimum. A design argued on the whole ledger would be argued on a number that shrinks as the tick
-list grows. Unmeasured now: the current store's figures. The harness does not re-measure timing.
-A timing assertion on a shared CI machine is a flake, not a guard (`harness/tests/t11_walk_plan.py`).
+**Measured** on the owner's store, from a read-only copy: 97 walkable orders over 65 sections. The
+solve takes 0-2 ms and is exact. The whole plan takes 64-101 ms. The earlier dominance rule dropped
+7 owed copies on that store. This rule walks all of them, at 1 to 5 more stops. Sparse synthetic
+walks can reach the 2 s budget and return a valid cover with `exact: false`. The harness does not
+assert timing. A timing assertion on a shared CI machine is a flake, not a guard
+(`harness/tests/t11_walk_plan.py`).
 
 ### Where it runs
 
@@ -165,7 +197,8 @@ A timing assertion on a shared CI machine is a flake, not a guard (`harness/test
   reasoning over inventory.
 - The harness can test it. A browser solver is reachable only by a Playwright suite, which
   `make design-check` keeps off the commit path. A case over a seeded store runs in `make harness`.
-- It reads one `Store().read()` snapshot. A client would need the whole inventory to do the same
+- It works on one snapshot its caller passes in (`plan`'s `inventory` and `ledger`). It reads no
+  file, takes no lock and writes nothing. A client would need the whole inventory to do the same
   arithmetic, which is the second store this repo does not have.
 
 The client already holds every pick after `POST /orders/picks`, so a browser solve would add no

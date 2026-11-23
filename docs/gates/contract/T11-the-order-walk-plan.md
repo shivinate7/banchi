@@ -3,7 +3,8 @@
 New 2026-09-17, with `pipeline/walkplan.py` and `docs/specs/order-walk-plan.md`. **Pass: the plan is the proven optimum on a fixture greedy gets wrong. A section holding one
 copy never satisfies a demand for two. An unfillable SKU lands in the shortfall rather
 than making the instance infeasible. A pooled game is one stop, last, and never a
-section. And `exact` comes back false when the budget cannot be met.**
+section. `exact` comes back false when the budget cannot be met, and never on a cover short
+of its demand. Every owed copy is either walked to or listed short.**
 
 **There is no T10, and the gap is deliberate.** T10 is spelled for the Intelligent Mail
 barcode encoder. That encoder was shelved on the owner's ruling with `pipeline/imb.py`, on
@@ -58,7 +59,6 @@ two more. The fourth let a pooled stop sort among the drawers. The fifth pinned 
 Each one turned this test red on the clause that names it.
 
 **What a green T11 does not mean.** It does not mean the plan is fast on the owner's store.
-The 27.9 ms figure for all 275 walkable orders was measured there and is recorded in the
-spec's section 6. It is not re-measured here, because a timing assertion on a shared CI box is
-a flake rather than a guard. A green T11 also does not mean any of this is on a screen. The
+Timing is not asserted here, because a timing assertion on a shared CI box is a flake rather
+than a guard. A green T11 also does not mean any of this is on a screen. The
 route and the screen are separate work, and no code under test reaches a wire.
