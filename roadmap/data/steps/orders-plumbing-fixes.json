@@ -1,0 +1,10 @@
+{
+  "title": "Orders plumbing fixes: the 9 plumbing-hunt findings",
+  "status": "doing",
+  "phase": "Orders walk fixes",
+  "why": "The plumbing hunt on the Orders screen found 9 faults, worst first: the walk plan drops owed copies, sales refused after a return read, positions off by one after Undo, and more. Source: handoff 72b8b5ec, section Findings from the plumbing hunt.",
+  "note": "Fan out per owner ruling Q1 (19:44 CST Nov 22, process-only). Branches: lane/walkplan-owed-stops (bug 1); lane/orders-pull-status (bug 4); lane/orders-undo-plumbing (bugs 3, 5, 7, 8, 9; ruling Q2 = 2a: U undoes the newest standing sale after any click, home docs/specs/undo.md section 10); lane/walk-pane-tally-focus (bugs 2, 6). Done when every fix is merged and one re-run of the hunt on a read-only store copy passes. Feedback item fb-1942-2 points here.",
+  "ask": null,
+  "updatedAt": "2026-11-23T01:51:00Z",
+  "order": 999
+}
