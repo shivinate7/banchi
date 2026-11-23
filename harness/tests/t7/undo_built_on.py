@@ -1487,8 +1487,9 @@ def check_undo_after_cancel_unshipped(checks: Checks) -> None:
 
 def check_undo_after_cancel_built_on(checks: Checks) -> None:
     """The control for `check_undo_after_cancel_unshipped`: a label bought for the order still
-    builds the sale on, so its undo refuses with `sale_built_on` after the order is canceled. It
-    is green on main, and it must stay green when the unshipped case goes green.
+    builds the sale on, so its undo refuses with `sale_built_on` after the order is canceled.
+    The unshipped case allows an undo after a cancel, so this case pins the label half of the
+    rule that the allowance must not cover (undo.md UN-7, section 11.1).
 
     The label is asserted on record before the cancel. Without that, a refusal for any other
     reason would pass this control and hide a label that was never written."""
@@ -1555,10 +1556,11 @@ def _refused_on_both_routes(checks: Checks, capture_id: str, label: str, scenari
 
 
 def check_undo_refused_after_shipped_then_canceled(checks: Checks) -> None:
-    """Owner ruling (`docs/specs/undo.md` section 11.1): a sale is undone only while nothing has
-    shipped. An order the feed read as Shipped and later reads Canceled has shipped. `Ledger.ingest`
-    overwrites `OrderRecord.status`, so the store keeps no trace of that shipment. The undo must
-    still refuse. Two orders: the shipment seen before the sale, and the shipment seen after it."""
+    """A sale is undone only while nothing has shipped (undo.md UN-7, section 11.1). An order the
+    feed read as Shipped and later reads Canceled has shipped. `Ledger.ingest` overwrites
+    `OrderRecord.status` on a cancel, so the store keeps no trace of that shipment. The refusal
+    rests on `OrderRecord.seen_shipped`, which stays true once set. Two orders: the shipment seen
+    before the sale, and the shipment seen after it."""
     checks.note("")
     checks.note("UN-7 after a cancel: an order that shipped, then canceled, refuses the undo")
 
@@ -1582,8 +1584,8 @@ def check_undo_refused_after_shipped_then_canceled(checks: Checks) -> None:
 
 
 def check_undo_refused_after_hand_fill_then_canceled(checks: Checks) -> None:
-    """Owner ruling (`docs/specs/undo.md` section 11.1): a hand-filled line means a copy went out. The
-    pulled copy stays in the line beside it, so the undo has a sale to reverse. The hand-filled copy
+    """A hand-filled line means a copy went out, so it builds the sale on (undo.md UN-7, section
+    11.1). The pulled copy stays in the line beside it, so the undo has a sale to reverse. The hand-filled copy
     is the shipment, and it is kept as `LineProgress.by_hand`, so a cancel after it must still refuse.
     The line reads fulfilled 2, one of them by hand, because a hand fill alone has no pulled copy to
     undo."""
@@ -1605,9 +1607,9 @@ def check_undo_refused_after_hand_fill_then_canceled(checks: Checks) -> None:
 
 
 def check_undo_refused_after_shipped_elsewhere_then_canceled(checks: Checks) -> None:
-    """Owner ruling (`docs/specs/undo.md` section 11.1): a line closed as shipped elsewhere is a copy
-    that went. The close is kept as `LineProgress.closed_reason`, so a cancel after it must still
-    refuse. The line keeps the pulled copy, and the other copy is the one that shipped elsewhere."""
+    """A line closed as shipped elsewhere is a copy that went, so it builds the sale on (undo.md
+    UN-7, section 11.1). The close is kept as `LineProgress.closed_reason`, so a cancel after it
+    must still refuse. The line keeps the pulled copy, and the other copy is the one that shipped elsewhere."""
     checks.note("")
     checks.note("UN-7 after a cancel: a line closed as shipped elsewhere, then canceled, refuses the undo")
 
@@ -1630,8 +1632,9 @@ def check_undo_refused_after_shipped_elsewhere_then_canceled(checks: Checks) -> 
 
 def check_undo_refused_legacy_order_canceled(checks: Checks) -> None:
     """An order held before `OrderRecord.seen_shipped` existed reads it back None. Its history is
-    unknown, and "cannot tell" refuses, so a cancel alone does not allow the undo. Green on the head.
-    The mutant that reads None as never shipped turns it red: that is the proof this case is real."""
+    unknown, and "cannot tell" refuses, so a cancel alone does not allow the undo (undo.md UN-7,
+    section 11.1). Reading None as never shipped would let the undo through, so this case fails
+    under that change."""
     checks.note("")
     checks.note("UN-7 after a cancel: a legacy order, with no seen_shipped flag, refuses the undo")
 
@@ -1696,8 +1699,9 @@ def check_undo_refused_claimed_label_then_canceled(checks: Checks) -> None:
 def check_undo_allowed_reingested_pre_ship_then_canceled(checks: Checks) -> None:
     """An order held before the flag existed, re-read at a known pre-ship status, then canceled, with
     no label. The feed said "Ready to Ship" after the field existed and never said it shipped, so
-    the undo is allowed on both routes. Red on the head: `Ledger.ingest` keeps the None the row was
-    stored with, so the cancel still reads as unknown."""
+    the undo is allowed on both routes (undo.md UN-7, section 11.1: a known pre-ship read sets the
+    flag false). `Ledger.ingest` must take that read. If it keeps the None the row was stored with,
+    the cancel still reads as unknown and the undo refuses."""
     checks.note("")
     checks.note("UN-7 after a cancel: a legacy order re-read at a pre-ship status, then canceled, undoes")
 
@@ -1775,9 +1779,10 @@ def check_undo_still_here_on_refused_holder(checks: Checks) -> None:
 
     Two holders, each built on: an order the feed ships and then cancels after the sale, and a
     shipped order whose line is stood down after the sale. Both reach `record_fill` under the
-    recovery. The red is the regression the review named: a refusal escaping as a 500, where main
-    answers success. The canceled holder ships first: owner ruling (page item 124, a, 10:21 CST
-    Nov 23) allows the undo of a canceled order that never shipped, so only a shipped one refuses.
+    recovery. The failure this guards is a `record_fill` refusal escaping as a 500, where the
+    recovery must answer success as it does on main. The canceled holder is fed a shipment before
+    its cancel, so it counts as shipped. A canceled order that never shipped still undoes (undo.md
+    UN-7, section 11.1), so this case needs the shipment to reach the refusal.
     """
     checks.note("")
     checks.note("UN-7, still here: the recovery on a canceled or stood-down holder answers, as main does")
