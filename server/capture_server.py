@@ -10761,11 +10761,12 @@ def _order_built_on(snapshot, held_key: str, position_key: Optional[str] = None)
     later than the sale's `sold` event shipped before it. Any other content change also
     restamps `changed_at`, which can only make this refuse more, never less.
 
-    A CANCELED ORDER IS NOT BUILT ON BY ITS CANCEL (owner ruling, `docs/specs/undo.md`
-    section 11.1): nothing shipped, so the sale undoes. The cancel is no shipment, and it
-    restamps `changed_at`, which the rule below would read as one. A label bought for the
-    order (`LabelRow.made`) still builds the sale on, since the label is the one trace of a
-    shipment a canceled status hides.
+    A CANCELED ORDER IS NOT BUILT ON BY ITS CANCEL ALONE (owner ruling, `docs/specs/undo.md`
+    section 11.1): the sale undoes only while nothing has shipped. `Ledger.ingest` overwrites
+    the status, so a canceled order's own word says nothing about an earlier shipment. The
+    order counts as never shipped only when `Ledger.never_shipped` knows it (`seen_shipped`
+    False, no hand fill, no line closed as shipped elsewhere) and no label was bought
+    (`LabelRow.made`). An order held before `seen_shipped` existed is unknown and refuses.
 
     FAILS SAFE: a missing `position_key`, a missing sale event, a missing `changed_at` or
     either stamp that will not parse refuses, because "cannot tell" must not read as
@@ -10774,7 +10775,7 @@ def _order_built_on(snapshot, held_key: str, position_key: Optional[str] = None)
     record = snapshot.ledger.get(held_key)
     if record is None or not order_store.is_terminal_status(record.status):
         return None
-    if order_store.is_canceled_status(record.status):
+    if order_store.is_canceled_status(record.status) and snapshot.ledger.never_shipped(held_key):
         label = snapshot.ledger.labels.get(held_key)
         if label is None or not label.made:
             return None
