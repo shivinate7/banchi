@@ -1329,10 +1329,10 @@ def check_undo_until_built_on(checks: Checks) -> None:
         checks.equal(field(undone, "to"), live.key, "and the card is back at its own key")
 
 
-def _feed_order(number: str, status: str) -> None:
-    """One order as the feed writes it on a fetch: one line of 9191486, at `status`. The ledger
-    stamps `changed_at` only where this content moved, so a fetch that ships the order after a
-    sale restamps it past the sale."""
+def _feed_order(number: str, status: str, quantity: int = 1) -> None:
+    """One order as the feed writes it on a fetch: `quantity` copies of 9191486, at `status`. The
+    ledger stamps `changed_at` only where this content moved, so a fetch that ships the order after
+    a sale restamps it past the sale."""
     with Store().write() as snapshot:
         snapshot.ledger.ingest([
             order_store.OrderRecord(
@@ -1340,18 +1340,18 @@ def _feed_order(number: str, status: str) -> None:
                 number=number,
                 placed_at="2026-09-25T10:00:00.000+00:00",
                 status=status,
-                lines=[order_store.OrderLine(sku="9191486", quantity=1)],
+                lines=[order_store.OrderLine(sku="9191486", quantity=quantity)],
             )
         ])
 
 
-def _sold_to_order(capture_id: str, number: str, status: str) -> None:
+def _sold_to_order(capture_id: str, number: str, status: str, quantity: int = 1) -> None:
     """Card 4/1, identified, pulled to one order that the feed reports at `status`."""
     capture_server.do_capture(capture_payload(4, capture_id=capture_id))
     with Store().write() as snapshot:
         snapshot.inventory.set_state("4/1", master.IDENTIFIED)
         _bind(snapshot, "4/1", "9191486")
-    _feed_order(number, status)
+    _feed_order(number, status, quantity)
     target = [{"box": 4, "index": 1, "capture_id": capture_id}]
     capture_server.do_order_pull({"source": "TCGplayer", "number": number, "sku": "9191486", "targets": target})
 
@@ -1497,9 +1497,130 @@ def check_undo_after_cancel_built_on(checks: Checks) -> None:
         )
 
 
+def _order_shape(checks: Checks, number: str, capture_id: str, fulfilled: int, by_hand: int = 0,
+                 closed_reason=None) -> None:
+    """The precondition each refusal case holds itself to, asserted before its undo. A refusal says
+    something only when the order and its line are the shape the case names."""
+    snapshot = Store().read()
+    key = order_store.order_key("TCGplayer", number)
+    record = snapshot.ledger.get(key)
+    line = snapshot.ledger.recorded(key, "9191486")
+    checks.equal(
+        (record.status if record is not None else None, _label_made(snapshot, key)),
+        ("Canceled", False),
+        "precondition: the order reads Canceled, and no label is bought for it",
+    )
+    checks.equal(
+        (snapshot.ledger.holder_of(capture_id) is not None, line.fulfilled, line.by_hand, line.closed_reason),
+        (True, fulfilled, by_hand, closed_reason),
+        "precondition: the pulled copy is held, and the line reads the shape the case names",
+    )
+
+
+def _refused_on_both_routes(checks: Checks, capture_id: str, label: str, scenario, shape) -> None:
+    """Build `scenario` in a fresh store, check its `shape`, then assert the card's own undo and the
+    pull's undo each refuse with `sale_built_on`. Each route gets a store of its own, so a route that
+    wrongly undoes cannot leave the other route with nothing to undo."""
+    target = [{"box": 4, "index": 1, "capture_id": capture_id}]
+    with isolated_home():
+        scenario()
+        shape(checks)
+        refusal(
+            checks,
+            lambda: capture_server.do_mark_sold(4, 1, {"undo": True}),
+            "sale_built_on",
+            f"{label}: the card's own undo refuses",
+        )
+    with isolated_home():
+        scenario()
+        refusal(
+            checks,
+            lambda: capture_server.do_order_pull({"undo": True, "targets": target}),
+            "sale_built_on",
+            f"{label}: the walk's undo of the pull refuses",
+        )
+
+
+def check_undo_refused_after_shipped_then_canceled(checks: Checks) -> None:
+    """Owner ruling (`docs/specs/undo.md` section 11.1): a sale is undone only while nothing has
+    shipped. An order the feed read as Shipped and later reads Canceled has shipped. `Ledger.ingest`
+    overwrites `OrderRecord.status`, so the store keeps no trace of that shipment. The undo must
+    still refuse. Two orders: the shipment seen before the sale, and the shipment seen after it."""
+    checks.note("")
+    checks.note("UN-7 after a cancel: an order that shipped, then canceled, refuses the undo")
+
+    def shipped_before_sale():
+        _sold_to_order("shipped-first", "SHIPPED-FIRST", "Shipped - In Transit")
+        _feed_order("SHIPPED-FIRST", "Canceled")
+
+    def shipped_after_sale():
+        _sold_to_order("shipped-later", "SHIPPED-LATER", "Ready to Ship")
+        _feed_order("SHIPPED-LATER", "Shipped - In Transit")
+        _feed_order("SHIPPED-LATER", "Canceled")
+
+    _refused_on_both_routes(
+        checks, "shipped-first", "a shipment seen before the sale, then canceled", shipped_before_sale,
+        lambda c: _order_shape(c, "SHIPPED-FIRST", "shipped-first", fulfilled=1),
+    )
+    _refused_on_both_routes(
+        checks, "shipped-later", "a shipment seen after the sale, then canceled", shipped_after_sale,
+        lambda c: _order_shape(c, "SHIPPED-LATER", "shipped-later", fulfilled=1),
+    )
+
+
+def check_undo_refused_after_hand_fill_then_canceled(checks: Checks) -> None:
+    """Owner ruling (`docs/specs/undo.md` section 11.1): a hand-filled line means a copy went out. The
+    pulled copy stays in the line beside it, so the undo has a sale to reverse. The hand-filled copy
+    is the shipment, and it is kept as `LineProgress.by_hand`, so a cancel after it must still refuse.
+    The line reads fulfilled 2, one of them by hand, because a hand fill alone has no pulled copy to
+    undo."""
+    checks.note("")
+    checks.note("UN-7 after a cancel: a line hand-filled, then canceled, refuses the undo")
+
+    def hand_filled():
+        _sold_to_order("hand-filled", "HAND-FILLED", "Ready to Ship", quantity=2)
+        capture_server.do_order_fill({
+            "source": "TCGplayer", "number": "HAND-FILLED", "sku": "9191486",
+            "count": 1, "reason": order_store.FILL_SEALED,
+        })
+        _feed_order("HAND-FILLED", "Canceled", quantity=2)
+
+    _refused_on_both_routes(
+        checks, "hand-filled", "a line hand-filled, then canceled", hand_filled,
+        lambda c: _order_shape(c, "HAND-FILLED", "hand-filled", fulfilled=2, by_hand=1),
+    )
+
+
+def check_undo_refused_after_shipped_elsewhere_then_canceled(checks: Checks) -> None:
+    """Owner ruling (`docs/specs/undo.md` section 11.1): a line closed as shipped elsewhere is a copy
+    that went. The close is kept as `LineProgress.closed_reason`, so a cancel after it must still
+    refuse. The line keeps the pulled copy, and the other copy is the one that shipped elsewhere."""
+    checks.note("")
+    checks.note("UN-7 after a cancel: a line closed as shipped elsewhere, then canceled, refuses the undo")
+
+    def closed_elsewhere():
+        _sold_to_order("closed-elsewhere", "CLOSED-ELSEWHERE", "Ready to Ship", quantity=2)
+        capture_server.do_order_close({
+            "lines": [{"source": "TCGplayer", "number": "CLOSED-ELSEWHERE", "sku": "9191486"}],
+            "reason": order_store.CLOSE_SHIPPED_ELSEWHERE,
+        })
+        _feed_order("CLOSED-ELSEWHERE", "Canceled", quantity=2)
+
+    _refused_on_both_routes(
+        checks, "closed-elsewhere", "a line closed as shipped elsewhere, then canceled", closed_elsewhere,
+        lambda c: _order_shape(
+            c, "CLOSED-ELSEWHERE", "closed-elsewhere", fulfilled=1,
+            closed_reason=order_store.CLOSE_SHIPPED_ELSEWHERE,
+        ),
+    )
+
+
 CHECKS = (
     check_undo_until_built_on,
     check_undo_order_shipped_before_sale,
     check_undo_after_cancel_unshipped,
     check_undo_after_cancel_built_on,
+    check_undo_refused_after_shipped_then_canceled,
+    check_undo_refused_after_hand_fill_then_canceled,
+    check_undo_refused_after_shipped_elsewhere_then_canceled,
 )
