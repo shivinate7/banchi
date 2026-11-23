@@ -43,9 +43,6 @@ export type HubState = {
   /** A write in flight from OUTSIDE any mounted hub — an undo pressed on a toast — so every Pull
    *  stays disabled while it runs, in whichever hub is mounted by the time it answers. */
   readonly busy: string | null
-  /** Bumped by anything that wrote to the ledger from outside a mounted hub (an undo pressed
-   *  on a toast), so the next mounted hub re-reads. */
-  readonly version: number
   /** THE PULLS THIS SCREEN MADE THAT STILL STAND, OLDEST FIRST — `docs/specs/undo.md` §3's fast path,
    *  `U`, reached from `OrdersHub` regardless of which stage or order is on screen. The last entry is
    *  the newest; undoing it hands the rank to the one before. It lives here rather than in a
@@ -69,7 +66,6 @@ let state: HubState = {
   lanes: new Set(SHIP_LANES),
   gone: null,
   busy: null,
-  version: 0,
   pulls: [],
   walkLine: null,
   buyersOpen: false,
@@ -92,10 +88,6 @@ export function setHub(patch: Partial<HubState> | ((current: HubState) => Partia
   const next = typeof patch === 'function' ? patch(state) : patch
   state = { ...state, ...next }
   for (const listener of listeners) listener()
-}
-
-export function touchHub(): void {
-  setHub((current) => ({ version: current.version + 1 }))
 }
 
 export function useHub(): HubState {

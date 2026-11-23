@@ -45,7 +45,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/Fulfillment.css` — The generous `24`-`64` end of the one system, two densities.
   - Decisions: `D275`, `D218`, `D212`, `D93`, `D97`, `D10`, `D313`, `D5`
 - `app/src/Fulfillment.tsx` — The Fulfiller's whole product: cards to pull in box-walk order, a photo confirm before each pull, and a one-tap mark-sold with an undo window.
-  - Decisions: `D5`, `D212`, `D93`, `D83`, `D24`, `D193`, `D218`, `D172`, `D28`, `D57`, `D294`, `D94`, `D6`, `D192`, `D31`, `D196`, `D259`, `D275`, `D7`, `D10`, `D13`, `D21`, `D26`, `D32`, `D69`, `D125`
+  - Decisions: `D5`, `D212`, `D93`, `D83`, `D24`, `D193`, `D218`, `D172`, `D28`, `D57`, `D294`, `D94`, `D6`, `D192`, `D31`, `D196`, `D259`, `D275`, `D7`, `D10`, `D13`, `D21`, `D26`, `D32`, `D69`, `D125`, `D73`
 - `app/src/Gallery.css` — The kit page's own layout — the specimen grid and its labels.
   - Decisions: `D119`, `D272`, `D117`, `D5`, `D94`, `D118`
 - `app/src/Gallery.tsx` — The kit on one page: every primitive, every button variant and size, and the whole icon set, so the tokens are looked at.
