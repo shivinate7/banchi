@@ -1148,11 +1148,11 @@ test('three digit presses on copies at three places give three receipts, each na
   await expect.poll(cardsNamed, 'the three receipts name three different cards, each its own copy\'s place').toEqual(['Card 17', 'Card 18', 'Card 19'])
 })
 
-/* THE RETURN READ AND THE TALLY IT LEAVES (finding 2). `useOrderWalk`'s `reread` puts the server's plan in place
- * whenever the window regains focus or the tab becomes visible. That plan already nets the walk's own sales out of
- * `owed`, while `tallyRef` still counts them, so `pickOrderFor` takes each sale away twice. With one copy sold the
- * order's `owed` is 1 and the tally is 1, so `remaining` is 0 and the next press is refused, though the order still
- * wants a copy. The control below is the same walk with no return read, which is green on main. */
+/* A RETURN READ DOES NOT REFUSE THE NEXT SALE. On a return, `useOrderWalk`'s `reread` puts the server's plan in place
+ * (D73, screens re-read on return). That plan's `owed` already nets out the sales the walk made, and `pickOrderFor`
+ * subtracts only the sales still unanswered, so each sale counts once (the order-walk-plan spec, section 8). This case
+ * sells one of two copies, takes the return read, then presses again: the order still owes a copy, so the press must
+ * be taken, not refused. The control below walks the same order with no return read. */
 
 /** The copies in the order the rows draw them: row 0 is `3/21`, and a press takes them in this order. */
 const PRESS_ORDER = ['3/21', '5/22'] as const
