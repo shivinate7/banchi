@@ -427,6 +427,12 @@ def guard(upstream: str, head: str, window: int, cwd: Optional[str] = None, out=
         return 0
     head_sha = git(["rev-parse", head], cwd).strip()
     up_sha = git(["rev-parse", upstream], cwd).strip()
+    # `merge-base` exits 1 with no output when the two share no history (the record branch is an
+    # orphan). A merge of unrelated histories changes none of main's files, so nothing can revert.
+    code, _, err = git_status(["merge-base", upstream, head_sha], cwd)
+    if code == 1 and not err.strip():
+        print(f"revert guard: {head} shares no history with {upstream}; nothing would land by merge, allowing.", file=out)
+        return 0
     if head_sha == up_sha or git_status(["merge-base", "--is-ancestor", head_sha, up_sha], cwd)[0] == 0:
         print(f"revert guard: {head} is at or behind {upstream}; nothing would land.", file=out)
         return 0

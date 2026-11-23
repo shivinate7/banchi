@@ -50,7 +50,37 @@ guard_branch() {
   python3 "$top/scripts/revert-audit.py" branch --upstream "$remote/main" --head "$1" >&2
 }
 
+# The record branch is an orphan (no history shared with main) and never becomes a PR to main, so
+# the revert guard has nothing to judge there and its merge-base read would crash. Its name has one
+# home: record_branch() in the global lint/layout.py, which reads the "record-branch" key of
+# .claude/layout-extras.json. Where that module is absent (a fixture clone, a throwaway) the same key
+# is read from the file directly; no key means "roadmap". A read that fails gives the default.
+record_branch() {
+  local top
+  top="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo roadmap; return 0; }
+  command -v python3 >/dev/null 2>&1 || { echo roadmap; return 0; }
+  python3 - "$top" <<'PY' 2>/dev/null || echo roadmap
+import json, os, sys
+root = sys.argv[1]
+try:
+    sys.path.insert(0, os.path.expanduser("~/.claude/lint"))
+    import layout
+    print(layout.record_branch(root))
+except Exception:
+    try:
+        with open(os.path.join(root, ".claude", "layout-extras.json"), encoding="utf-8") as fh:
+            name = json.load(fh).get("record-branch")
+    except Exception:
+        name = None
+    print(name if isinstance(name, str) and name else "roadmap")
+PY
+}
+record_ref="refs/heads/$(record_branch)"
+
 while IFS=' ' read -r local_ref local_oid remote_ref _; do
+  if [ "${remote_ref:-}" = "$record_ref" ]; then
+    continue
+  fi
   if [ "${remote_ref:-}" != "refs/heads/main" ]; then
     case "${local_oid:-}" in
       ""|0000000000000000000000000000000000000000) ;;  # a delete pushes no commit
