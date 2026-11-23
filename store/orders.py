@@ -936,11 +936,11 @@ class Ledger:
         """
         by_number: Dict[str, Optional[OrderRecord]] = {}
         for record in self.orders.values():
-            folded = str(record.number or "").strip().casefold()
+            folded = fold_number(record.number)
             by_number[folded] = None if folded in by_number else record
         report = NameReport()
         for number, ship_to in names:
-            record = by_number.get(str(number or "").strip().casefold())
+            record = by_number.get(fold_number(number))
             if record is None:
                 report.unknown += 1
                 continue
@@ -1199,17 +1199,19 @@ class Ledger:
         """The folded numbers (`fold_number`) of orders the feed says are canceled, for a caller
         holding a number alone (a shipping export names no marketplace).
 
-        A NUMBER IS IN IT ONLY WHEN EVERY RECORD THAT SPELLS IT IS CANCELED, `name_ship_tos_by_number`'s
-        fold across every source. One a live record shares is left out: a guess here would refuse a
-        live buyer's label. A number the ledger does not hold is not canceled either.
+        THE SAME MATCH AS `name_ship_tos_by_number`: a number is matched only when exactly one
+        record spells it. Two records that spell it are not matched, because the row cannot be
+        told to a sale, so the number is left out and no label is refused on a guess.
         """
-        live: Set[str] = set()
-        gone: Set[str] = set()
+        spelled: Dict[str, List[OrderRecord]] = {}
         for record in self.orders.values():
-            (gone if is_canceled_status(record.status) else live).add(fold_number(record.number))
-        return gone - live
+            spelled.setdefault(fold_number(record.number), []).append(record)
+        return {
+            number for number, records in spelled.items()
+            if len(records) == 1 and is_canceled_status(records[0].status)
+        }
 
-    def record_fill(self, key: str, sku: Any, count: int, reason: str) -> int:
+    def record_fill(self, key: str, sku: Any, count: int, reason: str, recovering: bool = False) -> int:
         """Close `count` copies of a line with NO physical card behind them. Returns `count`.
 
         THE WRITE `record_pull` CANNOT MAKE, AND THE ONE THREE REAL ORDERS NEEDED. That
@@ -1238,6 +1240,11 @@ class Ledger:
           `OverFulfilled`     recording more than the line ordered. NOT CLAMPED, for
                               `record_pull`'s reason: you cannot ship the fourth.
 
+        `recovering` IS FOR THE STILL-HERE RECOVERY ONLY (`do_mark_sold`). It records that a copy
+        which already left for a buyer is no longer a pulled card, so it reads no cancellation
+        and no stand-down: a recovery must not depend on the state it recovers. Every new
+        write leaves it False.
+
         A count of zero or less is refused too, and as a `ValueError` rather than a silent
         no-op: nothing on a screen should ever ask for it, so one arriving is a caller bug
         and swallowing it would hide the bug rather than the press.
@@ -1245,7 +1252,7 @@ class Ledger:
         count = int(count)
         if count <= 0:
             raise ValueError(f"a hand-fill records at least one copy; got {count}")
-        line = self.writable_line(key, sku)
+        line = self._line_or_raise(key, sku) if recovering else self.writable_line(key, sku)
 
         row = self.recorded(key, sku)
         if int(row.fulfilled) + count > int(line.quantity):

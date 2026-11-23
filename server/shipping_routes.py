@@ -769,6 +769,10 @@ class _Stopped(Exception):
     """A stop arrived while a press waited for `_CREATE_LOCK`: nothing was sent for its order."""
 
 
+class _OrderCanceled(Exception):
+    """The ledger holds this order as canceled, read right before its create: nothing was sent for it."""
+
+
 def _ours() -> set:
     """The orders this process must not create again: a create in flight, or one whose answer is held."""
     with _HELD_LOCK:
@@ -907,7 +911,9 @@ def _fill_pdfs(rows: Sequence[Any]) -> Optional[tcgtracking.TrackingRefused]:
 def _make_one(order: str, shipment: shipping.Shipment, insured: bool, stop: threading.Event) -> Optional[dict]:
     """Make one order's label. Returns the receipt entry for `made`, or None when the order is
     already labeled, in flight or held. Raises TrackingRefused, or `_Stopped` when `stop` is set once
-    `_CREATE_LOCK` is taken, with nothing sent and no claim left behind. Once a create has answered,
+    `_CREATE_LOCK` is taken, or `_OrderCanceled` when the ledger now holds the order as canceled, with
+    nothing sent and no claim left behind. The cancel is read again HERE, right before the create:
+    `_confirm`'s verdict is one snapshot, and a feed ingest can cancel the order after it. Once a create has answered,
     the label is bought, and its answer is stored BEFORE the PDF is fetched.
 
     THE STORE LOCK IS NEVER HELD ACROSS A CALL: the claim is one `Store.write`, the create runs
@@ -937,6 +943,8 @@ def _make_one(order: str, shipment: shipping.Shipment, insured: bool, stop: thre
             # A stop that arrived while this press waited for the lock: nothing is sent.
             if stop.is_set():
                 raise _Stopped()
+            if order_store.fold_number(order) in Store().read().ledger.canceled_numbers():
+                raise _OrderCanceled()
             answer = tcgtracking.create(_label_body(shipment, insured))
         answered = True
         kept = {key: value for key, value in answer.items() if key != "pdf_base64"}
@@ -1010,6 +1018,10 @@ def _confirm(batch: str, held: _Batch, payload: dict) -> Dict[str, Any]:
                 entry = _make_one(order, envelope[order], order in insured, stop)
             except _Stopped:
                 left_over = [{"order": rest} for rest in orders[at:]]
+                break
+            except _OrderCanceled:
+                # Canceled after the verdict was read. Nothing was bought; the orders after it are untouched.
+                refused.append({"order": order, "code": REASON_ORDER_CANCELED})
                 break
             except tcgtracking.TrackingRefused as exc:
                 # STOP AT THE FIRST ERROR. A 401 or a 429 on the third order will be the same on the

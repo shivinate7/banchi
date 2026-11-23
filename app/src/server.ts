@@ -324,6 +324,15 @@ function failureKind(code: string, status: number): 'refusal' | 'retry' {
   return 'refusal'
 }
 
+/** The two refusals of a write against an order the store owes nothing on, said once for every screen that shows a
+ *  server refusal. They are the words the server sends for the same codes (`_line_not_owed`); a client keeps them
+ *  because an older server's message for these two names the order key and the SKU, which no screen may show. */
+const PLAIN_REFUSALS: Readonly<Record<string, string>> = {
+  order_canceled: 'This order was canceled, so nothing more can be recorded for it. Put back any card you took for it.',
+  line_stood_down:
+    'This card is stood down on this order, so nothing more can be recorded for it. Put back any card you took for it.',
+}
+
 /**
  * Any thrown thing, as an owner-side screen shows it.
  *
@@ -352,7 +361,7 @@ function failureKind(code: string, status: number): 'refusal' | 'retry' {
  * "finish the job" by wiring this into it.
  */
 export function describeFailure(err: unknown): Failure {
-  if (err instanceof ServerError) return { code: err.code, message: err.message, kind: failureKind(err.code, err.status), status: err.status, data: err.data }
+  if (err instanceof ServerError) return { code: err.code, message: PLAIN_REFUSALS[err.code] ?? err.message, kind: failureKind(err.code, err.status), status: err.status, data: err.data }
   /* A READ THE APP DROPPED ITSELF (`leaveReadScope`) HAS NO OUTCOME: nothing to say, nothing to log. */
   if (err instanceof DOMException && err.name === 'AbortError') return { code: 'aborted', message: '', kind: 'refusal' }
   console.error('The app failed before the server could answer.', err) // the detail belongs in the console, never on screen
