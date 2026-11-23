@@ -18,6 +18,9 @@ import { describeFailure, isFinalUndoRefusal } from './server'
 
 type Reread = () => Promise<void>
 
+/** How long one round of re-reads may run before the next write's round may start. */
+const ROUND_LIMIT_MS = 30_000
+
 const registered = new Set<Reread>()
 let inFlight = false
 let pending = false
@@ -33,7 +36,16 @@ export function rereadNow(): void {
     try {
       do {
         pending = false
-        await Promise.allSettled([...registered].map((reread) => reread()))
+        /* A ROUND THAT NEVER SETTLES (a request the server holds open) ends at the limit, so it cannot shut every later round out. */
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const limit = new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, ROUND_LIMIT_MS)
+        })
+        try {
+          await Promise.race([Promise.allSettled([...registered].map((reread) => reread())), limit])
+        } finally {
+          clearTimeout(timer)
+        }
       } while (pending)
     } finally {
       inFlight = false

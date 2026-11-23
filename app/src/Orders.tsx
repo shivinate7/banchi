@@ -50,7 +50,7 @@ import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { orderReasonLabel, orderReasonRemedy } from './orderReasons'
 import { rememberHideSold, rememberOrderFilter, storedHideSold, storedOrderFilter, type OrderFetchFilter } from './deviceMemory'
 import { afterWrite, rereadNow, useRereadOnWrite } from './afterWrite'
-import { hubState, setHub, touchHub, useHub, type PullNote, type Stage } from './OrdersHubStore'
+import { hubState, setHub, useHub, type PullNote, type Stage } from './OrdersHubStore'
 import { PositionLabel } from './PositionLabel'
 import { RailFrame } from './RailFrame'
 import { sayPlace } from './position'
@@ -1994,7 +1994,8 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       if (describeFailure(err).code === PULL_NOT_RECORDED) {
         toast({ kind: 'ok', icon: 'undo', title: 'Already undone', body: `${place} holds it, from somewhere else.` })
         forgetPull(target.capture_id)
-        return { ok: true, refreshed: [] }
+        /* THE LEDGER NO LONGER HELD THE PULL, so this undo moved nothing: the walk's figure stays what the store said. */
+        return { ok: true, refreshed: [], moved: false }
       }
       const trouble = undoFailure(err, place)
       toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
@@ -2036,8 +2037,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             onPress: () => {
               void (async () => {
                 try {
-                  await undoFill(aim, done.moved)
-                  touchHub()
+                  await afterWrite(() => undoFill(aim, done.moved))
                 } catch (err) {
                   toast({ ...refusalToast(err), icon: 'alert' })
                 }
@@ -2104,8 +2104,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             onPress: () => {
               void (async () => {
                 try {
-                  await reopenOrders(aim)
-                  touchHub()
+                  await afterWrite(() => reopenOrders(aim))
                 } catch (err) {
                   toast({ ...refusalToast(err), icon: 'alert' })
                 }
@@ -2156,8 +2155,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
               onPress: () => {
                 void (async () => {
                   try {
-                    await reopenLines(aim)
-                    touchHub()
+                    await afterWrite(() => reopenLines(aim))
                   } catch (err) {
                     toast({ ...refusalToast(err), icon: 'alert' })
                   }
@@ -2201,8 +2199,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             onPress: () => {
               void (async () => {
                 try {
-                  await reopenOrders(done.closed)
-                  touchHub()
+                  await afterWrite(() => reopenOrders(done.closed))
                 } catch (err) {
                   toast({ ...refusalToast(err), icon: 'alert' })
                 }
@@ -2243,8 +2240,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             onPress: () => {
               void (async () => {
                 try {
-                  await reopenLines(aim)
-                  touchHub()
+                  await afterWrite(() => reopenLines(aim))
                 } catch (err) {
                   toast({ ...refusalToast(err), icon: 'alert' })
                 }

@@ -49,7 +49,7 @@ export type WalkPullOutcome =
   | { readonly ok: false; readonly failure: Failure }
 
 export type WalkUndoOutcome =
-  | { readonly ok: true; readonly refreshed: readonly Place[]; readonly owed?: number }
+  | { readonly ok: true; readonly refreshed: readonly Place[]; readonly owed?: number; readonly moved?: false }
   | { readonly ok: false; readonly failure?: Failure }
 
 /** `Orders.tsx`'s own pull for this screen — the write `onPull` already makes for the "By
@@ -538,7 +538,7 @@ async function runUndo(job: Extract<Job, { kind: 'undo' }>): Promise<void> {
   }
   if (lineSales.get(sale.copyKey) === sale) lineSales.delete(sale.copyKey)
   if (outcome.ok) {
-    dropLineSale(sale, outcome.refreshed, { owed: outcome.owed })
+    dropLineSale(sale, outcome.refreshed, outcome.moved === false ? undefined : { owed: outcome.owed })
   } else if (outcome.failure?.code === SALE_BUILT_ON) {
     /* THE ORDER HAS MOVED ON: no control here can undo this sale, so its row keeps no Undo (undo.md §3). */
     strandLineSale(sale, 'spent')
