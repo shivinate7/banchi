@@ -2475,16 +2475,17 @@ test('ux-w2: a failed refresh on the card view moves nothing once the stale noti
 })
 
 /* A pull the server refuses because the order was canceled, or its line stood down, after the list was
-   read. The server answers 409 with that code and its own words (order key and SKU included). The screen
-   says the card is no longer needed for the order and to put it back: never "try again", never "press
-   again". The re-read then answers the order as it now stands, with no copy owed, so the card must not
-   offer "Mark it sold" any more. */
+   read. The server answers 409 with that code and its own words, which name neither the order key nor the
+   SKU (`server/capture_server.py`'s `_ORDER_CANCELED_WORDS` and `_LINE_STOOD_DOWN_WORDS`, copied here as test
+   data). The screen says the card is no longer needed for the order and to put it back: never "try again",
+   never "press again". The re-read then answers the order as it now stands, with no copy owed, so the card
+   must not offer "Mark it sold" any more. */
 const NO_LONGER_NEEDED = 'This card is no longer needed for this order. Put it back where you found it.'
 const STOOD_AT = '2026-11-21T10:00:00+00:00'
 const REFUSALS = [
   {
     code: 'order_canceled',
-    message: `Order ${ORDER_KEY} is canceled, so nothing more can be recorded against it. A copy recorded now would count as going to a buyer who will never receive it.`,
+    message: 'This order was canceled, so nothing more can be recorded for it. Put back any card you took for it.',
     after: {
       ...ONE_OPEN_ORDER,
       orders: ONE_OPEN_ORDER.orders.map((one) => ({ ...one, status: 'Canceled', open: false })),
@@ -2492,7 +2493,7 @@ const REFUSALS = [
   },
   {
     code: 'line_stood_down',
-    message: `SKU ${ORDER_SKU} on order ${ORDER_KEY} is stood down, so this store has stopped accounting for it. Reopen the line first if it should take a copy again.`,
+    message: 'This card is stood down on this order, so nothing more can be recorded for it. Put back any card you took for it.',
     after: {
       ...ONE_OPEN_ORDER,
       orders: ONE_OPEN_ORDER.orders.map((one) => ({

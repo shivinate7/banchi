@@ -1120,16 +1120,18 @@ test('three digit presses on copies at three places give three receipts, each na
 
 /* A walk pull the server refuses because its order was canceled, or its line stood down, after the walk was
    read. The toast says so in plain words, tells him to put the card back, and names neither the order key
-   nor the SKU (D196). The 409 bodies below are the server's own words, key and SKU included. */
+   nor the SKU (D196). The 409 bodies are the server's own words, copied as test data from
+   `server/capture_server.py`'s `_ORDER_CANCELED_WORDS` and `_LINE_STOOD_DOWN_WORDS`: neither names the key
+   or the SKU, so the toast must show them as they stand. */
 const WALK_REFUSALS = [
   {
     code: 'order_canceled',
-    message: `Order TCGplayer:${ORDER_NUMBER} is canceled, so nothing more can be recorded against it. A copy recorded now would count as going to a buyer who will never receive it.`,
+    message: 'This order was canceled, so nothing more can be recorded for it. Put back any card you took for it.',
     sentence: 'This order was canceled, so nothing more can be recorded for it. Put back any card you took for it.',
   },
   {
     code: 'line_stood_down',
-    message: `SKU ${SKU} on order TCGplayer:${ORDER_NUMBER} is stood down, so this store has stopped accounting for it. Reopen the line first if it should take a copy again.`,
+    message: 'This card is stood down on this order, so nothing more can be recorded for it. Put back any card you took for it.',
     sentence: 'This card is stood down on this order, so nothing more can be recorded for it. Put back any card you took for it.',
   },
 ]
