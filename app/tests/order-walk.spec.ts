@@ -1551,6 +1551,46 @@ test('a refused undo of the newest pull leaves U’s list, and the next U reache
   ).toBe('cap-a')
 })
 
+test('an undo the server refuses as pull_entry_refused drops the pull: its receipt keeps no Undo, and the next U reaches the pull before it', async ({ page }) => {
+  /* `server/capture_server.py` `do_order_pull` folds every refused position into one 409 `pull_entry_refused`, with no
+     data. The client cannot tell which position refused it, so a refused undo drops the pull on that code alone. */
+  const refusedEntry =
+    '1 of 1 positions were refused, so the whole pull was refused and nothing was written. Reload the order screen, then try again. ' +
+    'Box 3, Section 2, Card 15: The card at Box 3, Section 2, Card 15 is not the card the screen showed. ' +
+    'A delete, an undo or a re-shoot may have changed what sits there. Reload the order screen, then try again.'
+  const wire = await open(page, {
+    plan: renumberPlan(),
+    refreshed: renumbered,
+    refuse: (body) =>
+      body.undo === true && body.targets?.[0]?.capture_id === 'cap-b'
+        ? { status: 409, code: 'pull_entry_refused', message: refusedEntry }
+        : null,
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+
+  await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(1)
+  await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => pullsOf(wire).length).toBe(2)
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => undosOf(wire).length).toBe(1)
+  await expect(page.locator('.bn-toast', { hasText: 'The card was not put back' })).toBeVisible()
+  await expect.soft(
+    page.locator('.bn-toast-receipt', { hasText: 'Card 15' }).locator('button.bn-toast-action'),
+    'the receipt of the refused pull keeps its Undo control',
+  ).toHaveCount(0)
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => undosOf(wire).length).toBe(2)
+  expect(
+    (undosOf(wire)[1]?.body as { targets: PullTarget[] }).targets[0]?.capture_id,
+    'the next U reaches copy A, the pull before the refused one',
+  ).toBe('cap-a')
+})
+
 test('a refused undo says why in words the person reads: the order can no longer be undone', async ({ page }) => {
   const wire = await open(page, {
     plan: renumberPlan(),
