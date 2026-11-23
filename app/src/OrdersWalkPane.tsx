@@ -74,8 +74,7 @@ export type WalkUndoFn = (
  *  replaced by the answer of each sale and undo the walk makes (`applyOwed`), so the walk never counts its own sales.
  *  `unanswered` holds the sales still queued or out, which no answer has reached yet. The press goes to the ref
  *  whose remaining (`owed` minus those sales) is smallest
- *  and still positive — the fewest-remaining-first rule (owner's ruling 2026-09-25: "if we
- *  were to give it to someone, whoever it completes") — because the order closest to done is
+ *  and still positive — the fewest-remaining-first rule, because the order closest to done is
  *  the one a single short copy is most likely to finish. Ties go to the order placed longest
  *  ago. AN ORDER WITH NOTHING LEFT OWED IS NEVER PICKED — no `for[0]` fallback
  *  (`docs/specs/order-walk-plan.md` §8): the caller who used to fall through to a

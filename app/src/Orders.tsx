@@ -1081,7 +1081,7 @@ async function undoPullNow(target: PullTarget, place: string, name: string): Pro
     }
   } finally {
     reversalsHeld.delete(target.capture_id)
-    /* A refused undo leaves the pull standing and keeps it in `pulls`: it is still the one `U` reverses next. */
+    /* A final refusal has already dropped the pull from `pulls` (above), so `U` moves to the pull before it; a refusal that may pass (a 5xx, a network error) keeps it, and it is still the one `U` reverses next. */
     setHub({ busy: null })
   }
 }

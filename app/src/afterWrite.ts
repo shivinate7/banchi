@@ -1,9 +1,8 @@
 /* app/src/afterWrite.ts: the one home of "re-read after a write" for a screen that registers its reads.
  *
- * D73 (reworded): a screen re-reads after every write the server answers, a refusal included, and on return. A write
- * that was refused still says the screen was behind (another tab sold the copy; the order moved on), so a 4xx re-reads
- * as a success does. A write that got no answer (the server unreachable, a 5xx, a busy store) changed nothing the
- * screen can read, so it re-reads nothing.
+ * D73 (reworded): a screen re-reads after every write that settles, a refusal included, and on return. A refused write
+ * still says the screen was behind (another tab sold the copy; the order moved on). A write that failed with a 5xx or a
+ * network error may still have committed, so it re-reads too.
  *
  * `afterWrite(write)` runs the write and starts the re-reads when it answers. It never awaits them: the person's next
  * press must not wait on a read, and the re-reads never refetch a list that reorders (D313). A screen registers its
@@ -14,7 +13,6 @@
  * (`CLAUDE.md`). Writes answered while a round runs fold into one more round after it.
  */
 import { useEffect, useRef } from 'react'
-import { describeFailure, isFinalUndoRefusal } from './server'
 
 type Reread = () => Promise<void>
 
@@ -53,18 +51,15 @@ export function rereadNow(): void {
   })()
 }
 
-/** Run one write, then re-read what the screen shows: on its answer, and on a refusal (a final 4xx), which is rethrown for the
- *  caller to say. A write that got no answer rethrows with nothing re-read. */
+/** Run one write, then re-read what the screen shows, whatever the write came to: an answer, a refusal, a 5xx or a network
+ *  error. A write that got no answer may still have committed (the server can fail after it writes), so the screen cannot
+ *  know it is unchanged. A failure is rethrown for the caller to say. */
 export async function afterWrite<T>(write: () => Promise<T>): Promise<T> {
-  let done: T
   try {
-    done = await write()
-  } catch (err) {
-    if (isFinalUndoRefusal(describeFailure(err))) rereadNow()
-    throw err
+    return await write()
+  } finally {
+    rereadNow()
   }
-  rereadNow()
-  return done
 }
 
 /** Register this screen's reads, in the order they must run (each reads what the one before it found), for as long as it
