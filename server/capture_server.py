@@ -15331,13 +15331,8 @@ def _prepare_targets(
 
 # One sentence per code, written once and used by the pull, the fill and the line kind. No order key and no
 # SKU: a screen shows the server's sentence as it stands (D196).
-_ORDER_CANCELED_WORDS = (
-    "This order was canceled, so nothing more can be recorded for it. Put back any card you took for it."
-)
-_LINE_STOOD_DOWN_WORDS = (
-    "This card is stood down on this order, so nothing more can be recorded for it. "
-    "Put back any card you took for it."
-)
+_ORDER_CANCELED_WORDS = "This order was canceled. Put back any card you took for it."
+_LINE_STOOD_DOWN_WORDS = "This card is no longer needed for this order. Put it back where you found it."
 
 
 def _line_not_owed(exc: "order_store.LineNotOwed") -> BadRequest:
