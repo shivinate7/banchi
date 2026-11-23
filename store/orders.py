@@ -209,16 +209,11 @@ def is_canceled_status(status: Optional[str]) -> bool:
 
 
 # THE STATUSES THE FEED USES FOR AN ORDER THAT HAS NOT SHIPPED, HAND-AUTHORED AND CLOSED, compared
-# casefolded and stripped like `TERMINAL_STATUSES`. These are the two words D63 names as open
-# orders: `Ready to Ship` is live work and `Completed - Paid` is a payment that cleared with nothing
-# yet sent. A word outside both sets is UNKNOWN, and an unknown word counts as shipped
+# casefolded and stripped like `TERMINAL_STATUSES`. Only `Ready to Ship`, which is live work.
+# `Completed - Paid` is deliberately absent (D63 ruling 3): a payment that cleared says nothing about
+# whether the card shipped. A word outside this set is UNKNOWN, and an unknown word counts as shipped
 # (`is_shipped_status`), because "cannot tell" must not read as "nothing shipped".
-PRE_SHIP_STATUSES = frozenset(
-    {
-        "ready to ship",
-        "completed - paid",
-    }
-)
+PRE_SHIP_STATUSES = frozenset({"ready to ship"})
 
 
 def is_pre_ship_status(status: Optional[str]) -> bool:
