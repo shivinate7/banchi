@@ -77,7 +77,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/Orders.css` — The order screen at owner density: the line, its reason and remedy, and the pick rows under it.
   - Decisions: `D313`, `D274`, `D304`, `D289`, `D123`, `D270`, `D118`, `D212`, `D196`, `D113`, `D203`, `D91`, `D117`, `D5`, `D24`, `D38`, `D41`, `D50`, `D63`, `D69`, `D193`, `D195`, `D221`
 - `app/src/Orders.tsx` — The orders hub: one screen with two stages, drawn on the orders route with the pull stage selected.
-  - Decisions: `D69`, `D274`, `D10`, `D58`, `D13`, `D27`, `D91`, `D193`, `D24`, `D296`, `D313`, `D171`, `D113`, `D118`, `D218`, `D196`, `D203`, `D271`, `D304`, `D212`, `D123`, `D285`, `D132`, `D181`, `D270`, `D93`, `D97`, `D51`, `D259`, `D7`, `D28`, `D36`, `D39`, `D57`, `D61`, `D63`, `D103`, `D192`, `D195`, `D220`, `D221`, `D277`, `D284`, `D037`
+  - Decisions: `D69`, `D274`, `D10`, `D58`, `D13`, `D27`, `D91`, `D193`, `D24`, `D296`, `D313`, `D171`, `D113`, `D118`, `D218`, `D196`, `D203`, `D271`, `D304`, `D212`, `D123`, `D285`, `D132`, `D181`, `D270`, `D93`, `D97`, `D51`, `D259`, `D7`, `D28`, `D36`, `D39`, `D57`, `D61`, `D63`, `D103`, `D192`, `D195`, `D220`, `D221`, `D277`, `D284`, `D037`, `D73`
 - `app/src/OrdersHubStore.ts` — THE HUB'S MEMORY ACROSS A STAGE SWITCH.
   - Decisions: `D28`, `D57`, `D73`, `D97`, `D27`, `D61`, `D63`, `D69`, `D94`
 - `app/src/OrdersShipStage.tsx` — The SHIP stage of that hub: TCGplayer's Orders -> Export Shipping read into D61's three lanes, with the Pirate Ship import CSV as a download and a way to forget the batch.
@@ -190,6 +190,8 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
   - Decisions: `D174`, `D89`, `D50`, `D196`, `D118`, `D57`, `D207`, `D33`, `D39`, `D94`
 - `app/src/TakeOffLine.tsx` — The take-off line on a master-set retire receipt: Take It Off TCGplayer at the pull and the answer in the same place, drawn in the toast kit's changing line.
   - Decisions: `D100`, `D118`, `D196`, `D313`
+- `app/src/afterWrite.ts` — The one home of re-reading after a write for a screen that registers its reads: `afterWrite` runs a write and starts the re-reads when it answers or is refused, merged to one in flight and one pending, never awaited.
+  - Decisions: `D73`, `D313`
 - `app/src/autoMatch.ts` — MATCHING RUNS BY ITSELF WHEN A READING FINISHES (the owner's Q4 ruling).
   - Decisions: `D65`, `D273`
 - `app/src/base.css` — Reset and the page ground, and the six app-wide floors: the `:focus-visible` ring, the cursor floor after `39` of `142` interactive elements were measured with no cursor rule any selector could reach, tabular figures on every table, `output` and `time`, and the reduced-motion floor.

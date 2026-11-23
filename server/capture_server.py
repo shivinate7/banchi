@@ -14284,8 +14284,10 @@ def _walk_plan_order_ref(ledger: order_store.Ledger, key: str, sku: str) -> Opti
     `owed` IS THE LEDGER'S OWN `outstanding`, ZEROED FOR A STOOD-DOWN LINE — the same filter
     `walkplan.demand` applies (owner's ruling 2026-09-17, "if I stand a line down... it should
     say owed 0"), read off this plan's own snapshot so a press this pass records against never
-    moves it. Its own reader, `pickOrderFor` (`app/src/OrdersWalkPane.tsx`), needs it to stop
-    handing a press to an order already full (`docs/specs/order-walk-plan.md` §8)."""
+    moves it. Its readers: `pickOrderFor` (`app/src/OrdersWalkPane.tsx`), which needs it to stop
+    handing a press to an order already full (`docs/specs/order-walk-plan.md` §8), and
+    `do_order_pull`, whose reply carries the same figure after the write so the walk never
+    counts its own sales."""
     record = ledger.orders.get(key)
     if record is None:
         return None

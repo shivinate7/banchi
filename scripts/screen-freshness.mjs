@@ -29,7 +29,7 @@
  *      is why the classification is a transitive call-graph closure and not a grep.
  *
  *   2. IT FINDS EVERY CALL SITE OF EVERY WRITE, in every `.tsx` under `app/src`, and asks
- *      whether a freshness mechanism covers it. Thirteen mechanisms are already in the tree
+ *      whether a freshness mechanism covers it. Fourteen mechanisms are already in the tree
  *      and each has a recogniser here, named after what it does rather than after the file it
  *      was found in. A site covered by none of them is a finding.
  *
@@ -1194,6 +1194,46 @@ function recognizers(screens) {
       return null
     }],
 
+    /* 14. THE AFTER-WRITE HELPER (`app/src/afterWrite.ts`). The write runs inside `afterWrite(() => write())`, or its
+     *     handler calls `afterWrite` or `rereadNow`, and the helper starts the re-reads the screen REGISTERED with
+     *     `useRereadOnWrite(...)`, which is where the read lives. Both halves are checked, as idiom 3's are: the helper
+     *     is imported from `./afterWrite` and used here, AND this screen registers a function that reaches a read. A
+     *     screen that calls the helper and registers nothing, or registers a no-op, re-reads nothing, and its write is
+     *     still a finding. */
+    ['write through the after-write helper', (ctx) => {
+      const local = new Map()
+      for (const statement of ctx.screen.src.statements) {
+        if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue
+        if (statement.moduleSpecifier.text !== './afterWrite') continue
+        const named = statement.importClause?.namedBindings
+        if (named === undefined || !ts.isNamedImports(named)) continue
+        for (const element of named.elements) local.set((element.propertyName ?? element.name).text, element.name.text)
+      }
+      const helper = local.get('afterWrite')
+      const refetch = local.get('rereadNow')
+      const register = local.get('useRereadOnWrite')
+      if (register === undefined || (helper === undefined && refetch === undefined)) return null
+      const registered = collect(ctx.screen.src, (n) =>
+        ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === register &&
+        n.arguments[0] !== undefined && reachesRead(ctx.screen, n.arguments[0]))
+      if (registered.length === 0) return null
+      const callsHelper = (node) =>
+        ts.isCallExpression(node) && ts.isIdentifier(node.expression) &&
+        (node.expression.text === helper || node.expression.text === refetch)
+      /* THE WRITE IS INSIDE A FUNCTION HANDED TO `afterWrite`. */
+      for (let child = ctx.site.node, up = child.parent; up !== undefined; child = up, up = up.parent) {
+        if (ts.isCallExpression(up) && helper !== undefined && ts.isIdentifier(up.expression) &&
+            up.expression.text === helper && up.arguments.includes(child)) {
+          return 'afterWrite(() => write) and a registered re-read'
+        }
+      }
+      /* OR ITS HANDLER CALLS THE HELPER (the write's own undo on a toast, a loop that ends by re-reading). */
+      for (const node of ctx.scope.nodes) {
+        if (collect(node, callsHelper).length > 0) return 'the handler calls the helper and a re-read is registered'
+      }
+      return null
+    }],
+
     /* 4. THE WRITE'S OWN RESPONSE CARRIES THE NEW STATE. `CaptureScreen.tsx` folds the created
      *    box row straight into `boxRecords` — "the answer IS the row `GET /boxes` would
      *    return, so a round trip would buy nothing and would put a second await between the
@@ -1706,7 +1746,9 @@ function selfTest() {
     nonRequests: [],
     codeCard: [],
   }
-  const head = "import { doRead, doWrite } from './server'\nimport { useCallback, useEffect, useState } from 'react'\n"
+  const head =
+    "import { doRead, doWrite } from './server'\nimport { useCallback, useEffect, useState } from 'react'\n" +
+    "import { afterWrite, rereadNow, useRereadOnWrite } from './afterWrite'\n"
 
   const cases = [
     ['a bare write with nothing after it', null, `
@@ -2003,6 +2045,44 @@ function selfTest() {
         const [reloads, setReloads] = useState(0)
         useEffect(() => { void doRead().then(setRows) }, [reloads])
         return <div>{rows}<Kitted onChanged={() => setReloads((n) => n + 1)} /></div>
+      }`],
+    ['14. the write inside afterWrite, the screen registers a re-read', 'write through the after-write helper', `
+      export function Helped() {
+        const [rows, setRows] = useState(null)
+        useRereadOnWrite(async () => { setRows(await doRead()) })
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press}>{rows}</button>
+      }`],
+    ['14b. the handler ends with rereadNow, the screen registers a re-read', 'write through the after-write helper', `
+      export function Nowed() {
+        const [rows, setRows] = useState(null)
+        useRereadOnWrite(async () => { setRows(await doRead()) })
+        const press = async () => { await doWrite(1, 2); rereadNow() }
+        return <button onClick={press}>{rows}</button>
+      }`],
+    ['14c. the write inside afterWrite, the screen registers nothing', null, `
+      export function Unregistered() {
+        const [rows, setRows] = useState(null)
+        useEffect(() => { void doRead().then(setRows) }, [])
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press}>{rows}</button>
+      }`],
+    ['14d. the write inside afterWrite, the registered re-read reads nothing', null, `
+      export function Registered() {
+        const [rows, setRows] = useState(null)
+        useEffect(() => { void doRead().then(setRows) }, [])
+        useRereadOnWrite(async () => undefined)
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press}>{rows}</button>
+      }`],
+    ['14e. a second write beside the helper that skips it', null, `
+      export function Skipper() {
+        const [rows, setRows] = useState(null)
+        useEffect(() => { void doRead().then(setRows) }, [])
+        useRereadOnWrite(async () => { setRows(await doRead()) })
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        const sneak = async () => { await doWrite(3, 4) }
+        return <button onClick={press}>{rows}<i onClick={sneak} /></button>
       }`],
     ['3e. the kit hook useSheetWrite handed a no-op onChanged', null, `
       export function KitNoop({ onChanged }: { onChanged: () => void }) {
