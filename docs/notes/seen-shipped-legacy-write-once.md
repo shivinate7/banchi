@@ -1,0 +1,1 @@
+- seen-shipped-legacy-write-once: `Ledger.ingest` sets an unknown `OrderRecord.seen_shipped` to False on an unchanged re-read at a pre-ship status, with no `changed_at` stamp. The file's bytes move there, so D63 (byte stability) breaks once per legacy order. It bites when a byte-stability check runs over a store that still holds legacy orders.
