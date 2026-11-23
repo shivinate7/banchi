@@ -54,6 +54,7 @@ exactly the kind of code that is confidently wrong in a way no screen reveals.
 
 from __future__ import annotations
 
+import heapq
 import math
 import re
 import time
@@ -88,9 +89,9 @@ COST_FUNCTIONS: Dict[str, int] = {
 
 COST_NAMES: Tuple[str, ...] = tuple(sorted(COST_FUNCTIONS))
 
-# THE SOLVER'S WALL-CLOCK BUDGET, IN SECONDS. Two orders of magnitude above the worst instance
-# ever measured on the owner's store (27.9 ms for all 275 walkable orders), because the number
-# this bounds is not the expected case but the pathological one nobody has seen yet. It is a
+# THE SOLVER'S WALL-CLOCK BUDGET, IN SECONDS. Far above what the owner's store has needed (all
+# 275 walkable orders solved in milliseconds when measured there), because the number this
+# bounds is not the expected case but the pathological one nobody has seen yet. It is a
 # ceiling on a route's latency, not a target.
 DEFAULT_BUDGET_S = 2.0
 
@@ -250,7 +251,10 @@ class Stop:
 
 @dataclass(frozen=True)
 class Short:
-    """One SKU the store cannot fill, and by how much.
+    """One SKU the plan cannot reach in full, and by how many copies.
+
+    Usually the store holds fewer than the orders want. `plan` also lists here any copy the
+    chosen stops fail to reach, so no owed copy goes unwalked and unlisted.
 
     NOT A STOP AND NEVER DRAWN AS ONE. It is the capped remainder — see `demand` — and it is
     reported rather than made infeasible, because 23 of the 59 SKUs the owner's forty open
@@ -571,26 +575,36 @@ def _dominated(
     LOSE THE COVER. Ties are broken by walk order: of two stops with the same vector, the one
     a hand reaches first survives. That also makes the reduction deterministic, which a plan
     the operator sees twice has to be.
+
+    A DOMINATOR MUST HOLD EVERY SKU *B* HOLDS, so the candidates for *A* are the holders of
+    *B*'s rarest SKU, looked up in an index rather than found by scanning every stop. The
+    answer is the same as the scan's; only the cost differs.
     """
     keys = sorted(clipped, key=lambda k: k.walk_order)
+    holders: Dict[str, List[StopKey]] = {}
+    for key in keys:
+        for sku in clipped[key]:
+            holders.setdefault(sku, []).append(key)
+    rank = {key: i for i, key in enumerate(keys)}
     dropped: Set[StopKey] = set()
-    for i, b in enumerate(keys):
+    for b in keys:
         if b in dropped:
             continue
-        for j, a in enumerate(keys):
+        held_b = clipped[b]
+        rarest = min(held_b, key=lambda sku: len(holders[sku]))
+        for a in holders[rarest]:
             if a is b or a in dropped:
                 continue
+            held_a = clipped[a]
             covers = all(
-                clipped[a].get(sku, 0) >= count
-                and clipped[a].get(sku, 0) >= int(wanted.get(sku, 0))
-                for sku, count in clipped[b].items()
+                held_a.get(sku, 0) >= count and held_a.get(sku, 0) >= int(wanted.get(sku, 0))
+                for sku, count in held_b.items()
             )
             if not covers:
                 continue
-            same = clipped[a] == clipped[b]
             # A strict cover always wins. An equal one wins only if it comes first in the
             # walk, which is what stops a mutual pair erasing itself.
-            if same and j > i:
+            if held_a == held_b and rank[a] > rank[b]:
                 continue
             dropped.add(b)
             break
@@ -598,17 +612,22 @@ def _dominated(
 
 
 def _coverage(held: Dict[str, int], remaining: Dict[str, int]) -> int:
-    """How many still-outstanding COPIES this stop would supply. Multiplicity, not SKUs."""
-    return sum(min(count, held.get(sku, 0)) for sku, count in remaining.items())
+    """How many still-outstanding COPIES this stop would supply. Multiplicity, not SKUs.
+
+    Walks the stop's own SKUs, a handful, never the whole outstanding demand.
+    """
+    return sum(min(count, remaining.get(sku, 0)) for sku, count in held.items())
 
 
 def _after(remaining: Dict[str, int], held: Dict[str, int]) -> Dict[str, int]:
     """What is still outstanding once this stop has been taken."""
-    out: Dict[str, int] = {}
-    for sku, count in remaining.items():
-        left = count - held.get(sku, 0)
+    out = dict(remaining)
+    for sku, count in held.items():
+        left = out.get(sku, 0) - count
         if left > 0:
             out[sku] = left
+        else:
+            out.pop(sku, None)
     return out
 
 
@@ -623,8 +642,17 @@ def _supplied(
     return out
 
 
+# THE GREEDY INCUMBENT'S OWN FLOOR, IN SECONDS. The incumbent is the answer a starved budget
+# falls back to, so it is never refused outright; this is how long it may run before it stops
+# choosing the best stop each time and takes the first one that helps. A zero budget therefore
+# still returns the real greedy cover on any instance a walk can hold.
+GREEDY_FLOOR_S = 0.5
+
+
 def _greedy(
-    clipped: Dict[StopKey, Dict[str, int]], wanted: Dict[str, int]
+    clipped: Dict[StopKey, Dict[str, int]],
+    wanted: Dict[str, int],
+    deadline: Optional[float] = None,
 ) -> List[StopKey]:
     """Step 3: take the stop covering the most outstanding copies, until nothing is left.
 
@@ -634,103 +662,149 @@ def _greedy(
     the ticked subsets the owner walks, and a heuristic that happens to be right on one store
     is a heuristic nobody can tell has stopped being right.
 
+    LAZY, NOT A RESCAN. A stop's coverage only falls as copies are taken (the sum of
+    `min(held, outstanding)` is submodular), so a heap of last-seen coverages is an upper
+    bound on every stop. Pop the top, recompute it, and take it only if it still beats the
+    next bound; otherwise push it back lower. That picks the same stop a full scan would, ties
+    included, without touching every stop on every pick.
+
+    PAST THE DEADLINE it stops choosing and takes, in walk order, each stop that still helps.
+    The result is a valid cover, only a longer one, and `solve` flags the plan inexact.
+
     Ties break on walk order, so a plan does not reshuffle between two presses over an
     unchanged store.
     """
-    remaining = dict(wanted)
+    remaining = {sku: n for sku, n in wanted.items() if n > 0}
+    order = sorted(clipped, key=lambda k: k.walk_order)
+    heap = [(-_coverage(clipped[key], remaining), i) for i, key in enumerate(order)]
+    heapq.heapify(heap)
     taken: List[StopKey] = []
-    available = sorted(clipped, key=lambda k: k.walk_order)
-    while remaining:
-        best: Optional[StopKey] = None
-        best_cover = 0
-        for key in available:
-            if key in taken:
-                continue
-            cover = _coverage(clipped[key], remaining)
-            if cover > best_cover:
-                best, best_cover = key, cover
-        if best is None:
-            # Unreachable: `solve` refuses an uncoverable instance by name before this runs,
-            # and the dominance reduction keeps a cover. `solve` still checks what comes back
-            # against the demand, so a partial cover is never flagged exact.
+    used: Set[int] = set()
+    while remaining and heap:
+        if deadline is not None and time.monotonic() >= deadline:
+            for i, key in enumerate(order):
+                if not remaining:
+                    break
+                if i not in used and _coverage(clipped[key], remaining) > 0:
+                    taken.append(key)
+                    remaining = _after(remaining, clipped[key])
             break
-        taken.append(best)
-        remaining = _after(remaining, clipped[best])
+        stale, i = heapq.heappop(heap)
+        gain = _coverage(clipped[order[i]], remaining)
+        if gain <= 0:
+            continue
+        if gain < -stale:
+            heapq.heappush(heap, (-gain, i))
+            continue
+        taken.append(order[i])
+        used.add(i)
+        remaining = _after(remaining, clipped[order[i]])
+    # Anything left here is unreachable: `solve` refuses an uncoverable instance by name
+    # before this runs, and the reductions keep a cover. `solve` still checks the cover it
+    # gets back against the demand, so a partial one is never flagged exact.
     return taken
 
 
-def solve(
-    per_stop: Dict[StopKey, Dict[str, int]],
-    wanted: Dict[str, int],
-    budget_s: float = DEFAULT_BUDGET_S,
-) -> Solution:
-    """The fewest stops that cover every demanded copy. Exact branch and bound, pure Python.
+def _reduce(
+    clipped: Dict[StopKey, Dict[str, int]], wanted: Dict[str, int]
+) -> Tuple[Set[StopKey], Dict[StopKey, Dict[str, int]], Dict[str, int]]:
+    """Step 2b: take every FORCED stop and shrink the demand, until nothing more is forced.
 
-    THE FORMULATION IS THE MEASUREMENT, NOT A STYLE PREFERENCE, and the spec records both
-    attempts. Branching on section index did not finish the owner's 275-order instance in 30
-    seconds. Branching on the SCARCEST demanded SKU, over dominance-reduced vectors, solves
-    the same instance in 27.9 ms. Anyone rewriting the branch rule is undoing a measured
-    result and owes a new measurement, not an argument.
+    A stop is forced when the other stops cannot supply what the walk still wants of some
+    SKU it holds: every cover must contain it, so the smallest cover is the forced stops plus
+    the smallest cover of what they leave. That is the common case on a real store, where the
+    demand is capped at what is on hand and a SKU's last copies are all needed. What the
+    forced stops supply comes off the demand, the survivors are clipped to the smaller demand
+    (more stops saturate, so more are dominated), and the round repeats.
 
-    WHY THE SCARCEST SKU. Every cover must contain at least one supplier of every demanded
-    SKU, so branching over the suppliers of ONE SKU is exhaustive by construction — and
-    picking the SKU with the fewest suppliers makes that branch the narrowest available.
-    Branching on "in or out" of an arbitrary section is a binary tree over every section
-    instead, most of whose leaves are covers nobody would consider.
+    Sound under the same constant per-section cost as `_dominated`: forcing never discards a
+    stop an optimal cover could do without, and the dominance rule is re-proved against the
+    residual demand each round, because it is a statement about the instance in hand.
 
-    SIBLINGS ARE BANNED AS THEY ARE TRIED, which is what keeps the branches disjoint. Once the
-    subtree containing supplier *s* has been searched, every cover containing *s* has been
-    seen, so later siblings may exclude it. Without the ban the same cover is re-derived once
-    per permutation of its members and the search is factorial in the answer's own size.
-
-    THE BOUND. `|chosen| + ceil(outstanding / best single-stop coverage)` is a lower bound on
-    any completion of this branch: no stop can supply more than the best one does, so no
-    completion can be shorter than that many further stops. Reaching the incumbent's size
-    prunes, since an equal answer is not an improvement.
-
-    THE BUDGET IS CHECKED FIRST IN EVERY NODE, AND THAT IS WHAT MAKES `exact: false`
-    REACHABLE. A budget of zero exhausts before the first bound is computed, so the greedy
-    incumbent comes back flagged — which is how `harness/tests/t11_walk_plan.py` proves the
-    flag can be false without needing an instance nobody has found. A silent fall back to
-    greedy is the failure mode this return value exists to prevent.
+    Returns the forced stops, the stops left to choose from, and the demand they must meet.
     """
-    started = time.monotonic()
-    clipped = _clip(per_stop, wanted)
+    forced: Set[StopKey] = set()
+    pool = dict(clipped)
+    residual = dict(wanted)
+    while residual:
+        pool = _clip(pool, residual)
+        for key in _dominated(pool, residual):
+            pool.pop(key, None)
+        reach: Dict[str, int] = {}
+        for held in pool.values():
+            for sku, count in held.items():
+                reach[sku] = reach.get(sku, 0) + count
+        now = {
+            key
+            for key, held in pool.items()
+            if any(reach[sku] - count < residual[sku] for sku, count in held.items())
+        }
+        if not now:
+            break
+        for key in now:
+            residual = _after(residual, pool.pop(key))
+        forced |= now
+    return forced, pool, residual
 
-    # THE INSTANCE MUST BE COVERABLE BEFORE ANYTHING SEARCHES IT. Checked on the CLIPPED
-    # vectors and before the dominance reduction, so the sum is over exactly the copies a
-    # cover could use. `plan` caps the demand at availability first, so this is a statement
-    # about the caller rather than about any real store — see `Uncoverable`.
-    reach: Dict[str, int] = {}
-    for held in clipped.values():
-        for sku, count in held.items():
-            reach[sku] = reach.get(sku, 0) + count
-    missing = sorted(sku for sku, count in wanted.items() if reach.get(sku, 0) < int(count))
-    if missing:
-        raise Uncoverable(
-            "No set of stops can fill "
-            + ", ".join(
-                f"{sku} (wants {wanted[sku]}, {reach.get(sku, 0)} reachable)"
-                for sku in missing
-            )
-            + " — cap the demand at availability and report the remainder as a shortfall"
-        )
 
-    for key in _dominated(clipped, wanted):
-        clipped.pop(key, None)
-    candidates = len(clipped)
+def _components(
+    pool: Dict[StopKey, Dict[str, int]], residual: Dict[str, int]
+) -> List[Tuple[Dict[StopKey, Dict[str, int]], Dict[str, int]]]:
+    """Split what is left into groups that share no SKU. Each is solved on its own.
 
-    if not wanted:
-        return Solution(chosen=frozenset(), exact=True, candidates=candidates, solve_ms=0)
+    Two groups that share no SKU cannot help each other, so the smallest cover of the whole is
+    the smallest cover of each, added. The search over several small groups is far cheaper
+    than one search over their product.
+    """
+    parent: Dict[str, str] = {}
 
+    def find(sku: str) -> str:
+        while parent[sku] != sku:
+            parent[sku] = parent[parent[sku]]
+            sku = parent[sku]
+        return sku
+
+    for held in pool.values():
+        skus = list(held)
+        for sku in skus:
+            parent.setdefault(sku, sku)
+        for sku in skus[1:]:
+            parent[find(sku)] = find(skus[0])
+    groups: Dict[str, Dict[StopKey, Dict[str, int]]] = {}
+    for key in sorted(pool, key=lambda k: k.walk_order):
+        groups.setdefault(find(next(iter(pool[key]))), {})[key] = pool[key]
+    out = []
+    for stops in groups.values():
+        skus = {sku for held in stops.values() for sku in held}
+        out.append((stops, {sku: n for sku, n in residual.items() if sku in skus}))
+    return out
+
+
+def _search(
+    clipped: Dict[StopKey, Dict[str, int]],
+    wanted: Dict[str, int],
+    deadline: float,
+    greedy_deadline: float,
+) -> Tuple[List[StopKey], bool]:
+    """The smallest cover of one group, and whether the search finished inside the deadline."""
     suppliers: Dict[str, List[StopKey]] = {}
     for key in sorted(clipped, key=lambda k: k.walk_order):
         for sku in clipped[key]:
             suppliers.setdefault(sku, []).append(key)
 
-    incumbent: List[StopKey] = _greedy(clipped, wanted)
-    best: List[StopKey] = list(incumbent)
-    deadline = started + max(0.0, float(budget_s))
+    # IDENTICAL STOPS ARE ONE CANDIDATE WITH A MULTIPLICITY. Among stops with the same vector
+    # a cover that holds the later one but not the earlier is the earlier's mirror image, so
+    # `twin` names each stop's predecessor and the branch below skips a stop whose
+    # predecessor was tried and banned.
+    twin: Dict[StopKey, StopKey] = {}
+    last_seen: Dict[Tuple[Tuple[str, int], ...], StopKey] = {}
+    for key in sorted(clipped, key=lambda k: k.walk_order):
+        shape = tuple(sorted(clipped[key].items()))
+        if shape in last_seen:
+            twin[key] = last_seen[shape]
+        last_seen[shape] = key
+
+    best: List[StopKey] = _greedy(clipped, wanted, greedy_deadline)
 
     def search(chosen: List[StopKey], remaining: Dict[str, int], banned: Set[StopKey]) -> None:
         if time.monotonic() >= deadline:
@@ -776,23 +850,117 @@ def solve(
         for key in suppliers.get(str(scarcest), ()):
             if key in local or key in chosen:
                 continue
+            if twin.get(key) in local:
+                local.add(key)
+                continue
             chosen.append(key)
             search(chosen, _after(remaining, clipped[key]), local)
             chosen.pop()
             local.add(key)
 
-    exact = True
     try:
         search([], dict(wanted), set())
-    except _Exhausted:
-        exact = False
-    except RecursionError:
-        # The same honest answer as a budget overrun: the incumbent, flagged. A plan nobody
-        # can tell is unproven is the one thing this function may not return.
-        exact = False
+    except (_Exhausted, RecursionError):
+        # The same honest answer for a budget overrun and for a recursion limit: the
+        # incumbent, flagged. A plan nobody can tell is unproven is the one thing this
+        # function may not return.
+        return best, False
+    return best, True
+
+
+def solve(
+    per_stop: Dict[StopKey, Dict[str, int]],
+    wanted: Dict[str, int],
+    budget_s: float = DEFAULT_BUDGET_S,
+) -> Solution:
+    """The fewest stops that cover every demanded copy. Exact branch and bound, pure Python.
+
+    THE FORMULATION IS THE MEASUREMENT, NOT A STYLE PREFERENCE, and the spec records both
+    attempts. Branching on section index did not finish the owner's 275-order instance in 30
+    seconds. Branching on the SCARCEST demanded SKU, over dominance-reduced vectors, solved
+    the same instance in a few dozen milliseconds when it was measured. Anyone rewriting the
+    branch rule is undoing a measured result and owes a new measurement, not an argument.
+
+    WHAT RUNS, IN ORDER: clip to the demand, refuse an uncoverable instance, drop dominated
+    stops, then take forced stops and split what is left into groups that share no SKU
+    (`_reduce`, `_components`), then search each group. Each reduction keeps an optimal cover,
+    so the answer is the same one the bare search would find, found over far fewer stops.
+
+    WHY THE SCARCEST SKU. Every cover must contain at least one supplier of every demanded
+    SKU, so branching over the suppliers of ONE SKU is exhaustive by construction — and
+    picking the SKU with the fewest suppliers makes that branch the narrowest available.
+    Branching on "in or out" of an arbitrary section is a binary tree over every section
+    instead, most of whose leaves are covers nobody would consider.
+
+    SIBLINGS ARE BANNED AS THEY ARE TRIED, which is what keeps the branches disjoint. Once the
+    subtree containing supplier *s* has been searched, every cover containing *s* has been
+    seen, so later siblings may exclude it. Without the ban the same cover is re-derived once
+    per permutation of its members and the search is factorial in the answer's own size.
+
+    THE BOUND. `|chosen| + ceil(outstanding / best single-stop coverage)` is a lower bound on
+    any completion of this branch: no stop can supply more than the best one does, so no
+    completion can be shorter than that many further stops. Reaching the incumbent's size
+    prunes, since an equal answer is not an improvement.
+
+    THE BUDGET IS CHECKED BEFORE ANY REDUCTION BEYOND DOMINATION AND FIRST IN EVERY NODE, AND
+    THAT IS WHAT MAKES `exact: false` REACHABLE. A budget of zero returns the greedy incumbent
+    over the dominance-reduced stops, flagged, which is how
+    `harness/tests/t11_walk_plan.py` proves the flag can be false without needing an instance
+    nobody has found. A silent fall back to greedy is the failure mode this return value
+    exists to prevent.
+    """
+    started = time.monotonic()
+    clipped = _clip(per_stop, wanted)
+
+    # THE INSTANCE MUST BE COVERABLE BEFORE ANYTHING SEARCHES IT. Checked on the CLIPPED
+    # vectors and before the dominance reduction, so the sum is over exactly the copies a
+    # cover could use. `plan` caps the demand at availability first, so this is a statement
+    # about the caller rather than about any real store — see `Uncoverable`.
+    reach: Dict[str, int] = {}
+    for held in clipped.values():
+        for sku, count in held.items():
+            reach[sku] = reach.get(sku, 0) + count
+    missing = sorted(sku for sku, count in wanted.items() if reach.get(sku, 0) < int(count))
+    if missing:
+        raise Uncoverable(
+            "No set of stops can fill "
+            + ", ".join(
+                f"{sku} (wants {wanted[sku]}, {reach.get(sku, 0)} reachable)"
+                for sku in missing
+            )
+            + " — cap the demand at availability and report the remainder as a shortfall"
+        )
+
+    for key in _dominated(clipped, wanted):
+        clipped.pop(key, None)
+
+    def elapsed_ms() -> int:
+        return int(round((time.monotonic() - started) * 1000))
+
+    if not wanted:
+        return Solution(chosen=frozenset(), exact=True, candidates=len(clipped), solve_ms=0)
+
+    deadline = started + max(0.0, float(budget_s))
+    greedy_deadline = started + max(GREEDY_FLOOR_S, float(budget_s))
+
+    if time.monotonic() >= deadline:
+        # The budget is gone before any search: the incumbent, flagged.
+        best = _greedy(clipped, wanted, greedy_deadline)
+        return Solution(
+            chosen=frozenset(best), exact=False, candidates=len(clipped), solve_ms=elapsed_ms()
+        )
+
+    forced, pool, residual = _reduce(clipped, wanted)
+    candidates = len(forced) + len(pool)
+    best = list(forced)
+    exact = True
+    for stops, group_wanted in _components(pool, residual):
+        group_best, group_exact = _search(stops, group_wanted, deadline, greedy_deadline)
+        best.extend(group_best)
+        exact = exact and group_exact
 
     # A COVER SHORT OF THE DEMAND PROVES NOTHING, so it is never `exact`. Unreachable while the
-    # reduction keeps a cover; this is what stops a future reduction bug shipping a partial
+    # reductions keep a cover; this is what stops a future reduction bug shipping a partial
     # plan flagged as the proven optimum.
     if _after(dict(wanted), _supplied(clipped, best)):
         exact = False
@@ -801,7 +969,7 @@ def solve(
         chosen=frozenset(best),
         exact=exact,
         candidates=candidates,
-        solve_ms=int(round((time.monotonic() - started) * 1000)),
+        solve_ms=elapsed_ms(),
     )
 
 
