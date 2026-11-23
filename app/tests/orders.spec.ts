@@ -1421,7 +1421,7 @@ test('the receipt names where the card just was, never the departed label the sa
 })
 
 /* `docs/specs/undo.md` §3: `U` IS THE ONE KEY FOR THE NEWEST REVERSIBLE WRITE — here, the
- * newest pull this screen made, held in `OrdersHubStore.lastPull` and reached by
+ * newest pull this screen made, held in `OrdersHubStore.pulls` and reached by
  * `undoFromToast`, the same function the toast's own Undo button calls. `page.keyboard.press`
  * is what dispatches a real `keydown` a window listener can see; `.fill()` elsewhere in this
  * file does not. */
@@ -5891,9 +5891,8 @@ test('a remount with a sale in flight keeps it: the toast fires, its row reads S
   await expect(rows).toHaveCount(3)
   await letNextWrite(seen)
   await expect.poll(() => seen.answered).toBe(2)
-  /* Receipts stack and last twenty seconds, so cap-a's is still there: the sale that was out across the remount
-     fires a second one beside it. */
-  await expect(page.locator('.bn-toast-receipt button.bn-toast-action')).toHaveCount(2)
+  /* cap-b is recorded, so cap-a's receipt has lost its Undo: only the newest receipt keeps one. */
+  await expect(page.locator('.bn-toast-receipt button.bn-toast-action')).toHaveCount(1)
   await expect(rows.nth(1).getByRole('button', { name: /^Undo/ })).toBeVisible()
   await expect(rows.nth(0).getByRole('button', { name: /^Undo/ })).toHaveCount(0)
   await page.keyboard.press('u')

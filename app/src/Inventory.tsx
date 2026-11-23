@@ -26,6 +26,7 @@ import {
   undoRetire,
   undoSale,
   failureTone,
+  ALREADY_SOLD,
 } from './server'
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
@@ -91,7 +92,6 @@ const UNDO_WINDOW_MS = 20_000
  * (`sold_origin_unknown`, `retired_origin_unknown`) stays off the screen. */
 const NO_UNDO = 'No undo for this one.'
 
-const ALREADY_SOLD = 'already_sold'
 const NOT_SOLD = 'not_sold'
 const ALREADY_RETIRED = 'already_retired'
 const NOT_RETIRED = 'not_retired'

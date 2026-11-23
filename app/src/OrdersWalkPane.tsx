@@ -587,7 +587,7 @@ export function inWalkLine(run: () => Promise<void>): Promise<void> {
 }
 
 /** The newest press the line still holds that has not been reversed: what `U` undoes first. A sale already
- *  recorded is the hub's `lastPull`, and `U` takes that only when this answers null. */
+ *  recorded is in the hub's `pulls`, and `U` takes the newest of those only when this answers null. */
 export function newestWalkSale(): { readonly copyKey: string } | null {
   let newest: LineSale | null = null
   for (const sale of lineSales.values()) {
@@ -597,7 +597,7 @@ export function newestWalkSale(): { readonly copyKey: string } | null {
   return newest
 }
 
-/** Is a reversal of this pull already in the line, queued behind its write or out? `U` skips the hub's `lastPull`
+/** Is a reversal of this pull already in the line, queued behind its write or out? `U` skips that pull in the hub's `pulls`
  *  while this says yes, so a second press never queues a second reversal of the same copy. */
 export function walkReversalHeld(captureId: string): boolean {
   for (const sale of lineSales.values()) {

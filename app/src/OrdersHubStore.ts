@@ -21,6 +21,15 @@ export type Stage = 'pull' | 'ship'
  *  that needs a person. */
 export const SHIP_LANES: readonly ShippingLane[] = ['envelope', 'parcel', 'unjudged']
 
+/** One recorded pull: the copy it took, and the words its toast and its undo say. */
+export type PullNote = {
+  readonly target: PullTarget
+  readonly place: string
+  readonly name: string
+  /** The id of this pull's receipt toast, so a newer pull can take its Undo away. */
+  readonly receipt?: number
+}
+
 export type HubState = {
   readonly payload: OrdersPayload | null
   /** Whether the "add orders" well is open. `null` until the first read answers, which is what
@@ -37,17 +46,15 @@ export type HubState = {
   /** Bumped by anything that wrote to the ledger from outside a mounted hub (an undo pressed
    *  on a toast), so the next mounted hub re-reads. */
   readonly version: number
-  /** THE NEWEST PULL THIS SCREEN MADE THAT IS STILL UNDOABLE — `docs/specs/undo.md` §3's fast
-   *  path, `U`, reached from `OrdersHub` regardless of which stage or order is on screen. It
-   *  lives here rather than in a component because the pull's own toast outlives the row it
-   *  was pressed from. Overwritten by the next pull, cleared by its own undo, and NO CLOCK
-   *  (UN-5, `docs/specs/undo.md` §11.1, D28/D57 amended 2026-09-25): rank replaces it, the same
-   *  ruling every other undo in this store answers to. It was called that already before UN-5
-   *  and still carried an `until` the `U` handler gated on — this field's own removal is what
-   *  makes the comment true. */
-  readonly lastPull: { readonly target: PullTarget; readonly place: string; readonly name: string } | null
+  /** THE PULLS THIS SCREEN MADE THAT STILL STAND, OLDEST FIRST — `docs/specs/undo.md` §3's fast path,
+   *  `U`, reached from `OrdersHub` regardless of which stage or order is on screen. The last entry is
+   *  the newest; undoing it hands the rank to the one before. It lives here rather than in a
+   *  component because the pull's own toast outlives the row it was pressed from. A pull enters when
+   *  its write is recorded and leaves when it is undone, by any route. NO CLOCK (UN-5,
+   *  `docs/specs/undo.md` §11.1): rank replaces it. */
+  readonly pulls: readonly PullNote[]
   /** THE MOST RECENT SUCCESSFUL UNDO MADE FROM A TOAST OR `U` — `undoFromToast` in
-   *  `Orders.tsx` sets this beside clearing `lastPull`, and `PullStage` watches `undoneAt` to
+   *  `Orders.tsx` sets this beside dropping the pull from `pulls`, and `PullStage` watches `undoneAt` to
    *  tell its own mounted walk (`useOrderWalk`'s `noteExternalUndo`) that this copy is no
    *  longer recorded. Neither of those undo paths goes through the walk's own `undoCopy`, so
    *  before this existed the walk's tally never moved for them (the review round's finding
@@ -73,7 +80,7 @@ let state: HubState = {
   gone: null,
   busy: null,
   version: 0,
-  lastPull: null,
+  pulls: [],
   undoneTarget: null,
   undoneAt: 0,
   walkLine: null,
