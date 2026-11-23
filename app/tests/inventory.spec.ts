@@ -2388,6 +2388,76 @@ test('U after a Mark sold leaves focus on the Mark sold that replaces the Undo, 
   expect(await heldFocus(page), 'focus lands on the Mark sold that replaces the Undo, never on the body').toContain('card-locations-sell')
 })
 
+/* FOCUS AFTER A REFUSED SALE. The server answers `already_sold` when another device sold the copy first. The press that held
+ * focus is gone, and nothing on the row takes focus back, so focus falls to the body. It must stay on the row. */
+
+test('a Mark sold the server refuses as already sold leaves focus on its row, never on the body', async ({ page }) => {
+  const { store, sell } = sellableStore()
+  await open(page, BOXES, store, () => PRICING, () => {
+    sell('2/1')
+    return { status: 409, body: { error: { code: 'already_sold', message: 'Box 2, card 1 is already sold.' } } }
+  })
+  const row = copyRow(page, CARD_1)
+
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect(receiptToast(page), 'the refusal reaches the person as a receipt').toContainText('Already sold')
+  await expect(row.getByRole('button', { name: /^(Mark Sold|Undo)/ }), 'no Mark sold or Undo returns to the row').toHaveCount(0)
+
+  await expect(row, 'focus lands on the row itself after the refused sale').toBeFocused()
+})
+
+test('a Mark sold refused as already sold keeps focus on the search box the person moved to, while the write is out', async ({ page }) => {
+  const { store, sell } = sellableStore()
+  await open(page, BOXES, store, () => PRICING, () => {
+    sell('2/1')
+    return { status: 409, body: { error: { code: 'already_sold', message: 'Box 2, card 1 is already sold.' } } }
+  })
+  let answer!: () => void
+  const held = new Promise<void>((done) => {
+    answer = done
+  })
+  /* Registered after `open`, so it answers first: it holds the sale until released, then hands it on to `open`'s own stub. */
+  await page.route(/\/inventory\/\d+\/\d+\/sold$/, async (route) => {
+    await held
+    await route.fallback()
+  })
+  const row = copyRow(page, CARD_1)
+
+  const sent = page.waitForRequest(/\/inventory\/\d+\/\d+\/sold$/)
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
+  await sent
+
+  const search = page.getByRole('searchbox')
+  await search.focus()
+  answer()
+  await expect(receiptToast(page), 'the refusal reaches the person as a receipt').toContainText('Already sold')
+  await expect(row.getByRole('button', { name: /^(Mark Sold|Undo)/ }), 'no Mark sold or Undo returns to the row').toHaveCount(0)
+  await expect(search, 'focus stays on the search box the person moved to, not taken back by the refused sale').toBeFocused()
+})
+
+test('a phone sticky Mark sold the server refuses as already sold leaves focus off the page body', async ({ page }) => {
+  await setViewport(page, { width: 390, height: 844 })
+  const cards: Cards = {
+    ...CARDS,
+    '2/1': card({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, cid: 'thievul-cid' }),
+  }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  await open(page, BOXES, store, () => PRICING, () => {
+    const held = cards['2/1']
+    if (held !== undefined) held.state = 'sold'
+    return { status: 409, body: { error: { code: 'already_sold', message: 'Box 2, card 1 is already sold.' } } }
+  }, { settle: '.card-locations-owner', route: '/#/inventory?box=2&card=thievul-cid' })
+  const bar = page.locator('.browse-actionbar-slot')
+
+  await bar.getByRole('button', { name: /^Mark Sold/ }).focus()
+  await page.keyboard.press('Enter')
+  await expect(receiptToast(page), 'the refusal reaches the person as a receipt').toContainText('Already sold')
+  await expect(bar.getByRole('button', { name: /^(Mark Sold|Undo)/ }), 'no Mark sold or Undo returns to the sticky bar').toHaveCount(0)
+
+  const onBody = await page.evaluate(() => document.activeElement === document.body)
+  expect(onBody, 'focus fell to the page body after the refused sticky Mark sold').toBe(false)
+})
+
 
 /* D218: A TYPED DOT IS A DEFECT WHEREVER IT IS TYPED. `Position.label` reaches this screen as
  * `Box 2, Section 1, Card 1` — real, server-composed, and never edited here — but the toast
