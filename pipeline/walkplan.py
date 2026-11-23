@@ -547,20 +547,30 @@ def _clip(
     return out
 
 
-def _dominated(clipped: Dict[StopKey, Dict[str, int]]) -> Set[StopKey]:
-    """Step 2: every stop some other stop covers componentwise. This is where the search goes.
+def _dominated(
+    clipped: Dict[StopKey, Dict[str, int]], wanted: Dict[str, int]
+) -> Set[StopKey]:
+    """Step 2: every stop some other stop makes redundant. This is where the search goes.
 
     SAFE ONLY BECAUSE THE COST IS A PER-SECTION CONSTANT. If *A* supplies at least as many
-    copies of every demanded SKU as *B* and costs no more, any cover using *B* stays a cover
-    when *B* is swapped for *A* and never grows. That reasoning is the cost function's, not
-    the constraint's, so a future non-constant cost must revisit this function rather than
-    inherit it — which is one of the two places `COST_FUNCTIONS`' docstring means when it says
-    the table must not be stretched.
+    copies of every SKU *B* supplies and costs no more, a cover using *B* can swap *B* for
+    *A* and never grow. That reasoning is the cost function's, not the constraint's, so a
+    future non-constant cost must revisit this function rather than inherit it — which is one
+    of the two places `COST_FUNCTIONS`' docstring means when it says the table must not be
+    stretched.
 
-    TWO IDENTICAL STOPS DOMINATE EACH OTHER, AND DROPPING BOTH WOULD LOSE THE COVER. Ties are
-    broken by walk order: of two stops with the same vector, the one a hand reaches first
-    survives. That also makes the reduction deterministic, which a plan the operator sees
-    twice has to be.
+    A STOP CAN BE WALKED TO ONCE, SO COVERING IS NOT ENOUGH. The swap fails when the cover
+    already holds *A*: *A* cannot be taken twice, and *B*'s copies are lost with *B*. Two
+    sections each holding one copy of a card the order owes twice are the plain case: each
+    "covers" the other, and dropping either leaves one copy of two. *B* is redundant next to
+    *A* only when *A* alone supplies everything the walk wants of every SKU *B* holds (`A`'s
+    clipped count equals the demand). Then a cover holding both loses nothing by dropping
+    *B*, and a cover holding only *B* swaps to *A*.
+
+    TWO IDENTICAL STOPS THAT BOTH MEET THAT TEST DOMINATE EACH OTHER, AND DROPPING BOTH WOULD
+    LOSE THE COVER. Ties are broken by walk order: of two stops with the same vector, the one
+    a hand reaches first survives. That also makes the reduction deterministic, which a plan
+    the operator sees twice has to be.
     """
     keys = sorted(clipped, key=lambda k: k.walk_order)
     dropped: Set[StopKey] = set()
@@ -571,7 +581,9 @@ def _dominated(clipped: Dict[StopKey, Dict[str, int]]) -> Set[StopKey]:
             if a is b or a in dropped:
                 continue
             covers = all(
-                clipped[a].get(sku, 0) >= count for sku, count in clipped[b].items()
+                clipped[a].get(sku, 0) >= count
+                and clipped[a].get(sku, 0) >= int(wanted.get(sku, 0))
+                for sku, count in clipped[b].items()
             )
             if not covers:
                 continue
@@ -597,6 +609,17 @@ def _after(remaining: Dict[str, int], held: Dict[str, int]) -> Dict[str, int]:
         left = count - held.get(sku, 0)
         if left > 0:
             out[sku] = left
+    return out
+
+
+def _supplied(
+    clipped: Dict[StopKey, Dict[str, int]], chosen: Iterable[StopKey]
+) -> Dict[str, int]:
+    """Copies of each SKU the chosen stops hold between them."""
+    out: Dict[str, int] = {}
+    for key in chosen:
+        for sku, count in clipped.get(key, {}).items():
+            out[sku] = out.get(sku, 0) + count
     return out
 
 
@@ -628,7 +651,8 @@ def _greedy(
                 best, best_cover = key, cover
         if best is None:
             # Unreachable: `solve` refuses an uncoverable instance by name before this runs,
-            # which is what stops this `break` returning a partial cover shaped like a plan.
+            # and the dominance reduction keeps a cover. `solve` still checks what comes back
+            # against the demand, so a partial cover is never flagged exact.
             break
         taken.append(best)
         remaining = _after(remaining, clipped[best])
@@ -692,7 +716,7 @@ def solve(
             + " — cap the demand at availability and report the remainder as a shortfall"
         )
 
-    for key in _dominated(clipped):
+    for key in _dominated(clipped, wanted):
         clipped.pop(key, None)
     candidates = len(clipped)
 
@@ -765,6 +789,12 @@ def solve(
     except RecursionError:
         # The same honest answer as a budget overrun: the incumbent, flagged. A plan nobody
         # can tell is unproven is the one thing this function may not return.
+        exact = False
+
+    # A COVER SHORT OF THE DEMAND PROVES NOTHING, so it is never `exact`. Unreachable while the
+    # reduction keeps a cover; this is what stops a future reduction bug shipping a partial
+    # plan flagged as the proven optimum.
+    if _after(dict(wanted), _supplied(clipped, best)):
         exact = False
 
     return Solution(
@@ -900,6 +930,32 @@ def plan(
     solution = solve(stocks.per_stop, capped, budget_s=budget_s)
     walk = sorted(solution.chosen, key=lambda k: k.walk_order)
     assigned = _assign(walk, stocks.per_stop, capped)
+
+    # EVERY OWED COPY IS WALKED TO OR LISTED SHORT. The shortfall above is built from on-hand
+    # counts, before the solve, so it cannot see a copy the chosen stops fail to reach. Any
+    # such copy is listed here, with `on_hand` lowered to what the plan reaches, rather than
+    # dropped without a word.
+    walked: Dict[str, int] = {}
+    for take_counts in assigned.values():
+        for sku, count in take_counts.items():
+            walked[sku] = walked.get(sku, 0) + count
+    unreached = {
+        sku: count - walked.get(sku, 0)
+        for sku, count in capped.items()
+        if count > walked.get(sku, 0)
+    }
+    if unreached:
+        listed = {short.sku: short for short in shortfall}
+        for want in wants:
+            if want.sku not in unreached:
+                continue
+            listed[want.sku] = Short(
+                sku=want.sku,
+                wanted=want.wanted,
+                on_hand=walked.get(want.sku, 0),
+                orders=want.orders,
+            )
+        shortfall = [listed[want.sku] for want in wants if want.sku in listed]
 
     owed_by = {want.sku: want.orders for want in wants}
     stops: List[Stop] = []
