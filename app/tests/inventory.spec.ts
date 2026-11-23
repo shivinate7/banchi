@@ -717,10 +717,11 @@ const SALE: SaleStub = (box, index, undo) => ({
  *  press first, so nothing re-reads between the move and the click.
  *
  *  `move` IS HANDED THE DIRECTION, because a reversal is a move too: a stub that stayed sold
- *  through an undo answers the re-read with a card the server has just put back. */
-function movesOnSale(move: (undo: boolean) => void, answers: SaleStub = SALE): SaleStub {
+ *  through an undo answers the re-read with a card the server has just put back. It is handed
+ *  the copy's store key as well, for a case that sells two copies and must move each one. */
+function movesOnSale(move: (undo: boolean, key: string) => void, answers: SaleStub = SALE): SaleStub {
   return (box, index, undo) => {
-    move(undo)
+    move(undo, `${box}/${index}`)
     return answers(box, index, undo)
   }
 }
@@ -1712,6 +1713,8 @@ function sellableStore(): {
 
 /** The first card of the walked box, as `pipeline/join.py:Position.label` spells it. */
 const CARD_1 = 'Box 2, Section 1, Card 1'
+/** The second copy of the same SKU in that section, `2/3` in the fixture. */
+const CARD_3 = 'Box 2, Section 1, Card 3'
 
 /** THE WAY BACK THAT OUTLIVES THE WALK. A write now leaves two things: the slot in the copy
  *  row turns into a RECEIPT for the window — its sentence, its draining clock and its `Undo`,
@@ -2282,6 +2285,63 @@ test('the row that sold the copy becomes the way to take it back', async ({ page
   await expect(row.getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
   await expect(page.locator('.inventory-receipt')).toHaveCount(0)
   await expect(receiptToast(page).getByRole('button', { name: 'Undo' })).toHaveCount(0)
+})
+
+/* A RECEIPT'S UNDO REACHES ONLY THE NEWEST WRITE (D57, undo spec section 3), on Inventory as on Orders. Each Marked
+ * sold posts its own receipt toast. A newer sale takes the Undo off the older toast, and the spent label keeps its
+ * box, hidden, so the older toast does not move (D313). Orders asserts the same shape in `order-walk.spec.ts`. */
+test('a newer sale takes the Undo off the older Marked sold receipt, and that toast keeps its box (D57, D313)', async ({
+  page,
+}) => {
+  const { store, sell, unsell } = sellableStore()
+  await open(page, BOXES, store, () => PRICING,
+    movesOnSale((undo, key) => (undo ? unsell(key) : sell(key))))
+
+  await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
+  const older = receiptToast(page).filter({ hasText: CARD_1 })
+  await expect(older.locator('button.bn-toast-action'), 'the older receipt has its Undo first').toHaveCount(1)
+  /* The entrance is scaled and shifted until it settles, so the box is read once the motion has finished. */
+  await afterPaint(page)
+  await settleMotion(page)
+  const before = await older.boundingBox()
+
+  await copyRow(page, CARD_3).getByRole('button', { name: /^Mark Sold/ }).click()
+  const newer = receiptToast(page).filter({ hasText: CARD_3 })
+  await expect(newer.locator('button.bn-toast-action'), 'the newest receipt has its Undo').toHaveCount(1)
+  await expect(older.locator('button.bn-toast-action'), 'the older receipt has lost its Undo to the newer sale').toHaveCount(0)
+  await expect.soft(older.locator('span.bn-toast-action[data-spent]'), 'the spent Undo stays in the toast, to hold its box').toHaveCount(1)
+  await expect.soft(older.locator('span.bn-toast-action[data-spent]'), 'the spent Undo is not visible').toBeHidden()
+  await settleMotion(page)
+  const after = await older.boundingBox()
+
+  expect.soft(after?.height, 'the older receipt changed height when a newer sale took its Undo').toBe(before?.height)
+  expect.soft(after?.y, 'the older receipt moved its top edge when a newer sale took its Undo').toBe(before?.y)
+})
+
+test('undoing the newer sale leaves the older Marked sold receipt\'s Undo spent (D57, undo spec section 3)', async ({
+  page,
+}) => {
+  const { store, sell, unsell } = sellableStore()
+  const wire = await open(page, BOXES, store, () => PRICING,
+    movesOnSale((undo, key) => (undo ? unsell(key) : sell(key))))
+
+  await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
+  const older = receiptToast(page).filter({ hasText: CARD_1 })
+  await copyRow(page, CARD_3).getByRole('button', { name: /^Mark Sold/ }).click()
+  const newer = receiptToast(page).filter({ hasText: CARD_3 })
+  await expect(newer.locator('button.bn-toast-action'), 'the newest receipt has its Undo first').toHaveCount(1)
+
+  /* THE NEWEST RECEIPT'S UNDO STILL REVERSES ITS OWN SALE. This is the control: it holds on main, and it is the
+     press the older receipt's state is measured against. */
+  await newer.locator('button.bn-toast-action').click()
+  await expect.poll(() => wire.filter((call) => call.path.endsWith('/sold')).map((call) => call.body)).toEqual([
+    {},
+    {},
+    { undo: true },
+  ])
+
+  await expect(older.locator('button.bn-toast-action'), 'the older receipt\'s Undo is still spent after the newer sale is undone').toHaveCount(0)
+  await expect.soft(older.locator('span.bn-toast-action[data-spent]'), 'the spent Undo stays in the toast, to hold its box').toHaveCount(1)
 })
 
 /* FOCUS ACROSS THE UNDO. A desktop row's Undo is `UndoSaleButton`, and the Mark sold that replaces it is `MarkSoldButton`,
