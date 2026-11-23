@@ -36,7 +36,7 @@ typing. That exception is listed in `scripts/kit-adoption-allow.json`.
 
 Rank decides the fast path. Rank never decides which rows draw a control. `U` and a toast's own Undo reach
 only the newest reversible write. Every sold row keeps its own Undo until that write is built on. This
-holds on Inventory and on Cards to pull. Fulfillment's "Pulled today" list works the same way.
+holds on Inventory and on Cards to pull. Fulfillment's "Pulled today" list works the same way. Inventory follows the same receipt rule: a newer receipt with an Undo, whether a sale, move or retire, spends the Undo on every older standing receipt (`remember` in `app/src/Inventory.tsx`).
 
 The walk is short, and a wrong pull is noticed at once. So the fast path undoes the newest pull. Anything
 older belongs to the slow path.
@@ -126,7 +126,7 @@ no longer recorded (`pull_not_recorded`), or once the server answers its reversa
 `sale_built_on`, whose order has moved on, or `pull_entry_refused`). The next `U` then reaches the pull before it. `forgetPull` in `app/src/Orders.tsx` takes the pull off the list. `undoPullNow` calls it on success, on `pull_not_recorded` and on a final refusal, and `isFinalUndoRefusal` in `app/src/server.ts` is true only for a refusal with a 4xx status. A
 network failure, a server fault (5xx) or a busy store leaves the pull in the list, so `U` retries it. A receipt
 toast's `Undo` follows the same rank: a newer recorded pull takes the control off every older receipt, and a press on
-the newest receipt while its reversal is queued or out does nothing. A sale still queued or in flight is not yet a pull
+the newest receipt while its reversal is queued or out does nothing. A receipt whose Undo was spent stays spent, even after the newer write is undone, so the way back to the older write is `U` and the row (and, on Inventory, the card), never the old toast: `clearToastAction` in `app/src/kit/toast.tsx` sets `spent`, and nothing restores it. A sale still queued or in flight is not yet a pull
 that stands, so during that window an older receipt still reverses its own copy, behind the write in flight. `undoFromReceipt` in `app/src/Orders.tsx` acts only when the receipt's pull is the newest and its reversal is idle. `notePull` in the same file calls `clearToastAction` in `app/src/kit/toast.tsx` on every older receipt, which takes its Undo control off.
 
 ## 11. The undo rules

@@ -57,7 +57,7 @@ import {
 } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { markFor } from './kit/rarityMarks'
-import { dismissToast, toast } from './kit/toast'
+import { clearToastAction, dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
 import { RANK_IS_CURRENT, stalenessSentence, type FrozenRank } from './frozenRank'
 import { Dialog as Overlay } from './kit/overlay'
@@ -433,6 +433,10 @@ function InventoryWalk({
     setReceipts((held) => [receipt, ...held.filter((standing) => standing.key !== receipt.key)])
     const previous = toasts.current.get(receipt.key)
     if (previous !== undefined) dismissToast(previous)
+    /* A toast's Undo reaches only the newest reversible write (`docs/specs/undo.md` §3): every receipt before this one
+       stops offering it, and its label keeps its box so no toast moves (D313). A receipt with no Undo is not a write
+       to reverse, so it takes nothing from the ones before it. */
+    if (receipt.canUndo) for (const [key, older] of toasts.current) if (key !== receipt.key) clearToastAction(older)
     const toastId = { current: 0 }
     const id = toast({
       kind: receipt.canUndo ? 'receipt' : 'status',
