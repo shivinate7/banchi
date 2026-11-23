@@ -1,0 +1,4 @@
+{
+  "title": "Screens back in step after a press",
+  "why": "Both items decide how screens re-read the store after a write: Orders first, then the other screens."
+}

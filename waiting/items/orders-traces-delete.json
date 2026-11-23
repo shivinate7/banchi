@@ -1,0 +1,51 @@
+{
+  "added": "2026-11-23T01:56:00Z",
+  "closed": "2026-11-23T01:58:00Z",
+  "context": "Goal: no buyer names left lying in scratch folders once the Orders hunt is done.\nProblem (cannot undo): the hunt's traces and video folders hold buyer names and have no copy, so a delete cannot be undone.\nBased on (read): the Orders lane says its 9 findings are written up in its handoff, and nothing in the lane reads the traces.\nDeparts from: the traces and video folders in the Orders lane's scratchpad (session 72b8b5ec) — they would be deleted.\nWaiting on: nothing stopped; the Orders lane deletes or keeps them on your answer.\nYour answer (chat, 19:50 CST Nov 22): keep them. \"Old hunt traces -- those are totally okay to keep, in general buyer names is generally fine to keep on this device/repo.\" The folders stay.",
+  "home": "orders-plumbing-fixes",
+  "kind": "decision",
+  "lastAnswer": {
+    "at": "2026-11-23T01:50:00Z",
+    "choice": "b",
+    "note": "Old hunt traces are okay to keep; buyer names are fine to keep on this device and repo."
+  },
+  "n": 121,
+  "options": [
+    {
+      "gain": "No buyer names left on disk outside the store.",
+      "how": "The Orders lane deletes the scratchpad traces and video folders.",
+      "id": "delete",
+      "key": "a",
+      "label": "Delete both folders",
+      "lose": "The raw traces and video are gone for good; a re-check needs a new hunt run."
+    },
+    {
+      "gain": "Raw evidence stays if a fix is disputed.",
+      "how": "Leave both folders until the fixes merge and the hunt re-runs.",
+      "id": "keep",
+      "key": "b",
+      "label": "Keep them for now",
+      "lose": "Buyer names stay in a scratch folder."
+    }
+  ],
+  "owner": "local_4b9a5874-466e-45fe-9f26-825f678b757c",
+  "recommended": "a",
+  "ref": "roadmap step orders-plumbing-fixes (the 9 Orders plumbing-hunt findings)",
+  "repo": "shivinate7/banchi",
+  "short": "Delete hunt traces",
+  "shown": [
+    {
+      "id": "delete",
+      "key": "a",
+      "label": "Delete both folders"
+    },
+    {
+      "id": "keep",
+      "key": "b",
+      "label": "Keep them for now"
+    }
+  ],
+  "status": "closed",
+  "title": "Delete the Orders plumbing-hunt traces that hold buyer names?",
+  "why": "The findings are written up, and the planned re-run on a store copy makes fresh traces."
+}
