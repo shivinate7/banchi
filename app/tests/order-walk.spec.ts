@@ -1126,13 +1126,13 @@ test('three digit presses on copies at three places give three receipts, each na
 const WALK_REFUSALS = [
   {
     code: 'order_canceled',
-    message: 'This order was canceled, so nothing more can be recorded for it. Put back any card you took for it.',
-    sentence: 'This order was canceled, so nothing more can be recorded for it. Put back any card you took for it.',
+    message: 'This order was canceled. Put back any card you took for it.',
+    sentence: 'This order was canceled. Put back any card you took for it.',
   },
   {
     code: 'line_stood_down',
-    message: 'This card is stood down on this order, so nothing more can be recorded for it. Put back any card you took for it.',
-    sentence: 'This card is stood down on this order, so nothing more can be recorded for it. Put back any card you took for it.',
+    message: 'This card is no longer needed for this order. Put it back where you found it.',
+    sentence: 'This card is no longer needed for this order. Put it back where you found it.',
   },
 ]
 for (const refusal of WALK_REFUSALS) {

@@ -2485,7 +2485,7 @@ const STOOD_AT = '2026-11-21T10:00:00+00:00'
 const REFUSALS = [
   {
     code: 'order_canceled',
-    message: 'This order was canceled, so nothing more can be recorded for it. Put back any card you took for it.',
+    message: 'This order was canceled. Put back any card you took for it.',
     after: {
       ...ONE_OPEN_ORDER,
       orders: ONE_OPEN_ORDER.orders.map((one) => ({ ...one, status: 'Canceled', open: false })),
@@ -2493,7 +2493,7 @@ const REFUSALS = [
   },
   {
     code: 'line_stood_down',
-    message: 'This card is stood down on this order, so nothing more can be recorded for it. Put back any card you took for it.',
+    message: 'This card is no longer needed for this order. Put it back where you found it.',
     after: {
       ...ONE_OPEN_ORDER,
       orders: ONE_OPEN_ORDER.orders.map((one) => ({
