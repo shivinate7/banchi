@@ -1128,7 +1128,7 @@ test('three digit presses on copies at three places give three receipts, each na
  * whenever the window regains focus or the tab becomes visible. That plan already nets the walk's own sales out of
  * `owed`, while `tallyRef` still counts them, so `pickOrderFor` takes each sale away twice. With one copy sold the
  * order's `owed` is 1 and the tally is 1, so `remaining` is 0 and the next press is refused, though the order still
- * wants a copy. The control below is the same walk with no return read, which is green on main. */
+ * wants a copy. The control below is the same walk with no return read: the second sale is accepted there. */
 
 /** The copies in the order the rows draw them: row 0 is `3/21`, and a press takes them in this order. */
 const PRESS_ORDER = ['3/21', '5/22'] as const
@@ -1233,9 +1233,8 @@ test('an Undo press leaves focus on the Mark sold that replaces it, never on the
 
 /* -------------------------------------------------------------------------------------- 8 */
 
-/* FOCUS ACROSS THE KEYS (round 1 review of the focus fix). A digit key sells the current pick and `U` undoes the newest
- * sale. Neither passes through a button's own press, so neither reaches the note a press leaves for the button that
- * replaces it. */
+/* FOCUS ACROSS THE KEYS. A digit key sells the current pick and `U` undoes the newest sale. Neither passes through a
+ * button's own press, so neither reaches the note that press leaves for the button that replaces it. */
 
 test('a digit-key sale leaves focus on the pick row that held it, and does not take it for the Undo', async ({ page }) => {
   const wire = await open(page)
@@ -1313,4 +1312,14 @@ test('a failed sale leaves no focus note: a later re-render does not move focus'
   await reread
 
   expect(await heldFocus(page), 'focus stays on the pick row: nothing from the failed sale takes it').toContain('orders-walk-press')
+
+  // The pick row lets go, and a second return read re-renders the walk. A note the failed sale left must not take focus then.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  const again = page.waitForResponse(/\/orders\/walk-plan$/)
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('focus'))
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await again
+  expect(await heldFocus(page), 'focus stays on the page after the second re-render: nothing takes it').toBe('BODY')
 })

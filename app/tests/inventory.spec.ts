@@ -2284,11 +2284,11 @@ test('the row that sold the copy becomes the way to take it back', async ({ page
   await expect(receiptToast(page).getByRole('button', { name: 'Undo' })).toHaveCount(0)
 })
 
-/* FOCUS ACROSS THE UNDO (the order walk's finding 6, on this screen). A desktop row's Undo is `UndoSaleButton`, and the
- * Mark sold that replaces it is `MarkSoldButton`, both from `CardLocations.tsx`. The pressed Undo leaves the page, and focus
- * has to land on the Mark sold that replaces it. The case reads focus once the box re-read that the undo causes has landed,
- * because a re-read that remounts the row would move focus after the press looked settled. The Mark sold direction holds
- * already on the old tree (`Undo stands in Mark sold's own frame` asserts it), so it has no red case of its own. */
+/* FOCUS ACROSS THE UNDO. A desktop row's Undo is `UndoSaleButton`, and the Mark sold that replaces it is `MarkSoldButton`,
+ * both from `CardLocations.tsx`. The pressed Undo leaves the page, so focus must land on the Mark sold that replaces it.
+ * The case reads focus once the box re-read that the undo causes has landed, because a re-read that remounts the row
+ * would move focus after the press looked settled. The other direction (Mark sold, then Undo) is asserted by
+ * `Undo stands in Mark sold's own frame`, so it has no case here. */
 
 test('after Undo, focus lands on the Mark sold that replaces it, never on the body', async ({ page }) => {
   const { store, sell, unsell } = sellableStore()
