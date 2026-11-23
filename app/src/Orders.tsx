@@ -95,7 +95,7 @@ import {
   failureTone,
   refusalToast,
   ALREADY_SOLD,
-  UNDO_NEVER_CODES,
+  isFinalUndoRefusal,
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
@@ -1068,8 +1068,8 @@ async function undoPullNow(target: PullTarget, place: string, name: string): Pro
     } else {
       const trouble = describeFailure(err)
       toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
-      /* A refusal no second press clears: this pull can never be reversed, so `U` moves to the pull before it. */
-      if (UNDO_NEVER_CODES.has(trouble.code ?? '')) forgetPull(target.capture_id)
+      /* The server refused the undo: a second press gets the same answer, so `U` moves to the pull before it. */
+      if (isFinalUndoRefusal(trouble)) forgetPull(target.capture_id)
     }
   } finally {
     reversalsHeld.delete(target.capture_id)
@@ -1989,7 +1989,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       }
       const trouble = describeFailure(err)
       toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
-      if (UNDO_NEVER_CODES.has(trouble.code ?? '')) forgetPull(target.capture_id)
+      if (isFinalUndoRefusal(trouble)) forgetPull(target.capture_id)
       return { ok: false }
     } finally {
       setHub({ busy: null })

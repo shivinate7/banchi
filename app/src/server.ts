@@ -313,10 +313,12 @@ export type Failure = {
  *  longer be reversed. Codes, never messages. */
 export const ALREADY_SOLD = 'already_sold'
 export const SALE_BUILT_ON = 'sale_built_on'
-/** The refusals of an undo that no second press can clear: the order moved on, or the pull's entry is refused (the
- *  server folds a missing card and a capture mismatch into that one 409). A screen drops the pull from its undo list
- *  for any of these. */
-export const UNDO_NEVER_CODES: ReadonlySet<string> = new Set([SALE_BUILT_ON, 'pull_entry_refused'])
+/** Did the server answer an undo with a refusal (a 4xx) rather than fail or time out? The same press can clear a
+ *  network failure, a 5xx, or a busy store (a `retry` failure), so those keep the pull for another try. Any other
+ *  refusal drops the pull from the screen's undo list, whatever its code. */
+export function isFinalUndoRefusal(failure: Failure): boolean {
+  return failure.kind === 'refusal' && failure.status !== undefined && failure.status >= 400 && failure.status < 500
+}
 
 /** The codes a second press can clear: nothing answered, or the store was mid-write. */
 const RETRY_CODES: ReadonlySet<string> = new Set(['unreachable', 'bad_response', 'store_busy'])
