@@ -2232,6 +2232,49 @@ function selfTest() {
         const sneak = async () => { await save() }
         return <button onClick={press}>{rows}<i onClick={sneak} /></button>
       }`],
+    ['14n. the counter the registration bumps is read only by a sibling component\'s own counter', null, `
+      export function BumpsAlone() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useRereadOnWrite(() => setReloads((n) => n + 1))
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press}>{rows}{reloads}</button>
+      }
+      export function ReadsItsOwn() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        return <button onClick={() => setReloads((n) => n + 1)}>{rows}</button>
+      }`],
+    ['14o. the registered load reads nothing, and a sibling component has a load that does', null, `
+      export function BlindLoad() {
+        const [rows, setRows] = useState(null)
+        useEffect(() => { void doRead().then(setRows) }, [])
+        const load = async () => undefined
+        useRereadOnWrite(load)
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press}>{rows}</button>
+      }
+      export function SeeingLoad() {
+        const [rows, setRows] = useState(null)
+        const load = async () => { setRows(await doRead()) }
+        useRereadOnWrite(load)
+        return <div>{rows}</div>
+      }`],
+    ['14p. afterWrite(save) is right, and a sibling component has its own save that is called bare', 'write through the after-write helper', `
+      export function SavesRight() {
+        const [rows, setRows] = useState(null)
+        const load = useCallback(async () => { setRows(await doRead()) }, [])
+        useRereadOnWrite(load)
+        const save = async () => { await doWrite(1, 2) }
+        const press = async () => { await afterWrite(save) }
+        return <button onClick={press}>{rows}</button>
+      }
+      export function SavesOther() {
+        const save = () => 1
+        const press = () => save()
+        return <button onClick={press} />
+      }`],
     ['3e. the kit hook useSheetWrite handed a no-op onChanged', null, `
       export function KitNoop({ onChanged }: { onChanged: () => void }) {
         const { write } = useSheetWrite(() => undefined)
