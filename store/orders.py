@@ -208,6 +208,26 @@ def is_canceled_status(status: Optional[str]) -> bool:
     return str(status or "").strip().casefold() == "canceled"
 
 
+# THE STATUSES THE FEED USES FOR AN ORDER THAT HAS NOT SHIPPED, HAND-AUTHORED AND CLOSED, compared
+# casefolded and stripped like `TERMINAL_STATUSES`. Only `Ready to Ship`, which is live work.
+# `Completed - Paid` is deliberately absent (D63 ruling 3): a payment that cleared says nothing about
+# whether the card shipped. A word outside this set is UNKNOWN, and an unknown word counts as shipped
+# (`is_shipped_status`), because "cannot tell" must not read as "nothing shipped".
+PRE_SHIP_STATUSES = frozenset({"ready to ship"})
+
+
+def is_pre_ship_status(status: Optional[str]) -> bool:
+    """Whether the feed's own word is one this store knows means "not shipped yet"."""
+    return str(status or "").strip().casefold() in PRE_SHIP_STATUSES
+
+
+def is_shipped_status(status: Optional[str]) -> bool:
+    """Whether the feed's word must be read as "this order shipped": any word that is neither a known
+    pre-ship status nor a cancel. FAILS SAFE, so a status this store has never seen, and a missing
+    one, count as shipped. A cancel is no shipment, and it is no proof of one either."""
+    return not is_pre_ship_status(status) and not is_canceled_status(status)
+
+
 def is_terminal_status(status: Optional[str]) -> bool:
     """Whether the feed's own word says this order is finished — a TERMINAL OVERRIDE.
 
@@ -482,6 +502,16 @@ class OrderRecord:
     # position is shifted. It lives in the stored payload and in no column, so an older row
     # reads back as `None` with no migration (`_parse_order` filters by `__annotations__`).
     ship_to: Optional[str] = None
+    # WHETHER THE FEED EVER SAID THIS ORDER SHIPPED, STICKY. `ingest` overwrites `status`, so a
+    # shipped order that is later canceled would otherwise read as one that never shipped. Not
+    # `_content` (it is derived from the feed's words, never fed), and set only by `ingest`:
+    # True once any ingest read a status as shipped (`is_shipped_status`) and never cleared after;
+    # False once an ingest saw a known pre-ship status and none since read as shipped; None for an
+    # order held before this field existed, or first seen at a cancel, whose history is unknown and
+    # must read as shipped (`Ledger.never_shipped`). It lives in the
+    # stored payload and in no column, so an older row reads back as `None` with no migration
+    # (`_parse_order` filters by `__annotations__`), as `ship_to` does.
+    seen_shipped: Optional[bool] = None
 
     @property
     def key(self) -> str:
@@ -529,6 +559,19 @@ class OrderRecord:
                 for line in self.lines
             ),
         )
+
+
+def _seen_shipped(existing: Optional["OrderRecord"], incoming: "OrderRecord") -> Optional[bool]:
+    """`OrderRecord.seen_shipped` after this ingest. A status read as shipped sets it for good. A
+    known pre-ship status settles an unknown (None) flag to False: the feed was read after the field
+    existed and had not shipped the order. Any other word, a cancel included, leaves the flag as it
+    was, so a cancel read first, or after an order held before the field existed, stays unknown."""
+    if is_shipped_status(incoming.status):
+        return True
+    held = existing.seen_shipped if existing is not None else None
+    if held is None and is_pre_ship_status(incoming.status):
+        return False
+    return held
 
 
 def _parse_order(key: Any, record: Any) -> Optional[OrderRecord]:
@@ -839,6 +882,9 @@ class Ledger:
         fetch that DOES carry a name still overwrites, same as `status` or any other
         feed-owned field: the feed is the authority whenever it speaks.
 
+        `seen_shipped` is the one other carried field: set here from each status the feed
+        sends, never from the record a caller built, and never cleared (`_seen_shipped`).
+
         `changed_at` is stamped only where the content actually moved.
         """
         report = IngestReport()
@@ -852,6 +898,8 @@ class Ledger:
             if existing is not None and record.ship_to is None:
                 record.ship_to = existing.ship_to
 
+            record.seen_shipped = _seen_shipped(existing, record)
+
             if existing is None:
                 record.first_seen = record.first_seen or today()
                 record.changed_at = record.changed_at or now()
@@ -861,7 +909,10 @@ class Ledger:
 
             if record._content == existing._content:
                 # Nothing new. The incumbent is left exactly as it is — not re-assigned,
-                # not re-stamped — so this file's bytes do not move.
+                # not re-stamped — so this file's bytes do not move. The one exception is an
+                # unknown `seen_shipped` settling to False on a pre-ship read.
+                if existing.seen_shipped is None and record.seen_shipped is False:
+                    existing.seen_shipped = False
                 report.unchanged += 1
                 continue
 
@@ -1020,6 +1071,20 @@ class Ledger:
         if line is None:
             return 0
         return max(0, self.fulfilled(key, sku) - int(line.quantity))
+
+    def never_shipped(self, key: str) -> bool:
+        """Whether this order is KNOWN never to have shipped: `seen_shipped` is False, no line was filled
+        by hand or closed as shipped elsewhere, and no label row exists for it. A label is keyed by the
+        bare order number (`LabelRow`, D326), and a claim with no answer counts as one, since the create
+        may have gone out. False for an unknown order, for one held before `seen_shipped` existed, and
+        for a missing one, because "cannot tell" must read as shipped."""
+        record = self.orders.get(str(key))
+        if record is None or record.seen_shipped is not False or record.number in self.labels:
+            return False
+        for line in self.fulfilment.get(str(key), {}).values():
+            if int(line.by_hand) > 0 or line.closed_reason == CLOSE_SHIPPED_ELSEWHERE:
+                return False
+        return True
 
     def holder_of(self, capture_id: str) -> Optional[Tuple[str, str]]:
         """`(order key, sku)` this copy is already recorded against, or None.
