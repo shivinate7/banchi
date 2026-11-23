@@ -1,0 +1,1 @@
+- inventory-count-pill-width-d313: Inventory's count pill moves 48 px on a sale, against D313 (nothing on screen moves unless the person moved it). The shift was already on main before the Orders plumbing lanes. The symbol stays unconfirmed; the nearest one read is the sold-state Pill in app/src/Inventory.tsx. Why unfixed: not recorded. Seen: 2026-11-22 x1

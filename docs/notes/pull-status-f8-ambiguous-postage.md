@@ -1,0 +1,1 @@
+- pull-status-f8-ambiguous-postage: Pull-status finding F8. When two records spell one order number, `canceled_numbers` in store/orders.py fails open. A canceled order could then get postage. This code is in PR 1128 (not merged), so main does not have it yet. Why unfixed: not recorded. Seen: 2026-11-22 x1

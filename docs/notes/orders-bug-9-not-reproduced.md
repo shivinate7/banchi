@@ -1,0 +1,1 @@
+- orders-bug-9-not-reproduced: Bug 9 from the Orders plumbing hunt was not reproduced. The hunt rated it low confidence: U during an in-flight sale shows nothing. The U path is the useUndoHotkey callback in app/src/Orders.tsx, which hands a sale still in the walk's line to undoWalkSale. Why unfixed: not reproduced, so no fix was written. Seen: 2026-11-22 x1

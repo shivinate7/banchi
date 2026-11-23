@@ -1,0 +1,1 @@
+- pull-status-f5-label-gate: Pull-status finding F5. The label gate reads only ledger status. An order not yet ingested after its cancel still gets postage. The gap is on main today, and PR 1128 (not merged) does not change it. Why unfixed: not recorded. Seen: 2026-11-22 x1

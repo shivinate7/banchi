@@ -1,0 +1,1 @@
+- pull-status-f10: Pull-status finding F10. `Ledger.record_fill` takes a `recovering: bool` flag argument. The file header prefers an operation that cannot do the wrong thing over a flag. This call is in PR 1128 (not merged), so main does not have it yet. Why unfixed: not recorded. Seen: 2026-11-22 x1

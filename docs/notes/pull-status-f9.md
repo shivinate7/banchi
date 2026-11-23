@@ -1,0 +1,1 @@
+- pull-status-f9: Pull-status finding F9. The check `check_labels_cancel_after_the_verdict` in harness/tests/t7/labels.py accepts `row is None or not row.made`, so a leaked claim would pass. Only the release is unpinned. This check is in PR 1128 (not merged), so main does not have it yet. Why unfixed: not recorded. Seen: 2026-11-22 x1
