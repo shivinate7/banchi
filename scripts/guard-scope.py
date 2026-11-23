@@ -503,6 +503,8 @@ EXTRA_SUBJECTS = {
         ("app/src/server.ts", "`classifyServer` parses it; the deriver finds it only in a header comment."),
         ("app/src/*.tsx", "`tsxFiles(APP_SRC)` audits every screen, and the self-test reruns that audit."),
         ("app/src/kit/settings.tsx", "`KIT_HOOKS` parses it for `useSheetWrite`."),
+        ("app/package.json", "pins the `typescript` the audit loads from `app/node_modules`."),
+        ("app/package-lock.json", "pins the `typescript` the audit loads from `app/node_modules`."),
     ),
 }
 
@@ -884,6 +886,8 @@ def selftest() -> int:
     for path in ("app/src/server.ts", "app/src/Orders.tsx", "app/src/kit/settings.tsx"):
         check(f"screen-freshness-selftest runs on {path}, a file the audit parses",
               verdict("screen-freshness-selftest", [path]), True)
+    check("screen-freshness-selftest runs on app/package-lock.json, which pins the typescript it loads",
+          verdict("screen-freshness-selftest", ["app/package-lock.json"]), True)
     check("screen-freshness-selftest skips on a kit file it never parses",
           verdict("screen-freshness-selftest", ["app/src/kit/index.tsx"]), False)
 
