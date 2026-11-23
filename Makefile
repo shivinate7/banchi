@@ -1791,6 +1791,7 @@ demo-mirror-rebuild:
 # THE WEEKLY REFRESH (D295, demo.md §13): a launchd job on the owner's Mac, main tree only. It runs
 # `demo-mirror` in a throwaway worktree and auto-merges a mirror-only PR on green CI. ARGS=--remove
 # takes the job out. ARGS=--dry-run is not this target's: run `python3 scripts/demo-mirror-daily.py --dry-run`.
+# Frozen: the owner holds this job off; do not reinstall it (docs/notes/demo-mirror-frozen.md).
 demo-mirror-agent:
 	@python3 scripts/demo-mirror-daily.py --agent $(ARGS)
 
