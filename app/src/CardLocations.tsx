@@ -309,29 +309,62 @@ export function hiddenCopies(
    the class of the button that replaces it, by copy key. That button takes focus once it can: a disabled
    button cannot, and the replacement is disabled while the press's write is out. A re-read that remounts the
    row finds the same note. There is one note: the next press replaces it, a failed sale clears it
-   (`clearFreshSale`), and a button that finds focus anywhere else drops it. */
+   (`clearFreshSale`), and a button that finds focus anywhere else drops it.
+
+   FOCUS COMES BACK AFTER A REFUSAL. A refused write leaves the row drawing the button that was pressed, and
+   that button was disabled while the write was out, so focus fell to the body. A press that held focus keeps
+   a second note, `FOCUS_RESTORE`, naming its own class. A button of that class that has just become enabled
+   (a disabled button turning enabled, or a remount) takes focus, and only from the body. The swap's note
+   taken or dropped ends the restore: a sale that stood needs no return. */
 type FocusNote = { readonly key: string; readonly to: 'sell' | 'undo' }
 let FOCUS_NOTE: FocusNote | null = null
+let FOCUS_RESTORE: FocusNote | null = null
 function noteFocusFor(saleKey: string | undefined, to: FocusNote['to']): void {
   if (saleKey !== undefined) FOCUS_NOTE = { key: saleKey, to }
 }
-function useTakesFocusNote(
-  saleKey: string | undefined,
-  as: FocusNote['to'],
-  button: { readonly current: HTMLButtonElement | HTMLAnchorElement | null },
-): void {
+/** The swap's note is over (taken, or dropped for focus held elsewhere), so the press it came from stood. */
+function endFocusNote(): void {
+  if (FOCUS_NOTE !== null && FOCUS_RESTORE?.key === FOCUS_NOTE.key) FOCUS_RESTORE = null
+  FOCUS_NOTE = null
+}
+type FocusButton = { readonly current: HTMLButtonElement | HTMLAnchorElement | null }
+/** A press that holds focus asks for it back, should the write be refused. Every press replaces the last ask. */
+function noteRestoreFor(saleKey: string | undefined, as: FocusNote['to'], button: FocusButton): void {
+  const held = button.current !== null && document.activeElement === button.current
+  FOCUS_RESTORE = saleKey !== undefined && held ? { key: saleKey, to: as } : null
+}
+function isDisabledButton(el: HTMLButtonElement | HTMLAnchorElement): boolean {
+  return (el instanceof HTMLButtonElement && el.disabled) || el.getAttribute('aria-disabled') === 'true'
+}
+function useTakesFocusNote(saleKey: string | undefined, as: FocusNote['to'], button: FocusButton): void {
   useLayoutEffect(() => {
     const note = FOCUS_NOTE
     if (saleKey === undefined || note === null || note.key !== saleKey || note.to !== as) return
     const held = document.activeElement
     const el = button.current
     if (held !== null && held !== document.body && held !== el) {
-      FOCUS_NOTE = null
+      endFocusNote()
       return
     }
-    if (el === null || (el instanceof HTMLButtonElement && el.disabled) || el.getAttribute('aria-disabled') === 'true') return
+    if (el === null || isDisabledButton(el)) return
     el.focus({ preventScroll: true })
-    FOCUS_NOTE = null
+    endFocusNote()
+  })
+  const wasDisabled = useRef(true)
+  useLayoutEffect(() => {
+    const el = button.current
+    if (el === null) return
+    const disabled = isDisabledButton(el)
+    const arrived = wasDisabled.current && !disabled
+    wasDisabled.current = disabled
+    const ask = FOCUS_RESTORE
+    if (!arrived || saleKey === undefined || ask === null || ask.key !== saleKey || ask.to !== as) return
+    const held = document.activeElement
+    if (held === el) return
+    FOCUS_RESTORE = null
+    if (held !== null && held !== document.body) return
+    if (FOCUS_NOTE?.key === saleKey) FOCUS_NOTE = null
+    el.focus({ preventScroll: true })
   })
 }
 
@@ -388,6 +421,7 @@ export function MarkSoldButton({
         /* A press on the button is a sale like any other. `markFreshSale` is idempotent, so the
            sell path that follows (`onSell`) may note it again. */
         if (saleKey !== undefined) markFreshSale(saleKey)
+        noteRestoreFor(saleKey, 'sell', button)
         noteFocusFor(saleKey, 'undo')
         onClick()
       }}
@@ -526,6 +560,7 @@ export function UndoSaleButton({
         disabled={disabled}
         kbd={kbd}
         onClick={() => {
+          noteRestoreFor(saleKey, 'undo', button)
           noteFocusFor(saleKey, 'sell')
           onClick()
         }}
