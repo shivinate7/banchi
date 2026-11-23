@@ -15330,7 +15330,7 @@ def _prepare_targets(
 
 
 # One sentence per code, written once and used by the pull, the fill and the line kind. No order key and no
-# SKU: a screen shows it as it stands (D196). `app/src/server.ts:PLAIN_REFUSALS` carries the same two.
+# SKU: a screen shows the server's sentence as it stands (D196).
 _ORDER_CANCELED_WORDS = (
     "This order was canceled, so nothing more can be recorded for it. Put back any card you took for it."
 )
