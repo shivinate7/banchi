@@ -4,7 +4,7 @@
  * still says the screen was behind (another tab sold the copy; the order moved on). A write that failed with a 5xx or a
  * network error may still have committed, so it re-reads too.
  *
- * `afterWrite(write)` runs the write and starts the re-reads when it answers. It never awaits them: the person's next
+ * `afterWrite(write)` runs the write and starts the re-reads in a `finally`, after every outcome (an answer, a refusal, a 5xx, a network error). It never awaits them: the person's next
  * press must not wait on a read, and the re-reads never refetch a list that reorders (D313). A screen registers its
  * reads once with `useRereadOnWrite`, and the registry is module-level, so a write pressed on a toast after the screen
  * unmounted still reaches whatever is mounted by the time it answers, or nothing, and the next mount re-reads anyway.
