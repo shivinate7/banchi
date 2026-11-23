@@ -31,7 +31,7 @@ import {
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
 import { useViewParam } from './kit/viewState'
-import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton, UndoSaleButton, clearFreshSale, markFreshSale } from './CardLocations'
+import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton, UndoSaleButton, askFocusBack, clearFreshSale, markFreshSale } from './CardLocations'
 import { inTopTenth, useMarketRead, type HeroFigures } from './CardHero'
 import { InventorySets } from './InventorySets'
 import { TakeOffLine } from './TakeOffLine'
@@ -1246,7 +1246,19 @@ function Action({
           sticky action bar (ICONOGRAPHY). The row form is the icon vocabulary's own `sold`
           glyph — a round seal, never confused with Retire's box. */}
       {primary ? (
-        <Button variant="primary" size="lg" icon="check" busy={busy} disabled={busyKey !== null && !busy} onClick={() => onSell(copy)}>
+        /* THE STICKY BAR'S PRESS ASKS FOR FOCUS BACK like the row's (`MarkSoldButton`): a sale the server
+           refuses as already made leaves no button here, and `OwnerRows` lands it on this copy's row. */
+        <Button
+          variant="primary"
+          size="lg"
+          icon="check"
+          busy={busy}
+          disabled={busyKey !== null && !busy}
+          onClick={(event) => {
+            askFocusBack(copy.key, 'sell', event.currentTarget)
+            onSell(copy)
+          }}
+        >
           Mark Sold
         </Button>
       ) : (
