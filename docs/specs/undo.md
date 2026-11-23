@@ -119,8 +119,9 @@ card on `#/inventory` (§4). A test fakes the clock and advances it past the old
 
 The `U` key on the Pull stage undoes the newest press. A sale still queued in the walk's line is canceled, and the
 server is never called. A sale whose write is in flight gets its reversal queued behind it. Otherwise `U` reverses
-the last recorded pull (`lastPull`). A `lastPull` whose reversal is already queued or out is skipped, so a second `U`
-does nothing and never queues a second reversal of the same copy.
+the newest pull that still stands, whatever was clicked since. Once that pull is undone, the next `U` reverses the
+pull now newest. A pull whose reversal is already queued or out is skipped, so `U` never queues a second reversal
+of the same copy. A receipt toast's `Undo` follows the same rank: once a newer pull stands, it does nothing.
 
 ## 11. The undo rules
 
