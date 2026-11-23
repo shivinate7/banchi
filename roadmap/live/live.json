@@ -1,13 +1,21 @@
 {
- "readAt": "2026-11-23T07:28:25Z",
+ "readAt": "2026-11-23T17:11:13Z",
  "pulls": [
   {
-   "number": 1128,
-   "title": "Refuse sales, fills, kinds and labels on canceled orders (bug 4)",
-   "branch": "lane/orders-pull-status",
+   "number": 1137,
+   "title": "tests: Orders re-read cases, red first, for the after-write helper",
+   "branch": "lane/orders-reread",
    "draft": true,
-   "createdAt": "2026-11-23T03:21:40Z",
-   "url": "https://github.com/shivinate7/banchi/pull/1128"
+   "createdAt": "2026-11-23T16:52:21Z",
+   "url": "https://github.com/shivinate7/banchi/pull/1137"
+  },
+  {
+   "number": 1135,
+   "title": "Undo a sale on a canceled order when nothing has shipped",
+   "branch": "lane/undo-after-cancel",
+   "draft": true,
+   "createdAt": "2026-11-23T16:31:45Z",
+   "url": "https://github.com/shivinate7/banchi/pull/1135"
   }
  ],
  "branches": [
@@ -321,13 +329,16 @@
    "name": "lane/orders-plumbing-notes"
   },
   {
-   "name": "lane/orders-pull-status"
+   "name": "lane/orders-reread"
   },
   {
    "name": "lane/orders-undo-plumbing"
   },
   {
    "name": "lane/shipped-order-walk"
+  },
+  {
+   "name": "lane/undo-after-cancel"
   },
   {
    "name": "lane/walk-pane-tally-focus"
