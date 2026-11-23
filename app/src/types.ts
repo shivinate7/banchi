@@ -4288,6 +4288,11 @@ export type PullResult = {
   newly: number
   recorded: number
   outstanding: number
+  /** What the order still owes of this line after the write, with a stood-down line at 0: the figure the walk's plan carries
+   *  as `WalkPlanRef.owed`, answered by the one function that computes it (`_walk_plan_order_ref`). The walk takes it from
+   *  here after a write and never counts its own sales. Optional because an older server omits it, and the walk keeps the
+   *  plan's own figure then. */
+  owed?: number
   places: Place[]
   /** THE OTHER DIRECTION IN TIME, AND IT IS NOT A SECOND RECEIPT. One `Place` for each
    *  `refresh` position the press actually touched the box of, composed AFTER the write.

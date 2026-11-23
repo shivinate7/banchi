@@ -49,6 +49,7 @@ import { Dialog as Overlay } from './kit/overlay'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { orderReasonLabel, orderReasonRemedy } from './orderReasons'
 import { rememberHideSold, rememberOrderFilter, storedHideSold, storedOrderFilter, type OrderFetchFilter } from './deviceMemory'
+import { afterWrite, rereadNow, useRereadOnWrite } from './afterWrite'
 import { hubState, setHub, touchHub, useHub, type PullNote, type Stage } from './OrdersHubStore'
 import { PositionLabel } from './PositionLabel'
 import { RailFrame } from './RailFrame'
@@ -102,7 +103,7 @@ import {
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
 import { useLeaveWarning } from './useLeaveWarning'
-import { pickFigureOf, reachablePickPeak, NO_PICK_PEAK, type PickPeak, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, inWalkLine, newestWalkSale, undoWalkSale, walkReversalHeld, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
+import { pickFigureOf, reachablePickPeak, NO_PICK_PEAK, type PickPeak, RowAction, WalkStrip, stepPickAndReveal, takeBuyers, useOrderWalk, useWalkKeys, inWalkLine, newestWalkSale, undoWalkRecorded, undoWalkSale, walkReversalHeld, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   BoxRecord,
   IngestResult,
@@ -1047,6 +1048,9 @@ function undoFromReceipt(target: PullTarget, place: string, name: string): void 
  *  nothing else — the server finds whoever holds the `capture_id` — and bumps the hub so any
  *  mounted screen re-reads. */
 function undoFromToast(target: PullTarget, place: string, name: string): Promise<void> {
+  /* A WALK THAT HOLDS THIS SALE REVERSES IT THROUGH ITS LINE, as its own Undo does: with its refresh list, and its row
+     hears the answer. Its write (`onWalkUndo`) takes the busy lock and says the result. */
+  if (undoWalkRecorded(target)) return Promise.resolve()
   /* The lock lives on the HUB, not in a component: the toast outlives the list, and whichever hub
      is mounted by the time the undo answers must see every Pull disabled until it does. It is taken now, while
      the undo waits for its turn in the walk's line, so nothing else starts beside it. */
@@ -1058,15 +1062,9 @@ function undoFromToast(target: PullTarget, place: string, name: string): Promise
 
 async function undoPullNow(target: PullTarget, place: string, name: string): Promise<void> {
   try {
-    await undoPull([target])
+    await afterWrite(() => undoPull([target]))
     toast({ kind: 'ok', icon: 'undo', title: 'Pull undone', body: `${place} holds ${name} again.` })
     forgetPull(target.capture_id)
-    /* `undoneTarget`/`undoneAt` are how a MOUNTED walk's own tally hears about this — this
-       write never goes through `useOrderWalk` at all, so without this the walk kept believing
-       the copy this pull put back was still recorded (the review round's finding 2, D171).
-       `PullStage` watches `undoneAt` and calls `walk.noteExternalUndo`, which is a no-op for
-       a copy the walk never recorded in the first place. */
-    setHub((current) => ({ undoneTarget: target, undoneAt: current.undoneAt + 1 }))
   } catch (err) {
     /* FINDING #8 (the Opus review round): `pull_not_recorded` means the ledger no longer
      * holds this pull — it was already reversed some other way (the server's own message
@@ -1085,7 +1083,6 @@ async function undoPullNow(target: PullTarget, place: string, name: string): Pro
     reversalsHeld.delete(target.capture_id)
     /* A refused undo leaves the pull standing and keeps it in `pulls`: it is still the one `U` reverses next. */
     setHub({ busy: null })
-    touchHub()
   }
 }
 
@@ -1527,6 +1524,13 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     }
   }, [])
 
+  /* EVERY WRITE'S RE-READ (`afterWrite`, D73): both reads, in this order, each started when a write is answered and never
+     awaited, so a refused write and a succeeded one leave the screen as the store has it. */
+  useRereadOnWrite(async () => {
+    await reread()
+    await rereadStore()
+  })
+
   useEffect(() => {
     void (async () => {
       /* SEQUENCED: `rereadStore` reads its SKUs off the ledger `reread` just fetched, so it
@@ -1556,15 +1560,11 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       setBusy('ingest')
       setFailure(null)
       try {
-        const done = await ingestOrders(reading.orders)
+        const done = await afterWrite(() => ingestOrders(reading.orders))
         if (!live.current) return
         setHub({ paste: '' })
         /* `wrote_nothing` is the honest answer to "did that work" for a second identical paste. */
         setPasteNote(done.summary)
-        await reread()
-        /* A pasted order can name a SKU this SKU set has never asked the store about — see
-           `rereadStore`'s own comment for why this must run AFTER `reread`, not beside it. */
-        await rereadStore()
       } catch (err) {
         if (!live.current) return
         setFailure(describeFailure(err))
@@ -1676,10 +1676,8 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             if (stopLoop.current || !live.current) break
           }
           writeLastCheck({ at, matched: null, statuses: null })
-          await reread()
-          /* A fetched batch can bring an order naming a SKU never asked about before — see
-             `rereadStore`'s own comment. */
-          await rereadStore()
+          /* A fetched batch can bring an order naming a SKU never asked about before: both reads run. */
+          rereadNow()
           return
         }
 
@@ -1765,9 +1763,10 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         if (!live.current) return
         /* RE-READ EITHER WAY. A fetch that brought nothing new still refreshes a ledger another
            device may have moved. */
-        await reread()
-        await rereadStore()
+        rereadNow()
       } catch (err) {
+        /* A fetch that failed part way may have ingested batches already. */
+        rereadNow()
         if (!live.current) return
         setFailure(describeFailure(err))
       } finally {
@@ -1897,7 +1896,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       setBusy(`${line.order_key}/${line.sku}/${target.capture_id}`)
       setFailure(null)
       try {
-        const done = await pullCopy({ source: order.source, number: order.number, sku: line.sku }, [target])
+        const done = await afterWrite(() => pullCopy({ source: order.source, number: order.number, sku: line.sku }, [target]))
         if (!live.current) return
         /* `places[0]`, NEVER `sales[0].card.place.label` — see the header. The fallback is the
            pre-press label rather than an invented one. D218: the toast body below carries this
@@ -1916,10 +1915,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         /* THE NEWEST PULL THIS SCREEN MADE — `docs/specs/undo.md` §3's fast path, reached by `U`. It takes the
            rank from the pull before it, which `U` reaches again once this one is undone. */
         notePull({ target, place, name, receipt })
-        /* BOTH READS, because the card this press sold has to leave every other line's map at the
-           same moment it leaves this one. The undo goes the other way through `touchHub`, which
-           bumps the version the effect above watches, so it re-reads both as well. */
-        await Promise.all([reread(), rereadStore()])
       } catch (err) {
         if (!live.current) return
         setFailure(pullFailure(err, pick.place.label ?? null))
@@ -1945,7 +1940,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
          drawer, whose numbers and neighbours this write moves (D58). It reaches the same
          route in the same request, and `refreshed` comes back POST-write. `places` below is
          still the PRE-write receipt and the two are never confused. */
-      const done = await pullCopy({ source: order.source, number: order.number, sku }, [target], refresh)
+      const done = await afterWrite(() => pullCopy({ source: order.source, number: order.number, sku }, [target], refresh))
       /* NO `live` CHECK: the toast and `pulls` are the hub's, not this mount's. The write is made, and the way back to it must be
          recorded even if the screen was left while it was out. */
       /* D218: same read as `onPull` above — the toast body carries this as plain text. */
@@ -1965,8 +1960,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         action: { label: 'Undo', onPress: () => undoFromReceipt(target, resolvedPlace, name) },
       })
       notePull({ target, place: resolvedPlace, name, receipt })
-      await Promise.all([reread(), rereadStore()])
-      return { ok: true, place: resolvedPlace, refreshed: done.refreshed ?? [] }
+      return { ok: true, place: resolvedPlace, refreshed: done.refreshed ?? [], owed: done.owed }
     } catch (err) {
       const trouble = pullFailure(err, place ?? null)
       if (live.current) setFailure(trouble)
@@ -1984,26 +1978,23 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     try {
       /* The copy goes back in the drawer, so the rows still ahead of it take their old
          numbers back too — the same `refresh` list the pull sent, answered the other way. */
-      const done = await undoPull([target], refresh)
+      const done = await afterWrite(() => undoPull([target], refresh))
       toast({ kind: 'ok', icon: 'undo', title: 'Pull undone', body: `${place} holds ${name} again.` })
       forgetPull(target.capture_id)
-      await Promise.all([reread(), rereadStore()])
-      return { ok: true, refreshed: done.refreshed ?? [] }
+      return { ok: true, refreshed: done.refreshed ?? [], owed: done.owed }
     } catch (err) {
       /* FINDING #8: the same "already reversed elsewhere" case `undoFromToast` reads. */
       if (describeFailure(err).code === PULL_NOT_RECORDED) {
         toast({ kind: 'ok', icon: 'undo', title: 'Already undone', body: `${place} holds it, from somewhere else.` })
         forgetPull(target.capture_id)
-        await Promise.all([reread(), rereadStore()])
         return { ok: true, refreshed: [] }
       }
       const trouble = undoFailure(err, place)
       toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
       if (isFinalUndoRefusal(trouble)) forgetPull(target.capture_id)
-      return { ok: false }
+      return { ok: false, failure: trouble }
     } finally {
       setHub({ busy: null })
-      touchHub()
     }
   }
 
@@ -2021,7 +2012,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       setFailure(null)
       try {
         const aim = { source: order.source, number: order.number, sku: line.sku }
-        const done = await fillLine(aim, count, reason)
+        const done = await afterWrite(() => fillLine(aim, count, reason))
         if (!live.current) return
         const name = line.line.name ?? line.sku
         toast({
@@ -2047,7 +2038,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             },
           },
         })
-        await reread()
       } catch (err) {
         if (!live.current) return
         setFailure(describeFailure(err))
@@ -2062,7 +2052,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       setBusy(`kind/${line.order_key}/${line.sku}`)
       setFailure(null)
       try {
-        await declareLineKind({ source: order.source, number: order.number, sku: line.sku }, kind)
+        await afterWrite(() => declareLineKind({ source: order.source, number: order.number, sku: line.sku }, kind))
         if (!live.current) return
         toast({
           kind: 'ok',
@@ -2073,7 +2063,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
               ? 'The feed\'s own word stands again.'
               : 'It ships in a parcel and is picked by hand. It still owes its copies until it is filled.',
         })
-        await reread()
       } catch (err) {
         if (!live.current) return
         setFailure(describeFailure(err))
@@ -2095,7 +2084,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       setFailure(null)
       try {
         const aim = rows.map((row) => ({ source: row.source, number: row.number }))
-        const done = await closeOrders(aim, reason)
+        const done = await afterWrite(() => closeOrders(aim, reason))
         if (!live.current) return
         toast({
           kind: 'receipt',
@@ -2117,7 +2106,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             },
           },
         })
-        await reread()
       } catch (err) {
         if (!live.current) return
         setFailure(describeFailure(err))
@@ -2140,7 +2128,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         const aim = order.progress
           .filter((row) => row.closed_at == null && row.outstanding > 0)
           .map((row) => ({ source: order.source, number: order.number, sku: row.sku }))
-        const done = aim.length === 0 ? null : await closeLines(aim, reason)
+        const done = aim.length === 0 ? null : await afterWrite(() => closeLines(aim, reason))
         if (!live.current) return
         if (done === null || done.moved === 0) {
           toast({
@@ -2171,7 +2159,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             },
           })
         }
-        await reread()
       } catch (err) {
         if (!live.current) return
         setFailure(describeFailure(err))
@@ -2194,7 +2181,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       setBusy('reconcile')
       setFailure(null)
       try {
-        const done = await reconcileBacklog(cutoff)
+        const done = await afterWrite(() => reconcileBacklog(cutoff))
         if (!live.current) return
         toast({
           kind: 'receipt',
@@ -2216,7 +2203,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             },
           },
         })
-        await reread()
       } catch (err) {
         if (!live.current) return
         setFailure(describeFailure(err))
@@ -2237,7 +2223,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       setFailure(null)
       try {
         const aim = [{ source: order.source, number: order.number, sku: line.sku }]
-        await closeLines(aim, reason)
+        await afterWrite(() => closeLines(aim, reason))
         if (!live.current) return
         toast({
           kind: 'receipt',
@@ -2259,7 +2245,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             },
           },
         })
-        await reread()
       } catch (err) {
         if (!live.current) return
         setFailure(describeFailure(err))
@@ -3647,21 +3632,6 @@ function PullStage({
   const shownWalking = useHeld(walking, walk.pending)
   const shownGroup = allGroups.find((group) => group.key === shownKey) ?? null
   const walkHeld = walk.held
-
-  /* A TOAST OR `U` UNDO REACHES THIS MOUNTED WALK — the review round's finding 2. Neither
-   *  path calls `walk.undoCopy` (they write through `undoFromToast`, module-level, with no
-   *  access to this hook's state), so without this the walk's own tally never learned that a
-   *  copy it recorded is no longer held, and the NEXT press against that order silently did
-   *  nothing (D171: a refusal that reaches nobody did not happen). `hub.undoneAt` is a
-   *  counter rather than the target itself, so a repeat undo of the same copy still fires
-   *  this effect. `noteExternalUndo` is itself a no-op for a copy this walk never recorded. */
-  const seenUndoAt = useRef(hub.undoneAt)
-  useEffect(() => {
-    if (hub.undoneAt === seenUndoAt.current) return
-    seenUndoAt.current = hub.undoneAt
-    if (hub.undoneTarget !== null) walk.noteExternalUndo(hub.undoneTarget)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hub.undoneAt, hub.undoneTarget])
 
   /* THE SKIP LINK'S LANDING SPOT (interaction review, "32 tab stops"). A Tab-only pass has to
    *  cross the filter bar and the buyer list before it reaches the walk. A skip link, one press

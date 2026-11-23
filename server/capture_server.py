@@ -15556,6 +15556,9 @@ def do_order_pull(payload: dict) -> dict:
             "newly": int(newly),
             "recorded": snapshot.ledger.fulfilled(key, sku),
             "outstanding": snapshot.ledger.outstanding(key, sku),
+            # What the order still owes of this line AFTER the write, through the one home of the
+            # stood-down zero, so the walk takes its figure from this answer and never counts.
+            "owed": _walk_plan_order_ref(snapshot.ledger, key, sku)["owed"],
             # The PRE-WRITE places, one per target in request order — where the operator
             # just was, not where the box has closed up to.
             "places": [entry["place"] for entry in prepared],
