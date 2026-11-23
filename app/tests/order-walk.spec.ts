@@ -1212,6 +1212,58 @@ test('control: with no return read, the next sale of the same order is accepted'
   await expect(page.locator('.orders-pick-chip .orders-pick-live'), 'both copies are picked, so the chip reads Picked').toHaveText(/^Picked/)
 })
 
+test('a return read that lands after a newer sale keeps that sale’s owed figure, so the copy still owed is offered', async ({ page }) => {
+  /* The return read is sent after the first sale and answered after the second. It shows the copies as they stood then:
+     two still owed. The second sale's reply says one is owed. The walk keeps the reply's figure, so the third copy is
+     offered. On main the stale plan's two, less the two sales the walk tallied, reads none left, and the press is refused. */
+  const LATE = ['3/21', '3/22'] as const
+  let pressed = 0
+  const wire = await open(page, {
+    plan: () => sectionPlan(3, new Set(LATE.slice(0, pressed))),
+    orders: sectionOrders(3),
+    onPull: () => {
+      pressed += 1
+    },
+  })
+  const sellOf = (key: string) => page.locator(`${CURRENT_PICK} [data-copy-key="${key}"] .card-locations-sell`)
+  await expect(sellOf('3/23'), 'before any sale the third copy is offered').toHaveCount(1)
+
+  await sellOf('3/21').click()
+  await expect.poll(() => pullsOf(wire).length, 'the first sale reaches the server').toBe(1)
+
+  /* The return read: the first one after the sale is held, and answered with the plan as it stood when it was sent. */
+  const late = gate()
+  let holdNext = false
+  let held = 0
+  await page.route(/\/orders\/walk-plan$/, async (route) => {
+    if (!holdNext) return route.fallback()
+    holdNext = false
+    held += 1
+    const sentAt = JSON.stringify(sectionPlan(3, new Set(LATE.slice(0, pressed))))
+    await late.promise
+    await route.fulfill({ status: 200, contentType: 'application/json', body: sentAt })
+  })
+  holdNext = true
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('focus'))
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await expect.poll(() => held, 'the return read is out and held at the server').toBe(1)
+
+  await sellOf('3/22').click()
+  await expect.poll(() => pullsOf(wire).length, 'the second sale reaches the server').toBe(2)
+
+  const landed = page.waitForResponse(/\/orders\/walk-plan$/)
+  late.release()
+  await landed
+  await expect(sellOf('3/23'), 'the copy still owed is in the pane once the late read lands').toBeEnabled()
+
+  await sellOf('3/23').click()
+  const refusal = page.locator('.bn-toast', { hasText: 'Nobody here still owes a copy' })
+  await expect.poll(() => pullsOf(wire).length, 'the copy still owed reaches the server: the newer reply says one is owed').toBe(3)
+  expect(await refusal.count(), 'the late return read does not overwrite the newer sale’s owed figure, so no refusal is raised for the copy still owed').toBe(0)
+})
+
 /* -------------------------------------------------------------------------------------- undo and the walk's positions */
 
 /* `docs/specs/undo.md` §10 and D58: a pull renumbers every card behind it in the drawer, so a walk row
@@ -1321,19 +1373,14 @@ test('a receipt toast’s Undo puts the next copy back at its own place, as the 
  *  sale after every write the case queued. */
 const COPY_NAMES = ['a', 'b', 'c', 'd', 'e'] as const
 
-function sectionPlan(count: number): WalkPlan {
-  return walkPlanOf([
-    walkPlanStop({
-      takes: [
-        walkPlanTake({
-          wanted: count,
-          copies: COPY_NAMES.slice(0, count).map((name, at) =>
-            walkPlanCopy({ box: 3, index: 21 + at, capture_id: `cap-${name}`, key: `3/${21 + at}`, place: cardPlace(14 + at, 34, 21 + at) }),
-          ),
-        }),
-      ],
-    }),
-  ])
+function sectionPlan(count: number, gone: ReadonlySet<string> = new Set()): WalkPlan {
+  /* `gone` names the copies a sale has taken off the server's plan, as `twoCopyPlan`'s does: they leave `copies`, and
+     `wanted` and the order's `owed` fall by them. With none named the plan is the one every caller above is built on. */
+  const copies = COPY_NAMES.slice(0, count)
+    .map((name, at) => walkPlanCopy({ box: 3, index: 21 + at, capture_id: `cap-${name}`, key: `3/${21 + at}`, place: cardPlace(14 + at, 34, 21 + at) }))
+    .filter((copy) => !gone.has(copy.key))
+  if (copies.length === 0) return walkPlanOf([])
+  return walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ wanted: copies.length, copies })] })])
 }
 
 function sectionOrders(count: number): OrdersPayload {
@@ -2026,4 +2073,26 @@ test('a Mark sold refused as already sold leaves focus where the person moved it
   await expect(sell, 'the Mark sold is enabled again once the refusal lands').toBeEnabled()
 
   await expect(moved, 'focus stays on the control the person moved to, not taken back by the refused sale').toBeFocused()
+})
+
+test('a copy another Orders tab already pulled leaves its row Sold with no Mark sold, and focus on the row, as already_sold does', async ({ page }) => {
+  /* `copy_already_pulled` is refused the way `already_sold` is: the copy is no longer on offer in this tab. */
+  const held =
+    `That copy is already recorded against order TCGplayer:${ORDER_NUMBER} SKU ${SKU}. ` +
+    `Recording it again for TCGplayer:${ORDER_NUMBER} would send the same card to two buyers.`
+  const wire = await open(page, {
+    refuse: (body) => (body.undo === true ? null : { status: 409, code: 'copy_already_pulled', message: held }),
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  const sell = rows.nth(0).locator('.card-locations-sell')
+  await expect(sell, 'the row draws Mark sold before the press').toHaveCount(1)
+
+  await sell.focus()
+  await page.keyboard.press('Enter')
+  await expect.poll(() => pullsOf(wire).length, 'the refused sale reaches the server').toBe(1)
+  await expect(page.locator('.bn-toast', { hasText: 'Not marked sold' }), 'the refusal says the sale did not stand').toBeVisible()
+  await expect(sell, 'the row draws no Mark sold once the refusal lands: another tab pulled this copy').toHaveCount(0)
+  await expect(rows.nth(0), 'the row reads Sold once the refusal lands').toContainText('Sold')
+
+  await expect(rows.nth(0), 'focus lands on the copy’s own row, the button it began from being gone').toBeFocused()
 })
