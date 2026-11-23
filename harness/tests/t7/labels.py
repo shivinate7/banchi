@@ -741,6 +741,57 @@ def check_labels_canceled_order(checks: Checks) -> None:
         )
 
 
+def check_labels_cancel_after_the_verdict(checks: Checks) -> None:
+    """A cancel that lands after the verdict was read still refuses the create.
+
+    `_confirm` reads the ledger's state once, decides every order from that snapshot, and then
+    `_make_one` claims the order and creates. A cancel ingested in that gap is invisible to the
+    verdict, so the create would buy postage for an order the feed has already canceled. The hook
+    ingests the cancel right after `_label_state` returns its snapshot, which is the gap. The carrier
+    must see no create, and the order must not be reported made.
+    """
+    from server import shipping_routes
+    from store.session import Store
+
+    checks.note("")
+    checks.note("TCGTRACKING LABELS, CANCEL AFTER THE VERDICT: the create is refused, and the carrier never called")
+    with _rig() as rig:
+        if not rig.upload(checks):
+            return
+        order = rig.envelope[0]
+        real_state = shipping_routes._label_state
+        landed = []
+
+        def cancel_after_the_read(*args, **kwargs):
+            state = real_state(*args, **kwargs)
+            if not landed:
+                landed.append(True)
+                capture_server.do_order_ingest({"orders": [{
+                    "source": "TCGplayer", "number": order, "status": "Canceled",
+                    "placed_at": "2026-08-28T10:00:00.000+00:00",
+                    "lines": [{"sku": "9191486", "quantity": 1}],
+                }]})
+            return state
+
+        with mock.patch.object(shipping_routes, "_label_state", cancel_after_the_read):
+            status, doc = rig.confirm([order])
+        checks.ok(bool(landed), "precondition: the cancel landed in the gap, after the state was read")
+        checks.equal(
+            len(rig.fake.creates), 0,
+            "and the carrier is never called: the fake saw 0 creates",
+        )
+        checks.ok(
+            order not in _names(doc.get("made")),
+            "and the order is not reported made",
+            f"{status} {doc}",
+        )
+        row = Store().read().ledger.labels.get(order)
+        checks.ok(
+            row is None or not row.made,
+            "and no label is stored for it",
+        )
+
+
 # --------------------------------------------------------------- make, replay, insurance
 
 
@@ -1478,6 +1529,7 @@ CHECKS = (
     check_labels_preview_presence,
     check_labels_money_gate,
     check_labels_canceled_order,
+    check_labels_cancel_after_the_verdict,
     check_labels_make_and_replay,
     check_labels_listing_rows,
     check_labels_double_press,
