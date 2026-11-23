@@ -3439,6 +3439,13 @@ def check_order_screen(checks: Checks) -> None:
                 "of three — the counts come off the LEDGER rather than off the request",
             )
             checks.equal(
+                pulled.get("owed"),
+                2,
+                "THE PULL'S REPLY CARRIES `owed`, the order's owed count for this line after the "
+                "write, so the walk takes its figure from the answer and never counts its own sales "
+                "(`docs/specs/order-walk-plan.md` section 8). Two still owed of three",
+            )
+            checks.equal(
                 sorted(pulled["sales"][0]),
                 ["box", "card", "index", "listing", "position", "previous_state",
                  "restores_to", "state", "undone"],
@@ -3897,6 +3904,40 @@ def check_order_screen(checks: Checks) -> None:
             "AND THE CARD IS NOT UN-SOLD BY IT: a refusal in phase two discards every state "
             "change queued behind it, because `Store.write()` commits only on a clean exit",
         )
+
+    # ------------------------------------------- a stood-down line: its pull's reply owes it nothing
+    with isolated_home():
+        stock(3, 5, "9191486", prefix="p")
+        with Store().write() as snapshot:
+            snapshot.inventory.listing("9191486").set(master.LIVE, 3)
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest(
+                paste("S-1", line("9191486", 3, name="Moonfall", unit_price="11.88"))
+            ),
+            "an order for three copies of the SKU is ingested, to be stood down",
+        )
+        standing_down = order_store.order_key("TCGplayer", "S-1")
+        with Store().write() as snapshot:
+            snapshot.ledger.close_line(standing_down, "9191486", order_store.CLOSE_NOT_SHIPPING)
+        stood = answers(
+            checks,
+            lambda: capture_server.do_order_pull(
+                {
+                    "source": "TCGplayer", "number": "S-1", "sku": "9191486",
+                    "targets": [target(3, 1, "p1")],
+                }
+            ),
+            "a copy pulled against the stood-down line is recorded",
+        )
+        if stood is not None:
+            checks.equal(
+                stood.get("owed"),
+                0,
+                "AND A STOOD-DOWN LINE REPLIES OWED 0: `_walk_plan_order_ref` zeroes it for the "
+                "walk's plan, and the reply reads the same figure, so the walk is not offered copies "
+                "the order no longer wants (`docs/specs/order-walk-plan.md` section 8)",
+            )
 
 
 def check_order_walk_plan_route(checks: Checks) -> None:
