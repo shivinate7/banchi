@@ -682,6 +682,22 @@ def cmd_selftest(_: argparse.Namespace) -> int:
         else:
             bad("escape hatch", sink.text)
 
+        # An orphan head (the record branch's shape) shares no history with upstream: no merge-base,
+        # nothing lands by merge. It must pass with a printed line, never a traceback.
+        git(["checkout", "-q", "--orphan", "record"], work)
+        git(["rm", "-rf", "-q", "."], work)
+        write("record/data.txt", "record data\n")
+        commit("record data, no shared history")
+        sink = Sink()
+        try:
+            code = guard("origin/main", "HEAD", WINDOW, work, out=sink)
+        except RuntimeError as err:
+            code, sink.text = -1, f"raised: {err}"
+        if code == 0 and "shares no history" in sink.text:
+            ok("an orphan head passes with a line saying it shares no history")
+        else:
+            bad(f"an orphan head — expected a pass, exit {code}", sink.text)
+
         # A branch at upstream's tip has nothing to land.
         git(["checkout", "-q", "main"], work)
         run_guard(work, False, "main itself: nothing would land")
