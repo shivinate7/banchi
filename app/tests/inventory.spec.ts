@@ -7,6 +7,7 @@ import { sealEveryTest } from './shell'
 import { afterPaint, sameBox, settleMotion, settled, whatMoved } from './motionSettled'
 import { iconTip } from './iconTooltip'
 import { heldFocus } from './focusHeld'
+import { storeReadsAfter } from './storeReads'
 import { phoneOff, setViewport } from './phoneSwitch'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
 
@@ -759,6 +760,8 @@ type OpenOptions = {
   /** Pricing tables for runs other than `PRICED_RUN`, keyed by run name, so one case can hold two
    *  copies of a SKU that two runs each priced. A name not listed here still refuses. */
   otherRuns?: Readonly<Record<string, Priced>>
+  /** Answers the box-claims write, `PUT /inventory/<box>`, with this instead of the landed answer (item 123's 5xx case). */
+  boxClaims?: (box: number) => { status: number; body: unknown }
 }
 
 async function open(
@@ -948,6 +951,12 @@ async function open(
     const request = route.request()
     if (request.method() !== 'PUT') return route.fallback()
     record(request.method(), request.url(), request.postDataJSON())
+    if (options.boxClaims !== undefined) {
+      const box = Number(new URL(request.url()).pathname.split('/')[2])
+      const answer = options.boxClaims(box)
+      await route.fulfill({ status: answer.status, contentType: 'application/json', body: JSON.stringify(answer.body) })
+      return
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1055,6 +1064,7 @@ async function open(
    * (box claims) already falls back for a non-PUT method; this is what it falls back TO. */
   await page.route(/\/inventory\/\d+$/, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
+    record(route.request().method(), route.request().url(), null)
     const match = /\/inventory\/(\d+)$/.exec(route.request().url())
     const box = match ? Number(match[1]) : NaN
     const cards = Object.fromEntries(
@@ -9107,6 +9117,146 @@ test('and the re-rank is what moves it — the same sale, with the order taken a
     'Box 2, Section 1, Card 1',
   ])
 })
+
+/* ------------------------------------------------------------------ a write that fails still re-reads (item 123, D73)
+ *
+ * EVERY WRITE ON `#/inventory` RE-READS AFTER IT SETTLES, whatever the outcome. A 5xx may still have committed (the server
+ * can fail after it writes), and a refusal still says the screen was behind, so the screen cannot know the copy is
+ * unchanged without reading it again. These cases fail the answer to one write on each surface: a sale from the copies
+ * list, a sale that committed under a search (where the order must hold still, D313 and D181), a refused sale (where
+ * focus must hold too, the PR 1127 and 1132 rules), a box claim from Manage box, and an undo from a card's own menu.
+ * Each case asserts the write reached the wire, then the read. */
+
+/** THE RE-READ THIS SCREEN MEANS: the walk's own box, `GET /inventory/<n>` (D192). The copies list's `GET /search` is NOT
+ *  counted, because the list re-runs its search on other state changes too, so a count of it passes with no re-read. */
+const isBoxRead = (path: string) => /^\/inventory\/\d+$/.test(path)
+
+/** The answer a server gives when it fails after it may have written: a 5xx in the shape every stub here answers with. */
+const didNotAnswer = () => ({
+  status: 503,
+  body: { error: { code: 'store_unavailable', message: 'The store did not answer. Try again.' } },
+})
+
+/** THE SHARED STEP. The write reaches the server first, then a store read is sent after it. Two polls, so a red names which
+ *  half did not happen: a write that never arrived is not the same failure as a write with no re-read after it. */
+async function expectReadAfter(wire: Wire[], isWrite: (entry: Wire) => boolean, what: string): Promise<void> {
+  await expect
+    .poll(() => wire.findIndex(isWrite), { message: `${what}: the write reaches the server` })
+    .toBeGreaterThan(-1)
+  await expect
+    .poll(() => storeReadsAfter(wire, wire.findIndex(isWrite), isBoxRead), {
+      message: `${what}: no box read reached the server after the write`,
+    })
+    .toBeGreaterThan(0)
+}
+
+test('a Mark sold the server fails with a 5xx is followed by a store re-read', async ({ page }) => {
+  /* THE SALE COMMITS AND THEN THE ANSWER FAILS. The store now holds a sold copy the screen has not read, which is what the
+     re-read is for: `Inventory.tsx:doSell` reports a 5xx and never bumps the counter the walk re-reads on. */
+  const { store, sell } = sellableStore()
+  const wire = await open(
+    page,
+    BOXES,
+    store,
+    () => PRICING,
+    movesOnSale(
+      (undo, key) => {
+        if (!undo) sell(key)
+      },
+      () => didNotAnswer(),
+    ),
+  )
+
+  await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expectReadAfter(wire, (entry) => entry.path.endsWith('/sold'), 'the 5xx sale')
+})
+
+test('a 5xx sale that committed keeps its row in place under a search', async ({ page }) => {
+  /* D313 and D181: an order taken under a search is held once taken. A sale that committed and then failed must not re-rank
+     the list when the re-read lands. The sold row stays where it was, struck, and every other row keeps its place.
+     `hideSold` is on, so without the hold the row folds away and every row under it comes up one. */
+  const { store, depart } = stackedStore()
+  const wire = await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => {
+    if (!undo) depart('7/38')
+  }, () => didNotAnswer()), {
+    route: '/#/inventory?box=2',
+    hideSold: true,
+  })
+  await expandAll(page)
+  await page.getByRole('searchbox').fill('Thievul')
+
+  const labels = page.locator('.card-locations-row .card-locations-identity')
+  await expect(labels).toHaveCount(6)
+  await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
+  const before = await copyOrder(page)
+
+  await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: /^Mark Sold/ }).click()
+  await expectReadAfter(wire, (entry) => entry.path.endsWith('/sold'), 'the 5xx sale under a search')
+
+  /* The read has landed, so the departed label is on the row. The row keeps the place it had, and every other row keeps its own. */
+  await expect(
+    page.locator('.card-locations-row .card-locations-identity[aria-label="Was at Box 7, Section 1, Card 38"]'),
+    'the committed sale is drawn once the read lands',
+  ).toHaveCount(1)
+  await expect(page.locator('.card-locations-row.is-gone'), 'the sold row is still drawn, held in place').toHaveCount(1)
+  const after = await copyOrder(page)
+  expect(after, 'the copies keep their order under the search').toHaveLength(6)
+  expect(after[0], 'the sold row is still first').toBe('Was at Box 7, Section 1, Card 38')
+  expect(after.slice(1), 'every other row is the row it was').toEqual(before.slice(1))
+})
+
+/** A SALE THE SERVER REFUSES FOR A REASON OTHER THAN `already_sold`: the copy is retired, so it left without a sale. The
+ *  refusal is the same kind of answer as a 5xx for this screen's purposes: the screen was behind (D73), and it says so. */
+const retiredRefusal = () => ({
+  status: 409,
+  body: { error: { code: 'card_retired', message: 'Box 2, card 1 is retired, so it left the inventory without a sale.' } },
+})
+
+test('a refused Mark sold is followed by a store re-read', async ({ page }) => {
+  const wire = await open(page, BOXES, STORE, () => PRICING, () => retiredRefusal())
+
+  await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect(page.locator('.bn-toast', { hasText: 'retired' }), 'the refusal reaches the person').toBeVisible()
+  await expectReadAfter(wire, (entry) => entry.path.endsWith('/sold'), 'the refused sale')
+})
+
+test('a refused Mark sold leaves focus on its row, never on the body', async ({ page }) => {
+  /* THE PR 1127 AND 1132 FOCUS RULE, for a refusal that is not `already_sold` (the existing focus case for that one stays as it is). */
+  await open(page, BOXES, STORE, () => PRICING, () => retiredRefusal())
+  const row = copyRow(page, CARD_1)
+
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect(page.locator('.bn-toast', { hasText: 'retired' }), 'the refusal reaches the person').toBeVisible()
+  await expect(row, 'focus lands on the row after the refused sale').toBeFocused()
+})
+
+test('a box claim the server fails with a 5xx is followed by a store re-read', async ({ page }) => {
+  /* THE MANAGE BOX SHEET'S OWN WRITE, the most used one in the sheet. `useSheetWrite` reads again only after a write that
+     landed, so a 5xx leaves the box's cards as they were. */
+  const wire = await open(page, BOXES, STORE, () => PRICING, SALE, { boxClaims: () => didNotAnswer() })
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /^Claims/ }).click()
+  await page.locator('.boxops-claim-row', { hasText: 'SET HINT' }).getByRole('switch').check()
+  await page.getByRole('textbox', { name: /set hint/i }).fill('SV09')
+  await page.getByRole('button', { name: /^Apply to/ }).click()
+
+  await expectReadAfter(wire, (entry) => entry.method === 'PUT', 'the 5xx box claim')
+})
+
+test('an undo the server fails with a 5xx from the card\'s own menu is followed by a store re-read', async ({ page }) => {
+  /* THE CARD'S OWN MENU, the undo the walk offers on a sold copy. `CardOps` reads again only after an undo that landed, so a
+     5xx leaves the walk drawing a sold copy as sold. */
+  const wire = await open(page, BOXES, STORE, () => PRICING, (box, index, undo) =>
+    undo ? didNotAnswer() : SALE(box, index, undo),
+  )
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+  await page.getByRole('button', { name: 'Actions' }).click()
+  await page.getByRole('menuitem', { name: 'Bring this card back' }).click()
+
+  await expectReadAfter(wire, (entry) => entry.path === '/inventory/2/4/sold', 'the 5xx undo')
+})
+
 
 test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute later, and a newer sale keeps its own row too', async ({ page }) => {
   /* D28 AND D57 ARE AMENDED, 2026-09-25 (`docs/specs/undo.md` §11.1): rank replaces the
