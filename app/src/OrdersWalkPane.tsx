@@ -18,7 +18,7 @@
  * exported from here because `Orders.tsx` still needs them: the "Pick N of M" figure, and the
  * one press (Mark sold / Undo) `CardLocations`'s own `renderAction` slot calls per copy.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CardThumb, Icon, Loading, Notice, overlayOpen, Pill } from './kit'
 import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
@@ -1426,31 +1426,59 @@ export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk
      no busy: its Undo cancels it. Nothing here waits on another row's write. */
   const busy = receipt?.phase === 'sending' || receipt?.phase === 'undoing'
   const where = copy.place.label === null ? copy.key : sayPlace(copy.place.label)
+  /* FOCUS FOLLOWS THE SWAP. The button that was pressed leaves the page and the one that replaces it
+     is a new element, so focus would drop to the body. A press names the class of the button it hands
+     focus to, and the layout effect below gives it focus once that button can take it: a disabled
+     button cannot, and the Undo is disabled while the sale's write is out. It stands down when focus
+     has gone anywhere the press did not leave it. The press lives here, not in `CardLocations.tsx`,
+     because `Inventory.tsx` shares those buttons and has its own focus handling. */
+  const root = useRef<HTMLSpanElement>(null)
+  const handOff = useRef<string | null>(null)
+  useLayoutEffect(() => {
+    const target = handOff.current
+    if (target === null) return
+    const held = document.activeElement
+    if (held !== null && held !== document.body && !root.current?.contains(held)) {
+      handOff.current = null
+      return
+    }
+    const next = root.current?.querySelector<HTMLButtonElement>(target)
+    if (next === null || next === undefined || next.disabled) return
+    next.focus({ preventScroll: true })
+    handOff.current = null
+  })
   if (receipt !== undefined && copy.key !== walk.newestUndoKey) return <Pill tone="ok" icon="check">Sold</Pill>
   const undo = receipt !== undefined
   /* MARK SOLD IS INVENTORY'S OWN PRESS (`CardLocations.tsx:MarkSoldButton`), so a change to it
      reaches the walk with no second edit. Undo is the icon it always was. */
-  if (!undo) {
-    /* THE KEY IS IN THE TOOLTIP, never on the face: the button is one width on every row (D195). */
-    return (
-      <MarkSoldButton
-        name={`Mark Sold: ${where}`}
-        saleKey={copy.key}
-        kbd={hint}
-        busy={false}
-        disabled={false}
-        onClick={() => walk.onSell(copy, take)}
-      />
-    )
-  }
   return (
-    <UndoSaleButton
-      saleKey={copy.key}
-      name={`Undo sale: ${where}`}
-      busy={busy}
-      disabled={busy}
-      onClick={() => walk.undoCopy(copy.key)}
-    />
+    <span ref={root} style={{ display: 'contents' }}>
+      {!undo ? (
+        /* THE KEY IS IN THE TOOLTIP, never on the face: the button is one width on every row (D195). */
+        <MarkSoldButton
+          name={`Mark Sold: ${where}`}
+          saleKey={copy.key}
+          kbd={hint}
+          busy={false}
+          disabled={false}
+          onClick={() => {
+            handOff.current = '.card-locations-undo'
+            walk.onSell(copy, take)
+          }}
+        />
+      ) : (
+        <UndoSaleButton
+          saleKey={copy.key}
+          name={`Undo sale: ${where}`}
+          busy={busy}
+          disabled={busy}
+          onClick={() => {
+            handOff.current = '.card-locations-sell'
+            walk.undoCopy(copy.key)
+          }}
+        />
+      )}
+    </span>
   )
 }
 
