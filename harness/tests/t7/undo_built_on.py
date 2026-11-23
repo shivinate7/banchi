@@ -31,6 +31,7 @@ from harness.tests.t7.common import (
     _bind,
     _refusal_text,
     answers,
+    attempt,
     back_of,
     capture_payload,
     command,
@@ -1396,7 +1397,71 @@ def check_undo_order_shipped_before_sale(checks: Checks) -> None:
         )
 
 
+def _still_here_recovery(checks: Checks, number: str, cause: str) -> None:
+    """Card 4/1, sold to `number` and built on, taken back with "this card is still here".
+
+    Main answers it as a hand-fill and writes exactly this: the copy leaves the line, one copy is
+    recorded by hand under `sold_separately`, and the card is identified again. The recovery records
+    that fill through `Ledger.record_fill`, which refuses a canceled order and a stood-down line. So
+    the recovery must not reach that refusal: it answers, and the store reads as main's.
+    """
+    key = order_store.order_key("TCGplayer", number)
+    refusal(
+        checks,
+        lambda: capture_server.do_mark_sold(4, 1, {"undo": True}),
+        "sale_built_on",
+        f"precondition: the sale to {number} is built on, so only the still-here recovery reaches it",
+    )
+    answer, caught = attempt(lambda: capture_server.do_mark_sold(4, 1, {"still_here": True}))
+    checks.ok(
+        caught is None,
+        f"the still-here recovery on {cause} answers rather than raising",
+        f"raised {type(caught).__name__}: {caught}",
+    )
+    if caught is None and isinstance(answer, dict):
+        checks.equal(
+            (answer.get("order_effect"), answer.get("state")),
+            ("filled_by_hand", master.IDENTIFIED),
+            f"and on {cause} it is answered as a hand-fill, with the card identified",
+        )
+    row = Store().read().ledger.recorded(key, "9191486")
+    checks.equal(
+        (int(row.fulfilled), int(row.by_hand), row.reason, list(row.copies)),
+        (1, 1, order_store.FILL_SOLD_SEPARATELY, []),
+        f"and the store is main's on {cause}: the copy leaves the line, one is recorded by hand",
+    )
+    checks.equal(
+        Store().read().inventory.cards["4/1"].state, master.IDENTIFIED,
+        f"and the card is identified again on {cause}",
+    )
+
+
+def check_undo_still_here_on_refused_holder(checks: Checks) -> None:
+    """The still-here recovery on a holder the ledger now refuses to write to answers as main does.
+
+    Two holders, each built on: an order the feed cancels after the sale, and a shipped order whose
+    line is stood down after the sale. Both reach `record_fill` under the recovery. The red is the
+    regression the review named: a refusal escaping as a 500, where main answers success.
+    """
+    checks.note("")
+    checks.note("UN-7, still here: the recovery on a canceled or stood-down holder answers, as main does")
+    with isolated_home():
+        _sold_to_order("sh-cancel", "SH-CANCEL", "Ready to Ship")
+        _feed_order("SH-CANCEL", "Canceled")
+        _still_here_recovery(checks, "SH-CANCEL", "a canceled order")
+    with isolated_home():
+        _sold_to_order("sh-stood", "SH-STOOD", "Ready to Ship")
+        _feed_order("SH-STOOD", "Shipped - In Transit")
+        with Store().write() as snapshot:
+            snapshot.ledger.close_line(
+                order_store.order_key("TCGplayer", "SH-STOOD"), "9191486",
+                order_store.CLOSE_SHIPPED_ELSEWHERE,
+            )
+        _still_here_recovery(checks, "SH-STOOD", "a stood-down line")
+
+
 CHECKS = (
     check_undo_until_built_on,
     check_undo_order_shipped_before_sale,
+    check_undo_still_here_on_refused_holder,
 )

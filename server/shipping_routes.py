@@ -719,6 +719,8 @@ REASON_ALREADY_LABELED = "already_labelled"
 # A press of this process is making the label now. Not eligible in a preview; a confirm answers it `existing`.
 REASON_PENDING = "label_pending"
 REASON_NOT_IN_BATCH = "not_in_batch"
+# The ledger holds the order as canceled. Never confirmable: the whole press is refused before any create.
+REASON_ORDER_CANCELED = "order_canceled"
 # What a confirm may name: an already labeled order is answered `existing`, not refused.
 _CONFIRMABLE = (REASON_ENVELOPE, REASON_ALREADY_LABELED, REASON_PENDING)
 
@@ -767,6 +769,10 @@ class _Stopped(Exception):
     """A stop arrived while a press waited for `_CREATE_LOCK`: nothing was sent for its order."""
 
 
+class _OrderCanceled(Exception):
+    """The ledger holds this order as canceled, read right before its create: nothing was sent for it."""
+
+
 def _ours() -> set:
     """The orders this process must not create again: a create in flight, or one whose answer is held."""
     with _HELD_LOCK:
@@ -795,23 +801,31 @@ def _write_held() -> bool:
     return True
 
 
-def _label_state() -> Tuple[set, set]:
-    """`(made, pending)`: the orders with a made label, and the orders a press of THIS process is making
-    now or holds an unwritten answer for. A claim left by a dead press, or by this process after a failed release, is neither: it is
+def _label_state() -> Tuple[set, set, set]:
+    """`(made, pending, canceled)`: the orders with a made label, the orders a press of THIS process is making
+    now or holds an unwritten answer for, and the folded numbers the ledger holds as canceled
+    (`Ledger.canceled_numbers`). A claim left by a dead press, or by this process after a failed release, is neither: it is
     eligible, and the confirm retries it (TCGTracking dedups on `source_order_id`)."""
-    rows = list(Store().read().ledger.labels.values())
+    ledger = Store().read().ledger
+    rows = list(ledger.labels.values())
     ours = _ours()
     made = {row.order for row in rows if row.made}
     pending = {row.order for row in rows if not row.made and row.claim == PROCESS_MARK and row.order in ours}
-    return made, pending
+    return made, pending, ledger.canceled_numbers()
 
 
-def _verdict(held: _Batch, order: str, state: Tuple[set, set]) -> str:
-    """The reason code for one order: `envelope` when it can be labeled now, else why not."""
-    labeled, pending = state
+def _verdict(held: _Batch, order: str, state: Tuple[set, set, set]) -> str:
+    """The reason code for one order: `envelope` when it can be labeled now, else why not.
+
+    A CANCELED ORDER IS REFUSED HERE, BEFORE ANY CREATE, because `shipping.parse` keeps every row of the
+    export and a create buys postage. It comes after `already_labelled` (that label is bought and a
+    confirm only finishes its PDF) and before the lane, so a canceled order is never offered."""
+    labeled, pending, canceled = state
     row = next((row for row in held.rows if row["order"] == order), None)
     if row is None:
         return REASON_NOT_IN_BATCH
+    if order not in labeled and order_store.fold_number(order) in canceled:
+        return REASON_ORDER_CANCELED
     if row["lane"] == shipping.LANE_PARCEL:
         return REASON_PARCEL
     if row["lane"] != shipping.LANE_ENVELOPE:
@@ -897,7 +911,9 @@ def _fill_pdfs(rows: Sequence[Any]) -> Optional[tcgtracking.TrackingRefused]:
 def _make_one(order: str, shipment: shipping.Shipment, insured: bool, stop: threading.Event) -> Optional[dict]:
     """Make one order's label. Returns the receipt entry for `made`, or None when the order is
     already labeled, in flight or held. Raises TrackingRefused, or `_Stopped` when `stop` is set once
-    `_CREATE_LOCK` is taken, with nothing sent and no claim left behind. Once a create has answered,
+    `_CREATE_LOCK` is taken, or `_OrderCanceled` when the ledger now holds the order as canceled, with
+    nothing sent and no claim left behind. The cancel is read again HERE, right before the create:
+    `_confirm`'s verdict is one snapshot, and a feed ingest can cancel the order after it. Once a create has answered,
     the label is bought, and its answer is stored BEFORE the PDF is fetched.
 
     THE STORE LOCK IS NEVER HELD ACROSS A CALL: the claim is one `Store.write`, the create runs
@@ -927,6 +943,8 @@ def _make_one(order: str, shipment: shipping.Shipment, insured: bool, stop: thre
             # A stop that arrived while this press waited for the lock: nothing is sent.
             if stop.is_set():
                 raise _Stopped()
+            if order_store.fold_number(order) in Store().read().ledger.canceled_numbers():
+                raise _OrderCanceled()
             answer = tcgtracking.create(_label_body(shipment, insured))
         answered = True
         kept = {key: value for key, value in answer.items() if key != "pdf_base64"}
@@ -1000,6 +1018,10 @@ def _confirm(batch: str, held: _Batch, payload: dict) -> Dict[str, Any]:
                 entry = _make_one(order, envelope[order], order in insured, stop)
             except _Stopped:
                 left_over = [{"order": rest} for rest in orders[at:]]
+                break
+            except _OrderCanceled:
+                # Canceled after the verdict was read. Nothing was bought; the orders after it are untouched.
+                refused.append({"order": order, "code": REASON_ORDER_CANCELED})
                 break
             except tcgtracking.TrackingRefused as exc:
                 # STOP AT THE FIRST ERROR. A 401 or a 429 on the third order will be the same on the

@@ -11078,7 +11078,7 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
                 # not refused as a second shipment of one physical card. An OPEN order is
                 # released instead, as a plain undo does (section 4): its copy did not go.
                 snapshot.ledger.record_fill(
-                    held_key, held_sku, 1, order_store.FILL_SOLD_SEPARATELY
+                    held_key, held_sku, 1, order_store.FILL_SOLD_SEPARATELY, recovering=True
                 )
                 order_effect = "filled_by_hand"
             else:
@@ -15329,6 +15329,21 @@ def _prepare_targets(
     return prepared, refused
 
 
+# One sentence per code, written once and used by the pull, the fill and the line kind. No order key and no
+# SKU: a screen shows the server's sentence as it stands (D196).
+_ORDER_CANCELED_WORDS = "This order was canceled. Put back any card you took for it."
+_LINE_STOOD_DOWN_WORDS = "This card is no longer needed for this order. Put it back where you found it."
+
+
+def _line_not_owed(exc: "order_store.LineNotOwed") -> BadRequest:
+    """The one mapping of `Ledger.writable_line`'s refusal to this server's code and words, for the
+    pull, the fill and the line kind. A 409, the way `order_not_ingested` is: the request was well
+    formed and the ledger's state is what refuses it."""
+    if isinstance(exc, order_store.OrderCanceled):
+        return BadRequest(HTTPStatus.CONFLICT, "order_canceled", _ORDER_CANCELED_WORDS)
+    return BadRequest(HTTPStatus.CONFLICT, "line_stood_down", _LINE_STOOD_DOWN_WORDS)
+
+
 def _ledger_pull(
     snapshot,
     key: str,
@@ -15387,6 +15402,8 @@ def _ledger_pull(
             f"Order {key} has no line for SKU {sku}. The buyer did not order it, "
             f"and fulfilment is keyed by SKU.",
         ) from None
+    except order_store.LineNotOwed as exc:
+        raise _line_not_owed(exc) from None
     except order_store.CopyNotIdentifiable as exc:
         raise BadRequest(HTTPStatus.CONFLICT, "copy_not_identifiable", str(exc)) from None
     except order_store.CopyAlreadyPulled as exc:
@@ -15704,6 +15721,8 @@ def do_order_fill(payload: dict) -> dict:
                 raise BadRequest(
                     HTTPStatus.CONFLICT, "over_fulfilled", str(exc)
                 ) from None
+            except order_store.LineNotOwed as exc:
+                raise _line_not_owed(exc) from None
 
         return {
             "undone": bool(undo),
@@ -16130,6 +16149,9 @@ def do_order_line_kind(payload: dict) -> dict:
 
     with Store().write() as snapshot:
         try:
+            if raw is not None:
+                # A claim only: withdrawing one is the way back, and reads no status.
+                snapshot.ledger.writable_line(key, sku)
             snapshot.ledger.declare_kind(key, sku, raw)
         except order_store.UnknownOrder:
             raise BadRequest(
@@ -16143,6 +16165,8 @@ def do_order_line_kind(payload: dict) -> dict:
                 "sku_not_on_order",
                 f"Order {key} has no line for SKU {sku}. The buyer did not order it.",
             ) from None
+        except order_store.LineNotOwed as exc:
+            raise _line_not_owed(exc) from None
 
         return {
             "order_key": key,

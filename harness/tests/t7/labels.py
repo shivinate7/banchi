@@ -71,6 +71,7 @@ from harness.tests import Checks
 from harness.tests.t7.common import (
     QuietHandler,
     _spawn_server,
+    answers,
     error_code,
     fresh_hosts,
     isolated_home,
@@ -683,6 +684,111 @@ def check_labels_money_gate(checks: Checks) -> None:
             status == 200 and _names(doc.get("made")) == [e1] and len(rig.fake.creates) == 1,
             "and the same route buys when the press is right: 1 create (a missing route would refuse all five too)",
             f"{status} {doc}",
+        )
+
+
+def check_labels_canceled_order(checks: Checks) -> None:
+    """A label is never bought for a canceled order, even one the export still lists.
+
+    `shipping.parse` keeps every row of the export, and `_verdict` reads the lane, the street and
+    the label state, never the ledger's own status. So nothing before `_make_one` stops a canceled
+    order: the confirm buys it. The refusal is for the whole press and comes before any create, so
+    the fake carrier sees no request for that order and no label row is written. A live envelope
+    order in the same batch still buys, which is the control.
+    """
+    from store import orders as order_store
+    from store.session import Store
+
+    checks.note("")
+    checks.note("TCGTRACKING LABELS, CANCELED ORDER: a canceled order in the export buys nothing")
+    with _rig() as rig:
+        if not rig.upload(checks):
+            return
+        canceled, live = rig.envelope[0], rig.envelope[1]
+        answers(
+            checks,
+            lambda: capture_server.do_order_ingest({"orders": [{
+                "source": "TCGplayer", "number": canceled, "status": "Canceled",
+                "placed_at": "2026-08-28T10:00:00.000+00:00",
+                "lines": [{"sku": "9191486", "quantity": 1}],
+            }]}),
+            "the feed's canceled order is ingested first, as the feed would send it",
+        )
+        checks.equal(
+            Store().read().ledger.get(order_store.order_key("TCGplayer", canceled)).status,
+            "Canceled",
+            "precondition: the ledger holds the order as canceled, as the feed said",
+        )
+        before = store_tables()
+        status, doc = rig.confirm([canceled])
+        refused = status >= 400 or canceled in _names(doc.get("refused"))
+        checks.ok(
+            refused and canceled not in _names(doc.get("made")),
+            "a confirm for a canceled order is refused, and no label is made for it",
+            f"{status} {doc}",
+        )
+        checks.equal(
+            len(rig.fake.creates), 0,
+            "and the carrier is never called: the fake saw 0 creates",
+        )
+        checks.ok(store_tables() == before, "and no label row is written")
+        creates = len(rig.fake.creates)
+        status, doc = rig.confirm([live])
+        checks.ok(
+            status == 200 and _names(doc.get("made")) == [live] and len(rig.fake.creates) == creates + 1,
+            "the control: a live envelope order in the same batch still buys, with one create",
+            f"{status} {doc}",
+        )
+
+
+def check_labels_cancel_after_the_verdict(checks: Checks) -> None:
+    """A cancel that lands after the verdict was read still refuses the create.
+
+    `_confirm` reads the ledger's state once, decides every order from that snapshot, and then
+    `_make_one` claims the order and creates. A cancel ingested in that gap is invisible to the
+    verdict, so the create would buy postage for an order the feed has already canceled. The hook
+    ingests the cancel right after `_label_state` returns its snapshot, which is the gap. The carrier
+    must see no create, and the order must not be reported made.
+    """
+    from server import shipping_routes
+    from store.session import Store
+
+    checks.note("")
+    checks.note("TCGTRACKING LABELS, CANCEL AFTER THE VERDICT: the create is refused, and the carrier never called")
+    with _rig() as rig:
+        if not rig.upload(checks):
+            return
+        order = rig.envelope[0]
+        real_state = shipping_routes._label_state
+        landed = []
+
+        def cancel_after_the_read(*args, **kwargs):
+            state = real_state(*args, **kwargs)
+            if not landed:
+                landed.append(True)
+                capture_server.do_order_ingest({"orders": [{
+                    "source": "TCGplayer", "number": order, "status": "Canceled",
+                    "placed_at": "2026-08-28T10:00:00.000+00:00",
+                    "lines": [{"sku": "9191486", "quantity": 1}],
+                }]})
+            return state
+
+        with mock.patch.object(shipping_routes, "_label_state", cancel_after_the_read):
+            status, doc = rig.confirm([order])
+        checks.ok(bool(landed), "precondition: the cancel landed in the gap, after the state was read")
+        checks.equal(
+            len(rig.fake.creates), 0,
+            "and the carrier is never called: the fake saw 0 creates",
+        )
+        checks.ok(
+            order not in _names(doc.get("made")),
+            "and the order is not reported made",
+            f"{status} {doc}",
+        )
+        row = Store().read().ledger.labels.get(order)
+        checks.ok(
+            row is None or not row.made,
+            "and no label is stored for it",
         )
 
 
@@ -1422,6 +1528,8 @@ CHECKS = (
     check_labels_preview,
     check_labels_preview_presence,
     check_labels_money_gate,
+    check_labels_canceled_order,
+    check_labels_cancel_after_the_verdict,
     check_labels_make_and_replay,
     check_labels_listing_rows,
     check_labels_double_press,

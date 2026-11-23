@@ -1148,6 +1148,44 @@ test('three digit presses on copies at three places give three receipts, each na
   await expect.poll(cardsNamed, 'the three receipts name three different cards, each its own copy\'s place').toEqual(['Card 17', 'Card 18', 'Card 19'])
 })
 
+/* A walk pull the server refuses because its order was canceled, or its line stood down, after the walk was
+   read. The toast says so in plain words, tells him to put the card back, and names neither the order key
+   nor the SKU (D196). The 409 bodies are the server's own words, copied as test data from
+   `server/capture_server.py`'s `_ORDER_CANCELED_WORDS` and `_LINE_STOOD_DOWN_WORDS`: neither names the key
+   or the SKU, so the toast must show them as they stand. */
+const WALK_REFUSALS = [
+  {
+    code: 'order_canceled',
+    message: 'This order was canceled. Put back any card you took for it.',
+    sentence: 'This order was canceled. Put back any card you took for it.',
+  },
+  {
+    code: 'line_stood_down',
+    message: 'This card is no longer needed for this order. Put it back where you found it.',
+    sentence: 'This card is no longer needed for this order. Put it back where you found it.',
+  },
+]
+for (const refusal of WALK_REFUSALS) {
+  test(`a walk pull refused as ${refusal.code} toasts the plain sentence, with no order key and no SKU`, async ({ page }) => {
+    await open(page)
+    // Registered after `open`, so this answer takes precedence over the walk's own success route.
+    await page.route(/\/orders\/pull$/, (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: refusal.code, message: refusal.message } }),
+      }),
+    )
+    const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+    await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+    const toast = page.locator('.bn-toast', { hasText: 'Not marked sold' })
+    await expect(toast, `the ${refusal.code} refusal is toasted`).toBeVisible()
+    await expect(toast, `the ${refusal.code} toast says what happened and to put the card back`).toContainText(refusal.sentence)
+    await expect(toast, `the ${refusal.code} toast names no order key`).not.toContainText(ORDER_NUMBER)
+    await expect(toast, `the ${refusal.code} toast names no SKU`).not.toContainText(SKU)
+  })
+}
+
 /* -------------------------------------------------------------------------------------- undo and the walk's positions */
 
 /* `docs/specs/undo.md` §10 and D58: a pull renumbers every card behind it in the drawer, so a walk row
