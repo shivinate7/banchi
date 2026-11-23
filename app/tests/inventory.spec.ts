@@ -6,6 +6,7 @@ import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 import { afterPaint, sameBox, settleMotion, settled, whatMoved } from './motionSettled'
 import { iconTip } from './iconTooltip'
+import { heldFocus } from './focusHeld'
 import { phoneOff, setViewport } from './phoneSwitch'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
 
@@ -2282,6 +2283,51 @@ test('the row that sold the copy becomes the way to take it back', async ({ page
   await expect(page.locator('.inventory-receipt')).toHaveCount(0)
   await expect(receiptToast(page).getByRole('button', { name: 'Undo' })).toHaveCount(0)
 })
+
+/* FOCUS ACROSS THE UNDO. A desktop row's Undo is `UndoSaleButton`, and the Mark sold that replaces it is `MarkSoldButton`,
+ * both from `CardLocations.tsx`. The pressed Undo leaves the page, so focus must land on the Mark sold that replaces it.
+ * The case reads focus once the box re-read that the undo causes has landed, because a re-read that remounts the row
+ * would move focus after the press looked settled. The other direction (Mark sold, then Undo) is asserted by
+ * `Undo stands in Mark sold's own frame`, so it has no case here. */
+
+test('after Undo, focus lands on the Mark sold that replaces it, never on the body', async ({ page }) => {
+  const { store, sell, unsell } = sellableStore()
+  await open(page, BOXES, store, () => PRICING, movesOnSale((undo) => (undo ? unsell('2/1') : sell('2/1'))))
+  const row = copyRow(page, CARD_1)
+
+  const saleReread = page.waitForResponse(/\/inventory\/\d+(\?|$)/)
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
+  await saleReread
+  const undo = row.locator('.card-locations-undo')
+  await expect(undo, 'the row draws Undo after the sale').toHaveCount(1)
+
+  const undoReread = page.waitForResponse(/\/inventory\/\d+(\?|$)/)
+  await undo.click()
+  await undoReread
+
+  await expect(row.locator('.card-locations-sell'), 'the row draws Mark sold again after the undo').toHaveCount(1)
+  expect(await heldFocus(page), 'focus lands on the Mark sold that replaced Undo').toContain('card-locations-sell')
+})
+
+test('U after a Mark sold leaves focus on the Mark sold that replaces the Undo, never on the body', async ({ page }) => {
+  const { store, sell, unsell } = sellableStore()
+  await open(page, BOXES, store, () => PRICING, movesOnSale((undo) => (undo ? unsell('2/1') : sell('2/1'))))
+  const row = copyRow(page, CARD_1)
+
+  const saleReread = page.waitForResponse(/\/inventory\/\d+(\?|$)/)
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
+  await saleReread
+  await expect(row.locator('.card-locations-undo'), 'the row draws Undo after the sale').toHaveCount(1)
+  expect(await heldFocus(page), 'the Undo holds focus before U is pressed').toContain('card-locations-undo')
+
+  const undoReread = page.waitForResponse(/\/inventory\/\d+(\?|$)/)
+  await page.keyboard.press('u')
+  await undoReread
+
+  await expect(row.locator('.card-locations-sell'), 'the row draws Mark sold again after U').toHaveCount(1)
+  expect(await heldFocus(page), 'focus lands on the Mark sold that replaces the Undo, never on the body').toContain('card-locations-sell')
+})
+
 
 /* D218: A TYPED DOT IS A DEFECT WHEREVER IT IS TYPED. `Position.label` reaches this screen as
  * `Box 2, Section 1, Card 1` — real, server-composed, and never edited here — but the toast
