@@ -111,6 +111,12 @@ function refusalCode(err: unknown): string {
   return err instanceof ServerError ? err.code : ''
 }
 
+/** The write got no answer, or the server failed (a 5xx, a lost connection, a body that did not parse), so it may still
+ *  have committed. A 4xx is the server's "no" and wrote nothing. */
+function gotNoAnswer(err: unknown): boolean {
+  return !(err instanceof ServerError && err.status >= 400 && err.status < 500)
+}
+
 /** Reverse a sale; a `not_sold` refusal means it already is, which is the outcome he wanted. */
 async function unsell(box: number, index: number): Promise<void> {
   try {
@@ -901,9 +907,13 @@ export function Fulfillment() {
           setTrouble('The list has changed since it was opened. Go back to the cards and try again.')
           return
         }
-        /* A 5xx or a lost connection may still have committed the sale, so this does not say nothing was saved: the
-         * re-read `afterWrite` started shows where the card stands. */
-        setTrouble('The store did not answer. The list is checking where this card stands.')
+        /* A 5xx or a lost connection may still have committed the sale, so it does not say nothing was saved: the
+         * re-read `afterWrite` started shows where the card stands. A 4xx refusal wrote nothing, so it still says so. */
+        setTrouble(
+          gotNoAnswer(err)
+            ? 'The store did not answer. The list is checking where this card stands.'
+            : 'Nothing was saved. Press Mark it sold again.',
+        )
       } finally {
         setBusyKey(null)
       }
