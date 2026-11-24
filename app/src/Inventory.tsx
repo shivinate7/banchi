@@ -280,6 +280,23 @@ function report(failure: Failure): void {
   toast({ kind: 'refusal', tone: failureTone(failure), title: failure.message })
 }
 
+/* A WRITE THAT GOT NO ANSWER MAY HAVE COMMITTED, so the server's own sentence ("Try again") would send the person to press
+   a second time on a card that may already be gone. The sentence this screen owes them says the write is unconfirmed and
+   names the button to press if the card is still here. The raw server text stays off the screen (D196). Any other failure
+   is the server's "no", and its own sentence stands. `button` is the control's label exactly. */
+function reportWrite(err: unknown, what: string, button: string): void {
+  const failure = describeFailure(err)
+  if (!gotNoAnswer(err)) {
+    report(failure)
+    return
+  }
+  toast({
+    kind: 'refusal',
+    tone: failureTone(failure),
+    title: `The store did not confirm the ${what}. If the card is still here, press ${button} again.`,
+  })
+}
+
 /* ONE OWNER-SIDE VIEW OF STORED CARDS (D31), SEEN TWO WAYS: the walk, card by card, and the
    shelf, every box from above with its sections as blocks that move (D264). Which one is in the
    URL (`?view=shelf`, D285), so a reload keeps it. */
@@ -512,7 +529,7 @@ function InventoryWalk({
           })
           return
         }
-        report(describeFailure(err))
+        reportWrite(err, 'sale', 'Mark Sold')
       } finally {
         setBusyKey(null)
       }
@@ -534,7 +551,16 @@ function InventoryWalk({
         place: sayPlace(copy.place.label ?? `pooled, ${copy.key}`),
       }
       try {
-        const result = await afterWrite(() => retireCard(copy.place.box, copy.place.index, reason))
+        const result = await afterWrite(async () => {
+          try {
+            return await retireCard(copy.place.box, copy.place.index, reason)
+          } catch (err) {
+            /* AS THE SALE: a retire that got no answer may have committed, and the re-read `afterWrite` starts next brings
+               the departure back. The row is held first, so that read cannot fold it away under a search (D313, D181). */
+            if (gotNoAnswer(err)) holdRank(copy.key)
+            throw err
+          }
+        })
         const reversible = canTakeBack(result)
         setRetired((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
         holdRank(copy.key)
@@ -559,7 +585,7 @@ function InventoryWalk({
           })
           return
         }
-        report(describeFailure(err))
+        reportWrite(err, 'retirement', 'Retire')
       } finally {
         setBusyKey(null)
       }
@@ -587,7 +613,15 @@ function InventoryWalk({
       setMoveRefused(null)
       setMoveTrouble(null)
       try {
-        const result = await afterWrite(() => moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox, section))
+        const result = await afterWrite(async () => {
+          try {
+            return await moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox, section)
+          } catch (err) {
+            /* AS THE SALE: a move that got no answer may have committed (D313, D181). */
+            if (gotNoAnswer(err)) holdRank(copy.key)
+            throw err
+          }
+        })
         setMoving(null)
         holdRank(copy.key)
         const where = boxRecords.find((record) => record.box === toBox)?.name ?? UNNAMED_BOX
@@ -616,7 +650,7 @@ function InventoryWalk({
           setMoveTrouble(describeFailure(err))
           return
         }
-        report(describeFailure(err))
+        reportWrite(err, 'move', 'Move')
       } finally {
         setBusyKey(null)
       }
