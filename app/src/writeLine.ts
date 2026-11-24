@@ -62,7 +62,7 @@ function pump(line: Line): void {
           line.unanswered -= 1
           entry.resolve()
         }
-        /* The next write goes out a turn later, so the screen has drawn this answer before it is asked for the next one. */
+        /* The next write goes out a turn later, so whoever awaits this write's `done` sees it answered, and the count down by one, before the next write is sent. */
         if (line.waiting.length > 0) await new Promise<void>((next) => setTimeout(next, 0))
       }
     } finally {
