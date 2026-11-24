@@ -9625,7 +9625,7 @@ test('a move the server fails with a 5xx says the move is unconfirmed, with no T
   await expectUnconfirmedToast(
     page,
     'The store did not confirm the move',
-    /^.+, Box 7, Section 1, Card 39\. If the Move dialog is still open, press Move again\. If the move went through, the second press says so\.$/,
+    /^.+, Box 7, Section 1, Card 39\. If the Move dialog is still open, press Move again\. If the move already went through, that press is refused and the card stays where it moved\.$/,
   )
 })
 
