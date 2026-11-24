@@ -2375,20 +2375,27 @@ test('a hand fill the server answers with a 5xx after it committed takes its but
 const PASTE_NOT_CONFIRMED: Said = { title: 'The store did not confirm the paste', body: 'The list shows what the store holds now.' }
 const FETCH_NOT_CONFIRMED: Said = { title: 'The store did not confirm the fetch', body: 'The list shows what the store holds now.' }
 
+/** The one paste every case here sends: one order, one line, the SKU the default world holds. */
+const PASTE_TEXT = JSON.stringify({
+  source: 'TCGplayer',
+  number: ORDER_NUMBER,
+  buyerName: 'Ada Lovelace',
+  lines: [{ sku: SKU, quantity: 1, name: 'Volcanion' }],
+})
+
+/** Types the paste and presses its Read button, then waits until the write reached the server. The caller opens the sheet first
+ *  when the list has orders in it; an empty store draws the paste well in place. */
+async function readPaste(page: Page, wire: Wire[]): Promise<void> {
+  await page.locator('textarea.orders-paste-box').fill(PASTE_TEXT)
+  await page.locator('.orders-paste').getByRole('button', { name: 'Read this paste' }).click()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/ingest')).length, { message: 'the paste reached the server' }).toBe(1)
+}
+
 test('a paste the server answers with a 5xx says the store did not confirm the paste, and what the list holds now', async ({ page }) => {
   const wire = await open(page, { orders: unseenLineOrder() })
   await answerWhen(page, wire, /\/orders\/ingest$/, () => true, SERVER_500_ANSWER)
   await openStore(page)
-  await page.locator('textarea.orders-paste-box').fill(
-    JSON.stringify({
-      source: 'TCGplayer',
-      number: ORDER_NUMBER,
-      buyerName: 'Ada Lovelace',
-      lines: [{ sku: SKU, quantity: 1, name: 'Volcanion' }],
-    }),
-  )
-  await page.locator('.orders-paste').getByRole('button', { name: 'Read this paste' }).click()
-  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/ingest')).length, { message: 'the paste reached the server' }).toBe(1)
+  await readPaste(page, wire)
 
   await expectSaidInNotice(page, PASTE_NOT_CONFIRMED, 'a 5xx after the paste may have written the orders, so the list is the place to look')
   await expect(page.getByText(SERVER_500, { exact: true }), 'the generic server sentence is not an answer about the paste').toHaveCount(0)
@@ -2403,6 +2410,36 @@ test('a fetch the server answers with a 5xx says the store did not confirm the f
 
   await expectSaidInNotice(page, FETCH_NOT_CONFIRMED, 'a 5xx after the fetch may have written the orders, so the list is the place to look')
   await expect(page.getByText(SERVER_500, { exact: true }), 'the generic server sentence is not an answer about the fetch').toHaveCount(0)
+})
+
+/* AN EMPTY STORE'S FIRST PASTE OR FETCH. The list is the empty state, and its notice is drawn on that branch, so the title and
+   the body must be two elements there too. The paste well is drawn in place; the fetch is the empty state's own action. */
+test('a paste the server answers with a 5xx on an empty store says the store did not confirm the paste, in its title and its body', async ({ page }) => {
+  const wire = await open(page, { orders: payloadOf([], []) })
+  await answerWhen(page, wire, /\/orders\/ingest$/, () => true, SERVER_500_ANSWER)
+  await readPaste(page, wire)
+
+  await expectSaidInNotice(page, PASTE_NOT_CONFIRMED, 'a 5xx after the first paste on an empty store may have written the orders, so the empty state must say the store did not confirm it')
+  await expect(page.getByText(SERVER_500, { exact: true }), 'the generic server sentence is not an answer about the paste').toHaveCount(0)
+})
+
+test('a fetch the server answers with a 5xx on an empty store says the store did not confirm the fetch, in its title and its body', async ({ page }) => {
+  const wire = await open(page, { orders: payloadOf([], []) })
+  await answerWhen(page, wire, /\/orders\/fetch$/, () => true, SERVER_500_ANSWER)
+  await page.locator('.orders-stage').getByRole('button', { name: 'Fetch from TCGplayer', exact: true }).click()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length, { message: 'the fetch reached the server' }).toBe(1)
+
+  await expectSaidInNotice(page, FETCH_NOT_CONFIRMED, 'a 5xx after the first fetch on an empty store may have written the orders, so the empty state must say the store did not confirm it')
+  await expect(page.getByText(SERVER_500, { exact: true }), 'the generic server sentence is not an answer about the fetch').toHaveCount(0)
+})
+
+test('a paste the server refuses with a 4xx on an empty store keeps the server sentence', async ({ page }) => {
+  const wire = await open(page, { orders: payloadOf([], []) })
+  await answerWhen(page, wire, /\/orders\/ingest$/, () => true, REFUSED_ANSWER)
+  await readPaste(page, wire)
+
+  await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on the empty state').toBeVisible()
+  await expect(page.getByText(PASTE_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
 })
 
 /* -------------------------------------------------------------------------------------- 6 */
