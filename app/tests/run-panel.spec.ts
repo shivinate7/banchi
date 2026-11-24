@@ -246,6 +246,9 @@ async function open(
      *  wire either way, so a case can assert that the match ran with nobody pressing — or that
      *  it did not. Default: not waiting, which changes nothing on screen. */
     match?: (body: Record<string, unknown>) => unknown
+    /** Answers `POST /pipeline/runs/<name>/match` with a refusal or a 5xx instead of `match`'s answer, so a case can press
+     *  Try again against a failure. The press is still recorded into the wire. */
+    matchFailure?: { status: number; code: string }
     /** `GET /pipeline/match`: the free reader's state. PREPARED by default, which is what a free
      *  quote needs; a case about the not-prepared state passes `{ ready: false, ... }`. */
     matchState?: Partial<MatchState>
@@ -285,6 +288,14 @@ async function open(
   await page.route(/\/pipeline\/runs\/[^/]+\/match$/, async (route) => {
     const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>
     record('POST', route.request().url(), body)
+    if (options.matchFailure !== undefined) {
+      await route.fulfill({
+        status: options.matchFailure.status,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: options.matchFailure.code, message: 'The server said no.' } }),
+      })
+      return
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -3216,6 +3227,59 @@ test('a match that stopped is the run\'s next step, with one door, and is not as
   await notice.getByRole('button', { name: 'Try again' }).click()
   await expect.poll(() => matchPosts(wire).length).toBe(1)
   expect(matchPosts(wire)[0]?.body).toEqual({ retry: true })
+})
+
+/* ---------------------------------------- the open run after Try again on a stopped match
+
+   `retryMatch` in `RunPanel.tsx` reads the open run and the list only after `matchRun(run, true)` answers. A Try again the
+   server fails with a 5xx, or refuses, throws before either read, so the screen keeps the problem it drew before the press.
+   Each case counts the GETs of the open run's own path sent after the POST of `/match`. The detail poll is not counted from
+   before the press: it runs on a 20s timer, and the snapshot is taken once the problem is on screen, so its first read is behind it. */
+
+const STOPPED_MATCH = {
+  code: 'export_needs_set_hint',
+  message: 'Every Pokémon card in a run has to name its set, and 3 of 40 do not.',
+  step: 'fetch',
+}
+
+/** Opens a run whose match stopped, and returns the wire and the count of its detail reads taken with the problem on screen. */
+async function openStoppedMatch(page: Page, options: Parameters<typeof open>[1] = {}) {
+  const wire = await open(page, {
+    runs: [runRow({ match_problem: STOPPED_MATCH })],
+    detail: { match_problem: STOPPED_MATCH },
+    ...options,
+  })
+  await openRun(page)
+  await expect(page.locator('.run-match-problem')).toBeVisible()
+  const detailReads = countRunDetailReads(page)
+  return { wire, detailReads, before: detailReads() }
+}
+
+test('a Try again on a stopped match that the server fails with a 5xx re-reads the open run', async ({ page }) => {
+  const { wire, detailReads, before } = await openStoppedMatch(page, { matchFailure: { status: 503, code: 'store_unavailable' } })
+  await page.locator('.run-match-problem').getByRole('button', { name: 'Try again' }).click()
+  await expect.poll(() => matchPosts(wire).length, 'the Try again reached the server').toBe(1)
+  await expect.poll(detailReads, {
+    message: 'the Try again on a stopped match that failed with a 5xx is followed by a read of the open run: no GET /pipeline/runs/<run> reached the server after it',
+  }).toBeGreaterThan(before)
+})
+
+test('a refused Try again on a stopped match re-reads the open run', async ({ page }) => {
+  const { wire, detailReads, before } = await openStoppedMatch(page, { matchFailure: { status: 409, code: 'run_busy' } })
+  await page.locator('.run-match-problem').getByRole('button', { name: 'Try again' }).click()
+  await expect.poll(() => matchPosts(wire).length, 'the Try again reached the server').toBe(1)
+  await expect.poll(detailReads, {
+    message: 'the refused Try again on a stopped match is followed by a read of the open run: no GET /pipeline/runs/<run> reached the server after it',
+  }).toBeGreaterThan(before)
+})
+
+test('a Try again on a stopped match that succeeds re-reads the open run', async ({ page }) => {
+  const { wire, detailReads, before } = await openStoppedMatch(page, {
+    match: () => ({ ran: true, ok: true, summary: runRow({ phase: 'emit' }) }),
+  })
+  await page.locator('.run-match-problem').getByRole('button', { name: 'Try again' }).click()
+  await expect.poll(() => matchPosts(wire).length, 'the Try again reached the server').toBe(1)
+  await expect.poll(detailReads, { message: 'a successful Try again on a stopped match is followed by a read of the open run' }).toBeGreaterThan(before)
 })
 
 test('rebind: a refusal draws a sentence, never the CLI reason code', async ({ page }) => {
