@@ -10,21 +10,38 @@ import { expect, test } from './unit'
  * language's own parser for the function, strips its types and runs it, and the cases check what
  * it SAYS. A text search for `case '<code>'` passes when the label sits in a comment, in a string
  * or in the other switch. The parser reads past comment openers inside strings, a multi-line
- * template literal and a lone quote in JSX text; the decoy case below pins that. `emptySendTitle`
- * is the one name the function reaches outside itself. No case here passes `data`, so the stub is
- * never called, and any other outside name throws a ReferenceError when a case calls the function. */
-function functionNamed(source: string, name: string): (code: string, data?: unknown) => string {
+ * template literal and a lone quote in JSX text; the decoy case below pins that. The names it
+ * reaches outside itself are lifted by the same parser from the file that declares them, so a case
+ * runs the product's own code and words: the save code and its sentence come from server.ts.
+ * `emptySendTitle` is the one name stubbed: no case here passes `data`, so the stub is never
+ * called. Any other outside name throws a ReferenceError when a case calls the function. */
+function lifted(source: string, name: string, kind: 'function' | 'const'): string {
   const file = ts.createSourceFile('source.tsx', source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TSX)
-  const found = file.statements.filter((s): s is ts.FunctionDeclaration => ts.isFunctionDeclaration(s) && s.name?.text === name)
-  const [fn] = found
-  if (found.length !== 1 || fn === undefined) throw new Error(`expected one top-level function ${name}, found ${found.length}`)
-  const text = fn.getText(file).replace(/^export\s+/, '')
-  const js = ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
-  const emptySendTitle = (): never => { throw new Error('emptySendTitle is outside this check') }
-  return runInNewContext(`${js}\n${name}`, { emptySendTitle }) as (code: string, data?: unknown) => string
+  const found = file.statements.filter((s): s is ts.FunctionDeclaration | ts.VariableStatement => kind === 'function'
+    ? ts.isFunctionDeclaration(s) && s.name?.text === name
+    : ts.isVariableStatement(s) && s.declarationList.declarations.some((d) => ts.isIdentifier(d.name) && d.name.text === name))
+  const [node] = found
+  if (found.length !== 1 || node === undefined) throw new Error(`expected one top-level ${kind} ${name}, found ${found.length}`)
+  const text = node.getText(file).replace(/^export\s+/, '')
+  return ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
 }
 
-const refusalTitle = functionNamed(readFileSync(new URL('../../src/SendCard.tsx', import.meta.url), 'utf8'), 'refusalTitle')
+function functionNamed(source: string, name: string, outside: string[] = []): (code: string, data?: unknown) => string {
+  const js = lifted(source, name, 'function')
+  const emptySendTitle = (): never => { throw new Error('emptySendTitle is outside this check') }
+  return runInNewContext(`${outside.join('\n')}\n${js}\n${name}`, { emptySendTitle }) as (code: string, data?: unknown) => string
+}
+
+const SERVER = readFileSync(new URL('../../src/server.ts', import.meta.url), 'utf8')
+const SAVE_CODE_JS = lifted(SERVER, 'UNCONFIRMED_SAVE_CODE', 'const')
+const SAVE_SENTENCE_JS = [lifted(SERVER, 'unconfirmedLine', 'function'), lifted(SERVER, 'unconfirmedPriceSaveAtSend', 'function')]
+const SAVE_CODE = runInNewContext(`${SAVE_CODE_JS}\nUNCONFIRMED_SAVE_CODE`) as string
+
+const refusalTitle = functionNamed(
+  readFileSync(new URL('../../src/SendCard.tsx', import.meta.url), 'utf8'),
+  'refusalTitle',
+  [SAVE_CODE_JS, ...SAVE_SENTENCE_JS],
+)
 
 const TCG_LINE = 'TCGplayer did not take the send'
 const UNKNOWN = 'zz_not_a_code'
@@ -46,6 +63,12 @@ test('every refusal the press raises before TCGplayer has its own sentence', () 
     expect(title, `${code} reads as the TCGplayer line`).not.toContain(TCG_LINE)
     expect(title, `${code} falls through to the default`).not.toBe(fallback)
   }
+})
+
+test('a send refused after an unanswered price save names that save in the server\'s own sentence', () => {
+  expect(refusalTitle(SAVE_CODE), 'the save that got no answer has its own sentence').toBe(
+    'The store did not confirm your last price save. Change the field to save it again before you send.',
+  )
 })
 
 test('a Banchi failure is worded as Banchi\'s, and a timeout does not say nothing is live', () => {

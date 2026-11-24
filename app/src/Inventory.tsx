@@ -28,6 +28,11 @@ import {
   failureTone,
   ALREADY_SOLD,
   gotNoAnswer,
+  ROW_CONTROL_SEEN,
+  unconfirmedCopyMove,
+  unconfirmedCopyWrite,
+  unconfirmedSale,
+  type Unconfirmed,
 } from './server'
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
@@ -286,23 +291,16 @@ function copyPlaceName(copy: SearchCopy): string {
   return sayPlace(copy.place.label ?? copy.key)
 }
 
-/* A WRITE THAT GOT NO ANSWER MAY HAVE COMMITTED, so the server's own sentence ("Try again") would send the person to press
-   a second time on a card that may already be gone. The sentence this screen owes them says the write is unconfirmed, names
-   the copy (after a committed sale the selection has moved to the next copy, so "this copy" would point at the wrong card)
-   and names the button to press again if it is still on that copy (a committed sale leaves the row but drops its button).
-   The raw server text stays off the screen (D196). Any other failure is the server's "no", and its own sentence stands.
-   `button` is the control's label exactly. */
-function reportWrite(err: unknown, what: string, copy: SearchCopy, button: string): void {
+/* A WRITE THAT GOT NO ANSWER MAY HAVE COMMITTED, so `unconfirmed` says it (from `server.ts`, given the card's name and the copy's place). Any other
+   failure is the server's "no", and its own sentence stands. */
+function reportWrite(err: unknown, copy: SearchCopy, name: string | null, unconfirmed: (name: string, place: string) => Unconfirmed): void {
   const failure = describeFailure(err)
   if (!gotNoAnswer(err)) {
     report(failure)
     return
   }
-  toast({
-    kind: 'refusal',
-    tone: failureTone(failure),
-    title: `The store did not confirm the ${what} of ${copyPlaceName(copy)}. If ${button} is still on that copy, press it again.`,
-  })
+  const said = unconfirmed(name ?? 'This card', copyPlaceName(copy))
+  toast({ kind: 'refusal', tone: failureTone(failure), title: said.title, body: said.body })
 }
 
 /* ONE OWNER-SIDE VIEW OF STORED CARDS (D31), SEEN TWO WAYS: the walk, card by card, and the
@@ -537,12 +535,12 @@ function InventoryWalk({
           })
           return
         }
-        reportWrite(err, 'sale', copy, 'Mark Sold')
+        reportWrite(err, copy, selected?.card.name ?? null, unconfirmedSale)
       } finally {
         setBusyKey(null)
       }
     },
-    [busyKey, remember, holdRank],
+    [busyKey, remember, holdRank, selected],
   )
 
   /* The sibling write (D26), shaped move for move on `doSell`. */
@@ -593,7 +591,7 @@ function InventoryWalk({
           })
           return
         }
-        reportWrite(err, 'retirement', copy, 'Retire')
+        reportWrite(err, copy, selected?.card.name ?? null, (name, place) => unconfirmedCopyWrite('retirement', name, place, ROW_CONTROL_SEEN.retire))
       } finally {
         setBusyKey(null)
       }
@@ -658,12 +656,12 @@ function InventoryWalk({
           setMoveTrouble(describeFailure(err))
           return
         }
-        reportWrite(err, 'move', copy, 'Move')
+        reportWrite(err, copy, selected?.card.name ?? null, unconfirmedCopyMove)
       } finally {
         setBusyKey(null)
       }
     },
-    [busyKey, holdRank, boxRecords, remember],
+    [busyKey, holdRank, boxRecords, remember, selected],
   )
 
   const doUndo = useCallback(

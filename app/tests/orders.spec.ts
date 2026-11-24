@@ -5,6 +5,7 @@ import { sealEveryTest, stubStore } from './shell'
 import { line, order, payloadOf, pick, place, progressOf, severalOrders } from './routeFixtures'
 import { afterPaint, settleMotion } from './motionSettled'
 import { closeFilters, openFilters, pickFacet, showDoneOnly, showOpenOnly } from './ordersFilterSheet'
+import { recordSent } from './wireOrder'
 
 /** A real, tiny image `route.fulfill` can hand back for a photo read — `inventory.spec.ts`'s
  *  own constant, copied rather than imported (that file's is private): a PNG would need a
@@ -303,6 +304,66 @@ async function openStore(page: Page): Promise<void> {
   await page.locator('main.orders .orders-filterbar').getByRole('button', { name: 'Add Orders', exact: true }).click()
 }
 
+/** One order whose line no pull can reach (`sku_unseen`): the two presses that can close it are the only ones on screen. */
+function unseenLineOrder(): OrdersPayload {
+  const unseen = line({ reason: 'sku_unseen', fulfilled: 0, outstanding: 1, on_hand: 0, picks: [] })
+  return payloadOf(
+    [order()],
+    [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [unseen] }],
+  )
+}
+
+/** One order whose line is `no_copies_on_hand`: the one line the "It isn't shipping" press is drawn for. */
+function noCopiesLineOrder(): OrdersPayload {
+  const gone = line({ reason: 'no_copies_on_hand', fulfilled: 0, outstanding: 1, on_hand: 0, sold: 3, picks: [] })
+  return payloadOf(
+    [order()],
+    [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [gone] }],
+  )
+}
+
+/** Two orders the marketplace already settled and one still to ship: the backlog panel's cutoff starts on the live one. */
+function backlogOrders(): OrdersPayload {
+  return payloadOf(
+    [
+      order({ key: 'TCGplayer:A-1', number: 'A-1', buyer: 'Old Buyer', status: 'Completed - Paid', recorded: 0, placed_at: '2020-01-01T00:00:00+00:00' }),
+      order({ key: 'TCGplayer:A-3', number: 'A-3', buyer: 'Older Buyer', status: 'Completed - Paid', recorded: 0, placed_at: '2019-06-01T00:00:00+00:00' }),
+      order({ key: 'TCGplayer:A-2', number: 'A-2', buyer: 'Live Buyer', status: 'Ready to Ship', recorded: 0, placed_at: '2020-03-01T00:00:00+00:00' }),
+    ],
+    [
+      { key: 'TCGplayer:A-1', number: 'A-1', complete: false, outstanding: 1, lines: [line()] },
+      { key: 'TCGplayer:A-2', number: 'A-2', complete: false, outstanding: 1, lines: [line()] },
+      { key: 'TCGplayer:A-3', number: 'A-3', complete: false, outstanding: 1, lines: [line()] },
+    ],
+  )
+}
+
+/**
+ * ONE WRITE'S ANSWER, FOR THE REQUESTS A CASE NAMES. Registered after `open()`, so Playwright tries it first: a request whose body
+ * passes `applies` is answered with `answer` and recorded into `wire`; every other request falls through to `open()`'s own stub.
+ */
+async function answerWhen(
+  page: Page,
+  wire: Wire[],
+  path: RegExp,
+  applies: (body: { undo?: boolean; preview?: boolean } | null) => boolean,
+  answer: { status: number; code: string; message: string },
+): Promise<void> {
+  await page.route(path, async (route) => {
+    const body = route.request().postDataJSON() as { undo?: boolean; preview?: boolean } | null
+    if (!applies(body)) {
+      await route.fallback()
+      return
+    }
+    wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body })
+    await route.fulfill({
+      status: answer.status,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: answer.code, message: answer.message } }),
+    })
+  })
+}
+
 /** The default world: one open order, one resolved line, one copy in box 3. */
 function oneOpenOrder(): OrdersPayload {
   return payloadOf(
@@ -327,6 +388,9 @@ async function open(
        Mutating a stub AFTER the click is the race this repo has recorded (DEBTS 23) — this
        is the stub answering the press it is handed, which is not that. */
     pull?: unknown | ((body: unknown, call: number) => unknown)
+    /* Answers every `POST /orders/pull` with this refusal or 5xx instead of `pull`. The write is still recorded into `wire`:
+       a 5xx after a commit is a sale the store holds with an answer that says it does not. */
+    pullFailure?: { status: number; code: string; message: string }
     preview?: unknown
     fetched?: unknown
     /* THE ALL-STATUSES, SKIP-KNOWN BODY (`D193`) — the ordinary press on
@@ -381,6 +445,14 @@ async function open(
       path: new URL(route.request().url()).pathname,
       body,
     })
+    if (options.pullFailure !== undefined) {
+      await route.fulfill({
+        status: options.pullFailure.status,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: options.pullFailure.code, message: options.pullFailure.message } }),
+      })
+      return
+    }
     const answer =
       typeof options.pull === 'function'
         ? (options.pull as (body: unknown, call: number) => unknown)(body, pullCalls++)
@@ -720,13 +792,7 @@ test('a line no pull can reach offers the two presses that can, and each sends i
   /* THE CASE THE WHOLE ENTRY IS ABOUT. A `sku_unseen` line has no card in the store and never
      will, so `POST /orders/pull` — which needs a capture_id — can never close it. Before D113
      the remedy row was the end of the road and three real orders sat open behind it. */
-  const unseen = line({ reason: 'sku_unseen', fulfilled: 0, outstanding: 1, on_hand: 0, picks: [] })
-  const wire = await open(page, {
-    orders: payloadOf(
-      [order()],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [unseen] }],
-    ),
-  })
+  const wire = await open(page, { orders: unseenLineOrder() })
 
   await openManage(page)
   const stand = page.locator('.orders-standdown').first()
@@ -768,13 +834,7 @@ test('a refused Undo on a hand fill’s toast re-reads the store, as every other
   /* D73 as the owner ruled it: a screen re-reads after every write the server answers, a refusal included. The toast's Undo
      of a hand fill calls `undoFill` outside `afterWrite` (`Orders.tsx`, the receipt's `onPress`), so a refusal it gets back
      re-reads nothing and the screen keeps the figure the refused write was meant to move. */
-  const unseen = line({ reason: 'sku_unseen', fulfilled: 0, outstanding: 1, on_hand: 0, picks: [] })
-  const wire = await open(page, {
-    orders: payloadOf(
-      [order()],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [unseen] }],
-    ),
-  })
+  const wire = await open(page, { orders: unseenLineOrder() })
   /* Registered after `open`, so it answers the reversal, and passes the fill itself on to `open`'s own stub. */
   await page.route(/\/orders\/fill$/, async (route) => {
     const body = route.request().postDataJSON() as { undo?: boolean }
@@ -822,13 +882,7 @@ test('a copy that left by the sale door can be recorded, and a line that will no
      `no_copies_on_hand` carries THREE truths — this order's copy went out by the sale, another
      buyer took the last one, or it was retired damaged — so both answers are offered and
      neither is assumed. */
-  const gone = line({ reason: 'no_copies_on_hand', fulfilled: 0, outstanding: 1, on_hand: 0, sold: 3, picks: [] })
-  const wire = await open(page, {
-    orders: payloadOf(
-      [order()],
-      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [gone] }],
-    ),
-  })
+  const wire = await open(page, { orders: noCopiesLineOrder() })
 
   await openManage(page)
   const stand = page.locator('.orders-standdown').first()
@@ -1623,6 +1677,769 @@ test('u typed into the buyer search field does not undo the pull', async ({ page
   await expect(page.locator('.bn-toast', { hasText: 'Pull undone' })).toHaveCount(0)
   expect(wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
   await expect(page.getByRole('searchbox', { name: 'Search Buyers' })).toHaveValue('u')
+})
+
+/* A SALE THE SERVER ANSWERS WITH A 5xx. The sale may have committed (D73): the server writes, then fails. The generic 500 text
+   is what the screen was given, and no sentence on it may say the sale failed. Each case presses the card pane's own Mark Sold. */
+const SERVER_500 = 'Something went wrong inside the server. Try again, and if it repeats, restart the app on the Mac.'
+
+test('a sale the server answers with a 5xx after it committed says the store did not confirm it', async ({ page }) => {
+  const wire = await open(page, {
+    pullFailure: { status: 500, code: 'server_error', message: SERVER_500 },
+    walkPlan: walkPlanOf([walkPlanStop()]),
+  })
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length, { message: 'the sale reached the server' })
+    .toBe(1)
+
+  const toast = page.locator('.bn-toast-refusal', { has: page.locator('.bn-toast-title', { hasText: SALE_TITLE }) })
+  await expect(toast.locator('.bn-toast-title'), 'a 5xx after the sale may have committed, so the toast must say the store did not confirm it').toHaveText(SALE_TITLE)
+  await expect(toast.locator('.bn-toast-body'), 'the body names the card and its place, and what to press again').toHaveText(SALE_BODY)
+  await expect(
+    page.getByText('Not marked sold', { exact: false }),
+    'the store may hold this sale, so "Not marked sold" is a false sentence',
+  ).toHaveCount(0)
+  await expect(
+    page.getByText(SERVER_500, { exact: true }),
+    'the generic server sentence is not an answer about a sale',
+  ).toHaveCount(0)
+  await expect(
+    page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }),
+    'the copy points the reader at Mark Sold, so that control must be on screen',
+  ).toBeVisible()
+})
+
+test('a sale the server answers with a 5xx is followed by a read of the orders', async ({ page }) => {
+  const wire = await open(page, {
+    pullFailure: { status: 500, code: 'server_error', message: SERVER_500 },
+    walkPlan: walkPlanOf([walkPlanStop()]),
+  })
+  const sent = recordSent(page)
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length, { message: 'the sale reached the server' })
+    .toBe(1)
+  await expect
+    .poll(
+      () => {
+        const at = sent.findIndex((r) => r.method === 'POST' && r.path.endsWith('/orders/pull'))
+        return at >= 0 && sent.slice(at + 1).some((r) => r.method === 'GET')
+      },
+      { message: 'the screen re-reads after every write, whatever its outcome (D73): no GET reached the server after the 5xx pull' },
+    )
+    .toBe(true)
+})
+
+test('a sale the server answers with a 4xx keeps the server sentence', async ({ page }) => {
+  await open(page, {
+    pullFailure: { status: 409, code: 'card_departed', message: 'That card left its box.' },
+    walkPlan: walkPlanOf([walkPlanStop()]),
+  })
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect(
+    page.getByRole('alert').getByText('Not marked sold: Volcanion', { exact: true }),
+    'a refusal keeps the walk\'s own toast title: the server said no to this sale',
+  ).toBeVisible()
+  await expect(
+    page.getByRole('alert').getByText('That card left its box.', { exact: true }),
+    'a refusal is the server\'s "no": its own sentence stays in the toast',
+  ).toBeVisible()
+  await expect(
+    page.getByRole('main').getByText('That card left its box.', { exact: true }),
+    'a refusal is the server\'s "no": its own sentence stays on the screen',
+  ).toBeVisible()
+  await expect(
+    page.getByText(/The store did not confirm/),
+    'a refusal says nothing about the store having failed to confirm',
+  ).toHaveCount(0)
+})
+
+/* THE COPY ON A WRITE THAT GOT NO ANSWER (`gotNoAnswer`). A 5xx or a lost connection may follow a commit, so each says the store did
+   not confirm the write and never carries the server's own sentence. A 4xx is the server's "no" and keeps its text. A toast's title
+   and its body are two elements, so each is pinned on its own. The card is Volcanion, at Box 3, Section 2, Card 17. */
+const PLACE = 'Box 3, Section 2, Card 17'
+const SALE_TITLE = 'The store did not confirm the sale'
+const SALE_BODY = `Volcanion, ${PLACE}. If the $ button is still on its row, press it again. If the sale went through, the second press says so.`
+const UNDO_TITLE = 'The store did not confirm the undo'
+const UNDO_BODY = `Volcanion, ${PLACE}. If the hooked arrow button is still on its row, press it again. If the undo went through, the second press says so.`
+/* A LIST WRITE THAT GOT NO ANSWER: its notice draws the title and the body as two elements, as a toast does (`expectSaidInNotice`). */
+type Said = { readonly title: string; readonly body: string }
+const FILL_NOT_CONFIRMED: Said = {
+  title: 'The store did not confirm Shipped This by Hand for Volcanion',
+  body: 'If the button still says Shipped This by Hand, press it again.',
+}
+const KIND_NOT_CONFIRMED: Said = {
+  title: 'The store did not confirm Sealed Product for Volcanion',
+  body: 'If Sealed Product is still there, press it again.',
+}
+const CLOSE_NOT_CONFIRMED: Said = {
+  title: "The store did not confirm It Isn't Shipping for Volcanion",
+  body: "If It Isn't Shipping is still there, press it again.",
+}
+const STAND_DOWN_ORDER_NOT_CONFIRMED: Said = {
+  title: 'The store did not confirm Cancelled or Refunded for order B58DDD-24C44',
+  body: 'If Stand down this order is still there, press it again.',
+}
+const STAND_DOWN_NOT_CONFIRMED: Said = {
+  title: 'The store did not confirm that 1 shipped order stood down',
+  body: 'If the button still says Stand down 1 shipped order, press it again.',
+}
+const RECONCILE_NOT_CONFIRMED: Said = {
+  title: 'The store did not confirm that 2 old orders stood down',
+  body: 'If the button still says Stand down 2 orders, press it again.',
+}
+const LIST_UNDO_TITLE = 'The store did not confirm the undo'
+
+/** A list write's title and its body, each on its own element of the notice. The title is exact, so it cannot carry the body sentence;
+ *  the body is exact too. The first check finds the title on the page, so a page without it fails there and not on a missing element. */
+async function expectSaidInNotice(page: Page, said: Said, why: string): Promise<void> {
+  await expect(page.getByText(said.title, { exact: false }).first(), `${why}: the title is on the screen`).toBeVisible()
+  const notice = page.locator('.bn-notice').filter({ has: page.locator('.bn-notice-title', { hasText: said.title }) }).first()
+  await expect(
+    notice.locator('.bn-notice-title'),
+    `${why}: the notice's title names what the store did not confirm, and holds no body sentence`,
+  ).toHaveText(said.title)
+  await expect(notice.locator('.bn-notice-body'), `${why}: the body says what to press, in its own element`).toHaveText(said.body)
+}
+const SERVER_500_ANSWER = { status: 500, code: 'server_error', message: SERVER_500 }
+const REFUSED_ANSWER = { status: 409, code: 'refused', message: 'The store refused that write.' }
+
+const undoCalls = (wire: Wire[]): number =>
+  wire.filter((one) => one.path.endsWith('/orders/pull') && (one.body as { undo?: boolean } | null)?.undo === true).length
+
+test('a sale reversed with U whose undo the server answers with a 5xx after it committed says the store did not confirm the undo', async ({
+  page,
+}) => {
+  const wire = await open(page, { walkPlan: walkPlanOf([walkPlanStop()]) })
+  await answerWhen(page, wire, /\/orders\/pull$/, (body) => body?.undo === true, SERVER_500_ANSWER)
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect(page.locator('.bn-toast-receipt')).toBeVisible()
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => undoCalls(wire), { message: 'the undo reached the server' }).toBe(1)
+
+  const toast = page.locator('.bn-toast-refusal', { has: page.locator('.bn-toast-title', { hasText: UNDO_TITLE }) })
+  await expect(toast.locator('.bn-toast-title'), 'a 5xx after the undo may have reversed the sale, so the toast says the store did not confirm it').toHaveText(UNDO_TITLE)
+  await expect(toast.locator('.bn-toast-body'), 'the body names the card and the control to press again').toHaveText(UNDO_BODY)
+  await expect(
+    page.locator('.bn-toast', { hasText: 'The card was not put back' }),
+    'the old refusal title is wrong for a write that may have committed',
+  ).toHaveCount(0)
+})
+
+test('a sale whose off-walk undo the server answers with a 5xx keeps an Undo on its toast, and a press sends the undo again', async ({
+  page,
+}) => {
+  const wire = await open(page, { walkPlan: walkPlanOf([walkPlanStop()]) })
+  await answerWhen(page, wire, /\/orders\/pull$/, (body) => body?.undo === true, SERVER_500_ANSWER)
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect(page.locator('.bn-toast-receipt')).toBeVisible()
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => undoCalls(wire), { message: 'the undo reached the server' }).toBe(1)
+
+  const action = page.locator('.bn-toast-refusal .bn-toast-action', { hasText: 'Undo' })
+  await expect(action, 'the failure toast offers Undo, so a press that may have reversed nothing can try again').toHaveCount(1)
+  await action.click()
+  await expect.poll(() => undoCalls(wire), { message: 'the Undo on the failure toast reached the server' }).toBe(2)
+})
+
+test('a sale the server answers with a 5xx says the store did not confirm it once, in the toast alone', async ({ page }) => {
+  await open(page, {
+    pullFailure: { status: 500, code: 'server_error', message: SERVER_500 },
+    walkPlan: walkPlanOf([walkPlanStop()]),
+  })
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect(page.locator('.bn-toast-refusal .bn-toast-title', { hasText: SALE_TITLE })).toBeVisible()
+  await expect(
+    page.getByText(SALE_TITLE, { exact: false }),
+    'the walk says the sale once: the toast title, with no second line on the screen repeating it',
+  ).toHaveCount(1)
+  await expect(
+    page.getByText('If the $ button is still on its row', { exact: false }),
+    'the press-again sentence is said once, in the toast body',
+  ).toHaveCount(1)
+})
+
+test('a sale whose walk Undo the server answers with a 5xx after it committed says the store did not confirm the undo', async ({
+  page,
+}) => {
+  const wire = await open(page, { walkPlan: walkPlanOf([walkPlanStop()]) })
+  await answerWhen(page, wire, /\/orders\/pull$/, (body) => body?.undo === true, SERVER_500_ANSWER)
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
+  const undo = page.getByRole('button', { name: /^Undo/ }).first()
+  await expect(undo).toBeVisible()
+  await undo.click()
+  await expect.poll(() => undoCalls(wire), { message: 'the walk Undo reached the server' }).toBe(1)
+
+  const toast = page.locator('.bn-toast-refusal', { has: page.locator('.bn-toast-title', { hasText: UNDO_TITLE }) })
+  await expect(toast.locator('.bn-toast-title'), 'a 5xx after the walk Undo may have reversed the sale, so the toast says the store did not confirm it').toHaveText(UNDO_TITLE)
+  await expect(toast.locator('.bn-toast-body'), 'the body names the card and the control to press again').toHaveText(UNDO_BODY)
+  await expect(
+    page.locator('.bn-toast', { hasText: 'The card was not put back' }),
+    'the old refusal title is wrong for a write that may have committed',
+  ).toHaveCount(0)
+})
+
+test('a sale whose walk Undo the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
+  const wire = await open(page, { walkPlan: walkPlanOf([walkPlanStop()]) })
+  await answerWhen(page, wire, /\/orders\/pull$/, (body) => body?.undo === true, REFUSED_ANSWER)
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
+  const undo = page.getByRole('button', { name: /^Undo/ }).first()
+  await expect(undo).toBeVisible()
+  await undo.click()
+  await expect.poll(() => undoCalls(wire), { message: 'the walk Undo reached the server' }).toBe(1)
+
+  await expect(
+    page.locator('.bn-toast', { hasText: 'The card was not put back' }),
+    'a refusal keeps the undo\'s own title',
+  ).toBeVisible()
+  await expect(
+    page.locator('.bn-toast', { hasText: REFUSED_ANSWER.message }),
+    'a refusal is the server\'s "no": its own sentence stays in the toast',
+  ).toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: UNDO_TITLE })).toHaveCount(0)
+})
+
+test('a hand shipment the server answers with a 5xx after it committed says the store did not confirm the hand shipment', async ({
+  page,
+}) => {
+  const wire = await open(page, { orders: unseenLineOrder() })
+  await answerWhen(page, wire, /\/orders\/fill$/, (body) => body?.undo !== true, SERVER_500_ANSWER)
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: /shipped/i }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/fill').length, { message: 'the hand shipment reached the server' }).toBe(1)
+
+  await expectSaidInNotice(page, FILL_NOT_CONFIRMED, 'a 5xx after the hand shipment may have committed, so the list must say the store did not confirm it')
+})
+
+test('a hand shipment the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
+  const wire = await open(page, { orders: unseenLineOrder() })
+  await answerWhen(page, wire, /\/orders\/fill$/, (body) => body?.undo !== true, REFUSED_ANSWER)
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: /shipped/i }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/fill').length, { message: 'the hand shipment reached the server' }).toBe(1)
+
+  await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on screen').toBeVisible()
+  await expect(page.getByText(FILL_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+})
+
+test('a sealed-product claim the server answers with a 5xx after it committed says the store did not confirm the sealed product', async ({
+  page,
+}) => {
+  const wire = await open(page, { orders: unseenLineOrder() })
+  await answerWhen(page, wire, /\/orders\/line-kind$/, () => true, SERVER_500_ANSWER)
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: 'Sealed Product' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/line-kind').length, { message: 'the claim reached the server' }).toBe(1)
+
+  await expectSaidInNotice(page, KIND_NOT_CONFIRMED, 'a 5xx after the claim may have committed, so the list must say the store did not confirm it')
+})
+
+test('a sealed-product claim the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
+  const wire = await open(page, { orders: unseenLineOrder() })
+  await answerWhen(page, wire, /\/orders\/line-kind$/, () => true, REFUSED_ANSWER)
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: 'Sealed Product' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/line-kind').length, { message: 'the claim reached the server' }).toBe(1)
+
+  await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on screen').toBeVisible()
+  await expect(page.getByText(KIND_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+})
+
+/** One unseen line already claimed as sealed: the one line the "Undo: not sealed" press is drawn for. */
+function sealedClaimOrder(): OrdersPayload {
+  const unseen = line({ reason: 'sku_unseen', fulfilled: 0, outstanding: 1, on_hand: 0, picks: [] })
+  const claimed = [
+    { sku: SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: 'sealed' as const, closed_at: null, closed_reason: null },
+  ]
+  return payloadOf(
+    [order({ progress: claimed })],
+    [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [unseen] }],
+  )
+}
+
+const KIND_UNDO_NOT_CONFIRMED: Said = {
+  title: 'The store did not confirm the undo for Volcanion',
+  body: 'If Sealed Product is not back, press Undo again.',
+}
+
+test('an Undo of a sealed claim the server answers with a 5xx says the store did not confirm the undo, and what to press', async ({ page }) => {
+  const wire = await open(page, { orders: sealedClaimOrder() })
+  await answerWhen(page, wire, /\/orders\/line-kind$/, () => true, SERVER_500_ANSWER)
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: 'Undo: not sealed' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/line-kind').length, { message: 'the undo of the claim reached the server' }).toBe(1)
+  expect(
+    (wire.find((one) => one.path === '/orders/line-kind')?.body as { kind?: unknown } | null)?.kind,
+    'the undo of a claim sends no kind',
+  ).toBeNull()
+
+  await expectSaidInNotice(page, KIND_UNDO_NOT_CONFIRMED, 'a 5xx after the undo may have cleared the claim, so the list must say the store did not confirm it, and what to press')
+})
+
+test('an Undo of a sealed claim the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
+  const wire = await open(page, { orders: sealedClaimOrder() })
+  await answerWhen(page, wire, /\/orders\/line-kind$/, () => true, REFUSED_ANSWER)
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: 'Undo: not sealed' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/line-kind').length, { message: 'the undo of the claim reached the server' }).toBe(1)
+
+  await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on screen').toBeVisible()
+  await expect(page.getByText(KIND_UNDO_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+})
+
+test('a line closed as not shipping the server answers with a 5xx after it committed says the store did not confirm the not-shipping close', async ({
+  page,
+}) => {
+  const wire = await open(page, { orders: noCopiesLineOrder() })
+  await answerWhen(page, wire, /\/orders\/close$/, (body) => body?.undo !== true, SERVER_500_ANSWER)
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: /It Isn.t Shipping/ }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length, { message: 'the close reached the server' }).toBe(1)
+
+  await expectSaidInNotice(page, CLOSE_NOT_CONFIRMED, 'a 5xx after the close may have committed, so the list must say the store did not confirm it')
+})
+
+test('a line closed as not shipping the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
+  const wire = await open(page, { orders: noCopiesLineOrder() })
+  await answerWhen(page, wire, /\/orders\/close$/, (body) => body?.undo !== true, REFUSED_ANSWER)
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: /It Isn.t Shipping/ }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length, { message: 'the close reached the server' }).toBe(1)
+
+  await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on screen').toBeVisible()
+  await expect(page.getByText(CLOSE_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+})
+
+test('the backlog stand-down the server answers with a 5xx after it committed says the store did not confirm the stand-down', async ({
+  page,
+}) => {
+  const shipped = order({ status: 'Shipped - In Transit' })
+  const wire = await open(page, {
+    orders: payloadOf(
+      [shipped],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }],
+    ),
+  })
+  await answerWhen(page, wire, /\/orders\/close$/, (body) => body?.undo !== true, SERVER_500_ANSWER)
+  await openStore(page)
+  const prompt = page.locator('.orders-backlog')
+  await expect(prompt).toBeVisible()
+  await prompt.getByRole('button', { name: /Stand down/ }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length, { message: 'the stand-down reached the server' }).toBe(1)
+
+  await expectSaidInNotice(page, STAND_DOWN_NOT_CONFIRMED, 'a 5xx after the stand-down may have committed, so the list must say the store did not confirm it')
+})
+
+test('the backlog stand-down the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
+  const shipped = order({ status: 'Shipped - In Transit' })
+  const wire = await open(page, {
+    orders: payloadOf(
+      [shipped],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }],
+    ),
+  })
+  await answerWhen(page, wire, /\/orders\/close$/, (body) => body?.undo !== true, REFUSED_ANSWER)
+  await openStore(page)
+  const prompt = page.locator('.orders-backlog')
+  await expect(prompt).toBeVisible()
+  await prompt.getByRole('button', { name: /Stand down/ }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length, { message: 'the stand-down reached the server' }).toBe(1)
+
+  await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on screen').toBeVisible()
+  await expect(page.getByText(STAND_DOWN_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+})
+
+test('the stand-down of one order the server answers with a 5xx after it committed says the store did not confirm the stand-down', async ({
+  page,
+}) => {
+  const wire = await open(page, { orders: twoOrderBuyer() })
+  await answerWhen(page, wire, /\/orders\/close$/, (body) => body?.undo !== true, SERVER_500_ANSWER)
+  await openManage(page, 'overview')
+  const sheet = page.locator('.orders-manage-sheet')
+  await sheet.locator('.bn-set-op', { hasText: SECOND_ORDER }).click()
+  await sheet.locator('.bn-set-group-danger').getByRole('button', { name: 'Stand down this order: cancelled or refunded' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length, { message: 'the stand-down reached the server' }).toBe(1)
+
+  await expectSaidInNotice(page, STAND_DOWN_ORDER_NOT_CONFIRMED, 'a 5xx after the stand-down may have committed, so the sheet must say the store did not confirm it')
+})
+
+test('the stand-down of one order the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
+  const wire = await open(page, { orders: twoOrderBuyer() })
+  await answerWhen(page, wire, /\/orders\/close$/, (body) => body?.undo !== true, REFUSED_ANSWER)
+  await openManage(page, 'overview')
+  const sheet = page.locator('.orders-manage-sheet')
+  await sheet.locator('.bn-set-op', { hasText: SECOND_ORDER }).click()
+  await sheet.locator('.bn-set-group-danger').getByRole('button', { name: 'Stand down this order: cancelled or refunded' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length, { message: 'the stand-down reached the server' }).toBe(1)
+
+  await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on screen').toBeVisible()
+  await expect(page.getByText(STAND_DOWN_ORDER_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+  await expect(page.getByText(STAND_DOWN_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+})
+
+test('the backlog reconcile the server answers with a 5xx after it committed says the store did not confirm the backlog stand-down', async ({
+  page,
+}) => {
+  const wire = await open(page, { orders: backlogOrders() })
+  await answerWhen(page, wire, /\/orders\/reconcile-backlog$/, (body) => body?.preview !== true, SERVER_500_ANSWER)
+  await openStore(page)
+  const panel = page.locator('.orders-reconcile')
+  await expect(panel).toBeVisible()
+  await panel.getByRole('button', { name: 'Stand down 2 orders' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/reconcile-backlog' && (one.body as { preview?: boolean }).preview !== true).length, { message: 'the reconcile press reached the server' }).toBe(1)
+
+  await expectSaidInNotice(page, RECONCILE_NOT_CONFIRMED, 'a 5xx after the reconcile may have committed, so the panel must say the store did not confirm it')
+})
+
+test('the backlog reconcile the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
+  const wire = await open(page, { orders: backlogOrders() })
+  await answerWhen(page, wire, /\/orders\/reconcile-backlog$/, (body) => body?.preview !== true, REFUSED_ANSWER)
+  await openStore(page)
+  const panel = page.locator('.orders-reconcile')
+  await expect(panel).toBeVisible()
+  await panel.getByRole('button', { name: 'Stand down 2 orders' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/reconcile-backlog' && (one.body as { preview?: boolean }).preview !== true).length, { message: 'the reconcile press reached the server' }).toBe(1)
+
+  await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on screen').toBeVisible()
+  await expect(page.getByText(RECONCILE_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+})
+
+/* THE RECEIPT'S UNDO OF A HAND FILL, OR OF A STAND-DOWN OR CLOSE (`undoFill`, `reopenOrders`, `reopenLines`, the toast's own press): a 5xx
+   after the reversal may have taken the copies or the lines back out, so the toast says the store did not confirm the undo. */
+/** Every reversal of a close: the Undo of a stand-down, of a line closed as not shipping, or of a reconcile. */
+const closeUndoCalls = (wire: Wire[]): number =>
+  wire.filter((one) => one.path === '/orders/close' && (one.body as { undo?: boolean } | null)?.undo === true).length
+
+/** The toast a list write's Undo gets when no answer came back: its own title, then a body that names the receipt it undoes
+ *  and the control to look for. `receipt` is the receipt's title as it was drawn before the press. */
+async function expectListUndoToast(page: Page, receipt: string, label: string): Promise<void> {
+  const toast = page.locator('.bn-toast-refusal', { has: page.locator('.bn-toast-title', { hasText: LIST_UNDO_TITLE }) })
+  await expect(toast.locator('.bn-toast-title'), 'a 5xx after the reversal may have taken the copies or the lines back out, so the toast says the store did not confirm the undo').toHaveText(LIST_UNDO_TITLE)
+  await expect(toast.locator('.bn-toast-body'), 'the body names the receipt and the control to look for').toHaveText(`${receipt}. If ${label} is back, the undo went through.`)
+}
+
+/** Presses the receipt's own Undo, once the press that drew it has been answered. Returns the receipt's title as it was drawn. */
+async function pressReceiptUndo(page: Page, wire: Wire[]): Promise<string> {
+  const undo = page.locator('.bn-toast-receipt button.bn-toast-action')
+  await expect(undo, 'the receipt offers its Undo').toHaveCount(1)
+  const receipt = (await page.locator('.bn-toast-receipt .bn-toast-title').first().textContent())?.trim() ?? ''
+  await undo.click()
+  await expect.poll(() => closeUndoCalls(wire), { message: 'the receipt\'s Undo reached the server' }).toBe(1)
+  return receipt
+}
+
+/** Presses the hand fill and its receipt's Undo, after the fill has been answered and the receipt is on screen. Returns the receipt's title. */
+async function fillThenUndoFromReceipt(page: Page, wire: Wire[]): Promise<string> {
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: /shipped/i }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/fill' && (one.body as { undo?: boolean }).undo !== true).length, { message: 'the hand fill reached the server' }).toBe(1)
+  const undo = page.locator('.bn-toast-receipt button.bn-toast-action')
+  await expect(undo, 'the fill\'s toast offers its Undo').toHaveCount(1)
+  const receipt = (await page.locator('.bn-toast-receipt .bn-toast-title').first().textContent())?.trim() ?? ''
+  await undo.click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/fill' && (one.body as { undo?: boolean }).undo === true).length, { message: 'the receipt\'s Undo reached the server' }).toBe(1)
+  return receipt
+}
+
+test('a hand fill undone from its receipt, which the server answers with a 5xx after it committed, says the store did not confirm the undo', async ({
+  page,
+}) => {
+  const wire = await open(page, { orders: unseenLineOrder() })
+  await answerWhen(page, wire, /\/orders\/fill$/, (body) => body?.undo === true, SERVER_500_ANSWER)
+  const receipt = await fillThenUndoFromReceipt(page, wire)
+  await expectListUndoToast(page, receipt, 'Shipped This by Hand')
+  await expect(page.getByText(SERVER_500, { exact: true }), 'the generic server sentence is not an answer about the undo').toHaveCount(0)
+})
+
+test('a hand fill undone from its receipt, which the server refuses with a 4xx, keeps the server sentence', async ({ page }) => {
+  const wire = await open(page, { orders: unseenLineOrder() })
+  await answerWhen(page, wire, /\/orders\/fill$/, (body) => body?.undo === true, REFUSED_ANSWER)
+  await fillThenUndoFromReceipt(page, wire)
+
+  await expect(
+    page.locator('.bn-toast', { hasText: REFUSED_ANSWER.message }),
+    'a refusal is the server\'s "no": its own sentence stays in the toast',
+  ).toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: LIST_UNDO_TITLE }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+})
+
+/* THE RECEIPT'S UNDO OF EACH CLOSE (`onStandDown`, `onStandDownOrder`, `onReconcileBacklog`, `onCloseLine`). Each press is answered
+   by the stub; only the reversal the receipt sends is answered by the case. */
+test('a backlog stand-down whose receipt\'s Undo the server answers with a 5xx after it committed says the store did not confirm the undo', async ({
+  page,
+}) => {
+  const shipped = order({ status: 'Shipped - In Transit' })
+  const wire = await open(page, {
+    orders: payloadOf(
+      [shipped],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }],
+    ),
+  })
+  await answerWhen(page, wire, /\/orders\/close$/, (body) => body?.undo === true, SERVER_500_ANSWER)
+  await openStore(page)
+  const prompt = page.locator('.orders-backlog')
+  await expect(prompt).toBeVisible()
+  await prompt.getByRole('button', { name: /Stand down/ }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close' && (one.body as { undo?: boolean }).undo !== true).length, { message: 'the stand-down reached the server' }).toBe(1)
+  const receipt = await pressReceiptUndo(page, wire)
+  await expectListUndoToast(page, receipt, 'Stand down 1 shipped order')
+})
+
+test('a backlog stand-down whose receipt\'s Undo the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
+  const shipped = order({ status: 'Shipped - In Transit' })
+  const wire = await open(page, {
+    orders: payloadOf(
+      [shipped],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }],
+    ),
+  })
+  await answerWhen(page, wire, /\/orders\/close$/, (body) => body?.undo === true, REFUSED_ANSWER)
+  await openStore(page)
+  const prompt = page.locator('.orders-backlog')
+  await expect(prompt).toBeVisible()
+  await prompt.getByRole('button', { name: /Stand down/ }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close' && (one.body as { undo?: boolean }).undo !== true).length, { message: 'the stand-down reached the server' }).toBe(1)
+  await pressReceiptUndo(page, wire)
+
+  await expect(page.locator('.bn-toast', { hasText: REFUSED_ANSWER.message }), 'a refusal is the server\'s "no": its own sentence stays in the toast').toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: LIST_UNDO_TITLE }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+})
+
+test('a stand-down of one order whose receipt\'s Undo the server answers with a 5xx after it committed says the store did not confirm the undo', async ({
+  page,
+}) => {
+  const wire = await open(page, { orders: twoOrderBuyer() })
+  await answerWhen(page, wire, /\/orders\/close$/, (body) => body?.undo === true, SERVER_500_ANSWER)
+  await openManage(page, 'overview')
+  const sheet = page.locator('.orders-manage-sheet')
+  await sheet.locator('.bn-set-op', { hasText: SECOND_ORDER }).click()
+  await sheet.locator('.bn-set-group-danger').getByRole('button', { name: 'Stand down this order: cancelled or refunded' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close' && (one.body as { undo?: boolean }).undo !== true).length, { message: 'the stand-down reached the server' }).toBe(1)
+  const receipt = await pressReceiptUndo(page, wire)
+  await expectListUndoToast(page, receipt, 'Stand down this order')
+})
+
+test('a stand-down of one order whose receipt\'s Undo the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
+  const wire = await open(page, { orders: twoOrderBuyer() })
+  await answerWhen(page, wire, /\/orders\/close$/, (body) => body?.undo === true, REFUSED_ANSWER)
+  await openManage(page, 'overview')
+  const sheet = page.locator('.orders-manage-sheet')
+  await sheet.locator('.bn-set-op', { hasText: SECOND_ORDER }).click()
+  await sheet.locator('.bn-set-group-danger').getByRole('button', { name: 'Stand down this order: cancelled or refunded' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close' && (one.body as { undo?: boolean }).undo !== true).length, { message: 'the stand-down reached the server' }).toBe(1)
+  await pressReceiptUndo(page, wire)
+
+  await expect(page.locator('.bn-toast', { hasText: REFUSED_ANSWER.message }), 'a refusal is the server\'s "no": its own sentence stays in the toast').toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: LIST_UNDO_TITLE }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+})
+
+test('a backlog reconcile whose receipt\'s Undo the server answers with a 5xx after it committed says the store did not confirm the undo', async ({
+  page,
+}) => {
+  const closed = [
+    { source: 'TCGplayer', number: 'A-1' },
+    { source: 'TCGplayer', number: 'A-3' },
+  ]
+  const wire = await open(page, {
+    orders: backlogOrders(),
+    reconcile: { cutoff: '2020-03-01', orders: 2, moved: 2, lines: 2, closed, reason: 'shipped_elsewhere', still_open: 1 },
+  })
+  await answerWhen(page, wire, /\/orders\/close$/, (body) => body?.undo === true, SERVER_500_ANSWER)
+  await openStore(page)
+  const panel = page.locator('.orders-reconcile')
+  await expect(panel).toBeVisible()
+  await panel.getByRole('button', { name: 'Stand down 2 orders' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/reconcile-backlog' && (one.body as { preview?: boolean }).preview !== true).length, { message: 'the reconcile press reached the server' }).toBe(1)
+  const receipt = await pressReceiptUndo(page, wire)
+  await expectListUndoToast(page, receipt, 'Stand down 2 orders')
+})
+
+test('a backlog reconcile whose receipt\'s Undo the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
+  const closed = [
+    { source: 'TCGplayer', number: 'A-1' },
+    { source: 'TCGplayer', number: 'A-3' },
+  ]
+  const wire = await open(page, {
+    orders: backlogOrders(),
+    reconcile: { cutoff: '2020-03-01', orders: 2, moved: 2, lines: 2, closed, reason: 'shipped_elsewhere', still_open: 1 },
+  })
+  await answerWhen(page, wire, /\/orders\/close$/, (body) => body?.undo === true, REFUSED_ANSWER)
+  await openStore(page)
+  const panel = page.locator('.orders-reconcile')
+  await expect(panel).toBeVisible()
+  await panel.getByRole('button', { name: 'Stand down 2 orders' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/reconcile-backlog' && (one.body as { preview?: boolean }).preview !== true).length, { message: 'the reconcile press reached the server' }).toBe(1)
+  await pressReceiptUndo(page, wire)
+
+  await expect(page.locator('.bn-toast', { hasText: REFUSED_ANSWER.message }), 'a refusal is the server\'s "no": its own sentence stays in the toast').toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: LIST_UNDO_TITLE }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+})
+
+test('a line closed as not shipping whose receipt\'s Undo the server answers with a 5xx after it committed says the store did not confirm the undo', async ({
+  page,
+}) => {
+  const wire = await open(page, { orders: noCopiesLineOrder() })
+  await answerWhen(page, wire, /\/orders\/close$/, (body) => body?.undo === true, SERVER_500_ANSWER)
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: /It Isn.t Shipping/ }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close' && (one.body as { undo?: boolean }).undo !== true).length, { message: 'the close reached the server' }).toBe(1)
+  const receipt = await pressReceiptUndo(page, wire)
+  await expectListUndoToast(page, receipt, "It Isn't Shipping")
+})
+
+test('a line closed as not shipping whose receipt\'s Undo the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
+  const wire = await open(page, { orders: noCopiesLineOrder() })
+  await answerWhen(page, wire, /\/orders\/close$/, (body) => body?.undo === true, REFUSED_ANSWER)
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: /It Isn.t Shipping/ }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close' && (one.body as { undo?: boolean }).undo !== true).length, { message: 'the close reached the server' }).toBe(1)
+  await pressReceiptUndo(page, wire)
+
+  await expect(page.locator('.bn-toast', { hasText: REFUSED_ANSWER.message }), 'a refusal is the server\'s "no": its own sentence stays in the toast').toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: LIST_UNDO_TITLE }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+})
+
+/* A HAND FILL THAT GOT NO ANSWER, IN ITS TWO STATES. While the line is still open, the button is still there and the line says to press it
+   again. When the fill committed, the next read takes the button away, and the line still says what the store did not confirm. */
+test('a hand fill the server answers with a 5xx on an open line keeps its button, and the line says to press it again', async ({ page }) => {
+  const wire = await open(page, { orders: unseenLineOrder() })
+  await answerWhen(page, wire, /\/orders\/fill$/, (body) => body?.undo !== true, SERVER_500_ANSWER)
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: /shipped/i }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/fill').length, { message: 'the hand fill reached the server' }).toBe(1)
+
+  await expectSaidInNotice(page, FILL_NOT_CONFIRMED, 'the line names the button and the card, so the reader knows what to press again')
+  await expect(
+    stand.getByRole('button', { name: 'Shipped This by Hand' }),
+    'the line says press it again if the button still says so, so the button must still be on screen',
+  ).toBeVisible()
+})
+
+test('a hand fill the server answers with a 5xx after it committed takes its button away, and the line still says so', async ({ page }) => {
+  let committed = false
+  const closed = payloadOf(
+    [order()],
+    [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line({ reason: 'sku_unseen', fulfilled: 1, outstanding: 0, on_hand: 0, picks: [] })] }],
+  )
+  const wire = await open(page, { orders: () => (committed ? closed : unseenLineOrder()) })
+  await page.route(/\/orders\/fill$/, async (route) => {
+    const body = route.request().postDataJSON() as { undo?: boolean } | null
+    if (body?.undo === true) {
+      await route.fallback()
+      return
+    }
+    committed = true
+    wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body })
+    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'server_error', message: SERVER_500 } }) })
+  })
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: /shipped/i }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/fill').length, { message: 'the hand fill reached the server' }).toBe(1)
+
+  await expectSaidInNotice(page, FILL_NOT_CONFIRMED, 'a fill that committed still leaves the line saying the store did not confirm it')
+  await expect(
+    page.getByRole('button', { name: 'Shipped This by Hand' }),
+    'the read after the write found nothing left to ship, so the button is gone and cannot be pressed a second time',
+  ).toHaveCount(0)
+})
+
+const PASTE_NOT_CONFIRMED: Said = { title: 'The store did not confirm the paste', body: 'The list shows what the store holds now.' }
+const FETCH_NOT_CONFIRMED: Said = { title: 'The store did not confirm the fetch', body: 'The list shows what the store holds now.' }
+
+/** The one paste every case here sends: one order, one line, the SKU the default world holds. */
+const PASTE_TEXT = JSON.stringify({
+  source: 'TCGplayer',
+  number: ORDER_NUMBER,
+  buyerName: 'Ada Lovelace',
+  lines: [{ sku: SKU, quantity: 1, name: 'Volcanion' }],
+})
+
+/** Types the paste and presses its Read button, then waits until the write reached the server. The caller opens the sheet first
+ *  when the list has orders in it; an empty store draws the paste well in place. */
+async function readPaste(page: Page, wire: Wire[]): Promise<void> {
+  await page.locator('textarea.orders-paste-box').fill(PASTE_TEXT)
+  await page.locator('.orders-paste').getByRole('button', { name: 'Read this paste' }).click()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/ingest')).length, { message: 'the paste reached the server' }).toBe(1)
+}
+
+test('a paste the server answers with a 5xx says the store did not confirm the paste, and what the list holds now', async ({ page }) => {
+  const wire = await open(page, { orders: unseenLineOrder() })
+  await answerWhen(page, wire, /\/orders\/ingest$/, () => true, SERVER_500_ANSWER)
+  await openStore(page)
+  await readPaste(page, wire)
+
+  await expectSaidInNotice(page, PASTE_NOT_CONFIRMED, 'a 5xx after the paste may have written the orders, so the list is the place to look')
+  await expect(page.getByText(SERVER_500, { exact: true }), 'the generic server sentence is not an answer about the paste').toHaveCount(0)
+})
+
+test('a fetch the server answers with a 5xx says the store did not confirm the fetch, and what the list holds now', async ({ page }) => {
+  const wire = await open(page, { orders: unseenLineOrder() })
+  await answerWhen(page, wire, /\/orders\/fetch$/, () => true, SERVER_500_ANSWER)
+  await openStore(page)
+  await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length, { message: 'the fetch reached the server' }).toBe(1)
+
+  await expectSaidInNotice(page, FETCH_NOT_CONFIRMED, 'a 5xx after the fetch may have written the orders, so the list is the place to look')
+  await expect(page.getByText(SERVER_500, { exact: true }), 'the generic server sentence is not an answer about the fetch').toHaveCount(0)
+})
+
+/* AN EMPTY STORE'S FIRST PASTE OR FETCH. The list is the empty state, and its notice is drawn on that branch, so the title and
+   the body must be two elements there too. The paste well is drawn in place; the fetch is the empty state's own action. */
+test('a paste the server answers with a 5xx on an empty store says the store did not confirm the paste, in its title and its body', async ({ page }) => {
+  const wire = await open(page, { orders: payloadOf([], []) })
+  await answerWhen(page, wire, /\/orders\/ingest$/, () => true, SERVER_500_ANSWER)
+  await readPaste(page, wire)
+
+  await expectSaidInNotice(page, PASTE_NOT_CONFIRMED, 'a 5xx after the first paste on an empty store may have written the orders, so the empty state must say the store did not confirm it')
+  await expect(page.getByText(SERVER_500, { exact: true }), 'the generic server sentence is not an answer about the paste').toHaveCount(0)
+})
+
+test('a fetch the server answers with a 5xx on an empty store says the store did not confirm the fetch, in its title and its body', async ({ page }) => {
+  const wire = await open(page, { orders: payloadOf([], []) })
+  await answerWhen(page, wire, /\/orders\/fetch$/, () => true, SERVER_500_ANSWER)
+  await page.locator('.orders-stage').getByRole('button', { name: 'Fetch from TCGplayer', exact: true }).click()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length, { message: 'the fetch reached the server' }).toBe(1)
+
+  await expectSaidInNotice(page, FETCH_NOT_CONFIRMED, 'a 5xx after the first fetch on an empty store may have written the orders, so the empty state must say the store did not confirm it')
+  await expect(page.getByText(SERVER_500, { exact: true }), 'the generic server sentence is not an answer about the fetch').toHaveCount(0)
+})
+
+test('a paste the server refuses with a 4xx on an empty store keeps the server sentence', async ({ page }) => {
+  const wire = await open(page, { orders: payloadOf([], []) })
+  await answerWhen(page, wire, /\/orders\/ingest$/, () => true, REFUSED_ANSWER)
+  await readPaste(page, wire)
+
+  await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on the empty state').toBeVisible()
+  await expect(page.getByText(PASTE_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
 })
 
 /* -------------------------------------------------------------------------------------- 6 */
@@ -2974,20 +3791,8 @@ test('the reconcile control is absent with nothing to reconcile', async ({ page 
 test('the stand-down names its cutoff, its span and every Ready-to-ship order, and starts safe (UX-165)', async ({
   page,
 }) => {
-  const both = payloadOf(
-    [
-      order({ key: 'TCGplayer:A-1', number: 'A-1', buyer: 'Old Buyer', status: 'Completed - Paid', recorded: 0, placed_at: '2020-01-01T00:00:00+00:00' }),
-      order({ key: 'TCGplayer:A-3', number: 'A-3', buyer: 'Older Buyer', status: 'Completed - Paid', recorded: 0, placed_at: '2019-06-01T00:00:00+00:00' }),
-      order({ key: 'TCGplayer:A-2', number: 'A-2', buyer: 'Live Buyer', status: 'Ready to Ship', recorded: 0, placed_at: '2020-03-01T00:00:00+00:00' }),
-    ],
-    [
-      { key: 'TCGplayer:A-1', number: 'A-1', complete: false, outstanding: 1, lines: [line()] },
-      { key: 'TCGplayer:A-2', number: 'A-2', complete: false, outstanding: 1, lines: [line()] },
-      { key: 'TCGplayer:A-3', number: 'A-3', complete: false, outstanding: 1, lines: [line()] },
-    ],
-  )
   const wire = await open(page, {
-    orders: both,
+    orders: backlogOrders(),
     reconcile: { cutoff: '2026-01-01', orders: 3, moved: 3, lines: 3, closed: [], reason: 'shipped_elsewhere', still_open: 0 },
   })
   await openStore(page)
@@ -5985,7 +6790,9 @@ test('a throw inside the line worker rolls its sale back, toasts it, and the nex
   await expect.poll(() => seen.asked).toEqual(['cap-a'])
   await page.keyboard.press('2')
   await letNextWrite(seen)
-  await expect(page.locator('.bn-toast', { hasText: 'Not marked sold' })).toBeVisible()
+  const toast = page.locator('.bn-toast', { has: page.locator('.bn-toast-title', { hasText: SALE_TITLE }) })
+  await expect(toast.locator('.bn-toast-title'), 'a throw in the line worker may follow a commit, so the toast says the store did not confirm the sale').toHaveText(SALE_TITLE)
+  await expect(toast.locator('.bn-toast-body'), 'the body names the card and its place, and what to press again').toHaveText(SALE_BODY)
   await expect(rows.nth(0).getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
   await expect.poll(() => seen.asked, 'the next queued sale still went out').toEqual(['cap-a', 'cap-b'])
   await letNextWrite(seen)

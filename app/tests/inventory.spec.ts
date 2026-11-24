@@ -9037,6 +9037,18 @@ const STACKED_BOXES = {
 /** The six-copy fixture, wired for a sale that really departs — `sell` alone moves `state` and
  *  the server also empties the place (D118's note on this fixture), and the ranking reads the
  *  place's section, so a half-move would be a store shape the server cannot produce. */
+/** THE STACKED COPIES CARRY THEIR CAPTURE IDS, as the server's rows do (`SearchCopy.capture_id`), so a Move sends the row's id back as its
+ *  aim. Only this store adds them: the other stores' Move bodies are pinned without one. */
+function withCaptureIds(answer: ReturnType<typeof searchAnswer>, cards: Cards): ReturnType<typeof searchAnswer> {
+  return {
+    ...answer,
+    groups: answer.groups.map((group) => ({
+      ...group,
+      copies: group.copies.map((copy) => ({ ...copy, capture_id: cards[copy.key]?.capture_id ?? null })),
+    })),
+  }
+}
+
 function stackedStore(): {
   store: Store
   depart: (key: string) => void
@@ -9059,7 +9071,7 @@ function stackedStore(): {
     delete (cards[key] as { card?: number }).card
   }
   return {
-    store: { cards, search: (query) => searchAnswer(query, cards) },
+    store: { cards, search: (query) => withCaptureIds(searchAnswer(query, cards), cards) },
     depart: (key) => leave(key, 'sold'),
     retire: (key) => leave(key, 'retired'),
     moveOut: (key) => leave(key, 'identified'),
@@ -9245,13 +9257,14 @@ async function expectReadAfter(wire: Wire[], isWrite: (entry: Wire) => boolean, 
     .toBeGreaterThan(0)
 }
 
-/** THE WORDS AFTER A WRITE THAT MAY HAVE COMMITTED, shared by the sale, retire and move cases: the toast's sentence, exactly.
- *  `Inventory.tsx`'s `reportWrite` says the write is not confirmed and names the one control still on the copy to press again,
- *  and never shows the store's own "Try again" (D196). */
-async function expectUnconfirmedToast(page: Page, sentence: string): Promise<void> {
+/** THE WORDS AFTER A WRITE THAT MAY HAVE COMMITTED, shared by the sale, retire and move cases: the toast's title, exactly, and its
+ *  body, which names the card and its place and the one control still on the copy to press again. The server's own "Try again"
+ *  and raw text never show (D196). The body's name is the card's own name, so it is matched as any text ahead of the place. */
+async function expectUnconfirmedToast(page: Page, title: string, body: RegExp): Promise<void> {
   const toast = page.locator('.bn-toast-refusal')
   await expect(toast, 'the refusal reaches the person').toBeVisible()
-  await expect(toast.locator('.bn-toast-title'), 'the toast reads the unconfirmed sentence, exactly').toHaveText(sentence)
+  await expect(toast.locator('.bn-toast-title'), 'the title names what the store did not confirm, exactly').toHaveText(title)
+  await expect(toast.locator('.bn-toast-body'), 'the body names the copy and the control to press again').toHaveText(body)
   await expect(toast, 'the toast carries no raw server text').not.toContainText('The store did not answer')
   await expect(toast, 'the toast does not say Try again').not.toContainText('Try again')
 }
@@ -9296,7 +9309,11 @@ test('a Mark sold the server fails with a 5xx says the sale is unconfirmed, with
   )
 
   await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
-  await expectUnconfirmedToast(page, 'The store did not confirm the sale of Box 2, Section 1, Card 1. If Mark Sold is still on that copy, press it again.')
+  await expectUnconfirmedToast(
+    page,
+    'The store did not confirm the sale',
+    /^.+, Box 2, Section 1, Card 1\. If the \$ button is still on its row, press it again\. If the sale went through, the second press says so\.$/,
+  )
 })
 
 test('a 5xx sale that committed keeps its row in place under a search', async ({ page }) => {
@@ -9505,8 +9522,17 @@ test('a retire the server fails with a 5xx says the retirement is unconfirmed, w
   await openStackedRetire(page)
   await pressStackedRetire(page)
 
-  await expectUnconfirmedToast(page, 'The store did not confirm the retirement of Box 7, Section 1, Card 39. If Retire is still on that copy, press it again.')
+  await expectUnconfirmedToast(
+    page,
+    'The store did not confirm the retirement',
+    /^.+, Box 7, Section 1, Card 39\. If the lidded box button is still on its row, press it again\. If the retirement went through, the second press says so\.$/,
+  )
 })
+
+/** THE MOCK'S ANSWER TO A SECOND MOVE OF A COMMITTED COPY, worded as `do_move_card` words its `capture_id_mismatch` refusal. The place
+ *  is a sample: the real one is `pipeline/join.py`'s `said_place`, and `harness/tests/t7/undo_built_on.py` pins the whole sentence. */
+const MOVED_AIM_REFUSAL =
+  'The card at ME01 spares, Section 1, Card 39 is not the one this request was aimed at. The box has probably shifted since it was loaded. Reload the box and try again; nothing was moved.'
 
 /** THE MOVE THE STACKED 5XX CASES START FROM: a copy leaves Box 7 for Box 2, and the server fails after the commit. Returns the
  *  wire and the order the search took before the press. */
@@ -9524,11 +9550,18 @@ async function openStackedMove(page: Page): Promise<{ wire: Wire[]; before: stri
         : box,
     ),
   }
+  /* ONLY THE FIRST PRESS COMMITS. The dialog's Move after a 5xx is the second press, aimed at the copy's own capture_id: the committed
+     move cleared that id from the tombstone (`store/master.py`'s `move_card`), and `do_move_card` checks the aim before the state. */
+  let presses = 0
   const wire = await open(page, boxes, store, () => PRICING, SALE, {
     route: '/#/inventory?box=2',
     hideSold: true,
     move: (box, index) => {
+      presses += 1
+      if (presses > 1) return { status: 409, body: { error: { code: 'capture_id_mismatch', message: MOVED_AIM_REFUSAL } } }
       moveOut(`${box}/${index}`)
+      const tombstone = store.cards[`${box}/${index}`]
+      if (tombstone !== undefined) tombstone.capture_id = null
       store.cards['2/41'] = card({
         index: 41, at: 41, state: 'identified', name: 'Thievul', sku: '8937370',
         section: 1, sectionStart: 1, sectionEnd: 60, box: 2, boxName: 'ME01 commons', boxTotal: 60,
@@ -9589,9 +9622,36 @@ test('a move the server fails with a 5xx says the move is unconfirmed, with no T
   await openStackedMove(page)
   await pressStackedMove(page)
 
-  await expectUnconfirmedToast(page, 'The store did not confirm the move of Box 7, Section 1, Card 39. If Move is still on that copy, press it again.')
+  await expectUnconfirmedToast(
+    page,
+    'The store did not confirm the move',
+    /^.+, Box 7, Section 1, Card 39\. If the Move dialog is still open, press Move again\. If the move already went through, that press is refused and the card stays where it moved\.$/,
+  )
 })
 
+
+test('a move the server fails with a 5xx, pressed again in the dialog, is refused on its aim and the refusal reaches the person', async ({ page }) => {
+  /* THE DIALOG STAYS OPEN AFTER A 5XX, so its own Move is the second press. That press goes out with the copy's own capture_id, which the
+     committed move cleared from the tombstone, so the server refuses on the aim. The toast carries the server's sentence as it words it. */
+  const { wire } = await openStackedMove(page)
+  await pressStackedMove(page)
+  const dialog = page.getByRole('dialog', { name: /^Move/ })
+  await expect(dialog, 'the dialog stays open after a 5xx').toBeVisible()
+  const move = dialog.getByRole('button', { name: 'Move', exact: true })
+  await expect(move, 'Move is still enabled for the second press').toBeEnabled()
+  await move.click()
+
+  await expect(
+    page.locator('.bn-toast-refusal .bn-toast-title', { hasText: 'is not the one this request was aimed at' }),
+    'the refusal reaches the person, as the server words it',
+  ).toHaveText(/^The card at .+ is not the one this request was aimed at\. The box has probably shifted since it was loaded\. Reload the box and try again; nothing was moved\.$/)
+  const moves = wire.filter((entry) => entry.path.endsWith('/move'))
+  expect(moves, 'the first press and the second both reach the move route').toHaveLength(2)
+  expect(moves[1], 'the second press is aimed at the copy, with the capture id the first one sent').toMatchObject({
+    path: '/inventory/7/39/move',
+    body: { capture_id: 'cap-39' },
+  })
+})
 
 test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute later, and a newer sale keeps its own row too', async ({ page }) => {
   /* D28 AND D57 ARE AMENDED, 2026-09-25 (`docs/specs/undo.md` §11.1): rank replaces the

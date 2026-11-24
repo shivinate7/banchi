@@ -298,6 +298,8 @@ export class ServerError extends Error {
 export type Failure = {
   code: string
   message: string
+  /** Set when the failure is a write that got no answer: `message` is then its body, and this is its title (`failureParts`). */
+  title?: string
   /** Which of the kit's two shapes draws it (UX-041). `retry` may pass on a second press: the
    *  server was not reached, it failed inside, or it was busy. `refusal` is a "no" that the
    *  same press will get again. Optional, so a failure a screen builds by hand still types. */
@@ -331,7 +333,150 @@ const isServerFault = (status: number | undefined): boolean => status !== undefi
 /** DID THE WRITE GET NO ANSWER (a 5xx, a lost connection, a body that did not parse)? Such a write may still have
  *  committed, because the server can fail after it writes. A 4xx is the server's "no": it wrote nothing. */
 export function gotNoAnswer(err: unknown): boolean {
-  return !(err instanceof ServerError && err.status >= 400 && err.status < 500)
+  return !(err instanceof ServerError && isRefusalStatus(err.status))
+}
+
+/** `gotNoAnswer`, read off a failure a screen already holds (`describeFailure` keeps the status). */
+export function failureGotNoAnswer(failure: { readonly status?: number }): boolean {
+  return !isRefusalStatus(failure.status)
+}
+
+const isRefusalStatus = (status: number | undefined): boolean => status !== undefined && status >= 400 && status < 500
+
+/** WHAT ANY WRITE THAT GOT NO ANSWER OWES (`gotNoAnswer`), IN ONE FORM: a title that says the store did not confirm the write, and a
+ *  body that says what to look at or press. The server's own sentence ("Try again") would send the person to press a second time on a
+ *  write that may already be done, and its raw text stays off the screen. Every pair below is built here, and a screen only places it. */
+export type Unconfirmed = { readonly title: string; readonly body: string }
+
+/** "The store did not confirm the <thing>", and then what to do about it. */
+export function unconfirmedWrite(thing: string, body: string): Unconfirmed {
+  return { title: `The store did not confirm the ${thing}`, body }
+}
+
+/** The pair as one line, for a place that draws a single sentence (a failure line, a status). */
+export function unconfirmedLine(said: Unconfirmed): string {
+  return `${said.title}. ${said.body}`
+}
+
+/** THE WRITE ON A NAMED COPY, WHERE THE ROW HAS ONE BUTTON FOR IT (a sale, an undo, a retirement, a move). The body names the card and
+ *  its place (after a committed sale the selection has moved to the next copy, so "this copy" would point at the wrong card), the
+ *  control to press again if it is still on its row, and what a second press says if the write went through. `place` is already said
+ *  (`sayPlace`), or null when the copy has none. `control` is what the row shows on that button (`ROW_CONTROL_SEEN`), never its label:
+ *  the row draws an icon, so the label words are not on the screen to look for. */
+export function unconfirmedCopyWrite(what: string, name: string, place: string | null, control: string): Unconfirmed {
+  const whose = place === null ? name : `${name}, ${place}`
+  return unconfirmedWrite(what, `${whose}. If the ${control} button is still on its row, press it again. If the ${what} went through, the second press says so.`)
+}
+
+/** WHAT EACH ICON-ONLY COPY CONTROL LOOKS LIKE ON ITS ROW, as a reader would say it: the seal's $ for Mark Sold, the hooked arrow for
+ *  undo, and the lidded box for Retire. `unconfirmedCopyWrite` names the control by this, never by its label. Move has no row control
+ *  to name: its no-answer leaves the Move dialog open (`unconfirmedCopyMove`). */
+export const ROW_CONTROL_SEEN = { sale: '$', undo: 'hooked arrow', retire: 'lidded box' } as const
+
+/** THE MOVE OF A NAMED COPY THAT GOT NO ANSWER. The Move dialog stays open, so the body points at its Move button, not at a row
+ *  control. A second press after a committed move is refused by the server, and the body says the card stays where it moved. */
+export function unconfirmedCopyMove(name: string, place: string | null): Unconfirmed {
+  const whose = place === null ? name : `${name}, ${place}`
+  return unconfirmedWrite('move', `${whose}. If the Move dialog is still open, press Move again. If the move already went through, that press is refused and the card stays where it moved.`)
+}
+
+/** THE SALE OF A NAMED CARD: the one pair that Orders (the walk's toast and the pick row's line) and Inventory all say. */
+export function unconfirmedSale(name: string, place: string | null): Unconfirmed {
+  return unconfirmedCopyWrite('sale', name, place, ROW_CONTROL_SEEN.sale)
+}
+
+/** THE UNDO OF THE SALE OF A NAMED CARD. */
+export function unconfirmedSaleUndo(name: string, place: string | null): Unconfirmed {
+  return unconfirmedCopyWrite('undo', name, place, ROW_CONTROL_SEEN.undo)
+}
+
+/** A PRESS ON A LIST (an order, a line, a backlog) THAT GOT NO ANSWER: "<act> for <subject>", and to press it again. The list is read
+ *  again after every write (`afterWrite`), so it shows what the store holds. A notice draws the title and the body as two elements.
+ *  This one is for a button whose label changes with the press (a count): it names the button as it says now. */
+export function unconfirmedButtonSays(label: string, subject: string): Unconfirmed {
+  return { title: `The store did not confirm ${label} for ${subject}`, body: `If the button still says ${label}, press it again.` }
+}
+
+/** The other form, for a control that is on the list or gone: `where` is the control to look for, and is the act's own label unless
+ *  the act is a choice made inside it (a reason under "Stand down this order"). */
+export function unconfirmedStillThere(act: string, subject: string, where: string = act): Unconfirmed {
+  return { title: `The store did not confirm ${act} for ${subject}`, body: `If ${where} is still there, press it again.` }
+}
+
+/** THE STAND-DOWN OF A COUNT OF ORDERS (`orders` is "1 shipped order", "2 old orders"), by the one button that names that count. */
+export function unconfirmedStandDown(orders: string, button: string): Unconfirmed {
+  return { title: `The store did not confirm that ${orders} stood down`, body: `If the button still says ${button}, press it again.` }
+}
+
+/** THE UNDO OF A LIST WRITE, PRESSED ON ITS RECEIPT: the body names the receipt it undoes and the control to look for. `receipt` is the
+ *  receipt's title as it was drawn. */
+export function unconfirmedListUndo(receipt: string, label: string): Unconfirmed {
+  return unconfirmedWrite('undo', `${receipt}. If ${label} is back, the undo went through.`)
+}
+
+/** THE UNDO OF A LIST PRESS WHOSE CONTROL IS ITSELF AN UNDO (the claim of a sealed product withdrawn): `label` is what the press
+ *  put there, and is looked for. */
+export function unconfirmedPressUndo(subject: string, label: string): Unconfirmed {
+  return unconfirmedWrite(`undo for ${subject}`, `If ${label} is not back, press Undo again.`)
+}
+
+/** A PASTE OR A FETCH THAT GOT NO ANSWER: the list shows what the store holds now. */
+export function unconfirmedListRead(thing: string): Unconfirmed {
+  return unconfirmedWrite(thing, 'The list shows what the store holds now.')
+}
+
+/** WHAT THE PRICING SCREEN SAYS OF A WRITE THAT GOT NO ANSWER. The fields are not read back (only the clear lists are), so for an undo,
+ *  a restore or a clear the page is the place to see what the file holds. */
+const RELOAD_FOR_PRICES = 'Reload the page to see the prices the store holds now.'
+
+/** An autosave of a typed price. True whether or not the file holds the price, because the field shows what was typed either way. */
+export function unconfirmedPriceSave(): Unconfirmed {
+  return unconfirmedWrite('price save', 'The price field shows what you typed. Change it to try the save again.')
+}
+
+/** The code of the failure a Send holds when the save before it got no answer (`gotNoAnswer`), so its title is the line below. */
+export const UNCONFIRMED_SAVE_CODE = 'answers_unconfirmed'
+
+/** A Send pressed after such a save: nothing was sent, and the field is what to change. Drawn as one line (`unconfirmedLine`). */
+export function unconfirmedPriceSaveAtSend(): Unconfirmed {
+  return { title: 'The store did not confirm your last price save', body: 'Change the field to save it again before you send.' }
+}
+
+/** A Clear Typed Prices press. */
+export function unconfirmedClear(): Unconfirmed {
+  return unconfirmedWrite('clear', RELOAD_FOR_PRICES)
+}
+
+/** The Undo on a Clear's toast. */
+export function unconfirmedPriceUndo(): Unconfirmed {
+  return unconfirmedWrite('undo', RELOAD_FOR_PRICES)
+}
+
+/** The "Restore N cleared" press: `count` is the figure its button draws. */
+export function unconfirmedRestore(count: number): Unconfirmed {
+  return unconfirmedWrite('restore', `If Restore ${count} cleared is still on the page, press it again. If it is gone, reload the page to see the prices.`)
+}
+
+/** A failure a screen holds, with the pair of a write that got no answer in place of the server's own. `said` is a function so a
+ *  refusal builds nothing. The pair travels as `title` and `message` (`failureParts` reads it). */
+export function noAnswerFailure(err: unknown, said: () => Unconfirmed): Failure {
+  const trouble = describeFailure(err)
+  if (!gotNoAnswer(err)) return trouble
+  const pair = said()
+  return { ...trouble, title: pair.title, message: pair.body }
+}
+
+/** A toast for a write that failed: the pair when no answer came back, the server's own (`refusalToast`) otherwise. */
+export function noAnswerToast(err: unknown, said: () => Unconfirmed) {
+  if (!gotNoAnswer(err)) return refusalToast(err)
+  const pair = said()
+  return { kind: 'refusal' as const, tone: failureTone(describeFailure(err)), title: pair.title, body: pair.body }
+}
+
+/** What a screen draws of a failure it holds: a failure that carries a `title` (a write that got no answer) has a title and a body;
+ *  any other is its sentence as the title, with no body. */
+export function failureParts(failure: { readonly title?: string; readonly message: string }): { title: string; body: string | null } {
+  return failure.title === undefined ? { title: failure.message, body: null } : { title: failure.title, body: failure.message }
 }
 
 /** A rate limit from Card Ladder is a "no" until tomorrow, even though it arrives as a 429, so no second press is offered. */

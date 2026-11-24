@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 
 import { Icon, type IconName } from './Icon'
 import { Button, Notice, Segmented } from './index'
-import { describeFailure, failureTone, type Failure } from '../server'
+import { describeFailure, failureParts, failureTone, type Failure } from '../server'
 
 /* THE SETTINGS SHEET'S PARTS (D275, every screen inherits the scaffold; the owner: "Kit first").
  * Manage box was the first sheet built as rows of one-line settings that each open an editor, and
@@ -50,10 +50,23 @@ export function useSheetWrite(onChanged?: () => void): {
   return { busy, trouble, write }
 }
 
-/** The refusal panel: the server's sentence, then the greppable code beneath it. */
-export function SettingsTrouble({ failure }: { failure: Failure | null }) {
+/** The refusal panel: the server's sentence, then the greppable code beneath it. A write that got no answer (`failureParts`) draws its
+ *  title and then its body. `children` follow the body: a press that answers the failure. */
+export function SettingsTrouble({ failure, compact, children }: { failure: Failure | null; compact?: boolean; children?: ReactNode }) {
   if (failure === null) return null
-  return <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />
+  const said = failureParts(failure)
+  /* `Notice` draws its body block for any truthy `children`, and an array is always truthy: an empty body would still take a box. */
+  const hasBody = said.body !== null || (children !== undefined && children !== null && children !== false)
+  return (
+    <Notice tone={failureTone(failure)} title={said.title} code={failure.code} compact={compact}>
+      {hasBody ? (
+        <>
+          {said.body}
+          {children}
+        </>
+      ) : null}
+    </Notice>
+  )
 }
 
 /** One titled group of rows: a small head, an optional quieter note beside it, and the rows on one

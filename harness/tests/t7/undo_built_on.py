@@ -1802,6 +1802,31 @@ def check_undo_still_here_on_refused_holder(checks: Checks) -> None:
         _still_here_recovery(checks, "SH-STOOD", "a stood-down line")
 
 
+def check_move_again_after_a_committed_move(checks: Checks) -> None:
+    """A SECOND MOVE OF A COPY THAT ALREADY MOVED, aimed with the capture id the copy carried. The committed move cleared that id from
+    the tombstone (`store/master.py`'s `move_card`), so `do_move_card` refuses on the aim before it reads the state. The sentence says
+    nothing was moved, and it is the one inventory.spec's Move-again toast draws (MOVED_AIM_REFUSAL)."""
+    with isolated_home():
+        capture_server.do_capture(capture_payload(6, capture_id="cap-61"))
+        capture_server.do_capture(capture_payload(7))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, **back_of(7)})
+        refused = _refusal_text(
+            lambda: capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, **back_of(7)})
+        )
+        checks.equal(
+            refused and refused[0],
+            "capture_id_mismatch",
+            "UN-14: a second Move aimed at the copy's own capture id is refused on the aim, not read as a move",
+        )
+        checks.equal(
+            refused and refused[1],
+            "The card at Box 1, Section 1, Card 1 is not the one this request was aimed at. The box has probably shifted since it was "
+            "loaded. Reload the box and try again; nothing was moved.",
+            "UN-14: the refusal's sentence, as the server words it",
+        )
+
+
 CHECKS = (
     check_undo_until_built_on,
     check_undo_order_shipped_before_sale,
@@ -1815,4 +1840,5 @@ CHECKS = (
     check_undo_refused_claimed_label_then_canceled,
     check_undo_allowed_reingested_pre_ship_then_canceled,
     check_undo_still_here_on_refused_holder,
+    check_move_again_after_a_committed_move,
 )

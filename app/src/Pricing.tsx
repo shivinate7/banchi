@@ -31,6 +31,14 @@ import {
   getPricingCorpus,
   getPricingWorklist,
   gotNoAnswer,
+  UNCONFIRMED_SAVE_CODE,
+  noAnswerFailure,
+  noAnswerToast,
+  unconfirmedLine,
+  unconfirmedPriceSave,
+  unconfirmedPriceSaveAtSend,
+  unconfirmedPriceUndo,
+  unconfirmedRestore,
   keepTicks,
   restoreLastClear,
   restoreClear,
@@ -107,6 +115,7 @@ import {
   Location,
   Money,
   Notice,
+  SettingsTrouble,
   Page,
   Pill,
   Popover,
@@ -822,6 +831,8 @@ function PricingThumb({
  *  retry (the server answers them 409), so no press here can send the prices twice. */
 function shipTroubleTitle(code: string): string {
   switch (code) {
+    case UNCONFIRMED_SAVE_CODE:
+      return unconfirmedLine(unconfirmedPriceSaveAtSend())
     case 'send_unknown':
       return 'TCGplayer did not confirm these prices. Do not send them again. Banchi checks after the wait.'
     case 'send_in_progress':
@@ -997,6 +1008,8 @@ export function Pricing() {
   const savedBook = useRef<PricingCorpus | null>(null)
   const inFlight = useRef(false)
   const failedBook = useRef<PricingCorpus | null>(null)
+  /* THE SAVE THAT FAILED GOT NO ANSWER, so it may have committed: the Send line says so rather than "could not be saved". */
+  const failedUnconfirmed = useRef(false)
   const touched = useRef(new Set<string>())
   const phone = usePhone()
 
@@ -1304,7 +1317,10 @@ export function Pricing() {
         setFailure(null)
       } catch (err) {
         failedBook.current = sent
-        setFailure(describeFailure(err))
+        /* A 5xx or a lost connection may have committed the save, so "Try again" is not said. The re-read leaves the field as typed
+           whether the file holds that price or not (`refreshCorpus` never replaces the book), so the sentence asks only for a change to the field. */
+        failedUnconfirmed.current = gotNoAnswer(err)
+        setFailure(noAnswerFailure(err, unconfirmedPriceSave))
       } finally {
         inFlight.current = false
         setSaving(false)
@@ -1378,6 +1394,7 @@ export function Pricing() {
   )
 
   const saveFailed = useCallback(() => book !== null && failedBook.current === book, [book])
+  const saveUnconfirmed = useCallback(() => failedUnconfirmed.current, [])
 
   /* THE PRICES THE OWNER TYPED ON THIS WORKLIST, THIS VISIT (round 6). Only these may ride a send
      as a price change. Remembered nowhere, and spent by a send. */
@@ -1643,10 +1660,15 @@ export function Pricing() {
     if (push === 'idle' || stamp === null) return
     if (book !== null && failedBook.current === book) {
       setPush('idle')
-      setShipTrouble({
-        code: 'answers_not_saved',
-        message: 'Your answers could not be saved, so nothing was sent. The next keystroke tries the save again.',
-      })
+      /* A SAVE THAT GOT NO ANSWER MAY HAVE COMMITTED, so the Send line does not say the answers could not be saved: it says what the save toast says (`shipTroubleTitle`). */
+      setShipTrouble(
+        failedUnconfirmed.current
+          ? { code: UNCONFIRMED_SAVE_CODE, message: 'Nothing was sent.' }
+          : {
+              code: 'answers_not_saved',
+              message: 'Your answers could not be saved, so nothing was sent. The next keystroke tries the save again.',
+            },
+      )
       return
     }
     if (dirty || saving || inFlight.current) return
@@ -2795,7 +2817,12 @@ export function Pricing() {
       })
     } catch (err) {
       const trouble = describeFailure(err)
-      toast({ kind: 'refusal', tone: failureTone(trouble), title: 'Not undone', body: trouble.message })
+      /* A 5xx or a lost connection may have put the answers back, so "Not undone" would be false. */
+      toast(
+        gotNoAnswer(err)
+          ? noAnswerToast(err, () => unconfirmedRestore(clear.count))
+          : { kind: 'refusal', tone: failureTone(trouble), title: 'Not undone', body: trouble.message },
+      )
     }
   }, [takeRevision])
 
@@ -2855,7 +2882,8 @@ export function Pricing() {
                   body: restoreSkipBody(back.skipped),
                 })
               } catch (err) {
-                toast({ ...refusalToast(err) })
+                /* A 5xx or a lost connection may have put the answers back, so the server's "Try again" is not said. */
+                toast(noAnswerToast(err, unconfirmedPriceUndo))
               }
             })()
           },
@@ -3263,6 +3291,7 @@ export function Pricing() {
             liveMoves={liveMoves}
             settled={!dirty && !saving && ticksPending === 0}
             saveFailed={saveFailed}
+            saveUnconfirmed={saveUnconfirmed}
             quantities={quantitiesAsked}
             owed={owedTakeOffs}
             onSent={afterSend}
@@ -3361,7 +3390,7 @@ export function Pricing() {
   const status = (
     <>
       {failure === null || table === null ? null : (
-        <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} compact>
+        <SettingsTrouble failure={failure} compact>
           {/* A CONFLICT HAS SOMEWHERE TO GO: the file moved under this screen, and re-reading
               costs what is unsaved, so the press says so. */}
           {failure.code !== 'corpus_moved' ? null : (
@@ -3369,7 +3398,7 @@ export function Pricing() {
               Read the file again, losing what is unsaved here
             </Button>
           )}
-        </Notice>
+        </SettingsTrouble>
       )}
       {(work?.skipped ?? []).length === 0 ? null : (
         <Notice tone="warn" compact title={`${(work?.skipped ?? []).length} ${(work?.skipped ?? []).length === 1 ? 'batch' : 'batches'} could not be read, and ${(work?.skipped ?? []).length === 1 ? 'is' : 'are'} left out of this list.`} />

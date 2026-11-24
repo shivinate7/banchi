@@ -26,7 +26,7 @@ import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
 import { isEditableTarget } from './keys'
 import { MarkSoldButton, UndoSaleButton, markFreshSale, clearFreshSale, noteUndoPressedBy } from './CardLocations'
-import { ALREADY_SOLD, COPY_ALREADY_PULLED, SALE_BUILT_ON, describeFailure, failureTone, photoUrl, walkPlan } from './server'
+import { ALREADY_SOLD, COPY_ALREADY_PULLED, SALE_BUILT_ON, describeFailure, failureGotNoAnswer, failureTone, photoUrl, unconfirmedSale, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
   InventoryCard,
@@ -63,11 +63,14 @@ export type WalkPullFn = (args: {
   readonly refresh: readonly PullRefresh[]
 }) => Promise<WalkPullOutcome>
 
+/** `place` is where the copy was sold; `rowPlace` is where its row draws it now (a later sale may have renumbered the
+ *  section), the place a no-answer undo body points the reader to. */
 export type WalkUndoFn = (
   target: PullTarget,
   place: string,
   name: string,
   refresh: readonly PullRefresh[],
+  rowPlace: string,
 ) => Promise<WalkUndoOutcome>
 
 /** A take's `for` names every order sharing it, and `ref.owed` is what it still wants: the plan's own figure,
@@ -392,6 +395,8 @@ type LineSale = {
   gone: boolean
   readonly onUndo: WalkUndoFn
   readonly refresh: () => readonly PullRefresh[]
+  /** The place label the copy's row draws now, off the walk's current state, or null when the copy is gone from it. */
+  readonly rowPlace: () => string | null
 }
 
 /** One write waiting its turn. Presses, undos and a toast's Undo share one line, so the server never hears two
@@ -505,7 +510,7 @@ async function runSell(job: Extract<Job, { kind: 'sell' }>): Promise<void> {
     /* THE SERVER'S REFUSAL IS SAID HERE, once per write, even after the screen was left (the toast stack is
        the app's, and a refusal that reaches nobody did not happen, D171). `onWalkPull` also sets the screen's
        one failure line, but the next write in the line clears that before it can be read. */
-    toast({ kind: 'refusal', tone: failureTone(outcome.failure), title: `Not marked sold: ${sale.name}`, body: outcome.failure.message })
+    toast(saleNotMarkedToast(sale.name, job.placeLabel, outcome.failure))
     /* ANOTHER TAB SOLD OR PULLED THIS COPY (undo.md §3): the row reads Sold with no button, not Mark sold over a card
        that is gone. Any other refusal puts the row back to what it was. */
     if (outcome.failure.code === ALREADY_SOLD || outcome.failure.code === COPY_ALREADY_PULLED) {
@@ -524,6 +529,18 @@ async function runSell(job: Extract<Job, { kind: 'sell' }>): Promise<void> {
   setLineBusy(null)
 }
 
+/** THE TOAST FOR A SALE THAT DID NOT COME BACK MARKED. A refusal is the server's "no" and keeps its sentence. A 5xx or a lost connection
+ *  may have committed the sale, so "Not marked sold" would be false: it says the store did not confirm it (`unconfirmedSale`, the one
+ *  pair `Orders.tsx` also puts on its pick row's line). `place` is the pre-write label. */
+function saleNotMarkedToast(name: string, place: string | null, failure: Failure) {
+  const tone = failureTone(failure)
+  if (failureGotNoAnswer(failure)) {
+    const said = unconfirmedSale(name, place === null ? null : sayPlace(place))
+    return { kind: 'refusal' as const, tone, title: said.title, body: said.body }
+  }
+  return { kind: 'refusal' as const, tone, title: `Not marked sold: ${name}`, body: failure.message }
+}
+
 async function runUndo(job: Extract<Job, { kind: 'undo' }>): Promise<void> {
   const { sale } = job
   /* A reversal made elsewhere while this one waited has already taken the sale: nothing left to reverse. */
@@ -531,7 +548,7 @@ async function runUndo(job: Extract<Job, { kind: 'undo' }>): Promise<void> {
   setLineBusy(sale.copyKey)
   let outcome: WalkUndoOutcome
   try {
-    outcome = await sale.onUndo(sale.target, sale.place, sale.name, sale.refresh())
+    outcome = await sale.onUndo(sale.target, sale.place, sale.name, sale.refresh(), sale.rowPlace() ?? sale.place)
   } catch {
     outcome = { ok: false }
   }
@@ -557,7 +574,7 @@ function settleAfterThrow(job: Job, err: unknown): void {
   const trouble = describeFailure(err)
   if (job.kind === 'sell') {
     clearFreshSale(sale.copyKey)
-    toast({ kind: 'refusal', tone: failureTone(trouble), title: `Not marked sold: ${sale.name}`, body: trouble.message })
+    toast(saleNotMarkedToast(sale.name, job.placeLabel, trouble))
     dropLineSale(sale)
   } else {
     if (lineSales.get(sale.copyKey) === sale) lineSales.delete(sale.copyKey)
@@ -894,6 +911,8 @@ export function useOrderWalk({
   }, [plan])
 
   const [facts, setFacts] = useState<ReadonlyMap<string, Place>>(new Map())
+  const factsNow = useRef(facts)
+  factsNow.current = facts
   /* A WALK MOUNTED AFTER A PRESS (the router remounts the screen on every route change) STARTS FROM WHAT THE
      PAGE'S LINE STILL HOLDS: its rows draw those sales as sold and their Undo works. */
   const [receipts, setReceipts] = useState<ReadonlyMap<string, Receipt>>(lineReceipts)
@@ -1025,6 +1044,17 @@ export function useOrderWalk({
     return out
   }
 
+  /** THE PLACE LABEL A COPY'S ROW DRAWS NOW: the place the first sale's answer gave it (`facts`), else the plan's own. */
+  const rowPlaceOf = (copyKey: string): string | null => {
+    for (const stop of planNow.current?.stops ?? []) {
+      for (const take of stop.takes) {
+        const copy = take.copies.find((candidate) => candidate.key === copyKey)
+        if (copy !== undefined) return (factsNow.current.get(copyKey) ?? copy.place).label
+      }
+    }
+    return null
+  }
+
   const absorb = (blocks: readonly Place[]) => {
     if (blocks.length === 0) return
     setFacts((prev) => {
@@ -1139,6 +1169,7 @@ export function useOrderWalk({
       gone: false,
       onUndo,
       refresh: () => staleAfter(target.box, copy.key),
+      rowPlace: () => rowPlaceOf(copy.key),
     }
     commitReceipts(new Map(receiptsRef.current).set(copy.key, receiptOf(sale)))
     /* THE SALE IS NOTED HERE, not in the button: a digit key reaches this too, and its Undo plays the burst. */
@@ -1180,6 +1211,7 @@ export function useOrderWalk({
       gone: false,
       onUndo,
       refresh: () => staleAfter(receipt.target.box, copyKey),
+      rowPlace: () => rowPlaceOf(copyKey),
     })
     undoWalkSale({ copyKey })
   }
