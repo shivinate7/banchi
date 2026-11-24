@@ -1760,19 +1760,48 @@ test('a sale the server answers with a 4xx keeps the server sentence', async ({ 
    and its body are two elements, so each is pinned on its own. The card is Volcanion, at Box 3, Section 2, Card 17. */
 const PLACE = 'Box 3, Section 2, Card 17'
 const SALE_TITLE = 'The store did not confirm the sale'
-const SALE_BODY = `Volcanion, ${PLACE}. If Mark Sold is still on its row, press it again. If the sale went through, the second press says so.`
+const SALE_BODY = `Volcanion, ${PLACE}. If the $ button is still on its row, press it again. If the sale went through, the second press says so.`
 const UNDO_TITLE = 'The store did not confirm the undo'
-const UNDO_BODY = `Volcanion, ${PLACE}. If Undo is still on its row, press it again. If the undo went through, the second press says so.`
-const FILL_NOT_CONFIRMED = 'The store did not confirm Shipped This by Hand for Volcanion. If the button still says Shipped This by Hand, press it again.'
-const KIND_NOT_CONFIRMED = 'The store did not confirm Sealed Product for Volcanion. If Sealed Product is still there, press it again.'
-const CLOSE_NOT_CONFIRMED = "The store did not confirm It Isn't Shipping for Volcanion. If It Isn't Shipping is still there, press it again."
-const STAND_DOWN_ORDER_NOT_CONFIRMED =
-  'The store did not confirm Cancelled or Refunded for order B58DDD-24C44. If Stand down this order is still there, press it again.'
-const STAND_DOWN_NOT_CONFIRMED =
-  'The store did not confirm that 1 shipped order stood down. If the button still says Stand down 1 shipped order, press it again.'
-const RECONCILE_NOT_CONFIRMED =
-  'The store did not confirm that 2 old orders stood down. If the button still says Stand down 2 orders, press it again.'
+const UNDO_BODY = `Volcanion, ${PLACE}. If the ↺ button is still on its row, press it again. If the undo went through, the second press says so.`
+/* A LIST WRITE THAT GOT NO ANSWER: its notice draws the title and the body as two elements, as a toast does (`expectSaidInNotice`). */
+type Said = { readonly title: string; readonly body: string }
+const FILL_NOT_CONFIRMED: Said = {
+  title: 'The store did not confirm Shipped This by Hand for Volcanion',
+  body: 'If the button still says Shipped This by Hand, press it again.',
+}
+const KIND_NOT_CONFIRMED: Said = {
+  title: 'The store did not confirm Sealed Product for Volcanion',
+  body: 'If Sealed Product is still there, press it again.',
+}
+const CLOSE_NOT_CONFIRMED: Said = {
+  title: "The store did not confirm It Isn't Shipping for Volcanion",
+  body: "If It Isn't Shipping is still there, press it again.",
+}
+const STAND_DOWN_ORDER_NOT_CONFIRMED: Said = {
+  title: 'The store did not confirm Cancelled or Refunded for order B58DDD-24C44',
+  body: 'If Stand down this order is still there, press it again.',
+}
+const STAND_DOWN_NOT_CONFIRMED: Said = {
+  title: 'The store did not confirm that 1 shipped order stood down',
+  body: 'If the button still says Stand down 1 shipped order, press it again.',
+}
+const RECONCILE_NOT_CONFIRMED: Said = {
+  title: 'The store did not confirm that 2 old orders stood down',
+  body: 'If the button still says Stand down 2 orders, press it again.',
+}
 const LIST_UNDO_TITLE = 'The store did not confirm the undo'
+
+/** A list write's title and its body, each on its own element of the notice. The title is exact, so it cannot carry the body sentence;
+ *  the body is exact too. The first check finds the title on the page, so a page without it fails there and not on a missing element. */
+async function expectSaidInNotice(page: Page, said: Said, why: string): Promise<void> {
+  await expect(page.getByText(said.title, { exact: false }).first(), `${why}: the title is on the screen`).toBeVisible()
+  const notice = page.locator('.bn-notice').filter({ has: page.locator('.bn-notice-title', { hasText: said.title }) }).first()
+  await expect(
+    notice.locator('.bn-notice-title'),
+    `${why}: the notice's title names what the store did not confirm, and holds no body sentence`,
+  ).toHaveText(said.title)
+  await expect(notice.locator('.bn-notice-body'), `${why}: the body says what to press, in its own element`).toHaveText(said.body)
+}
 const SERVER_500_ANSWER = { status: 500, code: 'server_error', message: SERVER_500 }
 const REFUSED_ANSWER = { status: 409, code: 'refused', message: 'The store refused that write.' }
 
@@ -1828,7 +1857,7 @@ test('a sale the server answers with a 5xx says the store did not confirm it onc
     'the walk says the sale once: the toast title, with no second line on the screen repeating it',
   ).toHaveCount(1)
   await expect(
-    page.getByText('If Mark Sold is still on its row', { exact: false }),
+    page.getByText('If the $ button is still on its row', { exact: false }),
     'the press-again sentence is said once, in the toast body',
   ).toHaveCount(1)
 })
@@ -1884,10 +1913,7 @@ test('a hand shipment the server answers with a 5xx after it committed says the 
   await stand.getByRole('button', { name: /shipped/i }).click()
   await expect.poll(() => wire.filter((one) => one.path === '/orders/fill').length, { message: 'the hand shipment reached the server' }).toBe(1)
 
-  await expect(
-    page.getByText(FILL_NOT_CONFIRMED).first(),
-    'a 5xx after the hand shipment may have committed, so the list must say the store did not confirm it',
-  ).toBeVisible()
+  await expectSaidInNotice(page, FILL_NOT_CONFIRMED, 'a 5xx after the hand shipment may have committed, so the list must say the store did not confirm it')
 })
 
 test('a hand shipment the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
@@ -1900,7 +1926,7 @@ test('a hand shipment the server refuses with a 4xx keeps the server sentence', 
   await expect.poll(() => wire.filter((one) => one.path === '/orders/fill').length, { message: 'the hand shipment reached the server' }).toBe(1)
 
   await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on screen').toBeVisible()
-  await expect(page.getByText(FILL_NOT_CONFIRMED), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+  await expect(page.getByText(FILL_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
 })
 
 test('a sealed-product claim the server answers with a 5xx after it committed says the store did not confirm the sealed product', async ({
@@ -1914,10 +1940,7 @@ test('a sealed-product claim the server answers with a 5xx after it committed sa
   await stand.getByRole('button', { name: 'Sealed Product' }).click()
   await expect.poll(() => wire.filter((one) => one.path === '/orders/line-kind').length, { message: 'the claim reached the server' }).toBe(1)
 
-  await expect(
-    page.getByText(KIND_NOT_CONFIRMED).first(),
-    'a 5xx after the claim may have committed, so the list must say the store did not confirm it',
-  ).toBeVisible()
+  await expectSaidInNotice(page, KIND_NOT_CONFIRMED, 'a 5xx after the claim may have committed, so the list must say the store did not confirm it')
 })
 
 test('a sealed-product claim the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
@@ -1930,7 +1953,7 @@ test('a sealed-product claim the server refuses with a 4xx keeps the server sent
   await expect.poll(() => wire.filter((one) => one.path === '/orders/line-kind').length, { message: 'the claim reached the server' }).toBe(1)
 
   await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on screen').toBeVisible()
-  await expect(page.getByText(KIND_NOT_CONFIRMED), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+  await expect(page.getByText(KIND_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
 })
 
 /** One unseen line already claimed as sealed: the one line the "Undo: not sealed" press is drawn for. */
@@ -1945,7 +1968,10 @@ function sealedClaimOrder(): OrdersPayload {
   )
 }
 
-const KIND_UNDO_NOT_CONFIRMED = 'The store did not confirm the undo for Volcanion. If Sealed Product is not back, press Undo again.'
+const KIND_UNDO_NOT_CONFIRMED: Said = {
+  title: 'The store did not confirm the undo for Volcanion',
+  body: 'If Sealed Product is not back, press Undo again.',
+}
 
 test('an Undo of a sealed claim the server answers with a 5xx says the store did not confirm the undo, and what to press', async ({ page }) => {
   const wire = await open(page, { orders: sealedClaimOrder() })
@@ -1960,10 +1986,7 @@ test('an Undo of a sealed claim the server answers with a 5xx says the store did
     'the undo of a claim sends no kind',
   ).toBeNull()
 
-  await expect(
-    page.getByText(KIND_UNDO_NOT_CONFIRMED, { exact: true }).first(),
-    'a 5xx after the undo may have cleared the claim, so the list must say the store did not confirm it, and what to press',
-  ).toBeVisible()
+  await expectSaidInNotice(page, KIND_UNDO_NOT_CONFIRMED, 'a 5xx after the undo may have cleared the claim, so the list must say the store did not confirm it, and what to press')
 })
 
 test('an Undo of a sealed claim the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
@@ -1976,7 +1999,7 @@ test('an Undo of a sealed claim the server refuses with a 4xx keeps the server s
   await expect.poll(() => wire.filter((one) => one.path === '/orders/line-kind').length, { message: 'the undo of the claim reached the server' }).toBe(1)
 
   await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on screen').toBeVisible()
-  await expect(page.getByText(KIND_UNDO_NOT_CONFIRMED), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+  await expect(page.getByText(KIND_UNDO_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
 })
 
 test('a line closed as not shipping the server answers with a 5xx after it committed says the store did not confirm the not-shipping close', async ({
@@ -1990,10 +2013,7 @@ test('a line closed as not shipping the server answers with a 5xx after it commi
   await stand.getByRole('button', { name: /It Isn.t Shipping/ }).click()
   await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length, { message: 'the close reached the server' }).toBe(1)
 
-  await expect(
-    page.getByText(CLOSE_NOT_CONFIRMED).first(),
-    'a 5xx after the close may have committed, so the list must say the store did not confirm it',
-  ).toBeVisible()
+  await expectSaidInNotice(page, CLOSE_NOT_CONFIRMED, 'a 5xx after the close may have committed, so the list must say the store did not confirm it')
 })
 
 test('a line closed as not shipping the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
@@ -2006,7 +2026,7 @@ test('a line closed as not shipping the server refuses with a 4xx keeps the serv
   await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length, { message: 'the close reached the server' }).toBe(1)
 
   await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on screen').toBeVisible()
-  await expect(page.getByText(CLOSE_NOT_CONFIRMED), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+  await expect(page.getByText(CLOSE_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
 })
 
 test('the backlog stand-down the server answers with a 5xx after it committed says the store did not confirm the stand-down', async ({
@@ -2026,10 +2046,7 @@ test('the backlog stand-down the server answers with a 5xx after it committed sa
   await prompt.getByRole('button', { name: /Stand down/ }).click()
   await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length, { message: 'the stand-down reached the server' }).toBe(1)
 
-  await expect(
-    page.getByText(STAND_DOWN_NOT_CONFIRMED).first(),
-    'a 5xx after the stand-down may have committed, so the list must say the store did not confirm it',
-  ).toBeVisible()
+  await expectSaidInNotice(page, STAND_DOWN_NOT_CONFIRMED, 'a 5xx after the stand-down may have committed, so the list must say the store did not confirm it')
 })
 
 test('the backlog stand-down the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
@@ -2048,7 +2065,7 @@ test('the backlog stand-down the server refuses with a 4xx keeps the server sent
   await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length, { message: 'the stand-down reached the server' }).toBe(1)
 
   await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on screen').toBeVisible()
-  await expect(page.getByText(STAND_DOWN_NOT_CONFIRMED), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+  await expect(page.getByText(STAND_DOWN_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
 })
 
 test('the stand-down of one order the server answers with a 5xx after it committed says the store did not confirm the stand-down', async ({
@@ -2062,10 +2079,7 @@ test('the stand-down of one order the server answers with a 5xx after it committ
   await sheet.locator('.bn-set-group-danger').getByRole('button', { name: 'Stand down this order: cancelled or refunded' }).click()
   await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length, { message: 'the stand-down reached the server' }).toBe(1)
 
-  await expect(
-    page.getByText(STAND_DOWN_ORDER_NOT_CONFIRMED, { exact: true }).first(),
-    'a 5xx after the stand-down may have committed, so the sheet must say the store did not confirm it',
-  ).toBeVisible()
+  await expectSaidInNotice(page, STAND_DOWN_ORDER_NOT_CONFIRMED, 'a 5xx after the stand-down may have committed, so the sheet must say the store did not confirm it')
 })
 
 test('the stand-down of one order the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
@@ -2078,8 +2092,8 @@ test('the stand-down of one order the server refuses with a 4xx keeps the server
   await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length, { message: 'the stand-down reached the server' }).toBe(1)
 
   await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on screen').toBeVisible()
-  await expect(page.getByText(STAND_DOWN_ORDER_NOT_CONFIRMED), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
-  await expect(page.getByText(STAND_DOWN_NOT_CONFIRMED), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+  await expect(page.getByText(STAND_DOWN_ORDER_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+  await expect(page.getByText(STAND_DOWN_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
 })
 
 test('the backlog reconcile the server answers with a 5xx after it committed says the store did not confirm the backlog stand-down', async ({
@@ -2093,10 +2107,7 @@ test('the backlog reconcile the server answers with a 5xx after it committed say
   await panel.getByRole('button', { name: 'Stand down 2 orders' }).click()
   await expect.poll(() => wire.filter((one) => one.path === '/orders/reconcile-backlog' && (one.body as { preview?: boolean }).preview !== true).length, { message: 'the reconcile press reached the server' }).toBe(1)
 
-  await expect(
-    page.getByText(RECONCILE_NOT_CONFIRMED).first(),
-    'a 5xx after the reconcile may have committed, so the panel must say the store did not confirm it',
-  ).toBeVisible()
+  await expectSaidInNotice(page, RECONCILE_NOT_CONFIRMED, 'a 5xx after the reconcile may have committed, so the panel must say the store did not confirm it')
 })
 
 test('the backlog reconcile the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
@@ -2109,7 +2120,7 @@ test('the backlog reconcile the server refuses with a 4xx keeps the server sente
   await expect.poll(() => wire.filter((one) => one.path === '/orders/reconcile-backlog' && (one.body as { preview?: boolean }).preview !== true).length, { message: 'the reconcile press reached the server' }).toBe(1)
 
   await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on screen').toBeVisible()
-  await expect(page.getByText(RECONCILE_NOT_CONFIRMED), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+  await expect(page.getByText(RECONCILE_NOT_CONFIRMED.title, { exact: false }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
 })
 
 /* THE RECEIPT'S UNDO OF A HAND FILL, OR OF A STAND-DOWN OR CLOSE (`undoFill`, `reopenOrders`, `reopenLines`, the toast's own press): a 5xx
@@ -2324,10 +2335,7 @@ test('a hand fill the server answers with a 5xx on an open line keeps its button
   await stand.getByRole('button', { name: /shipped/i }).click()
   await expect.poll(() => wire.filter((one) => one.path === '/orders/fill').length, { message: 'the hand fill reached the server' }).toBe(1)
 
-  await expect(
-    page.getByText(FILL_NOT_CONFIRMED, { exact: true }).first(),
-    'the line names the button and the card, so the reader knows what to press again',
-  ).toBeVisible()
+  await expectSaidInNotice(page, FILL_NOT_CONFIRMED, 'the line names the button and the card, so the reader knows what to press again')
   await expect(
     stand.getByRole('button', { name: 'Shipped This by Hand' }),
     'the line says press it again if the button still says so, so the button must still be on screen',
@@ -2357,18 +2365,15 @@ test('a hand fill the server answers with a 5xx after it committed takes its but
   await stand.getByRole('button', { name: /shipped/i }).click()
   await expect.poll(() => wire.filter((one) => one.path === '/orders/fill').length, { message: 'the hand fill reached the server' }).toBe(1)
 
-  await expect(
-    page.getByText(FILL_NOT_CONFIRMED, { exact: true }).first(),
-    'a fill that committed still leaves the line saying the store did not confirm it',
-  ).toBeVisible()
+  await expectSaidInNotice(page, FILL_NOT_CONFIRMED, 'a fill that committed still leaves the line saying the store did not confirm it')
   await expect(
     page.getByRole('button', { name: 'Shipped This by Hand' }),
     'the read after the write found nothing left to ship, so the button is gone and cannot be pressed a second time',
   ).toHaveCount(0)
 })
 
-const PASTE_NOT_CONFIRMED = 'The store did not confirm the paste. The list shows what the store holds now.'
-const FETCH_NOT_CONFIRMED = 'The store did not confirm the fetch. The list shows what the store holds now.'
+const PASTE_NOT_CONFIRMED: Said = { title: 'The store did not confirm the paste', body: 'The list shows what the store holds now.' }
+const FETCH_NOT_CONFIRMED: Said = { title: 'The store did not confirm the fetch', body: 'The list shows what the store holds now.' }
 
 test('a paste the server answers with a 5xx says the store did not confirm the paste, and what the list holds now', async ({ page }) => {
   const wire = await open(page, { orders: unseenLineOrder() })
@@ -2385,7 +2390,7 @@ test('a paste the server answers with a 5xx says the store did not confirm the p
   await page.locator('.orders-paste').getByRole('button', { name: 'Read this paste' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/ingest')).length, { message: 'the paste reached the server' }).toBe(1)
 
-  await expect(page.getByText(PASTE_NOT_CONFIRMED, { exact: true }).first(), 'a 5xx after the paste may have written the orders, so the list is the place to look').toBeVisible()
+  await expectSaidInNotice(page, PASTE_NOT_CONFIRMED, 'a 5xx after the paste may have written the orders, so the list is the place to look')
   await expect(page.getByText(SERVER_500, { exact: true }), 'the generic server sentence is not an answer about the paste').toHaveCount(0)
 })
 
@@ -2396,7 +2401,7 @@ test('a fetch the server answers with a 5xx says the store did not confirm the f
   await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length, { message: 'the fetch reached the server' }).toBe(1)
 
-  await expect(page.getByText(FETCH_NOT_CONFIRMED, { exact: true }).first(), 'a 5xx after the fetch may have written the orders, so the list is the place to look').toBeVisible()
+  await expectSaidInNotice(page, FETCH_NOT_CONFIRMED, 'a 5xx after the fetch may have written the orders, so the list is the place to look')
   await expect(page.getByText(SERVER_500, { exact: true }), 'the generic server sentence is not an answer about the fetch').toHaveCount(0)
 })
 

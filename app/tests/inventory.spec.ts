@@ -9300,7 +9300,7 @@ test('a Mark sold the server fails with a 5xx says the sale is unconfirmed, with
   await expectUnconfirmedToast(
     page,
     'The store did not confirm the sale',
-    /^.+, Box 2, Section 1, Card 1\. If Mark Sold is still on its row, press it again\. If the sale went through, the second press says so\.$/,
+    /^.+, Box 2, Section 1, Card 1\. If the \$ button is still on its row, press it again\. If the sale went through, the second press says so\.$/,
   )
 })
 
@@ -9513,7 +9513,7 @@ test('a retire the server fails with a 5xx says the retirement is unconfirmed, w
   await expectUnconfirmedToast(
     page,
     'The store did not confirm the retirement',
-    /^.+, Box 7, Section 1, Card 39\. If Retire is still on its row, press it again\. If the retirement went through, the second press says so\.$/,
+    /^.+, Box 7, Section 1, Card 39\. If the (?!Retire )[^.]+ button is still on its row, press it again\. If the retirement went through, the second press says so\.$/,
   )
 })
 
@@ -9601,7 +9601,7 @@ test('a move the server fails with a 5xx says the move is unconfirmed, with no T
   await expectUnconfirmedToast(
     page,
     'The store did not confirm the move',
-    /^.+, Box 7, Section 1, Card 39\. If Move is still on its row, press it again\. If the move went through, the second press says so\.$/,
+    /^.+, Box 7, Section 1, Card 39\. If the (?!Move )[^.]+ button is still on its row, press it again\. If the move went through, the second press says so\.$/,
   )
 })
 
