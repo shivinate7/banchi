@@ -1547,7 +1547,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       await reread()
       await rereadStore()
     })()
-  }, [reread, rereadStore, hub.version])
+  }, [reread, rereadStore])
 
   /* ---------------------------------------------------------------------- orders arrive */
 
