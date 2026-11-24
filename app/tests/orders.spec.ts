@@ -2024,6 +2024,48 @@ test('the backlog reconcile the server refuses with a 4xx keeps the server sente
   await expect(page.getByText(RECONCILE_NOT_CONFIRMED), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
 })
 
+/* THE RECEIPT'S UNDO OF A HAND FILL (`undoFill`, the toast's own press): a 5xx after the reversal may have taken the copies back out. */
+const FILL_UNDO_NOT_CONFIRMED = 'The store did not confirm the undo. The list shows what the store holds now.'
+
+/** Presses the hand fill and its receipt's Undo, after the fill has been answered and the receipt is on screen. */
+async function fillThenUndoFromReceipt(page: Page, wire: Wire[]): Promise<void> {
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: /shipped/i }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/fill' && (one.body as { undo?: boolean }).undo !== true).length, { message: 'the hand fill reached the server' }).toBe(1)
+  const undo = page.locator('.bn-toast-receipt button.bn-toast-action')
+  await expect(undo, 'the fill\'s toast offers its Undo').toHaveCount(1)
+  await undo.click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/fill' && (one.body as { undo?: boolean }).undo === true).length, { message: 'the receipt\'s Undo reached the server' }).toBe(1)
+}
+
+test('a hand fill undone from its receipt, which the server answers with a 5xx after it committed, says the store did not confirm the undo', async ({
+  page,
+}) => {
+  const wire = await open(page, { orders: unseenLineOrder() })
+  await answerWhen(page, wire, /\/orders\/fill$/, (body) => body?.undo === true, SERVER_500_ANSWER)
+  await fillThenUndoFromReceipt(page, wire)
+
+  await expect(
+    page.locator('.bn-toast', { hasText: FILL_UNDO_NOT_CONFIRMED }),
+    'a 5xx after the reversal may have taken the copies back out, so the toast says the store did not confirm the undo',
+  ).toBeVisible()
+  await expect(page.getByText(SERVER_500, { exact: true }), 'the generic server sentence is not an answer about the undo').toHaveCount(0)
+})
+
+test('a hand fill undone from its receipt, which the server refuses with a 4xx, keeps the server sentence', async ({ page }) => {
+  const wire = await open(page, { orders: unseenLineOrder() })
+  await answerWhen(page, wire, /\/orders\/fill$/, (body) => body?.undo === true, REFUSED_ANSWER)
+  await fillThenUndoFromReceipt(page, wire)
+
+  await expect(
+    page.locator('.bn-toast', { hasText: REFUSED_ANSWER.message }),
+    'a refusal is the server\'s "no": its own sentence stays in the toast',
+  ).toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: FILL_UNDO_NOT_CONFIRMED }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+})
+
 /* -------------------------------------------------------------------------------------- 6 */
 
 test('a pooled copy is drawn as pooled rather than as a position (D24)', async ({ page }) => {
