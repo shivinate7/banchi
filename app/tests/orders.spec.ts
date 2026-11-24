@@ -5,6 +5,7 @@ import { sealEveryTest, stubStore } from './shell'
 import { line, order, payloadOf, pick, place, progressOf, severalOrders } from './routeFixtures'
 import { afterPaint, settleMotion } from './motionSettled'
 import { closeFilters, openFilters, pickFacet, showDoneOnly, showOpenOnly } from './ordersFilterSheet'
+import { recordSent } from './wireOrder'
 
 /** A real, tiny image `route.fulfill` can hand back for a photo read — `inventory.spec.ts`'s
  *  own constant, copied rather than imported (that file's is private): a PNG would need a
@@ -327,6 +328,9 @@ async function open(
        Mutating a stub AFTER the click is the race this repo has recorded (DEBTS 23) — this
        is the stub answering the press it is handed, which is not that. */
     pull?: unknown | ((body: unknown, call: number) => unknown)
+    /* Answers every `POST /orders/pull` with this refusal or 5xx instead of `pull`. The write is still recorded into `wire`:
+       a 5xx after a commit is a sale the store holds with an answer that says it does not. */
+    pullFailure?: { status: number; code: string; message: string }
     preview?: unknown
     fetched?: unknown
     /* THE ALL-STATUSES, SKIP-KNOWN BODY (`D193`) — the ordinary press on
@@ -381,6 +385,14 @@ async function open(
       path: new URL(route.request().url()).pathname,
       body,
     })
+    if (options.pullFailure !== undefined) {
+      await route.fulfill({
+        status: options.pullFailure.status,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: options.pullFailure.code, message: options.pullFailure.message } }),
+      })
+      return
+    }
     const answer =
       typeof options.pull === 'function'
         ? (options.pull as (body: unknown, call: number) => unknown)(body, pullCalls++)
@@ -1623,6 +1635,83 @@ test('u typed into the buyer search field does not undo the pull', async ({ page
   await expect(page.locator('.bn-toast', { hasText: 'Pull undone' })).toHaveCount(0)
   expect(wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
   await expect(page.getByRole('searchbox', { name: 'Search Buyers' })).toHaveValue('u')
+})
+
+/* A SALE THE SERVER ANSWERS WITH A 5xx. The sale may have committed (D73): the server writes, then fails. The generic 500 text
+   is what the screen was given, and no sentence on it may say the sale failed. Each case presses the card pane's own Mark Sold. */
+const SERVER_500 = 'Something went wrong inside the server. Try again, and if it repeats, restart the app on the Mac.'
+
+test('a sale the server answers with a 5xx after it committed says the store did not confirm it', async ({ page }) => {
+  const wire = await open(page, {
+    pullFailure: { status: 500, code: 'server_error', message: SERVER_500 },
+    walkPlan: walkPlanOf([walkPlanStop()]),
+  })
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length, { message: 'the sale reached the server' })
+    .toBe(1)
+
+  await expect(
+    page.getByText(/^The store did not confirm the sale of Volcanion\./).first(),
+    'a 5xx after the sale may have committed, so the screen must say the store did not confirm it',
+  ).toBeVisible()
+  await expect(
+    page.getByText('Not marked sold', { exact: false }),
+    'the store may hold this sale, so "Not marked sold" is a false sentence',
+  ).toHaveCount(0)
+  await expect(
+    page.getByText(SERVER_500, { exact: true }),
+    'the generic server sentence is not an answer about a sale',
+  ).toHaveCount(0)
+  await expect(
+    page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }),
+    'the copy points the reader at Mark Sold, so that control must be on screen',
+  ).toBeVisible()
+})
+
+test('a sale the server answers with a 5xx is followed by a read of the orders', async ({ page }) => {
+  const wire = await open(page, {
+    pullFailure: { status: 500, code: 'server_error', message: SERVER_500 },
+    walkPlan: walkPlanOf([walkPlanStop()]),
+  })
+  const sent = recordSent(page)
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length, { message: 'the sale reached the server' })
+    .toBe(1)
+  await expect
+    .poll(
+      () => {
+        const at = sent.findIndex((r) => r.method === 'POST' && r.path.endsWith('/orders/pull'))
+        return at >= 0 && sent.slice(at + 1).some((r) => r.method === 'GET')
+      },
+      { message: 'the screen re-reads after every write, whatever its outcome (D73): no GET reached the server after the 5xx pull' },
+    )
+    .toBe(true)
+})
+
+test('a sale the server answers with a 4xx keeps the server sentence', async ({ page }) => {
+  await open(page, {
+    pullFailure: { status: 409, code: 'card_departed', message: 'That card left its box.' },
+    walkPlan: walkPlanOf([walkPlanStop()]),
+  })
+  await page.locator(CURRENT_PICK).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect(
+    page.getByRole('alert').getByText('Not marked sold: Volcanion', { exact: true }),
+    'a refusal keeps the walk\'s own toast title: the server said no to this sale',
+  ).toBeVisible()
+  await expect(
+    page.getByRole('alert').getByText('That card left its box.', { exact: true }),
+    'a refusal is the server\'s "no": its own sentence stays in the toast',
+  ).toBeVisible()
+  await expect(
+    page.getByRole('main').getByText('That card left its box.', { exact: true }),
+    'a refusal is the server\'s "no": its own sentence stays on the screen',
+  ).toBeVisible()
+  await expect(
+    page.getByText(/The store did not confirm/),
+    'a refusal says nothing about the store having failed to confirm',
+  ).toHaveCount(0)
 })
 
 /* -------------------------------------------------------------------------------------- 6 */
