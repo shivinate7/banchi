@@ -3605,7 +3605,7 @@ test('ff-done-undo pressed while another Undo is out reads queued, with its word
   const doneUndo = page.locator('.ff-done-undo')
   await doneUndo.click()
   await expect(doneUndo, 'the press is taken while the other undo is out, so this Undo reads queued').toHaveAttribute('data-busy', 'queued')
-  await expect(view(page).locator('.ff-done'), 'the words name the other undo').toContainText('Waits for the other undo to save.')
+  await expect(view(page).locator('.ff-done'), 'the heading line names the other undo').toContainText('Undo waits for the other undo to save')
   expect(reversals(wire).length, 'no second reversal goes out while the first is out').toBe(1)
 
   held.release()
