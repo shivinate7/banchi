@@ -9287,7 +9287,7 @@ test('a Mark sold the server fails with a 5xx says the sale is unconfirmed, with
   await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
   const toast = page.locator('.bn-toast-refusal')
   await expect(toast.locator('.bn-toast-title'), 'the toast reads the unconfirmed-sale sentence, exactly').toHaveText(
-    'The store did not confirm the sale. If the card is still here, press Mark sold again.',
+    'The store did not confirm the sale. If the card is still here, press Mark Sold again.',
   )
   await expect(toast, 'the toast carries no raw server text').not.toContainText('The store did not answer')
   await expect(toast, 'the toast does not say Try again').not.toContainText('Try again')
