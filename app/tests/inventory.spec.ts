@@ -9191,7 +9191,7 @@ test('and the re-rank is what moves it — the same sale, with the order taken a
  * can fail after it writes), and a refusal still says the screen was behind, so the screen cannot know the copy is
  * unchanged without reading it again. These cases fail the answer to one write on each surface: a sale from the copies
  * list, a sale that committed under a search (where the order must hold still, D313 and D181), a refused sale (where
- * focus must hold too, the PR 1127 and 1132 rules), a box claim from Manage box, and an undo from a card's own menu.
+ * focus must hold too: it stays on the pressed button while that stands, and lands on the row once it is gone), a box claim from Manage box, and an undo from a card's own menu.
  * Each case asserts the write reached the wire, then the read. */
 
 /** THE RE-READ THIS SCREEN MEANS: the walk's own box, `GET /inventory/<n>` (D192). The copies list's `GET /search` is NOT
@@ -9343,7 +9343,7 @@ test('a refused Mark sold is followed by a store re-read', async ({ page }) => {
 })
 
 test('a refused Mark sold that retires the copy leaves focus on its row, never on the body', async ({ page }) => {
-  /* THE PR 1132 FOCUS RULE. A real `card_retired` leaves the copy retired, which draws no Mark sold, so the press that held
+  /* THE RETIRED-REFUSAL FOCUS RULE. A real `card_retired` leaves the copy retired, which draws no Mark sold, so the press that held
      focus is gone and nothing on the row takes it back. The row takes focus (`landStrandedFocus`), never the body. The store
      answers the re-read as the server would: the copy is retired in it, not still on sale. */
   const { store, retire } = sellableStore()
@@ -9361,8 +9361,8 @@ test('a refused Mark sold that retires the copy leaves focus on its row, never o
 })
 
 test('a refused Mark sold that leaves the copy unsold keeps focus on its own button, never on the body', async ({ page }) => {
-  /* THE PR 1127 FOCUS RULE, for a refusal that leaves the copy for sale. The store still draws the copy unsold, so the pressed
-     button stands and keeps focus. The row takes focus only once the button is gone (PR 1132), so this case holds that line. */
+  /* THE KEPT-BUTTON FOCUS RULE, for a refusal that leaves the copy for sale. The store still draws the copy unsold, so the pressed
+     button stands and keeps focus. The row takes focus only once the button is gone, so this case holds that line. */
   await open(page, BOXES, STORE, () => PRICING, () => busyRefusal())
   const markSold = copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ })
 
@@ -9522,8 +9522,8 @@ test('a move the server fails with a 5xx after it committed keeps its row in pla
   await dialog.getByRole('button', { name: 'Move', exact: true }).click()
 
   await expectReadAfter(wire, (entry) => entry.path.endsWith('/move'), 'the 5xx move under a search')
-  /* THE ORDER A SUCCESSFUL MOVE GIVES under this same search, measured on main 4fcfb2250 (the commit's Red-run trailer names the
-     run): the departed row holds, `Box 2, Section 1, Card 1` rises above Section 2's two rows, and the arrival lands last. */
+  /* THE ORDER A SUCCESSFUL MOVE GIVES under this same search: the departed row holds, `Box 2, Section 1, Card 1` rises above
+     Section 2's two rows, and the arrival lands last. */
   await expectHeldUnderSearch(page, before, 'Box 7, Section 1, Card 39', [
     'Box 7, Section 1, Card 38',
     'Was at Box 7, Section 1, Card 39',
