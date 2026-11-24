@@ -2312,6 +2312,73 @@ test('the routing lever reaches join', async ({ page }) => {
   expect((join?.body as { rule?: unknown }).rule).toBeUndefined()
 })
 
+/* ---------------------------------------- the open run after a step
+
+   `settle` re-reads the open run after a step settles. A step the server fails with a 5xx, or refuses, never reaches
+   `settle`, so the screen keeps its picture of the run from before the press. Each case counts the GETs of the open
+   run's own path (`/pipeline/runs/<run>`) sent after the step's POST. The list's own poll is not counted: it runs on a
+   20s timer and would make the count depend on the clock. */
+
+/** The GETs of the open run's own detail the page has sent since this was called. */
+function countRunDetailReads(page: Page): () => number {
+  let reads = 0
+  page.on('request', (request) => {
+    if (request.method() === 'GET' && /^\/pipeline\/runs\/[^/]+$/.test(new URL(request.url()).pathname)) reads += 1
+  })
+  return () => reads
+}
+
+test('a Preview the server fails with a 5xx re-reads the open run', async ({ page }) => {
+  await open(page)
+  await openRun(page)
+  let posts = 0
+  await page.route(/\/pipeline\/runs\/[^/]+\/join$/, async (route) => {
+    posts += 1
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'store_unavailable', message: 'The store did not answer. Try again.' } }),
+    })
+  })
+  const detailReads = countRunDetailReads(page)
+  const before = detailReads()
+  await page.getByRole('button', { name: 'Preview' }).click()
+  await expect.poll(() => posts, 'the Preview reached the server').toBe(1)
+  await expect.poll(detailReads, {
+    message: 'the Preview that failed with a 5xx is followed by a read of the open run: no GET /pipeline/runs/<run> reached the server after it',
+  }).toBeGreaterThan(before)
+})
+
+test('a refused Preview re-reads the open run', async ({ page }) => {
+  await open(page)
+  await openRun(page)
+  let posts = 0
+  await page.route(/\/pipeline\/runs\/[^/]+\/join$/, async (route) => {
+    posts += 1
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'run_busy', message: 'This run is busy with another step. Wait for it to finish.' } }),
+    })
+  })
+  const detailReads = countRunDetailReads(page)
+  const before = detailReads()
+  await page.getByRole('button', { name: 'Preview' }).click()
+  await expect.poll(() => posts, 'the Preview reached the server').toBe(1)
+  await expect.poll(detailReads, {
+    message: 'the refused Preview is followed by a read of the open run: no GET /pipeline/runs/<run> reached the server after it',
+  }).toBeGreaterThan(before)
+})
+
+test('a Preview that succeeds re-reads the open run', async ({ page }) => {
+  await open(page)
+  await openRun(page)
+  const detailReads = countRunDetailReads(page)
+  const before = detailReads()
+  await page.getByRole('button', { name: 'Preview' }).click()
+  await expect.poll(detailReads, { message: 'a successful Preview is followed by a read of the open run' }).toBeGreaterThan(before)
+})
+
 /* ---------------------------------------- the rarity correction, and why it needs two steps */
 
 test('a joined run says how to correct a whole stack, and that the box alone is not enough', async ({
