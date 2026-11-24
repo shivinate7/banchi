@@ -328,6 +328,12 @@ const RETRY_CODES: ReadonlySet<string> = new Set(['unreachable', 'bad_response',
 /** ONE RULE FOR "THE SERVER BROKE": a 5xx. `failureKind` and `failureTone` both read it. */
 const isServerFault = (status: number | undefined): boolean => status !== undefined && status >= 500
 
+/** DID THE WRITE GET NO ANSWER (a 5xx, a lost connection, a body that did not parse)? Such a write may still have
+ *  committed, because the server can fail after it writes. A 4xx is the server's "no": it wrote nothing. */
+export function gotNoAnswer(err: unknown): boolean {
+  return !(err instanceof ServerError && err.status >= 400 && err.status < 500)
+}
+
 /** A rate limit from Card Ladder is a "no" until tomorrow, even though it arrives as a 429, so no second press is offered. */
 const REFUSAL_CODES: ReadonlySet<string> = new Set(['cardladder_rate_limited'])
 
@@ -376,13 +382,6 @@ export function describeFailure(err: unknown): Failure {
     message:
       'The app hit a problem before it could ask the server. Reload the page, and if it repeats, restart the app on the Mac.',
   }
-}
-
-/** The write got no answer, or the server failed (a 5xx, a lost connection, a body that did not parse), so it may still
- *  have committed. A 4xx is the server's "no" and wrote nothing. A screen that says what a failed write left behind says
- *  "the store did not confirm" for this one, and keeps "nothing was saved" for a refusal. */
-export function gotNoAnswer(err: unknown): boolean {
-  return !(err instanceof ServerError && err.status >= 400 && err.status < 500)
 }
 
 /** Which colour a failure earns. Red is for a real fault: the server did not answer, answered
