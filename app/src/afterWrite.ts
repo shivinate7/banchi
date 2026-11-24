@@ -4,7 +4,7 @@
  * still says the screen was behind (another tab sold the copy; the order moved on). A write that failed with a 5xx or a
  * network error may still have committed, so it re-reads too.
  *
- * `afterWrite(write)` runs the write and starts the re-reads in a `finally`, after every outcome (an answer, a refusal, a 5xx, a network error). It never awaits them: the person's next
+ * `afterWrite(write, kind)` runs the write and starts the re-reads in a `finally`, after every outcome (an answer, a refusal, a 5xx, a network error). It never awaits them: the person's next
  * press must not wait on a read, and the re-reads never refetch a list that reorders (D313). A screen registers its
  * reads once with `useRereadOnWrite`, and the registry is module-level, so a write pressed on a toast after the screen
  * unmounted still reaches whatever is mounted by the time it answers, or nothing, and the next mount re-reads anyway.
@@ -16,10 +16,11 @@ import { useEffect, useRef } from 'react'
 
 /** What a write was, so a screen re-reads only what it touched (a burst of clients kills the capture server). A `sale`
  *  changes the copy, its box and the counts, the review queues and the order claims: it moves no price and buries no box.
- *  A `tick` is a kept suggestion tick, and moves only the ticks on the worklist. A `corpus` write is a price save, a clear
- *  or its Undo, and moves the saved prices alone. A `refresh` is a Refresh Now press: it moves the refresh state and the
+ *  A `tick` is a kept suggestion tick, or an Unhold or its Undo, and reads only the worklist's live rows and lays the held-copy counts. A `corpus` write is a price save, a clear
+ *  or its Undo, and moves the saved prices alone: it also re-reads the clearable list and the kept clears. A `refresh` is a Refresh Now press: it moves the refresh state and the
  *  saved prices. A `send` is a Send that answered: the screen's own reload reads the worklist and the saved prices, so
- *  a send re-reads only what that reload does not. Any other write is `other`, which re-reads all of it. */
+ *  a send re-reads only what that reload does not. A take-off press is a `send` whatever it came to, since `pressTakeOff` never throws: the owed list is read again.
+ *  Any other write is `other`, which re-reads all of it. */
 export type WriteKind = 'sale' | 'tick' | 'corpus' | 'refresh' | 'send' | 'other'
 
 type Reread = (kind: WriteKind) => Promise<void>
@@ -28,6 +29,11 @@ type Reread = (kind: WriteKind) => Promise<void>
  *  the digest it reads (D86). One the server refused (`corpus_moved`) or never answered wrote nothing the screen knows of, so its re-read is `other`:
  *  it reads all, and takes no digest, or the next save would overwrite the writer that moved the file. */
 export const corpusKind = (failed: boolean): WriteKind => (failed ? 'other' : 'corpus')
+
+/** WHICH RE-READ A SEND OWES (`afterWrite`, D73). A Send that answered is followed by the screen's own reload, which reads
+ *  the worklist and the saved prices, so only what that reload does not read is left (`send`). A Send that did not answer has
+ *  no reload coming, and may still have gone: all of it is read (`other`). */
+export const sendKind = (failed: boolean): WriteKind => (failed ? 'other' : 'send')
 
 /** How long one round of re-reads may run before the next write's round may start. */
 const ROUND_LIMIT_MS = 30_000

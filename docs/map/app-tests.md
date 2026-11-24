@@ -134,9 +134,9 @@ The Playwright specs and unit tests of the app, and the helpers they share.
 - `app/tests/photo-cache.spec.ts` — Home, Review and Pricing draw every photograph by name and version (`D172`, `D26`): a by-card URL carries `?v=<capture_id>` because a re-shoot writes new bytes under the same name, and never a bare or slot URL.
   - Decisions: `D26`, `D172`
 - `app/tests/pricing-markdown.spec.ts` — `#/pricing` AS A LENS OVER LIVE TCGPLAYER LISTINGS (D103), in its own file so that `tests/pricing.spec.ts` could stay UNEDITED through every commit of that work — which is the only thing that proves the second source cost the run path nothing.
-  - Decisions: `D28`, `D278`, `D103`, `D107`, `D118`, `D218`, `D273`, `D277`, `D9`, `D99`, `D101`, `D221`, `D54`, `D197`, `D100`
+  - Decisions: `D28`, `D278`, `D103`, `D107`, `D118`, `D218`, `D273`, `D277`, `D9`, `D99`, `D101`, `D221`, `D54`, `D197`, `D100`, `D73`
 - `app/tests/pricing.spec.ts` — The pricing screen, asserted where nothing else can see it.
-  - Decisions: `D86`, `D59`, `D278`, `D277`, `D118`, `D218`, `D156`, `D168`, `D273`, `D9`, `D56`, `D180`, `D20`, `D259`, `D301`, `D313`, `D196`, `D269`, `D103`, `D28`, `D8`, `D7`, `D54`, `D115`, `D181`, `D99`, `D33`, `D51`, `D57`, `D58`, `D68`, `D92`, `D117`
+  - Decisions: `D86`, `D59`, `D278`, `D277`, `D118`, `D218`, `D156`, `D168`, `D273`, `D9`, `D56`, `D180`, `D20`, `D259`, `D301`, `D313`, `D196`, `D269`, `D103`, `D28`, `D8`, `D7`, `D54`, `D115`, `D181`, `D99`, `D33`, `D51`, `D57`, `D58`, `D68`, `D92`, `D117`, `D73`
 - `app/tests/product-history.spec.ts` — `#/product`'s own hard rule (D227): the market series and the owner's own fills draw as two different SVG shapes, never one line — counted by class name, a `<polyline>` for a market run and a `<path>` for a fill.
   - Decisions: `D278`, `D227`, `D212`, `D219`
 - `app/tests/request-budget-allow.json` — The shrinking list `request-budget.spec.ts` reads, rule and route to measurement. A screen on it is measured and not failed.

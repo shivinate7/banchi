@@ -5,6 +5,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleMotion } from './motionSettled'
 import { stubHistoryCard } from './routeFixtures'
+import { readAfterWrite, recordSent } from './wireOrder'
 
 import type { MarkdownSku } from '../src/types'
 import { setViewport } from './phoneSwitch'
@@ -93,6 +94,12 @@ async function open(
     /** What the apply route answers. A function so a case can differ between the check and
      *  the write, which is the pair this screen's two presses are about. */
     apply?: (body: Record<string, unknown>) => Record<string, unknown>
+    /** Answers `POST /pipeline/markdowns/<stamp>/apply` with a refusal or a 5xx instead of the file. The POST is recorded first. */
+    applyFailure?: { status: number; code: string }
+    /** Answers the saved prices' re-read (`GET /pricing`) with a 5xx once an apply is in the wire, so nothing lands over the digest the apply answered. */
+    corpusReadFailsAfterApply?: boolean
+    /** The revision the saved prices' re-read (`GET /pricing`) answers once an apply is in the wire. Default: `rev-1`, the revision the screen reads first. */
+    corpusRevisionAfterApply?: string
     /** What `POST /pipeline/markdowns/<stamp>/send` answers: 200 with a receipt that went
      *  live, or a refusal code. Nothing here reaches TCGplayer. */
     send?: () => { status: number; code?: string }
@@ -138,6 +145,14 @@ async function open(
   await page.route(/\/pipeline\/markdowns\/[^/]+\/apply$/, async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>
     wire.push({ method: 'POST', path: new URL(route.request().url()).pathname, body })
+    if (options.applyFailure !== undefined) {
+      await route.fulfill({
+        status: options.applyFailure.status,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: options.applyFailure.code, message: 'The server said no.' } }),
+      })
+      return
+    }
     const answer = options.apply?.(body) ?? {
       ok: true,
       exit_code: 0,
@@ -208,6 +223,10 @@ async function open(
       })
     }
     wire.push({ method: 'GET', path: '/pricing', body: null })
+    if (options.corpusReadFailsAfterApply === true && wire.some((row) => row.path.includes('/apply'))) {
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'store_unavailable', message: 'The server said no.' } }) })
+      return
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -218,7 +237,7 @@ async function open(
           skus: options.answers ?? {},
         },
         path: '/tmp/prices.json',
-        revision: 'rev-1',
+        revision: options.corpusRevisionAfterApply !== undefined && wire.some((row) => row.path.includes('/apply')) ? options.corpusRevisionAfterApply : 'rev-1',
       }),
     })
   })
@@ -477,6 +496,134 @@ test('a refused write sends nothing and says so', async ({ page }) => {
 
   await expect(page.getByRole('region', { name: 'Send these prices' })).toContainText('These prices could not be written, so nothing was sent.')
   expect(wire.filter((row) => row.path.endsWith('/send'))).toHaveLength(0)
+})
+
+/* REREAD FOLLOW-ON (D73, `afterWrite`). The one list's press is two writes. The file's write (`apply`) changes the saved prices, so the
+   saved prices are read again, as a corpus write is. The send (`send`) makes the listings live, so the worklist's live rows are read
+   again, as a successful send's own reload reads them. A write that fails re-reads what it may have moved. Each red case asserts the
+   read came after its own POST. The success control is what the failure must match. */
+const APPLY_PATH = `/pipeline/markdowns/${STAMP}/apply`
+const SEND_PATH = `/pipeline/markdowns/${STAMP}/send`
+
+async function pressOnePrice(page: Page): Promise<void> {
+  const field = page.locator('.pricing-input').first()
+  await field.click()
+  await field.fill('')
+  await field.type('17.50')
+  await field.blur()
+  await page.getByRole('button', { name: 'Send 1 Price to TCGplayer' }).click()
+}
+
+/* THE DIGEST AN APPLY THAT WROTE NOTHING CARRIES. `do_markdown_apply` answers the corpus digest on every apply, but `wrote` is false when no
+   import file was written, so that digest is not one this screen wrote. The re-read after the apply is failed here: a re-read that lands takes its
+   own digest over the answer, which would hide the adoption. The next save must still name the digest the screen read. */
+/** Presses one price, lets the apply's answer and its re-read settle, then saves a new price. Returns the digest that save names.
+ *  The re-read fails unless `reread` says how it answers. */
+async function digestOfSaveAfterApply(
+  page: Page,
+  answer: Record<string, unknown>,
+  reread: { corpusReadFailsAfterApply?: boolean; corpusRevisionAfterApply?: string } = { corpusReadFailsAfterApply: true },
+): Promise<string | undefined> {
+  const wire = await open(page, { apply: () => answer, ...reread })
+  const sent = recordSent(page)
+  await pressOnePrice(page)
+  await expect.poll(() => readAfterWrite(sent, 'POST', APPLY_PATH, '/pricing'), {
+    message: 'the apply is followed by its re-read of the saved prices, which this case fails',
+  }).toBe(true)
+  const putsBefore = wire.filter((row) => row.method === 'PUT').length
+  const field = page.locator('.pricing-input').first()
+  await field.click()
+  await field.fill('')
+  await field.type('19.99')
+  await field.blur()
+  await expect.poll(() => wire.filter((row) => row.method === 'PUT').length, { message: 'the next save reached the server' }).toBeGreaterThan(putsBefore)
+  return (wire.filter((row) => row.method === 'PUT').at(-1)?.body as { revision?: string } | undefined)?.revision
+}
+
+test('reread follow-on: a markdown apply that answers wrote false does not take the digest it carries', async ({ page }) => {
+  const digest = await digestOfSaveAfterApply(page, {
+    ok: true,
+    exit_code: 0,
+    wrote: false,
+    console: 'DRY RUN — nothing written.',
+    stamp: STAMP,
+    revision: 'rev-moved',
+  })
+  expect(digest, 'the next save names the digest the screen read, not the one an apply that wrote nothing carried').toBe('rev-1')
+})
+
+/* THE CONTROL: the same press, with an answer that carries no digest. The screen keeps the one it read, so this passes on the old code, and the
+   red above differs from it by the digest the answer carries and nothing else. */
+test('reread follow-on control: a markdown apply that answers wrote false with no digest keeps the digest the screen read', async ({ page }) => {
+  const digest = await digestOfSaveAfterApply(page, {
+    ok: true,
+    exit_code: 0,
+    wrote: false,
+    console: 'DRY RUN — nothing written.',
+    stamp: STAMP,
+  })
+  expect(digest, 'with no digest in the answer, the next save names the digest the screen read').toBe('rev-1')
+})
+
+/* THE RE-READ'S KIND WHEN THE RE-READ LANDS. An apply that wrote nothing owes an `other` re-read, so a re-read that answers takes no digest either.
+   The failed re-read above cannot tell that half of the kind from `failed` alone, so this case lets the re-read land with its own revision. */
+test('reread follow-on: a markdown apply that answers wrote false takes no digest from a re-read that lands', async ({ page }) => {
+  const digest = await digestOfSaveAfterApply(
+    page,
+    { ok: true, exit_code: 0, wrote: false, console: 'DRY RUN — nothing written.', stamp: STAMP, revision: 'rev-moved' },
+    { corpusRevisionAfterApply: 'rev-moved' },
+  )
+  expect(digest, 'the next save names the digest the screen read; a re-read that lands after an apply that wrote nothing takes no digest').toBe('rev-1')
+})
+
+test('reread follow-on: a write of the file that the server fails with a 5xx re-reads the saved prices', async ({ page }) => {
+  await open(page, { applyFailure: { status: 503, code: 'store_unavailable' } })
+  const sent = recordSent(page)
+  await pressOnePrice(page)
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === APPLY_PATH), { message: 'the write reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'POST', APPLY_PATH, '/pricing'), {
+    message: 'the write that failed with a 5xx is followed by a read of the saved prices: no GET /pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('reread follow-on: a write of the file that the server refuses re-reads the saved prices', async ({ page }) => {
+  await open(page, { applyFailure: { status: 409, code: 'revision_moved' } })
+  const sent = recordSent(page)
+  await pressOnePrice(page)
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === APPLY_PATH), { message: 'the write reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'POST', APPLY_PATH, '/pricing'), {
+    message: 'the write that was refused is followed by a read of the saved prices: no GET /pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('reread follow-on: a send that the server fails with a 5xx re-reads the prices worklist', async ({ page }) => {
+  await open(page, { send: () => ({ status: 503, code: 'store_unavailable' }) })
+  const sent = recordSent(page)
+  await pressOnePrice(page)
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === SEND_PATH), { message: 'the send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'POST', SEND_PATH, '/pipeline/pricing'), {
+    message: 'the send that failed with a 5xx is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('reread follow-on: a send that the server refuses re-reads the prices worklist', async ({ page }) => {
+  await open(page, { send: () => ({ status: 409, code: 'send_busy' }) })
+  const sent = recordSent(page)
+  await pressOnePrice(page)
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === SEND_PATH), { message: 'the send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'POST', SEND_PATH, '/pipeline/pricing'), {
+    message: 'the send that was refused is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('reread follow-on control: a send that answers re-reads the prices worklist', async ({ page }) => {
+  await open(page)
+  const sent = recordSent(page)
+  await pressOnePrice(page)
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === SEND_PATH), { message: 'the send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'POST', SEND_PATH, '/pipeline/pricing'), {
+    message: 'the send that answered is followed by a read of the prices worklist: its own reload reads it',
+  }).toBe(true)
 })
 
 test('a send the live read refuses says nothing changed, and offers Try again', async ({ page }) => {

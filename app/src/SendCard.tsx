@@ -31,7 +31,7 @@ import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react
 import type { ReactNode } from 'react'
 import { Button, Count, Icon, IconButton, Money, Notice, Pill, Refusal, Retry } from './kit'
 import { atClockTime, clockTime, dayMonth } from './dates'
-import { afterWrite, useRereadOnWrite } from './afterWrite'
+import { afterWrite, sendKind, useRereadOnWrite } from './afterWrite'
 import { describeFailure, dismissSendWarning, getOwedTakeOffs, gotNoAnswer, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, sendSuggestions, takeBackSend } from './server'
 import type { Failure } from './server'
 import type { EmptySend, LiveMove, OwedTakeOff, PriceChange, RefusedPrice, SendAnswer, SendSummary, SendTrim } from './types'
@@ -72,11 +72,6 @@ const RETRYABLE = new Set(['live_check_failed', 'tcg_write_refused', 'tcg_write_
  *  client names a failed fetch that way whenever `/status` still answers — which is also what
  *  a connection dropped mid-send looks like from the page. */
 const DROPPED = new Set(['unreachable', 'bad_response', 'origin_blocked'])
-
-/** WHICH RE-READ A SEND OWES (`afterWrite`, D73). A Send that answered is followed by the screen's own reload, which reads
- *  the worklist and the saved prices, so only the owed take-offs are left to read. A Send that did not answer has no reload
- *  coming, and may still have gone: all of it is read. */
-const sendKind = (failed: boolean): 'send' | 'other' => (failed ? 'other' : 'send')
 
 /** One sentence for why a press was refused, in owner words. The server's own text sits behind
  *  "What the server said" (D196, D269). */
@@ -162,13 +157,25 @@ export type OwedTakeOffs = {
   readonly loading: boolean
   readonly failure: Failure | null
   readonly reload: () => void
+  /** The last read that landed. A new object for each one, so a read that changed nothing is still seen; `own` is the read a take-off press started. */
+  readonly lastRead: OwedRead
+  /** A press calls this as its write ends, so the owed read its `afterWrite` starts next is marked `own`. */
+  readonly markPressRead: () => void
 }
+
+type OwedRead = { readonly own: boolean }
+const NO_READ: OwedRead = { own: false }
 
 export function useOwedTakeOffs(): OwedTakeOffs {
   const [owed, setOwed] = useState<readonly OwedTakeOff[]>([])
   const [loading, setLoading] = useState(true)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [reads, setReads] = useState(0)
+  const [lastRead, setLastRead] = useState<OwedRead>(NO_READ)
+  const pressMarked = useRef(false)
+  const markPressRead = useCallback(() => {
+    pressMarked.current = true
+  }, [])
   useEffect(() => {
     let live = true
     getOwedTakeOffs()
@@ -176,6 +183,7 @@ export function useOwedTakeOffs(): OwedTakeOffs {
         if (!live) return
         setOwed(answer.owed)
         setFailure(null)
+        setLastRead({ own: false })
       })
       .catch((err: unknown) => {
         if (live) setFailure(describeFailure(err))
@@ -191,15 +199,20 @@ export function useOwedTakeOffs(): OwedTakeOffs {
   /* A WRITE'S RE-READ (`afterWrite`, D73): a send, whatever it came to, may have settled a take-off, so the list is read again. */
   useRereadOnWrite(async (kind) => {
     if (kind !== 'send' && kind !== 'other') return
+    /* THE PRESS'S OWN RE-READ KEEPS ITS ANSWER (D313): the first read after a press's write is the one that press started; any other clears the answers of the entries it lists. */
+    const own = pressMarked.current
+    pressMarked.current = false
     try {
       const answer = await getOwedTakeOffs()
-      setOwed(answer.owed)
+      /* THE HELD LIST STANDS WHEN NOTHING DIFFERS: a new array would draw the line again for nothing. */
+      setOwed((held) => (JSON.stringify(held) === JSON.stringify(answer.owed) ? held : answer.owed))
       setFailure(null)
+      setLastRead({ own })
     } catch (err) {
       setFailure(describeFailure(err))
     }
   })
-  return { owed, loading, failure, reload }
+  return { owed, loading, failure, reload, lastRead, markPressRead }
 }
 
 const ownedCopies = (entry: OwedTakeOff): number => Math.max(1, entry.excess)
@@ -227,13 +240,38 @@ function OwedCell({ current, states }: { readonly current: string; readonly stat
   )
 }
 
+/** AN ANSWER THAT SURVIVES THE ENTRY'S LEAVING THE OWED LIST: only a settled 2xx one. `sent` (accepted) and `matches` (the server read the listing and sent nothing) are
+ *  true whatever the re-read says. `failed` (a refusal or a 5xx that may have committed), `nosession` (a refusal) and `onway` (a refusal that the take-off is already
+ *  outstanding; the re-read dropping it is the check the line promised) are claims about an owed entry, so they go with it. */
+const settledAnswer = (answer: TakeOffOutcome | undefined): boolean => answer?.view === 'sent' || answer?.view === 'matches'
+
+/** THE LIST THE LINE DRAWS AFTER A RE-READ: the read's entries, with the entries it no longer lists that hold a settled answer, each in the place it had. */
+function keepAnswered(
+  held: readonly OwedTakeOff[],
+  read: readonly OwedTakeOff[],
+  answers: Readonly<Record<string, TakeOffOutcome>>,
+): readonly OwedTakeOff[] {
+  const listed = new Map(read.map((entry) => [entryKey(entry), entry]))
+  const kept = held.flatMap((entry) => {
+    const now = listed.get(entryKey(entry))
+    if (now !== undefined) return [now]
+    return settledAnswer(answers[entryKey(entry)]) ? [entry] : []
+  })
+  const placed = new Set(kept.map(entryKey))
+  return [...kept, ...read.filter((entry) => !placed.has(entryKey(entry)))]
+}
+
 function OwedTakeOffsLine({
   owed,
+  lastRead,
+  markPressRead,
   taking,
   locked,
   setTaking,
 }: {
   readonly owed: readonly OwedTakeOff[]
+  readonly lastRead: OwedRead
+  readonly markPressRead: () => void
   /** The entry key being pressed, or null. One press runs at a time. */
   readonly taking: string | null
   /** A send or a download is running, so no take-off press is offered. */
@@ -242,15 +280,37 @@ function OwedTakeOffsLine({
 }) {
   const [answers, setAnswers] = useState<Readonly<Record<string, TakeOffOutcome>>>({})
   const [open, setOpen] = useState(false)
-  /* An answer stands until the list is read again, so an entry never leaves from under the person (D313). */
-  useEffect(() => setAnswers({}), [owed])
+  /* AN ANSWER STANDS UNTIL THE NEXT VISIT (D313): a re-read of the owed list never takes an answered entry from under the person. An entry
+     the re-read no longer lists stays here, in its place, while it holds a settled answer (`settledAnswer`); any other leaves with the list. */
+  const [shown, setShown] = useState(owed)
+  const [seen, setSeen] = useState(owed)
+  if (seen !== owed) {
+    setSeen(owed)
+    setShown(keepAnswered(shown, owed, answers))
+  }
+  /* A READ THAT IS NOT THE PRESS'S OWN CLEARS THE ANSWERS OF THE ENTRIES IT LISTS: it is the store as it is now. An entry it drops keeps its settled answer. */
+  const [handled, setHandled] = useState(lastRead)
+  if (handled !== lastRead) {
+    setHandled(lastRead)
+    if (!lastRead.own) {
+      const listed = new Set(owed.map(entryKey))
+      setAnswers((held) => Object.fromEntries(Object.entries(held).filter(([key]) => !listed.has(key))))
+    }
+  }
 
   const viewOfEntry = (entry: OwedTakeOff): TakeOffView => answers[entryKey(entry)]?.view ?? viewOf(entry.state)
   const off = taking !== null || locked
 
   const pressOne = async (entry: OwedTakeOff) => {
     setTaking(entryKey(entry))
-    const outcome = await pressTakeOff(entry.box, entry.index)
+    /* THE OWED LIST IS READ AGAIN WHATEVER THE PRESS CAME TO (`afterWrite`, D73): `pressTakeOff` turns a refusal or a 5xx into an outcome, and a take-off that got no answer may still have gone. */
+    const outcome = await afterWrite(async () => {
+      try {
+        return await pressTakeOff(entry.box, entry.index)
+      } finally {
+        markPressRead()
+      }
+    }, 'send')
     setAnswers((held) => ({ ...held, [entryKey(entry)]: outcome }))
     setTaking(null)
   }
@@ -265,8 +325,9 @@ function OwedTakeOffsLine({
     </span>
   )
 
-  if (owed.length === 1) {
-    const entry = owed[0] as OwedTakeOff
+  if (shown.length === 0) return null
+  if (shown.length === 1) {
+    const entry = shown[0] as OwedTakeOff
     const view = viewOfEntry(entry)
     const answer = answers[entryKey(entry)]
     const name = <span data-typed>{entry.name || 'this card'}</span>
@@ -320,13 +381,13 @@ function OwedTakeOffsLine({
   /* SEVERAL: one line and a fold; each entry has its own press, and there is no press for all. Open, the list floats over the worklist
      (`.send-moves`), so the bar keeps its height. */
   /* THE TOTAL IS WHAT TCGPLAYER STILL LISTS: an entry that was taken off, or already matched, leaves it. */
-  const left = owed.reduce((sum, entry) => (['matches', 'sent'].includes(viewOfEntry(entry)) ? sum : sum + ownedCopies(entry)), 0)
-  const accepted = owed.reduce((sum, entry) => {
+  const left = shown.reduce((sum, entry) => (['matches', 'sent'].includes(viewOfEntry(entry)) ? sum : sum + ownedCopies(entry)), 0)
+  const accepted = shown.reduce((sum, entry) => {
     const answer = answers[entryKey(entry)]
     return answer?.view === 'sent' ? sum + (answer.taken > 0 ? answer.taken : ownedCopies(entry)) : sum
   }, 0)
-  const mode = left === 0 ? 'done' : owed.every((entry) => viewOfEntry(entry) === 'nosession') ? 'nosession' : 'several'
-  const cards = count(owed.length, 'Card')
+  const mode = left === 0 ? 'done' : shown.every((entry) => viewOfEntry(entry) === 'nosession') ? 'nosession' : 'several'
+  const cards = count(shown.length, 'Card')
   return (
     <Notice
       tone={left === 0 ? 'ok' : 'warn'}
@@ -336,7 +397,9 @@ function OwedTakeOffsLine({
         <OwedCell
           current={mode}
           states={{
-            several: `TCGplayer still lists ${count(left, 'copy', 'copies')} from your master set.`,
+            several: `TCGplayer still lists ${count(left, 'copy', 'copies')} from your master set.${
+              accepted > 0 ? ` TCGplayer accepted: ${count(accepted, 'copy', 'copies')} ${accepted === 1 ? 'is' : 'are'} off.` : ''
+            }`,
             nosession: `TCGplayer is not signed in, so these ${count(left, 'copy', 'copies')} stay listed. Sign in, then press Refresh.`,
             done:
               accepted > 0
@@ -359,7 +422,7 @@ function OwedTakeOffsLine({
       }
     >
       <ul className="send-names" hidden={!open}>
-        {owed.map((entry) => {
+        {shown.map((entry) => {
           const view = viewOfEntry(entry)
           const answer = answers[entryKey(entry)]
           return (
@@ -1043,7 +1106,7 @@ export function SendCard({
 }) {
   const live = useLiveCheck()
   const reloadOwed = owed.reload
-  /* A LIVE CHECK THAT ENDS MAY HAVE SETTLED A TAKE-OFF: read the owed list again (the answers it held leave with it). */
+  /* A LIVE CHECK THAT ENDS MAY HAVE SETTLED A TAKE-OFF: read the owed list again. */
   const wasChecking = useRef(false)
   useEffect(() => {
     if (wasChecking.current && !live.checking) reloadOwed()
@@ -1388,7 +1451,7 @@ export function SendCard({
       </div>
 
       {/* FIRST OF THE CARD'S NOTICES, so a receipt or a refusal that comes and goes draws under it and the line never moves. */}
-      {owed.owed.length === 0 ? null : <OwedTakeOffsLine owed={owed.owed} taking={taking} locked={phase !== 'idle' || running} setTaking={setTaking} />}
+      <OwedTakeOffsLine owed={owed.owed} lastRead={owed.lastRead} markPressRead={owed.markPressRead} taking={taking} locked={phase !== 'idle' || running} setTaking={setTaking} />
       {owed.failure === null ? null : (
         <Retry
           compact
