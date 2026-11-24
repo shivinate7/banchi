@@ -95,6 +95,8 @@ const UNDO_WINDOW_MS = 20_000
 const NO_UNDO = 'No undo for this one.'
 
 const NOT_SOLD = 'not_sold'
+/* A sale refused because another device retired the copy: it left without a sale. */
+const CARD_RETIRED = 'card_retired'
 const ALREADY_RETIRED = 'already_retired'
 const NOT_RETIRED = 'not_retired'
 /* UN-14: "already undone" for a move, the same shape `not_sold`/`not_retired` answer. */
@@ -474,10 +476,12 @@ function InventoryWalk({
             try {
               return await markSold(copy.place.box, copy.place.index)
             } catch (err) {
-              /* A SALE THAT GOT NO ANSWER MAY HAVE COMMITTED, AND ANOTHER DEVICE'S SALE HAS: either way the re-read
-                 `afterWrite` starts next brings the departure back. The row is held first, so that read cannot fold it
-                 away under a search (D313, D181). Any other refusal wrote nothing and holds nothing. */
-              if (gotNoAnswer(err) || refusalCode(err) === ALREADY_SOLD) holdRank(copy.key)
+              /* A SALE THAT GOT NO ANSWER MAY HAVE COMMITTED, AND ANOTHER DEVICE'S SALE OR RETIREMENT HAS: either way the
+                 re-read `afterWrite` starts next brings the departure back. The row is held first, so that read cannot
+                 fold it away under a search (D313, D181), and the refused press still has a row to return focus to.
+                 Any other refusal wrote nothing and holds nothing. */
+              const code = refusalCode(err)
+              if (gotNoAnswer(err) || code === ALREADY_SOLD || code === CARD_RETIRED) holdRank(copy.key)
               throw err
             }
           }),
