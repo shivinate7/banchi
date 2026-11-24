@@ -10,7 +10,17 @@ Plan: D329#the-rule (web)
 ## The rule
 
 - Any press that the app takes and queues behind another write shows a queued state on the control or row it acts on. The state lasts from the press until the press runs. Then the usual result (a receipt, a refusal or a no-answer message) replaces it.
-- The queued state is one shared primitive, used by every screen. No screen builds its own. The Orders walk's U is its first user. Other presses that queue behind a write adopt it when they are found.
+- A queued press whose target is gone when it runs is skipped, with no write.
+- The queued state is one shared primitive, used by every screen. No screen builds its own. A new press that queues behind a write uses it too.
 - The wording and the look come from the design system (`--bn-*` tokens only), and are checked at 1440 and 820, in light and dark.
 
-**Ruled by.** The owner, answering the bug 9 question in chat: answer at once, and build it as a shared path, not for Orders alone.
+## Home and users
+
+- Home: `app/src/writeLine.ts`, one write line per screen (module level, so a write outlives the screen that pressed it). `queueWrite` adds a write, `isQueued` and `writeOut` read the line, `sayQueued` gives the shared words, and `cancel` drops a write still waiting.
+- Users now:
+  - Orders walk: U and the toast Undo (`WALK_LINE`, `app/src/OrdersWalkPane.tsx`).
+  - Inventory: U and the toast Undo (`app/src/Inventory.tsx`).
+  - Review: U (`app/src/ReviewQueue.tsx`).
+  - Fulfillment: Undo on the receipt and on the Pulled today rows (`app/src/Fulfillment.tsx`).
+
+**Ruled by.** The owner, on the bug 9 question: answer at once, and build it as a shared path, not for Orders alone.

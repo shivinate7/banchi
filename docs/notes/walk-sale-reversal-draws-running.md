@@ -1,0 +1,1 @@
+- walk-sale-reversal-draws-running: A recorded sale's waiting reversal draws as running, not queued (`app/src/OrdersWalkPane.tsx`).

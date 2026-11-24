@@ -1,0 +1,1 @@
+- boxshelf-review-skip-afterwrite: `app/src/BoxShelf.tsx` and `app/src/ReviewQueue.tsx` skip `afterWrite`, so they miss the re-reads that follow each settled write (D73, the re-read rule).

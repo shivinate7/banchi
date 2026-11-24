@@ -36,7 +36,10 @@ typing. That exception is listed in `scripts/kit-adoption-allow.json`.
 
 Rank decides the fast path. Rank never decides which rows draw a control. `U` and a toast's own Undo reach
 only the newest reversible write. Every sold row keeps its own Undo until that write is built on. This
-holds on Inventory and on Cards to pull. Fulfillment's "Pulled today" list works the same way. Inventory follows the same receipt rule: a newer receipt with an Undo, whether a sale, move or retire, spends the Undo on every older standing receipt (`remember` in `app/src/Inventory.tsx`).
+holds on Inventory and on Cards to pull. Fulfillment's "Pulled today" list works the same way. Inventory follows the same receipt rule: a newer receipt with an Undo, whether a sale, move or retire, spends the Undo on every older standing receipt (`remember` in `app/src/Inventory.tsx`). A `U` or a toast's Undo
+pressed while a write is out on its screen queues behind that write and shows the queued state (D329, the press
+queued state, one write line per screen in `app/src/writeLine.ts`). Inventory, Review and Fulfillment queue this
+way, as the walk does (§10).
 
 The walk is short, and a wrong pull is noticed at once. So the fast path undoes the newest pull. Anything
 older belongs to the slow path.
@@ -117,11 +120,13 @@ pull hands the rank back to the pull before it, if one still stands. Only one ro
 walk never piles up open buttons. An older sold copy is a dead end in this row on purpose. Its way back is the
 card on `#/inventory` (§4). A test fakes the clock and advances it past the old window. `Undo` on the newest pull survives. The row's one `Undo` is picked by `newestOf` in `app/src/OrdersWalkPane.tsx`.
 
-A press taken behind a sale that is still saving shows the queued state at once (`D329`). The row's
+A press taken behind a sale that is still saving shows the queued state at once (D329, the press queued state).
+The walk is its first user; Inventory, Review and Fulfillment share it (§3). The row's
 Undo is the kit `IconButton` that `CardLocations.UndoSaleButton` renders, drawn by `OrdersWalkPane.RowAction`. It takes
 `busy="queued"`, the hourglass badge, and "Waits for the sale to save." beside it (`QueuedNote`). The kit `Button`
 and `IconButton` share that face, typed as `kit.Busy`. While its sale is saving, the row's own Undo is
-disabled, so `U` is the press that takes it. When no row shows the Undo, `OrdersWalkPane.undoWalkSale` shows a status
+disabled, so `U` is the press that takes it. Once a press is taken, the control is queued, not disabled: it has no
+`disabled` attribute, carries `aria-disabled`, and ignores clicks. When no row shows the Undo, `OrdersWalkPane.undoWalkSale` shows a status
 toast, "Undo waits for the sale to save", instead. When the sale lands, the queued reversal runs, and the normal
 "Pull undone" receipt replaces the queued state.
 

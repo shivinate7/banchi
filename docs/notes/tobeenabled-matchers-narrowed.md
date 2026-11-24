@@ -1,0 +1,1 @@
+- tobeenabled-matchers-narrowed: The matcher re-point commit da179402f changes three `toBeEnabled()` matchers in `app/tests/inventory.spec.ts` and `app/tests/review.spec.ts` to `not.toHaveAttribute('disabled')`. That drops the aria-disabled half of the check. The commit adds no `data-busy="queued"` assertion.

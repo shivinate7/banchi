@@ -1,0 +1,1 @@
+- orders-u-during-list-pull: U during a list pull reverses the older pull at the same moment (`onPull` in `app/src/Orders.tsx`). Fixing which pull U targets changes what U writes, so it needs the owner.
