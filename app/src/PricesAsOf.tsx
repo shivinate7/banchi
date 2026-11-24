@@ -58,9 +58,9 @@ export function usePricesRefresh(onEnded: () => void, enabled: boolean) {
   useEffect(() => {
     if (enabled) void read()
   }, [enabled, read])
-  /* A PRESS'S RE-READ (`afterWrite`, D73): the state is read again whatever the press came to. Where the header is not drawn, nothing is read. */
+  /* A PRESS'S RE-READ (`afterWrite`, D73): the state is read again whatever the press came to. A Send that answered is read too: it may have run a refresh first, and moved the catalog. Where the header is not drawn, nothing is read. */
   useRereadOnWrite(async (kind) => {
-    if (enabled && (kind === 'refresh' || kind === 'other')) await read()
+    if (enabled && (kind === 'refresh' || kind === 'send' || kind === 'other')) await read()
   })
 
   const running = enabled && state?.state === 'running'

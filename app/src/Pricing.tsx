@@ -1057,10 +1057,10 @@ export function Pricing() {
     }
   }, [readView, stamp])
 
-  /** Fetch the worklist and the corpus together (D103). A read opened by its stamp is fetched beside the
+  /** Fetch the worklist and the corpus together (D103). `keepDigest` reads the file but leaves the digest as it is: a Refresh Now's read is no write's receipt (D86). A read opened by its stamp is fetched beside the
    *  worklist, so a link to a read with nothing in it can land on the one list. A read that cannot be had
    *  leaves the one list drawn without it. */
-  const load = useCallback(async (wanted: ReadonlySet<string>, markdown: string | null) => {
+  const load = useCallback(async (wanted: ReadonlySet<string>, markdown: string | null, keepDigest = false) => {
     loadWalk.current += 1
     const mine = loadWalk.current
     setLoading(true)
@@ -1090,7 +1090,7 @@ export function Pricing() {
       setBook(held.corpus)
       setClearable(held.clearable ?? null)
       setKept(keptOf(held))
-      takeRevision(held.revision)
+      if (!keepDigest) takeRevision(held.revision)
       savedBook.current = held.corpus
       failedBook.current = null
       setFailure(null)
@@ -1139,7 +1139,7 @@ export function Pricing() {
   /* "Refresh now" brings the rows and the saved strips current; when a run ends both are read again.
      A visit only reads where it is, and presses nothing. */
   const refresh = usePricesRefresh(() => {
-    reload()
+    void load(picked, hashStamp, true)
     readSaved()
   }, !readView && work !== null && (saved !== null || savedFailed)) /* NOT AT MOUNT: the worklist and the saved strips are read first, so the mount holds no more reads open at once than it did. */
   const asOf = asOfOf(refresh.state)
@@ -1248,7 +1248,7 @@ export function Pricing() {
               kind: 'refusal',
               tone: failureTone(trouble),
               title: `The store did not confirm the tick for ${one?.name || sku}`,
-              body: `If the box "Send the new price for ${one?.name || sku}" is not as you left it, press it again.`,
+              body: `If "Send the new price for ${one?.name || sku}" is not as you left it, press it again.`,
             })
             return
           }
@@ -2693,9 +2693,9 @@ export function Pricing() {
   const worklistName =
     scopeName ?? 'the cards on this screen'
 
-  /** Re-read what may still be cleared, the clears the server still remembers, and the digest — NOT the answers (StrictMode
-   *  runs an updater twice, and adopting them there re-dirtied the screen; see D168's receipt case). The digest is NOT taken
-   *  while a save has failed or been refused, and not over a receipt that landed after the read began: this read runs after a write, and a revision taken from a file that moved
+  /** Re-read what may still be cleared, the clears the server still remembers, and, after a save, a clear or its Undo, the digest — NOT the answers (StrictMode
+   *  runs an updater twice, and adopting them there re-dirtied the screen; see D168's receipt case). A Refresh Now's read, or a read after a failed write, never takes the digest (D86).
+   *  It is NOT taken while a save has failed or been refused, and not over a receipt that landed after the read began: this read runs after a write, and a revision taken from a file that moved
    *  under a book this screen still holds would let the next wholesale save overwrite the other writer. The stale revision
    *  keeps that save refused (`corpus_moved`) until the person reads the file again. */
   const refreshCorpus = useCallback(async (kind: WriteKind) => {
@@ -2705,7 +2705,7 @@ export function Pricing() {
     setClearable(answer.clearable ?? null)
     setKept(keptOf(answer))
     /* A RE-READ THAT BEGAN BEFORE A NEWER RECEIPT NEVER LANDS OVER IT: the file it read is the older one, and its digest would roll the revision back and refuse the next save. The receipt of the write that started the read is taken before it begins. */
-    if (failedBook.current === null && revisionSeq.current === began) revision.current = answer.revision
+    if (kind === 'corpus' && failedBook.current === null && revisionSeq.current === began) revision.current = answer.revision
   }, [])
   /* A WRITE'S RE-READ (`afterWrite`, D73): a save, a clear, its Undo or a Refresh Now, whatever it came to, reads the clearable list and the kept clears again. A tick or a send leaves them as read. */
   useRereadOnWrite(refreshCorpus)
