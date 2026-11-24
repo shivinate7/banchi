@@ -6,7 +6,7 @@ import { afterPaint, settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 import { expectOneStagger } from './staggerCheck'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
-import { readAfterPost, readAfterWrite, readsAfterWrite, recordSent } from './wireOrder'
+import { readAfterPost, readAfterWrite, readsAfterWrite, recordSent, type Sent } from './wireOrder'
 
 import type {
   HistoryRange,
@@ -349,9 +349,16 @@ async function open(
     /** Answers `POST /pricing/ticks`, one tick's press. Default: the server keeps it. A refusal names its code and message,
      *  and may wait on a promise, so a case can look at the row before the server answers. */
     ticks?: (body: Record<string, unknown>) => TickAnswer | Promise<TickAnswer>
+    /** The revision `GET /pricing` answers once a `POST /pricing/restore` is in the wire. Default: `rev-1`, as always. */
+    revisionAfterRestore?: string
+    /** The kept clears that carry an id, on `GET /pricing` beside `last_clear`: an earlier clear, pressed as `restoreClear`. */
+    clears?: { id?: string; count: number; at: number }[]
+    /** Answers `POST /pipeline/held/<sku>/unhold` and `POST /pipeline/held/<sku>/hold` with a refusal or a 5xx. Each POST is recorded first. */
+    held?: { unhold?: { status: number; code: string }; hold?: { status: number; code: string } }
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
+  let restoreSent = false
 
   /* THE ONE PRESS AND ITS STATUS, stubbed so no case can reach the server that would reach
      TCGplayer. Every body lands in `wire`, which is what the cases assert against. */
@@ -407,6 +414,20 @@ async function open(
   await page.route(/\/pipeline\/sends\/owed(\?.*)?$/, async (route) => {
     wire.push({ method: 'GET', path: '/pipeline/sends/owed', body: null })
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ owed: options.takeOffsOwed ?? [] }) })
+  })
+  /* HOLD AND UNHOLD (D273, R-S4): the copies the owner took down by hand. Each POST is recorded; a failure option answers it with a refusal or a 5xx. */
+  await page.route(/\/pipeline\/held\/[^/]+\/(un)?hold$/, async (route) => {
+    const request = route.request()
+    const path = new URL(request.url()).pathname
+    wire.push({ method: 'POST', path, body: request.postDataJSON() })
+    const unhold = path.endsWith('/unhold')
+    const failure = unhold ? options.held?.unhold : options.held?.hold
+    if (failure !== undefined) {
+      await route.fulfill({ status: failure.status, contentType: 'application/json', body: JSON.stringify({ error: { code: failure.code, message: 'The server said no.' } }) })
+      return
+    }
+    const sku = decodeURIComponent(path.split('/')[3] ?? '')
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(unhold ? { sku, moved: 2, unheld: 2, pushed: 0 } : { sku, held: 2 }) })
   })
   await page.route(/\/inventory\/\d+\/\d+\/take-off$/, async (route) => {
     const request = route.request()
@@ -613,6 +634,7 @@ async function open(
     const body = route.request().postDataJSON() as Record<string, unknown>
     wire.push({ method: 'POST', path: '/pricing/restore', body })
     const answers = (body.answers ?? {}) as Record<string, unknown>
+    restoreSent = true
     if (options.restoreFailure !== undefined) {
       await route.fulfill({
         status: options.restoreFailure.status,
@@ -695,7 +717,7 @@ async function open(
           skus,
         },
         path: '/tmp/prices.json',
-        revision: 'rev-1',
+        revision: restoreSent && options.revisionAfterRestore !== undefined ? options.revisionAfterRestore : 'rev-1',
         /* BESIDE THE DOCUMENT AND NEVER INSIDE IT. `PUT /pricing` sends `corpus` back
            wholesale and the server round-trips keys it does not recognise, so a derived block
            written into the document would be stored in `inventory/prices.json`. Absent unless
@@ -703,6 +725,7 @@ async function open(
            control. */
         ...(options.clearable === undefined ? {} : { clearable: options.clearable }),
         ...(options.lastClear === undefined ? {} : { last_clear: options.lastClear }),
+        ...(options.clears === undefined ? {} : { clears: options.clears }),
       }),
     })
   })
@@ -8887,6 +8910,235 @@ test('a saved price re-reads the saved prices and never the prices worklist', as
   }).toBe(true)
   expect(readsAfterWrite(sent, 'PUT', '/pricing'), 'a saved price read the prices worklist').not.toContain('/pipeline/pricing')
 })
+
+/* REREAD FOLLOW-ON (D73, `afterWrite`). Every write that settles re-reads what it touched, whatever it came to: a 5xx may still have
+   committed, and a refusal still says the screen was behind. Each red case asserts that the read its write owes came AFTER the write
+   (`readAfterWrite`, anchored at the first such POST, so a read from before the press proves nothing). A control already re-reads on
+   main and passes there. A pin holds a digest the screen must not take, and passes on main by construction. */
+
+/** Presses a kept clear's own `Restore N cleared` line (`doRestoreClear`), the history control, never the toast's Undo. */
+async function pressRestoreCleared(page: Page, count: number): Promise<void> {
+  await page.getByRole('button', { name: new RegExp(`^Restore ${count} cleared`) }).click()
+}
+
+/** The newest clear carries no id (`restoreLastClear`); an earlier clear carries one (`restoreClear`). */
+function clearOptions(earlier: boolean): { lastClear?: { count: number; at: number }; clears?: { id: string; count: number; at: number }[] } {
+  return earlier ? { clears: [{ id: 'clear-7', count: 2, at: CLEAR_AT }] } : { lastClear: { count: 3, at: CLEAR_AT } }
+}
+
+const UNHOLD_SKU = '8608859'
+const UNHOLD_PATH = `/pipeline/held/${UNHOLD_SKU}/unhold`
+const HOLD_PATH = `/pipeline/held/${UNHOLD_SKU}/hold`
+/** Articuno, with two copies the owner took down by hand: the row draws Unhold. */
+const UNHOLD_ROW = sku({ sku: UNHOLD_SKU, name: 'Articuno', listing: { pushed: 0, staged: 0, live: 0, held_copies: 2 } })
+
+for (const failure of [
+  { status: 503, code: 'store_unavailable', label: 'a 5xx' },
+  { status: 409, code: 'revision_moved', label: 'a refusal' },
+]) {
+  for (const earlier of [false, true]) {
+    test(`reread follow-on: a Restore of ${earlier ? 'an earlier' : 'the newest'} cleared price set that the server fails with ${failure.label} re-reads the prices`, async ({ page }) => {
+      await open(page, { ...clearOptions(earlier), restoreFailure: { status: failure.status, code: failure.code } })
+      const sent = recordSent(page)
+      await pressRestoreCleared(page, earlier ? 2 : 3)
+      await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === '/pricing/restore'), { message: 'the Restore reached the server' }).toBe(true)
+      await expect.poll(() => readAfterWrite(sent, 'POST', '/pricing/restore', '/pricing'), {
+        message: `the Restore that failed with ${failure.label} is followed by a read of the saved prices: no GET /pricing reached the server after it`,
+      }).toBe(true)
+    })
+  }
+}
+
+/* THE PIN (D86, a second writer must not revert the first). A refused Restore is not an answered write, so the digest its re-read
+   carries must not be taken: the next save still carries the revision the screen read before the Restore. The answered Restore below
+   is the control that does take it. */
+for (const earlier of [false, true]) {
+  test(`reread follow-on: a refused Restore of ${earlier ? 'an earlier' : 'the newest'} cleared price set does not take the digest its re-read carries`, async ({ page }) => {
+    const wire = await open(page, { ...clearOptions(earlier), restoreFailure: { status: 409, code: 'revision_moved' }, revisionAfterRestore: 'rev-moved' })
+    await pressRestoreCleared(page, earlier ? 2 : 3)
+    await expect(page.locator('.bn-toast', { hasText: 'Not undone' }), 'the refusal is said').toBeVisible()
+    await field(page).fill('19.99')
+    await field(page).press('Tab')
+    await expect.poll(() => wire.some((r) => r.method === 'PUT'), { message: 'the save reached the server' }).toBe(true)
+    const save = wire.filter((r) => r.method === 'PUT').at(-1)?.body as { revision?: string } | undefined
+    expect(save?.revision, 'the save carries the revision read before the refused Restore, not the one its re-read carries').toBe('rev-1')
+  })
+}
+
+test('reread follow-on: an answered Restore of the newest cleared price set takes the digest its re-read carries', async ({ page }) => {
+  const wire = await open(page, { ...clearOptions(false), revisionAfterRestore: 'rev-moved' })
+  await pressRestoreCleared(page, 3)
+  await expect(page.locator('.bn-toast', { hasText: /undone/ }), 'the Restore is said to have answered').toBeVisible()
+  await field(page).fill('19.99')
+  await field(page).press('Tab')
+  await expect.poll(() => wire.some((r) => r.method === 'PUT'), { message: 'the save reached the server' }).toBe(true)
+  const save = wire.filter((r) => r.method === 'PUT').at(-1)?.body as { revision?: string } | undefined
+  expect(save?.revision, 'an answered Restore takes the digest its re-read carries, so the save carries it').toBe('rev-moved')
+})
+
+/* A kept tick's drop (`keepTicks` with a drop) is a tick write: it re-reads the kept ticks on the worklist, as a press does. Typing a
+   price over a suggestion and clearing it is the one way to drop, so the helper types, commits, then clears, and records only the clear. */
+async function dropKeptTick(page: Page, failure: TickAnswer): Promise<{ wire: Wire[]; sent: Sent[] }> {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, { live: ONE_LIST_LIVE, ticks: () => failure })
+  await expect(listGroup(page, 'Suggested Changes').getByText('Market up 18% since listed.'), 'precondition: the suggestion is drawn').toBeVisible()
+  const typed = page.getByRole('textbox', { name: /^Price for Gardevoir/ })
+  await typed.focus()
+  await page.keyboard.type('3.50')
+  await page.keyboard.press('Enter')
+  await expect(typed, 'the typed price is held on the row').toHaveValue('3.50')
+  const sent = recordSent(page)
+  await typed.focus()
+  await page.keyboard.type('1')
+  await page.keyboard.press('Backspace')
+  await expect(typed, 'the field is cleared').toHaveValue('')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => ticksPosts(wire).length, { message: 'the clear posts one drop' }).toBe(1)
+  expect(ticksBody(wire, 0), 'the POST is the drop, and no tick is kept with it').toEqual({ ticks: {}, drop: ['9000002'] })
+  return { wire, sent }
+}
+
+test('reread follow-on: a kept-tick drop the server fails with a 5xx re-reads the prices worklist', async ({ page }) => {
+  const { sent } = await dropKeptTick(page, { status: 503, code: 'store_unavailable', message: 'The store did not answer. Try again.' })
+  await expect.poll(() => readAfterWrite(sent, 'POST', '/pricing/ticks', '/pipeline/pricing'), {
+    message: 'the drop that failed with a 5xx is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('reread follow-on: a kept-tick drop the server refuses re-reads the prices worklist', async ({ page }) => {
+  const { sent } = await dropKeptTick(page, { status: 409, code: 'tick_refused', message: 'The store refused the tick.' })
+  await expect.poll(() => readAfterWrite(sent, 'POST', '/pricing/ticks', '/pipeline/pricing'), {
+    message: 'the drop that was refused is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('reread follow-on: an Unhold the server fails with a 5xx re-reads the prices worklist', async ({ page }) => {
+  await open(page, { skus: [UNHOLD_ROW], held: { unhold: { status: 503, code: 'store_unavailable' } } })
+  await expect(page.getByRole('button', { name: 'Unhold', exact: true }), 'precondition: the row draws Unhold').toBeVisible()
+  const sent = recordSent(page)
+  await page.getByRole('button', { name: 'Unhold', exact: true }).click()
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === UNHOLD_PATH), { message: 'the Unhold reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'POST', UNHOLD_PATH, '/pipeline/pricing'), {
+    message: 'the Unhold that failed with a 5xx is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('reread follow-on: an Unhold the server refuses re-reads the prices worklist', async ({ page }) => {
+  await open(page, { skus: [UNHOLD_ROW], held: { unhold: { status: 409, code: 'held_refused' } } })
+  await expect(page.getByRole('button', { name: 'Unhold', exact: true }), 'precondition: the row draws Unhold').toBeVisible()
+  const sent = recordSent(page)
+  await page.getByRole('button', { name: 'Unhold', exact: true }).click()
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === UNHOLD_PATH), { message: 'the Unhold reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'POST', UNHOLD_PATH, '/pipeline/pricing'), {
+    message: 'the Unhold that was refused is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+})
+
+/* THE UNDO OF AN UNHOLD (`reholdCopies`). The Unhold itself answers first, so its own reload is before the hold POST and cannot satisfy the anchor. */
+for (const failure of [
+  { status: 503, code: 'store_unavailable', label: 'a 5xx' },
+  { status: 409, code: 'held_after_send', label: 'a refusal' },
+]) {
+  test(`reread follow-on: an Undo of an Unhold that the server fails with ${failure.label} re-reads the prices worklist`, async ({ page }) => {
+    await open(page, { skus: [UNHOLD_ROW], held: { hold: { status: failure.status, code: failure.code } } })
+    await page.getByRole('button', { name: 'Unhold', exact: true }).click()
+    const toast = page.locator('.bn-toast', { hasText: 'Unheld 2 copies of Articuno' })
+    await expect(toast.getByRole('button', { name: 'Undo' }), 'the Unhold answered and offers Undo').toBeVisible()
+    const sent = recordSent(page)
+    await toast.getByRole('button', { name: 'Undo' }).click()
+    await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === HOLD_PATH), { message: 'the Undo reached the server' }).toBe(true)
+    await expect.poll(() => readAfterWrite(sent, 'POST', HOLD_PATH, '/pipeline/pricing'), {
+      message: `the Undo that failed with ${failure.label} is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it`,
+    }).toBe(true)
+  })
+}
+
+/* THE TAKE-OFF PRESS (SendCard, `pressTakeOff`). It changes the owed list's entry, so the owed take-offs are read again after it. */
+const TAKE_OFF_PATH = '/inventory/2/1/take-off'
+for (const failure of [
+  { status: 503, body: { error: { code: 'store_unavailable', message: 'The store did not answer.' } }, label: 'a 5xx' },
+  { status: 409, body: { error: { code: 'take_off_refused', message: 'The store refused the take-off.' } }, label: 'a refusal' },
+]) {
+  test(`reread follow-on: a Take It Off that the server fails with ${failure.label} re-reads the owed take-offs`, async ({ page }) => {
+    await open(page, { takeOffsOwed: [THIEVUL], takeOff: () => failure })
+    await expect(page.locator('.send-owed').getByRole('button', { name: /take it off tcgplayer/i }), 'precondition: the owed entry offers its press').toBeVisible()
+    const sent = recordSent(page)
+    await page.locator('.send-owed').getByRole('button', { name: /take it off tcgplayer/i }).click()
+    await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === TAKE_OFF_PATH), { message: 'the take-off reached the server' }).toBe(true)
+    await expect.poll(() => readAfterWrite(sent, 'POST', TAKE_OFF_PATH, '/pipeline/sends/owed'), {
+      message: `the take-off that failed with ${failure.label} is followed by a read of the owed take-offs: no GET /pipeline/sends/owed reached the server after it`,
+    }).toBe(true)
+  })
+}
+
+/* THE SEND CARD'S OTHER WRITES, CONTROLS. Take back, dismiss, and the unreadable-claim release and restore each already read the
+   send status (`refreshLive`, GET /pipeline/sends) in a `finally`, whatever the answer. These pass on main; they hold that read. */
+const ROLLED_SEND = sendSummary({
+  stamp: '20260924-120000-cccccc',
+  state: 'failed',
+  published_at: null,
+  taken_back_at: '2026-09-24T12:00:09+00:00',
+  failure: { code: 'send_rolled_back', message: 'rolled back' },
+  warning: 'rolled_back',
+})
+const STUCK_CLAIM = { key: 'claim-1', kind: 'download', started_at: '2026-09-24T12:00:00+00:00' }
+const SHORT_SEND = sendSummary({
+  state: 'short',
+  takeable: 3,
+  checked_at: '2026-09-24T12:18:00+00:00',
+  check: { export: 'live.csv', found: 0, expected: 3, missing: [{ sku: '8608459', name: 'Dunsparce', sent: 3, found: 0 }] },
+})
+for (const failure of [
+  { status: 503, body: { error: { code: 'store_unavailable', message: 'The store did not answer.' } }, label: 'a 5xx' },
+  { status: 409, body: { error: { code: 'take_back_not_yet', message: 'Not yet.' } }, label: 'a refusal' },
+]) {
+  test(`reread follow-on control: a Take back that the server fails with ${failure.label} re-reads the send status`, async ({ page }) => {
+    await open(page, { sends: () => ({ ...SENDS_NONE, sends: [SHORT_SEND] }) })
+    await page.route(/\/pipeline\/sends\/[^/]+\/take-back$/, (route) => route.fulfill({ status: failure.status, contentType: 'application/json', body: JSON.stringify(failure.body) }))
+    const sent = recordSent(page)
+    await page.locator('.send-short-check').getByRole('button', { name: /^Take 3 copies back$/i }).click()
+    await expect.poll(() => readAfterWrite(sent, 'POST', `/pipeline/sends/${SHORT_SEND.stamp}/take-back`, '/pipeline/sends'), {
+      message: `the Take back that failed with ${failure.label} is followed by a read of the send status: no GET /pipeline/sends reached the server after it`,
+    }).toBe(true)
+  })
+
+  test(`reread follow-on control: a Dismiss that the server fails with ${failure.label} re-reads the send status`, async ({ page }) => {
+    await open(page, { sends: () => ({ ...SENDS_NONE, sends: [ROLLED_SEND] }) })
+    await page.route(/\/pipeline\/sends\/[^/]+\/dismiss$/, (route) => route.fulfill({ status: failure.status, contentType: 'application/json', body: JSON.stringify(failure.body) }))
+    await expect(page.locator('.send-taken-back'), 'precondition: the rolled-back send is drawn').toBeVisible()
+    const sent = recordSent(page)
+    await page.locator('.send-taken-back').getByRole('button', { name: 'Dismiss' }).click()
+    await expect.poll(() => readAfterWrite(sent, 'POST', `/pipeline/sends/${ROLLED_SEND.stamp}/dismiss`, '/pipeline/sends'), {
+      message: `the Dismiss that failed with ${failure.label} is followed by a read of the send status: no GET /pipeline/sends reached the server after it`,
+    }).toBe(true)
+  })
+
+  test(`reread follow-on control: a Release of an unreadable record that the server fails with ${failure.label} re-reads the send status`, async ({ page }) => {
+    await open(page, { sends: () => ({ ...SENDS_NONE, unreadable_claims: 1, unreadable: [STUCK_CLAIM] }) })
+    await page.route(/\/pipeline\/sends\/unreadable\/[^/]+\/release$/, (route) => route.fulfill({ status: failure.status, contentType: 'application/json', body: JSON.stringify(failure.body) }))
+    const sent = recordSent(page)
+    await page.getByRole('button', { name: 'Release this record' }).click()
+    await page.getByRole('button', { name: 'Release it anyway' }).click()
+    await expect.poll(() => readAfterWrite(sent, 'POST', `/pipeline/sends/unreadable/${STUCK_CLAIM.key}/release`, '/pipeline/sends'), {
+      message: `the Release that failed with ${failure.label} is followed by a read of the send status: no GET /pipeline/sends reached the server after it`,
+    }).toBe(true)
+  })
+
+  test(`reread follow-on control: a Put back of an unreadable record that the server fails with ${failure.label} re-reads the send status`, async ({ page }) => {
+    await open(page, { sends: () => ({ ...SENDS_NONE, unreadable_claims: 1, unreadable: [STUCK_CLAIM] }) })
+    await page.route(/\/pipeline\/sends\/unreadable\/[^/]+\/release$/, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ released: STUCK_CLAIM, status: SENDS_NONE }) }))
+    await page.route(/\/pipeline\/sends\/unreadable\/[^/]+\/restore$/, (route) => route.fulfill({ status: failure.status, contentType: 'application/json', body: JSON.stringify(failure.body) }))
+    await page.getByRole('button', { name: 'Release this record' }).click()
+    await page.getByRole('button', { name: 'Release it anyway' }).click()
+    const undo = page.locator('.send-released').getByRole('button', { name: /put the record back|undo/i })
+    await expect(undo, 'precondition: the released record offers Undo').toBeVisible()
+    const sent = recordSent(page)
+    await undo.click()
+    await expect.poll(() => readAfterWrite(sent, 'POST', `/pipeline/sends/unreadable/${STUCK_CLAIM.key}/restore`, '/pipeline/sends'), {
+      message: `the Put back that failed with ${failure.label} is followed by a read of the send status: no GET /pipeline/sends reached the server after it`,
+    }).toBe(true)
+  })
+}
 
 test('a tick the store does not confirm names its Send box in the toast body', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
