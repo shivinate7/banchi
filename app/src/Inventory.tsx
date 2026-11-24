@@ -280,11 +280,19 @@ function report(failure: Failure): void {
   toast({ kind: 'refusal', tone: failureTone(failure), title: failure.message })
 }
 
+/* THE ONE NAME OF A COPY'S PLACE in a dialog title, an alt text and the unconfirmed-write toast: its place label,
+   or its key when it has none. */
+function copyPlaceName(copy: SearchCopy): string {
+  return sayPlace(copy.place.label ?? copy.key)
+}
+
 /* A WRITE THAT GOT NO ANSWER MAY HAVE COMMITTED, so the server's own sentence ("Try again") would send the person to press
-   a second time on a card that may already be gone. The sentence this screen owes them says the write is unconfirmed and
-   names the button to press if the card is still here. The raw server text stays off the screen (D196). Any other failure
-   is the server's "no", and its own sentence stands. `button` is the control's label exactly. */
-function reportWrite(err: unknown, what: string, button: string): void {
+   a second time on a card that may already be gone. The sentence this screen owes them says the write is unconfirmed, names
+   the copy (after a committed sale the selection has moved to the next copy, so "this copy" would point at the wrong card)
+   and names the button to press again if it is still on that copy (a committed sale leaves the row but drops its button).
+   The raw server text stays off the screen (D196). Any other failure is the server's "no", and its own sentence stands.
+   `button` is the control's label exactly. */
+function reportWrite(err: unknown, what: string, copy: SearchCopy, button: string): void {
   const failure = describeFailure(err)
   if (!gotNoAnswer(err)) {
     report(failure)
@@ -293,7 +301,7 @@ function reportWrite(err: unknown, what: string, button: string): void {
   toast({
     kind: 'refusal',
     tone: failureTone(failure),
-    title: `The store did not confirm the ${what}. If the card is still here, press ${button} again.`,
+    title: `The store did not confirm the ${what} of ${copyPlaceName(copy)}. If ${button} is still on that copy, press it again.`,
   })
 }
 
@@ -529,7 +537,7 @@ function InventoryWalk({
           })
           return
         }
-        reportWrite(err, 'sale', 'Mark Sold')
+        reportWrite(err, 'sale', copy, 'Mark Sold')
       } finally {
         setBusyKey(null)
       }
@@ -585,7 +593,7 @@ function InventoryWalk({
           })
           return
         }
-        reportWrite(err, 'retirement', 'Retire')
+        reportWrite(err, 'retirement', copy, 'Retire')
       } finally {
         setBusyKey(null)
       }
@@ -650,7 +658,7 @@ function InventoryWalk({
           setMoveTrouble(describeFailure(err))
           return
         }
-        reportWrite(err, 'move', 'Move')
+        reportWrite(err, 'move', copy, 'Move')
       } finally {
         setBusyKey(null)
       }
@@ -1410,7 +1418,7 @@ function MovePanel({
     if (!sectionStillThere) setSection((held) => (held === null ? held : null))
   }, [sectionStillThere])
   return (
-    <Overlay kind="dialog" label={`Move: ${sayPlace(copy.place.label ?? copy.key)}`} onClose={onCancel} className="inventory-confirm">
+    <Overlay kind="dialog" label={`Move: ${copyPlaceName(copy)}`} onClose={onCancel} className="inventory-confirm">
       <div className="inv-dialog-head">
         <span className="bn-eyebrow">Move</span>
         <h2 className="inv-dialog-title">Which box, and which section, does this copy go to?</h2>
@@ -1483,7 +1491,7 @@ function RetirePanel({
 
 
   return (
-    <Overlay kind="dialog" label={`Retire: ${sayPlace(copy.place.label ?? copy.key)}`} onClose={onCancel} className="inventory-confirm">
+    <Overlay kind="dialog" label={`Retire: ${copyPlaceName(copy)}`} onClose={onCancel} className="inventory-confirm">
       <div className="inv-dialog-head">
         <span className="bn-eyebrow">Retire</span>
         <h2 className="inv-dialog-title">Why is this copy leaving?</h2>
@@ -1502,7 +1510,7 @@ function RetirePanel({
                  dialog is about to retire is the copy on screen, whatever has slid through
                  its slot since the search answered. */
               src={src ?? undefined}
-              alt={`The card stored at ${sayPlace(copy.place.label ?? copy.key)}`}
+              alt={`The card stored at ${copyPlaceName(copy)}`}
               onError={() => setBroken(true)}
             />
           )}

@@ -9191,7 +9191,7 @@ test('and the re-rank is what moves it — the same sale, with the order taken a
  * can fail after it writes), and a refusal still says the screen was behind, so the screen cannot know the copy is
  * unchanged without reading it again. These cases fail the answer to one write on each surface: a sale from the copies
  * list, a sale that committed under a search (where the order must hold still, D313 and D181), a refused sale (where
- * focus must hold too, the PR 1127 and 1132 rules), a box claim from Manage box, and an undo from a card's own menu.
+ * focus must hold too: it stays on the pressed button while that stands, and lands on the row once it is gone), a box claim from Manage box, and an undo from a card's own menu.
  * Each case asserts the write reached the wire, then the read. */
 
 /** THE RE-READ THIS SCREEN MEANS: the walk's own box, `GET /inventory/<n>` (D192). The copies list's `GET /search` is NOT
@@ -9245,6 +9245,17 @@ async function expectReadAfter(wire: Wire[], isWrite: (entry: Wire) => boolean, 
     .toBeGreaterThan(0)
 }
 
+/** THE WORDS AFTER A WRITE THAT MAY HAVE COMMITTED, shared by the sale, retire and move cases: the toast's sentence, exactly.
+ *  `Inventory.tsx`'s `reportWrite` says the write is not confirmed and names the one control still on the copy to press again,
+ *  and never shows the store's own "Try again" (D196). */
+async function expectUnconfirmedToast(page: Page, sentence: string): Promise<void> {
+  const toast = page.locator('.bn-toast-refusal')
+  await expect(toast, 'the refusal reaches the person').toBeVisible()
+  await expect(toast.locator('.bn-toast-title'), 'the toast reads the unconfirmed sentence, exactly').toHaveText(sentence)
+  await expect(toast, 'the toast carries no raw server text').not.toContainText('The store did not answer')
+  await expect(toast, 'the toast does not say Try again').not.toContainText('Try again')
+}
+
 test('a Mark sold the server fails with a 5xx is followed by a store re-read', async ({ page }) => {
   /* THE SALE COMMITS AND THEN THE ANSWER FAILS. The store now holds a sold copy the screen has not read, which is what the
      re-read is for: `Inventory.tsx:doSell` reports a 5xx and never bumps the counter the walk re-reads on. */
@@ -9285,12 +9296,7 @@ test('a Mark sold the server fails with a 5xx says the sale is unconfirmed, with
   )
 
   await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
-  const toast = page.locator('.bn-toast-refusal')
-  await expect(toast.locator('.bn-toast-title'), 'the toast reads the unconfirmed-sale sentence, exactly').toHaveText(
-    'The store did not confirm the sale. If the card is still here, press Mark Sold again.',
-  )
-  await expect(toast, 'the toast carries no raw server text').not.toContainText('The store did not answer')
-  await expect(toast, 'the toast does not say Try again').not.toContainText('Try again')
+  await expectUnconfirmedToast(page, 'The store did not confirm the sale of Box 2, Section 1, Card 1. If Mark Sold is still on that copy, press it again.')
 })
 
 test('a 5xx sale that committed keeps its row in place under a search', async ({ page }) => {
@@ -9343,7 +9349,7 @@ test('a refused Mark sold is followed by a store re-read', async ({ page }) => {
 })
 
 test('a refused Mark sold that retires the copy leaves focus on its row, never on the body', async ({ page }) => {
-  /* THE PR 1132 FOCUS RULE. A real `card_retired` leaves the copy retired, which draws no Mark sold, so the press that held
+  /* THE RETIRED-REFUSAL FOCUS RULE. A real `card_retired` leaves the copy retired, which draws no Mark sold, so the press that held
      focus is gone and nothing on the row takes it back. The row takes focus (`landStrandedFocus`), never the body. The store
      answers the re-read as the server would: the copy is retired in it, not still on sale. */
   const { store, retire } = sellableStore()
@@ -9361,8 +9367,8 @@ test('a refused Mark sold that retires the copy leaves focus on its row, never o
 })
 
 test('a refused Mark sold that leaves the copy unsold keeps focus on its own button, never on the body', async ({ page }) => {
-  /* THE PR 1127 FOCUS RULE, for a refusal that leaves the copy for sale. The store still draws the copy unsold, so the pressed
-     button stands and keeps focus. The row takes focus only once the button is gone (PR 1132), so this case holds that line. */
+  /* THE KEPT-BUTTON FOCUS RULE, for a refusal that leaves the copy for sale. The store still draws the copy unsold, so the pressed
+     button stands and keeps focus. The row takes focus only once the button is gone, so this case holds that line. */
   await open(page, BOXES, STORE, () => PRICING, () => busyRefusal())
   const markSold = copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ })
 
@@ -9461,9 +9467,9 @@ async function expectHeldUnderSearch(page: Page, before: string[], place: string
     .toEqual(order ?? [before[0], left, ...before.slice(2)])
 }
 
-test('a retire the server fails with a 5xx after it committed keeps its row in place under a search', async ({ page }) => {
-  /* D313 AND D181, as the sale case above: `doRetire` reports a 5xx through `afterWrite` and holds nothing, so the read that
-     follows folds the retired copy out of the list and re-ranks every row under it. */
+/** THE RETIRE THE STACKED 5XX CASES START FROM: Box 7's copy is retired and the server fails after the commit. Returns the wire
+ *  and the order the search took before the press. */
+async function openStackedRetire(page: Page): Promise<{ wire: Wire[]; before: string[] }> {
   const { store, retire } = stackedStore()
   const wire = await open(page, STACKED_BOXES, store, () => PRICING, SALE, {
     route: '/#/inventory?box=2',
@@ -9474,22 +9480,40 @@ test('a retire the server fails with a 5xx after it committed keeps its row in p
     },
   })
   const before = await searchStacked(page)
+  return { wire, before }
+}
 
+/** The press the stacked retire cases share: Box 7's copy, its Retire, and the reason the dialog asks for. */
+async function pressStackedRetire(page: Page): Promise<void> {
   await copyRow(page, 'Box 7, Section 1, Card 39').getByRole('button', { name: 'Retire' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Damaged' }).click()
+}
+
+test('a retire the server fails with a 5xx after it committed keeps its row in place under a search', async ({ page }) => {
+  /* D313 AND D181, as the sale case above: `doRetire` reports a 5xx through `afterWrite` and holds nothing, so the read that
+     follows folds the retired copy out of the list and re-ranks every row under it. */
+  const { wire, before } = await openStackedRetire(page)
+  await pressStackedRetire(page)
 
   await expectReadAfter(wire, (entry) => entry.path.endsWith('/retire'), 'the 5xx retire under a search')
   await expectHeldUnderSearch(page, before, 'Box 7, Section 1, Card 39')
 })
 
-test('a move the server fails with a 5xx after it committed keeps its row in place under a search', async ({ page }) => {
-  /* THE THIRD WAY A COPY LEAVES (D83), under the same rule. `doMove` reports a 5xx through `afterWrite` and holds the departed
-     row first, as a successful move does, so the read that follows draws it in place. The arrival re-ranks the search the way
-     a successful move's does (the last assertion). */
+test('a retire the server fails with a 5xx says the retirement is unconfirmed, with no Try again and no raw server text', async ({ page }) => {
+  /* THE SAME WORDS FOR A RETIRE. `doRetire` reports a 5xx through `reportWrite`, which names Retire, the control still on the
+     copy, as the one to press again. */
+  await openStackedRetire(page)
+  await pressStackedRetire(page)
+
+  await expectUnconfirmedToast(page, 'The store did not confirm the retirement of Box 7, Section 1, Card 39. If Retire is still on that copy, press it again.')
+})
+
+/** THE MOVE THE STACKED 5XX CASES START FROM: a copy leaves Box 7 for Box 2, and the server fails after the commit. Returns the
+ *  wire and the order the search took before the press. */
+async function openStackedMove(page: Page): Promise<{ wire: Wire[]; before: string[] }> {
   const { store, moveOut } = stackedStore()
   /* A COMMITTED MOVE LEAVES A TOMBSTONE AT ITS SOURCE (`moveCard`'s own doc: `undoMove` is aimed at it) AND THE COPY AT ITS
      NEW PLACE. The copy's new place is what re-ranks the search, so a case that did not add it could not go red. */
-  const arrived = 'Box 2, Section 1, Card 41'
   /* THE TARGET BOX NAMES A SECTION AND A LAYOUT TOKEN, or its Move never enables (D300, `Inventory.tsx`'s target sections
      read `div` and the box's `layout_token`). Box 2 gets both here and nowhere else, so the stacked boxes stay as the other
      cases read them. */
@@ -9513,17 +9537,30 @@ test('a move the server fails with a 5xx after it committed keeps its row in pla
     },
   })
   const before = await searchStacked(page)
+  return { wire, before }
+}
 
+/** The press the stacked move cases share: Box 7's copy, its Move, then the dialog's Box, section and Move. */
+async function pressStackedMove(page: Page): Promise<void> {
   await copyRow(page, 'Box 7, Section 1, Card 39').getByRole('button', { name: 'Move', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: /^Move/ })
   await dialog.locator('.bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 commons' }).click()
   await dialog.locator('.bn-section-pick-item').click()
   await dialog.getByRole('button', { name: 'Move', exact: true }).click()
+}
+
+test('a move the server fails with a 5xx after it committed keeps its row in place under a search', async ({ page }) => {
+  /* THE THIRD WAY A COPY LEAVES (D83), under the same rule. `doMove` reports a 5xx through `afterWrite` and holds the departed
+     row first, as a successful move does, so the read that follows draws it in place. The arrival re-ranks the search the way
+     a successful move's does (the last assertion). */
+  const { wire, before } = await openStackedMove(page)
+  await pressStackedMove(page)
 
   await expectReadAfter(wire, (entry) => entry.path.endsWith('/move'), 'the 5xx move under a search')
-  /* THE ORDER A SUCCESSFUL MOVE GIVES under this same search, measured on main 4fcfb2250 (the commit's Red-run trailer names the
-     run): the departed row holds, `Box 2, Section 1, Card 1` rises above Section 2's two rows, and the arrival lands last. */
+  const arrived = 'Box 2, Section 1, Card 41'
+  /* THE ORDER A SUCCESSFUL MOVE GIVES under this same search: the departed row holds, `Box 2, Section 1, Card 1` rises above
+     Section 2's two rows, and the arrival lands last. */
   await expectHeldUnderSearch(page, before, 'Box 7, Section 1, Card 39', [
     'Box 7, Section 1, Card 38',
     'Was at Box 7, Section 1, Card 39',
@@ -9544,6 +9581,15 @@ test('a move the server fails with a 5xx after it committed keeps its row in pla
     page.locator('.browse-boxcell').first(),
     'the rail leads with the box whose departed copy the hold still counts',
   ).toHaveAttribute('aria-label', /^ME01 spares/)
+})
+
+test('a move the server fails with a 5xx says the move is unconfirmed, with no Try again and no raw server text', async ({ page }) => {
+  /* THE SAME WORDS FOR A MOVE. `doMove` reports a 5xx through `reportWrite`, which names Move, the row's control still on the
+     copy, as the one to press again. */
+  await openStackedMove(page)
+  await pressStackedMove(page)
+
+  await expectUnconfirmedToast(page, 'The store did not confirm the move of Box 7, Section 1, Card 39. If Move is still on that copy, press it again.')
 })
 
 

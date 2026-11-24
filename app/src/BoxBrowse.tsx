@@ -907,11 +907,11 @@ export function BoxBrowse({
    * for its copy KEYS and nothing else. No autoFocus: this screen is opened to WALK. */
   const { query, setQuery, results, loading, failure: searchFailure, reload: reloadSearch } = useSearch()
   /* EVERY WRITE'S RE-READ (`afterWrite`, D73): a card write made here, in the box sheet or on the screen above re-reads
-     this walk, its pricing and its box counts, whatever the write came to. A SALE is the exception that keeps main's
-     light split: the screen above bumps `reloadToken` for it, which re-reads this box, the box counts and the review
-     queues, and this counter stays put, so the buried boxes and the price tables stay as read. Any other write bumps it
-     and re-asks this screen's own search too, so the box rail's counts follow a move or a retire. A sale does not re-ask
-     it, as on main. */
+     this walk, its pricing and its box counts, whatever the write came to. A SALE re-reads less, to keep the request
+     budget: the screen above bumps `reloadToken` for it, which re-reads this box, the box counts, the review queues
+     and the orders, and this counter stays put, so the buried boxes and the price tables stay as read. Any other write
+     bumps it and re-asks this screen's own search too, so the box rail's counts follow a move or a retire. A sale does
+     not re-ask the search. */
   useRereadOnWrite(async (kind) => {
     if (kind === 'sale') return
     setReloads((n) => n + 1)
