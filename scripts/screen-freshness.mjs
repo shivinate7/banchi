@@ -1077,12 +1077,25 @@ function registrationCausesRead(screens, screen, argument) {
    * the same names is another function and another counter. */
   const owner = topLevelOf(argument)
   const here = scopeScreen(screen, owner)
+  /* A PROP THE PARENT HANDS DOWN (`useRereadOnWrite(onChanged)`, or a function that calls it) re-reads exactly when the
+   * parent's binding does, which is idiom 3's question asked of this component's prop. A prop bound to nothing that
+   * reads, or bound nowhere, does not count. */
+  const component = owner === null ? undefined : screen.components.get(functionName(owner))
+  const propReReads = (name) =>
+    component !== undefined && component.props.has(name) &&
+    callbackBindingReReads(screens, functionName(owner), name) !== null
   let node = argument
   if (ts.isIdentifier(argument)) {
+    if (propReReads(argument.text)) return true
     node = here.declarations.get(argument.text)?.node
     if (node === undefined) return false
   }
   if (reachesRead(here, node)) return true
+  for (const scoped of evidenceScope(here, node).nodes) {
+    for (const call of collect(scoped, (n) => ts.isCallExpression(n) && ts.isIdentifier(n.expression))) {
+      if (propReReads(call.expression.text)) return true
+    }
+  }
   for (const scoped of evidenceScope(here, node).nodes) {
     for (const bump of collect(scoped, isCounterBump)) {
       const stateName = owner === null ? screen.stateOf.get(bump.expression.text) : stateIn(owner, bump.expression.text)
@@ -1180,6 +1193,69 @@ function callbackBindingReReads(screens, component, prop, depth = 0, seen = new 
     if (found !== null) return found
   }
   return null
+}
+
+/** What `app/src/afterWrite.ts` names in one file: its own local name for each export it imports, by export name. */
+function afterWriteNames(screen) {
+  const local = new Map()
+  for (const statement of screen.src.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue
+    if (statement.moduleSpecifier.text !== './afterWrite') continue
+    const named = statement.importClause?.namedBindings
+    if (named === undefined || !ts.isNamedImports(named)) continue
+    for (const element of named.elements) local.set((element.propertyName ?? element.name).text, element.name.text)
+  }
+  return local
+}
+
+/** Whether `node` (a component, or the whole file when null) registers a re-read that reads, with `useRereadOnWrite`. */
+function registersARead(screens, screen, node) {
+  const register = afterWriteNames(screen).get('useRereadOnWrite')
+  if (register === undefined) return false
+  return collect(node ?? screen.src, (n) =>
+    ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === register &&
+    n.arguments[0] !== undefined && registrationCausesRead(screens, screen, n.arguments[0])).length > 0
+}
+
+/** Whether `other` can render the component `name` that lives in `screen`: the same file, or a file that imports it from there. */
+function seesComponent(other, screen, name) {
+  if (other === screen) return true
+  const home = screen.name.replace(/\.tsx$/, '')
+  return other.src.statements.some((statement) => {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) return false
+    if (statement.moduleSpecifier.text.replace(/^\.\//, '') !== home) return false
+    const named = statement.importClause?.namedBindings
+    return named !== undefined && ts.isNamedImports(named) &&
+      named.elements.some((element) => (element.propertyName ?? element.name).text === name)
+  })
+}
+
+/**
+ * Whether some ancestor of the component `name` (the component that renders it, or one that renders that) registers a
+ * re-read that reads.
+ *
+ * `useRereadOnWrite` is one registry for the whole screen, so a card write in a child component is re-read by what
+ * the screen above it registered. The ancestors are found by the JSX that renders the child, one file at a time, and
+ * each is asked as the writing component is: its OWN registration, never a sibling's. A component that registers a
+ * re-read and does not render the writer (directly or through others) is not an ancestor and covers nothing.
+ */
+function ancestorRegisters(screens, screen, name, seen = new Set()) {
+  const key = `${screen.name}:${name}`
+  if (seen.has(key)) return false
+  seen.add(key)
+  for (const other of screens) {
+    if (!seesComponent(other, screen, name)) continue
+    for (const [parent, meta] of other.components) {
+      if (other === screen && parent === name) continue
+      const renders = collect(meta.node, (n) => {
+        const opening = ts.isJsxSelfClosingElement(n) ? n : ts.isJsxOpeningElement(n) ? n : null
+        return opening !== null && opening.tagName.getText(other.src) === name
+      }).length > 0
+      if (!renders) continue
+      if (registersARead(screens, other, meta.node) || ancestorRegisters(screens, other, parent, seen)) return true
+    }
+  }
+  return false
 }
 
 // -------------------------------------------------------------------- the twelve recognizers
@@ -1323,26 +1399,16 @@ function recognizers(screens) {
      *     screen that calls the helper and registers nothing, or registers a no-op, re-reads nothing, and its write is
      *     still a finding. */
     ['write through the after-write helper', (ctx) => {
-      const local = new Map()
-      for (const statement of ctx.screen.src.statements) {
-        if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue
-        if (statement.moduleSpecifier.text !== './afterWrite') continue
-        const named = statement.importClause?.namedBindings
-        if (named === undefined || !ts.isNamedImports(named)) continue
-        for (const element of named.elements) local.set((element.propertyName ?? element.name).text, element.name.text)
-      }
+      const local = afterWriteNames(ctx.screen)
       const helper = local.get('afterWrite')
       const refetch = local.get('rereadNow')
-      const register = local.get('useRereadOnWrite')
-      if (register === undefined || (helper === undefined && refetch === undefined)) return null
-      /* THE REGISTRATION IS THE WRITING COMPONENT'S OWN: a sibling that registers a read re-reads for itself, and the
-       * registry is only as good as what is mounted when the write answers. A write in no component (a module-level
-       * function a component calls) takes any registration in the file. */
+      if (helper === undefined && refetch === undefined) return null
+      /* THE REGISTRATION IS THE WRITING COMPONENT'S OWN, OR AN ANCESTOR'S THAT RENDERS IT: a sibling that registers a
+       * read re-reads for itself, and the registry is only as good as what is mounted when the write answers. A write
+       * in no component (a module-level function a component calls) takes any registration in the file. */
       const owner = ctx.component === null ? null : functionNode(ctx.screen, ctx.component.name)
-      const registered = collect(owner ?? ctx.screen.src, (n) =>
-        ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === register &&
-        n.arguments[0] !== undefined && registrationCausesRead(ctx.screens, ctx.screen, n.arguments[0]))
-      if (registered.length === 0) return null
+      if (!registersARead(ctx.screens, ctx.screen, owner) &&
+          !(ctx.component !== null && ancestorRegisters(ctx.screens, ctx.screen, ctx.component.name))) return null
       const callsHelper = (node) =>
         ts.isCallExpression(node) && ts.isIdentifier(node.expression) &&
         (node.expression.text === helper || node.expression.text === refetch)
@@ -2339,6 +2405,74 @@ function selfTest() {
         const save = () => 1
         const press = () => save()
         return <button onClick={press} />
+      }`],
+    ['14q. the child writes, and the parent that renders it registers a re-read that reads', 'write through the after-write helper', `
+      export function ChildSaves() {
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
+      }
+      export function ParentReads() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        useRereadOnWrite(async () => setReloads((n) => n + 1))
+        return <div>{rows}<ChildSaves /></div>
+      }`],
+    ['14r. the child registers a function that calls a prop, and the parent binds that prop to a re-read', 'write through the after-write helper', `
+      export function ChildCalls({ onChanged }: { onChanged: () => void }) {
+        useRereadOnWrite(async () => onChanged())
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
+      }
+      export function ParentBinds() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        return <div>{rows}<ChildCalls onChanged={() => setReloads((n) => n + 1)} /></div>
+      }`],
+    ['14s. the registration is in a component that does not render the child that writes', null, `
+      export function ChildSavesAlone() {
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
+      }
+      export function RendersTheChild() {
+        return <div><ChildSavesAlone /></div>
+      }
+      export function RendersAnother() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        useRereadOnWrite(async () => setReloads((n) => n + 1))
+        return <div>{rows}<Other /></div>
+      }
+      export function Other() {
+        return <i />
+      }`],
+    ['14t. the child registers a function that calls a prop, and the parent binds that prop to nothing that reads', null, `
+      export function ChildCallsBlind({ onChanged }: { onChanged: () => void }) {
+        useRereadOnWrite(async () => onChanged())
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
+      }
+      export function ParentBindsBlind() {
+        const [rows, setRows] = useState(null)
+        useEffect(() => { void doRead().then(setRows) }, [])
+        return <div>{rows}<ChildCallsBlind onChanged={() => undefined} /></div>
+      }`],
+    ['14u. a grandchild writes, and the grandparent two components up registers a re-read that reads', 'write through the after-write helper', `
+      export function GrandchildSaves() {
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
+      }
+      export function MiddleRenders() {
+        return <GrandchildSaves />
+      }
+      export function GrandparentReads() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        useRereadOnWrite(async () => setReloads((n) => n + 1))
+        return <div>{rows}<MiddleRenders /></div>
       }`],
     ['3e. the kit hook useSheetWrite handed a no-op onChanged', null, `
       export function KitNoop({ onChanged }: { onChanged: () => void }) {
