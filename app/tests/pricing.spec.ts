@@ -4049,14 +4049,15 @@ test('a slow re-read from a first save never puts back the revision a second sav
   for (const release of held.splice(0)) release()
 })
 
-test('a Refresh Now does not adopt the file digest its read answers, so the next save is refused as moved', async ({
+test('a Refresh Now re-reads the file and takes no digest while its run goes on, so the next save is refused as moved', async ({
   page,
 }) => {
-  /* A REFRESH RE-READS THE SAVED PRICES AND THE CLEARS, NEVER THE FILE'S DIGEST. Only a write's receipt, and a clear
-     or its Undo, set the digest. Here another writer moves the file, the owner presses Refresh Now, and the next
-     autosave must still name the digest the screen read at load. The server is modelled: a write names the digest it
-     read, and a write that names an old one is refused with `corpus_moved`, so it never takes the moved file over. */
-  const wire = await open(page)
+  /* THE PRESS'S OWN RE-READ IS NO WRITE'S RECEIPT. Here another writer moves the file, the owner presses Refresh Now,
+     and the run is still going when the press's re-read lands: the refresh state stays `running`, so the end of the run
+     never reads the file. That re-read answers the moved file and must not take its digest, so the next autosave still
+     names the digest the screen read at load. The server is modelled: a write names the digest it read, and a write
+     that names an old one is refused with `corpus_moved`, so it never takes the moved file over. */
+  const wire = await open(page, { refresh: refreshState('running', { step: 'listings' }) })
   let serverRevision = 'rev-1'
   let overwrites = 0
   await page.route(/\/pricing$/, async (route) => {
