@@ -94,7 +94,6 @@ import {
   undoPull,
   walkPlan,
   failureTone,
-  refusalToast,
   ALREADY_SOLD,
   isFinalUndoRefusal,
   COPY_ALREADY_PULLED,
@@ -2123,7 +2122,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                 try {
                   await afterWrite(() => reopenOrders(aim))
                 } catch (err) {
-                  toast({ ...refusalToast(err), icon: 'alert' })
+                  toast({ ...listWriteToast(err, 'undo'), icon: 'alert' })
                 }
               })()
             },
@@ -2174,7 +2173,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                   try {
                     await afterWrite(() => reopenLines(aim))
                   } catch (err) {
-                    toast({ ...refusalToast(err), icon: 'alert' })
+                    toast({ ...listWriteToast(err, 'undo'), icon: 'alert' })
                   }
                 })()
               },
@@ -2218,7 +2217,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                 try {
                   await afterWrite(() => reopenOrders(done.closed))
                 } catch (err) {
-                  toast({ ...refusalToast(err), icon: 'alert' })
+                  toast({ ...listWriteToast(err, 'undo'), icon: 'alert' })
                 }
               })()
             },
@@ -2259,7 +2258,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                 try {
                   await afterWrite(() => reopenLines(aim))
                 } catch (err) {
-                  toast({ ...refusalToast(err), icon: 'alert' })
+                  toast({ ...listWriteToast(err, 'undo'), icon: 'alert' })
                 }
               })()
             },
