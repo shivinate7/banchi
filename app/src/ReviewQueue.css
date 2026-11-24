@@ -729,6 +729,10 @@
 /* UX-255: the outcome, a description beside the one act-verb ("Closed"). Never a second
    verb — quieter than the label, never bold. */
 .review-receipt-outcome { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; flex: none; }
+/* D329: the words of a queued Undo sit inside the text span, which takes the row's spare width, so the Undo stays where it
+   was (D118). The receipt's fill is ink in light and surface in dark, so the words take the receipt's own text color, not
+   `--bn-ink-2`. The label gives way (it already truncates) before the words do. */
+.review-receipt-text > .bn-queued-note { flex: none; color: inherit; min-height: 0; }
 .review-refusal { animation: bn-receipt-in var(--bn-t-slow) var(--bn-ease-spring) both, rv-shake var(--bn-t-slow) var(--bn-ease) var(--bn-t-slow) 1; }
 @keyframes rv-shake {
   0%, 100% { transform: none; }

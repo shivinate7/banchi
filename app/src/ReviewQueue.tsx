@@ -1865,6 +1865,9 @@ function Tray({
             {/* UX-255: the outcome, as a description beside the one act-verb — never a
                 second verb competing with "Closed". */}
             {receipt.outcome === undefined ? null : <span className="review-receipt-outcome">{receipt.outcome}</span>}
+            {/* THE WORDS OF A QUEUED UNDO (D329), inside the text span that already takes the row's spare width: the Undo keeps its
+                place (D118), and the label gives way before the words do. */}
+            {queued?.key === receipt.key && receipt.undoable ? <QueuedNote id="review-queued-note">{sayQueued(queued.ahead)}</QueuedNote> : null}
           </span>
           {/* NO CLOCK (UN-5): the drain bar is gone, because this row does not fade with a
               toast and there is no window left for it to count down. */}
@@ -1880,7 +1883,6 @@ function Tray({
               aria-describedby={queued?.key === receipt.key ? 'review-queued-note' : undefined}
             />
           )}
-          {queued?.key === receipt.key && receipt.undoable ? <QueuedNote id="review-queued-note">{sayQueued(queued.ahead)}</QueuedNote> : null}
         </div>
       )}
     </div>
