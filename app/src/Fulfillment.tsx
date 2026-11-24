@@ -17,6 +17,7 @@ import type {
 import {
   ServerError,
   getInventory,
+  getInventoryBox,
   getOrders,
   markSold,
   photoUrl,
@@ -945,11 +946,11 @@ export function Fulfillment() {
   )
 
   /** Has the store put this card back on hand since its sale was pressed? An Undo that waited sends nothing then. A read
-   *  that fails says nothing, and the press goes on: the server refuses a reversal it cannot do. This is a whole-store
-   *  read (DEBT27), paid only by an Undo that waited, because the re-read the sale ahead started has not landed yet. */
+   *  that fails says nothing, and the press goes on: the server refuses a reversal it cannot do. It reads the card's own
+   *  box (D192), paid only by an Undo that waited, because the re-read the sale ahead started has not landed yet. */
   const backOnHand = useCallback(async (card: Sellable): Promise<boolean> => {
     try {
-      const now = (await getInventory()).cards[card.key]
+      const now = (await getInventoryBox(card.box)).cards[card.key]
       return now !== undefined && forSale(now)
     } catch {
       return false
