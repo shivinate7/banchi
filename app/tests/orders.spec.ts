@@ -6074,7 +6074,7 @@ test('a throw inside the line worker rolls its sale back, toasts it, and the nex
   await expect.poll(() => seen.asked).toEqual(['cap-a'])
   await page.keyboard.press('2')
   await letNextWrite(seen)
-  await expect(page.locator('.bn-toast', { hasText: 'Not marked sold' })).toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: 'The store did not confirm the sale of' })).toBeVisible()
   await expect(rows.nth(0).getByRole('button', { name: /^Mark Sold/ })).toBeVisible()
   await expect.poll(() => seen.asked, 'the next queued sale still went out').toEqual(['cap-a', 'cap-b'])
   await letNextWrite(seen)
