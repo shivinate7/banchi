@@ -1,13 +1,13 @@
 {
- "readAt": "2026-11-24T01:27:28Z",
+ "readAt": "2026-11-24T05:14:58Z",
  "pulls": [
   {
-   "number": 1142,
-   "title": "Inventory: every write re-reads after it settles (item 123)",
-   "branch": "lane/inventory-reread",
+   "number": 1143,
+   "title": "Slabs, RunPanel steps and ClearPrices re-read after every write (item 123, pass 1)",
+   "branch": "lane/rest-screens-reread",
    "draft": true,
-   "createdAt": "2026-11-24T00:59:54Z",
-   "url": "https://github.com/shivinate7/banchi/pull/1142"
+   "createdAt": "2026-11-24T01:36:26Z",
+   "url": "https://github.com/shivinate7/banchi/pull/1143"
   }
  ],
  "branches": [
@@ -307,9 +307,6 @@
   },
   {
    "name": "lane/hand-fed-rail-flat-design"
-  },
-  {
-   "name": "lane/inventory-reread"
   },
   {
    "name": "lane/market-reads-latest"
