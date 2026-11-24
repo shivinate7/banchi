@@ -8913,8 +8913,9 @@ test('a saved price re-reads the saved prices and never the prices worklist', as
 
 /* REREAD FOLLOW-ON (D73, `afterWrite`). Every write that settles re-reads what it touched, whatever it came to: a 5xx may still have
    committed, and a refusal still says the screen was behind. Each red case asserts that the read its write owes came AFTER the write
-   (`readAfterWrite`, anchored at the first such POST, so a read from before the press proves nothing). A control already re-reads on
-   main and passes there. A pin holds a digest the screen must not take, and passes on main by construction. */
+   (`readAfterWrite`, anchored at the first such POST, so a read from before the press proves nothing). A control that already
+   re-reads passes without the fix, so its case guards that read rather than going red. A pin holds a digest the screen must not
+   take, so it passes by construction. */
 
 /** Presses a kept clear's own `Restore N cleared` line (`doRestoreClear`), the history control, never the toast's Undo. */
 async function pressRestoreCleared(page: Page, count: number): Promise<void> {
@@ -9135,7 +9136,8 @@ for (const failure of [
 }
 
 /* THE SEND CARD'S OTHER WRITES, CONTROLS. Take back, dismiss, and the unreadable-claim release and restore each already read the
-   send status (`refreshLive`, GET /pipeline/sends) in a `finally`, whatever the answer. These pass on main; they hold that read. */
+   send status (`refreshLive`, GET /pipeline/sends) in a `finally`, whatever the answer. These pass by design; they hold that read
+   against a later change. */
 const ROLLED_SEND = sendSummary({
   stamp: '20260924-120000-cccccc',
   state: 'failed',
