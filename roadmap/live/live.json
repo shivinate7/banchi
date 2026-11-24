@@ -1,15 +1,6 @@
 {
- "readAt": "2026-11-24T05:14:58Z",
- "pulls": [
-  {
-   "number": 1143,
-   "title": "Slabs, RunPanel steps and ClearPrices re-read after every write (item 123, pass 1)",
-   "branch": "lane/rest-screens-reread",
-   "draft": true,
-   "createdAt": "2026-11-24T01:36:26Z",
-   "url": "https://github.com/shivinate7/banchi/pull/1143"
-  }
- ],
+ "readAt": "2026-11-24T06:31:59Z",
+ "pulls": [],
  "branches": [
   {
    "name": "allow-install-refresh"
@@ -324,9 +315,6 @@
    "name": "lane/orders-undo-plumbing"
   },
   {
-   "name": "lane/rest-screens-reread"
-  },
-  {
    "name": "lane/shipped-order-walk"
   },
   {
@@ -431,12 +419,6 @@
    "n": 118,
    "status": "open",
    "home": "docs/specs/pricing-suggest.md",
-   "lane": null
-  },
-  {
-   "n": 123,
-   "status": "open",
-   "home": "orders-plumbing-fixes",
    "lane": null
   },
   {
