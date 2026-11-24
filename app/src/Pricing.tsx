@@ -77,7 +77,7 @@ import { FLAT_KEY, subThresholdSkus } from './readiness'
 import { isWithheld, rowShare, runChip } from './standing'
 import { TrendCell, type KeptTrend, type TrendRead } from './PriceTrend'
 import { PricesAsOf, asOfOf, usePricesRefresh } from './PricesAsOf'
-import { afterWrite, corpusKind, useRereadOnWrite, type WriteKind } from './afterWrite'
+import { afterWrite, corpusKind, sendKind, useRereadOnWrite, type WriteKind } from './afterWrite'
 import { ClearPrices } from './ClearPrices'
 import { runBoxLabel } from './runScope'
 import {
@@ -1124,7 +1124,8 @@ export function Pricing() {
    *  tick, laid on the rows held. It adds, drops and reorders nothing (D313), and it leaves the answers, the undo stack and a failed
    *  save to `load`, which a Reload or a send runs whole. */
   const rereadTicks = useCallback(async (kind: WriteKind) => {
-    if (readView || (kind !== 'tick' && kind !== 'other')) return
+    /* A READ OPENED BY ITS STAMP HAS NO TICKS TO LAY, but a write that may have gone live still reads the worklist (`other`). */
+    if ((readView && kind !== 'other') || (kind !== 'tick' && kind !== 'other')) return
     const fresh = await getPricingWorklist([...picked].sort())
     const ticked = new Map((fresh.live ?? []).map((one) => [one.sku, one.ticked]))
     /* THE HELD WORKLIST STANDS WHEN NO TICK DIFFERS: a new object would re-run what is read once per load (the stored holds, D313). */
@@ -1640,21 +1641,26 @@ export function Pricing() {
     const sending = push === 'sending'
     void (async () => {
       try {
-        const result = await applyMarkdown(stamp, {
-          edits: pushable,
-          revision: revision.current,
-          write: true,
-          kind: kind === '' ? undefined : kind,
-          /* THE SKUS TYPED THIS VISIT, so the server never reads `earlier_lower` off a
-             timestamp `stamp_answers` left in the past for an unchanged value (round 8). */
-          typed: pushable.map((edit) => edit.sku).filter((sku) => typedHere.has(sku)),
-        })
+        /* THE SAVED PRICES ARE READ AGAIN WHATEVER THE WRITE CAME TO (`afterWrite`, D73): the file's write is a corpus write. THE RECEIPT IS TAKEN INSIDE IT, so the re-read follows the receipt (`refreshCorpus`). */
+        const result = await afterWrite(async () => {
+          const wrote = await applyMarkdown(stamp, {
+            edits: pushable,
+            revision: revision.current,
+            write: true,
+            kind: kind === '' ? undefined : kind,
+            /* THE SKUS TYPED THIS VISIT, so the server never reads `earlier_lower` off a
+               timestamp `stamp_answers` left in the past for an unchanged value (round 8). */
+            typed: pushable.map((edit) => edit.sku).filter((sku) => typedHere.has(sku)),
+          })
+          if (wrote.revision) takeRevision(wrote.revision)
+          return wrote
+        }, corpusKind)
         setApplied(result)
         setWroteUpload(result.wrote)
-        if (result.revision) takeRevision(result.revision)
         setShipTrouble(null)
         if (sending && result.wrote) {
-          await sendMarkdown(stamp)
+          /* A SEND THE SERVER FAILED MAY STILL HAVE GONE LIVE, so the worklist is read again; one that answered is followed by `load` below. */
+          await afterWrite(() => sendMarkdown(stamp), sendKind)
           setTypedHere(new Set())
           void load(picked, hashStamp)
           toast({
@@ -2045,7 +2051,7 @@ export function Pricing() {
           })
           setListedDropped((held) => new Set(held).add(sku.sku))
           /* A tick the server still holds would come back on this row, so a failure is said, like a press that failed. */
-          keepTicks({}, [sku.sku]).catch((err: unknown) => {
+          afterWrite(() => keepTicks({}, [sku.sku]), 'tick').catch((err: unknown) => {
             const trouble = describeFailure(err)
             if (trouble.code === 'demo_read_only') return
             toast({ ...refusalToast(err, `Tick not cleared for ${sku.name}`) })
@@ -2491,7 +2497,8 @@ export function Pricing() {
     async (sku: PricingSku) => {
       setUnholding(sku.sku)
       try {
-        const done = await unholdCopies(sku.sku)
+        /* THE WORKLIST IS READ AGAIN WHATEVER THE UNHOLD CAME TO (`afterWrite`, D73): an Unhold the server failed may still have gone. */
+        const done = await afterWrite(() => unholdCopies(sku.sku), 'tick')
         reload()
         toast({
           kind: 'receipt',
@@ -2501,7 +2508,7 @@ export function Pricing() {
           action: {
             label: 'Undo',
             onPress: () =>
-              void reholdCopies(sku.sku, done.unheld, done.pushed)
+              void afterWrite(() => reholdCopies(sku.sku, done.unheld, done.pushed), 'tick')
                 .then(() => {
                   reload()
                   toast({ kind: 'ok', title: `Kept ${sku.name} off TCGplayer again` })
@@ -2717,7 +2724,11 @@ export function Pricing() {
    *  back" rule `withRestored` already follows for the toast's own path. */
   const doRestoreClear = useCallback(async (clear: KeptClear) => {
     try {
-      const back = clear.id === undefined ? await restoreLastClear(revision.current) : await restoreClear(clear.id, revision.current)
+      /* THE PRICES ARE READ AGAIN WHATEVER THE RESTORE CAME TO (`afterWrite`, D73), and only an answered one takes the digest (D86). */
+      const back = await afterWrite(
+        () => (clear.id === undefined ? restoreLastClear(revision.current) : restoreClear(clear.id, revision.current)),
+        corpusKind,
+      )
       const held = await getPricingCorpus()
       setKept(keptOf(held))
       takeRevision(held.revision)

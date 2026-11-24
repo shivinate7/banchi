@@ -31,7 +31,7 @@ import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react
 import type { ReactNode } from 'react'
 import { Button, Count, Icon, IconButton, Money, Notice, Pill, Refusal, Retry } from './kit'
 import { atClockTime, clockTime, dayMonth } from './dates'
-import { afterWrite, useRereadOnWrite } from './afterWrite'
+import { afterWrite, sendKind, useRereadOnWrite } from './afterWrite'
 import { describeFailure, dismissSendWarning, getOwedTakeOffs, gotNoAnswer, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, sendSuggestions, takeBackSend } from './server'
 import type { Failure } from './server'
 import type { EmptySend, LiveMove, OwedTakeOff, PriceChange, RefusedPrice, SendAnswer, SendSummary, SendTrim } from './types'
@@ -72,11 +72,6 @@ const RETRYABLE = new Set(['live_check_failed', 'tcg_write_refused', 'tcg_write_
  *  client names a failed fetch that way whenever `/status` still answers — which is also what
  *  a connection dropped mid-send looks like from the page. */
 const DROPPED = new Set(['unreachable', 'bad_response', 'origin_blocked'])
-
-/** WHICH RE-READ A SEND OWES (`afterWrite`, D73). A Send that answered is followed by the screen's own reload, which reads
- *  the worklist and the saved prices, so only the owed take-offs are left to read. A Send that did not answer has no reload
- *  coming, and may still have gone: all of it is read. */
-const sendKind = (failed: boolean): 'send' | 'other' => (failed ? 'other' : 'send')
 
 /** One sentence for why a press was refused, in owner words. The server's own text sits behind
  *  "What the server said" (D196, D269). */
@@ -193,7 +188,8 @@ export function useOwedTakeOffs(): OwedTakeOffs {
     if (kind !== 'send' && kind !== 'other') return
     try {
       const answer = await getOwedTakeOffs()
-      setOwed(answer.owed)
+      /* THE HELD LIST STANDS WHEN NOTHING DIFFERS: a new array would clear the answer to a press (`OwedTakeOffsLine`'s `answers`) that the server has not yet changed (D313). */
+      setOwed((held) => (JSON.stringify(held) === JSON.stringify(answer.owed) ? held : answer.owed))
       setFailure(null)
     } catch (err) {
       setFailure(describeFailure(err))
@@ -250,7 +246,8 @@ function OwedTakeOffsLine({
 
   const pressOne = async (entry: OwedTakeOff) => {
     setTaking(entryKey(entry))
-    const outcome = await pressTakeOff(entry.box, entry.index)
+    /* THE OWED LIST IS READ AGAIN WHATEVER THE PRESS CAME TO (`afterWrite`, D73): `pressTakeOff` turns a refusal or a 5xx into an outcome, and a take-off that got no answer may still have gone. */
+    const outcome = await afterWrite(() => pressTakeOff(entry.box, entry.index), 'send')
     setAnswers((held) => ({ ...held, [entryKey(entry)]: outcome }))
     setTaking(null)
   }
