@@ -2474,6 +2474,62 @@ function selfTest() {
         useRereadOnWrite(async () => setReloads((n) => n + 1))
         return <div>{rows}<MiddleRenders /></div>
       }`],
+    ['14v. the child registers a re-read that awaits a kit hook handed a no-op, and the parent binds the child\'s same-named prop to a re-read', null, `
+      export function KitRegs({ onChanged }: { onChanged: () => void }) {
+        const { write } = useSheetWrite(() => undefined)
+        useRereadOnWrite(async () => { await write(() => undefined) })
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
+      }
+      export function KitRegsOwner() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        return <div>{rows}<KitRegs onChanged={() => setReloads((n) => n + 1)} /></div>
+      }`],
+    ['14w. the child writes in one file, and the parent that imports it from there registers a re-read that reads', 'write through the after-write helper', `
+      export function ChildSavesAway() {
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
+      }`, [`
+      import { ChildSavesAway } from './__HOME__'
+      export function ParentAcrossFiles() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        useRereadOnWrite(async () => setReloads((n) => n + 1))
+        return <div>{rows}<ChildSavesAway /></div>
+      }`]],
+    ['14w2. the child writes in one file, and a file that does not import it renders a component of the same name that registers a re-read', null, `
+      export function ChildSavesHere() {
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
+      }`, [`
+      function ChildSavesHere() {
+        return <i />
+      }
+      export function NamesakeParent() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        useRereadOnWrite(async () => setReloads((n) => n + 1))
+        return <div>{rows}<ChildSavesHere /></div>
+      }`]],
+    ['14x. the child registers a function that calls a prop, and a file that does not import it binds that prop on a component of the same name', null, `
+      export function ChildCallsNamed({ onChanged }: { onChanged: () => void }) {
+        useRereadOnWrite(async () => onChanged())
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
+      }`, [`
+      function ChildCallsNamed(_: { onChanged: () => void }) {
+        return <i />
+      }
+      export function NamesakeBinds() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        return <div>{rows}<ChildCallsNamed onChanged={() => setReloads((n) => n + 1)} /></div>
+      }`]],
     ['3e. the kit hook useSheetWrite handed a no-op onChanged', null, `
       export function KitNoop({ onChanged }: { onChanged: () => void }) {
         const { write } = useSheetWrite(() => undefined)
@@ -2491,10 +2547,17 @@ function selfTest() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'banchi-freshness.'))
   try {
     console.log('\na stale write is flagged, and each idiom is recognised as ITSELF')
-    cases.forEach(([label, expected, body], index) => {
+    cases.forEach(([label, expected, body, siblings = []], index) => {
       const file = path.join(tmp, `Case${index}.tsx`)
       fs.writeFileSync(file, head + body + '\n', 'utf8')
-      const { findings, covered } = audit([file], synthetic)
+      /* A case may bring other files, audited together with it. `__HOME__` in one is the case's own module name, for an
+       * `import { X } from './__HOME__'`, so a case can say which file imports which. */
+      const others = siblings.map((text, n) => {
+        const sibling = path.join(tmp, `Case${index}Sibling${n}.tsx`)
+        fs.writeFileSync(sibling, head + text.replaceAll('__HOME__', `Case${index}`) + '\n', 'utf8')
+        return sibling
+      })
+      const { findings, covered } = audit([file, ...others], synthetic)
       if (expected === null) {
         ok(
           findings.length > 0,
@@ -2512,6 +2575,7 @@ function selfTest() {
         )
       }
       fs.rmSync(file)
+      for (const other of others) fs.rmSync(other)
     })
 
     /* THE KNOWN BLIND SPOT, ASSERTED RATHER THAN LEFT TO BE REDISCOVERED. This case documents
