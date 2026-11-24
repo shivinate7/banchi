@@ -5,6 +5,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleMotion } from './motionSettled'
 import { stubHistoryCard } from './routeFixtures'
+import { readAfterWrite, recordSent } from './wireOrder'
 
 import type { MarkdownSku } from '../src/types'
 import { setViewport } from './phoneSwitch'
@@ -93,6 +94,8 @@ async function open(
     /** What the apply route answers. A function so a case can differ between the check and
      *  the write, which is the pair this screen's two presses are about. */
     apply?: (body: Record<string, unknown>) => Record<string, unknown>
+    /** Answers `POST /pipeline/markdowns/<stamp>/apply` with a refusal or a 5xx instead of the file. The POST is recorded first. */
+    applyFailure?: { status: number; code: string }
     /** What `POST /pipeline/markdowns/<stamp>/send` answers: 200 with a receipt that went
      *  live, or a refusal code. Nothing here reaches TCGplayer. */
     send?: () => { status: number; code?: string }
@@ -138,6 +141,14 @@ async function open(
   await page.route(/\/pipeline\/markdowns\/[^/]+\/apply$/, async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>
     wire.push({ method: 'POST', path: new URL(route.request().url()).pathname, body })
+    if (options.applyFailure !== undefined) {
+      await route.fulfill({
+        status: options.applyFailure.status,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: options.applyFailure.code, message: 'The server said no.' } }),
+      })
+      return
+    }
     const answer = options.apply?.(body) ?? {
       ok: true,
       exit_code: 0,
@@ -477,6 +488,72 @@ test('a refused write sends nothing and says so', async ({ page }) => {
 
   await expect(page.getByRole('region', { name: 'Send these prices' })).toContainText('These prices could not be written, so nothing was sent.')
   expect(wire.filter((row) => row.path.endsWith('/send'))).toHaveLength(0)
+})
+
+/* REREAD FOLLOW-ON (D73, `afterWrite`). The one list's press is two writes. The file's write (`apply`) changes the saved prices, so the
+   saved prices are read again, as a corpus write is. The send (`send`) makes the listings live, so the worklist's live rows are read
+   again, as a successful send's own reload reads them. A write that fails re-reads what it may have moved. Each red case asserts the
+   read came after its own POST. The success control is what the failure must match. */
+const APPLY_PATH = `/pipeline/markdowns/${STAMP}/apply`
+const SEND_PATH = `/pipeline/markdowns/${STAMP}/send`
+
+async function pressOnePrice(page: Page): Promise<void> {
+  const field = page.locator('.pricing-input').first()
+  await field.click()
+  await field.fill('')
+  await field.type('17.50')
+  await field.blur()
+  await page.getByRole('button', { name: 'Send 1 Price to TCGplayer' }).click()
+}
+
+test('reread follow-on: a write of the file that the server fails with a 5xx re-reads the saved prices', async ({ page }) => {
+  await open(page, { applyFailure: { status: 503, code: 'store_unavailable' } })
+  const sent = recordSent(page)
+  await pressOnePrice(page)
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === APPLY_PATH), { message: 'the write reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'POST', APPLY_PATH, '/pricing'), {
+    message: 'the write that failed with a 5xx is followed by a read of the saved prices: no GET /pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('reread follow-on: a write of the file that the server refuses re-reads the saved prices', async ({ page }) => {
+  await open(page, { applyFailure: { status: 409, code: 'revision_moved' } })
+  const sent = recordSent(page)
+  await pressOnePrice(page)
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === APPLY_PATH), { message: 'the write reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'POST', APPLY_PATH, '/pricing'), {
+    message: 'the write that was refused is followed by a read of the saved prices: no GET /pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('reread follow-on: a send that the server fails with a 5xx re-reads the prices worklist', async ({ page }) => {
+  await open(page, { send: () => ({ status: 503, code: 'store_unavailable' }) })
+  const sent = recordSent(page)
+  await pressOnePrice(page)
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === SEND_PATH), { message: 'the send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'POST', SEND_PATH, '/pipeline/pricing'), {
+    message: 'the send that failed with a 5xx is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('reread follow-on: a send that the server refuses re-reads the prices worklist', async ({ page }) => {
+  await open(page, { send: () => ({ status: 409, code: 'send_busy' }) })
+  const sent = recordSent(page)
+  await pressOnePrice(page)
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === SEND_PATH), { message: 'the send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'POST', SEND_PATH, '/pipeline/pricing'), {
+    message: 'the send that was refused is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('reread follow-on control: a send that answers re-reads the prices worklist', async ({ page }) => {
+  await open(page)
+  const sent = recordSent(page)
+  await pressOnePrice(page)
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === SEND_PATH), { message: 'the send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'POST', SEND_PATH, '/pipeline/pricing'), {
+    message: 'the send that answered is followed by a read of the prices worklist: its own reload reads it',
+  }).toBe(true)
 })
 
 test('a send the live read refuses says nothing changed, and offers Try again', async ({ page }) => {
