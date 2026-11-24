@@ -1,0 +1,1 @@
+- inventory-820-inset-toast: At 820 wide on Inventory, after a press, the copy cards lose their left inset, and the refused toast covers the Correct control. Reported from a review. Whether main has either is unknown: this pass did not check main at 820. Distinct from `inventory-toast-covers-row-undo`.

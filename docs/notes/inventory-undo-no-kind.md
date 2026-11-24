@@ -1,0 +1,1 @@
+- inventory-undo-no-kind: `Inventory.tsx`'s `doUndo` passes no kind to `afterWrite`, so an undo takes the full re-read. Only `doSell` passes `'sale'`. Check whether an undo of a sale needs the pricing re-read.

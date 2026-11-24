@@ -1,0 +1,1 @@
+- inventory-non-sale-pricing: A non-sale write re-reads the box walk's pricing. The registered re-read in `BoxBrowse.tsx` returns early only for `sale`. `Inventory.tsx`'s retire and move pass no kind, so both re-read pricing. Check whether each needs that read.

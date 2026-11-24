@@ -1,0 +1,1 @@
+- inventory-writekind-untested: No test in `app/tests` names `WriteKind` or `rereadNow`. So the fold in `app/src/afterWrite.ts`, where a pending round keeps the widest kind, has no test. D73 (re-read after every write) is the rule it serves.
