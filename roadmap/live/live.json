@@ -1,21 +1,21 @@
 {
- "readAt": "2026-11-24T00:37:48Z",
+ "readAt": "2026-11-24T01:18:01Z",
  "pulls": [
   {
-   "number": 1141,
-   "title": "Screen freshness: a child writer is covered by an ancestor's re-read or a re-reading prop",
-   "branch": "lane/freshness-child-writer",
+   "number": 1142,
+   "title": "Inventory: every write re-reads after it settles (item 123)",
+   "branch": "lane/inventory-reread",
    "draft": true,
-   "createdAt": "2026-11-24T00:35:03Z",
-   "url": "https://github.com/shivinate7/banchi/pull/1141"
+   "createdAt": "2026-11-24T00:59:54Z",
+   "url": "https://github.com/shivinate7/banchi/pull/1142"
   },
   {
-   "number": 1140,
-   "title": "Fulfillment: re-read after every write; say plainly when the store did not confirm",
-   "branch": "lane/fulfillment-reread",
-   "draft": true,
-   "createdAt": "2026-11-23T21:49:29Z",
-   "url": "https://github.com/shivinate7/banchi/pull/1140"
+   "number": 1141,
+   "title": "Screen-freshness: a parent's re-read covers a child component that writes",
+   "branch": "lane/freshness-child-writer",
+   "draft": false,
+   "createdAt": "2026-11-24T00:35:03Z",
+   "url": "https://github.com/shivinate7/banchi/pull/1141"
   }
  ],
  "branches": [
@@ -315,9 +315,6 @@
   },
   {
    "name": "lane/freshness-child-writer"
-  },
-  {
-   "name": "lane/fulfillment-reread"
   },
   {
    "name": "lane/hand-fed-rail-flat-design"
