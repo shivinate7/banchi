@@ -1,0 +1,10 @@
+{
+  "title": "Declare merge.readyChecks in banchi's .github/stamp.json",
+  "status": "todo",
+  "phase": "Machine load",
+  "why": "Banchi's .github/stamp.json declares no merge.readyChecks (read by triage 2026-11-23 20:53 CST; reported by the Orders session). So `merge.py --ready` prints `unknown pre-ready: no merge.readyChecks declared` and runs no lint, and agents' cheap-lint reports read unknown. claude-settings declares 15 (.github/stamp.json).",
+  "note": "Fix: a lane lists the names of banchi's cheap checks-job steps (step names in .github/workflows) under merge.readyChecks in .github/stamp.json, then runs `merge.py --ready` on a draft to see it pass. Pick the cheap checks only. Home: claude-settings merge/merge.py, MERGE_FIELDS and the readyChecks line in the usage text.",
+  "ask": null,
+  "updatedAt": "2026-11-23T20:53:32-06:00",
+  "order": 999
+}
