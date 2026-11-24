@@ -1880,6 +1880,14 @@ test('a copy another Orders tab already pulled is refused in plain words, with n
   expect.soft(words, 'the SKU reaches the person').not.toContain(SKU)
 })
 
+/* THE COPY ON A WRITE THAT GOT NO ANSWER. A toast pins its title and its body on their own elements. Volcanion is the card. */
+const NOT_CONFIRMED_UNDO_TITLE = 'The store did not confirm the undo'
+const NOT_CONFIRMED_UNDO_BODY =
+  'Volcanion, Box 3, Section 2, Card 15. If Undo is still on its row, press it again. If the undo went through, the second press says so.'
+const NOT_CONFIRMED_SALE_TITLE = 'The store did not confirm the sale'
+const NOT_CONFIRMED_SALE_BODY =
+  'Volcanion, Box 3, Section 2, Card 17. If Mark Sold is still on its row, press it again. If the sale went through, the second press says so.'
+
 test('an undo the server fails with a 5xx keeps the pull: the next U retries the same copy, and its receipt keeps Undo', async ({ page }) => {
   /* `app/src/server.ts` `isFinalUndoRefusal`: only a 4xx answer takes the pull off the list. A 5xx is a retry kind, so the
      same press can clear it, and the next U reaches the same copy again. */
@@ -1903,7 +1911,9 @@ test('an undo the server fails with a 5xx keeps the pull: the next U retries the
   await page.getByRole('heading', { name: 'Orders' }).click()
   await page.keyboard.press('u')
   await expect.poll(() => undosOf(wire).length).toBe(1)
-  await expect(page.locator('.bn-toast', { hasText: 'The card was not put back' })).toBeVisible()
+  const failedToast = page.locator('.bn-toast-refusal', { has: page.locator('.bn-toast-title', { hasText: NOT_CONFIRMED_UNDO_TITLE }) })
+  await expect(failedToast.locator('.bn-toast-title'), 'a 5xx may have reversed the copy, so the toast says the store did not confirm the undo').toHaveText(NOT_CONFIRMED_UNDO_TITLE)
+  await expect(failedToast.locator('.bn-toast-body'), 'the body names the card and its place, and the press to make again').toHaveText(NOT_CONFIRMED_UNDO_BODY)
   await expect(
     page.locator('.bn-toast-receipt', { hasText: 'Card 15' }).locator('button.bn-toast-action'),
     'the receipt keeps its Undo after a 5xx',
@@ -1942,7 +1952,9 @@ test('an undo the server fails with a 5xx is followed by a store re-read, as a r
   await page.keyboard.press('u')
   await expect.poll(() => undosOf(wire).length).toBe(1)
   const undoAt = wire.indexOf(undosOf(wire)[0] as Wire)
-  await expect(page.locator('.bn-toast', { hasText: 'The card was not put back' })).toBeVisible()
+  const failedToast = page.locator('.bn-toast-refusal', { has: page.locator('.bn-toast-title', { hasText: NOT_CONFIRMED_UNDO_TITLE }) })
+  await expect(failedToast.locator('.bn-toast-title'), 'a 5xx may have reversed the copy, so the toast says the store did not confirm the undo').toHaveText(NOT_CONFIRMED_UNDO_TITLE)
+  await expect(failedToast.locator('.bn-toast-body'), 'the body names the card and its place, and the press to make again').toHaveText(NOT_CONFIRMED_UNDO_BODY)
 
   await expect
     .poll(() => storeReadsAfter(wire, undoAt, isOrdersRead), {
@@ -2054,7 +2066,9 @@ test('a failed sale leaves no focus note: a later re-render does not move focus'
 
   await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect.poll(() => pullsOf(wire).length, 'the failed sale reaches the server').toBe(1)
-  await expect(page.locator('.bn-toast', { hasText: 'Not marked sold' }), 'the refusal says the sale did not stand').toBeVisible()
+  const failedToast = page.locator('.bn-toast-refusal', { has: page.locator('.bn-toast-title', { hasText: NOT_CONFIRMED_SALE_TITLE }) })
+  await expect(failedToast.locator('.bn-toast-title'), 'a 5xx may have committed the sale, so the toast says the store did not confirm it').toHaveText(NOT_CONFIRMED_SALE_TITLE)
+  await expect(failedToast.locator('.bn-toast-body'), 'the body names the card and its place, and the press to make again').toHaveText(NOT_CONFIRMED_SALE_BODY)
   failing = false
   await expect(rows.nth(0).locator('.card-locations-sell'), 'the row is back to Mark sold after the failure').toHaveCount(1)
 
