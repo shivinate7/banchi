@@ -73,6 +73,8 @@ type Wire = {
   deletes: string[]
   listReply: (() => Reply) | null
   postReply: ((body: { cert: string; grader: string }) => Reply) | null
+  /** What `DELETE /slabs/<grader>/<cert>` sends instead of removing the slab; null is the route's own removal. */
+  deleteReply: ((grader: string, cert: string) => Reply) | null
   /** What `GET /slabs/<grader>/<cert>` sends for a slab on the list; null is `slabDetailOf(row)`. */
   detailReply: ((row: SlabRow) => Reply) | null
   hold: { list: Gate | null; post: Gate | null; del: Gate | null; detail: Gate | null }
@@ -120,6 +122,7 @@ function makeWire(over: Partial<Wire> = {}): Wire {
     deletes: [],
     listReply: null,
     postReply: null,
+    deleteReply: null,
     detailReply: null,
     hold: { list: null, post: null, del: null, detail: null },
     ...over,
@@ -181,6 +184,7 @@ async function stubApi(page: Page, wire: Wire): Promise<void> {
         if (method === 'DELETE') {
           wire.deletes.push(`${grader}/${cert}`)
           await wire.hold.del?.opened
+          if (wire.deleteReply !== null) return send(wire.deleteReply(grader, cert))
           if (row === undefined) return send(refuse(404, 'slab_unknown', 'That slab is not in the list, so there is nothing to remove.'))
           wire.rows = wire.rows.filter((r) => r !== row)
           wire.removed.push(row)
@@ -1210,6 +1214,67 @@ test('Remove is off while this tab has an add in flight', async ({ page }) => {
   await expect(remove).toBeDisabled()
   wire.hold.post.open()
   await expect(remove, 'Remove stays off after the add has finished').toBeEnabled()
+})
+
+/* ---------------------------------------------------------------------------- the list after a write
+
+   `afterWrite` re-reads the list after every write that settles: an answer, a refusal, a 5xx or a network error. A write
+   that got no answer may still have committed, so the screen cannot know the list is unchanged. Each case snapshots the
+   list reads it has counted, presses the write, and asserts a `GET /slabs` reached the server after it. The mount's own
+   read is counted before the press, so it is never the read the case counts. */
+
+test('an add the server fails with a 5xx re-reads the slabs', async ({ page }) => {
+  const wire = await open(page, makeWire({ postReply: () => STORE_UNAVAILABLE }))
+  await expect(dataRows(page)).toHaveCount(5)
+  const sheet = await openAdd(page)
+  await certField(sheet).fill(GENGAR.cert)
+  await pickGrader(sheet, 'bgs')
+  const before = wire.lists
+  await addButton(sheet).click()
+  await expect.poll(() => wire.posts.length, 'the add reached the server').toBe(1)
+  await expect.poll(() => wire.lists, { message: 'the add that failed with a 5xx is followed by a list read: no GET /slabs reached the server after it' }).toBeGreaterThan(before)
+})
+
+test('a refused add re-reads the slabs', async ({ page }) => {
+  const wire = await open(page, makeWire({ postReply: () => CERT_NOT_FOUND }))
+  await expect(dataRows(page)).toHaveCount(5)
+  const sheet = await openAdd(page)
+  await certField(sheet).fill(GENGAR.cert)
+  await pickGrader(sheet, 'bgs')
+  const before = wire.lists
+  await addButton(sheet).click()
+  await expect.poll(() => wire.posts.length, 'the add reached the server').toBe(1)
+  await expect.poll(() => wire.lists, { message: 'the refused add is followed by a list read: no GET /slabs reached the server after it' }).toBeGreaterThan(before)
+})
+
+test('a remove the server fails with a 5xx re-reads the slabs', async ({ page }) => {
+  const wire = await open(page, makeWire({ deleteReply: () => STORE_UNAVAILABLE }))
+  await expect(dataRows(page)).toHaveCount(5)
+  const before = wire.lists
+  await removeFrom(page, rowFor(page, LABEL.terapagos))
+  await expect.poll(() => wire.deletes.length, 'the remove reached the server').toBe(1)
+  await expect.poll(() => wire.lists, { message: 'the remove that failed with a 5xx is followed by a list read: no GET /slabs reached the server after it' }).toBeGreaterThan(before)
+})
+
+test('a refused remove re-reads the slabs', async ({ page }) => {
+  const wire = await open(page, makeWire({ deleteReply: () => refuse(404, 'slab_unknown', 'That slab is not in the list, so there is nothing to remove.') }))
+  await expect(dataRows(page)).toHaveCount(5)
+  const before = wire.lists
+  await removeFrom(page, rowFor(page, LABEL.terapagos))
+  await expect.poll(() => wire.deletes.length, 'the remove reached the server').toBe(1)
+  await expect.poll(() => wire.lists, { message: 'the refused remove is followed by a list read: no GET /slabs reached the server after it' }).toBeGreaterThan(before)
+})
+
+test('a successful add re-reads the slabs', async ({ page }) => {
+  const wire = await open(page)
+  await expect(dataRows(page)).toHaveCount(5)
+  const before = wire.lists
+  const sheet = await openAdd(page)
+  await certField(sheet).fill(GENGAR.cert)
+  await pickGrader(sheet, 'bgs')
+  await addButton(sheet).click()
+  await expect(sheet).toBeHidden()
+  await expect.poll(() => wire.lists, { message: 'a successful add is followed by a list read' }).toBeGreaterThan(before)
 })
 
 /* ---------------------------------------------------------------------------- the polish rulings (spec 4.8) */
