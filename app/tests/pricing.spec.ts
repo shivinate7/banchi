@@ -90,6 +90,12 @@ function pressAnswer(entry: OwedRow) {
 const sendPress = (page: Page) => page.getByRole('button', { name: /^Send ((all \d+ SKUs|1 SKU) )?to TCGplayer$/i })
 const sendPosts = (wire: Wire[]) => wire.filter((r) => r.method === 'POST' && r.path === '/pipeline/send')
 
+/** True when a GET of `readPath` reached the server after the first POST of `postPath`. The wire keeps the order the requests arrived in. */
+const readAfterPost = (wire: Wire[], postPath: string, readPath: string = postPath): boolean => {
+  const at = wire.findIndex((r) => r.method === 'POST' && r.path === postPath)
+  return at >= 0 && wire.slice(at + 1).some((r) => r.method === 'GET' && r.path === readPath)
+}
+
 /** One SKU in the shape `cli/cmd_join.py:_pricing_table` writes — every field, not the handful
  *  a given case reads. A partial fixture here does not fail partially: the row reads
  *  `row['Number']` and `positions[0]`, so a record missing either takes the screen down and
@@ -329,6 +335,9 @@ async function open(
     live?: LiveListing[] | ((wire: Wire[]) => LiveListing[])
     /** SPEC 7B. What `GET /pipeline/price-facts?sku=` answers: the T panel's one local read. */
     facts?: Record<string, unknown>
+    /** What `POST /pipeline/prices/refresh` answers when it fails: a refusal or a 5xx, in place of the running state. The
+     *  POST is still recorded into the wire, and the GETs of the same path are untouched. */
+    refreshPress?: { status: number; code: string }
     /** SPEC 7B. What `GET /pipeline/prices/refresh` answers. Default: resting, with the note. */
     refresh?: Record<string, unknown>
     /** SPEC 7B. The first N reads of `trends-saved` fail with a 500, as a restarted server would. */
@@ -895,6 +904,14 @@ async function open(
   await page.route(/\/pipeline\/prices\/refresh$/, async (route) => {
     const post = route.request().method() === 'POST'
     wire.push({ method: post ? 'POST' : 'GET', path: '/pipeline/prices/refresh', body: post ? route.request().postDataJSON() : null })
+    if (post && options.refreshPress !== undefined) {
+      await route.fulfill({
+        status: options.refreshPress.status,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: options.refreshPress.code, message: 'The server said no.' } }),
+      })
+      return
+    }
     await route.fulfill({
       status: post ? 202 : 200,
       contentType: 'application/json',
@@ -6143,6 +6160,28 @@ test('7b-16: the age line has a reserved line, so a fresh row and a stale row ar
   /* THE LAST ROW IS LEFT OUT: it has no row below it to be spaced from. */
   expect(heights).toHaveLength(3)
   expect(Math.abs(heights[0]! - heights[1]!)).toBeLessThan(0.5)
+})
+
+/* THE PRICES-AS-OF PRESS AFTER A FAILED ANSWER. `usePricesRefresh`'s `press` posts the refresh; a 5xx or a refusal sets the
+   line and reads nothing, so the screen keeps the state it drew before the press. Each case asserts that a GET of the refresh
+   state reached the server after the POST. No success control: a running refresh is read only on the 3s poll, which the
+   count must not depend on. */
+test('a Refresh Now that the server fails with a 5xx re-reads the refresh state', async ({ page }) => {
+  const wire = await open(page, { refreshPress: { status: 503, code: 'store_unavailable' } })
+  await page.getByRole('button', { name: /Refresh Now/ }).click()
+  await expect.poll(() => wire.filter((r) => r.method === 'POST' && r.path === '/pipeline/prices/refresh').length, { message: 'the Refresh Now reached the server' }).toBe(1)
+  await expect.poll(() => readAfterPost(wire, '/pipeline/prices/refresh'), {
+    message: 'the Refresh Now that failed with a 5xx is followed by a read of the refresh state: no GET /pipeline/prices/refresh reached the server after it',
+  }).toBe(true)
+})
+
+test('a refused Refresh Now re-reads the refresh state', async ({ page }) => {
+  const wire = await open(page, { refreshPress: { status: 409, code: 'refresh_running' } })
+  await page.getByRole('button', { name: /Refresh Now/ }).click()
+  await expect.poll(() => wire.filter((r) => r.method === 'POST' && r.path === '/pipeline/prices/refresh').length, { message: 'the Refresh Now reached the server' }).toBe(1)
+  await expect.poll(() => readAfterPost(wire, '/pipeline/prices/refresh'), {
+    message: 'the refused Refresh Now is followed by a read of the refresh state: no GET /pipeline/prices/refresh reached the server after it',
+  }).toBe(true)
 })
 
 test('7b-17: the header says Prices as of the catalog time, at rest, beside Refresh Now', async ({ page }) => {
