@@ -302,7 +302,7 @@ async function open(
      *  into the wire; the GETs of the same path are answered as before. */
     corpusSave?: { status: number; code: string; message?: string }
     /** Answers `POST /pricing/restore` (an Undo of a clear, or of a press's answers) with a refusal or a 5xx. Recorded into the wire first. */
-    restoreFailure?: { status: number; code: string }
+    restoreFailure?: { status: number; code: string; message?: string }
     /** UN-11: the newest clear the server still remembers, on `GET /pricing`'s own envelope,
      *  beside `clearable`. Absent means no clear stands (the ordinary case, and the state
      *  after a restore or after a send has built on it). */
@@ -661,7 +661,7 @@ async function open(
       await route.fulfill({
         status: options.restoreFailure.status,
         contentType: 'application/json',
-        body: JSON.stringify({ error: { code: options.restoreFailure.code, message: 'The server said no.' } }),
+        body: JSON.stringify({ error: { code: options.restoreFailure.code, message: options.restoreFailure.message ?? 'The server said no.' } }),
       })
       return
     }
@@ -8928,6 +8928,82 @@ test('a price save the server refuses keeps the server sentence', async ({ page 
     page.getByText(/The store did not confirm/),
     'a refusal says nothing about the store having failed to confirm',
   ).toHaveCount(0)
+})
+
+/* THE UNDO OF A CLEAR AND THE RESTORE OF THE LAST ONE, WHEN NO ANSWER CAME BACK (`gotNoAnswer`). A 5xx after the restore may have put the
+   answers back, so the copy says the store did not confirm it. A 4xx is the server's "no" and keeps its text. */
+const UNDO_NOT_CONFIRMED = 'The store did not confirm the undo.'
+const RESTORE_NOT_CONFIRMED = 'The store did not confirm the restore.'
+
+test('a Clear whose Undo the server answers with a 5xx after it committed says the store did not confirm the undo', async ({ page }) => {
+  const wire = await open(page, {
+    skus: CLEAR_ROWS,
+    clearable: CLEARABLE,
+    restoreFailure: { status: 500, code: 'server_error', message: SERVER_500 },
+  })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+    .getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })
+    .click()
+  await page.locator('.bn-toast').last().getByRole('button', { name: 'Undo' }).click()
+  await expect.poll(() => wire.filter((r) => r.path === '/pricing/restore').length, { message: 'the Undo reached the server' }).toBe(1)
+
+  await expect(
+    page.locator('.bn-toast', { hasText: UNDO_NOT_CONFIRMED }),
+    'a 5xx after the restore may have put the answers back, so the toast says the store did not confirm the undo',
+  ).toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: SERVER_500 }), 'the generic server sentence is not an answer about the undo').toHaveCount(0)
+})
+
+test('a Clear whose Undo the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
+  await open(page, {
+    skus: CLEAR_ROWS,
+    clearable: CLEARABLE,
+    restoreFailure: { status: 409, code: 'answers_gone', message: 'Those answers are no longer on the file.' },
+  })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+    .getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })
+    .click()
+  await page.locator('.bn-toast').last().getByRole('button', { name: 'Undo' }).click()
+
+  await expect(
+    page.locator('.bn-toast', { hasText: 'Those answers are no longer on the file.' }),
+    'a refusal is the server\'s "no": its own sentence stays in the toast',
+  ).toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: UNDO_NOT_CONFIRMED }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+})
+
+test('a restore of the last clear the server answers with a 5xx after it committed says the store did not confirm the restore', async ({ page }) => {
+  const wire = await open(page, {
+    lastClear: { count: 49, at: CLEAR_AT },
+    restoreFailure: { status: 500, code: 'server_error', message: SERVER_500 },
+  })
+  await page.locator('.pricing-restore-clear').getByRole('button').first().click()
+  await expect.poll(() => wire.filter((r) => r.path === '/pricing/restore').length, { message: 'the restore reached the server' }).toBe(1)
+
+  await expect(
+    page.locator('.bn-toast', { hasText: RESTORE_NOT_CONFIRMED }),
+    'a 5xx after the restore may have put the answers back, so the toast says the store did not confirm the restore',
+  ).toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: 'Not undone' }), 'the old refusal title is wrong for a restore that may have committed').toHaveCount(0)
+})
+
+test('a restore of the last clear the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
+  await open(page, {
+    lastClear: { count: 49, at: CLEAR_AT },
+    restoreFailure: { status: 409, code: 'answers_gone', message: 'Those answers are no longer on the file.' },
+  })
+  await page.locator('.pricing-restore-clear').getByRole('button').first().click()
+
+  await expect(page.locator('.bn-toast', { hasText: 'Not undone' }), 'a refusal keeps the restore\'s own title').toBeVisible()
+  await expect(
+    page.locator('.bn-toast', { hasText: 'Those answers are no longer on the file.' }),
+    'a refusal is the server\'s "no": its own sentence stays in the toast',
+  ).toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: RESTORE_NOT_CONFIRMED }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
 })
 
 /* THE PRICES WORKLIST AFTER A KEPT TICK THAT FAILS. A press on a suggestion posts `/pricing/ticks` (`keepTicks`). A 5xx or a
