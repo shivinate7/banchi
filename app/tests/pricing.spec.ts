@@ -8322,6 +8322,38 @@ const ticksPosts = (wire: Wire[]) => wire.filter((row) => row.method === 'POST' 
 const ticksBody = (wire: Wire[], at: number) =>
   ticksPosts(wire)[at]?.body as { ticks: Record<string, { price: string; on: boolean; group: string }>; drop: string[] }
 
+/* THE PRICES WORKLIST AFTER A KEPT TICK THAT FAILS. A press on a suggestion posts `/pricing/ticks` (`keepTicks`). A 5xx or a
+   refusal puts the row back to what the server holds and reads nothing else, so the worklist, which carries each row's `ticked`,
+   is not read again. Each case asserts that a GET of /pipeline/pricing was sent after the tick's POST. */
+test('a tick the server fails with a 5xx re-reads the prices worklist', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, {
+    live: ONE_LIST_LIVE,
+    ticks: () => ({ status: 503, code: 'store_unavailable', message: 'The store did not answer. Try again.' }),
+  })
+  const sent = recordSent(page)
+  /* A click, not a check: the server's refusal puts the row back, so the box never stays checked. */
+  await listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' }).click()
+  await expect.poll(() => ticksPosts(wire).length, { message: 'the tick reached the server' }).toBe(1)
+  await expect.poll(() => readAfterPost(sent, '/pricing/ticks', '/pipeline/pricing'), {
+    message: 'the tick that failed with a 5xx is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('a refused tick re-reads the prices worklist', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, {
+    live: ONE_LIST_LIVE,
+    ticks: () => ({ status: 409, code: 'tick_moved', message: 'The price moved. Look again.' }),
+  })
+  const sent = recordSent(page)
+  await listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' }).click()
+  await expect.poll(() => ticksPosts(wire).length, { message: 'the tick reached the server' }).toBe(1)
+  await expect.poll(() => readAfterPost(sent, '/pricing/ticks', '/pipeline/pricing'), {
+    message: 'the refused tick is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+})
+
 test('one list: kept ticks: a press posts its figure and its on, and an untick posts on false', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   const wire = await open(page, { live: ONE_LIST_LIVE })
