@@ -9296,7 +9296,7 @@ test('a Mark sold the server fails with a 5xx says the sale is unconfirmed, with
   )
 
   await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
-  await expectUnconfirmedToast(page, 'The store did not confirm the sale. If Mark Sold is still on this copy, press it again.')
+  await expectUnconfirmedToast(page, 'The store did not confirm the sale of Box 2, Section 1, Card 1. If Mark Sold is still on that copy, press it again.')
 })
 
 test('a 5xx sale that committed keeps its row in place under a search', async ({ page }) => {
@@ -9505,7 +9505,7 @@ test('a retire the server fails with a 5xx says the retirement is unconfirmed, w
   await openStackedRetire(page)
   await pressStackedRetire(page)
 
-  await expectUnconfirmedToast(page, 'The store did not confirm the retirement. If Retire is still on this copy, press it again.')
+  await expectUnconfirmedToast(page, 'The store did not confirm the retirement of Box 7, Section 1, Card 39. If Retire is still on that copy, press it again.')
 })
 
 /** THE MOVE THE STACKED 5XX CASES START FROM: a copy leaves Box 7 for Box 2, and the server fails after the commit. Returns the
@@ -9589,7 +9589,7 @@ test('a move the server fails with a 5xx says the move is unconfirmed, with no T
   await openStackedMove(page)
   await pressStackedMove(page)
 
-  await expectUnconfirmedToast(page, 'The store did not confirm the move. If Move is still on this copy, press it again.')
+  await expectUnconfirmedToast(page, 'The store did not confirm the move of Box 7, Section 1, Card 39. If Move is still on that copy, press it again.')
 })
 
 
