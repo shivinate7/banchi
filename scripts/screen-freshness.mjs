@@ -343,6 +343,8 @@ const RECORDED = {
     'failureTone', 'refusalToast',
     // A pure helper in app/src/server.ts that sorts an undo refusal as final or retryable, like `failureTone`; it makes no request.
     'isFinalUndoRefusal',
+    // A pure classifier in app/src/server.ts: says whether an error means the server gave no answer at all. It makes no request.
+    'gotNoAnswer',
     // The card preview's address: `photoUrl` plus `crop=card`. A string, no request.
     'previewUrl',
   ],

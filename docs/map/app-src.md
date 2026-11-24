@@ -11,7 +11,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/BoxBrowse.css` — Its layout, and why no accent appears anywhere in it.
   - Decisions: `D213`, `D289`, `D132`, `D118`, `D259`, `D313`, `D117`, `D38`, `D119`, `D5`, `D6`, `D13`, `D31`, `D32`, `D33`, `D39`, `D41`, `D58`, `D90`
 - `app/src/BoxBrowse.tsx` — The box walk, D31's default way into #/inventory — was #/pull until the three routes merged.
-  - Decisions: `D294`, `D22`, `D132`, `D192`, `D181`, `D259`, `D213`, `D218`, `D58`, `D092`, `D68`, `D92`, `D119`, `D24`, `D172`, `D293`, `D285`, `D65`, `D277`, `D18`, `D263`, `D118`, `D45`, `D313`, `D221`, `D275`, `D94`, `D99`, `D252`, `D10`, `D6`, `D8`, `D9`, `D16`, `D19`, `D20`, `D21`, `D23`, `D26`, `D27`, `D31`, `D33`, `D35`, `D38`, `D39`, `D41`, `D77`, `D86`, `D183`, `D67`, `D89`, `D90`, `D125`, `D264`
+  - Decisions: `D294`, `D22`, `D132`, `D192`, `D181`, `D259`, `D213`, `D218`, `D58`, `D092`, `D68`, `D92`, `D119`, `D24`, `D172`, `D293`, `D285`, `D65`, `D277`, `D18`, `D263`, `D118`, `D45`, `D313`, `D221`, `D275`, `D94`, `D99`, `D252`, `D10`, `D6`, `D8`, `D9`, `D16`, `D19`, `D20`, `D21`, `D23`, `D26`, `D27`, `D31`, `D33`, `D35`, `D38`, `D39`, `D41`, `D77`, `D86`, `D183`, `D67`, `D89`, `D90`, `D125`, `D264`, `D73`
 - `app/src/BoxOps.css` — The box header, the section track and the editors, at the dense owner-side end.
   - Decisions: `D41`, `D313`, `D132`, `D5`, `D20`, `D22`, `D31`, `D38`, `D50`, `D83`
 - `app/src/BoxOps.tsx` — D20's box object, made visible and editable ON THE BROWSE'S BOX HEADER since D31 merged #/boxes away.
@@ -61,7 +61,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/Inventory.css` — Its layout, at the dense owner-side end of the one system, two densities — the search field, the found groups, the receipts, and the retire panel.
   - Decisions: `D119`, `D118`, `D313`, `D5`, `D6`, `D7`, `D13`, `D26`, `D31`, `D41`, `D57`, `D125`, `D293`
 - `app/src/Inventory.tsx` — The Inventory screen: the one owner view of stored cards.
-  - Decisions: `D119`, `D28`, `D57`, `D196`, `D58`, `D260`, `D90`, `D7`, `D213`, `D269`, `D31`, `D264`, `D285`, `D293`, `D192`, `D300`, `D26`, `D83`, `D132`, `D275`, `D118`, `D313`, `D45`, `D172`, `D5`, `D6`, `D8`, `D10`, `D13`, `D24`, `D27`, `D33`, `D36`, `D38`, `D39`, `D41`, `D68`, `D86`, `D93`, `D125`, `D181`, `D218`
+  - Decisions: `D119`, `D28`, `D57`, `D196`, `D58`, `D260`, `D90`, `D7`, `D213`, `D269`, `D31`, `D264`, `D285`, `D293`, `D192`, `D300`, `D26`, `D83`, `D132`, `D275`, `D118`, `D313`, `D45`, `D172`, `D5`, `D6`, `D8`, `D10`, `D13`, `D24`, `D27`, `D33`, `D36`, `D38`, `D39`, `D41`, `D68`, `D86`, `D93`, `D125`, `D181`, `D218`, `D73`
 - `app/src/InventorySets.css` — Layout for the set view's rows — the card number column, the name column, and the row's own cursor.
   - Decisions: `D293`, `D313`
 - `app/src/InventorySets.tsx` — THE OWNER'S "BY SET" VIEW (D293), a second view inside #/inventory (D264's own precedent: a view switch lives inside Inventory rather than as a fourth screen, D31).
@@ -190,7 +190,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
   - Decisions: `D174`, `D89`, `D50`, `D196`, `D118`, `D57`, `D207`, `D33`, `D39`, `D94`
 - `app/src/TakeOffLine.tsx` — The take-off line on a master-set retire receipt: Take It Off TCGplayer at the pull and the answer in the same place, drawn in the toast kit's changing line.
   - Decisions: `D100`, `D118`, `D196`, `D313`
-- `app/src/afterWrite.ts` — The one home of re-reading after a write for a screen that registers its reads: `afterWrite` runs a write and starts the re-reads when it answers or is refused, merged to one in flight and one pending, never awaited.
+- `app/src/afterWrite.ts` — The one home of re-reading after a write for a screen that registers its reads: `afterWrite(write, kind)` runs a write, with `kind` a `WriteKind` (`'sale'` or `'other'`), and starts the re-reads when it answers or is refused, merged to one in flight and one pending, never awaited.
   - Decisions: `D73`, `D313`
 - `app/src/autoMatch.ts` — MATCHING RUNS BY ITSELF WHEN A READING FINISHES (the owner's Q4 ruling).
   - Decisions: `D65`, `D273`
