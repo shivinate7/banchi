@@ -345,6 +345,13 @@ const RECORDED = {
     'isFinalUndoRefusal',
     // A pure classifier in app/src/server.ts: says whether an error means the server gave no answer at all. It makes no request.
     'gotNoAnswer',
+    // The words a write says when the server gave no answer (`failureGotNoAnswer`, `unconfirmed*`,
+    // `noAnswerFailure`, `noAnswerToast`, `failureParts`): pure string and failure builders in app/src/server.ts, no request.
+    'failureGotNoAnswer', 'unconfirmedWrite', 'unconfirmedLine', 'unconfirmedCopyWrite',
+    'unconfirmedCopyMove', 'unconfirmedSale', 'unconfirmedSaleUndo', 'unconfirmedButtonSays',
+    'unconfirmedStillThere', 'unconfirmedStandDown', 'unconfirmedListUndo', 'unconfirmedPressUndo',
+    'unconfirmedListRead', 'unconfirmedPriceSave', 'unconfirmedPriceSaveAtSend', 'unconfirmedClear',
+    'unconfirmedPriceUndo', 'unconfirmedRestore', 'noAnswerFailure', 'noAnswerToast', 'failureParts',
     // The card preview's address: `photoUrl` plus `crop=card`. A string, no request.
     'previewUrl',
   ],
