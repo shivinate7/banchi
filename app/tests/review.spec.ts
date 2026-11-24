@@ -733,7 +733,7 @@ test('U during a held answer waits for it: the receipt reads queued, and one rev
 
   await page.keyboard.press('u')
   await expect(receipt, 'the receipt U will reverse reads queued, not dropped').toHaveAttribute('data-busy', 'queued')
-  await expect(receipt, 'a queued press is taken, so its control is not disabled').toBeEnabled()
+  await expect(receipt, 'a queued press is taken, so the disabled attribute stays off (the kit marks it aria-disabled)').not.toHaveAttribute('disabled')
   expect(undos(), 'no reversal goes out while the answer ahead is still out').toEqual([])
 
   held.release()

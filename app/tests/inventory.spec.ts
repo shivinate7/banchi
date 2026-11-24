@@ -2649,7 +2649,7 @@ test('U waits behind a held sale: the receipt it will reverse reads queued, and 
   await page.keyboard.press('u')
 
   await expect(receipt, 'the receipt U will reverse reads queued, not dropped').toHaveAttribute('data-busy', 'queued')
-  await expect(receipt, 'a queued press is taken, so its control is not disabled').toBeEnabled()
+  await expect(receipt, 'a queued press is taken, so the disabled attribute stays off (the kit marks it aria-disabled)').not.toHaveAttribute('disabled')
   expect(undos(), 'no reversal goes out while the sale ahead of it is still out').toEqual([])
 
   held.release()
@@ -2678,7 +2678,7 @@ test('the toast Undo waits behind a held sale the same way: the receipt reads qu
   await receiptToast(page).filter({ hasText: 'Marked sold' }).locator('button.bn-toast-action').click()
 
   await expect(receipt, 'the receipt the toast will reverse reads queued, not dropped').toHaveAttribute('data-busy', 'queued')
-  await expect(receipt, 'a queued press is taken, so its control is not disabled').toBeEnabled()
+  await expect(receipt, 'a queued press is taken, so the disabled attribute stays off (the kit marks it aria-disabled)').not.toHaveAttribute('disabled')
   expect(undos(), 'no reversal goes out while the sale ahead of it is still out').toEqual([])
 
   held.release()
