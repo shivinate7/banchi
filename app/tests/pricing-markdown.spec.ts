@@ -96,6 +96,8 @@ async function open(
     apply?: (body: Record<string, unknown>) => Record<string, unknown>
     /** Answers `POST /pipeline/markdowns/<stamp>/apply` with a refusal or a 5xx instead of the file. The POST is recorded first. */
     applyFailure?: { status: number; code: string }
+    /** Answers the saved prices' re-read (`GET /pricing`) with a 5xx once an apply is in the wire, so nothing lands over the digest the apply answered. */
+    corpusReadFailsAfterApply?: boolean
     /** What `POST /pipeline/markdowns/<stamp>/send` answers: 200 with a receipt that went
      *  live, or a refusal code. Nothing here reaches TCGplayer. */
     send?: () => { status: number; code?: string }
@@ -219,6 +221,10 @@ async function open(
       })
     }
     wire.push({ method: 'GET', path: '/pricing', body: null })
+    if (options.corpusReadFailsAfterApply === true && wire.some((row) => row.path.includes('/apply'))) {
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'store_unavailable', message: 'The server said no.' } }) })
+      return
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -505,6 +511,52 @@ async function pressOnePrice(page: Page): Promise<void> {
   await field.blur()
   await page.getByRole('button', { name: 'Send 1 Price to TCGplayer' }).click()
 }
+
+/* THE DIGEST AN APPLY THAT WROTE NOTHING CARRIES (F2). `do_markdown_apply` answers the corpus digest on every apply, but `wrote` is false when no
+   import file was written, so that digest is not one this screen wrote. The re-read after the apply is failed here: a re-read that lands takes its
+   own digest over the answer, which would hide the adoption. The next save must still name the digest the screen read. */
+/** Presses one price, lets the apply's answer and its failed re-read settle, then saves a new price. Returns the digest that save names. */
+async function digestOfSaveAfterApply(page: Page, answer: Record<string, unknown>): Promise<string | undefined> {
+  const wire = await open(page, { apply: () => answer, corpusReadFailsAfterApply: true })
+  const sent = recordSent(page)
+  await pressOnePrice(page)
+  await expect.poll(() => readAfterWrite(sent, 'POST', APPLY_PATH, '/pricing'), {
+    message: 'the apply is followed by its re-read of the saved prices, which this case fails',
+  }).toBe(true)
+  const putsBefore = wire.filter((row) => row.method === 'PUT').length
+  const field = page.locator('.pricing-input').first()
+  await field.click()
+  await field.fill('')
+  await field.type('19.99')
+  await field.blur()
+  await expect.poll(() => wire.filter((row) => row.method === 'PUT').length, { message: 'the next save reached the server' }).toBeGreaterThan(putsBefore)
+  return (wire.filter((row) => row.method === 'PUT').at(-1)?.body as { revision?: string } | undefined)?.revision
+}
+
+test('reread follow-on: a markdown apply that answers wrote false does not take the digest it carries', async ({ page }) => {
+  const digest = await digestOfSaveAfterApply(page, {
+    ok: true,
+    exit_code: 0,
+    wrote: false,
+    console: 'DRY RUN — nothing written.',
+    stamp: STAMP,
+    revision: 'rev-moved',
+  })
+  expect(digest, 'the next save names the digest the screen read, not the one an apply that wrote nothing carried').toBe('rev-1')
+})
+
+/* THE CONTROL: the same press, with an answer that carries no digest. The screen keeps the one it read, so this passes on the old code, and the
+   red above differs from it by the digest the answer carries and nothing else. */
+test('reread follow-on control: a markdown apply that answers wrote false with no digest keeps the digest the screen read', async ({ page }) => {
+  const digest = await digestOfSaveAfterApply(page, {
+    ok: true,
+    exit_code: 0,
+    wrote: false,
+    console: 'DRY RUN — nothing written.',
+    stamp: STAMP,
+  })
+  expect(digest, 'with no digest in the answer, the next save names the digest the screen read').toBe('rev-1')
+})
 
 test('reread follow-on: a write of the file that the server fails with a 5xx re-reads the saved prices', async ({ page }) => {
   await open(page, { applyFailure: { status: 503, code: 'store_unavailable' } })
