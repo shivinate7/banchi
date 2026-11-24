@@ -1,13 +1,21 @@
 {
- "readAt": "2026-11-23T21:23:35Z",
+ "readAt": "2026-11-24T00:37:48Z",
  "pulls": [
   {
-   "number": 1138,
-   "title": "Add review-finding notes from PRs 1135 and 1137",
-   "branch": "lane/notes-reread-cancel",
-   "draft": false,
-   "createdAt": "2026-11-23T20:55:41Z",
-   "url": "https://github.com/shivinate7/banchi/pull/1138"
+   "number": 1141,
+   "title": "Screen freshness: a child writer is covered by an ancestor's re-read or a re-reading prop",
+   "branch": "lane/freshness-child-writer",
+   "draft": true,
+   "createdAt": "2026-11-24T00:35:03Z",
+   "url": "https://github.com/shivinate7/banchi/pull/1141"
+  },
+  {
+   "number": 1140,
+   "title": "Fulfillment: re-read after every write; say plainly when the store did not confirm",
+   "branch": "lane/fulfillment-reread",
+   "draft": true,
+   "createdAt": "2026-11-23T21:49:29Z",
+   "url": "https://github.com/shivinate7/banchi/pull/1140"
   }
  ],
  "branches": [
@@ -306,7 +314,16 @@
    "name": "lane/fix-walk-head-sold"
   },
   {
+   "name": "lane/freshness-child-writer"
+  },
+  {
+   "name": "lane/fulfillment-reread"
+  },
+  {
    "name": "lane/hand-fed-rail-flat-design"
+  },
+  {
+   "name": "lane/inventory-reread"
   },
   {
    "name": "lane/market-reads-latest"
@@ -316,9 +333,6 @@
   },
   {
    "name": "lane/network-signatures-docs"
-  },
-  {
-   "name": "lane/notes-reread-cancel"
   },
   {
    "name": "lane/orders-plumbing-notes"
