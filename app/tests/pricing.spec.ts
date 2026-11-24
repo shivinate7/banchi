@@ -8975,6 +8975,26 @@ for (const earlier of [false, true]) {
   })
 }
 
+/* THE PIN, 5xx (F3). A Restore that fails with a 5xx may still have committed, but only an answered write takes the digest its re-read carries
+   (`corpusKind`). This is the refused pin's twin for a 5xx. It passes on the old code by construction; the mutant run in the report is what shows it
+   goes red when a re-read takes the digest after a failed write. */
+for (const earlier of [false, true]) {
+  test(`reread follow-on: a Restore of ${earlier ? 'an earlier' : 'the newest'} cleared price set that the server fails with a 5xx does not take the digest its re-read carries`, async ({ page }) => {
+    const wire = await open(page, { ...clearOptions(earlier), restoreFailure: { status: 503, code: 'store_unavailable' }, revisionAfterRestore: 'rev-moved' })
+    const sent = recordSent(page)
+    await pressRestoreCleared(page, earlier ? 2 : 3)
+    await expect(page.locator('.bn-toast', { hasText: 'Not undone' }), 'the failure is said').toBeVisible()
+    await expect.poll(() => readAfterWrite(sent, 'POST', '/pricing/restore', '/pricing'), {
+      message: 'the failed Restore is followed by its re-read of the saved prices, which must not take the digest it carries',
+    }).toBe(true)
+    await field(page).fill('19.99')
+    await field(page).press('Tab')
+    await expect.poll(() => wire.some((r) => r.method === 'PUT'), { message: 'the save reached the server' }).toBe(true)
+    const save = wire.filter((r) => r.method === 'PUT').at(-1)?.body as { revision?: string } | undefined
+    expect(save?.revision, 'the save carries the revision read before the failed Restore, not the one its re-read carries').toBe('rev-1')
+  })
+}
+
 test('reread follow-on: an answered Restore of the newest cleared price set takes the digest its re-read carries', async ({ page }) => {
   const wire = await open(page, { ...clearOptions(false), revisionAfterRestore: 'rev-moved' })
   await pressRestoreCleared(page, 3)
