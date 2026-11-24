@@ -1933,6 +1933,52 @@ test('a sealed-product claim the server refuses with a 4xx keeps the server sent
   await expect(page.getByText(KIND_NOT_CONFIRMED), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
 })
 
+/** One unseen line already claimed as sealed: the one line the "Undo: not sealed" press is drawn for. */
+function sealedClaimOrder(): OrdersPayload {
+  const unseen = line({ reason: 'sku_unseen', fulfilled: 0, outstanding: 1, on_hand: 0, picks: [] })
+  const claimed = [
+    { sku: SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: 'sealed' as const, closed_at: null, closed_reason: null },
+  ]
+  return payloadOf(
+    [order({ progress: claimed })],
+    [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [unseen] }],
+  )
+}
+
+const KIND_UNDO_NOT_CONFIRMED = 'The store did not confirm the undo for Volcanion. If Sealed Product is not back, press Undo again.'
+
+test('an Undo of a sealed claim the server answers with a 5xx says the store did not confirm the undo, and what to press', async ({ page }) => {
+  const wire = await open(page, { orders: sealedClaimOrder() })
+  await answerWhen(page, wire, /\/orders\/line-kind$/, () => true, SERVER_500_ANSWER)
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: 'Undo: not sealed' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/line-kind').length, { message: 'the undo of the claim reached the server' }).toBe(1)
+  expect(
+    (wire.find((one) => one.path === '/orders/line-kind')?.body as { kind?: unknown } | null)?.kind,
+    'the undo of a claim sends no kind',
+  ).toBeNull()
+
+  await expect(
+    page.getByText(KIND_UNDO_NOT_CONFIRMED, { exact: true }).first(),
+    'a 5xx after the undo may have cleared the claim, so the list must say the store did not confirm it, and what to press',
+  ).toBeVisible()
+})
+
+test('an Undo of a sealed claim the server refuses with a 4xx keeps the server sentence', async ({ page }) => {
+  const wire = await open(page, { orders: sealedClaimOrder() })
+  await answerWhen(page, wire, /\/orders\/line-kind$/, () => true, REFUSED_ANSWER)
+  await openManage(page)
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: 'Undo: not sealed' }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/line-kind').length, { message: 'the undo of the claim reached the server' }).toBe(1)
+
+  await expect(page.getByText(REFUSED_ANSWER.message, { exact: true }).first(), 'a refusal is the server\'s "no": its own sentence stays on screen').toBeVisible()
+  await expect(page.getByText(KIND_UNDO_NOT_CONFIRMED), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+})
+
 test('a line closed as not shipping the server answers with a 5xx after it committed says the store did not confirm the not-shipping close', async ({
   page,
 }) => {
