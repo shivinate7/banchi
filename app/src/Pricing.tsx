@@ -1247,8 +1247,8 @@ export function Pricing() {
             toast({
               kind: 'refusal',
               tone: failureTone(trouble),
-              title: `The store did not confirm the tick for ${one?.name || sku}`,
-              body: `If the Send box for ${one?.name || sku} is not as you left it, tick it again.`,
+              title: `The store did not confirm the ${on ? 'tick' : 'untick'} for ${one?.name || sku}`,
+              body: `If the Send box for ${one?.name || sku} is not as you left it, ${on ? 'tick' : 'untick'} it again.`,
             })
             return
           }
