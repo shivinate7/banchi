@@ -1649,7 +1649,7 @@ export function Pricing() {
             write: true,
             kind: kind === '' ? undefined : kind,
             /* THE SKUS TYPED THIS VISIT, so the server never reads `earlier_lower` off a
-               timestamp `stamp_answers` left in the past for an unchanged value (round 8). */
+               timestamp `stamp_answers` left in the past for an unchanged value. */
             typed: pushable.map((edit) => edit.sku).filter((sku) => typedHere.has(sku)),
           })
           if (wrote.revision) takeRevision(wrote.revision)
@@ -2054,6 +2054,16 @@ export function Pricing() {
           afterWrite(() => keepTicks({}, [sku.sku]), 'tick').catch((err: unknown) => {
             const trouble = describeFailure(err)
             if (trouble.code === 'demo_read_only') return
+            /* A 5xx or a lost connection may still have cleared the tick, so the toast names the untick and the Send box. */
+            if (gotNoAnswer(err)) {
+              toast({
+                kind: 'refusal',
+                tone: failureTone(trouble),
+                title: `The store did not confirm the untick for ${sku.name}`,
+                body: `If the Send box for ${sku.name} is still ticked, untick it again.`,
+              })
+              return
+            }
             toast({ ...refusalToast(err, `Tick not cleared for ${sku.name}`) })
           })
         }
@@ -2513,11 +2523,31 @@ export function Pricing() {
                   reload()
                   toast({ kind: 'ok', title: `Kept ${sku.name} off TCGplayer again` })
                 })
-                .catch((err: unknown) => toast({ ...refusalToast(err, `Could not hold ${sku.name} again`) })),
+                .catch((err: unknown) =>
+                  toast(
+                    gotNoAnswer(err)
+                      ? {
+                          kind: 'refusal',
+                          tone: failureTone(describeFailure(err)),
+                          title: `The store did not confirm keeping ${sku.name} off TCGplayer`,
+                          body: `If ${sku.name} does not show removed by you, press Keep off TCGplayer again.`,
+                        }
+                      : { ...refusalToast(err, `Could not hold ${sku.name} again`) },
+                  ),
+                ),
           },
         })
       } catch (err) {
-        toast({ ...refusalToast(err, `Could not unhold ${sku.name}`) })
+        toast(
+          gotNoAnswer(err)
+            ? {
+                kind: 'refusal',
+                tone: failureTone(describeFailure(err)),
+                title: `The store did not confirm the unhold for ${sku.name}`,
+                body: `If ${sku.name} still shows removed by you, press Unhold again.`,
+              }
+            : { ...refusalToast(err, `Could not unhold ${sku.name}`) },
+        )
       } finally {
         setUnholding(null)
       }
