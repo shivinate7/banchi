@@ -9533,6 +9533,17 @@ test('a move the server fails with a 5xx after it committed keeps its row in pla
     'Box 2, Section 2, Card 2',
     arrived,
   ])
+  /* THE BOX RAIL, the other reader of the hold. The copies list draws the departed row by its place whatever the hold says:
+     a committed move leaves a `moved` tombstone, which `isSold` does not read. The rail weighs the departure through
+     `copyDeparted`, and only while the hold still names the copy. The search reaches two boxes, Box 2 and Box 7 (the scope,
+     which no hold changes). Held, Box 7's section keeps all three of its copies in the count, so the rail leads with Box 7.
+     Not held, Box 7 drops to two, ties Box 2 at two, and the tie falls to the natural name, so Box 2 leads.
+     The rail re-asks its own search after a move, so its counts are the post-move counts. */
+  await expect(page.locator('.browse-boxcell:enabled'), 'the search reaches two boxes, Box 2 and Box 7').toHaveCount(2)
+  await expect(
+    page.locator('.browse-boxcell').first(),
+    'the rail leads with the box whose departed copy the hold still counts',
+  ).toHaveAttribute('aria-label', /^ME01 spares/)
 })
 
 
