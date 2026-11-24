@@ -9220,14 +9220,17 @@ test('a refused Mark sold is followed by a store re-read', async ({ page }) => {
   await expectReadAfter(wire, (entry) => entry.path.endsWith('/sold'), 'the refused sale')
 })
 
-test('a refused Mark sold leaves focus on its row, never on the body', async ({ page }) => {
-  /* THE PR 1127 AND 1132 FOCUS RULE, for a refusal that is not `already_sold` (the existing focus case for that one stays as it is). */
+test('a refused Mark sold keeps focus on its own button, never on the body', async ({ page }) => {
+  /* THE PR 1127 FOCUS RULE, for a refusal that is not `already_sold` (the existing focus case for that one stays as it is).
+     Focus stays on the pressed control while it still exists. The row takes focus (PR 1132, `landStrandedFocus`) only when
+     the button is gone. This fixture's store still draws the copy unsold after the refusal, so the button stands. */
   await open(page, BOXES, STORE, () => PRICING, () => retiredRefusal())
-  const row = copyRow(page, CARD_1)
+  const markSold = copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ })
 
-  await row.getByRole('button', { name: /^Mark Sold/ }).click()
+  await markSold.click()
   await expect(page.locator('.bn-toast', { hasText: 'retired' }), 'the refusal reaches the person').toBeVisible()
-  await expect(row, 'focus lands on the row after the refused sale').toBeFocused()
+  await expect(markSold, 'focus stays on the pressed Mark sold while it stands').toBeFocused()
+  await expect(page.locator('body'), 'focus is not left on the page body').not.toBeFocused()
 })
 
 test('a box claim the server fails with a 5xx is followed by a store re-read', async ({ page }) => {
