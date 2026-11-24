@@ -28,6 +28,7 @@ import {
   failureTone,
   ALREADY_SOLD,
   gotNoAnswer,
+  ROW_CONTROL_SEEN,
   unconfirmedCopyWrite,
   unconfirmedSale,
   type Unconfirmed,
@@ -589,7 +590,7 @@ function InventoryWalk({
           })
           return
         }
-        reportWrite(err, copy, selected?.card.name ?? null, (name, place) => unconfirmedCopyWrite('retirement', name, place, 'Retire'))
+        reportWrite(err, copy, selected?.card.name ?? null, (name, place) => unconfirmedCopyWrite('retirement', name, place, ROW_CONTROL_SEEN.retire))
       } finally {
         setBusyKey(null)
       }
@@ -654,7 +655,7 @@ function InventoryWalk({
           setMoveTrouble(describeFailure(err))
           return
         }
-        reportWrite(err, copy, selected?.card.name ?? null, (name, place) => unconfirmedCopyWrite('move', name, place, 'Move'))
+        reportWrite(err, copy, selected?.card.name ?? null, (name, place) => unconfirmedCopyWrite('move', name, place, ROW_CONTROL_SEEN.move))
       } finally {
         setBusyKey(null)
       }

@@ -1615,7 +1615,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         setPasteNote(done.summary)
       } catch (err) {
         if (!live.current) return
-        setFailure(noAnswerFailure(err, () => unconfirmedListRead('paste'), true))
+        setFailure(noAnswerFailure(err, () => unconfirmedListRead('paste')))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -1816,7 +1816,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         /* A fetch that failed part way may have ingested batches already. */
         rereadNow()
         if (!live.current) return
-        setFailure(noAnswerFailure(err, () => unconfirmedListRead('fetch'), true))
+        setFailure(noAnswerFailure(err, () => unconfirmedListRead('fetch')))
       } finally {
         if (live.current) {
           setBusy(null)
@@ -2091,7 +2091,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(noAnswerFailure(err, () => unconfirmedButtonSays(label, name), true))
+        setFailure(noAnswerFailure(err, () => unconfirmedButtonSays(label, name)))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2125,7 +2125,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
               kind === null
                 ? unconfirmedPressUndo(name, SEALED_LABEL)
                 : unconfirmedStillThere(SEALED_LABEL, name),
-            true,
           ),
         )
       } finally {
@@ -2171,7 +2170,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(noAnswerFailure(err, () => unconfirmedStandDown(countOf(rows.length, 'shipped order'), label), true))
+        setFailure(noAnswerFailure(err, () => unconfirmedStandDown(countOf(rows.length, 'shipped order'), label)))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2223,7 +2222,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         }
       } catch (err) {
         if (!live.current) return
-        setFailure(noAnswerFailure(err, () => unconfirmedStillThere(STAND_DOWN_REASON_LABEL[reason], `order ${order.number}`, STAND_DOWN_ORDER_LABEL), true))
+        setFailure(noAnswerFailure(err, () => unconfirmedStillThere(STAND_DOWN_REASON_LABEL[reason], `order ${order.number}`, STAND_DOWN_ORDER_LABEL)))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2268,7 +2267,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(noAnswerFailure(err, () => unconfirmedStandDown(countOf(candidates, 'old order'), label), true))
+        setFailure(noAnswerFailure(err, () => unconfirmedStandDown(countOf(candidates, 'old order'), label)))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2311,7 +2310,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(noAnswerFailure(err, () => unconfirmedStillThere(NOT_SHIPPING_LABEL, name), true))
+        setFailure(noAnswerFailure(err, () => unconfirmedStillThere(NOT_SHIPPING_LABEL, name)))
       } finally {
         if (live.current) setBusy(null)
       }

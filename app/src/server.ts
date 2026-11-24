@@ -361,24 +361,29 @@ export function unconfirmedLine(said: Unconfirmed): string {
 /** THE WRITE ON A NAMED COPY, WHERE THE ROW HAS ONE BUTTON FOR IT (a sale, an undo, a retirement, a move). The body names the card and
  *  its place (after a committed sale the selection has moved to the next copy, so "this copy" would point at the wrong card), the
  *  control to press again if it is still on its row, and what a second press says if the write went through. `place` is already said
- *  (`sayPlace`), or null when the copy has none. `button` is the control's label exactly. */
-export function unconfirmedCopyWrite(what: string, name: string, place: string | null, button: string): Unconfirmed {
+ *  (`sayPlace`), or null when the copy has none. `control` is what the row shows on that button (`ROW_CONTROL_SEEN`), never its label:
+ *  the row draws an icon, so the label words are not on the screen to look for. */
+export function unconfirmedCopyWrite(what: string, name: string, place: string | null, control: string): Unconfirmed {
   const whose = place === null ? name : `${name}, ${place}`
-  return unconfirmedWrite(what, `${whose}. If ${button} is still on its row, press it again. If the ${what} went through, the second press says so.`)
+  return unconfirmedWrite(what, `${whose}. If the ${control} button is still on its row, press it again. If the ${what} went through, the second press says so.`)
 }
+
+/** WHAT EACH ICON-ONLY COPY CONTROL LOOKS LIKE ON ITS ROW, as a reader would say it: the seal's $ for Mark Sold, the undo arrow, the
+ *  lidded box for Retire, and the arrow into a bar for Move. `unconfirmedCopyWrite` names the control by this, never by its label. */
+export const ROW_CONTROL_SEEN = { sale: '$', undo: '↺', retire: 'lidded box', move: '→|' } as const
 
 /** THE SALE OF A NAMED CARD: the one pair that Orders (the walk's toast and the pick row's line) and Inventory all say. */
 export function unconfirmedSale(name: string, place: string | null): Unconfirmed {
-  return unconfirmedCopyWrite('sale', name, place, 'Mark Sold')
+  return unconfirmedCopyWrite('sale', name, place, ROW_CONTROL_SEEN.sale)
 }
 
 /** THE UNDO OF THE SALE OF A NAMED CARD. */
 export function unconfirmedSaleUndo(name: string, place: string | null): Unconfirmed {
-  return unconfirmedCopyWrite('undo', name, place, 'Undo')
+  return unconfirmedCopyWrite('undo', name, place, ROW_CONTROL_SEEN.undo)
 }
 
 /** A PRESS ON A LIST (an order, a line, a backlog) THAT GOT NO ANSWER: "<act> for <subject>", and to press it again. The list is read
- *  again after every write (`afterWrite`), so it shows what the store holds. Both forms are drawn as one line (`unconfirmedLine`).
+ *  again after every write (`afterWrite`), so it shows what the store holds. A notice draws the title and the body as two elements.
  *  This one is for a button whose label changes with the press (a count): it names the button as it says now. */
 export function unconfirmedButtonSays(label: string, subject: string): Unconfirmed {
   return { title: `The store did not confirm ${label} for ${subject}`, body: `If the button still says ${label}, press it again.` }
@@ -402,7 +407,7 @@ export function unconfirmedListUndo(receipt: string, label: string): Unconfirmed
 }
 
 /** THE UNDO OF A LIST PRESS WHOSE CONTROL IS ITSELF AN UNDO (the claim of a sealed product withdrawn): `label` is what the press
- *  put there, and is looked for. Drawn as one line (`unconfirmedLine`). */
+ *  put there, and is looked for. */
 export function unconfirmedPressUndo(subject: string, label: string): Unconfirmed {
   return unconfirmedWrite(`undo for ${subject}`, `If ${label} is not back, press Undo again.`)
 }
@@ -445,12 +450,12 @@ export function unconfirmedRestore(count: number): Unconfirmed {
 }
 
 /** A failure a screen holds, with the pair of a write that got no answer in place of the server's own. `said` is a function so a
- *  refusal builds nothing. The pair travels as `title` and `message` (`failureParts` reads it); `line` folds it into one `message`. */
-export function noAnswerFailure(err: unknown, said: () => Unconfirmed, line = false): Failure {
+ *  refusal builds nothing. The pair travels as `title` and `message` (`failureParts` reads it). */
+export function noAnswerFailure(err: unknown, said: () => Unconfirmed): Failure {
   const trouble = describeFailure(err)
   if (!gotNoAnswer(err)) return trouble
   const pair = said()
-  return line ? { ...trouble, message: unconfirmedLine(pair) } : { ...trouble, title: pair.title, message: pair.body }
+  return { ...trouble, title: pair.title, message: pair.body }
 }
 
 /** A toast for a write that failed: the pair when no answer came back, the server's own (`refusalToast`) otherwise. */
