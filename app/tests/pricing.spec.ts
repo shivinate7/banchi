@@ -4853,7 +4853,8 @@ test('a Clear the server refuses as moved takes no digest from its own re-read, 
     (put?.body as { revision?: string }).revision,
     'a Clear refused as moved adopted the digest its re-read answered, so the autosave carries the file the other writer moved to',
   ).toBe('rev-1')
-  expect(file.accepted, 'the autosave overwrote the file another writer moved').toBe(1)
+  /* NOTHING IS ACCEPTED HERE: the Clear was refused as moved, and the autosave names rev-1 against the moved file, so it is refused too. */
+  expect(file.accepted, 'the autosave overwrote the file another writer moved').toBe(0)
   await expect(page.locator('.bn-status-slot')).toContainText('changed since this screen read it')
 })
 
