@@ -765,6 +765,38 @@ test('control: a U pressed while a reversal is out sends nothing, and the next a
   ).toEqual([false, true, false])
 })
 
+/* U takes a press while an answer is out, and the receipt it reverses must not move for it. The
+ * queued words draw where they take no row space (D329, D118), so the Undo keeps its x from the
+ * press to the queued state. The box is read after the entry motion has settled, so a reading is
+ * a position and not a frame of a transition. */
+test('U during a held answer leaves the receipt Undo where it was', async ({ page }) => {
+  const held = gate()
+  const sent = await open(page, REVIEW, [], CATALOG_ROWS, (path) => (path === '/review/2/2/answer' ? held.promise : null))
+  const posts = () => sent.filter((s) => s.method === 'POST')
+
+  await page.locator('.review-candidate').first().click()
+  await expect.poll(() => posts().length, 'the first answer is sent').toBe(1)
+  const undo = page.locator('.review-receipt').getByRole('button', { name: 'Undo' })
+  await expect(undo, 'the first answer stands as a receipt with its Undo').toBeVisible()
+
+  await page.locator('.review-candidate').first().click()
+  await expect.poll(() => posts().length, 'the second answer is out and held').toBe(2)
+
+  await settleMotion(page)
+  const before = await undo.boundingBox()
+  await page.keyboard.press('u')
+  await expect(undo, 'the receipt U will reverse reads queued').toHaveAttribute('data-busy', 'queued')
+  await settleMotion(page)
+  const queued = await undo.boundingBox()
+
+  expect(before, 'the receipt Undo has a box before U is pressed').not.toBeNull()
+  expect(queued, 'the receipt Undo has a box while its reversal is queued').not.toBeNull()
+  expect(queued?.x, 'U during a held answer moves the receipt Undo sideways').toBe(before?.x)
+
+  held.release()
+  await expect.poll(() => posts().filter((s) => (s.body as { undo?: boolean } | null)?.undo === true).length, 'the queued U sends its reversal on release').toBe(1)
+})
+
 test('finding #10 (the Opus review round) — the receipt reserves its own row, and nothing else moves (D118)', async ({
   page,
 }) => {
