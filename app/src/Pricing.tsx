@@ -1057,10 +1057,10 @@ export function Pricing() {
     }
   }, [readView, stamp])
 
-  /** Fetch the worklist and the corpus together (D103). `keepDigest` reads the file but leaves the digest as it is: a Refresh Now's read is no write's receipt (D86). A read opened by its stamp is fetched beside the
+  /** Fetch the worklist and the corpus together (D103). A read opened by its stamp is fetched beside the
    *  worklist, so a link to a read with nothing in it can land on the one list. A read that cannot be had
    *  leaves the one list drawn without it. */
-  const load = useCallback(async (wanted: ReadonlySet<string>, markdown: string | null, keepDigest = false) => {
+  const load = useCallback(async (wanted: ReadonlySet<string>, markdown: string | null) => {
     loadWalk.current += 1
     const mine = loadWalk.current
     setLoading(true)
@@ -1090,7 +1090,7 @@ export function Pricing() {
       setBook(held.corpus)
       setClearable(held.clearable ?? null)
       setKept(keptOf(held))
-      if (!keepDigest) takeRevision(held.revision)
+      takeRevision(held.revision)
       savedBook.current = held.corpus
       failedBook.current = null
       setFailure(null)
@@ -1139,7 +1139,7 @@ export function Pricing() {
   /* "Refresh now" brings the rows and the saved strips current; when a run ends both are read again.
      A visit only reads where it is, and presses nothing. */
   const refresh = usePricesRefresh(() => {
-    void load(picked, hashStamp, true)
+    reload()
     readSaved()
   }, !readView && work !== null && (saved !== null || savedFailed)) /* NOT AT MOUNT: the worklist and the saved strips are read first, so the mount holds no more reads open at once than it did. */
   const asOf = asOfOf(refresh.state)
@@ -2694,7 +2694,7 @@ export function Pricing() {
     scopeName ?? 'the cards on this screen'
 
   /** Re-read what may still be cleared, the clears the server still remembers, and, after a save, a clear or its Undo, the digest — NOT the answers (StrictMode
-   *  runs an updater twice, and adopting them there re-dirtied the screen; see D168's receipt case). A Refresh Now's read, or a read after a failed write, never takes the digest (D86).
+   *  runs an updater twice, and adopting them there re-dirtied the screen; see D168's receipt case). Only a read after a save, a clear or its Undo takes the digest (D86); `load` takes it with the book it swaps in.
    *  It is NOT taken while a save has failed or been refused, and not over a receipt that landed after the read began: this read runs after a write, and a revision taken from a file that moved
    *  under a book this screen still holds would let the next wholesale save overwrite the other writer. The stale revision
    *  keeps that save refused (`corpus_moved`) until the person reads the file again. */
