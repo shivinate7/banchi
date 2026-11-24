@@ -250,6 +250,9 @@ type Sold = { status: number; body: unknown }
  *  stands. Overridable per test so a refusal is one line rather than an `unroute` dance. */
 type SoldAnswer = (undo: boolean, key: string, states: Store) => Sold
 
+/** How the stub answers an order pull, given the direction and the store. `null` is the success every pull has had. */
+type PullAnswer = (undo: boolean, key: string, states: Store) => Sold | null
+
 /* The default answer is a MODEL of `do_mark_sold` rather than a fixed 200, and the difference
  * matters now that the view re-reads the cards after every sale. A stub that always answered
  * 200 and never moved its own store would hand the re-read a card it had just sold, so the
@@ -297,6 +300,11 @@ const soldModel: SoldAnswer = (undo, key, states) => {
 /** A refusal in the server's own shape, for the cases no state can produce. */
 function refuses(code: string, message: string): Sold {
   return { status: 409, body: { error: { code, message } } }
+}
+
+/** A failure the server answers with a 5xx, in its own shape. The write may still have committed. */
+function fails(code: string, message: string): Sold {
+  return { status: 500, body: { error: { code, message } } }
 }
 
 /* `GET /search?q=` AS `do_search` ANSWERS IT: one group per card, every copy of it inside,
@@ -404,6 +412,11 @@ type Mood = {
   /** Every photo 404s, which is the other screen the card panel can be. */
   noPhoto?: boolean
   sold?: SoldAnswer
+  /** The order pull's answer when it refuses or fails. Unset, every pull succeeds as it always has. */
+  pull?: PullAnswer
+  /** The wire's length when each `GET /inventory` was answered. A read the screen sends after a write sees a longer
+   *  wire than the write did, so counting the reads past a write's wire index is counting the re-read after it. */
+  listReads?: number[]
   /** How many times `GET /inventory` has been answered. The instrument for "the list is read
    *  again", which is the only defence a client has against the other device. */
   reads?: number
@@ -837,6 +850,11 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<St
     const target = sent?.targets?.[0]
     const key = target === undefined ? '' : `${target.box}/${target.index}`
     wire.push({ method: request.method(), url: request.url(), undo })
+    const refused = mood.pull?.(undo, key, states) ?? null
+    if (refused !== null) {
+      await route.fulfill({ status: refused.status, contentType: 'application/json', body: JSON.stringify(refused.body) })
+      return
+    }
     if (key !== '') states[key] = undo ? 'identified' : 'sold'
     await route.fulfill({
       status: 200,
@@ -907,6 +925,7 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<St
 
   await page.route(/\/inventory$/, async (route) => {
     mood.reads = (mood.reads ?? 0) + 1
+    mood.listReads = [...(mood.listReads ?? []), wire.length]
     // Long enough to read the screen and short enough not to be the test's runtime. The
     // loading state is the one screen here that nothing else can hold still.
     if (mood.slow === true) await new Promise((done) => setTimeout(done, 1200)) // keep: stubbed answer held 1200 ms on purpose, a latency fixture
@@ -2435,10 +2454,10 @@ test('ux-w2 R19: a dismissed banner shows again when a later re-read fails', asy
 test('ux-w2: a failed refresh on the card view moves nothing once the stale notice arrives', async ({ page }) => {
   await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
   await openCard(page, 'Charizard ex')
-  // Code reason (Fulfillment.tsx, `doSell`): the refusal path re-reads the screen only for ALREADY_SOLD, a PULL_STALE
-  // code, or a success. Any other refusal sets trouble and returns without `reread()`, so no notice can follow it.
-  // A PULL_STALE refusal (`over_fulfilled`) keeps the card open (no `drop`) and calls `reread()`. The re-read's orders
-  // read fails, so `ordersFailed` is set while `cards` is still loaded, and the notice draws on the open card.
+  // A PULL_STALE refusal (`over_fulfilled`) keeps the card open and sets the trouble line. Every write re-reads through
+  // `afterWrite`, a refusal included. The re-read's orders read fails while `cards` stays loaded, so `ordersFailed` is set
+  // and the stale notice draws on the open card. The case checks that the photograph keeps its box as the notice arrives,
+  // because the person is looking at that card and a shift there moves what they are looking at.
   let failNow = false
   await page.route(/\/orders$/, async (route) => {
     if (!failNow) return route.fallback()
@@ -4516,4 +4535,158 @@ test('a card whose order names no parcel keeps For the buyer, with no Ship To li
 
   await expect(view(page)).toContainText(`For ${ORDER_BUYER}`)
   await expect(view(page).locator('.ff-shipto')).toHaveCount(0)
+})
+
+/* ------------------------------------------------------------------ a write that fails re-reads the list
+ *
+ * D73: a screen re-reads after every write that settles, a refusal and a 5xx included. A 5xx may still have committed
+ * (the server can fail after it writes), so the screen cannot know the list is unchanged. Every Fulfillment write's
+ * failure path must reach the same re-read the answer path already reaches. The cases below cover each write the
+ * screen sends: the sale, the sale through an order, the undo of each, and a refusal. */
+
+/** `GET /inventory` answers after the write at wire index `at`: the re-read that write caused. */
+const listReadsAfter = (mood: Mood, at: number) => (mood.listReads ?? []).filter((seen) => seen > at).length
+
+/** The sentence the screen says after a sale that failed. It is false when the store recorded the sale. */
+const NOTHING_SAVED = 'Nothing was saved.'
+
+const SERVER_FAILED = 'The store did not answer.'
+
+test('a 5xx Mark it sold re-reads the list', async ({ page }) => {
+  const wire: Wire[] = []
+  const mood: Mood = { sold: () => fails('store_unavailable', SERVER_FAILED) }
+  await openList(page, wire, mood)
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+
+  await expect.poll(() => wire.length, 'the sale reaches the server').toBe(1)
+  await expect
+    .poll(() => listReadsAfter(mood, 0), {
+      message: 'the 5xx sale is followed by a list read: no GET /inventory reached the server after the sale',
+    })
+    .toBeGreaterThan(0)
+})
+
+test('after a 5xx, the screen does not say nothing was saved', async ({ page }) => {
+  /* The store recorded the sale before the server failed to answer, so "Nothing was saved" is false. The re-read
+   * shows the store: the sold card has left the list. */
+  const wire: Wire[] = []
+  const mood: Mood = {
+    sold: (_undo, key, states) => {
+      states[key] = 'sold'
+      return fails('store_unavailable', SERVER_FAILED)
+    },
+  }
+  await openList(page, wire, mood)
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  await expect.poll(() => wire.length, 'the sale reaches the server').toBe(1)
+
+  // Settled once the failure is handled: either the sentence is on screen, or the list has been read again.
+  await expect
+    .poll(
+      async () => ((await view(page).textContent()) ?? '').includes(NOTHING_SAVED) || listReadsAfter(mood, 0) > 0,
+      { message: 'the failed sale has been handled' },
+    )
+    .toBe(true)
+  await expect(view(page), 'the sale committed, so the screen must not say nothing was saved').not.toContainText(
+    NOTHING_SAVED,
+  )
+  await expect(
+    page.getByRole('button', { name: 'Charizard ex' }),
+    'the list shows the store: the sold card has left it',
+  ).toHaveCount(0)
+})
+
+test('a refused Mark it sold re-reads the list', async ({ page }) => {
+  // A refusal the screen has no word for. The server still says the screen was behind, so the list is read again.
+  const wire: Wire[] = []
+  const mood: Mood = {
+    sold: () => refuses('sale_built_on', 'This card is built on another card, so it cannot be sold here.'),
+  }
+  await openList(page, wire, mood)
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+
+  await expect.poll(() => wire.length, 'the sale reaches the server').toBe(1)
+  await expect
+    .poll(() => listReadsAfter(mood, 0), {
+      message: 'the refused sale is followed by a list read: no GET /inventory reached the server after the refusal',
+    })
+    .toBeGreaterThan(0)
+})
+
+test('a 5xx on a sale through an order re-reads the list', async ({ page }) => {
+  const wire: Wire[] = []
+  const mood: Mood = {
+    orders: ONE_OPEN_ORDER,
+    plan: ONE_OPEN_ORDER_PLAN,
+    pull: () => fails('store_unavailable', SERVER_FAILED),
+  }
+  await openList(page, wire, mood)
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+
+  await expect.poll(() => wire.length, 'the sale reaches the server').toBe(1)
+  expect(wire[0]!.url, 'the sale went through the order').toContain('/orders/pull')
+  await expect
+    .poll(() => listReadsAfter(mood, 0), {
+      message: 'the 5xx pull is followed by a list read: no GET /inventory reached the server after the pull',
+    })
+    .toBeGreaterThan(0)
+})
+
+test('a 5xx on the Undo of a sale re-reads the list', async ({ page }) => {
+  const wire: Wire[] = []
+  const mood: Mood = {
+    sold: (undo, key, states) => (undo ? fails('store_unavailable', SERVER_FAILED) : soldModel(undo, key, states)),
+  }
+  await openList(page, wire, mood)
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  await expect.poll(() => wire.length, 'the sale reaches the server').toBe(1)
+
+  await receiptFor(page, 'Box 3, Section 1, Card 7').getByRole('button', { name: 'Undo' }).click()
+  await expect.poll(() => wire.length, 'the undo reaches the server').toBe(2)
+  expect(wire.map((call) => call.undo), 'the second write reversed the sale').toEqual([false, true])
+  await expect
+    .poll(() => listReadsAfter(mood, 1), {
+      message: 'the 5xx undo is followed by a list read: no GET /inventory reached the server after the undo',
+    })
+    .toBeGreaterThan(0)
+})
+
+test('a 5xx on the Undo of a sale through an order re-reads the list', async ({ page }) => {
+  const wire: Wire[] = []
+  const mood: Mood = {
+    orders: ONE_OPEN_ORDER,
+    plan: ONE_OPEN_ORDER_PLAN,
+    pull: (undo) => (undo ? fails('store_unavailable', SERVER_FAILED) : null),
+  }
+  await openList(page, wire, mood)
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  await expect.poll(() => wire.length, 'the sale reaches the server').toBe(1)
+
+  await view(page).getByRole('button', { name: 'Undo' }).click()
+  await expect.poll(() => wire.length, 'the undo reaches the server').toBe(2)
+  expect(wire.map((call) => call.undo), 'the second write reversed the pull').toEqual([false, true])
+  await expect
+    .poll(() => listReadsAfter(mood, 1), {
+      message: 'the 5xx undo of a pull is followed by a list read: no GET /inventory reached the server after the undo',
+    })
+    .toBeGreaterThan(0)
+})
+
+test('control: a Mark it sold that succeeds re-reads the list', async ({ page }) => {
+  const wire: Wire[] = []
+  const mood: Mood = {}
+  await openList(page, wire, mood)
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+
+  await expect.poll(() => wire.length, 'the sale reaches the server').toBe(1)
+  await expect
+    .poll(() => listReadsAfter(mood, 0), { message: 'a sale that succeeds is followed by a list read' })
+    .toBeGreaterThan(0)
 })
