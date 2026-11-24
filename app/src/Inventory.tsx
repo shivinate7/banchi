@@ -501,7 +501,7 @@ function InventoryWalk({
               if (gotNoAnswer(err) || code === ALREADY_SOLD || code === CARD_RETIRED) holdRank(copy.key)
               throw err
             }
-          }),
+          }, 'sale'),
         )
         setSold((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
         holdRank(copy.key)

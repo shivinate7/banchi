@@ -874,8 +874,12 @@ export function BoxBrowse({
   const asked = useRef<Set<string>>(new Set())
   const [reloads, setReloads] = useState(0)
   /* EVERY WRITE'S RE-READ (`afterWrite`, D73): a card write made here, in the box sheet or on the screen above re-reads
-     this walk, its pricing and its box counts, whatever the write came to. This counter is what the reads below depend on. */
-  useRereadOnWrite(async () => setReloads((n) => n + 1))
+     this walk, its pricing and its box counts, whatever the write came to. A SALE is the exception that keeps main's
+     light split: the screen above bumps `reloadToken` for it, which re-reads this box, the box counts and the review
+     queues, and this counter stays put, so the buried boxes and the price tables stay as read. Any other write bumps it. */
+  useRereadOnWrite(async (kind) => {
+    if (kind !== 'sale') setReloads((n) => n + 1)
+  })
   /* Each re-shot card's NEW capture id, by row key — the cache nonce the photo appends. */
   const [reshot, setReshot] = useState<Record<string, string>>({})
   const [reshootBusy, setReshootBusy] = useState<string | null>(null)
@@ -1181,7 +1185,7 @@ export function BoxBrowse({
   /* THE DELETED BOXES SHELF CLOSES THE LIST, AND ONLY WHEN NOTHING NARROWS IT. A search and a
    * facet pick name live cards, which a buried record is not, so under either the shelf is not
    * offered and a walk standing on it moves on like any shelf the answer leaves out. */
-  const { buried, failure: buriedFailure, retry: retryBuried } = useBuried(reloads + reloadToken)
+  const { buried, failure: buriedFailure, retry: retryBuried } = useBuried(reloads)
   const [deletedKey, setDeletedKey] = useState<string | null>(null)
   /* THE WALK AND THE PANE READ ONE ANSWER: the record picked, else the first. The arrow keys step it
    * as they step a box's walk, and the row in view is kept in view within the rail. */
@@ -1455,8 +1459,9 @@ export function BoxBrowse({
     }
   }, [reloads, reloadToken])
 
-  /* A reread of this screen's own (the card menu's Reread, a re-shoot, a box op) drops the price tables: it is
-     pressed after something changed downstream. A sale, from the parent's token, changes no reading and keeps them. */
+  /* A reread that bumps `reloads` (the card menu's Reread, and every write but a sale: a re-shoot, a box op, a retire)
+     drops the price tables: it is pressed after something changed downstream. A sale, from the parent's token, changes
+     no reading and keeps them. */
   const pricingSeen = useRef(reloads)
   useEffect(() => {
     if (pricingSeen.current === reloads) return
