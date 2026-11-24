@@ -354,11 +354,18 @@ async function open(
     /** The kept clears that carry an id, on `GET /pricing` beside `last_clear`: an earlier clear, pressed as `restoreClear`. */
     clears?: { id?: string; count: number; at: number }[]
     /** Answers `POST /pipeline/held/<sku>/unhold` and `POST /pipeline/held/<sku>/hold` with a refusal or a 5xx. Each POST is recorded first. */
-    held?: { unhold?: { status: number; code: string }; hold?: { status: number; code: string } }
+    /** `committed` says a 5xx still wrote: the server can fail after it writes, so the count moves as an answer's would. A refusal never does. */
+    held?: {
+      unhold?: { status: number; code: string; committed?: boolean }
+      hold?: { status: number; code: string; committed?: boolean }
+    }
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
   let restoreSent = false
+  /* THE COPIES THE SERVER HOLDS, per SKU, as the held writes below leave them. A case that names `held` reads them back on the worklist, so a
+     write that committed shows on the row the way it does on the server. */
+  const heldCopies = new Map<string, number>()
 
   /* THE ONE PRESS AND ITS STATUS, stubbed so no case can reach the server that would reach
      TCGplayer. Every body lands in `wire`, which is what the cases assert against. */
@@ -422,11 +429,13 @@ async function open(
     wire.push({ method: 'POST', path, body: request.postDataJSON() })
     const unhold = path.endsWith('/unhold')
     const failure = unhold ? options.held?.unhold : options.held?.hold
+    const sku = decodeURIComponent(path.split('/')[3] ?? '')
+    /* THE COUNT MOVES WHEN THE WRITE COMMITS: an answer did, a 5xx only when it says so, and a refusal wrote nothing. */
+    if (options.held !== undefined && (failure === undefined || failure.committed === true)) heldCopies.set(sku, unhold ? 0 : 2)
     if (failure !== undefined) {
       await route.fulfill({ status: failure.status, contentType: 'application/json', body: JSON.stringify({ error: { code: failure.code, message: 'The server said no.' } }) })
       return
     }
-    const sku = decodeURIComponent(path.split('/')[3] ?? '')
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(unhold ? { sku, moved: 2, unheld: 2, pushed: 0 } : { sku, held: 2 }) })
   })
   await page.route(/\/inventory\/\d+\/\d+\/take-off$/, async (route) => {
@@ -784,7 +793,7 @@ async function open(
           open: options.emitted !== true || (options.unsent?.[row.run] ?? 0) > 0,
           unsent: options.unsent?.[row.run] ?? 0,
         })),
-        skus: options.noRun === true && listed.length === 0 ? [] : rows,
+        skus: options.noRun === true && listed.length === 0 ? [] : heldRows(rows, heldCopies),
         written_at: {},
         skipped: [],
         asked: [],
@@ -9053,6 +9062,54 @@ for (const failure of [
     }).toBe(true)
   })
 }
+
+/** The worklist's rows with the copies the server holds now (`heldCopies`) laid on each listing. A row no held write moved is returned as it was. */
+function heldRows(rows: readonly unknown[], held: ReadonlyMap<string, number>): unknown[] {
+  return rows.map((row) => {
+    const one = row as { sku: string; listing?: Record<string, unknown> | null }
+    const count = held.get(one.sku)
+    return count === undefined || one.listing == null ? row : { ...one, listing: { ...one.listing, held_copies: count } }
+  })
+}
+
+/* THE COUNT AFTER AN UNHOLD OR ITS UNDO THAT GOT A 5xx (F1). `rereadTicks` lays only the kept ticks, so the copies a held write moved stay on the
+   row until a whole reload. A 5xx may have committed, so the row must show what the store holds now. The control is a 5xx that did not commit:
+   the store still holds the copies, and the row keeps its line. */
+test('reread follow-on: an Unhold the server fails with a 5xx that committed takes the removed-by-you line off the row', async ({ page }) => {
+  await open(page, { skus: [UNHOLD_ROW], held: { unhold: { status: 503, code: 'store_unavailable', committed: true } } })
+  await expect(page.getByRole('button', { name: 'Unhold', exact: true }), 'precondition: the row draws Unhold').toBeVisible()
+  const sent = recordSent(page)
+  await page.getByRole('button', { name: 'Unhold', exact: true }).click()
+  await expect.poll(() => readAfterWrite(sent, 'POST', UNHOLD_PATH, '/pipeline/pricing'), {
+    message: 'the Unhold that failed with a 5xx is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+  await expect(page.locator('.pricing-removed'), 'the store holds no copies after the committed Unhold, so the row must not still say removed by you').toHaveCount(0)
+})
+
+test('reread follow-on control: an Unhold the server fails with a 5xx that did not commit leaves the row saying removed by you', async ({ page }) => {
+  await open(page, { skus: [UNHOLD_ROW], held: { unhold: { status: 503, code: 'store_unavailable' } } })
+  await expect(page.getByRole('button', { name: 'Unhold', exact: true }), 'precondition: the row draws Unhold').toBeVisible()
+  const sent = recordSent(page)
+  await page.getByRole('button', { name: 'Unhold', exact: true }).click()
+  await expect.poll(() => readAfterWrite(sent, 'POST', UNHOLD_PATH, '/pipeline/pricing'), {
+    message: 'the Unhold that failed with a 5xx is followed by a read of the prices worklist',
+  }).toBe(true)
+  await expect(page.locator('.pricing-removed', { hasText: '2 removed by you' }), 'the store still holds both copies, so the row keeps its line').toBeVisible()
+})
+
+test('reread follow-on: an Undo of an Unhold the server fails with a 5xx that committed puts the removed-by-you line back on the row', async ({ page }) => {
+  await open(page, { skus: [UNHOLD_ROW], held: { hold: { status: 503, code: 'store_unavailable', committed: true } } })
+  await page.getByRole('button', { name: 'Unhold', exact: true }).click()
+  const receipt = page.locator('.bn-toast', { hasText: 'Unheld 2 copies of Articuno' })
+  await expect(receipt.getByRole('button', { name: 'Undo' }), 'precondition: the Unhold answered and offers Undo').toBeVisible()
+  await expect(page.locator('.pricing-removed'), 'precondition: the answered Unhold took the line off the row').toHaveCount(0)
+  const sent = recordSent(page)
+  await receipt.getByRole('button', { name: 'Undo' }).click()
+  await expect.poll(() => readAfterWrite(sent, 'POST', HOLD_PATH, '/pipeline/pricing'), {
+    message: 'the Undo that failed with a 5xx is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+  await expect(page.locator('.pricing-removed', { hasText: '2 removed by you' }), 'the store holds both copies again after the committed Undo, so the row must say removed by you').toBeVisible()
+})
 
 /* THE 5xx COPY OF THE THREE WRITES A PRICES ROW MAKES (Unhold, the Undo of an Unhold, the kept-tick drop). A 5xx may have committed the
    write, so the copy names what the row shows and the control to press, which is true either way. A refusal (4xx) wrote nothing, and
