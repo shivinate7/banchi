@@ -1660,6 +1660,145 @@ test('U does nothing while the row’s Undo on B is in flight, with sale C queue
   expect(undoTargets(), 'the two U presses reversed nothing else, and never reached A').toEqual(['cap-b'])
 })
 
+/* THE ROW'S UNDO AS THE NEXT PAINT SHOWS IT. A press that is taken and waits behind a write says so on its own
+ * frame (D-press-queued-state). The read waits one animation frame, the earliest point a person can see it. */
+type UndoFace = { busy: string | null; ariaBusy: string | null; ariaDisabled: string | null; disabled: boolean; name: string | null }
+async function undoFaceOnNextFrame(page: Page): Promise<UndoFace | null> {
+  return page.evaluate((row: string) => new Promise<UndoFace | null>((resolve) => {
+    requestAnimationFrame(() => {
+      const button = document.querySelector<HTMLButtonElement>(`${row} button[aria-label^="Undo sale"]`)
+      if (button === null) return resolve(null)
+      resolve({
+        busy: button.getAttribute('data-busy'),
+        ariaBusy: button.getAttribute('aria-busy'),
+        ariaDisabled: button.getAttribute('aria-disabled'),
+        disabled: button.disabled,
+        name: button.getAttribute('aria-label'),
+      })
+    })
+  }), `${CURRENT_PICK} .card-locations-row`)
+}
+
+test('U while the newest sale is still saving marks the row Undo queued on the press frame', async ({ page }) => {
+  /* The sale is held until the queued state is read, so the read is the state a person sees, not the write landing. */
+  const sale = gate()
+  await open(page, {
+    plan: renumberPlan(),
+    refreshed: renumbered,
+    holdPull: (body) => (body.undo !== true ? sale.promise : null),
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  try {
+    await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+    await page.getByRole('heading', { name: 'Orders' }).click()
+    await page.keyboard.press('u')
+    const face = await undoFaceOnNextFrame(page)
+    expect(face, 'the row still carries its Undo while the sale saves').not.toBeNull()
+    expect(face?.busy, 'a press taken behind the sale reads data-busy queued, not the busy ring').toBe('queued')
+    expect(face?.ariaBusy, 'a queued press is announced busy').toBe('true')
+    expect(face?.ariaDisabled, 'a queued press is announced refused').toBe('true')
+    expect(face?.disabled, 'a queued press is never the disabled attribute, so it keeps its own paint').toBe(false)
+    expect(face?.name, 'a queued press keeps its label').toMatch(/^Undo sale/)
+  } finally {
+    sale.release()
+  }
+})
+
+test('the words Waits for the sale to save show beside the row while U waits', async ({ page }) => {
+  const sale = gate()
+  await open(page, {
+    plan: renumberPlan(),
+    refreshed: renumbered,
+    holdPull: (body) => (body.undo !== true ? sale.promise : null),
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  try {
+    await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+    await page.getByRole('heading', { name: 'Orders' }).click()
+    await page.keyboard.press('u')
+    await expect(rows.nth(0).getByRole('status'), 'the words sit in the row, beside the press').toHaveText('Waits for the sale to save.')
+  } finally {
+    sale.release()
+  }
+})
+
+test('once the sale lands the queued Undo runs, the words go, and Pull undone shows', async ({ page }) => {
+  const sale = gate()
+  const wire = await open(page, {
+    plan: renumberPlan(),
+    refreshed: renumbered,
+    holdPull: (body) => (body.undo !== true ? sale.promise : null),
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  try {
+    await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+    await expect.poll(() => pullsOf(wire).length).toBe(1)
+    await page.getByRole('heading', { name: 'Orders' }).click()
+    await page.keyboard.press('u')
+    await expect(rows.nth(0).getByRole('button', { name: /^Undo sale/ }), 'the queued state is on the row before the sale lands').toHaveAttribute('data-busy', 'queued')
+    await expect(rows.nth(0).getByRole('status'), 'the words are on the row before the sale lands').toHaveText('Waits for the sale to save.')
+    sale.release()
+    await expect.poll(() => undosOf(wire).length, 'the queued U runs once the sale lands').toBe(1)
+    await expect(page.locator('.bn-toast', { hasText: 'Pull undone' })).toBeVisible()
+    await expect(page.locator('[data-busy="queued"]'), 'the queued state is gone once the undo has run').toHaveCount(0)
+    await expect(rows.nth(0).getByRole('status'), 'the words go with the queued state').toHaveCount(0)
+  } finally {
+    sale.release()
+  }
+})
+
+test('the walk row keeps its box while the queued Undo and its words show', async ({ page }) => {
+  const sale = gate()
+  const wire = await open(page, {
+    plan: renumberPlan(),
+    refreshed: renumbered,
+    holdPull: (body) => (body.undo !== true ? sale.promise : null),
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  try {
+    await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+    await expect.poll(() => pullsOf(wire).length).toBe(1)
+    const sending = await rows.nth(0).boundingBox()
+    await page.getByRole('heading', { name: 'Orders' }).click()
+    await page.keyboard.press('u')
+    await expect(rows.nth(0).getByRole('button', { name: /^Undo sale/ }), 'the queued state must be on the row before its box is read').toHaveAttribute('data-busy', 'queued')
+    await expect(rows.nth(0).getByRole('status')).toHaveText('Waits for the sale to save.')
+    const queued = await rows.nth(0).boundingBox()
+    expect(queued, 'the row has a box in the queued state').not.toBeNull()
+    expect(queued?.height, 'the queued state and its words keep the row height (D118)').toBe(sending?.height)
+    expect(queued?.width, 'the queued state and its words keep the row width (D118)').toBe(sending?.width)
+  } finally {
+    sale.release()
+  }
+})
+
+test('a second U while the queued Undo waits sends no second undo', async ({ page }) => {
+  const sale = gate()
+  const wire = await open(page, {
+    plan: renumberPlan(),
+    refreshed: renumbered,
+    holdPull: (body) => (body.undo !== true ? sale.promise : null),
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  try {
+    await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+    await expect.poll(() => pullsOf(wire).length).toBe(1)
+    await page.getByRole('heading', { name: 'Orders' }).click()
+    await page.keyboard.press('u')
+    await expect(rows.nth(0).getByRole('button', { name: /^Undo sale/ }), 'the first U shows the queued state').toHaveAttribute('data-busy', 'queued')
+    await page.getByRole('heading', { name: 'Orders' }).click()
+    await page.keyboard.press('u')
+    await expect(rows.nth(0).getByRole('button', { name: /^Undo sale/ }), 'the second U leaves the queued state on the row').toHaveAttribute('data-busy', 'queued')
+    expect(undosOf(wire), 'nothing is posted while the sale saves').toHaveLength(0)
+    sale.release()
+    await expect.poll(() => undosOf(wire).length, 'the one queued U runs once the sale lands').toBe(1)
+    await expect(page.locator('.bn-toast', { hasText: 'Pull undone' })).toBeVisible()
+    expect(undosOf(wire), 'the second U added no second undo').toHaveLength(1)
+  } finally {
+    sale.release()
+  }
+})
+
 test('a receipt toast’s Undo does nothing while the same pull’s reversal, begun by U, is in flight', async ({ page }) => {
   /* The newest pull's reversal is in flight: `U` began it. Its own receipt's Undo has the same held check as `U`, so
      pressing that receipt's Undo queues no second reversal of the same copy. The sentinel sale C is pressed last, so
