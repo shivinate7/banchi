@@ -9132,8 +9132,7 @@ test('reread follow-on: an Undo of an Unhold the server fails with a 5xx that co
 })
 
 /* THE 5xx COPY OF THE THREE WRITES A PRICES ROW MAKES (Unhold, the Undo of an Unhold, the kept-tick drop). A 5xx may have committed the
-   write, so the copy names what the row shows and the control to press, which is true either way. A refusal (4xx) wrote nothing, and
-   its own title stays. */
+   write, so the copy says what the row or the Send box shows, which is true either way. A refusal (4xx) wrote nothing, and its own title stays. */
 test('5xx copy: Unhold names its row', async ({ page }) => {
   await open(page, { skus: [UNHOLD_ROW], held: { unhold: { status: 503, code: 'store_unavailable' } } })
   await expect(page.getByRole('button', { name: 'Unhold', exact: true }), 'precondition: the row draws Unhold').toBeVisible()
@@ -9160,10 +9159,10 @@ test('5xx copy: Undo of Unhold names its row', async ({ page }) => {
   const receipt = page.locator('.bn-toast', { hasText: 'Unheld 2 copies of Articuno' })
   await expect(receipt.getByRole('button', { name: 'Undo' }), 'precondition: the Unhold answered and offers Undo').toBeVisible()
   await receipt.getByRole('button', { name: 'Undo' }).click()
-  const toast = page.locator('.bn-toast', { hasText: 'The store did not confirm keeping Articuno off TCGplayer' })
-  await expect(toast, 'the toast names the hold the store did not confirm').toBeVisible()
-  await expect(toast, 'the body names the row text and the Keep off TCGplayer control to press again').toContainText(
-    'If Articuno does not show removed by you, press Keep off TCGplayer again.',
+  const toast = page.locator('.bn-toast', { hasText: 'The store did not confirm the Undo for Articuno' })
+  await expect(toast, 'the toast names the Undo the store did not confirm').toBeVisible()
+  await expect(toast, 'the body says what the row shows and where the copies go, true whether or not the write committed').toContainText(
+    'If Articuno shows 2 removed by you, the copies stay off TCGplayer. If not, they go out with the next send.',
   )
 })
 
@@ -9180,10 +9179,10 @@ test('refusal copy control: Undo of Unhold', async ({ page }) => {
 
 test('5xx copy: tick drop names the Send box', async ({ page }) => {
   await dropKeptTick(page, { status: 503, code: 'store_unavailable', message: 'The store did not answer. Try again.' })
-  const toast = page.locator('.bn-toast', { hasText: 'The store did not confirm the untick for Gardevoir ex' })
-  await expect(toast, 'the toast names the untick the store did not confirm').toBeVisible()
-  await expect(toast, 'the body names the Send box and the untick to press again').toContainText(
-    'If the Send box for Gardevoir ex is still ticked, untick it again.',
+  const toast = page.locator('.bn-toast', { hasText: 'The store did not confirm the Send box for Gardevoir ex' })
+  await expect(toast, 'the toast names the Send box the store did not confirm').toBeVisible()
+  await expect(toast, 'the body says the send follows the box as shown').toContainText(
+    'This send follows the box as shown. On your next visit, the box may show its earlier setting.',
   )
 })
 
