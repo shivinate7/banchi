@@ -9245,13 +9245,14 @@ async function expectReadAfter(wire: Wire[], isWrite: (entry: Wire) => boolean, 
     .toBeGreaterThan(0)
 }
 
-/** THE WORDS AFTER A WRITE THAT MAY HAVE COMMITTED, shared by the sale, retire and move cases: the toast's sentence, exactly.
- *  `Inventory.tsx`'s `reportWrite` says the write is not confirmed and names the one control still on the copy to press again,
- *  and never shows the store's own "Try again" (D196). */
-async function expectUnconfirmedToast(page: Page, sentence: string): Promise<void> {
+/** THE WORDS AFTER A WRITE THAT MAY HAVE COMMITTED, shared by the sale, retire and move cases: the toast's title, exactly, and its
+ *  body, which names the card and its place and the one control still on the copy to press again. The server's own "Try again"
+ *  and raw text never show (D196). The body's name is the card's own name, so it is matched as any text ahead of the place. */
+async function expectUnconfirmedToast(page: Page, title: string, body: RegExp): Promise<void> {
   const toast = page.locator('.bn-toast-refusal')
   await expect(toast, 'the refusal reaches the person').toBeVisible()
-  await expect(toast.locator('.bn-toast-title'), 'the toast reads the unconfirmed sentence, exactly').toHaveText(sentence)
+  await expect(toast.locator('.bn-toast-title'), 'the title names what the store did not confirm, exactly').toHaveText(title)
+  await expect(toast.locator('.bn-toast-body'), 'the body names the copy and the control to press again').toHaveText(body)
   await expect(toast, 'the toast carries no raw server text').not.toContainText('The store did not answer')
   await expect(toast, 'the toast does not say Try again').not.toContainText('Try again')
 }
@@ -9296,7 +9297,11 @@ test('a Mark sold the server fails with a 5xx says the sale is unconfirmed, with
   )
 
   await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
-  await expectUnconfirmedToast(page, 'The store did not confirm the sale of Box 2, Section 1, Card 1. If Mark Sold is still on that copy, press it again.')
+  await expectUnconfirmedToast(
+    page,
+    'The store did not confirm the sale',
+    /^.+, Box 2, Section 1, Card 1\. If Mark Sold is still on its row, press it again\. If the sale went through, the second press says so\.$/,
+  )
 })
 
 test('a 5xx sale that committed keeps its row in place under a search', async ({ page }) => {
@@ -9505,7 +9510,11 @@ test('a retire the server fails with a 5xx says the retirement is unconfirmed, w
   await openStackedRetire(page)
   await pressStackedRetire(page)
 
-  await expectUnconfirmedToast(page, 'The store did not confirm the retirement of Box 7, Section 1, Card 39. If Retire is still on that copy, press it again.')
+  await expectUnconfirmedToast(
+    page,
+    'The store did not confirm the retirement',
+    /^.+, Box 7, Section 1, Card 39\. If Retire is still on its row, press it again\. If the retirement went through, the second press says so\.$/,
+  )
 })
 
 /** THE MOVE THE STACKED 5XX CASES START FROM: a copy leaves Box 7 for Box 2, and the server fails after the commit. Returns the
@@ -9589,7 +9598,11 @@ test('a move the server fails with a 5xx says the move is unconfirmed, with no T
   await openStackedMove(page)
   await pressStackedMove(page)
 
-  await expectUnconfirmedToast(page, 'The store did not confirm the move of Box 7, Section 1, Card 39. If Move is still on that copy, press it again.')
+  await expectUnconfirmedToast(
+    page,
+    'The store did not confirm the move',
+    /^.+, Box 7, Section 1, Card 39\. If Move is still on its row, press it again\. If the move went through, the second press says so\.$/,
+  )
 })
 
 
