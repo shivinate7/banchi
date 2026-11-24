@@ -873,13 +873,6 @@ export function BoxBrowse({
   const [priced, setPriced] = useState<Record<string, MarketRead>>({})
   const asked = useRef<Set<string>>(new Set())
   const [reloads, setReloads] = useState(0)
-  /* EVERY WRITE'S RE-READ (`afterWrite`, D73): a card write made here, in the box sheet or on the screen above re-reads
-     this walk, its pricing and its box counts, whatever the write came to. A SALE is the exception that keeps main's
-     light split: the screen above bumps `reloadToken` for it, which re-reads this box, the box counts and the review
-     queues, and this counter stays put, so the buried boxes and the price tables stay as read. Any other write bumps it. */
-  useRereadOnWrite(async (kind) => {
-    if (kind !== 'sale') setReloads((n) => n + 1)
-  })
   /* Each re-shot card's NEW capture id, by row key — the cache nonce the photo appends. */
   const [reshot, setReshot] = useState<Record<string, string>>({})
   const [reshootBusy, setReshootBusy] = useState<string | null>(null)
@@ -912,7 +905,18 @@ export function BoxBrowse({
 
   /* The search is the server's matcher filtering this screen's own list: the answer is read
    * for its copy KEYS and nothing else. No autoFocus: this screen is opened to WALK. */
-  const { query, setQuery, results, loading, failure: searchFailure } = useSearch()
+  const { query, setQuery, results, loading, failure: searchFailure, reload: reloadSearch } = useSearch()
+  /* EVERY WRITE'S RE-READ (`afterWrite`, D73): a card write made here, in the box sheet or on the screen above re-reads
+     this walk, its pricing and its box counts, whatever the write came to. A SALE is the exception that keeps main's
+     light split: the screen above bumps `reloadToken` for it, which re-reads this box, the box counts and the review
+     queues, and this counter stays put, so the buried boxes and the price tables stay as read. Any other write bumps it
+     and re-asks this screen's own search too, so the box rail's counts follow a move or a retire. A sale does not re-ask
+     it, as on main. */
+  useRereadOnWrite(async (kind) => {
+    if (kind === 'sale') return
+    setReloads((n) => n + 1)
+    reloadSearch()
+  })
   const searching = query.trim() !== ''
 
   /* D213's game/set/rarity filter, independent of the search above and ANDed with it.
