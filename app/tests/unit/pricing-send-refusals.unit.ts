@@ -2,9 +2,9 @@
 // Governs: outcomes first (CLAUDE.md); server/send_routes.do_send
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
-import ts from 'typescript'
 
 import { expect, test } from './unit'
+import { lifted } from './lifted'
 
 /* `refusalTitle` IS NOT EXPORTED, and exporting it is a product edit. So the unit tier asks the
  * language's own parser for the function, strips its types and runs it, and the cases check what
@@ -15,17 +15,6 @@ import { expect, test } from './unit'
  * runs the product's own code and words: the save code and its sentence come from server.ts.
  * `emptySendTitle` is the one name stubbed: no case here passes `data`, so the stub is never
  * called. Any other outside name throws a ReferenceError when a case calls the function. */
-function lifted(source: string, name: string, kind: 'function' | 'const'): string {
-  const file = ts.createSourceFile('source.tsx', source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TSX)
-  const found = file.statements.filter((s): s is ts.FunctionDeclaration | ts.VariableStatement => kind === 'function'
-    ? ts.isFunctionDeclaration(s) && s.name?.text === name
-    : ts.isVariableStatement(s) && s.declarationList.declarations.some((d) => ts.isIdentifier(d.name) && d.name.text === name))
-  const [node] = found
-  if (found.length !== 1 || node === undefined) throw new Error(`expected one top-level ${kind} ${name}, found ${found.length}`)
-  const text = node.getText(file).replace(/^export\s+/, '')
-  return ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
-}
-
 function functionNamed(source: string, name: string, outside: string[] = []): (code: string, data?: unknown) => string {
   const js = lifted(source, name, 'function')
   const emptySendTitle = (): never => { throw new Error('emptySendTitle is outside this check') }
