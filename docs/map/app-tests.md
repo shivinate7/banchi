@@ -62,7 +62,7 @@ The Playwright specs and unit tests of the app, and the helpers they share.
 - `app/tests/fontsReady.ts` — One helper, `settleFonts`, awaited after every `page.goto` in the seven specs that measure type — it said FOUR, and the three that joined since arrived with nothing reading the sentence.
   - Decisions: `D124`, `D16`, `D38`, `D50`
 - `app/tests/fulfillment.spec.ts` — All nine rows of the Fulfillment constraints table against the rendered view, with every contrast ratio computed from the colors the page actually painted rather than from a number published in docs/DESIGN.md.
-  - Decisions: `D5`, `D10`, `D13`, `D93`, `D115`, `D136`, `D212`, `D218`, `D7`, `D288`, `D259`, `D31`, `D193`, `D118`, `D28`, `D57`, `D21`, `D24`, `D41`, `D125`, `D73`
+  - Decisions: `D5`, `D10`, `D13`, `D93`, `D115`, `D136`, `D212`, `D218`, `D7`, `D288`, `D259`, `D31`, `D193`, `D118`, `D28`, `D57`, `D21`, `D24`, `D41`, `D125`, `D73`, `D329`, `D192`
 - `app/tests/gallery.spec.ts` — The four row shapes `CardLocations` draws that no other spec reaches — the departed shell (`is-gone is-nobar`), the pooled one, the current one — which since D118 is an ORDINARY row carrying a bar, marked by a `Viewing` pill and a rail rather than by its shape — and the state cell's single pill — asserted against `#/gallery`'s own fixtures rather than a server.
   - Decisions: `D24`, `D68`, `D41`, `D118`, `D119`, `D269`, `D272`, `D6`, `D58`, `D93`
 - `app/tests/history-float.spec.ts` — The floating price-history card on `#/gallery`'s `history-float` section: opens by focus or by its door, sits above its row by default and below when there is no room, covers neither its row nor a price field, takes focus only in door mode, holds its size while history loads, and draws the product chart with the asking step line and the suggestion dot, in tokens and `.bn-money`.
@@ -84,7 +84,7 @@ The Playwright specs and unit tests of the app, and the helpers they share.
 - `app/tests/inventory-sets.spec.ts` — THE OWNER'S "BY SET" VIEW (D293), in a browser.
   - Decisions: `D172`, `D264`, `D285`, `D293`, `D301`, `D201`
 - `app/tests/inventory.spec.ts` — The owner's inventory screen in a browser: the unified box walk, the folding sections, mass-select, and the FOUR WRITES — box-wide claims, per-card claims, the mid-box delete and the whole-box delete — asserted at the request boundary against a stubbed server, so a control that draws but sends the wrong body fails here.
-  - Decisions: `D10`, `D92`, `D58`, `D20`, `D23`, `D22`, `D3`, `D67`, `D89`, `D172`, `D21`, `D213`, `D259`, `D68`, `D7`, `D83`, `D34`, `D9`, `D101`, `D115`, `D57`, `D132`, `D192`, `D63`, `D37`, `D27`, `D33`, `D31`, `D119`, `D45`, `D118`, `D195`, `D313`, `D218`, `D13`, `D196`, `D38`, `D41`, `D284`, `D299`, `D288`, `D314`, `D26`, `D134`, `D260`, `D300`, `D117`, `D277`, `D124`, `D310`, `D155`, `D8`, `D55`, `D24`, `D142`, `D28`, `D136`, `D5`, `D43`, `D86`, `D125`, `D181`, `D271`, `D73`, `D252`
+  - Decisions: `D10`, `D92`, `D58`, `D20`, `D23`, `D22`, `D3`, `D67`, `D89`, `D172`, `D21`, `D213`, `D259`, `D68`, `D7`, `D83`, `D34`, `D9`, `D101`, `D115`, `D57`, `D132`, `D192`, `D63`, `D37`, `D27`, `D33`, `D31`, `D119`, `D45`, `D118`, `D195`, `D313`, `D218`, `D13`, `D196`, `D38`, `D41`, `D284`, `D299`, `D288`, `D314`, `D26`, `D134`, `D260`, `D300`, `D117`, `D277`, `D124`, `D310`, `D155`, `D8`, `D55`, `D24`, `D142`, `D28`, `D136`, `D5`, `D43`, `D86`, `D125`, `D181`, `D271`, `D73`, `D252`, `D329`
 - `app/tests/kit-data.spec.ts` — The kit's data primitives and the one matcher.
   - Decisions: `D118`, `D195`, `D288`, `D212`, `D218`, `D221`
 - `app/tests/kit-data/harness.tsx` — The test page's entry: the tokens, the kit styles and the specimens, with `?theme=dark` for the dark theme.
@@ -148,7 +148,7 @@ The Playwright specs and unit tests of the app, and the helpers they share.
 - `app/tests/revenue.spec.ts` — `#/revenue`'s own suite (`D217`): the empty and failure states, every column's sort and its reverse, the search field, the month strip's cross-filter and its Clear, a drill-down's nested orders table, a custom range's week-granularity switch, the in-progress bucket mark, and full state round-tripping through the URL, including a reload.
   - Decisions: `D278`, `D201`, `D214`, `D217`, `D225`, `D196`, `D298`, `D271`, `D89`, `D301`, `D313`, `D50`, `D103`, `D118`, `D193`, `D277`
 - `app/tests/review.spec.ts` — The review queue's geometry and its two guarantees: the photograph at >=`23%` of the viewport with a >=`700px` long edge, zero page scroll for one card, every candidate row on screen beside the photo, D28's frame not moving between cards, the `1`:`1` loupe — HIDDEN AT REST, aimed by the pointer.
-  - Decisions: `D23`, `D24`, `D28`, `D32`, `D77`, `D118`, `D218`, `D13`, `D16`, `D35`, `D136`, `D37`, `D284`, `D29`, `D291`, `D76`, `D174`, `D221`, `D313`, `D4`, `D41`
+  - Decisions: `D23`, `D24`, `D28`, `D32`, `D77`, `D118`, `D218`, `D13`, `D16`, `D35`, `D136`, `D37`, `D284`, `D29`, `D291`, `D76`, `D174`, `D221`, `D313`, `D4`, `D41`, `D329`
 - `app/tests/routeExclusions.ts` — `EXCLUDED_FROM_SWEEP` (`#/fulfillment`, `#/gallery`), a REGEX rather than a quoted `'#/…'` string literal, read by `text-checks.spec.ts`.
   - Decisions: `D69`, `D70`, `D284`
 - `app/tests/routeFixtures.ts` — The fixture BUILDERS `run-panel.spec.ts`, `orders.spec.ts` and `shipping.spec.ts` already wrote — `runRow`, `place`/`pick`/`line`/`order`/`payloadOf`, `shippingRow`/`batchOf` — moved here so a fourth file could reuse the same proven shapes instead of a competing copy, plus two fresh ones (`codeEntry`/`codeLedgerOf`, `departedCard`) for `#/codes` and `#/graveyard`, which no existing spec seeded at all.
@@ -208,6 +208,8 @@ The Playwright specs and unit tests of the app, and the helpers they share.
   - Decisions: `D5`, `D275`
 - `app/tests/unit/unit.ts` — The unit tier's `test`: Playwright's, with the `page`, `context` and `browser` fixtures made to throw, so a unit case cannot open a browser.
   - Decisions: `D18`
+- `app/tests/unit/write-line.unit.ts` — The shared write line, run without a browser: writes go in the order pressed and one at a time, a waiting press reads as queued, cancel drops a waiting write, a write that throws strands nothing behind it, and the count is the writes not yet answered.
+  - Decisions: `D329`
 - `app/tests/wireOrder.ts` — The order of a page's requests: `recordSent` records each one as it leaves, and `readAfterWrite` and `readAfterPost` say whether a GET went out after a write, so a case asserts a write's read-back and never a bare count.
   - Decisions: `D73`
 - `app/tests/wide.spec.ts` — The owner's screens ABOVE the desk, which nothing in this suite had ever rendered.

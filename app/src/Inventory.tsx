@@ -37,7 +37,7 @@ import {
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
 import { useViewParam } from './kit/viewState'
-import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton, UndoSaleButton, askFocusBack, clearFreshSale, markFreshSale } from './CardLocations'
+import { CardLocations, hiddenCopies, layoutsOf, MarkSoldButton, UndoSaleButton, askFocusBack, clearFreshSale, markFreshSale, undoShownFor } from './CardLocations'
 import { inTopTenth, useMarketRead, type HeroFigures } from './CardHero'
 import { InventorySets } from './InventorySets'
 import { TakeOffLine } from './TakeOffLine'
@@ -54,6 +54,7 @@ import {
   Notice,
   Page,
   Pill,
+  QueuedNote,
   Select,
   SectionPicker,
   UNDO_KEY_LABEL,
@@ -67,6 +68,7 @@ import { clearToastAction, dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
 import { RANK_IS_CURRENT, stalenessSentence, type FrozenRank } from './frozenRank'
 import { afterWrite, useRereadOnWrite } from './afterWrite'
+import { isQueued, queueWrite, sayQueued, writeOut, type LineJob } from './writeLine'
 import { Dialog as Overlay } from './kit/overlay'
 import './Inventory.css'
 
@@ -106,6 +108,8 @@ const ALREADY_RETIRED = 'already_retired'
 const NOT_RETIRED = 'not_retired'
 /* UN-14: "already undone" for a move, the same shape `not_sold`/`not_retired` answer. */
 const NOT_MOVED = 'not_moved'
+/** The screen's write line (`writeLine.ts`). */
+const LINE = 'inventory'
 
 const NO_LAYOUTS: ReadonlyMap<number, readonly SectionDetail[]> = new Map()
 
@@ -373,6 +377,13 @@ function InventoryWalk({
 
   /* Receipts — sales and retirements — still inside their undo window, newest first. */
   const [receipts, setReceipts] = useState<Receipt[]>([])
+  /* THE STANDING RECEIPTS, kept in step as they change rather than as the screen redraws: a press that waits in the line
+     reads them when its turn comes, which can be before the next draw. */
+  const receiptsRef = useRef<Receipt[]>([])
+  const commitReceipts = useCallback((next: (held: Receipt[]) => Receipt[]) => {
+    receiptsRef.current = next(receiptsRef.current)
+    setReceipts(receiptsRef.current)
+  }, [])
 
   /* Copies this screen has sold or retired and the wire has not caught up with yet. */
   const [sold, setSold] = useState<string[]>([])
@@ -450,13 +461,21 @@ function InventoryWalk({
     return () => document.removeEventListener('keydown', onKey)
   }, [retiring])
 
-  const doUndoRef = useRef<(receipt: Receipt) => Promise<void>>(async () => {})
+  const doUndoRef = useRef<(receipt: Receipt) => void>(() => {})
+
+  /* THE SCREEN'S WRITE LINE (D329). Every write goes through it, so a press that must wait for the write in flight is
+     queued behind it. Mark sold, Retire and Move stay refused while a write is out (D57); only an Undo queues. */
+  const inLine = useCallback((what: 'sale' | 'retirement' | 'move' | 'undo', run: () => Promise<void>): LineJob => queueWrite(run, { screen: LINE, what }), [])
+  /** The Undo press waiting for the write ahead of it, held so a second press queues nothing. */
+  const undoWaiting = useRef<LineJob | null>(null)
+  /** The receipt whose Undo is waiting, and the write it waits for, for its control to draw the queued state. */
+  const [queued, setQueued] = useState<{ readonly key: string; readonly ahead: string } | null>(null)
 
   /** Newest first, and a second write against one position replaces its receipt. Every
    *  receipt is also a toast — with its Undo where there is one, and its note where there is
    *  not. */
   const remember = useCallback((receipt: Receipt) => {
-    setReceipts((held) => [receipt, ...held.filter((standing) => standing.key !== receipt.key)])
+    commitReceipts((held) => [receipt, ...held.filter((standing) => standing.key !== receipt.key)])
     const previous = toasts.current.get(receipt.key)
     if (previous !== undefined) dismissToast(previous)
     /* A toast's Undo reaches only the newest reversible write (`docs/specs/undo.md` §3): every receipt before this one
@@ -470,7 +489,7 @@ function InventoryWalk({
       title: receipt.said,
       body: receiptBody(receipt.place, receipt.note),
       ttlMs: UNDO_WINDOW_MS,
-      action: receipt.canUndo ? { label: 'Undo', onPress: () => void doUndoRef.current(receipt) } : undefined,
+      action: receipt.canUndo ? { label: 'Undo', onPress: () => doUndoRef.current(receipt) } : undefined,
       extra:
         receipt.takeOff === undefined ? undefined : (
           <TakeOffLine box={receipt.box} index={receipt.index} name={receipt.takeOff.name} start={receipt.takeOff.state} toastId={toastId} />
@@ -478,9 +497,9 @@ function InventoryWalk({
     })
     toastId.current = id
     toasts.current.set(receipt.key, id)
-  }, [])
+  }, [commitReceipts])
 
-  const doSell = useCallback(
+  const sellNow = useCallback(
     async (copy: SearchCopy) => {
       if (busyKey !== null) return
       setBusyKey(copy.key)
@@ -543,8 +562,13 @@ function InventoryWalk({
     [busyKey, remember, holdRank, selected],
   )
 
+  /* D57: one write at a time. A press while a write is out, or while an Undo waits for it, is refused and sends nothing. */
+  const lineBusy = useCallback(() => writeOut(LINE) !== null || undoWaiting.current !== null, [])
+
+  const doSell = useCallback((copy: SearchCopy) => (lineBusy() ? Promise.resolve() : inLine('sale', () => sellNow(copy)).done), [inLine, sellNow, lineBusy])
+
   /* The sibling write (D26), shaped move for move on `doSell`. */
-  const doRetire = useCallback(
+  const retireNow = useCallback(
     async (copy: SearchCopy, reason: RetireReason) => {
       if (busyKey !== null) return
       setBusyKey(copy.key)
@@ -611,7 +635,9 @@ function InventoryWalk({
    * server refusing an old caller's silence outright with `section_required` — is not a
    * generic failure: the dialog stays open, on the same box, with one plain sentence and a
    * fresh section list rather than a toast the owner has to reopen the whole flow to answer. */
-  const doMove = useCallback(
+  const doRetire = useCallback((copy: SearchCopy, reason: RetireReason) => (lineBusy() ? Promise.resolve() : inLine('retirement', () => retireNow(copy, reason)).done), [inLine, retireNow, lineBusy])
+
+  const moveNow = useCallback(
     async (copy: SearchCopy, toBox: number, section: MoveSection, sectionLabel: string) => {
       if (busyKey !== null) return
       setBusyKey(copy.key)
@@ -664,9 +690,13 @@ function InventoryWalk({
     [busyKey, holdRank, boxRecords, remember, selected],
   )
 
-  const doUndo = useCallback(
+  const doMove = useCallback(
+    (copy: SearchCopy, toBox: number, section: MoveSection, sectionLabel: string) => (lineBusy() ? Promise.resolve() : inLine('move', () => moveNow(copy, toBox, section, sectionLabel)).done),
+    [inLine, moveNow, lineBusy],
+  )
+
+  const undoNow = useCallback(
     async (receipt: Receipt) => {
-      if (busyKey !== null) return
       setBusyKey(receipt.key)
       let movedBack = false
       /* WHERE THE REMEDY ACTUALLY PUT IT (finding #5, the Opus review round): the remedy
@@ -716,7 +746,7 @@ function InventoryWalk({
           }
         }
       }
-      setReceipts((held) => held.filter((standing) => standing.key !== receipt.key))
+      commitReceipts((held) => held.filter((standing) => standing.key !== receipt.key))
       const standing = toasts.current.get(receipt.key)
       if (standing !== undefined) {
         dismissToast(standing)
@@ -750,22 +780,43 @@ function InventoryWalk({
       })
       setBusyKey(null)
     },
-    [busyKey, releaseRank],
+    [releaseRank, commitReceipts],
+  )
+
+  /* A PRESS OF U, OR OF A TOAST'S UNDO. It targets the receipt standing when it is pressed, and when a write is out it waits
+     behind that write and says so at once: on the receipt's own Undo while that is drawn, else in a toast. An Undo already
+     out or waiting takes a second press for nothing (`docs/specs/undo.md` section 10). The receipt is read again when its
+     turn comes, and a press whose receipt is gone sends nothing. */
+  const doUndo = useCallback(
+    (receipt: Receipt) => {
+      const ahead = writeOut(LINE)
+      if (ahead === 'undo' || (undoWaiting.current !== null && isQueued(undoWaiting.current))) return
+      if (ahead !== null) {
+        setQueued({ key: receipt.key, ahead })
+        if (!(receipt.kind === 'sale' && undoShownFor(receipt.key))) toast({ kind: 'status', icon: 'queued', title: sayQueued(ahead), body: receipt.place })
+      }
+      const job = inLine('undo', async () => {
+        undoWaiting.current = null
+        setQueued(null)
+        const standing = receiptsRef.current.find((held) => held.key === receipt.key && held.canUndo)
+        if (standing !== undefined) await undoNow(standing)
+      })
+      if (ahead !== null) undoWaiting.current = job
+    },
+    [inLine, undoNow],
   )
   doUndoRef.current = doUndo
 
   /* THE NEWEST RECEIPT STILL CARRYING AN UNDO — sale or retirement, whichever was pressed
    * last. `receipts` is already newest-first (`remember`), so the first one with `canUndo`
    * is the one `U` reaches. Read fresh every render; nothing about it needs a ref. */
-  const receiptsRef = useRef(receipts)
-  receiptsRef.current = receipts
   const newestUndoable = useMemo(() => receipts.find((receipt) => receipt.canUndo) ?? null, [receipts])
 
   /* THE SHARED HOOK (`docs/specs/undo.md` §11.3, UN-10) — one primitive for the newest
    * reversible write, in place of this screen's own listener. */
   useUndoHotkey(() => {
     const newest = receiptsRef.current.find((receipt) => receipt.canUndo)
-    return newest === undefined ? null : () => void doUndoRef.current(newest)
+    return newest === undefined ? null : () => doUndoRef.current(newest)
   })
 
   const soldKeys = useMemo(() => new Set(sold), [sold])
@@ -803,7 +854,7 @@ function InventoryWalk({
     [doSell],
   )
 
-  const undo = useCallback((receipt: Receipt) => void doUndo(receipt), [doUndo])
+  const undo = doUndo
 
   const openRetire = useCallback((copy: SearchCopy) => {
     setRetiring(copy)
@@ -819,6 +870,7 @@ function InventoryWalk({
       copy={copy}
       primary={primary}
       busyKey={busyKey}
+      queued={queued}
       soldKeys={soldKeys}
       retiredKeys={retiredKeys}
       undoableSales={undoableSales}
@@ -1204,6 +1256,7 @@ function Action({
   copy,
   primary,
   busyKey,
+  queued,
   soldKeys,
   retiredKeys,
   undoableSales,
@@ -1216,6 +1269,8 @@ function Action({
   copy: SearchCopy
   primary: boolean
   busyKey: string | null
+  /** The Undo press waiting behind a write: its receipt's key, and what it waits for. */
+  queued: { readonly key: string; readonly ahead: string } | null
   soldKeys: ReadonlySet<string>
   retiredKeys: ReadonlySet<string>
   undoableSales: ReadonlyMap<string, Receipt>
@@ -1229,6 +1284,9 @@ function Action({
   const busy = busyKey === copy.key
   if (copy.state === 'sold' || soldKeys.has(copy.key)) {
     const standing = undoableSales.get(copy.key)
+    /* THIS UNDO IS THE PRESS WAITING BEHIND A WRITE: taken, so it is not disabled, and it says what it waits for. */
+    const waits = queued !== null && queued.key === copy.key
+    const noteId = `queued-note-${copy.key}`
     /* After the undo window the state is a pill, ONLY FOR AN OPTIMISTIC SALE STILL IN FLIGHT
        (S2): the struck number this row already draws is the confirmed-sold mark, and the hero
        chips above say `Sold` once for the copy the walk stands on. That covers the phone's
@@ -1267,21 +1325,24 @@ function Action({
             label="Undo"
             name={`Undo the sale at ${standing.place}`}
             size="xl"
-            busy={busy}
-            disabled={busyKey !== null && !busy}
+            busy={waits ? 'queued' : busy}
+            disabled={busyKey !== null && !busy && !waits}
             kbd={undoKeyOn ? UNDO_KEY_LABEL : undefined}
+            aria-describedby={waits ? noteId : undefined}
             onClick={() => onUndo(standing)}
           />
         ) : (
           <UndoSaleButton
             saleKey={copy.key}
             name={`Undo sale: ${standing.place}`}
-            busy={busy}
-            disabled={busyKey !== null && !busy}
+            busy={waits ? 'queued' : busy}
+            disabled={busyKey !== null && !busy && !waits}
             kbd={undoKeyOn ? UNDO_KEY_LABEL : undefined}
+            describedBy={waits ? noteId : undefined}
             onClick={() => onUndo(standing)}
           />
         )}
+        {waits ? <QueuedNote id={noteId}>{sayQueued(queued.ahead)}</QueuedNote> : null}
       </span>
     )
   }

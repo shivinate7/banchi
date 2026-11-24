@@ -223,11 +223,16 @@ async function stubBandReads(page: Page): Promise<BandSweep> {
   return answer
 }
 
+/** Holds an answer or reversal write (`POST /review/<box>/<index>/answer`) until the promise it returns settles. The write is recorded
+ *  before the hold, so a case can see it is in flight. `path` is the pathname; `body` is the JSON body (`undo` marks a reversal). */
+type AnswerHold = (path: string, body: Record<string, unknown> | null) => Promise<void> | null
+
 async function open(
   page: Page,
   review = REVIEW,
   parked: Entry[] = [],
   catalogRows: Candidate[] = CATALOG_ROWS,
+  holdAnswers: AnswerHold = () => null,
 ): Promise<Sent[]> {
   const sent: Sent[] = []
 
@@ -274,7 +279,10 @@ async function open(
   // Every write, recorded and never issued.
   await page.route(/\/(answer|group-answer)$/, async (route) => {
     const request = route.request()
-    sent.push({ method: request.method(), url: request.url(), body: request.postDataJSON() })
+    const body = request.postDataJSON() as Record<string, unknown> | null
+    sent.push({ method: request.method(), url: request.url(), body })
+    const held = holdAnswers(new URL(request.url()).pathname, body)
+    if (held !== null) await held
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -696,6 +704,97 @@ test('finding #14 (the Opus review round) — the tray has no clock: a faked min
   await expect
     .poll(() => sent.filter((s) => s.method === 'POST' && (s.body as { undo?: boolean } | null)?.undo === true).length)
     .toBe(1)
+})
+
+/** A gate a case holds open: `open` waits on it, the case lets it through by calling `release`. */
+function gate(): { promise: Promise<void>; release: () => void } {
+  let release: () => void = () => {}
+  const promise = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  return { promise, release }
+}
+
+/* `docs/specs/undo.md` §10 and D329: U takes a press while an answer is out, instead of dropping it. The reversal goes at the
+ * receipt that was newest when U was pressed, once the answer ahead of it has saved. */
+test('U during a held answer waits for it: the receipt reads queued, and one reversal of that receipt goes out on release', async ({ page }) => {
+  const held = gate()
+  const sent = await open(page, REVIEW, [], CATALOG_ROWS, (path) => (path === '/review/2/2/answer' ? held.promise : null))
+  const posts = () => sent.filter((s) => s.method === 'POST')
+  const undos = () => posts().filter((s) => (s.body as { undo?: boolean } | null)?.undo === true)
+
+  await page.locator('.review-candidate').first().click()
+  await expect.poll(() => posts().length, 'the first answer is sent').toBe(1)
+  const receipt = page.locator('.review-receipt').getByRole('button', { name: 'Undo' })
+  await expect(receipt, 'the first answer stands as a receipt with its Undo').toBeVisible()
+
+  await page.locator('.review-candidate').first().click()
+  await expect.poll(() => posts().length, 'the second answer is out and held').toBe(2)
+
+  await page.keyboard.press('u')
+  await expect(receipt, 'the receipt U will reverse reads queued, not dropped').toHaveAttribute('data-busy', 'queued')
+  await expect(receipt, 'a queued press is taken, so the disabled attribute stays off (the kit marks it aria-disabled)').not.toHaveAttribute('disabled')
+  expect(undos(), 'no reversal goes out while the answer ahead is still out').toEqual([])
+
+  held.release()
+  await expect.poll(() => undos().length, 'the queued U sends its reversal once the answer ahead has saved').toBe(1)
+  expect(undos()[0]?.url, 'the reversal is of the first answer, the receipt that was newest when U was pressed').toContain('/review/2/14/answer')
+})
+
+test('control: a U pressed while a reversal is out sends nothing, and the next answer goes out alone', async ({ page }) => {
+  const held = gate()
+  const sent = await open(page, REVIEW, [], CATALOG_ROWS, (_path, body) => (body?.undo === true ? held.promise : null))
+  const posts = () => sent.filter((s) => s.method === 'POST')
+
+  await page.locator('.review-candidate').first().click()
+  await expect.poll(() => posts().length, 'the first answer is sent').toBe(1)
+  const receipt = page.locator('.review-receipt').getByRole('button', { name: 'Undo' })
+  await expect(receipt).toBeVisible()
+
+  await page.keyboard.press('u')
+  await expect.poll(() => posts().length, 'the reversal is out and held').toBe(2)
+  await page.keyboard.press('u')
+
+  held.release()
+  await expect(page.locator('.review-candidate').first(), 'the reversal landed, so the card is back in the queue').toBeVisible()
+  await page.locator('.review-candidate').first().click()
+  await expect.poll(() => posts().length, 'the next answer is the third write on the wire').toBe(3)
+  expect(
+    posts().map((s) => (s.body as { undo?: boolean } | null)?.undo === true),
+    'the second U reversed nothing: answer, reversal, then the next answer alone',
+  ).toEqual([false, true, false])
+})
+
+/* U takes a press while an answer is out, and the receipt it reverses must not move for it. The
+ * queued words draw where they take no row space (D329, D118), so the Undo keeps its x from the
+ * press to the queued state. The box is read after the entry motion has settled, so a reading is
+ * a position and not a frame of a transition. */
+test('U during a held answer leaves the receipt Undo where it was', async ({ page }) => {
+  const held = gate()
+  const sent = await open(page, REVIEW, [], CATALOG_ROWS, (path) => (path === '/review/2/2/answer' ? held.promise : null))
+  const posts = () => sent.filter((s) => s.method === 'POST')
+
+  await page.locator('.review-candidate').first().click()
+  await expect.poll(() => posts().length, 'the first answer is sent').toBe(1)
+  const undo = page.locator('.review-receipt').getByRole('button', { name: 'Undo' })
+  await expect(undo, 'the first answer stands as a receipt with its Undo').toBeVisible()
+
+  await page.locator('.review-candidate').first().click()
+  await expect.poll(() => posts().length, 'the second answer is out and held').toBe(2)
+
+  await settleMotion(page)
+  const before = await undo.boundingBox()
+  await page.keyboard.press('u')
+  await expect(undo, 'the receipt U will reverse reads queued').toHaveAttribute('data-busy', 'queued')
+  await settleMotion(page)
+  const queued = await undo.boundingBox()
+
+  expect(before, 'the receipt Undo has a box before U is pressed').not.toBeNull()
+  expect(queued, 'the receipt Undo has a box while its reversal is queued').not.toBeNull()
+  expect(queued?.x, 'U during a held answer moves the receipt Undo sideways').toBe(before?.x)
+
+  held.release()
+  await expect.poll(() => posts().filter((s) => (s.body as { undo?: boolean } | null)?.undo === true).length, 'the queued U sends its reversal on release').toBe(1)
 })
 
 test('finding #10 (the Opus review round) — the receipt reserves its own row, and nothing else moves (D118)', async ({

@@ -1,0 +1,1 @@
+- orders-hub-busy-u-drops-target: The hub-busy U can drop a different valid target while the walk reverses an older walk sale (`onWalkUndo` in `app/src/Orders.tsx`). Whether this is reachable is unknown.

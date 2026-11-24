@@ -43,9 +43,9 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/DeletedBoxes.tsx` — Inventory's deleted boxes shelf (D134 point `5`), which replaced the tab.
   - Decisions: `D134`, `D26`, `D31`, `D118`, `D132`, `D196`, `D259`, `D313`
 - `app/src/Fulfillment.css` — The generous `24`-`64` end of the one system, two densities.
-  - Decisions: `D275`, `D218`, `D212`, `D93`, `D97`, `D10`, `D313`, `D5`
+  - Decisions: `D275`, `D218`, `D212`, `D93`, `D97`, `D10`, `D313`, `D5`, `D329`, `D50`, `D118`
 - `app/src/Fulfillment.tsx` — The Fulfiller's whole product: cards to pull in box-walk order, a photo confirm before each pull, and a one-tap mark-sold with an undo window.
-  - Decisions: `D5`, `D212`, `D93`, `D83`, `D24`, `D193`, `D218`, `D172`, `D28`, `D57`, `D294`, `D94`, `D6`, `D192`, `D31`, `D196`, `D259`, `D275`, `D7`, `D10`, `D13`, `D21`, `D26`, `D32`, `D69`, `D125`, `D73`
+  - Decisions: `D5`, `D212`, `D93`, `D83`, `D24`, `D193`, `D218`, `D172`, `D28`, `D57`, `D294`, `D94`, `D6`, `D192`, `D31`, `D196`, `D259`, `D275`, `D7`, `D10`, `D13`, `D21`, `D26`, `D32`, `D69`, `D125`, `D73`, `D329`, `D118`
 - `app/src/Gallery.css` — The kit page's own layout — the specimen grid and its labels.
   - Decisions: `D119`, `D272`, `D117`, `D5`, `D94`, `D118`
 - `app/src/Gallery.tsx` — The kit on one page: every primitive, every button variant and size, and the whole icon set, so the tokens are looked at.
@@ -61,7 +61,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/Inventory.css` — Its layout, at the dense owner-side end of the one system, two densities — the search field, the found groups, the receipts, and the retire panel.
   - Decisions: `D119`, `D118`, `D313`, `D5`, `D6`, `D7`, `D13`, `D26`, `D31`, `D41`, `D57`, `D125`, `D293`
 - `app/src/Inventory.tsx` — The Inventory screen: the one owner view of stored cards.
-  - Decisions: `D119`, `D28`, `D57`, `D196`, `D58`, `D260`, `D90`, `D7`, `D213`, `D269`, `D31`, `D264`, `D285`, `D293`, `D192`, `D300`, `D26`, `D83`, `D132`, `D275`, `D118`, `D313`, `D45`, `D172`, `D5`, `D6`, `D8`, `D10`, `D13`, `D24`, `D27`, `D33`, `D36`, `D38`, `D39`, `D41`, `D68`, `D86`, `D93`, `D125`, `D181`, `D218`, `D73`
+  - Decisions: `D119`, `D28`, `D57`, `D196`, `D58`, `D260`, `D90`, `D7`, `D213`, `D269`, `D31`, `D264`, `D285`, `D293`, `D192`, `D300`, `D26`, `D83`, `D132`, `D275`, `D118`, `D313`, `D45`, `D172`, `D5`, `D6`, `D8`, `D10`, `D13`, `D24`, `D27`, `D33`, `D36`, `D38`, `D39`, `D41`, `D68`, `D86`, `D93`, `D125`, `D181`, `D218`, `D73`, `D329`
 - `app/src/InventorySets.css` — Layout for the set view's rows — the card number column, the name column, and the row's own cursor.
   - Decisions: `D293`, `D313`
 - `app/src/InventorySets.tsx` — THE OWNER'S "BY SET" VIEW (D293), a second view inside #/inventory (D264's own precedent: a view switch lives inside Inventory rather than as a fourth screen, D31).
@@ -139,9 +139,9 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/ReviewBandSheet.tsx` — THE REVIEW BAND'S FOUR SHEETS (`docs/specs/identify-engine-pick.md`, section `10`): waiting for a paid look (grouped by why the free reader stopped), not yet looked at (by box), matched free (by set) and the cards that need a set named (by box).
   - Decisions: `D313`, `D181`, `D196`
 - `app/src/ReviewQueue.css` — Its layout — a photo track sized from its own height beside a choice column in the tuned `656px` measure, with the worklist as a self-scrolling rail so `47` rows cost the page no height — and the price-driven type scale that makes the sort visible — name size and price size stepping down together, parked rows dimmed.
-  - Decisions: `D13`, `D32`, `D313`, `D117`, `D291`, `D118`, `D259`, `D28`, `D23`, `D162`, `D5`, `D9`, `D24`, `D29`, `D35`, `D37`, `D41`, `D50`, `D77`, `D123`
+  - Decisions: `D13`, `D32`, `D313`, `D117`, `D291`, `D118`, `D259`, `D28`, `D23`, `D162`, `D5`, `D9`, `D24`, `D29`, `D35`, `D37`, `D41`, `D50`, `D77`, `D123`, `D329`
 - `app/src/ReviewQueue.tsx` — The Review screen: works the queued entries in order, with a catalog lookup on every entry, searchable by name, number or SKU.
-  - Decisions: `D28`, `D3`, `D67`, `D23`, `D253`, `D137`, `D9`, `D37`, `D291`, `D313`, `D180`, `D33`, `D174`, `D118`, `D29`, `D26`, `D77`, `D164`, `D288`, `D172`, `D221`, `D284`, `D252`, `D4`, `D259`, `D218`, `D87`, `D5`, `D6`, `D10`, `D13`, `D22`, `D32`, `D35`, `D55`, `D117`, `D162`, `D167`
+  - Decisions: `D28`, `D3`, `D67`, `D23`, `D253`, `D137`, `D9`, `D37`, `D291`, `D313`, `D180`, `D33`, `D174`, `D118`, `D29`, `D26`, `D77`, `D164`, `D288`, `D172`, `D221`, `D284`, `D252`, `D4`, `D259`, `D218`, `D87`, `D5`, `D6`, `D10`, `D13`, `D22`, `D32`, `D35`, `D55`, `D117`, `D162`, `D167`, `D329`
 - `app/src/RunFiles.css` — The download rows — moved verbatim out of RunPanel.css with the component, every class name intact so the two specs that select .run-file-import and .run-file still select what they always did.
   - Decisions: `D218`, `D54`
 - `app/src/RunFiles.tsx` — A run's files, as downloads — extracted from RunPanel (D54) so two screens can draw them.
@@ -357,3 +357,5 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
   - Decisions: `D207`, `D16`
 - `app/src/useSearch.ts` — GET /search behind a debounce, with an out-of-order guard so a slow early answer cannot overwrite a fast later one; and `useQueryFilter`, a list the browser holds narrowed by the one matcher in `kit/match.ts`.
   - Decisions: `D13`, `D5`
+- `app/src/writeLine.ts` — The page's write line: one line per screen, at module level, that sends a screen's writes in the order they were pressed and one at a time. `queueWrite` takes a write and returns a job; `isQueued` and `cancel` act on a write still waiting; `writeOut` names the write now out; `writesInLine` counts the unanswered; `sayQueued` is the words beside a press that waits. The Orders walk, Inventory and Review each hold a line.
+  - Decisions: `D329`

@@ -1,0 +1,1 @@
+- review-digit-s-r-drop-silent: The digit, S and R keys drop silently while a write is out (`app/src/ReviewQueue.tsx`).

@@ -1,0 +1,1 @@
+- undo-second-card-refused-silent: A second Undo on another card, while one waits, is refused with no words (Fulfillment, Inventory, Review). Inventory and Review also send a write for a receipt reversed on another device, which the server refuses.

@@ -25,6 +25,7 @@ import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type Sec
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
 import { isEditableTarget } from './keys'
+import { cancel, queueWrite, sayQueued, writesInLine, type LineJob } from './writeLine'
 import { MarkSoldButton, UndoSaleButton, markFreshSale, clearFreshSale, noteUndoPressedBy, undoShownFor } from './CardLocations'
 import { ALREADY_SOLD, COPY_ALREADY_PULLED, SALE_BUILT_ON, describeFailure, failureGotNoAnswer, failureTone, photoUrl, unconfirmedSale, walkPlan } from './server'
 import type { Failure } from './server'
@@ -393,15 +394,17 @@ type LineSale = {
   undoAfter: boolean
   /** It did not stand (refused, cancelled while queued, or reversed): the line skips what is left of it. */
   gone: boolean
+  /** Its sale write in the page's line, held so a press that cancels it before it is sent can take it back out. */
+  job?: LineJob
   readonly onUndo: WalkUndoFn
   readonly refresh: () => readonly PullRefresh[]
   /** The place label the copy's row draws now, off the walk's current state, or null when the copy is gone from it. */
   readonly rowPlace: () => string | null
 }
 
-/** One write waiting its turn. Presses, undos and a toast's Undo share one line, so the server never hears two
- *  of the page's walk writes together (the capture server is threaded, and a burst of clients kills it). */
-type Job =
+/** One write the walk hands to its line: a press's sale, or the reversal of one. Presses, reversals and a toast's Undo share
+ *  the one line, so the server never hears two of the walk's writes together. */
+type LineWrite =
   | {
       readonly kind: 'sell'
       readonly sale: LineSale
@@ -410,7 +413,6 @@ type Job =
       readonly onPull: WalkPullFn
     }
   | { readonly kind: 'undo'; readonly sale: LineSale }
-  | { readonly kind: 'run'; readonly run: () => Promise<void> }
 
 /** What one write's reply says of an order's line: the owed count it carried (`PullResult.owed`), or, from an older
  *  server that sends none, the one copy it moved (`delta`: -1 for a sale, +1 for its undo). */
@@ -424,17 +426,13 @@ type LineEvent =
   | { readonly type: 'drop'; readonly copyKey: string; readonly refreshed?: readonly Place[]; readonly owed?: OwedNote }
   | { readonly type: 'busy'; readonly copyKey: string | null }
 
-/* THE PAGE'S ONE LINE AND ONE WORKER, at module level so they outlive any mounted walk: leaving the screen does
-   not stop the writes already pressed, and coming back must not start a second worker beside the first. */
-const lineQueue: Job[] = []
+/* THE WALK'S SALES, at module level so they outlive any mounted walk: leaving the screen does not stop the writes
+   already pressed. The writes themselves go through the walk's line in `writeLine.ts`. */
+const WALK_LINE = 'orders'
 const lineSales = new Map<string, LineSale>()
 const lineListeners = new Set<(event: LineEvent) => void>()
-let lineDraining = false
 let lineBusyCopy: string | null = null
 let lastSaleAt = 0
-
-/** WRITES OF THE LINE NOT YET ANSWERED (waiting or out). Closing the tab loses them, so the page asks first. */
-let writesInLine = 0
 
 function emitLine(event: LineEvent): void {
   for (const listener of lineListeners) listener(event)
@@ -445,12 +443,12 @@ function setLineBusy(copyKey: string | null): void {
   emitLine({ type: 'busy', copyKey })
 }
 
-/* CLOSING OR RELOADING THE TAB WITH A WRITE STILL IN THE LINE LOSES IT, though the screen drew the sale as sold,
+/* CLOSING OR RELOADING THE TAB WITH A WRITE STILL IN THE WALK'S LINE LOSES IT, though the screen drew the sale as sold,
    so the page asks first. One listener for the page, never per walk, because the line outlives the screen
    (leaving by the hash router does not stop it, and the router never fires this event). */
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', (event) => {
-    if (writesInLine <= 0) return
+    if (writesInLine(WALK_LINE) <= 0) return
     event.preventDefault()
     event.returnValue = ''
   })
@@ -490,7 +488,7 @@ function strandLineSale(sale: LineSale, phase: 'elsewhere' | 'spent'): void {
   emitLine({ type: 'phase', copyKey: sale.copyKey, phase })
 }
 
-async function runSell(job: Extract<Job, { kind: 'sell' }>): Promise<void> {
+async function runSell(job: Extract<LineWrite, { kind: 'sell' }>): Promise<void> {
   const { sale } = job
   if (sale.gone) return
   sale.phase = 'sending'
@@ -548,7 +546,7 @@ function saleNotMarkedToast(name: string, place: string | null, failure: Failure
   return { kind: 'refusal' as const, tone, title: `Not marked sold: ${name}`, body: failure.message }
 }
 
-async function runUndo(job: Extract<Job, { kind: 'undo' }>): Promise<void> {
+async function runUndo(job: Extract<LineWrite, { kind: 'undo' }>): Promise<void> {
   const { sale } = job
   /* A reversal made elsewhere while this one waited has already taken the sale: nothing left to reverse. */
   if (sale.gone) return
@@ -575,8 +573,7 @@ async function runUndo(job: Extract<Job, { kind: 'undo' }>): Promise<void> {
 
 /** A write that threw past its own handling must not strand its row: the sale is put back to what the server
  *  last said, the failure is said, and the line goes on. */
-function settleAfterThrow(job: Job, err: unknown): void {
-  if (job.kind === 'run') return
+function settleAfterThrow(job: { readonly kind: 'sell'; readonly sale: LineSale; readonly placeLabel: string | null } | { readonly kind: 'undo'; readonly sale: LineSale }, err: unknown): void {
   const { sale } = job
   const trouble = describeFailure(err)
   if (job.kind === 'sell') {
@@ -592,52 +589,31 @@ function settleAfterThrow(job: Job, err: unknown): void {
   setLineBusy(null)
 }
 
-/** THE LINE'S ONE WORKER: sends the waiting writes in the order they were pressed, each only after the one
- *  before it has answered. Leaving the screen does not stop it, and a screen coming back never starts another. */
-function pumpLine(): void {
-  if (lineDraining) return
-  lineDraining = true
-  void (async () => {
+/** A sale's write goes to the walk's line; one that throws past its own handling is settled here, and the line goes on. */
+function pushSell(job: Extract<LineWrite, { kind: 'sell' }>): void {
+  job.sale.job = queueWrite(async () => {
     try {
-      for (let job = lineQueue.shift(); job !== undefined; job = lineQueue.shift()) {
-        try {
-          if (job.kind === 'sell') await runSell(job)
-          else if (job.kind === 'undo') await runUndo(job)
-          else await job.run()
-        } catch (err) {
-          /* One write's own trouble never strands the ones behind it. */
-          settleAfterThrow(job, err)
-        } finally {
-          writesInLine -= 1
-        }
-      }
-    } finally {
-      lineDraining = false
+      await runSell(job)
+    } catch (err) {
+      settleAfterThrow(job, err)
     }
-  })()
+  }, { screen: WALK_LINE })
 }
 
-function pushJob(job: Job): void {
-  writesInLine += 1
-  lineQueue.push(job)
-  pumpLine()
+function pushUndo(job: Extract<LineWrite, { kind: 'undo' }>): void {
+  void queueWrite(async () => {
+    try {
+      await runUndo(job)
+    } catch (err) {
+      settleAfterThrow(job, err)
+    }
+  }, { screen: WALK_LINE })
 }
 
-/** Run one write through the page's line, after every write already in it. A toast's own Undo goes this way,
+/** Run one write through the walk's line, after every write already in it. A toast's own Undo goes this way,
  *  so it never runs beside a sale that is still queued. Resolves when `run` has. */
 export function inWalkLine(run: () => Promise<void>): Promise<void> {
-  return new Promise((resolve) => {
-    pushJob({
-      kind: 'run',
-      run: async () => {
-        try {
-          await run()
-        } finally {
-          resolve()
-        }
-      },
-    })
-  })
+  return queueWrite(run, { screen: WALK_LINE }).done
 }
 
 /** The newest press the line still holds that has not been reversed: what `U` undoes first. A sale already
@@ -676,10 +652,7 @@ export function undoWalkSale(held: { readonly copyKey: string }): void {
   const sale = lineSales.get(held.copyKey)
   if (sale === undefined || sale.gone) return
   if (sale.phase === 'queued') {
-    const at = lineQueue.findIndex((job) => job.kind === 'sell' && job.sale === sale)
-    if (at === -1) return
-    lineQueue.splice(at, 1)
-    writesInLine -= 1
+    if (sale.job === undefined || !cancel(sale.job)) return
     clearFreshSale(sale.copyKey)
     dropLineSale(sale)
     return
@@ -692,7 +665,7 @@ export function undoWalkSale(held: { readonly copyKey: string }): void {
     if (!undoShownFor(sale.copyKey)) toast({ kind: 'status', icon: 'queued', title: 'Undo waits for the sale to save', body: sale.place })
   } else sale.phase = 'undoing'
   emitLine({ type: 'phase', copyKey: sale.copyKey, phase: phaseOf(sale) })
-  pushJob({ kind: 'undo', sale })
+  pushUndo({ kind: 'undo', sale })
 }
 
 /** What the line holds for a walk that mounts now: its receipts, so the rows still draw sold. */
@@ -1186,7 +1159,7 @@ export function useOrderWalk({
     /* THE SALE IS NOTED HERE, not in the button: a digit key reaches this too, and its Undo plays the burst. */
     markFreshSale(copy.key)
     lineSales.set(copy.key, sale)
-    pushJob({ kind: 'sell', sale, order, placeLabel: place, onPull })
+    pushSell({ kind: 'sell', sale, order, placeLabel: place, onPull })
   }
 
   const undoCopy = (copyKey: string) => {
@@ -1601,7 +1574,7 @@ export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk
         describedBy={queued ? noteId : undefined}
         onClick={() => walk.undoCopy(copy.key)}
       />
-      {queued ? <QueuedNote id={noteId}>Waits for the sale to save.</QueuedNote> : null}
+      {queued ? <QueuedNote id={noteId}>{sayQueued('sale')}</QueuedNote> : null}
     </>
   )
 }

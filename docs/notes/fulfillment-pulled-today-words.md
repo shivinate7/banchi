@@ -1,0 +1,1 @@
+- fulfillment-pulled-today-words: The Pulled today heading in Fulfillment reads `Undo waits for the other undo to save`, with no period (`ff-queued-note-head` in `app/src/Fulfillment.tsx`). Its form differs from `sayQueued`, which reads `Waits for the X to save.`. The mockup chose this because the words sit away from the press.

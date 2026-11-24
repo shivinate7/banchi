@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fulfillment: the queued Undo</title>
+<style>
+/* ---- tokens: copied from app/src/tokens.css, the names this page reads, light and dark ---- */
+:root {
+  color-scheme: light;
+  --bn-bg: #f4f5f8; --bn-surface: #ffffff; --bn-surface-2: #eceef2; --bn-surface-3: #f7f8fa;
+  --bn-ink: #0f1217; --bn-ink-2: #3b414b; --bn-ink-3: #666c76; --bn-ink-4: #7f8791;
+  --bn-line: rgba(15, 18, 23, 0.08); --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-accent: #3d5af1; --bn-accent-hover: #2f4bd9; --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10); --bn-accent-tint-2: rgba(61, 90, 241, 0.18); --bn-on-accent: #ffffff;
+  --bn-ok: #15803d; --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309; --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-danger: #b91c1c;
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32), 0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-shadow-accent: 0 8px 24px -8px rgba(61, 90, 241, 0.55);
+  --bn-btn-bg: var(--bn-surface); --bn-btn-bg-hover: var(--bn-surface-3); --bn-btn-shadow: var(--bn-shadow-1);
+  --bn-font-display: 'Manrope', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --bn-fs-xs: 11px; --bn-fs-sm: 12px; --bn-fs-md: 13px; --bn-fs-base: 14px; --bn-fs-lg: 16px; --bn-fs-xl: 18px; --bn-fs-2xl: 22px; --bn-fs-4xl: 36px;
+  --bn-tracking-tight: -0.02em;
+  --bn-0-5: 2px; --bn-0-75: 3px; --bn-1: 4px; --bn-1-5: 6px; --bn-2: 8px; --bn-3: 12px; --bn-4: 16px; --bn-5: 20px; --bn-6: 24px; --bn-7: 32px; --bn-8: 40px; --bn-10: 64px;
+  --bn-r-xs: 4px; --bn-r-sm: 6px; --bn-r: 8px; --bn-r-lg: 12px; --bn-r-full: 999px;
+  --bn-t-fast: 120ms; --bn-ease: cubic-bezier(0.2, 0, 0, 1); --bn-ease-linear: linear; --bn-t-spin: 0.7s;
+  --bn-control-h: 34px; --bn-disabled: 0.45;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+  --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+  --bn-line: rgba(255, 255, 255, 0.08); --bn-line-strong: rgba(255, 255, 255, 0.16);
+  --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14); --bn-accent-tint-2: rgba(127, 144, 255, 0.24); --bn-on-accent: #0c0e12;
+  --bn-ok: #3ddc84; --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524; --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-danger: #ff5c5c;
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(127, 144, 255, 0.55);
+  --bn-btn-bg: var(--bn-surface-3); --bn-btn-bg-hover: #262b34; --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- the mockup's own page (not product) ---- */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bn-bg); color: var(--bn-ink); font: var(--bn-fs-base)/1.4 var(--bn-font-ui); padding: 0 var(--bn-6) var(--bn-8); overflow-x: hidden; }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+code { font-family: var(--bn-font-mono); font-size: 0.92em; }
+.mk-sample { position: sticky; top: 0; z-index: 80; margin: 0 calc(-1 * var(--bn-6)) var(--bn-5); padding: var(--bn-2) var(--bn-6); background: var(--bn-warn-tint); color: var(--bn-ink); font-size: var(--bn-fs-md); font-weight: 600; border-bottom: 1px solid var(--bn-line-strong); backdrop-filter: blur(8px); }
+.mk-sample span { font-weight: 400; color: var(--bn-ink-2); }
+.mk-head h1 { font: 700 var(--bn-fs-2xl)/1.2 var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.mk-head p { color: var(--bn-ink-2); max-width: 78ch; margin-top: var(--bn-1); font-size: var(--bn-fs-md); }
+.mk-controls { display: flex; flex-wrap: wrap; gap: var(--bn-3) var(--bn-6); margin: var(--bn-4) 0 var(--bn-5); align-items: center; }
+.mk-group { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1); }
+.mk-group > b { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-weight: 600; margin-right: var(--bn-1); }
+.mk-tab { height: 28px; padding: 0 var(--bn-3); border-radius: var(--bn-r-sm); font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2); background: var(--bn-surface-2); }
+.mk-tab[aria-pressed='true'] { background: var(--bn-ink); color: var(--bn-bg); }
+.mk-opt { display: inline-flex; align-items: center; padding: var(--bn-0-5); border-radius: var(--bn-r-sm); background: var(--bn-surface-2); }
+.mk-opt .mk-tab { background: transparent; }
+.mk-opt[data-on='true'] { background: var(--bn-ink); }
+.mk-opt[data-on='true'] .mk-tab, .mk-opt[data-on='true'] .mk-hide { color: var(--bn-bg); }
+.mk-hide { height: 28px; padding: 0 var(--bn-2); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); border-left: 1px solid var(--bn-line-strong); }
+.mk-opt[hidden] { display: none; }
+.mk-sec { margin-top: var(--bn-7); }
+.mk-sec > h2 { font: 700 var(--bn-fs-xl)/1.2 var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.mk-sec > p { color: var(--bn-ink-2); font-size: var(--bn-fs-md); max-width: 80ch; margin-top: var(--bn-1); }
+.mk-caption { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-weight: 600; margin-bottom: var(--bn-2); }
+.mk-verdict { font-size: var(--bn-fs-md); color: var(--bn-ink-2); margin-top: var(--bn-3); max-width: 90ch; }
+.mk-verdict b { color: var(--bn-ink); }
+.mk-today, .mk-new { position: relative; outline: 1.5px dashed var(--bn-ink-4); outline-offset: 4px; border-radius: var(--bn-r-sm); }
+.mk-new { outline-color: var(--bn-accent); }
+.mk-tag { position: absolute; z-index: 70; top: -8px; right: 0; transform: translateY(-100%); font: 600 var(--bn-fs-xs)/16px var(--bn-font-ui); letter-spacing: 0; white-space: nowrap; color: var(--bn-ink-3); background: var(--bn-bg); padding: 0 var(--bn-1); border: 1px dashed var(--bn-ink-4); border-radius: var(--bn-r-xs); pointer-events: none; }
+.mk-new > .mk-tag { color: var(--bn-accent-hover); border-color: var(--bn-accent); }
+:root[data-theme='dark'] .mk-new > .mk-tag { color: var(--bn-accent); }
+.mk-tag.is-left { left: 0; right: auto; }
+.mk-tag.is-below { top: auto; bottom: -8px; transform: translateY(100%); }
+body[data-l='0'] .mk-tag { display: none; }
+body[data-l='0'] .mk-today, body[data-l='0'] .mk-new { outline: none; }
+.mk-words { margin-top: var(--bn-4); border-collapse: collapse; font-size: var(--bn-fs-md); }
+.mk-words th, .mk-words td { text-align: left; padding: var(--bn-1-5) var(--bn-4) var(--bn-1-5) 0; border-bottom: 1px solid var(--bn-line); vertical-align: top; }
+.mk-words th { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-weight: 600; }
+.mk-words q { quotes: '\201C' '\201D'; font-weight: 600; }
+
+/* ---- the screen frame: the viewport's own width, so a 1440 render is the 1440 screen and an 820 render the 820 screen ---- */
+.mk-screen { position: relative; width: 100vw; margin-left: calc(-1 * var(--bn-6)); height: 900px; overflow: hidden; background: var(--bn-bg); border-top: 1px solid var(--bn-line-strong); border-bottom: 1px solid var(--bn-line-strong); }
+:not(body)[data-view] { display: none; }
+body[data-view='home'] [data-view='home'], body[data-view='card'] [data-view='card'] { display: flex; }
+.mk-screen > .fulfillment { position: static; height: 100%; }
+
+/* ==== Today: the kit Button, the rules copied from app/src/kit.css. kit.css loads before Fulfillment.css, so it comes first here too ==== */
+.bn-btn { --btn-h: var(--bn-control-h); position: relative; display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-2); height: var(--btn-h); padding: 0 var(--bn-4); border-radius: var(--bn-r); border: 1px solid transparent; font-size: var(--bn-fs-md); font-weight: 600; line-height: 1; white-space: nowrap; color: var(--bn-ink); background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow); user-select: none; transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease), opacity var(--bn-t-fast) var(--bn-ease); }
+.bn-btn:hover, .bn-btn.is-hover { background: var(--bn-btn-bg-hover); }
+.bn-btn[data-busy='true'] { color: transparent; pointer-events: none; }
+.bn-btn[data-busy='true']::after { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; color: var(--bn-ink-3); animation: bn-spin var(--bn-t-spin) var(--bn-ease-linear) infinite; }
+@keyframes bn-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .bn-btn[data-busy='true']::after { animation-duration: 1.4s; } }
+.bn-btn[data-busy='queued'] { opacity: 1; pointer-events: none; }
+.bn-queued-mark { position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: var(--bn-r-full); background: var(--bn-accent); color: var(--bn-on-accent); box-shadow: 0 0 0 2px var(--bn-surface); pointer-events: none; }
+.bn-queued-mark svg { width: 12px; height: 12px; }
+.bn-queued-note { display: inline-flex; align-items: center; gap: var(--bn-1-5); min-height: 20px; font-size: var(--bn-fs-md); font-weight: 500; color: var(--bn-ink-2); white-space: nowrap; }
+.bn-queued-note svg { flex: none; width: 14px; height: 14px; color: var(--bn-accent); }
+
+/* ==== Today: the Fulfiller's screen, the rules copied from app/src/Fulfillment.css ==== */
+.fulfillment {
+  --ff-fill: var(--bn-accent-press); --ff-on-fill: var(--bn-on-accent);
+  --ff-col: 720px; --ff-col-wide: 1080px; --ff-pad: var(--bn-6);
+  --ff-fs-base: 20px; --ff-fs-md: 24px; --ff-fs-xl: 32px; --ff-fs-2xl: 34px; --ff-fs-3xl: 38px; --ff-fs-4xl: 56px;
+  position: relative; padding: var(--ff-pad); background: var(--bn-bg); color: var(--bn-ink);
+  font-family: var(--bn-font-ui); font-size: var(--ff-fs-base); line-height: 1.5;
+}
+:root[data-theme='dark'] .fulfillment { --ff-fill: var(--bn-accent-hover); }
+.ff-column { position: relative; max-width: var(--ff-col); margin: 0 auto; display: flex; flex-direction: column; gap: var(--bn-7); }
+.ff-column[data-wide='true'] { max-width: var(--ff-col-wide); }
+.fulfillment-say { font-size: var(--ff-fs-base); line-height: 1.5; color: var(--bn-ink); max-width: 36em; }
+.ff-head { display: flex; align-items: center; gap: var(--bn-4); padding-top: var(--bn-2); }
+.ff-mark { flex: none; width: 44px; height: 44px; }
+.ff-title { font-family: var(--bn-font-display); font-size: var(--ff-fs-3xl); font-weight: 800; letter-spacing: -0.025em; line-height: 1.1; }
+.ff-bar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); align-items: end; column-gap: var(--bn-4); }
+.ff-count { display: flex; align-items: baseline; gap: 0.2em; font-family: var(--bn-font-display); font-size: var(--ff-fs-4xl); font-weight: 800; line-height: 1; white-space: nowrap; }
+.ff-count-word { font-size: 0.5em; }
+.ff-search-label { font-size: var(--bn-fs-2xl); font-weight: 700; line-height: 1.35; margin-bottom: var(--bn-3); }
+.ff-search-box { min-height: 64px; display: flex; align-items: center; padding: 0 var(--bn-5) 0 60px; border-radius: 16px; background: var(--bn-surface); box-shadow: inset 0 0 0 2px var(--bn-line-strong); color: var(--bn-ink-2); position: relative; }
+.ff-search-box svg { position: absolute; left: 20px; color: var(--bn-ink-2); }
+.ff-h2 { display: flex; align-items: center; gap: var(--bn-3); font-family: var(--bn-font-display); font-size: var(--ff-fs-md); font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; margin-bottom: var(--bn-4); }
+.ff-h2-icon { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; flex: none; }
+.ff-h2-icon-ok { background: var(--bn-ok-tint); color: var(--bn-ok); }
+.ff-done-list { list-style: none; display: flex; flex-direction: column; gap: var(--bn-2); }
+.ff-done-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--bn-1) var(--bn-4); padding: var(--bn-3) var(--bn-5); border-radius: 14px; background: var(--bn-surface); box-shadow: var(--bn-shadow-1); }
+.ff-done-name { font-weight: 700; }
+.ff-done-place { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+.ff-done-place > span:not(:first-child)::before, .ff-receipt-place > span:not(:first-child)::before,
+.ff-receipt-place::before, .ff-receipt-order::before, .ff-owed-place > span:not(:first-child)::before, .ff-place > span:not(:first-child)::before { content: '\00B7'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
+.ff-done-order, .ff-receipt-order { font-family: var(--bn-font-mono); font-weight: 600; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.ff-done-order { color: var(--bn-ink-2); }
+.ff-done-undo { margin-left: auto; display: inline-flex; align-items: center; gap: var(--bn-1); min-height: 40px; padding: 0 var(--bn-4); border-radius: var(--bn-r-full); background: var(--bn-surface-2); color: var(--bn-ink); font-weight: 700; }
+.ff-done-undo:hover, .ff-done-undo.is-hover { background: var(--bn-ink); color: var(--bn-bg); }
+.ff-owed-list { display: flex; flex-direction: column; gap: var(--bn-5); }
+.ff-owed-pick { color: var(--bn-ink-2); margin-bottom: var(--bn-2); }
+.ff-owed-copy { padding: var(--bn-5); border-radius: 22px; background: var(--bn-surface); box-shadow: var(--bn-shadow-1); display: flex; flex-direction: column; gap: var(--bn-2); }
+.ff-owed-name { font-family: var(--bn-font-display); font-size: var(--ff-fs-md); font-weight: 800; letter-spacing: -0.02em; }
+.ff-owed-place { font-size: var(--ff-fs-xl); font-weight: 600; color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+.ff-owed-place b { color: var(--bn-ink); font-weight: 800; }
+/* the card view */
+.ff-back { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--bn-3); min-height: 56px; padding: 0 var(--bn-6) 0 var(--bn-5); border-radius: var(--bn-r-full); background: var(--bn-surface); box-shadow: var(--bn-shadow-1); font-size: var(--ff-fs-base); font-weight: 700; line-height: 1.2; }
+.ff-card { display: flex; flex-direction: column; gap: var(--bn-5); }
+.ff-card-side { display: contents; }
+.ff-photo { aspect-ratio: 63 / 88; border-radius: 22px; box-shadow: var(--bn-shadow-3); background: var(--bn-surface-2); display: grid; place-items: center; color: var(--bn-ink-2); font-size: var(--bn-fs-lg); font-weight: 600; }
+.ff-card-name { font-family: var(--bn-font-display); font-size: var(--ff-fs-2xl); font-weight: 800; letter-spacing: -0.025em; line-height: 1.15; }
+.ff-where-label { display: flex; align-items: center; gap: var(--bn-2); font-weight: 700; color: var(--bn-ink-2); }
+.ff-place { font-size: var(--bn-fs-4xl); font-weight: 800; font-variant-numeric: tabular-nums; margin: var(--bn-1) 0; }
+.ff-action { display: flex; flex-direction: column; gap: var(--bn-6); }
+.ff-pulled { display: flex; align-items: center; justify-content: center; gap: var(--bn-3); min-height: 64px; padding: var(--bn-3) var(--bn-5); border-radius: 16px; background: var(--bn-surface); box-shadow: inset 0 0 0 2px var(--bn-line-strong); font-size: var(--ff-fs-md); font-weight: 700; line-height: 1.2; }
+.ff-pulled-icon { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--bn-ok-tint); color: var(--bn-ok); }
+.pull-confirm { display: flex; align-items: center; justify-content: center; min-height: 64px; width: 100%; padding: var(--bn-3) var(--bn-7); border-radius: 16px; background: var(--ff-fill); color: var(--bn-on-accent); font-size: 22px; font-weight: 700; box-shadow: var(--bn-shadow-2), var(--bn-shadow-accent); }
+@media (min-width: 900px) {
+  .ff-card { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); column-gap: var(--bn-7); align-items: start; }
+  .ff-card-side { display: flex; flex-direction: column; gap: var(--bn-5); min-width: 0; }
+}
+@media (min-width: 1100px) { .ff-card { grid-template-columns: minmax(0, 440px) minmax(0, 1fr); column-gap: var(--bn-8); } }
+/* Below 900 the card is one column and the action sits under a tall photo: the frame shows it scrolled to the action. */
+@media (max-width: 899px) { .ff-card { flex-direction: column; } .ff-card .ff-photo { order: -1; } .mk-scrolled { margin-top: -920px; } }
+/* the receipt sheet: fixed on the screen, drawn here at the frame's foot */
+.ff-sheet { position: absolute; z-index: 61; left: 0; right: 0; bottom: var(--bn-5); margin: 0 auto; width: min(680px, calc(100% - 32px)); border-radius: 22px; background: var(--bn-surface); box-shadow: var(--bn-shadow-3); }
+.ff-receipt { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'icon text undo' 'icon clock clock'; align-items: center; column-gap: var(--bn-4); row-gap: var(--bn-3); padding: calc(var(--bn-4) + 44px + var(--bn-2)) var(--bn-5) var(--bn-4); }
+.ff-receipt-dismiss { position: absolute; top: var(--bn-2); right: var(--bn-2); display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; color: var(--bn-ink-3); }
+.ff-receipt-icon { grid-area: icon; align-self: start; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--bn-ok-tint); color: var(--bn-ok); }
+.ff-receipt-text { grid-area: text; display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
+.ff-receipt-said { font-family: var(--bn-font-display); font-size: var(--ff-fs-md); font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; }
+.ff-receipt-what { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+.ff-receipt-name { color: var(--bn-ink); font-weight: 600; }
+.ff-undo { grid-area: undo; display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-2); min-height: 56px; min-width: 44px; padding: 0 var(--bn-6) 0 var(--bn-5); border-radius: var(--bn-r-full); background: var(--bn-ink); color: var(--bn-bg); font-family: var(--bn-font-ui); font-size: var(--ff-fs-base); font-weight: 700; white-space: nowrap; transition: transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease), opacity var(--bn-t-fast) var(--bn-ease); }
+.ff-undo:hover, .ff-undo.is-hover { transform: translateY(-1px); box-shadow: var(--bn-shadow-2); }
+
+/* ==== NEW: what Fulfillment.css adds once the two Undos are kit Buttons ====
+   1. Keep today's look at rest and on hover. The kit's box shadow, 1px border, 13px label and light hover ground
+      are put back to today's values, scoped to the two classes. Without these, the ink pill goes light on hover and
+      its label (--bn-bg) vanishes, and the row Undo's label drops from 20px to 13px, under the view's 20px floor. */
+.fulfillment .bn-btn.ff-undo, .fulfillment .bn-btn.ff-done-undo { height: auto; border: 0; box-shadow: none; line-height: 1.5; font-size: var(--ff-fs-base); }
+.fulfillment .bn-btn.ff-undo { font-weight: 700; }
+.fulfillment .bn-btn.ff-done-undo { gap: var(--bn-1); padding: 0 var(--bn-4); font-weight: 700; }
+.fulfillment .bn-btn.ff-undo:hover, .fulfillment .bn-btn.ff-undo.is-hover { background: var(--bn-ink); box-shadow: var(--bn-shadow-2); }
+.fulfillment .bn-btn.ff-done-undo:hover, .fulfillment .bn-btn.ff-done-undo.is-hover { background: var(--bn-ink); color: var(--bn-bg); }
+/* 2. The busy ring on the ink pill reads in --bn-bg, not --bn-ink-3 (3.4:1 on the ink fill). Only the "Ring" option uses it. */
+.fulfillment .bn-btn.ff-undo[data-busy='true']::after { color: var(--bn-bg); }
+.fulfillment .bn-btn.ff-done-undo[data-busy='true']::after { color: var(--bn-ink-2); }
+/* 3. The words at this view's floor: 20px, ink-2, the mark at 20px. */
+.fulfillment .bn-queued-note { font-size: var(--ff-fs-base); line-height: 1.2; min-height: 44px; }
+.fulfillment .bn-queued-note svg { width: 20px; height: 20px; }
+/* 4. Where the words sit: in room the screen already keeps, out of the flow, so the press moves nothing (D118, D313). */
+.ff-receipt > .bn-queued-note { position: absolute; top: var(--bn-2); }
+.ff-receipt > .bn-queued-note.is-right { right: calc(var(--bn-2) + 44px + var(--bn-3)); }
+.ff-receipt > .bn-queued-note.is-left { left: calc(var(--bn-5) + 44px + var(--bn-4)); }
+.ff-sheet > span > .bn-queued-note { position: absolute; top: var(--bn-2); right: calc(var(--bn-2) + 44px + var(--bn-3)); max-width: calc(100% - var(--bn-5) - 44px - var(--bn-3) - var(--bn-2)); overflow: hidden; text-overflow: ellipsis; display: block; line-height: 44px; }
+.ff-sheet > span > .bn-queued-note svg { vertical-align: -4px; margin-right: var(--bn-1-5); }
+.ff-done-head { position: relative; }
+.ff-done-head .bn-queued-note { position: absolute; right: 0; top: -6px; }
+/* 5. The mark at this view's size (option "Larger mark"): 24px disc, 16px glyph. */
+body[data-b='ff'] .fulfillment .bn-queued-mark { width: 24px; height: 24px; top: -8px; right: -8px; }
+body[data-b='ff'] .fulfillment .bn-queued-mark svg { width: 16px; height: 16px; }
+
+/* ---- option switching ---- */
+:not(body)[data-wq], :not(body)[data-wr], :not(body)[data-x], :not(body)[data-r] { display: none !important; }
+body[data-wq='right'] [data-wq='right'], body[data-wq='left'] [data-wq='left'],
+body[data-wr='head'] [data-wr='head'], body[data-wr='strip'] [data-wr='strip'],
+body[data-x='cancel'] [data-x='cancel'], body[data-x='run'] [data-x='run'],
+body[data-r='plain'] [data-r='plain'], body[data-r='ring'] [data-r='ring'] { display: revert !important; }
+body[data-wq='right'] .bn-queued-note[data-wq='right'], body[data-wq='left'] .bn-queued-note[data-wq='left'], body[data-wr='head'] .bn-queued-note[data-wr='head'] { display: inline-flex !important; }
+body[data-wr='strip'] .bn-queued-note[data-wr='strip'] { display: block !important; }
+body[data-r='plain'] .bn-btn[data-r='plain'], body[data-r='ring'] .bn-btn[data-r='ring'] { display: inline-flex !important; }
+:not(body)[data-s] { display: none; }
+body[data-s='rest'] [data-s~='rest'], body[data-s='sheet'] [data-s~='sheet'], body[data-s='handoff'] [data-s~='handoff'],
+body[data-s='row'] [data-s~='row'], body[data-s='skipped'] [data-s~='skipped'] { display: revert; }
+body[data-s] .ff-done-row[data-s] { display: none; }
+body[data-s='rest'] .ff-done-row[data-s~='rest'], body[data-s='handoff'] .ff-done-row[data-s~='handoff'], body[data-s='row'] .ff-done-row[data-s~='row'], body[data-s='skipped'] .ff-done-row[data-s~='skipped'] { display: flex; }
+body[data-s] .ff-receipt[data-s] { display: none; }
+body[data-s='rest'] .ff-receipt[data-s~='rest'], body[data-s='sheet'] .ff-receipt[data-s~='sheet'], body[data-s='handoff'] .ff-receipt[data-s~='handoff'], body[data-s='row'] .ff-receipt[data-s~='row'], body[data-s='skipped'] .ff-receipt[data-s~='skipped'] { display: grid; }
+
+/* ---- the kit check section ---- */
+.kc-grid { display: grid; max-width: 100%; overflow-x: auto; grid-template-columns: max-content repeat(3, max-content); gap: var(--bn-4) var(--bn-6); align-items: center; padding: var(--bn-6); border-radius: 22px; background: var(--bn-surface); box-shadow: var(--bn-shadow-1); margin-top: var(--bn-4); }
+.kc-h { font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); }
+.kc-cell { display: flex; flex-direction: column; gap: var(--bn-3); align-items: flex-start; }
+.kc-cell > * { margin: 0 !important; }
+.kc-grid .fulfillment { padding: 0; background: transparent; }
+</style>
+</head>
+<body data-s="sheet" data-view="card" data-wq="right" data-wr="head" data-b="ff" data-x="run" data-r="plain">
+
+<div class="mk-sample">Sample. <span>No card, place, order or figure on this page is real. Designer kind: informed.</span></div>
+
+<!-- glyphs copied from app/src/kit/Icon.tsx (undo, x, queued, hand, search, pin, arrowLeft) and Fulfillment.tsx's CheckMark -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="g-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5 M4 9h10a6 6 0 0 1 0 12h-3" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-x" viewBox="0 0 24 24"><path d="M6 6l12 12 M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-queued" viewBox="0 0 24 24"><path d="M6 3h12 M6 21h12 M7.5 3v2.5a4.5 4.5 0 0 0 9 0V3 M7.5 21v-2.5a4.5 4.5 0 0 1 9 0V21" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-search" viewBox="0 0 24 24"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M20 20l-4-4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-pin" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z M12 7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-left" viewBox="0 0 24 24"><path d="M19 12H5 M11 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<header class="mk-head">
+  <h1>Fulfillment: the queued Undo</h1>
+  <p>The two Undo presses on <code>#/fulfillment</code>: the receipt sheet's (<code>ff-undo</code>) and a Pulled today row's (<code>ff-done-undo</code>). Today a press made while another write is out is dropped and nothing shows (<code>doUndo</code>'s early return). Here they move onto the kit <code>Button</code>, take <code>busy="queued"</code>, and say why beside them. Render this page at 1440 or 820 wide: the frame below is the screen at that width.</p>
+</header>
+
+<div class="mk-controls" role="group" aria-label="Mockup controls">
+  <div class="mk-group" role="group" aria-label="State"><b>State</b>
+    <button class="mk-tab" data-set-s="rest">Normal</button>
+    <button class="mk-tab" data-set-s="sheet">Receipt Undo waits</button>
+    <button class="mk-tab" data-set-s="handoff">The sale lands</button>
+    <button class="mk-tab" data-set-s="row">Row Undo waits</button>
+    <button class="mk-tab" data-set-s="skipped">Skipped</button>
+  </div>
+  <div class="mk-group" role="group" aria-label="Theme"><b>Theme</b>
+    <button class="mk-tab" data-set-t="light">Light</button>
+    <button class="mk-tab" data-set-t="dark">Dark</button>
+  </div>
+  <div class="mk-group" role="group" aria-label="Labels"><b>Labels</b>
+    <button class="mk-tab" data-set-l="1">On</button>
+    <button class="mk-tab" data-set-l="0">Off</button>
+  </div>
+</div>
+<div class="mk-controls" role="group" aria-label="Options">
+  <div class="mk-group" role="group" aria-label="Receipt words"><b>Receipt words</b>
+    <span class="mk-opt" data-opt="right" data-key="wq"><button class="mk-tab" data-set-wq="right">Above the Undo</button><button class="mk-hide" data-hide="right" aria-label="Hide the above-the-Undo option">Hide</button></span>
+    <span class="mk-opt" data-opt="left" data-key="wq"><button class="mk-tab" data-set-wq="left">Above the receipt words</button><button class="mk-hide" data-hide="left" aria-label="Hide the above-the-receipt-words option">Hide</button></span>
+  </div>
+  <div class="mk-group" role="group" aria-label="Row words"><b>Row words</b>
+    <span class="mk-opt" data-opt="head" data-key="wr"><button class="mk-tab" data-set-wr="head">Pulled today's heading line</button><button class="mk-hide" data-hide="head" aria-label="Hide the heading-line option">Hide</button></span>
+    <span class="mk-opt" data-opt="strip" data-key="wr"><button class="mk-tab" data-set-wr="strip">The sheet's top strip</button><button class="mk-hide" data-hide="strip" aria-label="Hide the sheet-strip option">Hide</button></span>
+  </div>
+  <div class="mk-group" role="group" aria-label="Mark size"><b>Mark</b>
+    <span class="mk-opt" data-opt="kit" data-key="b"><button class="mk-tab" data-set-b="kit">Kit size</button><button class="mk-hide" data-hide="kit" aria-label="Hide the kit-size option">Hide</button></span>
+    <span class="mk-opt" data-opt="ff" data-key="b"><button class="mk-tab" data-set-b="ff">Larger mark</button><button class="mk-hide" data-hide="ff" aria-label="Hide the larger-mark option">Hide</button></span>
+  </div>
+  <div class="mk-group" role="group" aria-label="Close while waiting"><b>Close while waiting</b>
+    <span class="mk-opt" data-opt="cancel" data-key="x"><button class="mk-tab" data-set-x="cancel">Close skips the undo</button><button class="mk-hide" data-hide="cancel" aria-label="Hide the close-skips option">Hide</button></span>
+    <span class="mk-opt" data-opt="run" data-key="x"><button class="mk-tab" data-set-x="run">Close keeps the undo</button><button class="mk-hide" data-hide="run" aria-label="Hide the close-keeps option">Hide</button></span>
+  </div>
+  <div class="mk-group" role="group" aria-label="An undo running"><b>Undo running</b>
+    <span class="mk-opt" data-opt="plain" data-key="r"><button class="mk-tab" data-set-r="plain">As today</button><button class="mk-hide" data-hide="plain" aria-label="Hide the as-today option">Hide</button></span>
+    <span class="mk-opt" data-opt="ring" data-key="r"><button class="mk-tab" data-set-r="ring">Ring</button><button class="mk-hide" data-hide="ring" aria-label="Hide the ring option">Hide</button></span>
+  </div>
+</div>
+
+<p class="mk-caption" id="frame-cap"></p>
+<div class="mk-screen" id="screen">
+  <div class="fulfillment">
+
+    <!-- ===== the home view: Pulled today and the cards to pull ===== -->
+    <div class="ff-column" data-view="home">
+      <header class="ff-head">
+        <svg class="ff-mark" viewBox="0 0 44 44" aria-hidden="true"><path d="M22 1C6 1 1 6 1 22s5 21 21 21 21-5 21-21S38 1 22 1z" fill="var(--bn-accent)"/></svg>
+        <h1 class="ff-title">Cards to Pull</h1>
+      </header>
+      <div class="ff-bar">
+        <p class="ff-count"><b>3</b> <span class="ff-count-word">Left</span></p>
+        <div><div class="ff-search-label">Search</div><div class="ff-search-box"><svg width="24" height="24"><use href="#g-search"/></svg>Card name or number…</div></div>
+      </div>
+
+      <section class="ff-done" aria-label="Pulled today">
+        <div class="ff-done-head">
+          <h2 class="ff-h2"><span class="ff-h2-icon ff-h2-icon-ok"><svg width="18" height="18"><use href="#g-check"/></svg></span>Pulled today</h2>
+          <span data-s="row"><span class="bn-queued-note mk-new" data-wr="head" id="row-note-head" role="status"><span class="mk-tag">New: the words, on the heading line</span><svg><use href="#g-queued"/></svg>Undo waits for the other undo to save</span></span>
+        </div>
+        <ul class="ff-done-list">
+          <!-- handoff: B has just dropped here from the sheet, and its undo runs now -->
+          <li class="ff-done-row" data-s="handoff">
+            <span class="ff-done-name">Glimmer Fox</span>
+            <span class="ff-done-place"><span>Binder A</span><span>Section 2</span><span>Card 14</span></span>
+            <span class="ff-done-order">Order 4F21C-0007</span>
+            <span class="mk-today" style="margin-left:auto;display:inline-flex" data-r="plain"><span class="mk-tag">Today: no ring while its undo runs</span><button class="bn-btn ff-done-undo" aria-label="Undo Binder A, Section 2, Card 14"><svg width="18" height="18"><use href="#g-undo"/></svg>Undo</button></span>
+            <span class="mk-new" style="margin-left:auto;display:inline-flex" data-r="ring"><span class="mk-tag">New: the kit ring while it runs</span><button class="bn-btn ff-done-undo" data-busy="true" aria-busy="true" aria-label="Undo Binder A, Section 2, Card 14"><svg width="18" height="18"><use href="#g-undo"/></svg>Undo</button></span>
+          </li>
+          <li class="ff-done-row" data-s="rest handoff row skipped">
+            <span class="ff-done-name">Ember Moth</span>
+            <span class="ff-done-place"><span>Binder B</span><span>Section 1</span><span>Card 30</span></span>
+            <button class="bn-btn ff-done-undo" aria-label="Undo Binder B, Section 1, Card 30"><svg width="18" height="18"><use href="#g-undo"/></svg>Undo</button>
+          </li>
+          <li class="ff-done-row" data-s="rest handoff skipped">
+            <span class="ff-done-name">Quartz Owl</span>
+            <span class="ff-done-place"><span>Binder B</span><span>Section 4</span><span>Card 8</span></span>
+            <span class="ff-done-order">Order 9A0D2-0003</span>
+            <button class="bn-btn ff-done-undo" aria-label="Undo Binder B, Section 4, Card 8"><svg width="18" height="18"><use href="#g-undo"/></svg>Undo</button>
+          </li>
+          <!-- row: this row's Undo was pressed while the receipt's undo is out -->
+          <li class="ff-done-row" data-s="row">
+            <span class="ff-done-name">Quartz Owl</span>
+            <span class="ff-done-place"><span>Binder B</span><span>Section 4</span><span>Card 8</span></span>
+            <span class="ff-done-order">Order 9A0D2-0003</span>
+            <span class="mk-new" style="margin-left:auto;display:inline-flex"><span class="mk-tag is-below">New: queued on its own frame</span>
+              <button class="bn-btn ff-done-undo" id="row-undo" data-busy="queued" aria-busy="true" aria-disabled="true" aria-describedby="row-note-head" aria-label="Undo Binder B, Section 4, Card 8"><span class="bn-queued-mark" aria-hidden="true"><svg><use href="#g-queued"/></svg></span><svg width="18" height="18"><use href="#g-undo"/></svg>Undo</button>
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="ff-owed" id="skip-list" aria-label="Cards to Pull">
+        <div class="ff-owed-list">
+          <div data-s="skipped"><div class="ff-owed-card mk-today" data-x="run"><span class="mk-tag">Today: the undo ran, so Glimmer Fox is back in the list</span>
+                        <div class="ff-owed-copy"><span class="ff-owed-name">Glimmer Fox</span><span class="ff-owed-place"><span>Binder A</span><span>Section 2</span><span>Card <b>14</b></span></span></div>
+          </div></div>
+          <div class="ff-owed-card mk-today"><span class="mk-tag is-left">Today: Cards to Pull, drawn short</span>
+                        <div class="ff-owed-copy"><span class="ff-owed-name">Lantern Crab</span><span class="ff-owed-place"><span>Binder C</span><span>Section 1</span><span>Card <b>3</b></span></span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== the card view: Tidepool Newt, Mark it sold pressed, its write out ===== -->
+    <div class="ff-column" data-wide="true" data-view="card">
+      <button class="ff-back"><svg width="24" height="24"><use href="#g-left"/></svg>Back to the cards</button>
+      <article class="ff-card mk-scrolled">
+        <div class="ff-photo">Sample photo</div>
+        <div class="ff-card-side">
+          <h2 class="ff-card-name">Tidepool Newt</h2>
+          <section>
+            <p class="fulfillment-say ff-where-label"><svg width="22" height="22"><use href="#g-pin"/></svg>Where to find it</p>
+            <p class="ff-place"><span>Binder A</span><span>Section 3</span><span>Card 2</span></p>
+          </section>
+          <div class="ff-action">
+            <p class="ff-pulled"><span class="ff-pulled-icon"><svg width="22" height="22"><use href="#g-check"/></svg></span>Pulled.</p>
+            <span class="mk-today" style="display:block"><span class="mk-tag">Today: Mark it sold pressed; the sale is saving</span><span class="pull-confirm">Mark it sold</span></span>
+          </div>
+        </div>
+      </article>
+    </div>
+
+  <!-- ===== the receipt sheet: a child of the page, fixed to the screen ===== -->
+  <div class="ff-sheet" role="status" aria-live="polite" id="sheet">
+    <!-- rest, and row: Glimmer Fox's receipt. In row, its undo is the write out. -->
+    <div class="ff-receipt" data-s="rest row">
+      <span class="ff-receipt-icon"><svg width="24" height="24"><use href="#g-check"/></svg></span>
+      <div class="ff-receipt-text">
+        <p class="ff-receipt-said">Marked sold.</p>
+        <p class="ff-receipt-what"><span class="ff-receipt-name">Glimmer Fox</span><span class="ff-receipt-place"><span>Binder A</span><span>Section 2</span><span>Card 14</span></span><span class="ff-receipt-order">Order 4F21C-0007</span></p>
+      </div>
+      <span style="grid-area:undo" class="mk-today" data-s="rest"><span class="mk-tag">Today: the receipt's Undo, now a kit Button, same look</span><button class="bn-btn ff-undo" aria-label="Undo Binder A, Section 2, Card 14"><svg width="22" height="22"><use href="#g-undo"/></svg>Undo</button></span>
+      <span style="grid-area:undo" data-s="row">
+        <span class="mk-today" style="display:inline-flex" data-r="plain"><span class="mk-tag">Today: its undo runs, no ring</span><button class="bn-btn ff-undo" id="run-plain" aria-label="Undo Binder A, Section 2, Card 14"><svg width="22" height="22"><use href="#g-undo"/></svg>Undo</button></span>
+        <span class="mk-new" style="display:inline-flex" data-r="ring"><span class="mk-tag">New: the kit ring while it runs</span><button class="bn-btn ff-undo" id="run-ring" data-busy="true" aria-busy="true" aria-label="Undo Binder A, Section 2, Card 14"><svg width="22" height="22"><use href="#g-undo"/></svg>Undo</button></span>
+      </span>
+      <button class="ff-receipt-dismiss" aria-label="Dismiss this receipt"><svg width="18" height="18"><use href="#g-x"/></svg></button>
+    </div>
+    <!-- sheet: Glimmer Fox's receipt, its Undo queued behind Tidepool Newt's sale -->
+    <div class="ff-receipt" data-s="sheet">
+      <span class="bn-queued-note mk-new is-right" data-wq="right" id="sheet-note-right" role="status"><span class="mk-tag">New: the words, in the strip the X already keeps</span><svg><use href="#g-queued"/></svg>Waits for the sale to save.</span>
+      <span class="bn-queued-note mk-new is-left" data-wq="left" id="sheet-note-left" role="status"><span class="mk-tag is-left">New: the words, in the strip the X already keeps</span><svg><use href="#g-queued"/></svg>Waits for the sale to save.</span>
+      <span class="ff-receipt-icon"><svg width="24" height="24"><use href="#g-check"/></svg></span>
+      <div class="ff-receipt-text">
+        <p class="ff-receipt-said">Marked sold.</p>
+        <p class="ff-receipt-what"><span class="ff-receipt-name">Glimmer Fox</span><span class="ff-receipt-place"><span>Binder A</span><span>Section 2</span><span>Card 14</span></span><span class="ff-receipt-order">Order 4F21C-0007</span></p>
+      </div>
+      <span style="grid-area:undo" class="mk-new"><span class="mk-tag is-below">New: queued; label and fill stay</span>
+        <button class="bn-btn ff-undo" id="sheet-undo" data-busy="queued" aria-busy="true" aria-disabled="true" aria-describedby="sheet-note-right" aria-label="Undo Binder A, Section 2, Card 14"><span class="bn-queued-mark" aria-hidden="true"><svg><use href="#g-queued"/></svg></span><svg width="22" height="22"><use href="#g-undo"/></svg>Undo</button>
+      </span>
+      <button class="ff-receipt-dismiss" aria-label="Dismiss this receipt"><svg width="18" height="18"><use href="#g-x"/></svg></button>
+    </div>
+    <!-- handoff and skipped: Tidepool Newt's sale has landed; its receipt takes the sheet -->
+    <div class="ff-receipt" data-s="handoff skipped" id="skip-sheet">
+      <span class="ff-receipt-icon"><svg width="24" height="24"><use href="#g-check"/></svg></span>
+      <div class="ff-receipt-text">
+        <p class="ff-receipt-said">Marked sold.</p>
+        <p class="ff-receipt-what"><span class="ff-receipt-name">Tidepool Newt</span><span class="ff-receipt-place"><span>Binder A</span><span>Section 3</span><span>Card 2</span></span><span class="ff-receipt-order">Order 4F21C-0011</span></p>
+      </div>
+      <button class="bn-btn ff-undo" aria-label="Undo Binder A, Section 3, Card 2"><svg width="22" height="22"><use href="#g-undo"/></svg>Undo</button>
+      <button class="ff-receipt-dismiss" aria-label="Dismiss this receipt"><svg width="18" height="18"><use href="#g-x"/></svg></button>
+    </div>
+    <span data-s="row"><span class="bn-queued-note mk-new" data-wr="strip" id="row-note-strip" role="status"><span class="mk-tag is-left">New: the words, in the sheet's strip</span><svg><use href="#g-queued"/></svg>Undo for Quartz Owl waits for the other undo to save</span></span>
+  </div>
+  </div>
+</div>
+<p class="mk-verdict" id="verdict"></p>
+
+<section class="mk-sec" id="kit">
+  <h2>Does the kit Button change today's look?</h2>
+  <p>Yes, at rest and on hover. Measured in a scratch page that loads the real <code>kit.css</code> and then <code>Fulfillment.css</code>, at 1100 wide in light. With <code>bn-btn</code> added and nothing else:</p>
+  <ul class="mk-verdict" style="padding-left:1.2em">
+    <li><b>Receipt Undo.</b> A 1px border makes it 2px wider (124.4 to 126.4). The kit's box shadow draws a ring at rest. <b>On hover the ink fill turns to <code>--bn-btn-bg-hover</code> and the label, in <code>--bn-bg</code>, disappears</b>: <code>.bn-btn:hover</code> outranks <code>.ff-undo</code>, which sets no hover ground.</li>
+    <li><b>Row Undo.</b> The label drops from 20px to 13px (104.4 to 90.3 wide), under the view's 20px floor. It gains the ring at rest, the border, and the kit's 0.99 press squeeze.</li>
+    <li><b>Both.</b> The kit's <code>icon</code> prop draws the glyph at 16px. Today's glyphs are 22px and 18px, so the glyph stays a child <code>Icon</code>.</li>
+  </ul>
+  <p>Kept: the normal state below is today's look, with the overrides in the mockup's "NEW: what Fulfillment.css adds" block. The press squeeze is the kit's press floor (D50) and stays.</p>
+  <div class="kc-grid">
+    <span></span><span class="kc-h">Today, plain button</span><span class="kc-h">Kit Button, no override</span><span class="kc-h">Kit Button with the overrides</span>
+    <span class="kc-h">Rest</span>
+    <span class="kc-cell fulfillment"><button class="ff-undo"><svg width="22" height="22"><use href="#g-undo"/></svg>Undo</button><button class="ff-done-undo" style="margin:0"><svg width="18" height="18"><use href="#g-undo"/></svg>Undo</button></span>
+    <span class="kc-cell"><span class="fulfillment-raw"><button class="bn-btn ff-undo" style="font-size:20px"><svg width="16" height="16"><use href="#g-undo"/></svg>Undo</button></span><span class="fulfillment-raw"><button class="bn-btn ff-done-undo raw" style="margin:0;font-size:13px"><svg width="16" height="16"><use href="#g-undo"/></svg>Undo</button></span></span>
+    <span class="kc-cell fulfillment"><button class="bn-btn ff-undo"><svg width="22" height="22"><use href="#g-undo"/></svg>Undo</button><button class="bn-btn ff-done-undo" style="margin:0"><svg width="18" height="18"><use href="#g-undo"/></svg>Undo</button></span>
+    <span class="kc-h">Hover</span>
+    <span class="kc-cell fulfillment"><button class="ff-undo is-hover"><svg width="22" height="22"><use href="#g-undo"/></svg>Undo</button><button class="ff-done-undo is-hover" style="margin:0"><svg width="18" height="18"><use href="#g-undo"/></svg>Undo</button></span>
+    <span class="kc-cell"><span class="fulfillment-raw"><button class="bn-btn ff-undo is-hover raw-hover" style="font-size:20px"><svg width="16" height="16"><use href="#g-undo"/></svg>Undo</button></span><span class="fulfillment-raw"><button class="bn-btn ff-done-undo is-hover" style="margin:0;font-size:13px"><svg width="16" height="16"><use href="#g-undo"/></svg>Undo</button></span></span>
+    <span class="kc-cell fulfillment"><button class="bn-btn ff-undo is-hover"><svg width="22" height="22"><use href="#g-undo"/></svg>Undo</button><button class="bn-btn ff-done-undo is-hover" style="margin:0"><svg width="18" height="18"><use href="#g-undo"/></svg>Undo</button></span>
+  </div>
+</section>
+<style>
+/* The middle column shows the kit's own rules winning, as they would with no override: they outrank .ff-undo on hover. */
+.fulfillment-raw .bn-btn.ff-undo.raw-hover { background: var(--bn-btn-bg-hover); color: var(--bn-bg); }
+.fulfillment-raw .bn-btn.ff-done-undo.is-hover { background: var(--bn-ink); color: var(--bn-bg); }
+</style>
+
+<section class="mk-sec" id="words">
+  <h2>The words</h2>
+  <table class="mk-words">
+    <tr><th>Where</th><th>Words</th><th>Why</th></tr>
+    <tr><td>Receipt Undo, behind a sale</td><td><q>Waits for the sale to save.</q></td><td>D329's template; the press names itself</td></tr>
+    <tr><td>Receipt or row Undo, behind another undo</td><td><q>Waits for the other undo to save.</q></td><td>"other": the press is an undo too</td></tr>
+    <tr><td>Row Undo, heading-line option</td><td><q>Undo waits for the other undo to save</q></td><td>away from the press, so it names it; the mark shows which row</td></tr>
+    <tr><td>Row Undo, sheet-strip option</td><td><q>Undo for Quartz Owl waits for the other undo to save</q></td><td>the sheet holds another card's receipt, so it names the card</td></tr>
+    <tr><td>Skipped</td><td>none</td><td>the receipt is gone; nothing is written</td></tr>
+    <tr><td>After the undo runs</td><td>none new</td><td>today: the row leaves Pulled today and the card is back in the list</td></tr>
+    <tr><td>Screen reader</td><td>the Undo keeps its name; <code>aria-busy</code>, <code>aria-disabled</code>, the words by <code>aria-describedby</code></td><td>the sheet is already a polite live region</td></tr>
+  </table>
+  <p class="mk-verdict">The view bans "queue" on screen (DESIGN.md's jargon row). None of these words uses it.</p>
+</section>
+
+<script>
+(function () {
+  const keys = { wq: ['right', 'left'], wr: ['head', 'strip'], b: ['kit', 'ff'], x: ['cancel', 'run'], r: ['plain', 'ring'] };
+  const state = { s: 'sheet', l: '1', t: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light', wq: 'right', wr: 'head', b: 'ff', x: 'run', r: 'plain', h: [] };
+  const read = () => {
+    const q = new URLSearchParams(location.hash.slice(1));
+    for (const k of ['s', 't', 'l', 'wq', 'wr', 'b', 'x', 'r']) if (q.get(k)) state[k] = q.get(k);
+    state.h = (q.get('h') || '').split(',').filter(Boolean);
+  };
+  const write = () => {
+    const q = new URLSearchParams({ s: state.s, t: state.t, wq: state.wq, wr: state.wr, b: state.b, x: state.x, r: state.r });
+    if (state.l === '0') q.set('l', '0');
+    if (state.h.length) q.set('h', state.h.join(','));
+    history.replaceState(null, '', '#' + q.toString());
+  };
+  const w = () => (innerWidth >= 1100 ? '1440' : '820');
+  const caps = {
+    rest: 'Normal. Home view: the newest sale on the sheet, older sales in Pulled today. Both Undos are kit Buttons, drawn with today\'s look.',
+    sheet: 'Receipt Undo waits. Card view: Mark it sold was pressed on Tidepool Newt and its sale is saving. Then Undo (or U) on Glimmer Fox\'s receipt.',
+    handoff: 'The sale lands. Tidepool Newt takes the sheet; Glimmer Fox drops to Pulled today and its undo runs at once.',
+    row: 'Row Undo waits. Glimmer Fox\'s undo is out (pressed on the sheet). Then Undo on Quartz Owl\'s row.',
+    skipped: 'Skipped. As in "Receipt Undo waits", then the X on Glimmer Fox\'s receipt, then the sale lands.',
+  };
+  const verdicts = {
+    rest: 'Today\'s look. Nothing new shows.',
+    sheet: { right: 'New. The Undo keeps its label and ink fill, the mark sits on its corner, and the words sit above it in the strip the X already keeps. The sheet\'s height does not change.', left: 'New. As above, with the words at the left of the strip, over the receipt\'s own words. They read as part of the receipt, but sit further from the press.' },
+    handoff: { plain: 'The queued face leaves with Glimmer Fox\'s receipt. Its undo runs from the Pulled today row, which shows nothing while it runs, as today. When it lands the row leaves and the card is back in the list.', ring: 'The queued face leaves with Glimmer Fox\'s receipt. Its undo runs from the Pulled today row, which shows the kit ring until it lands. Then the row leaves and the card is back in the list.' },
+    row: { head: 'New. The row\'s Undo keeps its look and takes the mark; the words sit on the Pulled today heading line, which has room at both widths. No row grows.', strip: 'New. The row\'s Undo takes the mark; the words go to the sheet\'s strip, which is always on screen, but it sits on another card\'s receipt.' },
+    skipped: { cancel: 'The plan\'s rule. Glimmer Fox\'s receipt is gone, so the undo is skipped: no write. The card stays sold: it is not in Pulled today and not back in the list. Nothing on screen says so.', run: 'Departs from the plan. The X hides the receipt, but the press was taken first, so the undo still runs once the sale lands. Glimmer Fox is back in the list.' },
+  };
+  const paint = () => {
+    for (const [k, list] of Object.entries(keys)) if (state.h.includes(state[k])) state[k] = list.find((v) => !state.h.includes(v)) || state[k];
+    document.documentElement.dataset.theme = state.t;
+    const view = state.s === 'sheet' ? 'card' : 'home';
+    Object.assign(document.body.dataset, { s: state.s, l: state.l, view, wq: state.wq, wr: state.wr, b: state.b, x: state.x, r: state.r });
+    document.getElementById('sheet-undo').setAttribute('aria-describedby', 'sheet-note-' + state.wq);
+    document.getElementById('row-undo').setAttribute('aria-describedby', 'row-note-' + state.wr);
+    for (const [attr, key] of [['setS', 's'], ['setT', 't'], ['setL', 'l']]) document.querySelectorAll('[data-' + attr.replace('set', 'set-').toLowerCase() + ']').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset[attr] === state[key])));
+    document.querySelectorAll('.mk-opt').forEach((o) => { o.hidden = state.h.includes(o.dataset.opt); o.dataset.on = String(state[o.dataset.key] === o.dataset.opt); });
+    document.getElementById('frame-cap').textContent = w() + ' wide, ' + state.t + '. ' + caps[state.s] + ' The column is 720px (card view 1080px) and the sheet 680px at both widths.';
+    const v = verdicts[state.s];
+    const pick = { sheet: state.wq, handoff: state.r, row: state.wr, skipped: state.x }[state.s];
+    document.getElementById('verdict').textContent = typeof v === 'string' ? v : v[pick];
+    write();
+  };
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const d = b.dataset;
+    if (d.setS) state.s = d.setS; else if (d.setT) state.t = d.setT; else if (d.setL) state.l = d.setL;
+    else if (d.setWq) state.wq = d.setWq; else if (d.setWr) state.wr = d.setWr; else if (d.setB) state.b = d.setB;
+    else if (d.setX) state.x = d.setX; else if (d.setR) state.r = d.setR;
+    else if (d.hide) state.h = [...new Set([...state.h, d.hide])];
+    else return;
+    paint();
+  });
+  addEventListener('hashchange', () => { read(); paint(); });
+  addEventListener('resize', paint);
+  read();
+  paint();
+})();
+</script>
+</body>
+</html>

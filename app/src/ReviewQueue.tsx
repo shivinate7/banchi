@@ -55,6 +55,7 @@ import {
   Notice,
   Page,
   Pill,
+  QueuedNote,
   ReloadButton,
   Sheet,
   Skeleton,
@@ -63,6 +64,7 @@ import {
   useUndoHotkey,
 } from './kit'
 import { toast } from './kit/toast'
+import { isQueued, queueWrite, sayQueued, writeOut, type LineJob } from './writeLine'
 import { LogWell } from './RunsLog'
 import { RunsContent, boxInHash, perCardRate, runInHash, stateInHash } from './Runs'
 import { openingSelection, sendOfKeys } from './RunsComposer'
@@ -720,6 +722,9 @@ function isFinalRefusal(err: unknown): boolean {
   return err instanceof ServerError && FINAL_UNDO_CODES.has(err.code)
 }
 
+/** The screen's write line (`writeLine.ts`). */
+const LINE = 'review'
+
 type UndoTarget = { box: number; index: number; position: string; label: string }
 
 type Receipt = {
@@ -774,6 +779,21 @@ export function ReviewQueue() {
   const [lookingAt, setLookingAt] = useState<string | null>(null)
   const [photoAbsent, setPhotoAbsent] = useState<string | null>(null)
   const [receipts, setReceipts] = useState<readonly Receipt[]>([])
+  /* THE STANDING RECEIPTS, kept in step as they change rather than as the screen redraws: an Undo that waits in the write line
+     reads them when its turn comes, which can be before the next draw. */
+  const receiptsRef = useRef<readonly Receipt[]>([])
+  const commitReceipts = useCallback((next: (held: readonly Receipt[]) => readonly Receipt[]) => {
+    receiptsRef.current = next(receiptsRef.current)
+    setReceipts(receiptsRef.current)
+  }, [])
+  /* THE SCREEN'S WRITE LINE (D329). Every write goes through it, so a U pressed while an answer or a close is out is queued
+     behind it and says so at once, rather than dropped. `what` is the write out, in the words of `sayQueued`. */
+  const inLine = useCallback((what: 'answer' | 'retirement' | 'undo', run: () => Promise<unknown>): LineJob => queueWrite(async () => void (await run()), { screen: LINE, what }), [])
+  /** The U press waiting for the write ahead of it, held so a second press queues nothing. */
+  const undoWaiting = useRef<LineJob | null>(null)
+  const undoIsWaiting = useCallback(() => undoWaiting.current !== null && isQueued(undoWaiting.current), [])
+  /** The receipt whose Undo is waiting, and the write it waits for, for its control to draw the queued state. */
+  const [queued, setQueued] = useState<{ readonly key: string; readonly ahead: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   const [loading, setLoading] = useState(true)
@@ -1054,8 +1074,8 @@ export function ReviewQueue() {
   }, [])
 
   const remember = useCallback((receipt: Receipt) => {
-    setReceipts((held) => [receipt, ...held.filter((standing) => standing.key !== receipt.key)].slice(0, UNDO_DEPTH))
-  }, [])
+    commitReceipts((held) => [receipt, ...held.filter((standing) => standing.key !== receipt.key)].slice(0, UNDO_DEPTH))
+  }, [commitReceipts])
 
   const count = useCallback((field: 'answered' | 'closed' | 'skipped', by: number) => {
     setTally((prev) => ({ ...prev, [field]: Math.max(0, prev[field] + by) }))
@@ -1065,7 +1085,7 @@ export function ReviewQueue() {
    * row leaves only once the server has confirmed. */
   const closeCard = useCallback(
     (row: Row, how: CloseChoice) => {
-      if (busyRef.current || loadingRef.current) return
+      if (busyRef.current || loadingRef.current || undoIsWaiting()) return
       const position = row.entry.position
       const at = rows === null ? -1 : rows.findIndex((held) => held.entry.position === position)
       const dropped = rows === null ? [row] : rows.filter((held) => held.entry.position === position)
@@ -1077,7 +1097,8 @@ export function ReviewQueue() {
 
       const call = how.kind === 'stand_down' ? standDown(row.entry.box, row.entry.index, how.reason) : retireCard(row.entry.box, row.entry.index, how.reason)
 
-      void call
+      void inLine(how.kind === 'stand_down' ? 'answer' : 'retirement', () =>
+        call
         .then((result: unknown) => {
           setRows((prev) => (prev === null ? prev : prev.filter((held) => held.entry.position !== position)))
           count('closed', 1)
@@ -1104,16 +1125,17 @@ export function ReviewQueue() {
         .finally(() => {
           busyRef.current = false
           setBusy(false)
-        })
+        }),
+      )
     },
-    [rows, remember, count],
+    [rows, remember, count, inLine, undoIsWaiting],
   )
 
   /* Answer: advance first, write, put the card back if the write fails — except for the
    * stale codes, which are never restored. */
   const answer = useCallback(
     (row: Row, candidate: CandidateRow, fromCatalog = false) => {
-      if (busyRef.current || loadingRef.current) return
+      if (busyRef.current || loadingRef.current || undoIsWaiting()) return
       const position = row.entry.position
       const dropped = rows === null ? [row] : rows.filter((held) => held.entry.position === position)
       const at = rows === null ? -1 : rows.findIndex((held) => held.entry.position === position)
@@ -1124,7 +1146,8 @@ export function ReviewQueue() {
 
       const restore = (back: Row[]) => putBack(back, at)
 
-      void answerReview({
+      void inLine('answer', () =>
+        answerReview({
         box: row.entry.box,
         index: row.entry.index,
         sku: candidate.sku,
@@ -1164,15 +1187,16 @@ export function ReviewQueue() {
         .finally(() => {
           busyRef.current = false
           setBusy(false)
-        })
+        }),
+      )
     },
-    [rows, putBack, remember, count],
+    [rows, putBack, remember, count, inLine, undoIsWaiting],
   )
 
   /* Take one answer back (D28). Waits for the server; walks a group one position at a time. */
-  const undo = useCallback(
-    (receipt: Receipt) => {
-      if (busyRef.current || loadingRef.current) return
+  const undoNow = useCallback(
+    (receipt: Receipt): Promise<void> => {
+      if (busyRef.current || loadingRef.current) return Promise.resolve()
       busyRef.current = true
       setBusy(true)
       setRefusal(null)
@@ -1197,14 +1221,14 @@ export function ReviewQueue() {
         return { reversed, finished, failures }
       }
 
-      void walk()
+      return walk()
         .then(({ reversed, finished, failures }) => {
           const done = new Set([...reversed, ...finished])
           const back = receipt.dropped.filter((row) => reversed.includes(row.entry.position))
           if (back.length > 0) putBack(back, receipt.at)
           if (reversed.length > 0) count(receipt.counts, -new Set(reversed).size)
 
-          setReceipts((held) =>
+          commitReceipts((held) =>
             held.flatMap((standing) => {
               if (standing.key !== receipt.key) return [standing]
               const targets = standing.targets.filter((target) => !done.has(target.position))
@@ -1242,12 +1266,35 @@ export function ReviewQueue() {
           setBusy(false)
         })
     },
-    [putBack, count],
+    [putBack, count, commitReceipts],
+  )
+
+  /* A PRESS OF U. It targets the receipt standing when it is pressed, and when an answer or a close is out it waits behind that
+     write and says so at once: on the receipt's own Undo while the tray draws it, else in a toast. An Undo already out or
+     waiting takes a second press for nothing (`docs/specs/undo.md` section 10). The receipt is read again when its turn
+     comes, and a press whose receipt is gone sends nothing. */
+  const undo = useCallback(
+    (receipt: Receipt) => {
+      const ahead = writeOut(LINE)
+      if (ahead === 'undo' || undoIsWaiting() || loadingRef.current) return
+      if (ahead !== null) {
+        setQueued({ key: receipt.key, ahead })
+        if (receiptsRef.current[0]?.key !== receipt.key) toast({ kind: 'status', icon: 'queued', title: sayQueued(ahead), body: receipt.label })
+      }
+      const job = inLine('undo', async () => {
+        undoWaiting.current = null
+        setQueued(null)
+        const standing = receiptsRef.current.find((held) => held.key === receipt.key && held.undoable)
+        if (standing !== undefined) await undoNow(standing)
+      })
+      if (ahead !== null) undoWaiting.current = job
+    },
+    [inLine, undoNow, undoIsWaiting],
   )
 
   /* The group write: one route call, nothing dropped until the server answers. */
   const answerGroup = useCallback(() => {
-    if (busyRef.current || loadingRef.current) return
+    if (busyRef.current || loadingRef.current || undoIsWaiting()) return
     const offer = groupOffer
     if (offer === null || rows === null) return
 
@@ -1258,7 +1305,8 @@ export function ReviewQueue() {
     setBusy(true)
     setRefusal(null)
 
-    void answerReviewGroup(
+    void inLine('answer', () =>
+      answerReviewGroup(
       offer.rows.map((row) => ({
         box: row.entry.box,
         index: row.entry.index,
@@ -1312,8 +1360,9 @@ export function ReviewQueue() {
       .finally(() => {
         busyRef.current = false
         setBusy(false)
-      })
-  }, [groupOffer, rows, remember, count])
+      }),
+    )
+  }, [groupOffer, rows, remember, count, inLine, undoIsWaiting])
 
   const skip = useCallback(
     (row: Row) => {
@@ -1513,8 +1562,8 @@ export function ReviewQueue() {
    * owns the keyboard while it is up, and a write in flight or a queue still loading takes `U`
    * with it. */
   useUndoHotkey(() => {
-    if (recheckOpen || busyRef.current || loadingRef.current) return null
-    const newest = receipts.find((receipt) => receipt.undoable)
+    if (recheckOpen || loadingRef.current) return null
+    const newest = receiptsRef.current.find((receipt) => receipt.undoable)
     return newest === undefined ? null : () => undo(newest)
   })
 
@@ -1569,6 +1618,7 @@ export function ReviewQueue() {
       receipt={trayReceipt}
       refusal={refusal}
       onUndo={undo}
+      queued={queued}
       onReload={reload}
       onDismiss={() => setRefusal(null)}
       allSkipped={allSkipped}
@@ -1776,6 +1826,7 @@ function Tray({
   receipt,
   refusal,
   onUndo,
+  queued,
   onReload,
   onDismiss,
   allSkipped,
@@ -1785,6 +1836,8 @@ function Tray({
   receipt: Receipt | null
   refusal: Refusal | null
   onUndo: (receipt: Receipt) => void
+  /** The Undo press waiting behind a write: its receipt's key, and what it waits for. */
+  queued: { readonly key: string; readonly ahead: string } | null
   onReload: () => void
   onDismiss: () => void
   allSkipped: boolean
@@ -1812,11 +1865,23 @@ function Tray({
             {/* UX-255: the outcome, as a description beside the one act-verb — never a
                 second verb competing with "Closed". */}
             {receipt.outcome === undefined ? null : <span className="review-receipt-outcome">{receipt.outcome}</span>}
+            {/* THE WORDS OF A QUEUED UNDO (D329), inside the text span that already takes the row's spare width: the Undo keeps its
+                place (D118), and the label gives way before the words do. */}
+            {queued?.key === receipt.key && receipt.undoable ? <QueuedNote id="review-queued-note">{sayQueued(queued.ahead)}</QueuedNote> : null}
           </span>
           {/* NO CLOCK (UN-5): the drain bar is gone, because this row does not fade with a
               toast and there is no window left for it to count down. */}
           {!receipt.undoable ? null : (
-            <IconButton icon="undo" label="Undo" size="sm" kbd={UNDO_KEY_LABEL} onClick={() => onUndo(receipt)} disabled={disabled} />
+            <IconButton
+              icon="undo"
+              label="Undo"
+              size="sm"
+              kbd={UNDO_KEY_LABEL}
+              onClick={() => onUndo(receipt)}
+              busy={queued?.key === receipt.key ? 'queued' : false}
+              disabled={disabled && queued?.key !== receipt.key}
+              aria-describedby={queued?.key === receipt.key ? 'review-queued-note' : undefined}
+            />
           )}
         </div>
       )}

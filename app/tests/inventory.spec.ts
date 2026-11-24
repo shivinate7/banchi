@@ -757,6 +757,10 @@ type OpenOptions = {
   retire?: (box: number, index: number, body: unknown) => { status: number; body: unknown }
   /** Answers `POST /inventory/<box>/<index>/take-off`, the receipt's press. A case that holds the press open awaits its own gate. */
   takeOff?: (box: number, index: number) => Promise<{ status: number; body: unknown }>
+  /** Holds `POST /inventory/<box>/<index>/sold`, a sale or its reversal (`undo`), until the promise it returns settles. The write is
+   *  recorded on the wire before the hold, so a case can see it is in flight. A case that presses a second write while this one is
+   *  out lets it through by calling its own gate's `release`, the way `gate()` in order-walk.spec does. */
+  holdSale?: (box: number, index: number, undo: boolean) => Promise<void> | null
   /** Pricing tables for runs other than `PRICED_RUN`, keyed by run name, so one case can hold two
    *  copies of a SKU that two runs each priced. A name not listed here still refuses. */
   otherRuns?: Readonly<Record<string, Priced>>
@@ -808,6 +812,8 @@ async function open(
     const body = request.postDataJSON() as { undo?: boolean; still_here?: boolean } | null
     record(request.method(), request.url(), body)
     const path = new URL(request.url()).pathname.split('/')
+    const held = options.holdSale?.(Number(path[2]), Number(path[3]), body?.undo === true) ?? null
+    if (held !== null) await held
     const answer = sale(Number(path[2]), Number(path[3]), body?.undo === true, body?.still_here === true)
     await route.fulfill({
       status: answer.status,
@@ -2608,6 +2614,119 @@ test('u typed into the search field does not undo the sale', async ({ page }) =>
   expect(sales.map((call) => call.body)).toEqual([{}])
   await expect(rowUndo).toBeVisible()
   await expect(page.getByRole('searchbox')).toHaveValue('u')
+})
+
+/** A gate a case holds open: `open` waits on it, the case lets it through by calling `release`. */
+function gate(): { promise: Promise<void>; release: () => void } {
+  let release: () => void = () => {}
+  const promise = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  return { promise, release }
+}
+
+/* `docs/specs/undo.md` §10 and D329: a press that must wait is taken and says so at once. `U` and the toast's Undo name the
+ * newest standing receipt when they are pressed, and queue behind the write that is out, instead of being dropped. The
+ * reversal that goes out is of that receipt, not of whatever the write ahead of it makes newest. */
+test('U waits behind a held sale: the receipt it will reverse reads queued, and one reversal of that receipt goes out on release', async ({ page }) => {
+  const { store, sell, unsell } = sellableStore()
+  const held = gate()
+  const wire = await open(page, BOXES, store, () => PRICING, movesOnSale((undo, key) => (undo ? unsell(key) : sell(key))), {
+    holdSale: (box, index, undo) => (!undo && `${box}/${index}` === '2/3' ? held.promise : null),
+  })
+  const undos = () => wire.filter((call) => call.path.endsWith('/sold') && (call.body as { undo?: boolean } | null)?.undo === true)
+
+  const saleReread = page.waitForResponse(/\/inventory\/\d+(\?|$)/)
+  await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await saleReread
+  const receipt = copyRow(page, CARD_1).locator('.card-locations-undo')
+  await expect(receipt, 'the row draws Undo for the sale of Card 1').toBeVisible()
+
+  await copyRow(page, CARD_3).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => wire.filter((call) => call.path === '/inventory/2/3/sold').length, 'the sale of Card 3 is out').toBe(1)
+
+  await page.getByRole('heading', { name: 'Inventory' }).click()
+  await page.keyboard.press('u')
+
+  await expect(receipt, 'the receipt U will reverse reads queued, not dropped').toHaveAttribute('data-busy', 'queued')
+  await expect(receipt, 'a queued press is taken, so the disabled attribute stays off (the kit marks it aria-disabled)').not.toHaveAttribute('disabled')
+  expect(undos(), 'no reversal goes out while the sale ahead of it is still out').toEqual([])
+
+  held.release()
+  await expect.poll(() => undos().length, 'the queued U sends its reversal once the sale ahead has saved').toBe(1)
+  expect(undos()[0]?.path, 'the reversal is of Card 1, the receipt that was newest when U was pressed').toBe('/inventory/2/1/sold')
+})
+
+test('the toast Undo waits behind a held sale the same way: the receipt reads queued, and one reversal goes out on release', async ({ page }) => {
+  const { store, sell, unsell } = sellableStore()
+  const held = gate()
+  const wire = await open(page, BOXES, store, () => PRICING, movesOnSale((undo, key) => (undo ? unsell(key) : sell(key))), {
+    holdSale: (box, index, undo) => (!undo && `${box}/${index}` === '2/3' ? held.promise : null),
+  })
+  const undos = () => wire.filter((call) => call.path.endsWith('/sold') && (call.body as { undo?: boolean } | null)?.undo === true)
+
+  const saleReread = page.waitForResponse(/\/inventory\/\d+(\?|$)/)
+  await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await saleReread
+  const receipt = copyRow(page, CARD_1).locator('.card-locations-undo')
+  await expect(receipt, 'the row draws Undo for the sale of Card 1').toBeVisible()
+  await expect(receiptToast(page).filter({ hasText: 'Marked sold' }), 'the sale posts its receipt to the toast stack').toHaveCount(1)
+
+  await copyRow(page, CARD_3).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => wire.filter((call) => call.path === '/inventory/2/3/sold').length, 'the sale of Card 3 is out').toBe(1)
+
+  await receiptToast(page).filter({ hasText: 'Marked sold' }).locator('button.bn-toast-action').click()
+
+  await expect(receipt, 'the receipt the toast will reverse reads queued, not dropped').toHaveAttribute('data-busy', 'queued')
+  await expect(receipt, 'a queued press is taken, so the disabled attribute stays off (the kit marks it aria-disabled)').not.toHaveAttribute('disabled')
+  expect(undos(), 'no reversal goes out while the sale ahead of it is still out').toEqual([])
+
+  held.release()
+  await expect.poll(() => undos().length, 'the queued toast Undo sends its reversal once the sale ahead has saved').toBe(1)
+  expect(undos()[0]?.path, 'the reversal is of Card 1, the receipt the toast carries').toBe('/inventory/2/1/sold')
+})
+
+test('control: a U pressed while the reversal is out sends nothing, and the next write goes out alone', async ({ page }) => {
+  const { store, sell, unsell } = sellableStore()
+  const held = gate()
+  const wire = await open(page, BOXES, store, () => PRICING, movesOnSale((undo, key) => (undo ? unsell(key) : sell(key))), {
+    holdSale: (box, index, undo) => (undo && `${box}/${index}` === '2/1' ? held.promise : null),
+  })
+  const sold = () => wire.filter((call) => call.path.endsWith('/sold'))
+
+  const saleReread = page.waitForResponse(/\/inventory\/\d+(\?|$)/)
+  await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
+  await saleReread
+  await expect(copyRow(page, CARD_1).locator('.card-locations-undo')).toBeVisible()
+
+  await page.getByRole('heading', { name: 'Inventory' }).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => sold().length, 'the reversal is out and held').toBe(2)
+  await page.keyboard.press('u')
+
+  held.release()
+  await expect(copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }), 'the reversal landed, so Mark sold is back on the row').toBeVisible()
+
+  await copyRow(page, CARD_3).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => sold().length, 'the next write is the third one on the wire').toBe(3)
+  expect(sold().map((call) => call.body), 'the second U reversed nothing: sale, reversal, then the next sale alone').toEqual([{}, { undo: true }, {}])
+})
+
+test('control (D57): a Mark sold on another copy stays refused while a sale is out, and sends nothing', async ({ page }) => {
+  const { store, sell } = sellableStore()
+  const held = gate()
+  const wire = await open(page, BOXES, store, () => PRICING, movesOnSale((undo, key) => (undo ? undefined : sell(key))), {
+    holdSale: (box, index, undo) => (!undo && `${box}/${index}` === '2/3' ? held.promise : null),
+  })
+  const sold = () => wire.filter((call) => call.path.endsWith('/sold'))
+
+  await copyRow(page, CARD_3).getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect.poll(() => sold().length, 'the sale of Card 3 is out').toBe(1)
+  await expect(copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }), 'D57: one sale at a time, so another copy\'s Mark sold is refused').toBeDisabled()
+
+  held.release()
+  await expect(copyRow(page, CARD_3).locator('.card-locations-undo'), 'the held sale landed').toBeVisible()
+  expect(sold().map((call) => call.body), 'the refused press sent nothing: one sale on the wire').toEqual([{}])
 })
 
 test('the receipt is the undo that survives the rows being replaced', async ({ page }) => {
