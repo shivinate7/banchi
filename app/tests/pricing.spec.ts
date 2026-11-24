@@ -301,6 +301,8 @@ async function open(
     /** Answers `PUT /pricing` (the price save) with a refusal or a 5xx instead of the written file. The PUT is still recorded
      *  into the wire; the GETs of the same path are answered as before. */
     corpusSave?: { status: number; code: string }
+    /** Answers `POST /pricing/restore` (an Undo of a clear, or of a press's answers) with a refusal or a 5xx. Recorded into the wire first. */
+    restoreFailure?: { status: number; code: string }
     /** UN-11: the newest clear the server still remembers, on `GET /pricing`'s own envelope,
      *  beside `clearable`. Absent means no clear stands (the ordinary case, and the state
      *  after a restore or after a send has built on it). */
@@ -611,6 +613,14 @@ async function open(
     const body = route.request().postDataJSON() as Record<string, unknown>
     wire.push({ method: 'POST', path: '/pricing/restore', body })
     const answers = (body.answers ?? {}) as Record<string, unknown>
+    if (options.restoreFailure !== undefined) {
+      await route.fulfill({
+        status: options.restoreFailure.status,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: options.restoreFailure.code, message: 'The server said no.' } }),
+      })
+      return
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -8331,6 +8341,36 @@ test('one list: a tick does not carry over to a new suggested price from Refresh
 const ticksPosts = (wire: Wire[]) => wire.filter((row) => row.method === 'POST' && row.path === '/pricing/ticks')
 const ticksBody = (wire: Wire[], at: number) =>
   ticksPosts(wire)[at]?.body as { ticks: Record<string, { price: string; on: boolean; group: string }>; drop: string[] }
+
+/* THE PRICES AFTER AN UNDO THAT FAILS. A clear's toast Undo posts `/pricing/restore` (`restorePricingAnswers`). A 5xx or a
+   refusal sets its failure and reads nothing, so the prices the screen holds are not read again. Each case clears the typed
+   prices, presses that toast's Undo against a stub that answers 503 or 409, and asserts that a GET of /pricing was sent after
+   the POST. */
+async function clearThenUndo(page: Page, failure: { status: number; code: string }) {
+  const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE, restoreFailure: failure })
+  const sent = recordSent(page)
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  const toast = page.locator('.bn-toast').last()
+  await expect(toast.getByRole('button', { name: 'Undo' })).toBeVisible()
+  await toast.getByRole('button', { name: 'Undo' }).click()
+  await expect.poll(() => wire.filter((r) => r.method === 'POST' && r.path === '/pricing/restore').length, { message: 'the Undo reached the server' }).toBe(1)
+  return sent
+}
+
+test('an Undo of a clear that the server fails with a 5xx re-reads the prices', async ({ page }) => {
+  const sent = await clearThenUndo(page, { status: 503, code: 'store_unavailable' })
+  await expect.poll(() => readAfterWrite(sent, 'POST', '/pricing/restore', '/pricing'), {
+    message: 'the Undo that failed with a 5xx is followed by a read of the prices: no GET /pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('a refused Undo of a clear re-reads the prices', async ({ page }) => {
+  const sent = await clearThenUndo(page, { status: 409, code: 'revision_moved' })
+  await expect.poll(() => readAfterWrite(sent, 'POST', '/pricing/restore', '/pricing'), {
+    message: 'the refused Undo is followed by a read of the prices: no GET /pricing reached the server after it',
+  }).toBe(true)
+})
 
 /* THE PRICES AFTER A SAVE THAT FAILS. A typed price is saved with `PUT /pricing`. A 5xx or a refusal sets the failure and keeps
    the book the screen holds, and reads nothing. Each case types a price, blurs the field, and asserts that a GET of /pricing
