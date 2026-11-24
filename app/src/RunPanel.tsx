@@ -433,9 +433,8 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
   const retryMatch = () =>
     guard('join', async () => {
       if (openRun === null) return
-      const answer = await matchRun(openRun, true)
-      setDetail(await getRun(openRun))
-      await loadRuns()
+      /* THE RE-READ IS `afterWrite`'S (D73): the open run, then the list, started whatever the Try again came to. */
+      const answer = await afterWrite(() => matchRun(openRun, true))
       if (answer.ok) toast({ kind: 'ok', title: 'Matched', body: 'The next step is on the run.', ttlMs: 4000 })
     })
 

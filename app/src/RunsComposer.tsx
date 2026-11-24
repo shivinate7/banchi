@@ -35,6 +35,7 @@ import { whenLabel } from './RunsStage'
 import { boxesLabel, boxLabel, runBoxLabel } from './runScope'
 import { money } from './money'
 import { usePoll } from './usePoll'
+import { afterWrite } from './afterWrite'
 import { DEFAULT_ENGINE, HAIKU_NAME_TOOLTIP, MATCHER_NAME_TOOLTIP, type Engine } from './engines'
 import { storeKeyText } from './storeKey'
 import { carriedByBox, type CarriedScope } from './runHandoff'
@@ -867,7 +868,8 @@ export function RunsComposer({
 
   const doStart = () =>
     guard('start', async () => {
-      const answer = await startRun(send)
+      /* THE RUNS LIST IS RE-READ WHATEVER THE START CAME TO (`afterWrite`, D73): a start the server failed may still have started a run. `RunPanel` registers that read. */
+      const answer = await afterWrite(() => startRun(send))
       setStarted({
         runs: answer.started,
         estimate: quote?.total.estimate_usd ?? quote?.total.ceiling_usd ?? null,

@@ -30,6 +30,7 @@ import {
   sendMarkdown,
   getPricingCorpus,
   getPricingWorklist,
+  gotNoAnswer,
   keepTicks,
   restoreLastClear,
   restoreClear,
@@ -76,7 +77,7 @@ import { FLAT_KEY, subThresholdSkus } from './readiness'
 import { isWithheld, rowShare, runChip } from './standing'
 import { TrendCell, type KeptTrend, type TrendRead } from './PriceTrend'
 import { PricesAsOf, asOfOf, usePricesRefresh } from './PricesAsOf'
-import { useRereadOnWrite } from './afterWrite'
+import { afterWrite, useRereadOnWrite } from './afterWrite'
 import { ClearPrices } from './ClearPrices'
 import { runBoxLabel } from './runScope'
 import {
@@ -1113,6 +1114,21 @@ export function Pricing() {
 
   const reload = useCallback(() => void load(picked, hashStamp), [load, picked, hashStamp])
 
+  /** A WRITE'S RE-READ OF THE WORKLIST (`afterWrite`, D73): only what a write can have moved under the rows, each live listing's kept
+   *  tick, laid on the rows held. It adds, drops and reorders nothing (D313), and it leaves the answers, the undo stack and a failed
+   *  save to `load`, which a Reload or a send runs whole. */
+  const rereadTicks = useCallback(async () => {
+    if (readView) return
+    const fresh = await getPricingWorklist([...picked].sort())
+    const ticked = new Map((fresh.live ?? []).map((one) => [one.sku, one.ticked]))
+    setWork((held) =>
+      held === null || held.live === undefined
+        ? held
+        : { ...held, live: held.live.map((one) => (ticked.has(one.sku) ? { ...one, ticked: ticked.get(one.sku) } : one)) },
+    )
+  }, [readView, picked])
+  useRereadOnWrite(rereadTicks)
+
   /* "Refresh now" brings the rows and the saved strips current; when a run ends both are read again.
      A visit only reads where it is, and presses nothing. */
   const refresh = usePricesRefresh(() => {
@@ -1208,17 +1224,27 @@ export function Pricing() {
         return next
       })
       setTicksPending((n) => n + 1)
-      keepTicks({ [sku]: { price, on, group } })
+      afterWrite(() => keepTicks({ [sku]: { price, on, group } }))
         .catch((err: unknown) => {
           const trouble = describeFailure(err)
           if (trouble.code === 'demo_read_only') return
-          // THE SERVER NEVER KEPT IT: the row goes back to what the server holds, else it stays ticked and the send is refused.
+          // THE ROW GOES BACK TO WHAT THE SERVER HOLDS, else it stays ticked and the send is refused. The re-read `afterWrite` started says what that is.
           setListedTicks((held) => {
             const pressed = held[sku]
             if (pressed === undefined || pressed.on !== on || pressed.price !== price || pressed.group !== group) return held
             const { [sku]: _gone, ...rest } = held
             return rest
           })
+          /* A 5xx or a lost connection may still have kept the tick, so the toast does not say it was not kept. */
+          if (gotNoAnswer(err)) {
+            toast({
+              kind: 'refusal',
+              tone: failureTone(trouble),
+              title: `The store did not confirm the tick for ${one?.name || sku}`,
+              body: 'If the box is not as you left it, press it again.',
+            })
+            return
+          }
           toast({ ...refusalToast(err, `Tick not kept for ${one?.name || sku}`) })
         })
         .finally(() => setTicksPending((n) => n - 1))
@@ -1246,7 +1272,8 @@ export function Pricing() {
     setSaving(true)
     void (async () => {
       try {
-        const receipt = await putPricingCorpus(sent, revision.current)
+        /* THE PRICES ARE READ AGAIN WHATEVER THE SAVE CAME TO (`afterWrite`, D73): a save the server failed may still have been written. */
+        const receipt = await afterWrite(() => putPricingCorpus(sent, revision.current))
         revision.current = receipt.revision
         savedBook.current = sent
         failedBook.current = null
@@ -2655,15 +2682,17 @@ export function Pricing() {
   const worklistName =
     scopeName ?? 'the cards on this screen'
 
-  /** Re-read what may still be cleared, and the digest — NOT the answers (StrictMode runs an
-   *  updater twice, and adopting them there re-dirtied the screen; see D168's receipt case). */
+  /** Re-read what may still be cleared and the clears the server still remembers — NOT the answers (StrictMode runs an
+   *  updater twice, and adopting them there re-dirtied the screen; see D168's receipt case), and NOT the revision: this
+   *  read runs after every write, a refused save included, and a revision taken from a file that moved under a book this
+   *  screen still holds would let the next wholesale save overwrite the other writer. Each write that moves the file sets
+   *  its own revision from its own answer. */
   const refreshCorpus = useCallback(async () => {
     const answer = await getPricingCorpus()
     setClearable(answer.clearable ?? null)
     setKept(keptOf(answer))
-    revision.current = answer.revision
   }, [])
-  /* A CLEAR'S RE-READ (`afterWrite`, D73): the sheet's write, whatever it came to, reads the digest and the clearable list again. */
+  /* A WRITE'S RE-READ (`afterWrite`, D73): a clear, an Undo or a save, whatever it came to, reads the clearable list and the kept clears again. */
   useRereadOnWrite(refreshCorpus)
 
   /** UN-11: put back the newest clear, off the server's own memory of it rather than a
@@ -2731,7 +2760,7 @@ export function Pricing() {
           onPress: () => {
             void (async () => {
               try {
-                const back = await restorePricingAnswers(result.cleared, revision.current, result.clear_id)
+                const back = await afterWrite(() => restorePricingAnswers(result.cleared, revision.current, result.clear_id))
                 revision.current = back.revision
                 const kept = savedBook.current
                 if (kept !== null) {
@@ -2739,7 +2768,6 @@ export function Pricing() {
                   savedBook.current = next
                   setBook(next)
                 }
-                void refreshCorpus()
                 for (const sku of back.restored) {
                   const input = inputs.current.get(sku)
                   const was = result.cleared[sku]
@@ -2760,7 +2788,7 @@ export function Pricing() {
         },
       })
     },
-    [refreshCorpus],
+    [],
   )
 
   const activePreset = PRESETS.find((p) => p.rule === doc?.rule && p.basis === doc?.basis) ?? null

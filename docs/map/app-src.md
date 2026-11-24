@@ -113,7 +113,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/PricesAsOf.css` — That header at `--bn-*` tokens only.
   - Decisions: `D313`
 - `app/src/PricesAsOf.tsx` — The header line above #/pricing's list: "Prices as of" the catalog step's finish, and the one press, Refresh now, with its running, done and failed states.
-  - Decisions: `D313`, `D104`, `D189`, `D278`
+  - Decisions: `D313`, `D104`, `D189`, `D278`, `D73`
 - `app/src/Pricing.css` — The one list, the slim bar and the rule line, `--bn-*` only.
   - Decisions: `D277`, `D123`, `D313`, `D28`, `D118`, `D50`, `D273`, `D221`, `D117`, `D5`, `D9`, `D38`, `D41`, `D54`, `D56`, `D86`, `D103`, `D105`, `D125`, `D197`, `D218`, `D278`
 - `app/src/Pricing.tsx` — The Pricing screen: every unsent copy with its price, its holds and its readiness.
@@ -159,7 +159,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/Runs.tsx` — The runs sheet and the redirect from the old runs route: the box picker, the composer, the store-wide reconcile and the stale-listing markdown, with the run panel beneath them.
   - Decisions: `D39`, `D291`, `D56`, `D174`, `D5`, `D10`, `D13`, `D20`, `D27`, `D32`, `D33`, `D38`, `D87`, `D100`
 - `app/src/RunsComposer.tsx` — THE IDENTIFY COMPOSER: the one press in this product that spends money, as a staged dialog — which boxes, how each is read, what it costs, and a receipt.
-  - Decisions: `D33`, `D56`, `D32`, `D145`, `D174`, `D291`, `D180`, `D313`, `D275`, `D207`, `D39`, `D118`, `D196`, `D183`, `D58`, `D172`, `D269`, `D13`, `D27`, `D65`, `D76`, `D277`, `D94`, `D91`, `D2`
+  - Decisions: `D33`, `D56`, `D32`, `D145`, `D174`, `D291`, `D180`, `D313`, `D275`, `D207`, `D39`, `D118`, `D196`, `D183`, `D58`, `D172`, `D269`, `D13`, `D27`, `D65`, `D76`, `D277`, `D94`, `D91`, `D2`, `D73`
 - `app/src/RunsDrop.tsx` — The file controls, as controls that look like the product: a native file input cannot be styled to sit beside a kit button, so the input is visually hidden and its own <label> is the control — a label IS the accessible name of the input it wraps, so this costs nothing in reachability.
   - Decisions: `D5`, `D33`, `D94`
 - `app/src/RunsLog.tsx` — A command's stdout, verbatim, in a well that follows its tail, counts its lines, folds and copies.
@@ -175,7 +175,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/SendCard.css` — The send card's own rows: the press and its two quiet doors on one line that wraps as a unit, the download door, and the card lists under a notice.
   - Decisions: `D277`, `D313`, `D117`, `D118`, `D273`
 - `app/src/SendCard.tsx` — THE SEND CARD on Pricing's send bar: one press from priced to live (D273).
-  - Decisions: `D273`, `D196`, `D269`, `D313`, `D277`, `D118`, `D86`, `D99`, `D105`
+  - Decisions: `D273`, `D196`, `D269`, `D313`, `D277`, `D118`, `D86`, `D99`, `D105`, `D73`
 - `app/src/Shipping.css` — The lane table and its chips, at owner density.
   - Decisions: `D197`, `D218`, `D117`, `D61`, `D38`, `D50`, `D69`
 - `app/src/Shipping.tsx` — The shipping route: points the route at the orders hub on its ship stage.

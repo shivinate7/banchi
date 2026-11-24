@@ -14,7 +14,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Button, Icon } from './kit'
 import { absoluteDate, clockTime } from './dates'
-import { describeFailure, getPricesRefresh, startPricesRefresh } from './server'
+import { afterWrite, useRereadOnWrite } from './afterWrite'
+import { describeFailure, getPricesRefresh, gotNoAnswer, startPricesRefresh } from './server'
 import type { PricesRefreshState } from './types'
 import './PricesAsOf.css'
 
@@ -44,14 +45,27 @@ export function usePricesRefresh(onEnded: () => void, enabled: boolean) {
   const ended = useRef(onEnded)
   ended.current = onEnded
 
-  const read = useCallback(() => {
-    getPricesRefresh()
-      .then((next) => setState(next))
-      .catch(() => undefined /* No state is not a failure of this screen: the line says nothing. */)
+  /* THE REFRESH WAS PRESSED HERE AND THE STATE SHOWN IS OURS, not the server's: a read that finds it already over is not a run's end. */
+  const ours = useRef(false)
+  const read = useCallback(async () => {
+    try {
+      const next = await getPricesRefresh()
+      if (next.state === 'running') {
+        ours.current = false
+        setRefused(null)
+      }
+      setState(next)
+    } catch {
+      /* No state is not a failure of this screen: the line says nothing. */
+    }
   }, [])
   useEffect(() => {
-    if (enabled) read()
+    if (enabled) void read()
   }, [enabled, read])
+  /* A PRESS'S RE-READ (`afterWrite`, D73): the state is read again whatever the press came to. Where the header is not drawn, nothing is read. */
+  useRereadOnWrite(async () => {
+    if (enabled) await read()
+  })
 
   const running = enabled && state?.state === 'running'
   useEffect(() => {
@@ -61,15 +75,28 @@ export function usePricesRefresh(onEnded: () => void, enabled: boolean) {
   }, [running, read])
 
   useEffect(() => {
-    if (last.current === 'running' && state !== null && state.state !== 'running') ended.current()
+    if (last.current === 'running' && state !== null && state.state !== 'running') {
+      if (ours.current) ours.current = false
+      else ended.current()
+    }
     last.current = state?.state ?? null
   }, [state])
 
   const press = useCallback((force: boolean) => {
     setRefused(null)
-    startPricesRefresh(force)
-      .then(() => setState((now) => ({ note: null, done: 0, total: 0, ...now, state: 'running', step: 'listings' })))
-      .catch((error) => setRefused(describeFailure(error).message))
+    afterWrite(() => startPricesRefresh(force))
+      .then(() => {
+        ours.current = true
+        setState((now) => ({ note: null, done: 0, total: 0, ...now, state: 'running', step: 'listings' }))
+      })
+      .catch((error) => {
+        /* A 5xx may still have started the refresh: the line does not say it did not. */
+        setRefused(
+          gotNoAnswer(error)
+            ? 'The store did not confirm the refresh. If the prices are not refreshing, press Refresh Now again.'
+            : describeFailure(error).message,
+        )
+      })
   }, [])
 
   return { state, refused, press }

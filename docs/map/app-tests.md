@@ -204,5 +204,7 @@ The Playwright specs and unit tests of the app, and the helpers they share.
   - Decisions: `D5`, `D275`
 - `app/tests/unit/unit.ts` — The unit tier's `test`: Playwright's, with the `page`, `context` and `browser` fixtures made to throw, so a unit case cannot open a browser.
   - Decisions: `D18`
+- `app/tests/wireOrder.ts` — The order of a page's requests: `recordSent` records each one as it leaves, and `readAfterWrite` and `readAfterPost` say whether a GET went out after a write, so a case asserts a write's read-back and never a bare count.
+  - Decisions: `D73`
 - `app/tests/wide.spec.ts` — The owner's screens ABOVE the desk, which nothing in this suite had ever rendered.
   - Decisions: `D27`, `D123`, `D275`, `D50`, `D95`

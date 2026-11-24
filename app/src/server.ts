@@ -378,6 +378,13 @@ export function describeFailure(err: unknown): Failure {
   }
 }
 
+/** The write got no answer, or the server failed (a 5xx, a lost connection, a body that did not parse), so it may still
+ *  have committed. A 4xx is the server's "no" and wrote nothing. A screen that says what a failed write left behind says
+ *  "the store did not confirm" for this one, and keeps "nothing was saved" for a refusal. */
+export function gotNoAnswer(err: unknown): boolean {
+  return !(err instanceof ServerError && err.status >= 400 && err.status < 500)
+}
+
 /** Which colour a failure earns. Red is for a real fault: the server did not answer, answered
  *  garbage, or broke inside. A refusal, a busy store or a guard is a "no" the person can act on,
  *  so it is a warning and never danger red. */
