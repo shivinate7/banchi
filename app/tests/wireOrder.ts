@@ -12,8 +12,13 @@ export function recordSent(page: Page): Sent[] {
   return sent
 }
 
-/** True when a GET of `readPath` was sent after the first POST of `postPath`. Works on any list of requests in send order. */
-export function readAfterPost(sent: readonly Sent[], postPath: string, readPath: string = postPath): boolean {
-  const at = sent.findIndex((r) => r.method === 'POST' && r.path === postPath)
+/** True when a GET of `readPath` was sent after the first `method` request to `writePath`. Works on any list of requests in send order. */
+export function readAfterWrite(sent: readonly Sent[], method: string, writePath: string, readPath: string): boolean {
+  const at = sent.findIndex((r) => r.method === method && r.path === writePath)
   return at >= 0 && sent.slice(at + 1).some((r) => r.method === 'GET' && r.path === readPath)
+}
+
+/** `readAfterWrite` for a POST, with the read defaulting to the same path. */
+export function readAfterPost(sent: readonly Sent[], postPath: string, readPath: string = postPath): boolean {
+  return readAfterWrite(sent, 'POST', postPath, readPath)
 }

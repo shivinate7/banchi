@@ -6,7 +6,7 @@ import { afterPaint, settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 import { expectOneStagger } from './staggerCheck'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
-import { readAfterPost, recordSent } from './wireOrder'
+import { readAfterPost, readAfterWrite, recordSent } from './wireOrder'
 
 import type {
   HistoryRange,
@@ -298,6 +298,9 @@ async function open(
      *  exist to hold. Absent means a server that predates the route, and the control is then
      *  not offered at all. */
     clearable?: { days: Record<string, number | null>; holds: number; unknown: number }
+    /** Answers `PUT /pricing` (the price save) with a refusal or a 5xx instead of the written file. The PUT is still recorded
+     *  into the wire; the GETs of the same path are answered as before. */
+    corpusSave?: { status: number; code: string }
     /** UN-11: the newest clear the server still remembers, on `GET /pricing`'s own envelope,
      *  beside `clearable`. Absent means no clear stands (the ordinary case, and the state
      *  after a restore or after a send has built on it). */
@@ -631,6 +634,13 @@ async function open(
         path: '/pricing',
         body: route.request().postDataJSON(),
       })
+      if (options.corpusSave !== undefined) {
+        return route.fulfill({
+          status: options.corpusSave.status,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: options.corpusSave.code, message: 'The server said no.' } }),
+        })
+      }
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -8321,6 +8331,31 @@ test('one list: a tick does not carry over to a new suggested price from Refresh
 const ticksPosts = (wire: Wire[]) => wire.filter((row) => row.method === 'POST' && row.path === '/pricing/ticks')
 const ticksBody = (wire: Wire[], at: number) =>
   ticksPosts(wire)[at]?.body as { ticks: Record<string, { price: string; on: boolean; group: string }>; drop: string[] }
+
+/* THE PRICES AFTER A SAVE THAT FAILS. A typed price is saved with `PUT /pricing`. A 5xx or a refusal sets the failure and keeps
+   the book the screen holds, and reads nothing. Each case types a price, blurs the field, and asserts that a GET of /pricing
+   was sent after the PUT. */
+test('a price save the server fails with a 5xx re-reads the prices', async ({ page }) => {
+  await open(page, { corpusSave: { status: 503, code: 'store_unavailable' } })
+  const sent = recordSent(page)
+  await field(page).fill('19.99')
+  await field(page).press('Tab')
+  await expect.poll(() => sent.some((r) => r.method === 'PUT' && r.path === '/pricing'), { message: 'the save reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'PUT', '/pricing', '/pricing'), {
+    message: 'the price save that failed with a 5xx is followed by a read of the prices: no GET /pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('a price save the server refuses re-reads the prices', async ({ page }) => {
+  await open(page, { corpusSave: { status: 409, code: 'revision_moved' } })
+  const sent = recordSent(page)
+  await field(page).fill('19.99')
+  await field(page).press('Tab')
+  await expect.poll(() => sent.some((r) => r.method === 'PUT' && r.path === '/pricing'), { message: 'the save reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'PUT', '/pricing', '/pricing'), {
+    message: 'the price save that was refused is followed by a read of the prices: no GET /pricing reached the server after it',
+  }).toBe(true)
+})
 
 /* THE PRICES WORKLIST AFTER A KEPT TICK THAT FAILS. A press on a suggestion posts `/pricing/ticks` (`keepTicks`). A 5xx or a
    refusal puts the row back to what the server holds and reads nothing else, so the worklist, which carries each row's `ticked`,
