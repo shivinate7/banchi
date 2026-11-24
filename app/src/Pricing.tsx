@@ -482,6 +482,9 @@ function usePhone(): boolean {
 /** A strip older than this, against the newest overnight read, is drawn dimmed with its date. */
 const STALE_AFTER_S = 3600
 
+/** What an autosave that got no answer says (`gotNoAnswer`): it may have committed. True whether or not the file holds the typed price, because the field shows what was typed either way. */
+const UNCONFIRMED_PRICE_SAVE = 'The store did not confirm the price save. The price field shows what you typed. Change it to try the save again.'
+
 /** The saved read is tried again this many times, this long after a failure, before it says so. */
 const SAVED_RETRIES = 1
 const SAVED_RETRY_MS = 2000
@@ -1304,7 +1307,10 @@ export function Pricing() {
         setFailure(null)
       } catch (err) {
         failedBook.current = sent
-        setFailure(describeFailure(err))
+        const trouble = describeFailure(err)
+        /* A 5xx or a lost connection may have committed the save, so "Try again" is not said. The re-read leaves the field as typed
+           whether the file holds that price or not (`refreshCorpus` never replaces the book), so the sentence asks only for a change to the field. */
+        setFailure(gotNoAnswer(err) ? { ...trouble, message: UNCONFIRMED_PRICE_SAVE } : trouble)
       } finally {
         inFlight.current = false
         setSaving(false)

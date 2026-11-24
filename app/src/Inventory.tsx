@@ -28,6 +28,7 @@ import {
   failureTone,
   ALREADY_SOLD,
   gotNoAnswer,
+  unconfirmedCopyWrite,
 } from './server'
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
@@ -286,23 +287,15 @@ function copyPlaceName(copy: SearchCopy): string {
   return sayPlace(copy.place.label ?? copy.key)
 }
 
-/* A WRITE THAT GOT NO ANSWER MAY HAVE COMMITTED, so the server's own sentence ("Try again") would send the person to press
-   a second time on a card that may already be gone. The sentence this screen owes them says the write is unconfirmed, names
-   the copy (after a committed sale the selection has moved to the next copy, so "this copy" would point at the wrong card)
-   and names the button to press again if it is still on that copy (a committed sale leaves the row but drops its button).
-   The raw server text stays off the screen (D196). Any other failure is the server's "no", and its own sentence stands.
-   `button` is the control's label exactly. */
+/* A WRITE THAT GOT NO ANSWER MAY HAVE COMMITTED, so it is said as `unconfirmedCopyWrite`. Any other failure is the server's
+   "no", and its own sentence stands. */
 function reportWrite(err: unknown, what: string, copy: SearchCopy, button: string): void {
   const failure = describeFailure(err)
   if (!gotNoAnswer(err)) {
     report(failure)
     return
   }
-  toast({
-    kind: 'refusal',
-    tone: failureTone(failure),
-    title: `The store did not confirm the ${what} of ${copyPlaceName(copy)}. If ${button} is still on that copy, press it again.`,
-  })
+  toast({ kind: 'refusal', tone: failureTone(failure), title: unconfirmedCopyWrite(what, copyPlaceName(copy), button) })
 }
 
 /* ONE OWNER-SIDE VIEW OF STORED CARDS (D31), SEEN TWO WAYS: the walk, card by card, and the

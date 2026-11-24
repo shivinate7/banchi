@@ -331,7 +331,23 @@ const isServerFault = (status: number | undefined): boolean => status !== undefi
 /** DID THE WRITE GET NO ANSWER (a 5xx, a lost connection, a body that did not parse)? Such a write may still have
  *  committed, because the server can fail after it writes. A 4xx is the server's "no": it wrote nothing. */
 export function gotNoAnswer(err: unknown): boolean {
-  return !(err instanceof ServerError && err.status >= 400 && err.status < 500)
+  return !(err instanceof ServerError && isRefusalStatus(err.status))
+}
+
+/** `gotNoAnswer`, read off a failure a screen already holds (`describeFailure` keeps the status). */
+export function failureGotNoAnswer(failure: { readonly status?: number }): boolean {
+  return !isRefusalStatus(failure.status)
+}
+
+const isRefusalStatus = (status: number | undefined): boolean => status !== undefined && status >= 400 && status < 500
+
+/** THE SENTENCE A WRITE ON A COPY THAT GOT NO ANSWER OWES (`gotNoAnswer`): the server's own sentence ("Try again") would send the
+ *  person to press a second time on a card that may already be gone. This one says the write is unconfirmed, names the copy
+ *  (after a committed sale the selection has moved to the next copy, so "this copy" would point at the wrong card) and names the
+ *  button to press again if it is still on that copy (a committed sale leaves the row but drops its button). `button` is the
+ *  control's label exactly. The raw server text stays off the screen. */
+export function unconfirmedCopyWrite(what: string, subject: string, button: string): string {
+  return `The store did not confirm the ${what} of ${subject}. If ${button} is still on that copy, press it again.`
 }
 
 /** A rate limit from Card Ladder is a "no" until tomorrow, even though it arrives as a 429, so no second press is offered. */

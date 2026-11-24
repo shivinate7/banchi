@@ -99,6 +99,8 @@ import {
   isFinalUndoRefusal,
   COPY_ALREADY_PULLED,
   SALE_BUILT_ON,
+  gotNoAnswer,
+  unconfirmedCopyWrite,
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
@@ -990,8 +992,10 @@ const PULL_NOT_RECORDED = 'pull_not_recorded'
 /** The server's `already_sold` and `copy_already_pulled` refusals of a sale. The first tells an API caller to send
  *  `{"undo": true}`; the second names the order key and SKU. Neither is for a person at this screen, so a sale refused
  *  either way is said in this screen's own words. Every other refusal keeps the server's sentence. */
-function pullFailure(err: unknown, place: string | null): Failure {
+function pullFailure(err: unknown, place: string | null, name: string): Failure {
   const trouble = describeFailure(err)
+  /* A 5xx or a lost connection may have committed the sale, so the server's "Try again" is not said; the walk's toast says the same sentence. */
+  if (gotNoAnswer(err)) return { ...trouble, message: unconfirmedCopyWrite('sale', name, 'Mark Sold') }
   if (trouble.code !== ALREADY_SOLD && trouble.code !== COPY_ALREADY_PULLED) return trouble
   return { ...trouble, message: `${place === null ? 'That copy' : sayPlace(place)} was already sold.` }
 }
@@ -1924,7 +1928,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         notePull({ target, place, name, receipt })
       } catch (err) {
         if (!live.current) return
-        setFailure(pullFailure(err, pick.place.label ?? null))
+        setFailure(pullFailure(err, pick.place.label ?? null, pick.card_name ?? line.line.name ?? line.sku))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -1969,7 +1973,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       notePull({ target, place: resolvedPlace, name, receipt })
       return { ok: true, place: resolvedPlace, refreshed: done.refreshed ?? [], owed: done.owed }
     } catch (err) {
-      const trouble = pullFailure(err, place ?? null)
+      const trouble = pullFailure(err, place ?? null, name)
       if (live.current) setFailure(trouble)
       return { ok: false, failure: trouble }
     } finally {
