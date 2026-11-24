@@ -102,7 +102,8 @@ import {
   failureGotNoAnswer,
   noAnswerFailure,
   noAnswerToast,
-  unconfirmedListPress,
+  unconfirmedButtonSays,
+  unconfirmedStillThere,
   unconfirmedListRead,
   unconfirmedListUndo,
   unconfirmedPressUndo,
@@ -1028,7 +1029,7 @@ function undoFailureToast(err: unknown, trouble: Failure, retry?: { readonly lab
 }
 
 /* THE LABELS OF THE LIST PRESSES, EXACTLY AS THEIR BUTTONS DRAW THEM: a write that got no answer tells the person which button to look
-   for, so the sentence and the button must say the same words (`unconfirmedListPress`, `unconfirmedStandDown`). */
+   for, so the sentence and the button must say the same words (`unconfirmedButtonSays`, `unconfirmedStillThere`, `unconfirmedStandDown`). */
 const SEALED_LABEL = 'Sealed Product'
 const NOT_SHIPPING_LABEL = "It Isn't Shipping"
 const STOOD_DOWN_ORDER_RECEIPT = 'Stood down 1 order'
@@ -2090,7 +2091,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(noAnswerFailure(err, () => unconfirmedListPress(label, name, `the button still says ${label}`), true))
+        setFailure(noAnswerFailure(err, () => unconfirmedButtonSays(label, name), true))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2123,7 +2124,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             () =>
               kind === null
                 ? unconfirmedPressUndo(name, SEALED_LABEL)
-                : unconfirmedListPress(SEALED_LABEL, name, `${SEALED_LABEL} is still there`),
+                : unconfirmedStillThere(SEALED_LABEL, name),
             true,
           ),
         )
@@ -2222,7 +2223,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         }
       } catch (err) {
         if (!live.current) return
-        setFailure(noAnswerFailure(err, () => unconfirmedListPress(STAND_DOWN_REASON_LABEL[reason], `order ${order.number}`, `${STAND_DOWN_ORDER_LABEL} is still there`), true))
+        setFailure(noAnswerFailure(err, () => unconfirmedStillThere(STAND_DOWN_REASON_LABEL[reason], `order ${order.number}`, STAND_DOWN_ORDER_LABEL), true))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2310,7 +2311,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(noAnswerFailure(err, () => unconfirmedListPress(NOT_SHIPPING_LABEL, name, `${NOT_SHIPPING_LABEL} is still there`), true))
+        setFailure(noAnswerFailure(err, () => unconfirmedStillThere(NOT_SHIPPING_LABEL, name), true))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2587,7 +2588,7 @@ function BacklogPrompt({
       </p>
       <div className="orders-standdown-row">
         <Button busy={busyHere} disabled={busy !== null} onClick={() => onStandDown(candidates, 'shipped_elsewhere')}>
-          Stand down {countOf(candidates.length, 'shipped order')}
+          {standDownLabel(candidates.length, 'shipped order')}
         </Button>
       </div>
     </section>
@@ -2711,7 +2712,7 @@ function ReconcileBacklogPanel({
             if (valid) onPress(cutoff, candidates.length)
           }}
         >
-          Stand down {countOf(candidates.length, 'order')}
+          {standDownLabel(candidates.length, 'order')}
         </Button>
       </div>
     </section>
@@ -4821,7 +4822,7 @@ function LineStandDown({
             disabled={locked}
             onClick={() => onCloseLine(order, line, 'not_shipping')}
           >
-            It Isn&apos;t Shipping
+            {NOT_SHIPPING_LABEL}
           </Button>
         </div>
       </div>
@@ -4848,7 +4849,7 @@ function LineStandDown({
             disabled={locked}
             onClick={() => onDeclareKind(order, line, 'sealed')}
           >
-            Sealed Product
+            {SEALED_LABEL}
           </Button>
         ) : (
           <IconButton

@@ -55,10 +55,16 @@ export function useSheetWrite(onChanged?: () => void): {
 export function SettingsTrouble({ failure, compact, children }: { failure: Failure | null; compact?: boolean; children?: ReactNode }) {
   if (failure === null) return null
   const said = failureParts(failure)
+  /* `Notice` draws its body block for any truthy `children`, and an array is always truthy: an empty body would still take a box. */
+  const hasBody = said.body !== null || (children !== undefined && children !== null && children !== false)
   return (
     <Notice tone={failureTone(failure)} title={said.title} code={failure.code} compact={compact}>
-      {said.body}
-      {children}
+      {hasBody ? (
+        <>
+          {said.body}
+          {children}
+        </>
+      ) : null}
     </Notice>
   )
 }

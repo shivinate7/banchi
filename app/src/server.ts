@@ -377,11 +377,17 @@ export function unconfirmedSaleUndo(name: string, place: string | null): Unconfi
   return unconfirmedCopyWrite('undo', name, place, 'Undo')
 }
 
-/** A PRESS ON A LIST (an order, a line, a backlog) THAT GOT NO ANSWER, WITH THE BUTTON STILL ON THE LIST: "<act> for <subject>", and
- *  to press it again if `still` (what the person would see if it did not go through). The list is read again after every write
- *  (`afterWrite`), so it shows what the store holds. Drawn as one line (`unconfirmedLine`). */
-export function unconfirmedListPress(act: string, subject: string, still: string): Unconfirmed {
-  return { title: `The store did not confirm ${act} for ${subject}`, body: `If ${still}, press it again.` }
+/** A PRESS ON A LIST (an order, a line, a backlog) THAT GOT NO ANSWER: "<act> for <subject>", and to press it again. The list is read
+ *  again after every write (`afterWrite`), so it shows what the store holds. Both forms are drawn as one line (`unconfirmedLine`).
+ *  This one is for a button whose label changes with the press (a count): it names the button as it says now. */
+export function unconfirmedButtonSays(label: string, subject: string): Unconfirmed {
+  return { title: `The store did not confirm ${label} for ${subject}`, body: `If the button still says ${label}, press it again.` }
+}
+
+/** The other form, for a control that is on the list or gone: `where` is the control to look for, and is the act's own label unless
+ *  the act is a choice made inside it (a reason under "Stand down this order"). */
+export function unconfirmedStillThere(act: string, subject: string, where: string = act): Unconfirmed {
+  return { title: `The store did not confirm ${act} for ${subject}`, body: `If ${where} is still there, press it again.` }
 }
 
 /** THE STAND-DOWN OF A COUNT OF ORDERS (`orders` is "1 shipped order", "2 old orders"), by the one button that names that count. */
