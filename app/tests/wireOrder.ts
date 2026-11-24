@@ -22,3 +22,10 @@ export function readAfterWrite(sent: readonly Sent[], method: string, writePath:
 export function readAfterPost(sent: readonly Sent[], postPath: string, readPath: string = postPath): boolean {
   return readAfterWrite(sent, 'POST', postPath, readPath)
 }
+
+/** The paths of the GETs sent after the first `method` request to `writePath`, in the order they left. A case states
+ *  which reads follow a write and where they fall, never a bare count of requests. */
+export function readsAfterWrite(sent: readonly Sent[], method: string, writePath: string): string[] {
+  const at = sent.findIndex((r) => r.method === method && r.path === writePath)
+  return at < 0 ? [] : sent.slice(at + 1).filter((r) => r.method === 'GET').map((r) => r.path)
+}

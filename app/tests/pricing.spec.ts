@@ -6,7 +6,7 @@ import { afterPaint, settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 import { expectOneStagger } from './staggerCheck'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
-import { readAfterPost, readAfterWrite, recordSent } from './wireOrder'
+import { readAfterPost, readAfterWrite, readsAfterWrite, recordSent } from './wireOrder'
 
 import type {
   HistoryRange,
@@ -8552,6 +8552,47 @@ test('a price save the server refuses re-reads the prices', async ({ page }) => 
 /* THE PRICES WORKLIST AFTER A KEPT TICK THAT FAILS. A press on a suggestion posts `/pricing/ticks` (`keepTicks`). A 5xx or a
    refusal puts the row back to what the server holds and reads nothing else, so the worklist, which carries each row's `ticked`,
    is not read again. Each case asserts that a GET of /pipeline/pricing was sent after the tick's POST. */
+/* WHICH READS A WRITE OWES. A Send that answered re-reads the worklist and the saved prices once, through its own reload.
+   A kept tick re-reads the worklist and no price. A price save re-reads the saved prices and no worklist. Each case waits
+   for the read it expects, then states what else left after the write. */
+test('an answered Send reads the worklist and the saved prices once each, after the send', async ({ page }) => {
+  const wire = await open(page)
+  const sent = recordSent(page)
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pipeline/pricing'), {
+    message: 'the answered Send is followed by a read of the prices worklist',
+  }).toBe(true)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pricing'), {
+    message: 'the answered Send is followed by a read of the saved prices',
+  }).toBe(true)
+  const priced = readsAfterWrite(sent, 'POST', '/pipeline/send').filter((path) => path === '/pipeline/pricing' || path === '/pricing')
+  expect(priced.sort(), 'the reads after the Send are the worklist and the saved prices, each once').toEqual(['/pipeline/pricing', '/pricing'])
+})
+
+test('a kept tick re-reads the prices worklist and never the saved prices', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, { live: ONE_LIST_LIVE })
+  const sent = recordSent(page)
+  await listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' }).click()
+  await expect.poll(() => ticksPosts(wire).length, { message: 'the tick reached the server' }).toBe(1)
+  await expect.poll(() => readAfterPost(sent, '/pricing/ticks', '/pipeline/pricing'), {
+    message: 'the kept tick is followed by a read of the prices worklist',
+  }).toBe(true)
+  expect(readsAfterWrite(sent, 'POST', '/pricing/ticks'), 'a kept tick read the saved prices').not.toContain('/pricing')
+})
+
+test('a saved price re-reads the saved prices and never the prices worklist', async ({ page }) => {
+  await open(page)
+  const sent = recordSent(page)
+  await field(page).fill('19.99')
+  await field(page).press('Enter')
+  await expect.poll(() => readAfterWrite(sent, 'PUT', '/pricing', '/pricing'), {
+    message: 'the saved price is followed by a read of the saved prices',
+  }).toBe(true)
+  expect(readsAfterWrite(sent, 'PUT', '/pricing'), 'a saved price read the prices worklist').not.toContain('/pipeline/pricing')
+})
+
 test('a tick the server fails with a 5xx re-reads the prices worklist', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   const wire = await open(page, {
