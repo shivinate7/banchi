@@ -6,6 +6,7 @@ import { showDoneOnly, showOpenOnly } from './ordersFilterSheet'
 import { line, order, payloadOf, pick, place } from './routeFixtures'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
 import { heldFocus } from './focusHeld'
+import { storeReadsAfter } from './storeReads'
 
 import { afterPaint, settleMotion } from './motionSettled'
 import type {
@@ -1448,9 +1449,8 @@ function sectionOrders(count: number): OrdersPayload {
 
 const undosOf = (wire: Wire[]) => pullsOf(wire).filter((one) => (one.body as { undo?: boolean }).undo === true)
 
-/* Store reads (`GET /orders`) the wire holds after the entry at `at`: a read the screen sends after the write it names. */
-const storeReadsAfter = (wire: Wire[], at: number) =>
-  wire.slice(at + 1).filter((one) => one.method === 'GET' && one.path.endsWith('/orders')).length
+/* Store reads (`GET /orders`) after the write at `at`: `storeReadsAfter` is the one home of the count (`storeReads.ts`). */
+const isOrdersRead = (path: string) => path.endsWith('/orders')
 
 test('an older receipt offers no Undo once a newer pull lands (undo.md §3, D171)', async ({ page }) => {
   /* `docs/specs/undo.md` §3: a toast's own Undo reaches only the newest reversible write. Once B is sold, A's receipt
@@ -1945,7 +1945,7 @@ test('an undo the server fails with a 5xx is followed by a store re-read, as a r
   await expect(page.locator('.bn-toast', { hasText: 'The card was not put back' })).toBeVisible()
 
   await expect
-    .poll(() => storeReadsAfter(wire, undoAt), {
+    .poll(() => storeReadsAfter(wire, undoAt, isOrdersRead), {
       message: 'the 5xx undo is followed by a store re-read: no GET /orders reached the server after the undo',
     })
     .toBeGreaterThan(0)

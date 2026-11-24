@@ -27,6 +27,7 @@ import {
   undoSale,
   failureTone,
   ALREADY_SOLD,
+  gotNoAnswer,
 } from './server'
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
@@ -60,6 +61,7 @@ import { markFor } from './kit/rarityMarks'
 import { clearToastAction, dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
 import { RANK_IS_CURRENT, stalenessSentence, type FrozenRank } from './frozenRank'
+import { afterWrite, useRereadOnWrite } from './afterWrite'
 import { Dialog as Overlay } from './kit/overlay'
 import './Inventory.css'
 
@@ -93,6 +95,8 @@ const UNDO_WINDOW_MS = 20_000
 const NO_UNDO = 'No undo for this one.'
 
 const NOT_SOLD = 'not_sold'
+/* A sale refused because another device retired the copy: it left without a sale. */
+const CARD_RETIRED = 'card_retired'
 const ALREADY_RETIRED = 'already_retired'
 const NOT_RETIRED = 'not_retired'
 /* UN-14: "already undone" for a move, the same shape `not_sold`/`not_retired` answer. */
@@ -323,11 +327,10 @@ function InventoryWalk({
     [],
   )
 
-  /* Bumped after every write, and read by the walk and the copies panel as a re-read trigger. */
+  /* THE RE-READ TRIGGER the walk, the copies panel and the counts read on. `afterWrite` bumps it after every write on
+     this screen, whatever the write came to (D73), through the registration below. */
   const [reloads, setReloads] = useState(0)
-  /* A SALE'S OWN COUNTER. A sale changes this box, the box counts, the
-     review queues and the order claims on copies: the buried boxes and the pricing tables stay as read, so they follow `reloads` and not this. Every other write bumps `reloads`, which re-reads all. */
-  const [sales, setSales] = useState(0)
+  useRereadOnWrite(async () => setReloads((n) => n + 1))
 
   /* The copy waiting on a retire panel, or null. A retirement without a reason is refused, so
    * the four reason buttons ARE the confirm. */
@@ -412,7 +415,7 @@ function InventoryWalk({
     return () => {
       live = false
     }
-  }, [reloads, sales])
+  }, [reloads])
 
   /* Escape closes the retire panel. */
   useEffect(() => {
@@ -468,7 +471,21 @@ function InventoryWalk({
         place: sayPlace(copy.place.label ?? `pooled, ${copy.key}`),
       }
       try {
-        const reversible = canTakeBack(await markSold(copy.place.box, copy.place.index))
+        const reversible = canTakeBack(
+          await afterWrite(async () => {
+            try {
+              return await markSold(copy.place.box, copy.place.index)
+            } catch (err) {
+              /* A SALE THAT GOT NO ANSWER MAY HAVE COMMITTED, AND ANOTHER DEVICE'S SALE OR RETIREMENT HAS: either way the
+                 re-read `afterWrite` starts next brings the departure back. The row is held first, so that read cannot
+                 fold it away under a search (D313, D181), and the refused press still has a row to return focus to.
+                 Any other refusal wrote nothing and holds nothing. */
+              const code = refusalCode(err)
+              if (gotNoAnswer(err) || code === ALREADY_SOLD || code === CARD_RETIRED) holdRank(copy.key)
+              throw err
+            }
+          }),
+        )
         setSold((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
         holdRank(copy.key)
         remember({
@@ -478,7 +495,6 @@ function InventoryWalk({
           canUndo: reversible,
           note: [renumberNote(copy.place), reversible ? null : NO_UNDO].filter(Boolean).join(' ') || null,
         })
-        setSales((n) => n + 1)
       } catch (err) {
         clearFreshSale(copy.key)
         if (refusalCode(err) === ALREADY_SOLD) {
@@ -494,7 +510,6 @@ function InventoryWalk({
             canUndo: false,
             note: 'Another device sold this copy first, so nothing was written here.',
           })
-          setSales((n) => n + 1)
           return
         }
         report(describeFailure(err))
@@ -519,7 +534,7 @@ function InventoryWalk({
         place: sayPlace(copy.place.label ?? `pooled, ${copy.key}`),
       }
       try {
-        const result = await retireCard(copy.place.box, copy.place.index, reason)
+        const result = await afterWrite(() => retireCard(copy.place.box, copy.place.index, reason))
         const reversible = canTakeBack(result)
         setRetired((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
         holdRank(copy.key)
@@ -531,7 +546,6 @@ function InventoryWalk({
           note: [renumberNote(copy.place), reversible ? null : NO_UNDO].filter(Boolean).join(' ') || null,
           takeOff: result.take_off ? { name: selected?.card.name ?? 'this card', state: result.take_off } : undefined,
         })
-        setReloads((n) => n + 1)
       } catch (err) {
         if (refusalCode(err) === ALREADY_RETIRED) {
           setRetired((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
@@ -543,7 +557,6 @@ function InventoryWalk({
             canUndo: false,
             note: 'Another device retired this copy first, so nothing was written here.',
           })
-          setReloads((n) => n + 1)
           return
         }
         report(describeFailure(err))
@@ -574,7 +587,7 @@ function InventoryWalk({
       setMoveRefused(null)
       setMoveTrouble(null)
       try {
-        const result = await moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox, section)
+        const result = await afterWrite(() => moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox, section))
         setMoving(null)
         holdRank(copy.key)
         const where = boxRecords.find((record) => record.box === toBox)?.name ?? UNNAMED_BOX
@@ -588,7 +601,6 @@ function InventoryWalk({
           note: renumberNote(copy.place),
           current: { box: result.new_box, index: result.new_index, captureId: result.card.capture_id },
         })
-        setReloads((n) => n + 1)
       } catch (err) {
         const code = refusalCode(err)
         if (code === 'section_gone' || code === 'section_required' || code === 'layout_token_required') {
@@ -602,7 +614,6 @@ function InventoryWalk({
               : 'Choose a section — there is no default place inside the box.',
           )
           setMoveTrouble(describeFailure(err))
-          setReloads((n) => n + 1)
           return
         }
         report(describeFailure(err))
@@ -629,10 +640,10 @@ function InventoryWalk({
        * that. Only the move undo's own response carries the restored place. */
       let restoredPlace: string | null = null
       try {
-        if (receipt.kind === 'sale') await undoSale(receipt.box, receipt.index)
-        else if (receipt.kind === 'retirement') await undoRetire(receipt.box, receipt.index)
+        if (receipt.kind === 'sale') await afterWrite(() => undoSale(receipt.box, receipt.index))
+        else if (receipt.kind === 'retirement') await afterWrite(() => undoRetire(receipt.box, receipt.index))
         else {
-          const result = await undoMove(receipt.box, receipt.index)
+          const result = await afterWrite(() => undoMove(receipt.box, receipt.index))
           restoredPlace = result.card.place?.label ?? null
         }
       } catch (err) {
@@ -646,8 +657,9 @@ function InventoryWalk({
          * box the receipt started from. It lands at a fresh index there, never the
          * tombstoned one. */
         if (receipt.kind === 'move' && refusalCode(err) === MOVE_BUILT_ON && receipt.current !== undefined) {
+          const at = receipt.current
           try {
-            const result = await moveCard(receipt.current.box, receipt.current.index, receipt.current.captureId, receipt.box)
+            const result = await afterWrite(() => moveCard(at.box, at.index, at.captureId, receipt.box))
             movedBack = true
             movedBackTo = result.card.label === undefined ? null : sayPlace(result.card.label)
           } catch (remedyErr) {
@@ -696,7 +708,6 @@ function InventoryWalk({
             : receipt.place,
         ttlMs: 4000,
       })
-      setReloads((n) => n + 1)
       setBusyKey(null)
     },
     [busyKey, releaseRank],
@@ -787,7 +798,7 @@ function InventoryWalk({
           layouts={layouts}
           listings={listings}
           wanted={wanted}
-          reloadToken={reloads + sales}
+          reloadToken={reloads}
           busyKey={busyKey}
           soldKeys={soldKeys}
           onSell={sell}
@@ -833,7 +844,7 @@ function InventoryWalk({
       className="inventory"
     >
       {view === 'sets' ? (
-        <InventorySets reloadToken={reloads + sales} />
+        <InventorySets reloadToken={reloads} />
       ) : (
       <BoxBrowse
         detail={detail}
@@ -845,8 +856,7 @@ function InventoryWalk({
         onBoxes={setBoxRecords}
         onListings={setListings}
         goTo={goTo}
-        reloadToken={reloads + sales}
-        heavyToken={reloads}
+        reloadToken={reloads}
         hideSold={hideSold}
         onHideSold={toggleHideSold}
         frozen={frozen}
@@ -1071,7 +1081,7 @@ function CopiesPanel({
       {failure === null ? null : <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />}
 
       {/* D118: a press changes what is on screen, never where the rest of it is. A re-read
-          after `Mark sold` (`doSell`'s `setReloads`) keeps `group` standing from the old
+          after `Mark sold` (`doSell`'s `afterWrite`) keeps `group` standing from the old
           `results` while `useSearch` sets `loading` — measured at 1440 with `/search` delayed
           800ms: drawing this skeleton on every `loading`/`!settled` pushed `CardLocations` from
           y=79 to y=181 and back on an ~93ms answer. Draw it only when there is nothing to stand
