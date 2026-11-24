@@ -223,7 +223,12 @@ function OwedCell({ current, states }: { readonly current: string; readonly stat
   )
 }
 
-/** THE LIST THE LINE DRAWS AFTER A RE-READ: the read's entries, with the entries it no longer lists that hold an answer, each in the place it had. */
+/** AN ANSWER THAT SURVIVES THE ENTRY'S LEAVING THE OWED LIST: only a settled 2xx one. `sent` (accepted) and `matches` (the server read the listing and sent nothing) are
+ *  true whatever the re-read says. `failed` (a refusal or a 5xx that may have committed), `nosession` (a refusal) and `onway` (a refusal that the take-off is already
+ *  outstanding; the re-read dropping it is the check the line promised) are claims about an owed entry, so they go with it. */
+const settledAnswer = (answer: TakeOffOutcome | undefined): boolean => answer?.view === 'sent' || answer?.view === 'matches'
+
+/** THE LIST THE LINE DRAWS AFTER A RE-READ: the read's entries, with the entries it no longer lists that hold a settled answer, each in the place it had. */
 function keepAnswered(
   held: readonly OwedTakeOff[],
   read: readonly OwedTakeOff[],
@@ -233,7 +238,7 @@ function keepAnswered(
   const kept = held.flatMap((entry) => {
     const now = listed.get(entryKey(entry))
     if (now !== undefined) return [now]
-    return answers[entryKey(entry)] === undefined ? [] : [entry]
+    return settledAnswer(answers[entryKey(entry)]) ? [entry] : []
   })
   const placed = new Set(kept.map(entryKey))
   return [...kept, ...read.filter((entry) => !placed.has(entryKey(entry)))]
@@ -255,7 +260,7 @@ function OwedTakeOffsLine({
   const [answers, setAnswers] = useState<Readonly<Record<string, TakeOffOutcome>>>({})
   const [open, setOpen] = useState(false)
   /* AN ANSWER STANDS UNTIL THE NEXT VISIT (D313): a re-read of the owed list never takes an answered entry from under the person. An entry
-     the re-read no longer lists stays here, in its place, while it holds an answer; one with no answer leaves with the list. */
+     the re-read no longer lists stays here, in its place, while it holds a settled answer (`settledAnswer`); any other leaves with the list. */
   const [shown, setShown] = useState(owed)
   const [seen, setSeen] = useState(owed)
   if (seen !== owed) {
