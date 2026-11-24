@@ -1882,8 +1882,10 @@ test('a copy another Orders tab already pulled is refused in plain words, with n
 
 /* THE COPY ON A WRITE THAT GOT NO ANSWER. A toast pins its title and its body on their own elements. Volcanion is the card. */
 const NOT_CONFIRMED_UNDO_TITLE = 'The store did not confirm the undo'
+/* The undo body names the row's current place. Copy B was pressed at Card 15; once copy A's sale renumbered the section, its row
+   reads Card 14, and that is the place the reader is to find. */
 const NOT_CONFIRMED_UNDO_BODY =
-  'Volcanion, Box 3, Section 2, Card 15. If the hooked arrow button is still on its row, press it again. If the undo went through, the second press says so.'
+  'Volcanion, Box 3, Section 2, Card 14. If the hooked arrow button is still on its row, press it again. If the undo went through, the second press says so.'
 const NOT_CONFIRMED_SALE_TITLE = 'The store did not confirm the sale'
 const NOT_CONFIRMED_SALE_BODY =
   'Volcanion, Box 3, Section 2, Card 17. If the $ button is still on its row, press it again. If the sale went through, the second press says so.'
@@ -1947,6 +1949,10 @@ test('an undo the server fails with a 5xx is followed by a store re-read, as a r
   await expect.poll(() => pullsOf(wire).length).toBe(1)
   await rows.nth(1).getByRole('button', { name: /^Mark Sold/ }).click()
   await expect.poll(() => pullsOf(wire).length).toBe(2)
+  /* The place the undo's row draws before U: the first sale's answer renumbered it, so the expected body below is this place. */
+  await expect(rows.nth(1).getByRole('group'), 'the row the undo is for draws its place as Card 14, after the renumber').toHaveAccessibleName(
+    'Box 3, Section 2, Card 14',
+  )
 
   await page.getByRole('heading', { name: 'Orders' }).click()
   await page.keyboard.press('u')
@@ -1954,13 +1960,18 @@ test('an undo the server fails with a 5xx is followed by a store re-read, as a r
   const undoAt = wire.indexOf(undosOf(wire)[0] as Wire)
   const failedToast = page.locator('.bn-toast-refusal', { has: page.locator('.bn-toast-title', { hasText: NOT_CONFIRMED_UNDO_TITLE }) })
   await expect(failedToast.locator('.bn-toast-title'), 'a 5xx may have reversed the copy, so the toast says the store did not confirm the undo').toHaveText(NOT_CONFIRMED_UNDO_TITLE)
-  await expect(failedToast.locator('.bn-toast-body'), 'the body names the card and its place, and the press to make again').toHaveText(NOT_CONFIRMED_UNDO_BODY)
 
   await expect
     .poll(() => storeReadsAfter(wire, undoAt, isOrdersRead), {
       message: 'the 5xx undo is followed by a store re-read: no GET /orders reached the server after the undo',
     })
     .toBeGreaterThan(0)
+  /* THE BODY IS READ ONCE THE UNDO HAS SETTLED: the sale renumbered the section before this undo, so the body must name the row's
+     place now (Card 14), not the place the copy was sold at (Card 15). */
+  await expect(
+    failedToast.locator('.bn-toast-body'),
+    'after the undo settles the body names the card and the place its row draws now, and the press to make again',
+  ).toHaveText(NOT_CONFIRMED_UNDO_BODY)
 })
 
 /* ------------------------------------------------------------------ focus after a swap */
