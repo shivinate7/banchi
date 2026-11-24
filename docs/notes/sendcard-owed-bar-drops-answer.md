@@ -1,0 +1,1 @@
+- sendcard-owed-bar-drops-answer: The `bar` in `app/src/Pricing.tsx` mounts only while `owedTakeOffs.owed` is not empty, with no loaded or listed rows. A `matches` press whose re-read empties the owed list unmounts the bar, and `OwedTakeOffsLine` with it, so the press's `setAnswers` lands on nothing. Read from code, not run. Seen: 2026-11-24 x1

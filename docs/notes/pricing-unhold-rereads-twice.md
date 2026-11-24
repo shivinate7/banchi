@@ -1,0 +1,1 @@
+- pricing-unhold-rereads-twice: An answered Unhold, or its Undo, in `app/src/Pricing.tsx` reads the worklist twice: the `tick` re-read (`rereadTicks`, which reads the live rows and held copies), then `reload()`, which loads the whole worklist. Read from code. Seen: 2026-11-24 x1

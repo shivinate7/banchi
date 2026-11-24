@@ -1,0 +1,1 @@
+- sendcard-drops-reason-narrow: The oldest `Drops-lines` reason for `app/src/SendCard.tsx` names only `sendKind`, and its commit does not touch that file. The commit that removed the owed answer wipe and the owed list's conditional mount has no reason. A later reason names the wipe, but the check reads only the oldest. Seen: 2026-11-24 x1

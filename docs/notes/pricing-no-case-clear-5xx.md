@@ -1,0 +1,1 @@
+- pricing-no-case-clear-5xx: The 5xx Clear case in `app/tests/pricing.spec.ts` answers 503 and never commits the clear. No case covers a 5xx Clear that committed. Seen: 2026-11-24 x1

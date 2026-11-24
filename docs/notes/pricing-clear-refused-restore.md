@@ -1,0 +1,1 @@
+- pricing-clear-refused-restore: A refused Clear takes no revision. `corpusKind` gives `other` on a failure, and only `corpus` takes one. A Restore line then sends the older revision, so its Restore can be refused until a reload. Read from code, not run in a browser. Seen: 2026-11-24 x1
