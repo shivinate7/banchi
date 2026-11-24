@@ -3115,7 +3115,7 @@ test('the reason a row adds nothing is a heading, composed by the CLIENT, verbat
 
   /* AND THE FALLBACK IS NOT DEFENSIVE PADDING. This table is `pricing.json` READ OFF DISK, so
      a file written by an earlier join carries `at_cap` with no sentence beside it — measured,
-     both runs in `runs/` today. Modelled by DELETING the key, because that is the shape on
+     both runs in `runs/` today. Modeled by DELETING the key, because that is the shape on
      disk and `PricingSku` cannot express an absent field; `null` reaches the same `??` and is
      what a fresh join writes for a zero-copy match. An older file must state the bare fact,
      which is exactly what `at_cap` means, and invent no reason for it. */
@@ -4056,7 +4056,7 @@ test('a Refresh Now re-reads the file and takes no digest while its run goes on,
   /* THE PRESS'S OWN RE-READ IS NO WRITE'S RECEIPT. Here another writer moves the file, the owner presses Refresh Now,
      and the run is still going when the press's re-read lands: the refresh state stays `running`, so the end of the run
      never reads the file. That re-read answers the moved file and must not take its digest, so the next autosave still
-     names the digest the screen read at load. The server is modelled: a write names the digest it read, and a write
+     names the digest the screen read at load. The server is modeled: a write names the digest it read, and a write
      that names an old one is refused with `corpus_moved`, so it never takes the moved file over. */
   const wire = await open(page, { refresh: refreshState('running', { step: 'listings' }) })
   let serverRevision = 'rev-1'
@@ -4125,7 +4125,7 @@ test('a refresh that ends after another writer moved the file takes the digest i
 }) => {
   /* THE END OF A REFRESH READS THE FILE, AND THAT READ TAKES THE DIGEST. The run starts from a press, and another writer
      moves the file while it goes on. When the run ends, the screen reads the moved file, so the next autosave must name
-     the digest that read answered, and the server takes the write. The server is modelled: a write names the digest it
+     the digest that read answered, and the server takes the write. The server is modeled: a write names the digest it
      read, and a write that names an old one is refused with `corpus_moved`. The refresh state answers `running` from the
      press until the test ends the run. */
   const wire = await open(page)
@@ -4725,16 +4725,16 @@ test('a clear empties the fields it cleared, and offers the way back', async ({ 
   )
 })
 
-/* THE FILE A CLEAR, ITS UNDO AND THE AUTOSAVE MEET WHEN ANOTHER WRITER HAS MOVED IT (D86). The server is modelled the way it
+/* THE FILE A CLEAR, ITS UNDO AND THE AUTOSAVE MEET WHEN ANOTHER WRITER HAS MOVED IT (D86). The server is modeled the way it
    answers: a write names the digest it read, a write that names an old one is refused with `corpus_moved`, and an accepted write
    moves the digest on. `GET /pricing` answers the file's digest and the newest clear that can still be undone (`last_clear`, null
    once none stands). It is registered AFTER `open`, so the load's read is `open`'s and every later read, write and Undo is this
    model's. */
-type ModelledFile = { version: number; revision: string; lastClear: { count: number; at: number } | null; accepted: number; refusals: number }
+type ModeledFile = { version: number; revision: string; lastClear: { count: number; at: number } | null; accepted: number; refusals: number }
 
 const CLEAR_AT = 1758870000
 
-function bumpFile(file: ModelledFile): string {
+function bumpFile(file: ModeledFile): string {
   file.version += 1
   file.revision = `rev-${file.version}`
   return file.revision
@@ -4750,8 +4750,8 @@ function refuseMoved(route: Route) {
   })
 }
 
-async function modelPricingFile(page: Page, wire: Wire[]): Promise<ModelledFile> {
-  const file: ModelledFile = { version: 1, revision: 'rev-1', lastClear: null, accepted: 0, refusals: 0 }
+async function modelPricingFile(page: Page, wire: Wire[]): Promise<ModeledFile> {
+  const file: ModeledFile = { version: 1, revision: 'rev-1', lastClear: null, accepted: 0, refusals: 0 }
   await page.route(/\/pricing\/clear$/, async (route) => {
     const body = route.request().postDataJSON() as { revision?: string }
     wire.push({ method: 'POST', path: '/pricing/clear', body })
