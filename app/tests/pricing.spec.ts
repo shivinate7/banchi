@@ -346,6 +346,8 @@ async function open(
     takeOffsOwed?: OwedRow[]
     /** The owed list the read answers once a take-off is in the wire, so a case can drop the entry a press took. Default: `takeOffsOwed`. */
     takeOffsOwedAfterPress?: OwedRow[]
+    /** The owed list a read answers after the press's own re-read, such as a Refresh's. Default: `takeOffsOwedAfterPress`. */
+    takeOffsOwedLater?: OwedRow[]
     /** Called once the owed read that follows a take-off has been answered, so a case can hold another read behind it. */
     onOwedAfterPress?: () => void
     /** Answers `POST /inventory/<box>/<index>/take-off`, one entry's press. Default: TCGplayer takes that entry's copies. */
@@ -424,8 +426,12 @@ async function open(
      press. Newer than the shell's empty answer, so it wins for every case; each read and write lands in `wire`. */
   await page.route(/\/pipeline\/sends\/owed(\?.*)?$/, async (route) => {
     wire.push({ method: 'GET', path: '/pipeline/sends/owed', body: null })
-    const pressed = wire.some((call) => call.method === 'POST' && call.path.endsWith('/take-off'))
-    const owed = pressed && options.takeOffsOwedAfterPress !== undefined ? options.takeOffsOwedAfterPress : (options.takeOffsOwed ?? [])
+    /* THE PRESS'S OWN RE-READ is the first owed read after the take-off; any read after it (a Refresh's, a check's) is the second. */
+    const at = wire.findIndex((call) => call.method === 'POST' && call.path.endsWith('/take-off'))
+    const pressed = at >= 0
+    const readsSincePress = wire.slice(at).filter((call) => call.method === 'GET' && call.path === '/pipeline/sends/owed').length
+    const afterPress = pressed && options.takeOffsOwedAfterPress !== undefined ? options.takeOffsOwedAfterPress : (options.takeOffsOwed ?? [])
+    const owed = pressed && readsSincePress > 1 && options.takeOffsOwedLater !== undefined ? options.takeOffsOwedLater : afterPress
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ owed }) })
     if (pressed) options.onOwedAfterPress?.()
   })
@@ -9362,6 +9368,99 @@ test('reread follow-on: a 5xx take-off the owed read still lists keeps its refus
     'the owed read still lists Thievul, so the refusal line stands',
   ).toHaveCount(1)
   await expect(page.locator('.send-owed').getByRole('button', { name: 'Try again' }), 'the owed read still lists Thievul, so its Try again stands').toBeVisible()
+})
+
+/* A NON-SETTLED ANSWER HOLDS ONLY UNTIL A LATER READ (the second read after a press). A sign-in refusal and an on-its-way answer describe
+   the store as it was at the press, so the press's own re-read keeps them (D313). A read after that one (a Refresh's, a check's) is the
+   store as it is now: it clears the answer for each entry it still lists, and the line draws that entry's own state. Each case answers the
+   press, then the press's own re-read, then a later read with the entry in another state. */
+const NO_SESSION_THIEVUL = owedRow({ name: 'Thievul', sku: THIEVUL.sku, box: 2, index: 1, state: 'no_session' })
+const ON_ITS_WAY_THIEVUL = owedRow({ name: 'Thievul', sku: THIEVUL.sku, box: 2, index: 1, state: 'on_its_way' })
+const FAILED_THIEVUL = owedRow({ name: 'Thievul', sku: THIEVUL.sku, box: 2, index: 1, state: 'failed', failure: 'TCGplayer did not take it.' })
+const NOT_SIGNED_IN = { status: 409, body: { error: { code: 'take_off_no_session', message: 'TCGplayer is not signed in.' } } }
+const ALREADY_ON_ITS_WAY = { status: 409, body: { error: { code: 'take_off_outstanding', message: 'That take-off is already on its way.' } } }
+/* THE OWED READS SENT AFTER THE FIRST TAKE-OFF, in order: the press's own re-read, then each read after it. */
+const owedReadsSincePress = (sent: readonly Sent[]): number => readsAfterWrite(sent, 'POST', TAKE_OFF_PATH).filter((path) => path === '/pipeline/sends/owed').length
+
+test('reread follow-on control: a not-signed-in answer the press re-read still lists stays on the line', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const owedRead = gate()
+  const wire = await open(page, { takeOffsOwed: [THIEVUL], takeOffsOwedAfterPress: [NO_SESSION_THIEVUL], takeOff: () => NOT_SIGNED_IN, onOwedAfterPress: owedRead.open })
+  await holdHeaderBehind(page, wire, owedRead.wait)
+  const headerBefore = await page.getByText(AS_OF).textContent()
+  const sent = recordSent(page)
+  await page.locator('.send-owed').getByRole('button', { name: /take it off tcgplayer/i }).click()
+  await expect.poll(() => readAfterWrite(sent, 'POST', TAKE_OFF_PATH, '/pipeline/sends/owed'), {
+    message: 'a take-off the server refuses for no sign-in is followed by a read of the owed take-offs: no GET /pipeline/sends/owed reached the server after it',
+  }).toBe(true)
+  await expect(page.getByText(AS_OF), 'the header is read again once the owed list has been read').not.toHaveText(headerBefore ?? '')
+  await expect(page.locator(OWED_SHOWN), 'the press re-read still lists Thievul, so the sign-in answer stays on the line').toContainText(
+    'TCGplayer is not signed in, so Thievul stays listed.',
+  )
+})
+
+test('reread follow-on: a not-signed-in answer does not outlive a later owed read that draws the entry as offered', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const owedRead = gate()
+  const wire = await open(page, {
+    takeOffsOwed: [THIEVUL],
+    takeOffsOwedAfterPress: [NO_SESSION_THIEVUL],
+    takeOffsOwedLater: [THIEVUL],
+    takeOff: () => NOT_SIGNED_IN,
+    onOwedAfterPress: owedRead.open,
+  })
+  await holdHeaderBehind(page, wire, owedRead.wait)
+  const headerBefore = await page.getByText(AS_OF).textContent()
+  const sent = recordSent(page)
+  await page.locator('.send-owed').getByRole('button', { name: /take it off tcgplayer/i }).click()
+  await expect.poll(() => readAfterWrite(sent, 'POST', TAKE_OFF_PATH, '/pipeline/sends/owed'), {
+    message: 'a take-off the server refuses for no sign-in is followed by a read of the owed take-offs: no GET /pipeline/sends/owed reached the server after it',
+  }).toBe(true)
+  await expect(page.getByText(AS_OF), 'the header is read again once the owed list has been read').not.toHaveText(headerBefore ?? '')
+  await expect(page.locator(OWED_SHOWN), 'the press re-read still lists Thievul, so the sign-in answer stays on the line').toContainText(
+    'TCGplayer is not signed in, so Thievul stays listed.',
+  )
+  const before = owedReadsSincePress(sent)
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+  await expect.poll(() => owedReadsSincePress(sent), { message: 'a Refresh is followed by a read of the owed take-offs' }).toBeGreaterThan(before)
+  await expect(
+    page.locator(OWED_SHOWN),
+    'the Refresh read draws Thievul as offered, so the line draws that, not the sign-in answer the press left',
+  ).toContainText('TCGplayer still lists 2 copies of Thievul from your master set.')
+  await expect(page.locator('.send-owed').getByRole('button', { name: /take it off tcgplayer/i }), 'the store lists Thievul as offered, so its press is offered').toBeVisible()
+  await expect(page.locator(OWED_SHOWN), 'the sign-in answer must be gone once a later read lists Thievul as offered').not.toContainText('not signed in')
+})
+
+test('reread follow-on: an on-its-way answer does not outlive a later owed read that draws the entry as failed', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const owedRead = gate()
+  const wire = await open(page, {
+    takeOffsOwed: [THIEVUL],
+    takeOffsOwedAfterPress: [ON_ITS_WAY_THIEVUL],
+    takeOffsOwedLater: [FAILED_THIEVUL],
+    takeOff: () => ALREADY_ON_ITS_WAY,
+    onOwedAfterPress: owedRead.open,
+  })
+  await holdHeaderBehind(page, wire, owedRead.wait)
+  const headerBefore = await page.getByText(AS_OF).textContent()
+  const sent = recordSent(page)
+  await page.locator('.send-owed').getByRole('button', { name: /take it off tcgplayer/i }).click()
+  await expect.poll(() => readAfterWrite(sent, 'POST', TAKE_OFF_PATH, '/pipeline/sends/owed'), {
+    message: 'a take-off that is already on its way is followed by a read of the owed take-offs: no GET /pipeline/sends/owed reached the server after it',
+  }).toBe(true)
+  await expect(page.getByText(AS_OF), 'the header is read again once the owed list has been read').not.toHaveText(headerBefore ?? '')
+  await expect(page.locator(OWED_SHOWN), 'the press re-read still lists Thievul on its way, so the on-its-way answer stays on the line').toContainText(
+    'The take-off of Thievul is on its way.',
+  )
+  const before = owedReadsSincePress(sent)
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+  await expect.poll(() => owedReadsSincePress(sent), { message: 'a Refresh is followed by a read of the owed take-offs' }).toBeGreaterThan(before)
+  await expect(
+    page.locator(OWED_SHOWN),
+    'the Refresh read draws Thievul as failed, so the line says it did not go live, not that it is on its way',
+  ).toContainText('TCGplayer did not take Thievul off, so nothing went live.')
+  await expect(page.locator('.send-owed').getByRole('button', { name: 'Try again' }), 'the store lists Thievul as failed, so Try again must show').toBeVisible()
+  await expect(page.locator(OWED_SHOWN), 'the on-its-way answer must be gone once a later read lists Thievul as failed').not.toContainText('on its way')
 })
 
 /* THE SEND CARD'S OTHER WRITES, CONTROLS. Take back, dismiss, and the unreadable-claim release and restore each already read the
