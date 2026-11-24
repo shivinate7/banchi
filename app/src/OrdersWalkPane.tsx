@@ -26,7 +26,7 @@ import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
 import { isEditableTarget } from './keys'
 import { MarkSoldButton, UndoSaleButton, markFreshSale, clearFreshSale, noteUndoPressedBy } from './CardLocations'
-import { ALREADY_SOLD, COPY_ALREADY_PULLED, SALE_BUILT_ON, describeFailure, failureGotNoAnswer, failureTone, photoUrl, unconfirmedCopyWrite, walkPlan } from './server'
+import { ALREADY_SOLD, COPY_ALREADY_PULLED, SALE_BUILT_ON, describeFailure, failureGotNoAnswer, failureTone, photoUrl, unconfirmedSale, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
   InventoryCard,
@@ -525,11 +525,11 @@ async function runSell(job: Extract<Job, { kind: 'sell' }>): Promise<void> {
 }
 
 /** THE TOAST FOR A SALE THAT DID NOT COME BACK MARKED. A refusal is the server's "no" and keeps its sentence. A 5xx or a lost connection
- *  may have committed the sale, so "Not marked sold" would be false: it says the store did not confirm it (`unconfirmedCopyWrite`,
+ *  may have committed the sale, so "Not marked sold" would be false: it says the store did not confirm it (`unconfirmedSale`,
  *  the one sentence `Orders.tsx` also puts on its failure line). */
 function saleNotMarkedToast(name: string, failure: Failure) {
   const tone = failureTone(failure)
-  if (failureGotNoAnswer(failure)) return { kind: 'refusal' as const, tone, title: unconfirmedCopyWrite('sale', name, 'Mark Sold') }
+  if (failureGotNoAnswer(failure)) return { kind: 'refusal' as const, tone, title: unconfirmedSale(name) }
   return { kind: 'refusal' as const, tone, title: `Not marked sold: ${name}`, body: failure.message }
 }
 

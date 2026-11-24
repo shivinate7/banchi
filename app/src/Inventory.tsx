@@ -29,6 +29,7 @@ import {
   ALREADY_SOLD,
   gotNoAnswer,
   unconfirmedCopyWrite,
+  unconfirmedSale,
 } from './server'
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
@@ -287,15 +288,15 @@ function copyPlaceName(copy: SearchCopy): string {
   return sayPlace(copy.place.label ?? copy.key)
 }
 
-/* A WRITE THAT GOT NO ANSWER MAY HAVE COMMITTED, so it is said as `unconfirmedCopyWrite`. Any other failure is the server's
-   "no", and its own sentence stands. */
-function reportWrite(err: unknown, what: string, copy: SearchCopy, button: string): void {
+/* A WRITE THAT GOT NO ANSWER MAY HAVE COMMITTED, so `unconfirmed` says it (from `server.ts`, given the copy's place). Any other
+   failure is the server's "no", and its own sentence stands. */
+function reportWrite(err: unknown, copy: SearchCopy, unconfirmed: (place: string) => string): void {
   const failure = describeFailure(err)
   if (!gotNoAnswer(err)) {
     report(failure)
     return
   }
-  toast({ kind: 'refusal', tone: failureTone(failure), title: unconfirmedCopyWrite(what, copyPlaceName(copy), button) })
+  toast({ kind: 'refusal', tone: failureTone(failure), title: unconfirmed(copyPlaceName(copy)) })
 }
 
 /* ONE OWNER-SIDE VIEW OF STORED CARDS (D31), SEEN TWO WAYS: the walk, card by card, and the
@@ -530,7 +531,7 @@ function InventoryWalk({
           })
           return
         }
-        reportWrite(err, 'sale', copy, 'Mark Sold')
+        reportWrite(err, copy, unconfirmedSale)
       } finally {
         setBusyKey(null)
       }
@@ -586,7 +587,7 @@ function InventoryWalk({
           })
           return
         }
-        reportWrite(err, 'retirement', copy, 'Retire')
+        reportWrite(err, copy, (place) => unconfirmedCopyWrite('retirement', place, 'Retire'))
       } finally {
         setBusyKey(null)
       }
@@ -651,7 +652,7 @@ function InventoryWalk({
           setMoveTrouble(describeFailure(err))
           return
         }
-        reportWrite(err, 'move', copy, 'Move')
+        reportWrite(err, copy, (place) => unconfirmedCopyWrite('move', place, 'Move'))
       } finally {
         setBusyKey(null)
       }

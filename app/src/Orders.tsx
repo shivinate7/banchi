@@ -100,7 +100,10 @@ import {
   COPY_ALREADY_PULLED,
   SALE_BUILT_ON,
   gotNoAnswer,
-  unconfirmedCopyWrite,
+  unconfirmedSale,
+  unconfirmedSaleUndo,
+  listWriteFailure,
+  listWriteToast,
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
@@ -995,17 +998,27 @@ const PULL_NOT_RECORDED = 'pull_not_recorded'
 function pullFailure(err: unknown, place: string | null, name: string): Failure {
   const trouble = describeFailure(err)
   /* A 5xx or a lost connection may have committed the sale, so the server's "Try again" is not said; the walk's toast says the same sentence. */
-  if (gotNoAnswer(err)) return { ...trouble, message: unconfirmedCopyWrite('sale', name, 'Mark Sold') }
+  if (gotNoAnswer(err)) return { ...trouble, message: unconfirmedSale(name) }
   if (trouble.code !== ALREADY_SOLD && trouble.code !== COPY_ALREADY_PULLED) return trouble
   return { ...trouble, message: `${place === null ? 'That copy' : sayPlace(place)} was already sold.` }
 }
 
 /** The server's `sale_built_on` refusal of an undo says where to go on another screen ("This card is still here") and
  *  quotes the order's status. This screen has neither control, so it says only what holds. */
-function undoFailure(err: unknown, place: string): Failure {
+function undoFailure(err: unknown, place: string, name: string): Failure {
   const trouble = describeFailure(err)
+  /* A 5xx or a lost connection may have reversed the sale, so the server's "Try again" is not said. */
+  if (gotNoAnswer(err)) return { ...trouble, message: unconfirmedSaleUndo(name) }
   if (trouble.code !== SALE_BUILT_ON) return trouble
   return { ...trouble, message: `${sayPlace(place)} stays sold: its order has moved on.` }
+}
+
+/** The toast for an undo that failed. A refusal keeps its title; when no answer came back the sentence is the whole toast,
+ *  because "The card was not put back" is false of a reversal that may have gone through. */
+function undoFailureToast(err: unknown, trouble: Failure) {
+  const tone = failureTone(trouble)
+  if (gotNoAnswer(err)) return { kind: 'refusal' as const, tone, title: trouble.message }
+  return { kind: 'refusal' as const, tone, title: 'The card was not put back', body: trouble.message }
 }
 
 /** A pull is recorded: it becomes the newest standing pull, taking the rank from the one before it. */
@@ -1078,8 +1091,8 @@ async function undoPullNow(target: PullTarget, place: string, name: string): Pro
       toast({ kind: 'ok', icon: 'undo', title: 'Already undone', body: `${place} holds it, from somewhere else.` })
       forgetPull(target.capture_id)
     } else {
-      const trouble = undoFailure(err, place)
-      toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
+      const trouble = undoFailure(err, place, name)
+      toast(undoFailureToast(err, trouble))
       /* The server refused the undo: a second press gets the same answer, so `U` moves to the pull before it. */
       if (isFinalUndoRefusal(trouble)) forgetPull(target.capture_id)
     }
@@ -2001,8 +2014,8 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         /* THE LEDGER NO LONGER HELD THE PULL, so this undo moved nothing: the walk's figure stays what the store said. */
         return { ok: true, refreshed: [], moved: false }
       }
-      const trouble = undoFailure(err, place)
-      toast({ kind: 'refusal', tone: failureTone(trouble), title: 'The card was not put back', body: trouble.message })
+      const trouble = undoFailure(err, place, name)
+      toast(undoFailureToast(err, trouble))
       if (isFinalUndoRefusal(trouble)) forgetPull(target.capture_id)
       return { ok: false, failure: trouble }
     } finally {
@@ -2043,7 +2056,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                 try {
                   await afterWrite(() => undoFill(aim, done.moved))
                 } catch (err) {
-                  toast({ ...refusalToast(err), icon: 'alert' })
+                  toast({ ...listWriteToast(err, 'undo'), icon: 'alert' })
                 }
               })()
             },
@@ -2051,7 +2064,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(describeFailure(err))
+        setFailure(listWriteFailure(err, 'hand shipment'))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2076,7 +2089,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(describeFailure(err))
+        setFailure(listWriteFailure(err, 'sealed product'))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2118,7 +2131,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(describeFailure(err))
+        setFailure(listWriteFailure(err, 'stand-down'))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2170,7 +2183,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         }
       } catch (err) {
         if (!live.current) return
-        setFailure(describeFailure(err))
+        setFailure(listWriteFailure(err, 'stand-down'))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2213,7 +2226,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(describeFailure(err))
+        setFailure(listWriteFailure(err, 'backlog stand-down'))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2254,7 +2267,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(describeFailure(err))
+        setFailure(listWriteFailure(err, 'not-shipping close'))
       } finally {
         if (live.current) setBusy(null)
       }

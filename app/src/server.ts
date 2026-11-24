@@ -341,13 +341,46 @@ export function failureGotNoAnswer(failure: { readonly status?: number }): boole
 
 const isRefusalStatus = (status: number | undefined): boolean => status !== undefined && status >= 400 && status < 500
 
-/** THE SENTENCE A WRITE ON A COPY THAT GOT NO ANSWER OWES (`gotNoAnswer`): the server's own sentence ("Try again") would send the
- *  person to press a second time on a card that may already be gone. This one says the write is unconfirmed, names the copy
- *  (after a committed sale the selection has moved to the next copy, so "this copy" would point at the wrong card) and names the
- *  button to press again if it is still on that copy (a committed sale leaves the row but drops its button). `button` is the
- *  control's label exactly. The raw server text stays off the screen. */
+/** THE SENTENCE ANY WRITE THAT GOT NO ANSWER OWES (`gotNoAnswer`), IN ONE FORM: "The store did not confirm the <thing>." and then
+ *  what to do about it. The server's own sentence ("Try again") would send the person to press a second time on a write that may
+ *  already be done, and its raw text stays off the screen. Every sentence below is this one with a body. */
+export function unconfirmedWrite(thing: string, body: string): string {
+  return `The store did not confirm the ${thing}. ${body}`
+}
+
+/** THE SENTENCE A WRITE ON A COPY THAT GOT NO ANSWER OWES: it names the copy (after a committed sale the selection has moved to the
+ *  next copy, so "this copy" would point at the wrong card) and names the button to press again if it is still on that copy (a
+ *  committed sale leaves the row but drops its button). `button` is the control's label exactly. */
 export function unconfirmedCopyWrite(what: string, subject: string, button: string): string {
-  return `The store did not confirm the ${what} of ${subject}. If ${button} is still on that copy, press it again.`
+  return unconfirmedWrite(`${what} of ${subject}`, `If ${button} is still on that copy, press it again.`)
+}
+
+/** THE SALE OF A NAMED CARD: the one pair of words ("sale", "Mark Sold") that Orders, the walk's toast and Inventory all say. */
+export function unconfirmedSale(name: string): string {
+  return unconfirmedCopyWrite('sale', name, 'Mark Sold')
+}
+
+/** THE UNDO OF THE SALE OF A NAMED CARD. */
+export function unconfirmedSaleUndo(name: string): string {
+  return unconfirmedWrite(`undo for ${name}`, `If ${name} still shows sold, press Undo again.`)
+}
+
+/** THE SENTENCE A WRITE ON A LIST (an order, a line, a backlog) THAT GOT NO ANSWER OWES: the list is read again after every write
+ *  (`afterWrite`), so it is the place to look. */
+export function unconfirmedListWrite(thing: string): string {
+  return unconfirmedWrite(thing, 'The list shows what the store holds now.')
+}
+
+/** A failure a screen holds, with the no-answer sentence of a list write in place of the server's own when no answer came back. */
+export function listWriteFailure(err: unknown, thing: string): Failure {
+  const trouble = describeFailure(err)
+  return gotNoAnswer(err) ? { ...trouble, message: unconfirmedListWrite(thing) } : trouble
+}
+
+/** A toast for a list write that failed: the no-answer sentence when no answer came back, the server's own (`refusalToast`) otherwise. */
+export function listWriteToast(err: unknown, thing: string) {
+  if (!gotNoAnswer(err)) return refusalToast(err)
+  return { kind: 'refusal' as const, tone: failureTone(describeFailure(err)), title: unconfirmedListWrite(thing) }
 }
 
 /** A rate limit from Card Ladder is a "no" until tomorrow, even though it arrives as a 429, so no second press is offered. */

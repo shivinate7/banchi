@@ -31,6 +31,7 @@ import {
   getPricingCorpus,
   getPricingWorklist,
   gotNoAnswer,
+  unconfirmedWrite,
   keepTicks,
   restoreLastClear,
   restoreClear,
@@ -483,7 +484,10 @@ function usePhone(): boolean {
 const STALE_AFTER_S = 3600
 
 /** What an autosave that got no answer says (`gotNoAnswer`): it may have committed. True whether or not the file holds the typed price, because the field shows what was typed either way. */
-const UNCONFIRMED_PRICE_SAVE = 'The store did not confirm the price save. The price field shows what you typed. Change it to try the save again.'
+const UNCONFIRMED_PRICE_SAVE = unconfirmedWrite('price save', 'The price field shows what you typed. Change it to try the save again.')
+
+/** What a Clear's Undo, or a restore of the last clear, that got no answer says. The fields are not read back (only the clear lists are), so the page is the place to see what the file holds. */
+const unconfirmedRestore = (thing: 'undo' | 'restore') => unconfirmedWrite(thing, 'Reload the page to see the prices the store holds now.')
 
 /** The saved read is tried again this many times, this long after a failure, before it says so. */
 const SAVED_RETRIES = 1
@@ -2801,7 +2805,12 @@ export function Pricing() {
       })
     } catch (err) {
       const trouble = describeFailure(err)
-      toast({ kind: 'refusal', tone: failureTone(trouble), title: 'Not undone', body: trouble.message })
+      /* A 5xx or a lost connection may have put the answers back, so "Not undone" would be false. */
+      toast(
+        gotNoAnswer(err)
+          ? { kind: 'refusal', tone: failureTone(trouble), title: unconfirmedRestore('restore') }
+          : { kind: 'refusal', tone: failureTone(trouble), title: 'Not undone', body: trouble.message },
+      )
     }
   }, [takeRevision])
 
@@ -2861,7 +2870,8 @@ export function Pricing() {
                   body: restoreSkipBody(back.skipped),
                 })
               } catch (err) {
-                toast({ ...refusalToast(err) })
+                /* A 5xx or a lost connection may have put the answers back, so the server's "Try again" is not said. */
+                toast(gotNoAnswer(err) ? { kind: 'refusal', tone: failureTone(describeFailure(err)), title: unconfirmedRestore('undo') } : { ...refusalToast(err) })
               }
             })()
           },
