@@ -762,6 +762,14 @@ type OpenOptions = {
   otherRuns?: Readonly<Record<string, Priced>>
   /** Answers the box-claims write, `PUT /inventory/<box>`, with this instead of the landed answer (item 123's 5xx case). */
   boxClaims?: (box: number) => { status: number; body: unknown }
+  /** Answers `POST /inventory/<box>/<index>/move`, a copy's own Move when it is submitted (UX-244). */
+  move?: (box: number, index: number, body: unknown) => { status: number; body: unknown }
+  /** Answers `POST /inventory/<box>/<index>/correct`, the listing correction's own write (D252). */
+  correct?: (box: number, index: number, body: unknown) => { status: number; body: unknown }
+  /** Answers `POST /inventory/<box>/<index>/confirm`, the listing's own confirmation (identity-follows-sku §8.1). */
+  confirm?: (box: number, index: number, body: unknown) => { status: number; body: unknown }
+  /** Answers `GET /review/<box>/<index>/catalog`, the candidates the correction panel offers. */
+  catalog?: () => unknown
 }
 
 async function open(
@@ -829,6 +837,49 @@ async function open(
       const path = new URL(request.url()).pathname.split('/')
       const answer = await takeOff(Number(path[2]), Number(path[3]))
       await route.fulfill({ status: answer.status, contentType: 'application/json', body: JSON.stringify(answer.body) })
+    })
+  }
+
+  /* THE COPY'S OWN MOVE, AND THE TWO PRESSES ON A CARD'S LISTING (D252, identity-follows-sku §8.1). Registered only for a
+     case that answers them, so every other case still meets the seal for a write it did not ask for. Each one records the
+     write on the wire, so a case can count the store reads that follow it. */
+  if (options.move !== undefined) {
+    const move = options.move
+    await page.route(/\/inventory\/\d+\/\d+\/move$/, async (route) => {
+      const request = route.request()
+      const body = request.postDataJSON() as unknown
+      record(request.method(), request.url(), body)
+      const path = new URL(request.url()).pathname.split('/')
+      const answer = move(Number(path[2]), Number(path[3]), body)
+      await route.fulfill({ status: answer.status, contentType: 'application/json', body: JSON.stringify(answer.body) })
+    })
+  }
+  if (options.correct !== undefined) {
+    const correct = options.correct
+    await page.route(/\/inventory\/\d+\/\d+\/correct$/, async (route) => {
+      const request = route.request()
+      const body = request.postDataJSON() as unknown
+      record(request.method(), request.url(), body)
+      const path = new URL(request.url()).pathname.split('/')
+      const answer = correct(Number(path[2]), Number(path[3]), body)
+      await route.fulfill({ status: answer.status, contentType: 'application/json', body: JSON.stringify(answer.body) })
+    })
+  }
+  if (options.confirm !== undefined) {
+    const confirm = options.confirm
+    await page.route(/\/inventory\/\d+\/\d+\/confirm$/, async (route) => {
+      const request = route.request()
+      const body = request.postDataJSON() as unknown
+      record(request.method(), request.url(), body)
+      const path = new URL(request.url()).pathname.split('/')
+      const answer = confirm(Number(path[2]), Number(path[3]), body)
+      await route.fulfill({ status: answer.status, contentType: 'application/json', body: JSON.stringify(answer.body) })
+    })
+  }
+  if (options.catalog !== undefined) {
+    const catalog = options.catalog
+    await page.route(/\/review\/\d+\/\d+\/catalog\?/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(catalog()) })
     })
   }
 
@@ -1670,6 +1721,7 @@ function sellableStore(): {
   store: Store
   sell: (key: string) => void
   depart: (key: string) => void
+  retire: (key: string) => void
   unsell: (key: string) => void
 } {
   const cards: Cards = Object.fromEntries(
@@ -1712,6 +1764,13 @@ function sellableStore(): {
       }
       cards[key] = { ...held, label: gone.label, place: gone }
       delete (cards[key] as { card?: number }).card
+    },
+    /* AS `sell` DOES, THE STATE MOVES AND THE PLACE STAYS: the row keeps its address, so a case that presses on it can still
+       find it, and draws no Mark sold because a retired copy has none. A caller that wants the whole departure calls
+       `depart` as well. A refusal that retired the copy (`card_retired`) calls this. */
+    retire: (key) => {
+      const held = cards[key]
+      if (held !== undefined) held.state = 'retired'
     },
     unsell: (key) => {
       const held = cards[key]
@@ -8978,24 +9037,32 @@ const STACKED_BOXES = {
 /** The six-copy fixture, wired for a sale that really departs — `sell` alone moves `state` and
  *  the server also empties the place (D118's note on this fixture), and the ranking reads the
  *  place's section, so a half-move would be a store shape the server cannot produce. */
-function stackedStore(): { store: Store; depart: (key: string) => void } {
+function stackedStore(): {
+  store: Store
+  depart: (key: string) => void
+  retire: (key: string) => void
+  moveOut: (key: string) => void
+} {
   const cards = stackedThievul()
-  const inner = sellableStore()
+  /* ONE DEPARTURE, THREE WAYS OUT (D26, D83): a sale, a retirement and a move each empty the copy's slot and leave its
+     label behind, and each leaves its own state. The store moves when the write's POST arrives (`movesOnSale`). */
+  const leave = (key: string, state: string) => {
+    const held = cards[key]
+    if (held === undefined) return
+    const place = held.place
+    cards[key] = {
+      ...held,
+      state,
+      label: place.label,
+      place: { ...place, slot: null, card: null, fraction: null },
+    }
+    delete (cards[key] as { card?: number }).card
+  }
   return {
     store: { cards, search: (query) => searchAnswer(query, cards) },
-    depart: (key) => {
-      const held = cards[key]
-      if (held === undefined) return
-      const place = held.place
-      cards[key] = {
-        ...held,
-        state: 'sold',
-        label: place.label,
-        place: { ...place, slot: null, card: null, fraction: null },
-      }
-      delete (cards[key] as { card?: number }).card
-      void inner
-    },
+    depart: (key) => leave(key, 'sold'),
+    retire: (key) => leave(key, 'retired'),
+    moveOut: (key) => leave(key, 'identified'),
   }
 }
 
@@ -9137,6 +9204,34 @@ const didNotAnswer = () => ({
   body: { error: { code: 'store_unavailable', message: 'The store did not answer. Try again.' } },
 })
 
+/** A refusal that leaves the copy as it was: the store is busy with another write, so nothing on the row has changed. */
+const busyRefusal = () => ({
+  status: 423,
+  body: { error: { code: 'store_busy', message: 'The store was busy with another write. Nothing was sold.' } },
+})
+
+/** THE STORE WHERE CARD 2/1 IS HELD: its drawn name is the camera's, not the listing's (`identity_source: 'read'`). That is
+ *  the one state the listing's own confirm press is offered for (identity-follows-sku §8.1), so only a case that presses it
+ *  needs this store. */
+function heldStore(): Store {
+  const cards: Cards = {
+    ...CARDS,
+    '2/1': { ...CARDS['2/1'], identity_source: 'read' } as Cards[string],
+  }
+  return { cards, search: (query) => searchAnswer(query, cards) }
+}
+
+/** The candidates `GET /review/2/1/catalog` answers with: one row, the listing the correction below chooses. */
+const ADAPTATRON_LOOKUP = () => ({
+  box: 2,
+  index: 1,
+  game: 'riftbound',
+  query: '',
+  rows: [{ sku: '8925897', name: 'Adaptatron', set: 'Origins', number: '056/298', condition: 'Near Mint', market: '0.12' }],
+  found: 1,
+  truncated: false,
+})
+
 /** THE SHARED STEP. The write reaches the server first, then a store read is sent after it. Two polls, so a red names which
  *  half did not happen: a write that never arrived is not the same failure as a write with no re-read after it. */
 async function expectReadAfter(wire: Wire[], isWrite: (entry: Wire) => boolean, what: string): Promise<void> {
@@ -9169,6 +9264,33 @@ test('a Mark sold the server fails with a 5xx is followed by a store re-read', a
 
   await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
   await expectReadAfter(wire, (entry) => entry.path.endsWith('/sold'), 'the 5xx sale')
+})
+
+test('a Mark sold the server fails with a 5xx says the sale is unconfirmed, with no Try again and no raw server text', async ({ page }) => {
+  /* THE WORDS AFTER A SALE THAT MAY HAVE COMMITTED. `Inventory.tsx`'s `report` shows the server's own sentence, and that
+     sentence is the store's ("Try again"), not the one this screen owes the person (D196). The screen says the sale is not
+     confirmed and tells the person what to press next. */
+  const { store, sell } = sellableStore()
+  await open(
+    page,
+    BOXES,
+    store,
+    () => PRICING,
+    movesOnSale(
+      (undo, key) => {
+        if (!undo) sell(key)
+      },
+      () => didNotAnswer(),
+    ),
+  )
+
+  await copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ }).click()
+  const toast = page.locator('.bn-toast-refusal')
+  await expect(toast.locator('.bn-toast-title'), 'the toast reads the unconfirmed-sale sentence, exactly').toHaveText(
+    'The store did not confirm the sale. If the card is still here, press Mark sold again.',
+  )
+  await expect(toast, 'the toast carries no raw server text').not.toContainText('The store did not answer')
+  await expect(toast, 'the toast does not say Try again').not.toContainText('Try again')
 })
 
 test('a 5xx sale that committed keeps its row in place under a search', async ({ page }) => {
@@ -9220,15 +9342,32 @@ test('a refused Mark sold is followed by a store re-read', async ({ page }) => {
   await expectReadAfter(wire, (entry) => entry.path.endsWith('/sold'), 'the refused sale')
 })
 
-test('a refused Mark sold keeps focus on its own button, never on the body', async ({ page }) => {
-  /* THE PR 1127 FOCUS RULE, for a refusal that is not `already_sold` (the existing focus case for that one stays as it is).
-     Focus stays on the pressed control while it still exists. The row takes focus (PR 1132, `landStrandedFocus`) only when
-     the button is gone. This fixture's store still draws the copy unsold after the refusal, so the button stands. */
-  await open(page, BOXES, STORE, () => PRICING, () => retiredRefusal())
+test('a refused Mark sold that retires the copy leaves focus on its row, never on the body', async ({ page }) => {
+  /* THE PR 1132 FOCUS RULE. A real `card_retired` leaves the copy retired, which draws no Mark sold, so the press that held
+     focus is gone and nothing on the row takes it back. The row takes focus (`landStrandedFocus`), never the body. The store
+     answers the re-read as the server would: the copy is retired in it, not still on sale. */
+  const { store, retire } = sellableStore()
+  await open(page, BOXES, store, () => PRICING, () => {
+    retire('2/1')
+    return retiredRefusal()
+  })
+  const row = copyRow(page, CARD_1)
+
+  await row.getByRole('button', { name: /^Mark Sold/ }).click()
+  await expect(page.locator('.bn-toast', { hasText: 'retired' }), 'the refusal reaches the person').toBeVisible()
+  await expect(row.getByRole('button', { name: /^(Mark Sold|Undo)/ }), 'no Mark sold or Undo returns to the row').toHaveCount(0)
+  await expect(row, 'focus lands on the row itself after the refused retirement').toBeFocused()
+  await expect(page.locator('body'), 'focus is not left on the page body').not.toBeFocused()
+})
+
+test('a refused Mark sold that leaves the copy unsold keeps focus on its own button, never on the body', async ({ page }) => {
+  /* THE PR 1127 FOCUS RULE, for a refusal that leaves the copy for sale. The store still draws the copy unsold, so the pressed
+     button stands and keeps focus. The row takes focus only once the button is gone (PR 1132), so this case holds that line. */
+  await open(page, BOXES, STORE, () => PRICING, () => busyRefusal())
   const markSold = copyRow(page, CARD_1).getByRole('button', { name: /^Mark Sold/ })
 
   await markSold.click()
-  await expect(page.locator('.bn-toast', { hasText: 'retired' }), 'the refusal reaches the person').toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: 'busy' }), 'the refusal reaches the person').toBeVisible()
   await expect(markSold, 'focus stays on the pressed Mark sold while it stands').toBeFocused()
   await expect(page.locator('body'), 'focus is not left on the page body').not.toBeFocused()
 })
@@ -9258,6 +9397,129 @@ test('an undo the server fails with a 5xx from the card\'s own menu is followed 
   await page.getByRole('menuitem', { name: 'Bring this card back' }).click()
 
   await expectReadAfter(wire, (entry) => entry.path === '/inventory/2/4/sold', 'the 5xx undo')
+})
+
+test('a listing correction the server fails with a 5xx is followed by a box re-read', async ({ page }) => {
+  /* THE CORRECTION, the card's own press with the most behind it (D252). `CardHero.tsx`'s `choose` answers a 5xx with a
+     refusal toast and never reads the box again, so a correction that committed stays off the walk until the next visit. */
+  const wire = await open(page, BOXES, STORE, () => PRICING, SALE, {
+    correct: () => didNotAnswer(),
+    catalog: ADAPTATRON_LOOKUP,
+  })
+  await page.getByRole('button', { name: 'Correct' }).click()
+  await page.getByRole('button', { name: /Adaptatron/ }).click()
+
+  await expectReadAfter(wire, (entry) => entry.path === '/inventory/2/1/correct', 'the 5xx correction')
+})
+
+test('a listing confirmation the server fails with a 5xx is followed by a box re-read', async ({ page }) => {
+  /* THE LISTING'S OWN CONFIRMATION, the press a held card offers (identity-follows-sku §8.1). `CardHero.tsx`'s `runConfirm`
+     answers a 5xx with a refusal toast and never reads the box again. */
+  const wire = await open(page, BOXES, heldStore(), () => PRICING, SALE, { confirm: () => didNotAnswer() })
+  await page.getByRole('button', { name: 'The listing is right' }).click()
+
+  await expectReadAfter(wire, (entry) => entry.path === '/inventory/2/1/confirm', 'the 5xx confirmation')
+})
+
+test('a listing confirmation the server refuses as already confirmed is followed by a box re-read', async ({ page }) => {
+  /* A REFUSAL SAYS THE SCREEN WAS BEHIND (D73), as a 5xx does: another device confirmed first, and this screen still draws
+     the held name. The refusal wrote nothing, but the read still runs. */
+  const wire = await open(page, BOXES, heldStore(), () => PRICING, SALE, {
+    confirm: () => ({
+      status: 409,
+      body: { error: { code: 'already_confirmed', message: 'Box 2, card 1 is already confirmed.' } },
+    }),
+  })
+  await page.getByRole('button', { name: 'The listing is right' }).click()
+  await expect(page.locator('.bn-toast-refusal', { hasText: 'The listing was not confirmed' }), 'the refusal reaches the person').toBeVisible()
+
+  await expectReadAfter(wire, (entry) => entry.path === '/inventory/2/1/confirm', 'the refused confirmation')
+})
+
+/** THE STACKED SEARCH the two 5xx writes below start from: box 2 under `Thievul`, six copies, in the order D181 takes once.
+ *  Returns that order, so a case can hold the rest of it to what it was. */
+async function searchStacked(page: Page): Promise<string[]> {
+  await expandAll(page)
+  await page.getByRole('searchbox').fill('Thievul')
+  await expect(page.locator('.card-locations-row .card-locations-identity')).toHaveCount(6)
+  return copyOrder(page)
+}
+
+/** A copy that left under a search, after a write whose answer was lost: its row is drawn once the read lands, held in place,
+ *  and every other row keeps the place it had (D313, D181). `before` is the order taken before the write. `arrived` names
+ *  the copy a committed move added at its new place, which is not one of the rows `before` holds. */
+async function expectHeldUnderSearch(page: Page, before: string[], place: string, arrived?: string): Promise<void> {
+  const left = `Was at ${place}`
+  await expect(
+    page.locator(`.card-locations-row .card-locations-identity[aria-label="${left}"]`),
+    'the committed write is drawn once the read lands',
+  ).toHaveCount(1)
+  await expect(page.locator('.card-locations-row.is-gone'), 'the departed row is still drawn, held in place').toHaveCount(1)
+  const held = (await copyOrder(page)).filter((label) => label !== arrived)
+  expect(held, 'every copy keeps its place under the search').toEqual([before[0], left, ...before.slice(2)])
+}
+
+test('a retire the server fails with a 5xx after it committed keeps its row in place under a search', async ({ page }) => {
+  /* D313 AND D181, as the sale case above: `doRetire` reports a 5xx through `afterWrite` and holds nothing, so the read that
+     follows folds the retired copy out of the list and re-ranks every row under it. */
+  const { store, retire } = stackedStore()
+  const wire = await open(page, STACKED_BOXES, store, () => PRICING, SALE, {
+    route: '/#/inventory?box=2',
+    hideSold: true,
+    retire: (box, index) => {
+      retire(`${box}/${index}`)
+      return didNotAnswer()
+    },
+  })
+  const before = await searchStacked(page)
+
+  await copyRow(page, 'Box 7, Section 1, Card 39').getByRole('button', { name: 'Retire' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Damaged' }).click()
+
+  await expectReadAfter(wire, (entry) => entry.path.endsWith('/retire'), 'the 5xx retire under a search')
+  await expectHeldUnderSearch(page, before, 'Box 7, Section 1, Card 39')
+})
+
+test('a move the server fails with a 5xx after it committed keeps its row in place under a search', async ({ page }) => {
+  /* THE THIRD WAY A COPY LEAVES (D83), under the same rule. `doMove` reports a 5xx through `afterWrite` and holds nothing, so
+     the read that follows re-ranks the moved copy out of its place. */
+  const { store, moveOut } = stackedStore()
+  /* A COMMITTED MOVE LEAVES A TOMBSTONE AT ITS SOURCE (`moveCard`'s own doc: `undoMove` is aimed at it) AND THE COPY AT ITS
+     NEW PLACE. The copy's new place is what re-ranks the search, so a case that did not add it could not go red. */
+  const arrived = 'Box 2, Section 1, Card 41'
+  /* THE TARGET BOX NAMES A SECTION AND A LAYOUT TOKEN, or its Move never enables (D300, `Inventory.tsx`'s target sections
+     read `div` and the box's `layout_token`). Box 2 gets both here and nowhere else, so the stacked boxes stay as the other
+     cases read them. */
+  const boxes = {
+    boxes: STACKED_BOXES.boxes.map((box) =>
+      box.box === 2
+        ? { ...box, layout_token: 'tok-2-a', sections_detail: [{ section: 1, start: 1, end: 3, count: 3, div: '1', name: null }] }
+        : box,
+    ),
+  }
+  const wire = await open(page, boxes, store, () => PRICING, SALE, {
+    route: '/#/inventory?box=2',
+    hideSold: true,
+    move: (box, index) => {
+      moveOut(`${box}/${index}`)
+      store.cards['2/41'] = card({
+        index: 41, at: 41, state: 'identified', name: 'Thievul', sku: '8937370',
+        section: 1, sectionStart: 1, sectionEnd: 60, box: 2, boxName: 'ME01 commons', boxTotal: 60,
+      })
+      return didNotAnswer()
+    },
+  })
+  const before = await searchStacked(page)
+
+  await copyRow(page, 'Box 7, Section 1, Card 39').getByRole('button', { name: 'Move', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: /^Move/ })
+  await dialog.locator('.bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'ME01 commons' }).click()
+  await dialog.locator('.bn-section-pick-item').click()
+  await dialog.getByRole('button', { name: 'Move', exact: true }).click()
+
+  await expectReadAfter(wire, (entry) => entry.path.endsWith('/move'), 'the 5xx move under a search')
+  await expectHeldUnderSearch(page, before, 'Box 7, Section 1, Card 39', arrived)
 })
 
 
