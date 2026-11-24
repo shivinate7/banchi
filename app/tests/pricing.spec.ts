@@ -9335,8 +9335,12 @@ test('reread follow-on: one of two 5xx take-offs the owed read drops is not coun
     message: 'a take-off that fails with a 5xx is followed by a read of the owed take-offs: no GET /pipeline/sends/owed reached the server after it',
   }).toBe(true)
   await expect(page.getByText(AS_OF), 'the header is read again once the owed list has been read').not.toHaveText(headerBefore ?? '')
+  /* THE HEAD IS THE ONE SENTENCE THAT SAYS WHAT TCGPLAYER STILL LISTS. The single-entry form names its card, so the press beside it matches OWED_SHOWN
+     too: the locator is narrowed to the sentence, and the count it states is what is asserted. */
+  const head = page.locator(OWED_SHOWN).filter({ hasText: 'TCGplayer still lists' })
+  await expect(head, 'the head is one sentence that says what TCGplayer still lists').toHaveCount(1)
   await expect(
-    page.locator(OWED_SHOWN),
+    head,
     'the owed read dropped Thievul, so the head counts only Pikachu\'s one copy, never Thievul\'s two',
   ).toContainText('TCGplayer still lists 1 copy')
 })
