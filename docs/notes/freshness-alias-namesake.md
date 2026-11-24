@@ -1,0 +1,1 @@
+- freshness-alias-namesake: `seesComponent` in `scripts/screen-freshness.mjs` matches a named import by its imported name, and `ancestorRegisters` matches the JSX tag by its text. A parent that imports `Child as Other` and also declares a local `Child` can lend its re-read to a writer it never renders. No self-test case uses an aliased import.

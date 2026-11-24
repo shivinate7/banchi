@@ -1,0 +1,1 @@
+- freshness-default-import: `seesComponent` in `scripts/screen-freshness.mjs` matches a default import by its local name only. It never checks which component is the module's default export. Self-test case 14y (a default export whose name matches) does not test a mismatch.

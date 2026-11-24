@@ -1,0 +1,1 @@
+- map-afterwrite-unbacked: The merge tool's prose judge marks the `afterWrite.ts` line in `docs/map/app-src.md` unbacked. It states the re-read rules with no decision cite. The helper's header cites D73 (re-read after every write), so the map line can cite it.
