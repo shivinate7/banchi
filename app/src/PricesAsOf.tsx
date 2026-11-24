@@ -45,15 +45,11 @@ export function usePricesRefresh(onEnded: () => void, enabled: boolean) {
   const ended = useRef(onEnded)
   ended.current = onEnded
 
-  /* THE REFRESH WAS PRESSED HERE AND THE STATE SHOWN IS OURS, not the server's: a read that finds it already over is not a run's end. */
-  const ours = useRef(false)
   const read = useCallback(async () => {
     try {
       const next = await getPricesRefresh()
-      if (next.state === 'running') {
-        ours.current = false
-        setRefused(null)
-      }
+      /* A REFUSAL BECAUSE A REFRESH ALREADY RUNS IS MOOT ONCE THE READ SHOWS IT RUNNING. */
+      if (next.state === 'running') setRefused(null)
       setState(next)
     } catch {
       /* No state is not a failure of this screen: the line says nothing. */
@@ -75,20 +71,14 @@ export function usePricesRefresh(onEnded: () => void, enabled: boolean) {
   }, [running, read])
 
   useEffect(() => {
-    if (last.current === 'running' && state !== null && state.state !== 'running') {
-      if (ours.current) ours.current = false
-      else ended.current()
-    }
+    if (last.current === 'running' && state !== null && state.state !== 'running') ended.current()
     last.current = state?.state ?? null
   }, [state])
 
   const press = useCallback((force: boolean) => {
     setRefused(null)
     afterWrite(() => startPricesRefresh(force))
-      .then(() => {
-        ours.current = true
-        setState((now) => ({ note: null, done: 0, total: 0, ...now, state: 'running', step: 'listings' }))
-      })
+      .then(() => setState((now) => ({ note: null, done: 0, total: 0, ...now, state: 'running', step: 'listings' })))
       .catch((error) => {
         /* A 5xx may still have started the refresh: the line does not say it did not. */
         setRefused(

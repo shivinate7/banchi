@@ -1121,8 +1121,9 @@ export function Pricing() {
     if (readView) return
     const fresh = await getPricingWorklist([...picked].sort())
     const ticked = new Map((fresh.live ?? []).map((one) => [one.sku, one.ticked]))
+    /* THE HELD WORKLIST STANDS WHEN NO TICK DIFFERS: a new object would re-run what is read once per load (the stored holds, D313). */
     setWork((held) =>
-      held === null || held.live === undefined
+      held === null || held.live === undefined || !held.live.some((one) => ticked.has(one.sku) && ticked.get(one.sku) !== one.ticked)
         ? held
         : { ...held, live: held.live.map((one) => (ticked.has(one.sku) ? { ...one, ticked: ticked.get(one.sku) } : one)) },
     )
@@ -2682,15 +2683,16 @@ export function Pricing() {
   const worklistName =
     scopeName ?? 'the cards on this screen'
 
-  /** Re-read what may still be cleared and the clears the server still remembers — NOT the answers (StrictMode runs an
-   *  updater twice, and adopting them there re-dirtied the screen; see D168's receipt case), and NOT the revision: this
-   *  read runs after every write, a refused save included, and a revision taken from a file that moved under a book this
-   *  screen still holds would let the next wholesale save overwrite the other writer. Each write that moves the file sets
-   *  its own revision from its own answer. */
+  /** Re-read what may still be cleared, the clears the server still remembers, and the digest — NOT the answers (StrictMode
+   *  runs an updater twice, and adopting them there re-dirtied the screen; see D168's receipt case). The digest is NOT taken
+   *  while a save has failed or been refused: this read runs after every write, and a revision taken from a file that moved
+   *  under a book this screen still holds would let the next wholesale save overwrite the other writer. The stale revision
+   *  keeps that save refused (`corpus_moved`) until the person reads the file again. */
   const refreshCorpus = useCallback(async () => {
     const answer = await getPricingCorpus()
     setClearable(answer.clearable ?? null)
     setKept(keptOf(answer))
+    if (failedBook.current === null) revision.current = answer.revision
   }, [])
   /* A WRITE'S RE-READ (`afterWrite`, D73): a clear, an Undo or a save, whatever it came to, reads the clearable list and the kept clears again. */
   useRereadOnWrite(refreshCorpus)
