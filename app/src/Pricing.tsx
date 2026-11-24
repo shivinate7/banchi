@@ -1121,19 +1121,31 @@ export function Pricing() {
   const reload = useCallback(() => void load(picked, hashStamp), [load, picked, hashStamp])
 
   /** A WRITE'S RE-READ OF THE WORKLIST (`afterWrite`, D73): only what a write can have moved under the rows, each live listing's kept
-   *  tick, laid on the rows held. It adds, drops and reorders nothing (D313), and it leaves the answers, the undo stack and a failed
-   *  save to `load`, which a Reload or a send runs whole. */
+   *  tick and each row's held copies (an Unhold or its Undo that failed may still have committed), laid on the rows held. It adds,
+   *  drops and reorders nothing (D313), and it leaves the answers, the undo stack and a failed save to `load`, which a Reload or a
+   *  send runs whole. */
   const rereadTicks = useCallback(async (kind: WriteKind) => {
     /* A READ OPENED BY ITS STAMP HAS NO TICKS TO LAY, but a write that may have gone live still reads the worklist (`other`). */
     if ((readView && kind !== 'other') || (kind !== 'tick' && kind !== 'other')) return
     const fresh = await getPricingWorklist([...picked].sort())
     const ticked = new Map((fresh.live ?? []).map((one) => [one.sku, one.ticked]))
-    /* THE HELD WORKLIST STANDS WHEN NO TICK DIFFERS: a new object would re-run what is read once per load (the stored holds, D313). */
-    setWork((held) =>
-      held === null || held.live === undefined || !held.live.some((one) => ticked.has(one.sku) && ticked.get(one.sku) !== one.ticked)
-        ? held
-        : { ...held, live: held.live.map((one) => (ticked.has(one.sku) ? { ...one, ticked: ticked.get(one.sku) } : one)) },
-    )
+    const heldNow = new Map(fresh.skus.map((one) => [one.sku, one.listing?.held_copies]))
+    const tickMoved = (one: LiveListing) => ticked.has(one.sku) && ticked.get(one.sku) !== one.ticked
+    const heldMoved = (one: MergedSku) => one.listing !== null && heldNow.has(one.sku) && heldNow.get(one.sku) !== one.listing.held_copies
+    /* THE HELD WORKLIST STANDS WHEN NOTHING DIFFERS: a new object would re-run what is read once per load (the stored holds, D313). */
+    setWork((held) => {
+      if (held === null) return held
+      const ticks = held.live !== undefined && held.live.some(tickMoved)
+      const copies = held.skus.some(heldMoved)
+      if (!ticks && !copies) return held
+      return {
+        ...held,
+        ...(ticks ? { live: held.live?.map((one) => (tickMoved(one) ? { ...one, ticked: ticked.get(one.sku) } : one)) } : {}),
+        ...(copies
+          ? { skus: held.skus.map((one) => (heldMoved(one) && one.listing !== null ? { ...one, listing: { ...one.listing, held_copies: heldNow.get(one.sku) } } : one)) }
+          : {}),
+      }
+    })
   }, [readView, picked])
   useRereadOnWrite(rereadTicks)
 
@@ -1642,6 +1654,7 @@ export function Pricing() {
     void (async () => {
       try {
         /* THE SAVED PRICES ARE READ AGAIN WHATEVER THE WRITE CAME TO (`afterWrite`, D73): the file's write is a corpus write. THE RECEIPT IS TAKEN INSIDE IT, so the re-read follows the receipt (`refreshCorpus`). */
+        let filed = false
         const result = await afterWrite(async () => {
           const wrote = await applyMarkdown(stamp, {
             edits: pushable,
@@ -1652,9 +1665,11 @@ export function Pricing() {
                timestamp `stamp_answers` left in the past for an unchanged value. */
             typed: pushable.map((edit) => edit.sku).filter((sku) => typedHere.has(sku)),
           })
-          if (wrote.revision) takeRevision(wrote.revision)
+          /* THE DIGEST AN APPLY ANSWERS IS ONE THIS SCREEN WROTE ONLY WHEN IT WROTE (D86): `wrote: false` wrote no file, so neither the receipt nor the re-read after it takes one. */
+          filed = wrote.wrote
+          if (filed && wrote.revision) takeRevision(wrote.revision)
           return wrote
-        }, corpusKind)
+        }, (failed) => corpusKind(failed || !filed))
         setApplied(result)
         setWroteUpload(result.wrote)
         setShipTrouble(null)
