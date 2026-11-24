@@ -2,7 +2,7 @@
 // Governs: D-press-queued-state (a taken press answers at once); docs/specs/undo.md section 10
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
-import { createElement, type ReactElement } from 'react'
+import { createElement, Fragment, type ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import { expect, test } from './unit'
@@ -24,6 +24,26 @@ const Button = runInNewContext(`${lifted(KIT, 'Button', 'function')}\nButton`, {
 
 const markup = (props: Props): string => renderToStaticMarkup(createElement(Button, props))
 const rendered = (props: Props): Rendered => Button(props)
+
+/* THE KIT'S OWN `IconButton`, LIFTED THE SAME WAY, WITH ITS HOOKS STUBBED. `IconButton` keeps `useState`, `useRef` and
+ * `useId`, and portals its tip: only a DOM render supports those. The case calls it once, outside a render, so each hook
+ * is a plain stub that returns its first value, and `createPortal` returns its node. The element it returns is the
+ * `<button>` a DOM would receive, and its `onClick` is the handler a press calls. `import.meta.env.DEV` reads as `false`,
+ * since a vm script cannot parse `import.meta`. Its text is read here, never copied. */
+const KIT_FOR_VM = KIT.replaceAll('import.meta.env.DEV', 'false')
+const IconButton = runInNewContext(
+  `${lifted(KIT_FOR_VM, 'FACE_PX', 'const')}\n${lifted(KIT_FOR_VM, 'GLYPH_PX', 'const')}\n${lifted(KIT_FOR_VM, 'IconButton', 'function')}\nIconButton`,
+  {
+    React: { createElement, Fragment },
+    Icon: () => null,
+    Kbd: () => null,
+    createPortal: (node: unknown) => node,
+    document: { body: null },
+    useId: () => ':t:',
+    useRef: (initial: unknown) => ({ current: initial }),
+    useState: (initial: unknown) => [initial, () => undefined],
+  },
+) as (props: Props) => Rendered
 
 const QUEUED = 'queued'
 
@@ -56,4 +76,20 @@ test('control: busy true still draws the busy ring, not the queued mark', () => 
 
 test('control: a button with no busy prop draws no busy mark', () => {
   expect(markup({ children: 'Send' })).not.toContain('data-busy')
+})
+
+test('a queued IconButton ignores a click: the caller onClick is not called', () => {
+  let clicks = 0
+  const element = IconButton({ icon: 'undo', label: 'Undo sale', busy: QUEUED, onClick: () => { clicks += 1 } })
+  const onClick = element.props.onClick as ((event: { preventDefault: () => void }) => void) | undefined
+  onClick?.({ preventDefault: () => undefined })
+  expect(clicks, 'a second press while queued must not reach the caller, so it queues nothing').toBe(0)
+})
+
+test('control: an IconButton with no busy prop passes its click to the caller', () => {
+  let clicks = 0
+  const element = IconButton({ icon: 'undo', label: 'Undo sale', onClick: () => { clicks += 1 } })
+  const onClick = element.props.onClick as ((event: { preventDefault: () => void }) => void) | undefined
+  onClick?.({ preventDefault: () => undefined })
+  expect(clicks, 'a press that is not queued reaches the caller').toBe(1)
 })

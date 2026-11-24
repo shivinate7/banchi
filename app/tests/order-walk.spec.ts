@@ -1717,6 +1717,9 @@ test('the words Waits for the sale to save show beside the row while U waits', a
     await page.getByRole('heading', { name: 'Orders' }).click()
     await page.keyboard.press('u')
     await expect(rows.nth(0).getByRole('status'), 'the words sit in the row, beside the press').toHaveText('Waits for the sale to save.')
+    const described = await rows.nth(0).getByRole('button', { name: /^Undo sale/ }).getAttribute('aria-describedby')
+    expect(described, 'the queued Undo names the words that say what it waits for').not.toBeNull()
+    await expect(page.locator(`[id="${described}"]`), 'aria-describedby resolves to the words beside the queued Undo').toHaveText('Waits for the sale to save.')
   } finally {
     sale.release()
   }
@@ -1742,6 +1745,32 @@ test('once the sale lands the queued Undo runs, the words go, and Pull undone sh
     await expect(page.locator('.bn-toast', { hasText: 'Pull undone' })).toBeVisible()
     await expect(page.locator('[data-busy="queued"]'), 'the queued state is gone once the undo has run').toHaveCount(0)
     await expect(rows.nth(0).getByRole('status'), 'the words go with the queued state').toHaveCount(0)
+  } finally {
+    sale.release()
+  }
+})
+
+test('U after the walk steps off the sale’s row says so in a toast, and the undo runs once the sale lands', async ({ page }) => {
+  /* With no row for the sale, nothing is there to carry the words, so `undoWalkSale` answers with a toast
+     (OrdersWalkPane.tsx). The queued undo still runs once the sale lands, and its own receipt shows. */
+  const sale = gate()
+  const wire = await open(page, {
+    plan: twoStopTwoSkuPlan(),
+    orders: twoSkuOrders(),
+    holdPull: (body) => (body.undo !== true ? sale.promise : null),
+  })
+  const rows = page.locator(`${CURRENT_PICK} .card-locations-row`)
+  try {
+    await rows.nth(0).getByRole('button', { name: /^Mark Sold/ }).click()
+    await expect.poll(() => pullsOf(wire).length).toBe(1)
+    await page.locator('.orders-walk-press', { hasText: 'Tricksy Tentacles' }).click()
+    await expect(rows.first(), 'the walk stands on the other card, so the sale’s own row is gone').toContainText('WB1 R2')
+    await page.getByRole('heading', { name: 'Orders' }).click()
+    await page.keyboard.press('u')
+    await expect(page.locator('.bn-toast', { hasText: 'Undo waits for the sale to save' }), 'with no row to carry the words, U says so in a toast').toBeVisible()
+    sale.release()
+    await expect.poll(() => undosOf(wire).length, 'the queued U runs once the sale lands').toBe(1)
+    await expect(page.locator('.bn-toast', { hasText: 'Pull undone' }), 'the undo that ran shows its own receipt').toBeVisible()
   } finally {
     sale.release()
   }
