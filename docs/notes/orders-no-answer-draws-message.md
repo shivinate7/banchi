@@ -1,0 +1,1 @@
+- orders-no-answer-draws-message: `PullStage` in `app/src/Orders.tsx` draws the empty state titled "Orders did not answer" with `body={failure.message}`, the server's sentence alone, when the ledger has no payload. That branch does not use the title and body pair from `noAnswerFailure` in `app/src/server.ts`. The title string is on main as written.

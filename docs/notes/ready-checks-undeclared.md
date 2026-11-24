@@ -1,0 +1,1 @@
+- ready-checks-undeclared: Banchi declares no `merge.readyChecks` in `.github/stamp.json`, so the ready pass ran no local checks before the Orders 5xx copy change (PR 1147) merged. Two CI reds from that change reached CI: the screen-freshness self-test and `make unit`.

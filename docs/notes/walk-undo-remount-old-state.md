@@ -1,0 +1,1 @@
+- walk-undo-remount-old-state: The review found that a walk undo after a remount reads the old walk's state. The place to look is module-level line state such as `lineSales` in `app/src/OrdersWalkPane.tsx`, which outlives the walk that wrote it. No case pins this.

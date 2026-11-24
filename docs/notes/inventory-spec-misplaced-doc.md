@@ -1,0 +1,1 @@
+- inventory-spec-misplaced-doc: In `app/tests/inventory.spec.ts`, the doc comment of the six-copy fixture sits directly above the doc comment of `withCaptureIds`. So `withCaptureIds` carries two doc blocks, and the first describes a fixture, not the function.

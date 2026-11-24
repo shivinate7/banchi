@@ -1,0 +1,1 @@
+- price-reload-leaves-fields: The review found that the toolbar Reload (`ReloadButton` in `app/src/Pricing.tsx`, through `reload`) does not rewrite the price fields. `RELOAD_FOR_PRICES` in `app/src/server.ts` tells the reader that a reload shows the prices the store holds, so the copy promises what the Reload does not do. Not re-measured in a browser here.
