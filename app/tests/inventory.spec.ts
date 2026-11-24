@@ -9446,17 +9446,19 @@ async function searchStacked(page: Page): Promise<string[]> {
 }
 
 /** A copy that left under a search, after a write whose answer was lost: its row is drawn once the read lands, held in place,
- *  and every other row keeps the place it had (D313, D181). `before` is the order taken before the write. `arrived` names
- *  the copy a committed move added at its new place, which is not one of the rows `before` holds. */
-async function expectHeldUnderSearch(page: Page, before: string[], place: string, arrived?: string): Promise<void> {
+ *  and every other row keeps the place it had (D313, D181). `before` is the order taken before the write. `order` is the full
+ *  order a write gives when the write is more than a departure (a move's arrival re-ranks the section it lands in); absent,
+ *  every other row keeps its place. */
+async function expectHeldUnderSearch(page: Page, before: string[], place: string, order?: string[]): Promise<void> {
   const left = `Was at ${place}`
   await expect(
     page.locator(`.card-locations-row .card-locations-identity[aria-label="${left}"]`),
     'the committed write is drawn once the read lands',
   ).toHaveCount(1)
   await expect(page.locator('.card-locations-row.is-gone'), 'the departed row is still drawn, held in place').toHaveCount(1)
-  const held = (await copyOrder(page)).filter((label) => label !== arrived)
-  expect(held, 'every copy keeps its place under the search').toEqual([before[0], left, ...before.slice(2)])
+  await expect
+    .poll(() => copyOrder(page), { message: 'every copy keeps its place under the search' })
+    .toEqual(order ?? [before[0], left, ...before.slice(2)])
 }
 
 test('a retire the server fails with a 5xx after it committed keeps its row in place under a search', async ({ page }) => {
@@ -9481,8 +9483,9 @@ test('a retire the server fails with a 5xx after it committed keeps its row in p
 })
 
 test('a move the server fails with a 5xx after it committed keeps its row in place under a search', async ({ page }) => {
-  /* THE THIRD WAY A COPY LEAVES (D83), under the same rule. `doMove` reports a 5xx through `afterWrite` and holds nothing, so
-     the read that follows re-ranks the moved copy out of its place. */
+  /* THE THIRD WAY A COPY LEAVES (D83), under the same rule. `doMove` reports a 5xx through `afterWrite` and holds the departed
+     row first, as a successful move does, so the read that follows draws it in place. The arrival re-ranks the search the way
+     a successful move's does (the last assertion). */
   const { store, moveOut } = stackedStore()
   /* A COMMITTED MOVE LEAVES A TOMBSTONE AT ITS SOURCE (`moveCard`'s own doc: `undoMove` is aimed at it) AND THE COPY AT ITS
      NEW PLACE. The copy's new place is what re-ranks the search, so a case that did not add it could not go red. */
@@ -9519,7 +9522,17 @@ test('a move the server fails with a 5xx after it committed keeps its row in pla
   await dialog.getByRole('button', { name: 'Move', exact: true }).click()
 
   await expectReadAfter(wire, (entry) => entry.path.endsWith('/move'), 'the 5xx move under a search')
-  await expectHeldUnderSearch(page, before, 'Box 7, Section 1, Card 39', arrived)
+  /* THE ORDER A SUCCESSFUL MOVE GIVES under this same search, measured on main 4fcfb2250 (the commit's Red-run trailer names the
+     run): the departed row holds, `Box 2, Section 1, Card 1` rises above Section 2's two rows, and the arrival lands last. */
+  await expectHeldUnderSearch(page, before, 'Box 7, Section 1, Card 39', [
+    'Box 7, Section 1, Card 38',
+    'Was at Box 7, Section 1, Card 39',
+    'Box 7, Section 1, Card 40',
+    'Box 2, Section 1, Card 1',
+    'Box 2, Section 2, Card 1',
+    'Box 2, Section 2, Card 2',
+    arrived,
+  ])
 })
 
 
