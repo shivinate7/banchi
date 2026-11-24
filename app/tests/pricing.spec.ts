@@ -9053,6 +9053,69 @@ for (const failure of [
   })
 }
 
+/* THE 5xx COPY OF THE THREE WRITES A PRICES ROW MAKES (Unhold, the Undo of an Unhold, the kept-tick drop). A 5xx may have committed the
+   write, so the copy names what the row shows and the control to press, which is true either way. A refusal (4xx) wrote nothing, and
+   its own title stays. */
+test('5xx copy: Unhold names its row', async ({ page }) => {
+  await open(page, { skus: [UNHOLD_ROW], held: { unhold: { status: 503, code: 'store_unavailable' } } })
+  await expect(page.getByRole('button', { name: 'Unhold', exact: true }), 'precondition: the row draws Unhold').toBeVisible()
+  await page.getByRole('button', { name: 'Unhold', exact: true }).click()
+  const toast = page.locator('.bn-toast', { hasText: 'The store did not confirm the unhold for Articuno' })
+  await expect(toast, 'the toast names the Unhold the store did not confirm').toBeVisible()
+  await expect(toast, 'the body names the row text and the control to press again').toContainText(
+    'If Articuno still shows removed by you, press Unhold again.',
+  )
+})
+
+test('refusal copy control: Unhold', async ({ page }) => {
+  await open(page, { skus: [UNHOLD_ROW], held: { unhold: { status: 409, code: 'held_refused' } } })
+  await expect(page.getByRole('button', { name: 'Unhold', exact: true }), 'precondition: the row draws Unhold').toBeVisible()
+  await page.getByRole('button', { name: 'Unhold', exact: true }).click()
+  const toast = page.locator('.bn-toast', { hasText: 'Could not unhold Articuno' })
+  await expect(toast, 'a refusal keeps its own title: the store wrote nothing').toBeVisible()
+  await expect(toast, 'the server said no').toContainText('The server said no.')
+})
+
+test('5xx copy: Undo of Unhold names its row', async ({ page }) => {
+  await open(page, { skus: [UNHOLD_ROW], held: { hold: { status: 503, code: 'store_unavailable' } } })
+  await page.getByRole('button', { name: 'Unhold', exact: true }).click()
+  const receipt = page.locator('.bn-toast', { hasText: 'Unheld 2 copies of Articuno' })
+  await expect(receipt.getByRole('button', { name: 'Undo' }), 'precondition: the Unhold answered and offers Undo').toBeVisible()
+  await receipt.getByRole('button', { name: 'Undo' }).click()
+  const toast = page.locator('.bn-toast', { hasText: 'The store did not confirm keeping Articuno off TCGplayer' })
+  await expect(toast, 'the toast names the hold the store did not confirm').toBeVisible()
+  await expect(toast, 'the body names the row text and the Keep off TCGplayer control to press again').toContainText(
+    'If Articuno does not show removed by you, press Keep off TCGplayer again.',
+  )
+})
+
+test('refusal copy control: Undo of Unhold', async ({ page }) => {
+  await open(page, { skus: [UNHOLD_ROW], held: { hold: { status: 409, code: 'held_after_send' } } })
+  await page.getByRole('button', { name: 'Unhold', exact: true }).click()
+  const receipt = page.locator('.bn-toast', { hasText: 'Unheld 2 copies of Articuno' })
+  await expect(receipt.getByRole('button', { name: 'Undo' }), 'precondition: the Unhold answered and offers Undo').toBeVisible()
+  await receipt.getByRole('button', { name: 'Undo' }).click()
+  const toast = page.locator('.bn-toast', { hasText: 'Could not hold Articuno again' })
+  await expect(toast, 'a refusal keeps its own title: the store wrote nothing').toBeVisible()
+  await expect(toast, 'the server said no').toContainText('The server said no.')
+})
+
+test('5xx copy: tick drop names the Send box', async ({ page }) => {
+  await dropKeptTick(page, { status: 503, code: 'store_unavailable', message: 'The store did not answer. Try again.' })
+  const toast = page.locator('.bn-toast', { hasText: 'The store did not confirm the untick for Gardevoir ex' })
+  await expect(toast, 'the toast names the untick the store did not confirm').toBeVisible()
+  await expect(toast, 'the body names the Send box and the untick to press again').toContainText(
+    'If the Send box for Gardevoir ex is still ticked, untick it again.',
+  )
+})
+
+test('refusal copy control: tick drop', async ({ page }) => {
+  await dropKeptTick(page, { status: 409, code: 'tick_refused', message: 'The store refused the tick.' })
+  const toast = page.locator('.bn-toast', { hasText: 'Tick not cleared for Gardevoir ex' })
+  await expect(toast, 'a refusal keeps its own title: the store wrote nothing').toBeVisible()
+  await expect(toast, 'the server said why').toContainText('The store refused the tick.')
+})
+
 /* THE TAKE-OFF PRESS (SendCard, `pressTakeOff`). It changes the owed list's entry, so the owed take-offs are read again after it. */
 const TAKE_OFF_PATH = '/inventory/2/1/take-off'
 for (const failure of [
