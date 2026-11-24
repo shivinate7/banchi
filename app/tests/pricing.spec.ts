@@ -1362,6 +1362,14 @@ test('one press sends and makes live, and says when the check comes', async ({ p
    failed Send re-reads that status already: that case is the control. The owed take-offs (`reloadOwed`) and the prices
    worklist (`onSent`, which is `afterSend`, which calls `reload`) run only when the answer arrives, so a failed Send reads
    neither. Each case asserts an order with `recordSent`: a GET sent after the POST of /pipeline/send. */
+test('a Send the store does not confirm says so in its title, and says to check what is live', async ({ page }) => {
+  await open(page, { send: () => ({ status: 503, code: 'store_unavailable' }) })
+  await sendPress(page).click()
+  await expect(
+    page.getByText('The store did not confirm this send. Check what is live before you send again.', { exact: true }),
+  ).toBeVisible()
+})
+
 test('a Send the server fails with a 5xx still re-reads the send status', async ({ page }) => {
   await open(page, { send: () => ({ status: 503, code: 'store_unavailable' }) })
   const sent = recordSent(page)
@@ -8591,6 +8599,20 @@ test('a saved price re-reads the saved prices and never the prices worklist', as
     message: 'the saved price is followed by a read of the saved prices',
   }).toBe(true)
   expect(readsAfterWrite(sent, 'PUT', '/pricing'), 'a saved price read the prices worklist').not.toContain('/pipeline/pricing')
+})
+
+test('a tick the store does not confirm names its Send box in the toast body', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, {
+    live: ONE_LIST_LIVE,
+    ticks: () => ({ status: 503, code: 'store_unavailable', message: 'The store did not answer. Try again.' }),
+  })
+  await listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' }).click()
+  const toast = page.locator('.bn-toast', { hasText: 'did not confirm the tick for Iono' })
+  await expect(toast, 'the toast names the card the store did not confirm').toBeVisible()
+  await expect(toast, 'the toast body names the Send box by its label').toContainText(
+    'If "Send the new price for Iono" is not as you left it, press it again.',
+  )
 })
 
 test('a tick the server fails with a 5xx re-reads the prices worklist', async ({ page }) => {
