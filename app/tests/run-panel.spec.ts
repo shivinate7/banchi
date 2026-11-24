@@ -8,6 +8,7 @@ import type { MatchState } from '../src/types'
 import { expectOneStagger } from './staggerCheck'
 import { afterPaint, settleMotion } from './motionSettled'
 import { boxTitle } from '../src/kit/dataRules'
+import { readAfterPost, recordSent } from './wireOrder'
 
 /* THE PIPELINE IS REACHABLE FROM A SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
  *
@@ -249,6 +250,9 @@ async function open(
     /** Answers `POST /pipeline/runs/<name>/match` with a refusal or a 5xx instead of `match`'s answer, so a case can press
      *  Try again against a failure. The press is still recorded into the wire. */
     matchFailure?: { status: number; code: string }
+    /** Answers a CONFIRMED `POST /pipeline/identify` (the composer's Start) with a refusal or a 5xx, in place of the started run.
+     *  The preflight's own unconfirmed press is untouched. The press is still recorded into the wire. */
+    startFailure?: { status: number; code: string }
     /** `GET /pipeline/match`: the free reader's state. PREPARED by default, which is what a free
      *  quote needs; a case about the not-prepared state passes `{ ready: false, ... }`. */
     matchState?: Partial<MatchState>
@@ -309,6 +313,14 @@ async function open(
   await page.route(/\/pipeline\/identify$/, async (route) => {
     const body = route.request().postDataJSON() as SelectionBody
     record('POST', route.request().url(), body)
+    if (body.confirm === true && options.startFailure !== undefined) {
+      await route.fulfill({
+        status: options.startFailure.status,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: options.startFailure.code, message: 'The server said no.' } }),
+      })
+      return
+    }
     /* ONE RUN, WHERE IT USED TO ECHO ONE PER LEG. A send is one selection, so one child
        starts and `failed` is empty on every success — it is kept because the screen's
        partial-send notice is one length check.
@@ -3280,6 +3292,56 @@ test('a Try again on a stopped match that succeeds re-reads the open run', async
   await page.locator('.run-match-problem').getByRole('button', { name: 'Try again' }).click()
   await expect.poll(() => matchPosts(wire).length, 'the Try again reached the server').toBe(1)
   await expect.poll(detailReads, { message: 'a successful Try again on a stopped match is followed by a read of the open run' }).toBeGreaterThan(before)
+})
+
+/* ---------------------------------------- the runs list after the composer's Start
+
+   `doStart` in `RunsComposer.tsx` hands the started run to the screen only when `startRun` answers. A Start the server fails
+   with a 5xx, or refuses, throws first, so the list keeps the runs it drew before the press. Each failure case asserts that a
+   GET of the list (`/pipeline/runs`) was sent after the confirmed POST of `/pipeline/identify`. The preflight is another path
+   (`/pipeline/preflight`), so the first POST of identify is the Start. The list's own poll can land anywhere, so the order is
+   what is asserted, never a count. */
+
+test('a Start from the composer that the server fails with a 5xx re-reads the runs list', async ({ page }) => {
+  const wire = await open(page, { startFailure: { status: 503, code: 'store_unavailable' } })
+  const sent = recordSent(page)
+  await atReading(page)
+  await checkCost(page)
+  await page.locator('.run-button-money').click()
+  await expect.poll(() => wire.filter((row) => row.path === '/pipeline/identify' && (row.body as { confirm?: unknown }).confirm === true).length, {
+    message: 'the Start reached the server',
+  }).toBe(1)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/identify', '/pipeline/runs'), {
+    message: 'the Start that failed with a 5xx is followed by a read of the runs list: no GET /pipeline/runs reached the server after it',
+  }).toBe(true)
+})
+
+test('a refused Start from the composer re-reads the runs list', async ({ page }) => {
+  const wire = await open(page, { startFailure: { status: 409, code: 'quote_moved' } })
+  const sent = recordSent(page)
+  await atReading(page)
+  await checkCost(page)
+  await page.locator('.run-button-money').click()
+  await expect.poll(() => wire.filter((row) => row.path === '/pipeline/identify' && (row.body as { confirm?: unknown }).confirm === true).length, {
+    message: 'the Start reached the server',
+  }).toBe(1)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/identify', '/pipeline/runs'), {
+    message: 'the refused Start is followed by a read of the runs list: no GET /pipeline/runs reached the server after it',
+  }).toBe(true)
+})
+
+test('a Start from the composer that succeeds re-reads the runs list', async ({ page }) => {
+  const wire = await open(page)
+  const sent = recordSent(page)
+  await atReading(page)
+  await checkCost(page)
+  await page.locator('.run-button-money').click()
+  await expect.poll(() => wire.filter((row) => row.path === '/pipeline/identify' && (row.body as { confirm?: unknown }).confirm === true).length, {
+    message: 'the Start reached the server',
+  }).toBe(1)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/identify', '/pipeline/runs'), {
+    message: 'a Start that succeeds is followed by a read of the runs list',
+  }).toBe(true)
 })
 
 test('rebind: a refusal draws a sentence, never the CLI reason code', async ({ page }) => {

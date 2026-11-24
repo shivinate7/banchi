@@ -6,6 +6,7 @@ import { afterPaint, settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 import { expectOneStagger } from './staggerCheck'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
+import { readAfterPost } from './wireOrder'
 
 import type {
   HistoryRange,
@@ -89,12 +90,6 @@ function pressAnswer(entry: OwedRow) {
 
 const sendPress = (page: Page) => page.getByRole('button', { name: /^Send ((all \d+ SKUs|1 SKU) )?to TCGplayer$/i })
 const sendPosts = (wire: Wire[]) => wire.filter((r) => r.method === 'POST' && r.path === '/pipeline/send')
-
-/** True when a GET of `readPath` reached the server after the first POST of `postPath`. The wire keeps the order the requests arrived in. */
-const readAfterPost = (wire: Wire[], postPath: string, readPath: string = postPath): boolean => {
-  const at = wire.findIndex((r) => r.method === 'POST' && r.path === postPath)
-  return at >= 0 && wire.slice(at + 1).some((r) => r.method === 'GET' && r.path === readPath)
-}
 
 /** One SKU in the shape `cli/cmd_join.py:_pricing_table` writes — every field, not the handful
  *  a given case reads. A partial fixture here does not fail partially: the row reads
