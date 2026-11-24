@@ -3960,6 +3960,72 @@ test('the write carries the revision it read, and the refusal offers the way bac
   expect((put?.body as { revision?: string }).revision).toBe('rev-1')
 })
 
+test('a slow re-read from a first save never puts back the revision a second save took', async ({
+  page,
+}) => {
+  /* THE RECEIPT RACE. A save takes its receipt inside the write, so the re-read it starts is the
+     one that follows that receipt. A re-read from the first save can still be out when the second
+     save's receipt lands. Its answer is the older file, and it must not replace the revision the
+     second save took, or the next save is sent with a revision the server has moved past. Both
+     re-reads are held here, so the order is the test's and not the network's. */
+  const wire = await open(page)
+  let puts = 0
+  const held: (() => void)[] = []
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() === 'PUT') {
+      wire.push({ method: 'PUT', path: '/pricing', body: route.request().postDataJSON() })
+      puts += 1
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, written: '/tmp/prices.json', answers: 1, revision: `rev-${puts + 1}` }),
+      })
+    }
+    /* The read before any save is open()'s own answer. A read after a save answers the file as it
+       stands when the read arrives, and waits until the test lets it land. */
+    if (route.request().method() !== 'GET' || puts === 0) return route.fallback()
+    const revision = `rev-${puts + 1}`
+    await new Promise<void>((release) => held.push(release))
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: { version: 1, policy: { rule: 'match', basis: 'market' }, skus: {} },
+        path: '/tmp/prices.json',
+        revision,
+      }),
+    })
+  })
+
+  await field(page).fill('19.99')
+  await field(page).press('Enter')
+  await expect.poll(() => puts, { message: 'the first save reached the server' }).toBe(1)
+  await expect.poll(() => held.length, { message: 'the re-read after the first save is out' }).toBe(1)
+
+  /* THE SECOND SAVE LANDS WHILE THAT RE-READ IS STILL OUT, and takes its receipt there. */
+  await field(page).fill('21.50')
+  await field(page).press('Enter')
+  await expect.poll(() => puts, { message: 'the second save reached the server' }).toBe(2)
+
+  /* THE FIRST RE-READ LANDS LAST. The next re-read (the second save's) starts only once the first
+     round has settled, so its arrival means the first answer has been handled. */
+  held.shift()?.()
+  await expect.poll(() => held.length, { message: 'the second save\'s re-read started after the first settled' }).toBe(1)
+
+  await field(page).fill('23.75')
+  await field(page).press('Enter')
+  await expect.poll(() => puts, { message: 'the third save reached the server' }).toBe(3)
+
+  /* THE THIRD SAVE CARRIES THE REVISION THE SECOND SAVE TOOK. */
+  const third = wire.filter((r) => r.method === 'PUT').at(-1)
+  expect(
+    (third?.body as { revision?: string }).revision,
+    'a re-read that began before the second save overwrote the revision the second save took',
+  ).toBe('rev-3')
+
+  for (const release of held.splice(0)) release()
+})
+
 test('a corpus that moved under the screen refuses the write rather than reverting it', async ({
   page,
 }) => {
