@@ -412,6 +412,9 @@ type Mood = {
   /** Every photo 404s, which is the other screen the card panel can be. */
   noPhoto?: boolean
   sold?: SoldAnswer
+  /** A sold write held in flight. The stub records the call at once, then waits on the promise before it answers, so a case
+   *  can press on the screen while that write is out (D329). Null for a write that is not held. */
+  holdSold?: (undo: boolean, key: string) => Promise<void> | null
   /** The order pull's answer when it refuses or fails. Unset, every pull succeeds as it always has. */
   pull?: PullAnswer
   /** The wire's length when each `GET /inventory` was answered. A read the screen sends after a write sees a longer
@@ -824,6 +827,8 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<St
     const key = found === null ? '' : `${found[1] ?? ''}/${found[2] ?? ''}`
     wire.push({ method: request.method(), url: request.url(), undo })
 
+    const held = mood.holdSold?.(undo, key) ?? null
+    if (held !== null) await held
     const answer = (mood.sold ?? soldModel)(undo, key, states)
     // A sale the stub accepted is a sale the next GET /inventory has to show. This is the
     // store the other device would be looking at.
@@ -3534,6 +3539,161 @@ test('the undo is still there after walking into another card', async ({ page })
   await receipt.getByRole('button', { name: 'Undo' }).click()
   expect(wire.at(-1)!.url, 'the reversal named the sold card').toContain('/inventory/3/7/sold')
   await expect(receipt).toHaveCount(0)
+})
+
+/* D329 (`docs/specs/undo.md` section 10): a press taken while a write is out says so at once, and goes out when that write
+ * answers. The sheet's Undo and a Pulled today row's Undo both queue. Each case holds one write in flight with `gate()`, so the
+ * queued state is read while the write is still out, not after it lands. Design: `docs/design/press-queued/` (the notes). */
+function gate(): { promise: Promise<void>; release: () => void } {
+  let release: () => void = () => {}
+  const promise = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  return { promise, release }
+}
+
+const CHARIZARD_SOLD = '/inventory/3/7/sold'
+const IONO_KEY = '1/3'
+const reversals = (wire: Wire[]): Wire[] => wire.filter((call) => call.undo)
+const sales = (wire: Wire[]): Wire[] => wire.filter((call) => !call.undo && call.url.endsWith('/sold'))
+
+test('ff-undo pressed while a sale is out reads queued, with the words beside it, and sends nothing until the sale saves', async ({
+  page,
+}) => {
+  const wire: Wire[] = []
+  const held = gate()
+  await openList(page, wire, { holdSold: (undo, key) => (!undo && key === IONO_KEY ? held.promise : null) })
+
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  const sheetUndo = page.locator('.ff-undo')
+  await expect(sheetUndo, 'the sale of Charizard stands with its Undo on the sheet').toBeVisible()
+
+  await openCard(page, 'Iono')
+  await sellOpenCard(page)
+  await expect.poll(() => sales(wire).length, 'the sale of Iono is out and held').toBe(2)
+
+  await sheetUndo.click()
+  await expect(sheetUndo, 'the press is taken while the sale is out, so the Undo reads queued').toHaveAttribute('data-busy', 'queued')
+  await expect(page.locator('.ff-receipt'), 'the words beside the queued Undo name the sale').toContainText('Waits for the sale to save.')
+  expect(reversals(wire), 'no reversal goes out while the sale ahead of it is still out').toEqual([])
+
+  held.release()
+  await expect.poll(() => reversals(wire).length, 'the queued Undo sends its reversal once the sale saves').toBe(1)
+  await expect(page.locator('[data-busy="queued"]'), 'the queued mark is gone once the reversal has gone out').toHaveCount(0)
+  expect(reversals(wire)[0]!.url, 'the reversal is of Charizard, the receipt that was newest when Undo was pressed').toContain(CHARIZARD_SOLD)
+  expect(sales(wire).length, 'the press sent no second sale').toBe(2)
+})
+
+test('ff-done-undo pressed while another Undo is out reads queued, with its words, and sends its own target once the first saves', async ({
+  page,
+}) => {
+  const wire: Wire[] = []
+  const held = gate()
+  await openList(page, wire, { holdSold: (undo, key) => (undo && key === IONO_KEY ? held.promise : null) })
+
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  await openCard(page, 'Iono')
+  await sellOpenCard(page)
+  await expect(page.locator('.ff-receipt-name'), 'Iono holds the sheet').toHaveText('Iono')
+  await expect(page.locator('.ff-done-undo'), 'Charizard stands in Pulled today with its own Undo').toHaveCount(1)
+
+  await page.locator('.ff-undo').click()
+  await expect.poll(() => reversals(wire).length, 'the reversal of Iono is out and held').toBe(1)
+
+  const doneUndo = page.locator('.ff-done-undo')
+  await doneUndo.click()
+  await expect(doneUndo, 'the press is taken while the other undo is out, so this Undo reads queued').toHaveAttribute('data-busy', 'queued')
+  await expect(view(page).locator('.ff-done'), 'the words name the other undo').toContainText('Waits for the other undo to save.')
+  expect(reversals(wire).length, 'no second reversal goes out while the first is out').toBe(1)
+
+  held.release()
+  await expect.poll(() => reversals(wire).length, 'the queued Undo sends its own reversal once the first saves').toBe(2)
+  await expect(page.locator('[data-busy="queued"]'), 'the queued mark is gone once the reversal has gone out').toHaveCount(0)
+  expect(reversals(wire)[1]!.url, 'the second reversal is of Charizard, the row whose Undo was pressed').toContain(CHARIZARD_SOLD)
+})
+
+test('a queued Undo whose receipt is spent by the time it runs is skipped: no reversal goes out and the queued mark clears', async ({
+  page,
+}) => {
+  const wire: Wire[] = []
+  const held = gate()
+  const states = await openList(page, wire, { holdSold: (undo, key) => (!undo && key === IONO_KEY ? held.promise : null) })
+
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  await openCard(page, 'Iono')
+  await sellOpenCard(page)
+  await expect.poll(() => sales(wire).length, 'the sale of Iono is out and held').toBe(2)
+
+  const sheetUndo = page.locator('.ff-undo')
+  await sheetUndo.click()
+  await expect(sheetUndo, 'the press is taken while the sale is out, so the Undo reads queued').toHaveAttribute('data-busy', 'queued')
+
+  /* Another device reverses Charizard's sale while Iono's sale is out, so the receipt the press named is spent before it runs. */
+  states['3/7'] = 'identified'
+  held.release()
+  await expect(sheetUndo, 'the press is skipped and its queued mark clears').not.toHaveAttribute('data-busy', 'queued')
+  await expect(view(page).getByText('Waits for the sale to save.'), 'the words go with the queued mark').toHaveCount(0)
+  expect(reversals(wire), 'a spent receipt sends no reversal').toEqual([])
+})
+
+test('an X pressed while an Undo waits still lets that Undo run once the sale saves', async ({ page }) => {
+  const wire: Wire[] = []
+  const held = gate()
+  await openList(page, wire, { holdSold: (undo, key) => (!undo && key === IONO_KEY ? held.promise : null) })
+
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  await openCard(page, 'Iono')
+  await sellOpenCard(page)
+  await expect.poll(() => sales(wire).length, 'the sale of Iono is out and held').toBe(2)
+
+  const sheetUndo = page.locator('.ff-undo')
+  await sheetUndo.click()
+  await expect(sheetUndo, 'the press is taken while the sale is out, so the Undo reads queued').toHaveAttribute('data-busy', 'queued')
+
+  await page.getByRole('button', { name: 'Dismiss this receipt' }).click()
+  await expect(page.locator('.ff-receipt'), 'the receipt is closed').toHaveCount(0)
+
+  held.release()
+  await expect.poll(() => reversals(wire).length, 'the queued Undo still runs once the sale saves').toBe(1)
+  expect(reversals(wire)[0]!.url, 'the reversal is of Charizard, the receipt whose Undo was pressed').toContain(CHARIZARD_SOLD)
+})
+
+test('control: at rest the sheet Undo and the Pulled today Undo keep today\'s look and carry no queued mark', async ({ page }) => {
+  const wire: Wire[] = []
+  await openList(page, wire)
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  await openCard(page, 'Iono')
+  await sellOpenCard(page)
+
+  const sheetUndo = page.locator('.ff-undo')
+  const doneUndo = page.locator('.ff-done-undo')
+  await expect(doneUndo, 'Charizard stands in Pulled today with its own Undo').toBeVisible()
+  await expect(sheetUndo).toBeVisible()
+  await expect(sheetUndo, 'the sheet Undo keeps its 20px label').toHaveCSS('font-size', '20px')
+  await expect(sheetUndo, 'the sheet Undo keeps its 56px height floor').toHaveCSS('min-height', '56px')
+  await expect(doneUndo, 'the Pulled today Undo keeps its 40px height floor').toHaveCSS('min-height', '40px')
+  for (const control of [sheetUndo, doneUndo]) {
+    await expect(control, 'at rest the Undo carries no queued mark').not.toHaveAttribute('data-busy')
+    await expect(control, 'at rest the Undo is not refused').not.toHaveAttribute('aria-disabled')
+  }
+})
+
+test('control: at rest no Undo on the screen carries the queued mark or its words', async ({ page }) => {
+  const wire: Wire[] = []
+  await openList(page, wire)
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  await openCard(page, 'Iono')
+  await sellOpenCard(page)
+  await expect(page.locator('.ff-undo'), 'the sheet Undo is drawn').toBeVisible()
+
+  await expect(view(page).locator('[data-busy="queued"]'), 'nothing is queued at rest').toHaveCount(0)
+  await expect(view(page).getByText(/waits for the (sale|other undo) to save/i), 'no waiting words at rest').toHaveCount(0)
 })
 
 /* `restores_to`, which the route computes deliberately and which reached no screen: the wire
