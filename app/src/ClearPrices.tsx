@@ -33,8 +33,8 @@ import { count as nounCount } from './kit/dataRules'
 import { useEffect, useMemo, useState } from 'react'
 
 import { afterWrite, corpusKind } from './afterWrite'
-import { Button, Notice, Segmented, Sheet } from './kit'
-import { clearPricingAnswers, describeFailure, type Failure, failureTone } from './server'
+import { Button, Notice, Segmented, SettingsTrouble, Sheet } from './kit'
+import { clearPricingAnswers, type Failure, noAnswerFailure, unconfirmedClear } from './server'
 import type { PricingClearResult, PricingClearable } from './types'
 
 import './ClearPrices.css'
@@ -152,7 +152,7 @@ export function ClearPrices({
       }, corpusKind)
       onClose()
     } catch (err) {
-      setFailure(describeFailure(err))
+      setFailure(noAnswerFailure(err, unconfirmedClear))
     } finally {
       setBusy(false)
     }
@@ -256,7 +256,7 @@ export function ClearPrices({
       </Notice>
 
       {unsaved ? <Notice tone="warn" title="Wait for your last price to save first." /> : null}
-      {failure === null ? null : <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />}
+      <SettingsTrouble failure={failure} />
     </Sheet>
   )
 }

@@ -32,7 +32,7 @@ import type { ReactNode } from 'react'
 import { Button, Count, Icon, IconButton, Money, Notice, Pill, Refusal, Retry } from './kit'
 import { atClockTime, clockTime, dayMonth } from './dates'
 import { afterWrite, sendKind, useRereadOnWrite } from './afterWrite'
-import { describeFailure, dismissSendWarning, getOwedTakeOffs, gotNoAnswer, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, sendSuggestions, takeBackSend } from './server'
+import { UNCONFIRMED_SAVE_CODE, describeFailure, dismissSendWarning, getOwedTakeOffs, gotNoAnswer, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, sendSuggestions, takeBackSend, unconfirmedLine, unconfirmedPriceSaveAtSend } from './server'
 import type { Failure } from './server'
 import type { EmptySend, LiveMove, OwedTakeOff, PriceChange, RefusedPrice, SendAnswer, SendSummary, SendTrim } from './types'
 import { pressTakeOff, viewOf, type TakeOffOutcome, type TakeOffView } from './takeOff'
@@ -130,6 +130,8 @@ function refusalTitle(code: string, data?: unknown, noAnswer = false): string {
     case 'not_sendable':
     case 'write_split':
       return 'Banchi could not make this send, so nothing was sent.'
+    case UNCONFIRMED_SAVE_CODE:
+      return unconfirmedLine(unconfirmedPriceSaveAtSend())
     case 'answers_not_saved':
       return 'Your prices could not be saved, so nothing was sent.'
     default:
@@ -1069,6 +1071,7 @@ export function SendCard({
   liveMoves = [],
   settled,
   saveFailed,
+  saveUnconfirmed,
   quantities,
   owed,
   onSent,
@@ -1096,6 +1099,8 @@ export function SendCard({
   readonly settled: boolean
   /** True when the last save failed. A press refuses rather than sending old prices. */
   readonly saveFailed: () => boolean
+  /** True when that save got no answer (`gotNoAnswer`), so it may have committed: the press says so rather than that the prices could not be saved. */
+  readonly saveUnconfirmed: () => boolean
   /** The per-row quantities typed for this press. */
   readonly quantities: () => Record<string, number>
   /** The master-set take-offs still owed, read by the screen with the worklist: it draws the bar
@@ -1154,7 +1159,11 @@ export function SendCard({
     if (phase !== 'waiting') return
     if (saveFailed()) {
       setPhase('idle')
-      setFailure({ code: 'answers_not_saved', message: 'Your prices could not be saved. Fix the error above and press again.', kind: 'refusal' })
+      setFailure(
+        saveUnconfirmed()
+          ? { code: UNCONFIRMED_SAVE_CODE, message: 'Nothing was sent.', kind: 'refusal' }
+          : { code: 'answers_not_saved', message: 'Your prices could not be saved. Fix the error above and press again.', kind: 'refusal' },
+      )
       return
     }
     if (!settled) return
@@ -1209,7 +1218,7 @@ export function SendCard({
         void refreshLive()
       }
     })()
-  }, [phase, settled, saveFailed, intent, only, runs, split, quantities, priceChanges, listed, liveMoves, confirmed, onSent])
+  }, [phase, settled, saveFailed, saveUnconfirmed, intent, only, runs, split, quantities, priceChanges, listed, liveMoves, confirmed, onSent])
 
   const press = (next: 'send' | 'download', rows: readonly PriceChange[] | null = null) => {
     setOnly(rows)

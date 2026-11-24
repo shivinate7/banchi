@@ -505,7 +505,7 @@ async function runSell(job: Extract<Job, { kind: 'sell' }>): Promise<void> {
     /* THE SERVER'S REFUSAL IS SAID HERE, once per write, even after the screen was left (the toast stack is
        the app's, and a refusal that reaches nobody did not happen, D171). `onWalkPull` also sets the screen's
        one failure line, but the next write in the line clears that before it can be read. */
-    toast(saleNotMarkedToast(sale.name, outcome.failure))
+    toast(saleNotMarkedToast(sale.name, job.placeLabel, outcome.failure))
     /* ANOTHER TAB SOLD OR PULLED THIS COPY (undo.md §3): the row reads Sold with no button, not Mark sold over a card
        that is gone. Any other refusal puts the row back to what it was. */
     if (outcome.failure.code === ALREADY_SOLD || outcome.failure.code === COPY_ALREADY_PULLED) {
@@ -525,11 +525,14 @@ async function runSell(job: Extract<Job, { kind: 'sell' }>): Promise<void> {
 }
 
 /** THE TOAST FOR A SALE THAT DID NOT COME BACK MARKED. A refusal is the server's "no" and keeps its sentence. A 5xx or a lost connection
- *  may have committed the sale, so "Not marked sold" would be false: it says the store did not confirm it (`unconfirmedSale`,
- *  the one sentence `Orders.tsx` also puts on its failure line). */
-function saleNotMarkedToast(name: string, failure: Failure) {
+ *  may have committed the sale, so "Not marked sold" would be false: it says the store did not confirm it (`unconfirmedSale`, the one
+ *  pair `Orders.tsx` also puts on its pick row's line). `place` is the pre-write label. */
+function saleNotMarkedToast(name: string, place: string | null, failure: Failure) {
   const tone = failureTone(failure)
-  if (failureGotNoAnswer(failure)) return { kind: 'refusal' as const, tone, title: unconfirmedSale(name) }
+  if (failureGotNoAnswer(failure)) {
+    const said = unconfirmedSale(name, place === null ? null : sayPlace(place))
+    return { kind: 'refusal' as const, tone, title: said.title, body: said.body }
+  }
   return { kind: 'refusal' as const, tone, title: `Not marked sold: ${name}`, body: failure.message }
 }
 
@@ -566,7 +569,7 @@ function settleAfterThrow(job: Job, err: unknown): void {
   const trouble = describeFailure(err)
   if (job.kind === 'sell') {
     clearFreshSale(sale.copyKey)
-    toast(saleNotMarkedToast(sale.name, trouble))
+    toast(saleNotMarkedToast(sale.name, job.placeLabel, trouble))
     dropLineSale(sale)
   } else {
     if (lineSales.get(sale.copyKey) === sale) lineSales.delete(sale.copyKey)

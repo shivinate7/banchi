@@ -99,10 +99,16 @@ import {
   COPY_ALREADY_PULLED,
   SALE_BUILT_ON,
   gotNoAnswer,
+  failureGotNoAnswer,
+  noAnswerFailure,
+  noAnswerToast,
+  unconfirmedListPress,
+  unconfirmedListRead,
+  unconfirmedListUndo,
+  unconfirmedPressUndo,
   unconfirmedSale,
   unconfirmedSaleUndo,
-  listWriteFailure,
-  listWriteToast,
+  unconfirmedStandDown,
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
@@ -995,9 +1001,9 @@ const PULL_NOT_RECORDED = 'pull_not_recorded'
  *  `{"undo": true}`; the second names the order key and SKU. Neither is for a person at this screen, so a sale refused
  *  either way is said in this screen's own words. Every other refusal keeps the server's sentence. */
 function pullFailure(err: unknown, place: string | null, name: string): Failure {
+  /* A 5xx or a lost connection may have committed the sale, so the server's "Try again" is not said; the walk's toast says the same pair. */
+  if (gotNoAnswer(err)) return noAnswerFailure(err, () => unconfirmedSale(name, place === null ? null : sayPlace(place)))
   const trouble = describeFailure(err)
-  /* A 5xx or a lost connection may have committed the sale, so the server's "Try again" is not said; the walk's toast says the same sentence. */
-  if (gotNoAnswer(err)) return { ...trouble, message: unconfirmedSale(name) }
   if (trouble.code !== ALREADY_SOLD && trouble.code !== COPY_ALREADY_PULLED) return trouble
   return { ...trouble, message: `${place === null ? 'That copy' : sayPlace(place)} was already sold.` }
 }
@@ -1005,20 +1011,38 @@ function pullFailure(err: unknown, place: string | null, name: string): Failure 
 /** The server's `sale_built_on` refusal of an undo says where to go on another screen ("This card is still here") and
  *  quotes the order's status. This screen has neither control, so it says only what holds. */
 function undoFailure(err: unknown, place: string, name: string): Failure {
-  const trouble = describeFailure(err)
   /* A 5xx or a lost connection may have reversed the sale, so the server's "Try again" is not said. */
-  if (gotNoAnswer(err)) return { ...trouble, message: unconfirmedSaleUndo(name) }
+  if (gotNoAnswer(err)) return noAnswerFailure(err, () => unconfirmedSaleUndo(name, sayPlace(place)))
+  const trouble = describeFailure(err)
   if (trouble.code !== SALE_BUILT_ON) return trouble
   return { ...trouble, message: `${sayPlace(place)} stays sold: its order has moved on.` }
 }
 
-/** The toast for an undo that failed. A refusal keeps its title; when no answer came back the sentence is the whole toast,
- *  because "The card was not put back" is false of a reversal that may have gone through. */
-function undoFailureToast(err: unknown, trouble: Failure) {
+/** The toast for an undo that failed. A refusal keeps its title. When no answer came back the pair is the whole toast, because
+ *  "The card was not put back" is false of a reversal that may have gone through. It carries `retry`, an Undo that sends the
+ *  reversal again (`undoFromReceipt`, which a pull that no longer stands, or one already reversing, refuses). */
+function undoFailureToast(err: unknown, trouble: Failure, retry?: { readonly label: string; readonly onPress: () => void }) {
   const tone = failureTone(trouble)
-  if (gotNoAnswer(err)) return { kind: 'refusal' as const, tone, title: trouble.message }
+  if (gotNoAnswer(err) && trouble.title !== undefined) return { kind: 'refusal' as const, tone, title: trouble.title, body: trouble.message, action: retry }
   return { kind: 'refusal' as const, tone, title: 'The card was not put back', body: trouble.message }
 }
+
+/* THE LABELS OF THE LIST PRESSES, EXACTLY AS THEIR BUTTONS DRAW THEM: a write that got no answer tells the person which button to look
+   for, so the sentence and the button must say the same words (`unconfirmedListPress`, `unconfirmedStandDown`). */
+const SEALED_LABEL = 'Sealed Product'
+const NOT_SHIPPING_LABEL = "It Isn't Shipping"
+const STOOD_DOWN_ORDER_RECEIPT = 'Stood down 1 order'
+const STAND_DOWN_ORDER_LABEL = 'Stand down this order'
+const STAND_DOWN_REASON_LABEL: Readonly<Record<OrderCloseReason, string>> = { not_shipping: 'Cancelled or Refunded', shipped_elsewhere: 'Already Shipped' }
+
+/** The label of a hand fill's button: "Shipped This by Hand" (a figure of 1 reads "This"), "Already Sent It" for a copy sold apart. */
+function fillLabel(reason: OrderFillReason, owed: number): string {
+  if (reason === 'sold_separately') return owed === 1 ? 'Already Sent It' : `Already Sent These ${owed}`
+  return owed === 1 ? 'Shipped This by Hand' : `Shipped These ${owed} by Hand`
+}
+
+/** The label of a stand-down press that names a count of orders ("Stand down 2 orders"). */
+const standDownLabel = (n: number, noun: string): string => `Stand down ${countOf(n, noun)}`
 
 /** A pull is recorded: it becomes the newest standing pull, taking the rank from the one before it. */
 function notePull(note: PullNote): void {
@@ -1091,7 +1115,7 @@ async function undoPullNow(target: PullTarget, place: string, name: string): Pro
       forgetPull(target.capture_id)
     } else {
       const trouble = undoFailure(err, place, name)
-      toast(undoFailureToast(err, trouble))
+      toast(undoFailureToast(err, trouble, { label: 'Undo', onPress: () => undoFromReceipt(target, place, name) }))
       /* The server refused the undo: a second press gets the same answer, so `U` moves to the pull before it. */
       if (isFinalUndoRefusal(trouble)) forgetPull(target.capture_id)
     }
@@ -1590,7 +1614,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         setPasteNote(done.summary)
       } catch (err) {
         if (!live.current) return
-        setFailure(describeFailure(err))
+        setFailure(noAnswerFailure(err, () => unconfirmedListRead('paste'), true))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -1791,7 +1815,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         /* A fetch that failed part way may have ingested batches already. */
         rereadNow()
         if (!live.current) return
-        setFailure(describeFailure(err))
+        setFailure(noAnswerFailure(err, () => unconfirmedListRead('fetch'), true))
       } finally {
         if (live.current) {
           setBusy(null)
@@ -1986,7 +2010,8 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       return { ok: true, place: resolvedPlace, refreshed: done.refreshed ?? [], owed: done.owed }
     } catch (err) {
       const trouble = pullFailure(err, place ?? null, name)
-      if (live.current) setFailure(trouble)
+      /* A write that got no answer is said by the toast alone (`saleNotMarkedToast`), so the screen's failure line does not say it twice. */
+      if (live.current && !failureGotNoAnswer(trouble)) setFailure(trouble)
       return { ok: false, failure: trouble }
     } finally {
       if (live.current) setBusy(null)
@@ -2014,7 +2039,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         return { ok: true, refreshed: [], moved: false }
       }
       const trouble = undoFailure(err, place, name)
-      toast(undoFailureToast(err, trouble))
+      toast(undoFailureToast(err, trouble, { label: 'Undo', onPress: () => undoFromReceipt(target, place, name) }))
       if (isFinalUndoRefusal(trouble)) forgetPull(target.capture_id)
       return { ok: false, failure: trouble }
     } finally {
@@ -2034,15 +2059,17 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     void (async () => {
       setBusy(`fill/${line.order_key}/${line.sku}`)
       setFailure(null)
+      const name = line.line.name ?? line.sku
+      const label = fillLabel(reason, count)
       try {
         const aim = { source: order.source, number: order.number, sku: line.sku }
         const done = await afterWrite(() => fillLine(aim, count, reason))
         if (!live.current) return
-        const name = line.line.name ?? line.sku
+        const receipt = `Closed ${countOf(done.moved, 'copy', 'copies')} of ${name}`
         toast({
           kind: 'receipt',
           icon: 'hand',
-          title: `Closed ${countOf(done.moved, 'copy', 'copies')} of ${name}`,
+          title: receipt,
           body: `by hand: ${reason === 'sealed' ? 'not a single' : 'not photographed here'}, order ${order.number}`,
           ttlMs: UNDO_WINDOW_MS,
           /* The reversal names a COUNT and not a copy, because the fill never held one. It
@@ -2055,7 +2082,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                 try {
                   await afterWrite(() => undoFill(aim, done.moved))
                 } catch (err) {
-                  toast({ ...listWriteToast(err, 'undo'), icon: 'alert' })
+                  toast({ ...noAnswerToast(err, () => unconfirmedListUndo(receipt, label)), icon: 'alert' })
                 }
               })()
             },
@@ -2063,7 +2090,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(listWriteFailure(err, 'hand shipment'))
+        setFailure(noAnswerFailure(err, () => unconfirmedListPress(label, name, `the button still says ${label}`), true))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2088,7 +2115,18 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(listWriteFailure(err, 'sealed product'))
+        /* THE SCREEN DRAWS ONE CLAIM, Sealed Product, AND ITS UNDO: an accessory has no control here, so a press that is not the undo is the claim. */
+        const name = line.line.name ?? line.sku
+        setFailure(
+          noAnswerFailure(
+            err,
+            () =>
+              kind === null
+                ? unconfirmedPressUndo(name, SEALED_LABEL)
+                : unconfirmedListPress(SEALED_LABEL, name, `${SEALED_LABEL} is still there`),
+            true,
+          ),
+        )
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2105,14 +2143,16 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     void (async () => {
       setBusy('close')
       setFailure(null)
+      const label = standDownLabel(rows.length, 'shipped order')
       try {
         const aim = rows.map((row) => ({ source: row.source, number: row.number }))
         const done = await afterWrite(() => closeOrders(aim, reason))
         if (!live.current) return
+        const receipt = `Stood down ${countOf(done.moved, 'order')}`
         toast({
           kind: 'receipt',
           icon: 'check',
-          title: `Stood down ${countOf(done.moved, 'order')}`,
+          title: receipt,
           body: `${done.still_open} still open. Nothing was marked sold.`,
           ttlMs: UNDO_WINDOW_MS,
           action: {
@@ -2122,7 +2162,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                 try {
                   await afterWrite(() => reopenOrders(aim))
                 } catch (err) {
-                  toast({ ...listWriteToast(err, 'undo'), icon: 'alert' })
+                  toast({ ...noAnswerToast(err, () => unconfirmedListUndo(receipt, label)), icon: 'alert' })
                 }
               })()
             },
@@ -2130,7 +2170,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(listWriteFailure(err, 'stand-down'))
+        setFailure(noAnswerFailure(err, () => unconfirmedStandDown(countOf(rows.length, 'shipped order'), label), true))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2163,7 +2203,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           toast({
             kind: 'receipt',
             icon: 'check',
-            title: 'Stood down 1 order',
+            title: STOOD_DOWN_ORDER_RECEIPT,
             body: `${done.still_open} still open. Nothing was marked sold.`,
             ttlMs: UNDO_WINDOW_MS,
             action: {
@@ -2173,7 +2213,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                   try {
                     await afterWrite(() => reopenLines(aim))
                   } catch (err) {
-                    toast({ ...listWriteToast(err, 'undo'), icon: 'alert' })
+                    toast({ ...noAnswerToast(err, () => unconfirmedListUndo(STOOD_DOWN_ORDER_RECEIPT, STAND_DOWN_ORDER_LABEL)), icon: 'alert' })
                   }
                 })()
               },
@@ -2182,7 +2222,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         }
       } catch (err) {
         if (!live.current) return
-        setFailure(listWriteFailure(err, 'stand-down'))
+        setFailure(noAnswerFailure(err, () => unconfirmedListPress(STAND_DOWN_REASON_LABEL[reason], `order ${order.number}`, `${STAND_DOWN_ORDER_LABEL} is still there`), true))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2197,17 +2237,19 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
      already read; the press sends only the cutoff, and the store recomputes the candidate set
      itself at that moment, closes every line of every match with `shipped_elsewhere`, and
      claims no copy. */
-  const onReconcileBacklog = (cutoff: string) => {
+  const onReconcileBacklog = (cutoff: string, candidates: number) => {
     void (async () => {
       setBusy('reconcile')
       setFailure(null)
+      const label = standDownLabel(candidates, 'order')
       try {
         const done = await afterWrite(() => reconcileBacklog(cutoff))
         if (!live.current) return
+        const receipt = `Stood down ${countOf(done.moved, 'order')}`
         toast({
           kind: 'receipt',
           icon: 'check',
-          title: `Stood down ${countOf(done.moved, 'order')}`,
+          title: receipt,
           body: `${done.still_open} still open. Nothing was marked sold.`,
           ttlMs: UNDO_WINDOW_MS,
           action: {
@@ -2217,7 +2259,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                 try {
                   await afterWrite(() => reopenOrders(done.closed))
                 } catch (err) {
-                  toast({ ...listWriteToast(err, 'undo'), icon: 'alert' })
+                  toast({ ...noAnswerToast(err, () => unconfirmedListUndo(receipt, label)), icon: 'alert' })
                 }
               })()
             },
@@ -2225,7 +2267,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(listWriteFailure(err, 'backlog stand-down'))
+        setFailure(noAnswerFailure(err, () => unconfirmedStandDown(countOf(candidates, 'old order'), label), true))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2241,14 +2283,16 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     void (async () => {
       setBusy(`close/${line.order_key}/${line.sku}`)
       setFailure(null)
+      const name = line.line.name ?? line.sku
       try {
         const aim = [{ source: order.source, number: order.number, sku: line.sku }]
         await afterWrite(() => closeLines(aim, reason))
         if (!live.current) return
+        const receipt = `Closed ${name}`
         toast({
           kind: 'receipt',
           icon: 'check',
-          title: `Closed ${line.line.name ?? line.sku}`,
+          title: receipt,
           body: 'Nothing was marked sold and no copy is claimed to have gone.',
           ttlMs: UNDO_WINDOW_MS,
           action: {
@@ -2258,7 +2302,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
                 try {
                   await afterWrite(() => reopenLines(aim))
                 } catch (err) {
-                  toast({ ...listWriteToast(err, 'undo'), icon: 'alert' })
+                  toast({ ...noAnswerToast(err, () => unconfirmedListUndo(receipt, NOT_SHIPPING_LABEL)), icon: 'alert' })
                 }
               })()
             },
@@ -2266,7 +2310,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         })
       } catch (err) {
         if (!live.current) return
-        setFailure(listWriteFailure(err, 'not-shipping close'))
+        setFailure(noAnswerFailure(err, () => unconfirmedListPress(NOT_SHIPPING_LABEL, name, `${NOT_SHIPPING_LABEL} is still there`), true))
       } finally {
         if (live.current) setBusy(null)
       }
@@ -2570,7 +2614,7 @@ function ReconcileBacklogPanel({
 }: {
   readonly orders: readonly OrderRow[]
   readonly busy: string | null
-  readonly onPress: (cutoff: string) => void
+  readonly onPress: (cutoff: string, candidates: number) => void
 }) {
   const today = useMemo(() => utcDay(), [])
   /* EVERY ORDER THE RULE COULD REACH AT ANY CUTOFF: open, nothing recorded, a placed date. There
@@ -2664,7 +2708,7 @@ function ReconcileBacklogPanel({
           busy={busyHere}
           disabled={busy !== null || !valid || candidates.length === 0}
           onClick={() => {
-            if (valid) onPress(cutoff)
+            if (valid) onPress(cutoff, candidates.length)
           }}
         >
           Stand down {countOf(candidates.length, 'order')}
@@ -4025,7 +4069,7 @@ function PullStage({
     <div className={shownWalking ? 'orders-stage is-walking' : 'orders-stage'}>
       <WalkLinePublisher words={shownWalking && shownGroup !== null ? chipWords : null} />
       {filterBar}
-      {failure === null ? null : <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />}
+      <SettingsTrouble failure={failure} />
       {sharedNumber ? (
         <Notice tone="warn" title={`More than one buyer has order ${orderQ}`}>
           The link names only the number, so no buyer is opened. Pick the buyer from the list.
@@ -4218,11 +4262,11 @@ function ManagePanel({
           />
           <SettingsTrouble failure={failure} />
           {order.open ? (
-            <SettingsGroup title="Stand down this order" note="Marks nothing sold" danger>
+            <SettingsGroup title={STAND_DOWN_ORDER_LABEL} note="Marks nothing sold" danger>
               {(
                 [
-                  ['not_shipping', 'Cancelled or Refunded', 'x'],
-                  ['shipped_elsewhere', 'Already Shipped', 'truck'],
+                  ['not_shipping', STAND_DOWN_REASON_LABEL.not_shipping, 'x'],
+                  ['shipped_elsewhere', STAND_DOWN_REASON_LABEL.shipped_elsewhere, 'truck'],
                 ] as const
               ).map(([reason, label, icon]) => (
                 <SettingsOp
