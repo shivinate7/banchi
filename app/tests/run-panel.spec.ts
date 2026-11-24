@@ -3609,6 +3609,10 @@ test('a late answer for the run just left does not freeze the run now open', asy
     const readBack = page.waitForRequest(
       (request) => request.method() === 'GET' && request.url().endsWith(`/pipeline/runs/${first.run}`),
     )
+    /* The held read's own response: every GET of run A is held from here, so the first response for A is the one that lands late. */
+    const lateRead = page.waitForResponse(
+      (response) => response.request().method() === 'GET' && response.url().endsWith(`/pipeline/runs/${first.run}`),
+    )
     await page.getByRole('button', { name: 'Preview' }).click()
     await readBack
 
@@ -3623,8 +3627,9 @@ test('a late answer for the run just left does not freeze the run now open', asy
     await expectLive(page, 'codes')
 
     lateFirst.open()
-    /* The toast is the last thing the press does, after it has written A's read into the panel. */
-    await expect(page.locator('.bn-toast', { hasText: 'Match finished' })).toBeVisible()
+    /* THE HELD READ'S OWN RESPONSE, NOT A TOAST. Under `afterWrite` the toast comes before the re-read it would have followed, so
+       a toast proves nothing about the late read. `finished()` waits until the body has come in. */
+    await (await lateRead).finished()
     await expectLive(page, 'codes')
   } finally {
     slowSecond.open()
