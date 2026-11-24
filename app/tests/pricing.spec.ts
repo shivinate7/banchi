@@ -9202,8 +9202,10 @@ test('refusal copy control: tick drop', async ({ page }) => {
 
 /* THE TAKE-OFF PRESS (SendCard, `pressTakeOff`). It changes the owed list's entry, so the owed take-offs are read again after it. */
 const TAKE_OFF_PATH = '/inventory/2/1/take-off'
+/* A 5xx may still have committed, so the owed list is read again after it (D73). The cases below press through this answer too. */
+const TAKE_OFF_5XX = { status: 503, body: { error: { code: 'store_unavailable', message: 'The store did not answer.' } } }
 for (const failure of [
-  { status: 503, body: { error: { code: 'store_unavailable', message: 'The store did not answer.' } }, label: 'a 5xx' },
+  { ...TAKE_OFF_5XX, label: 'a 5xx' },
   { status: 409, body: { error: { code: 'take_off_refused', message: 'The store refused the take-off.' } }, label: 'a refusal' },
 ]) {
   test(`reread follow-on: a Take It Off that the server fails with ${failure.label} re-reads the owed take-offs`, async ({ page }) => {
@@ -9294,6 +9296,68 @@ test('reread follow-on: one of two accepted take-offs keeps its answer once the 
   await expect(page.getByText(AS_OF), 'the header is read again once the owed list has been read').not.toHaveText(headerBefore ?? '')
   const shown = await page.locator(OWED_SHOWN).allInnerTexts()
   expect(shown.join(' '), 'the accepted answer for Thievul is gone once the owed list is read again without it').toContain('TCGplayer accepted: 2 copies')
+})
+
+/* THE REFUSAL ANSWER THROUGH THE OWED RE-READ. A 5xx may have committed (D73), so the owed list is read again after it. An answer stands
+   only while the list still lists its entry: a re-read that drops the entry says TCGplayer no longer owes it, so the line that says
+   "nothing went live" and the head's count of its copies must not stay. Each case answers the press with a 5xx, then the owed read. */
+test('reread follow-on: a lone 5xx take-off the owed read drops shows no refusal line and no Try again', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const owedRead = gate()
+  const wire = await open(page, { takeOffsOwed: [THIEVUL], takeOffsOwedAfterPress: [], takeOff: () => TAKE_OFF_5XX, onOwedAfterPress: owedRead.open })
+  await holdHeaderBehind(page, wire, owedRead.wait)
+  const headerBefore = await page.getByText(AS_OF).textContent()
+  const sent = recordSent(page)
+  await expect(page.locator('.send-owed').getByRole('button', { name: /take it off tcgplayer/i }), 'precondition: the owed entry offers its press').toBeVisible()
+  await page.locator('.send-owed').getByRole('button', { name: /take it off tcgplayer/i }).click()
+  await expect.poll(() => readAfterWrite(sent, 'POST', TAKE_OFF_PATH, '/pipeline/sends/owed'), {
+    message: 'a take-off that fails with a 5xx is followed by a read of the owed take-offs: no GET /pipeline/sends/owed reached the server after it',
+  }).toBe(true)
+  await expect(page.getByText(AS_OF), 'the header is read again once the owed list has been read').not.toHaveText(headerBefore ?? '')
+  await expect(
+    page.locator(OWED_SHOWN).filter({ hasText: 'did not take Thievul off' }),
+    'the owed read dropped Thievul, so the line must not still say TCGplayer did not take it off',
+  ).toHaveCount(0)
+  await expect(page.locator('.send-owed').getByRole('button', { name: 'Try again' }), 'the owed read dropped Thievul, so no Try again is offered for it').toHaveCount(0)
+})
+
+test('reread follow-on: one of two 5xx take-offs the owed read drops is not counted in the head', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const owedRead = gate()
+  const wire = await open(page, { takeOffsOwed: [THIEVUL, PIKACHU], takeOffsOwedAfterPress: [PIKACHU], takeOff: () => TAKE_OFF_5XX, onOwedAfterPress: owedRead.open })
+  await holdHeaderBehind(page, wire, owedRead.wait)
+  const headerBefore = await page.getByText(AS_OF).textContent()
+  const sent = recordSent(page)
+  const owed = page.locator('.send-owed')
+  await owed.getByRole('button', { name: /^Show 2 Cards$/ }).click()
+  await owed.locator('.send-names li', { hasText: 'Thievul' }).getByRole('button', { name: 'Take It Off' }).click()
+  await expect.poll(() => readAfterWrite(sent, 'POST', TAKE_OFF_PATH, '/pipeline/sends/owed'), {
+    message: 'a take-off that fails with a 5xx is followed by a read of the owed take-offs: no GET /pipeline/sends/owed reached the server after it',
+  }).toBe(true)
+  await expect(page.getByText(AS_OF), 'the header is read again once the owed list has been read').not.toHaveText(headerBefore ?? '')
+  await expect(
+    page.locator(OWED_SHOWN),
+    'the owed read dropped Thievul, so the head counts only Pikachu\'s one copy, never Thievul\'s two',
+  ).toContainText('TCGplayer still lists 1 copy')
+})
+
+test('reread follow-on: a 5xx take-off the owed read still lists keeps its refusal line and Try again', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const owedRead = gate()
+  const wire = await open(page, { takeOffsOwed: [THIEVUL], takeOffsOwedAfterPress: [THIEVUL], takeOff: () => TAKE_OFF_5XX, onOwedAfterPress: owedRead.open })
+  await holdHeaderBehind(page, wire, owedRead.wait)
+  const headerBefore = await page.getByText(AS_OF).textContent()
+  const sent = recordSent(page)
+  await page.locator('.send-owed').getByRole('button', { name: /take it off tcgplayer/i }).click()
+  await expect.poll(() => readAfterWrite(sent, 'POST', TAKE_OFF_PATH, '/pipeline/sends/owed'), {
+    message: 'a take-off that fails with a 5xx is followed by a read of the owed take-offs: no GET /pipeline/sends/owed reached the server after it',
+  }).toBe(true)
+  await expect(page.getByText(AS_OF), 'the header is read again once the owed list has been read').not.toHaveText(headerBefore ?? '')
+  await expect(
+    page.locator(OWED_SHOWN).filter({ hasText: 'TCGplayer did not take Thievul off, so nothing went live.' }),
+    'the owed read still lists Thievul, so the refusal line stands',
+  ).toHaveCount(1)
+  await expect(page.locator('.send-owed').getByRole('button', { name: 'Try again' }), 'the owed read still lists Thievul, so its Try again stands').toBeVisible()
 })
 
 /* THE SEND CARD'S OTHER WRITES, CONTROLS. Take back, dismiss, and the unreadable-claim release and restore each already read the
