@@ -4522,7 +4522,9 @@ test('UN-11 (the delta review round) — the newest clear survives a reload, and
 
   /* `last_clear: true`, NEVER A GUESS AT THE SKUS: unlike the toast's own Undo, this route
      names no per-SKU values, so the server decides what comes back. */
-  expect(wire[0]?.body).toEqual({ last_clear: true, revision: 'rev-1' })
+  /* The Restore is posted from the click's own handler, so its wire entry lands after the click
+     returns. The same assertion, polled until the entry is there. */
+  await expect.poll(() => wire[0]?.body, { message: 'the Restore reached the server' }).toEqual({ last_clear: true, revision: 'rev-1' })
   const toast = page.locator('.bn-toast', { hasText: '49 prices undone' })
   await expect(toast).toBeVisible()
 
