@@ -9113,7 +9113,7 @@ for (const earlier of [false, true]) {
     const wire = await open(page, { ...clearOptions(earlier), restoreFailure: { status: 503, code: 'store_unavailable' }, revisionAfterRestore: 'rev-moved' })
     const sent = recordSent(page)
     await pressRestoreCleared(page, earlier ? 2 : 3)
-    await expect(page.locator('.bn-toast', { hasText: 'Not undone' }), 'the failure is said').toBeVisible()
+    await expect(page.locator('.bn-toast', { hasText: 'The store did not confirm the restore.' }), 'the failure is said').toBeVisible()
     await expect.poll(() => readAfterWrite(sent, 'POST', '/pricing/restore', '/pricing'), {
       message: 'the failed Restore is followed by its re-read of the saved prices, which must not take the digest it carries',
     }).toBe(true)
