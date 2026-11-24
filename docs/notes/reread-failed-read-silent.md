@@ -1,0 +1,1 @@
+- reread-failed-read-silent: A registered re-read that fails after a write (`refreshCorpus` and `rereadTicks` in `app/src/Pricing.tsx`, the reads in `app/src/Slabs.tsx` and `app/src/RunPanel.tsx`) says nothing: the screen keeps what it held, and the next load or write reads again. Main is silent too, so this keeps its behavior.

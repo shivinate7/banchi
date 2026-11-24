@@ -31,7 +31,8 @@ import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react
 import type { ReactNode } from 'react'
 import { Button, Count, Icon, IconButton, Money, Notice, Pill, Refusal, Retry } from './kit'
 import { atClockTime, clockTime, dayMonth } from './dates'
-import { describeFailure, dismissSendWarning, getOwedTakeOffs, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, sendSuggestions, takeBackSend } from './server'
+import { afterWrite, useRereadOnWrite } from './afterWrite'
+import { describeFailure, dismissSendWarning, getOwedTakeOffs, gotNoAnswer, releaseUnreadableClaim, restoreUnreadableClaim, sendCopies, sendFileUrl, sendSuggestions, takeBackSend } from './server'
 import type { Failure } from './server'
 import type { EmptySend, LiveMove, OwedTakeOff, PriceChange, RefusedPrice, SendAnswer, SendSummary, SendTrim } from './types'
 import { pressTakeOff, viewOf, type TakeOffOutcome, type TakeOffView } from './takeOff'
@@ -72,9 +73,14 @@ const RETRYABLE = new Set(['live_check_failed', 'tcg_write_refused', 'tcg_write_
  *  a connection dropped mid-send looks like from the page. */
 const DROPPED = new Set(['unreachable', 'bad_response', 'origin_blocked'])
 
+/** WHICH RE-READ A SEND OWES (`afterWrite`, D73). A Send that answered is followed by the screen's own reload, which reads
+ *  the worklist and the saved prices, so only the owed take-offs are left to read. A Send that did not answer has no reload
+ *  coming, and may still have gone: all of it is read. */
+const sendKind = (failed: boolean): 'send' | 'other' => (failed ? 'other' : 'send')
+
 /** One sentence for why a press was refused, in owner words. The server's own text sits behind
  *  "What the server said" (D196, D269). */
-function refusalTitle(code: string, data?: unknown): string {
+function refusalTitle(code: string, data?: unknown, noAnswer = false): string {
   /* AN EMPTY SEND'S TITLE STATES EVERY REASON IT HAD (R6-2), worded here from the figures the
      route sends, never from its sentence (D269): a card the guard trimmed is in the title. */
   const empty = (data as { empty?: EmptySend } | undefined)?.empty
@@ -135,7 +141,10 @@ function refusalTitle(code: string, data?: unknown): string {
       /* The tcg_* codes come from the far side; any other unknown code does not blame it. */
       return code.startsWith('tcg_')
         ? 'TCGplayer did not take the send. Nothing is live, and the copies are back on the list.'
-        : 'This send did not go through. Check what is live before you send again.'
+        : noAnswer
+          ? /* A 5xx or a lost connection may still have sent: the title does not say it did not. */
+            'The store did not confirm this send. Press Refresh to see what is live before you send again.'
+          : 'This send did not go through. Check what is live before you send again.'
   }
 }
 
@@ -179,6 +188,17 @@ export function useOwedTakeOffs(): OwedTakeOffs {
     }
   }, [reads])
   const reload = useCallback(() => setReads((n) => n + 1), [])
+  /* A WRITE'S RE-READ (`afterWrite`, D73): a send, whatever it came to, may have settled a take-off, so the list is read again. */
+  useRereadOnWrite(async (kind) => {
+    if (kind !== 'send' && kind !== 'other') return
+    try {
+      const answer = await getOwedTakeOffs()
+      setOwed(answer.owed)
+      setFailure(null)
+    } catch (err) {
+      setFailure(describeFailure(err))
+    }
+  })
   return { owed, loading, failure, reload }
 }
 
@@ -1033,7 +1053,7 @@ export function SendCard({
   const [passed, setPassed] = useState<readonly string[]>([])
   const [phase, setPhase] = useState<'idle' | 'waiting' | 'sending' | 'downloading'>('idle')
   const [intent, setIntent] = useState<'send' | 'download'>('send')
-  const [failure, setFailure] = useState<Failure | null>(null)
+  const [failure, setFailure] = useState<(Failure & { readonly noAnswer?: boolean }) | null>(null)
   const [sent, setSent] = useState<SendSummary | null>(null)
   /* WHAT THE PRESS DID TO THE KEPT SUGGESTIONS (a price that moved, one left out), answered with this visit's own press. */
   const [answered, setAnswered] = useState<SendAnswer | null>(null)
@@ -1081,13 +1101,12 @@ export function SendCard({
       try {
         /* THE LEFT-OUT PRICES ALONE: no run, no live-copy move, each against the live price the owner was shown. */
         if (only !== null && !download) {
-          const answer = await sendCopies([], { prices: only })
+          const answer = await afterWrite(() => sendCopies([], { prices: only }), sendKind)
           setSent(answer.send)
           setAnswered(answer)
           setFailure(null)
           setOnly(null)
           onSent()
-          reloadOwed()
           return
         }
         const prices = [...priceChanges, ...listed].map((change) =>
@@ -1098,16 +1117,18 @@ export function SendCard({
           ...Object.values(confirmed.moves),
         ]
         /* KEPT SUGGESTIONS ALONE NEED NO RUN: each is a price-only row on a listing that is already live. */
-        const answer =
+        /* THE OWED TAKE-OFFS AND THE PRICES ARE READ AGAIN WHATEVER THE SEND CAME TO (`afterWrite`, D73): a send the server failed may still have gone. */
+        const answer = await afterWrite(() =>
           !download && runs.length === 0 && moves.length === 0 && prices.length > 0 && prices.every((one) => one.source === 'suggested')
-            ? await sendSuggestions(prices)
-            : await sendCopies(runs, { download, splitThreshold: download && split, quantities: quantities(), prices, moves })
+            ? sendSuggestions(prices)
+            : sendCopies(runs, { download, splitThreshold: download && split, quantities: quantities(), prices, moves }),
+          sendKind,
+        )
         setSent(answer.send)
         setAnswered(answer)
         setFailure(null)
         setConfirmed({ was: {}, moves: {} })
         onSent()
-        reloadOwed()
       } catch (err) {
         const failed = describeFailure(err)
         if (DROPPED.has(failed.code)) {
@@ -1119,13 +1140,13 @@ export function SendCard({
             return
           }
         }
-        setFailure(failed)
+        setFailure({ ...failed, noAnswer: gotNoAnswer(err) })
       } finally {
         setPhase('idle')
         void refreshLive()
       }
     })()
-  }, [phase, settled, saveFailed, intent, only, runs, split, quantities, priceChanges, listed, liveMoves, confirmed, onSent, reloadOwed])
+  }, [phase, settled, saveFailed, intent, only, runs, split, quantities, priceChanges, listed, liveMoves, confirmed, onSent])
 
   const press = (next: 'send' | 'download', rows: readonly PriceChange[] | null = null) => {
     setOnly(rows)
@@ -1414,14 +1435,14 @@ export function SendCard({
         <Retry
           compact
           className="send-failure"
-          title={refusalTitle(failure.code, failure.data)}
+          title={refusalTitle(failure.code, failure.data, failure.noAnswer)}
           code={failure.code}
           detail={failure.message}
           busy={busy}
           onRetry={() => press(intent, only)}
         />
       ) : (
-        <Refusal compact className="send-failure" title={refusalTitle(failure.code, failure.data)} code={failure.code} detail={failure.message} />
+        <Refusal compact className="send-failure" title={refusalTitle(failure.code, failure.data, failure.noAnswer)} code={failure.code} detail={failure.message} />
       )}
 
       {undoFailure === null ? null : (

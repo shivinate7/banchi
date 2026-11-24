@@ -10,29 +10,37 @@
  * unmounted still reaches whatever is mounted by the time it answers, or nothing, and the next mount re-reads anyway.
  *
  * THE RE-READS MERGE: at most one round in flight and one pending, because a burst of clients kills the capture server
- * (`CLAUDE.md`). Writes answered while a round runs fold into one more round after it, of the widest kind among them.
+ * (`CLAUDE.md`). Writes answered while a round runs fold into one more round after it, of their kind, or of `other` when they differ.
  */
 import { useEffect, useRef } from 'react'
 
-/** What a write was. A `sale` changes the copy, its box and the counts, the review queues and the order claims: it moves no
- *  price and buries no box, so a screen's registered read may leave its buried boxes and price tables as read. Any other
- *  write is `other`, which re-reads all of it. */
-export type WriteKind = 'sale' | 'other'
+/** What a write was, so a screen re-reads only what it touched (a burst of clients kills the capture server). A `sale`
+ *  changes the copy, its box and the counts, the review queues and the order claims: it moves no price and buries no box.
+ *  A `tick` is a kept suggestion tick, and moves only the ticks on the worklist. A `corpus` write is a price save, a clear
+ *  or its Undo, and moves the saved prices alone. A `refresh` is a Refresh Now press: it moves the refresh state and the
+ *  saved prices. A `send` is a Send that answered: the screen's own reload reads the worklist and the saved prices, so
+ *  a send re-reads only what that reload does not. Any other write is `other`, which re-reads all of it. */
+export type WriteKind = 'sale' | 'tick' | 'corpus' | 'refresh' | 'send' | 'other'
 
 type Reread = (kind: WriteKind) => Promise<void>
+
+/** WHICH RE-READ A PRICE WRITE OWES (`afterWrite`, D73). A save, a clear or an Undo that answered owes the saved prices, and its re-read may take
+ *  the digest it reads (D86). One the server refused (`corpus_moved`) or never answered wrote nothing the screen knows of, so its re-read is `other`:
+ *  it reads all, and takes no digest, or the next save would overwrite the writer that moved the file. */
+export const corpusKind = (failed: boolean): WriteKind => (failed ? 'other' : 'corpus')
 
 /** How long one round of re-reads may run before the next write's round may start. */
 const ROUND_LIMIT_MS = 30_000
 
 const registered = new Set<Reread>()
 let inFlight = false
-/** The round waiting behind the one in flight, or null. Writes folded into it keep the widest kind: one `other` makes it `other`. */
+/** The round waiting behind the one in flight, or null. Writes folded into it of one kind keep it; two kinds make it `other`. */
 let pending: WriteKind | null = null
 
 /** Start the registered re-reads, now, without waiting. A round already out takes this as one pending round. */
 export function rereadNow(kind: WriteKind = 'other'): void {
   if (inFlight) {
-    pending = pending === 'other' || kind === 'other' ? 'other' : 'sale'
+    pending = pending === null || pending === kind ? kind : 'other'
     return
   }
   inFlight = true
@@ -61,13 +69,17 @@ export function rereadNow(kind: WriteKind = 'other'): void {
 
 /** Run one write, then re-read what the screen shows, whatever the write came to: an answer, a refusal, a 5xx or a network
  *  error. A write that got no answer may still have committed (the server can fail after it writes), so the screen cannot
- *  know it is unchanged. A failure is rethrown for the caller to say. `kind` says which re-read the write is owed: a sale
- *  passes `'sale'`, and every other write re-reads all. */
-export async function afterWrite<T>(write: () => Promise<T>, kind: WriteKind = 'other'): Promise<T> {
+ *  know it is unchanged. A failure is rethrown for the caller to say. `kind` says which re-read the write is owed, or, as a
+ *  function of whether the write failed, which one: a Send that answered leaves the worklist to its own reload, and one
+ *  that did not has no reload coming. Every write that names no kind re-reads all. */
+export async function afterWrite<T>(write: () => Promise<T>, kind: WriteKind | ((failed: boolean) => WriteKind) = 'other'): Promise<T> {
+  let failed = true
   try {
-    return await write()
+    const answer = await write()
+    failed = false
+    return answer
   } finally {
-    rereadNow(kind)
+    rereadNow(typeof kind === 'function' ? kind(failed) : kind)
   }
 }
 

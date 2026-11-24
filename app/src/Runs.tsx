@@ -124,6 +124,8 @@ export function RunsContent({
   const [boxes, setBoxes] = useState<readonly BoxRecord[] | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [reloads, setReloads] = useState(0)
+  /** A START reads the boxes again (a drawer is now in a run) but never the runs list: `afterWrite` re-reads that once, whatever the Start came to. */
+  const [startedReads, setStartedReads] = useState(0)
 
   /** WHAT THE OPERATOR HAS POINTED AT. No DRAWER is ever ticked for them — a drawer chosen on
    *  their behalf is one they did not read, and the press after it spends money. The default
@@ -149,7 +151,7 @@ export function RunsContent({
   }, [])
 
   /** The handoff from `#/inventory` is applied ONCE, on the first successful read of the
-   *  registry — never on a Reload and never when a run starts, both of which bump `reloads`.
+   *  registry — never on a Reload and never when a run starts, which re-read the boxes.
    *  It stays in storage until the operator picks a scope, so re-applying it here would reopen
    *  the composer uninvited and silently put back a selection they had just replaced. */
   const handoffApplied = useRef(false)
@@ -205,7 +207,7 @@ export function RunsContent({
     return () => {
       live = false
     }
-  }, [reloads])
+  }, [reloads, startedReads])
 
   /* D39'S RE-CONSENT RULE, NARROWED AND NOT REPEALED. That entry drops the ticked selection
      whenever a scope is picked on `#/runs`, because a tick list surviving a deliberate choice is
@@ -256,7 +258,7 @@ export function RunsContent({
   const onStarted = useCallback((run: string) => {
     started.current = true
     setOpenRun(run)
-    setReloads((n) => n + 1)
+    setStartedReads((n) => n + 1)
   }, [])
 
   const closeComposer = useCallback(() => {

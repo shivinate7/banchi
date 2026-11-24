@@ -113,11 +113,11 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/PricesAsOf.css` — That header at `--bn-*` tokens only.
   - Decisions: `D313`
 - `app/src/PricesAsOf.tsx` — The header line above #/pricing's list: "Prices as of" the catalog step's finish, and the one press, Refresh now, with its running, done and failed states.
-  - Decisions: `D313`, `D104`, `D189`, `D278`
+  - Decisions: `D313`, `D104`, `D189`, `D278`, `D73`
 - `app/src/Pricing.css` — The one list, the slim bar and the rule line, `--bn-*` only.
   - Decisions: `D277`, `D123`, `D313`, `D28`, `D118`, `D50`, `D273`, `D221`, `D117`, `D5`, `D9`, `D38`, `D41`, `D54`, `D56`, `D86`, `D103`, `D105`, `D125`, `D197`, `D218`, `D278`
 - `app/src/Pricing.tsx` — The Pricing screen: every unsent copy with its price, its holds and its readiness.
-  - Decisions: `D86`, `D277`, `D278`, `D103`, `D99`, `D118`, `D181`, `D56`, `D156`, `D115`, `D125`, `D301`, `D172`, `D7`, `D285`, `D313`, `D273`, `D271`, `D54`, `D59`, `D221`, `D9`, `D168`, `D137`, `D109`, `D36`, `D145`, `D4`, `D5`, `D22`, `D26`, `D28`, `D33`, `D35`, `D37`, `D38`, `D39`, `D41`, `D51`, `D58`, `D89`, `D100`, `D101`, `D105`, `D107`, `D117`, `D180`, `D196`, `D210`, `D218`, `D269`
+  - Decisions: `D86`, `D277`, `D278`, `D103`, `D99`, `D118`, `D181`, `D56`, `D156`, `D115`, `D125`, `D301`, `D172`, `D7`, `D285`, `D313`, `D273`, `D271`, `D54`, `D59`, `D221`, `D9`, `D168`, `D137`, `D109`, `D36`, `D145`, `D4`, `D5`, `D22`, `D26`, `D28`, `D33`, `D35`, `D37`, `D38`, `D39`, `D41`, `D51`, `D58`, `D89`, `D100`, `D101`, `D105`, `D107`, `D117`, `D180`, `D196`, `D210`, `D218`, `D269`, `D73`
 - `app/src/ProductHistory.css` — The chart at `--bn-*` tokens only.
   - Decisions: `D227`, `D278`, `D212`, `D41`, `D218`, `D94`
 - `app/src/ProductHistory.tsx` — `#/product`: one product's market history, with the owner's own sales marked on it.
@@ -149,7 +149,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/RunPanel.css` — The panel at owner density — the `4`-`16` end of the scale, mono on every number, and exactly one solid accent fill: the button that spends, drawn only once the estimate is on screen above it.
   - Decisions: `D291`, `D123`, `D117`, `D218`, `D28`, `D31`, `D32`, `D33`, `D38`, `D180`, `D50`, `D54`, `D65`, `D76`, `D86`
 - `app/src/RunPanel.tsx` — THE RUNS, AS MASTER AND DETAIL, on #/runs since D39 and in #/inventory's content column before it.
-  - Decisions: `D65`, `D76`, `D33`, `D313`, `D145`, `D207`, `D128`, `D180`, `D196`, `D118`, `D1`, `D3`, `D9`, `D13`, `D16`, `D28`, `D31`, `D32`, `D39`, `D54`, `D56`, `D86`
+  - Decisions: `D65`, `D76`, `D33`, `D313`, `D145`, `D207`, `D128`, `D180`, `D196`, `D118`, `D1`, `D3`, `D9`, `D13`, `D16`, `D28`, `D31`, `D32`, `D39`, `D54`, `D56`, `D86`, `D73`
 - `app/src/RunRescue.css` — The rescue sheet's own layout, `LiveReconcile.css`'s shape — width, padding, the thumb floor on a coarse pointer (D117).
   - Decisions: `D145`, `D210`, `D275`, `D117`
 - `app/src/RunRescue.tsx` — D145's repair, offered from `RunPanel.tsx`'s own header ONLY where `detail.box_former` is true — a run over a drawer D20 has since handed to another box.
@@ -159,7 +159,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/Runs.tsx` — The runs sheet and the redirect from the old runs route: the box picker, the composer, the store-wide reconcile and the stale-listing markdown, with the run panel beneath them.
   - Decisions: `D39`, `D291`, `D56`, `D174`, `D5`, `D10`, `D13`, `D20`, `D27`, `D32`, `D33`, `D38`, `D87`, `D100`
 - `app/src/RunsComposer.tsx` — THE IDENTIFY COMPOSER: the one press in this product that spends money, as a staged dialog — which boxes, how each is read, what it costs, and a receipt.
-  - Decisions: `D33`, `D56`, `D32`, `D145`, `D174`, `D291`, `D180`, `D313`, `D275`, `D207`, `D39`, `D118`, `D196`, `D183`, `D58`, `D172`, `D269`, `D13`, `D27`, `D65`, `D76`, `D277`, `D94`, `D91`, `D2`
+  - Decisions: `D33`, `D56`, `D32`, `D145`, `D174`, `D291`, `D180`, `D313`, `D275`, `D207`, `D39`, `D118`, `D196`, `D183`, `D58`, `D172`, `D269`, `D13`, `D27`, `D65`, `D76`, `D277`, `D94`, `D91`, `D2`, `D73`
 - `app/src/RunsDrop.tsx` — The file controls, as controls that look like the product: a native file input cannot be styled to sit beside a kit button, so the input is visually hidden and its own <label> is the control — a label IS the accessible name of the input it wraps, so this costs nothing in reachability.
   - Decisions: `D5`, `D33`, `D94`
 - `app/src/RunsLog.tsx` — A command's stdout, verbatim, in a well that follows its tail, counts its lines, folds and copies.
@@ -175,7 +175,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/SendCard.css` — The send card's own rows: the press and its two quiet doors on one line that wraps as a unit, the download door, and the card lists under a notice.
   - Decisions: `D277`, `D313`, `D117`, `D118`, `D273`
 - `app/src/SendCard.tsx` — THE SEND CARD on Pricing's send bar: one press from priced to live (D273).
-  - Decisions: `D273`, `D196`, `D269`, `D313`, `D277`, `D118`, `D86`, `D99`, `D105`
+  - Decisions: `D273`, `D196`, `D269`, `D313`, `D277`, `D118`, `D86`, `D99`, `D105`, `D73`
 - `app/src/Shipping.css` — The lane table and its chips, at owner density.
   - Decisions: `D197`, `D218`, `D117`, `D61`, `D38`, `D50`, `D69`
 - `app/src/Shipping.tsx` — The shipping route: points the route at the orders hub on its ship stage.
@@ -190,8 +190,8 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
   - Decisions: `D174`, `D89`, `D50`, `D196`, `D118`, `D57`, `D207`, `D33`, `D39`, `D94`
 - `app/src/TakeOffLine.tsx` — The take-off line on a master-set retire receipt: Take It Off TCGplayer at the pull and the answer in the same place, drawn in the toast kit's changing line.
   - Decisions: `D100`, `D118`, `D196`, `D313`
-- `app/src/afterWrite.ts` — The one home of re-reading after a write for a screen that registers its reads: `afterWrite(write, kind)` runs a write, with `kind` a `WriteKind` (`'sale'` or `'other'`), and starts the re-reads when it answers or is refused, merged to one in flight and one pending, never awaited.
-  - Decisions: `D73`, `D313`
+- `app/src/afterWrite.ts` — The one home of re-reading after a write for a screen that registers its reads: `afterWrite` runs a write and starts the re-reads when it answers or is refused, merged to one in flight and one pending, never awaited. Each write names its kind (a sale, a kept tick, a price save or clear, a Refresh Now, a send), and a registered read answers only the kinds it touches. `corpusKind` names the kind a price write owes: one that answered lets its re-read take the digest, one refused or unanswered does not.
+  - Decisions: `D73`, `D86`, `D313`
 - `app/src/autoMatch.ts` — MATCHING RUNS BY ITSELF WHEN A READING FINISHES (the owner's Q4 ruling).
   - Decisions: `D65`, `D273`
 - `app/src/base.css` — Reset and the page ground, and the six app-wide floors: the `:focus-visible` ring, the cursor floor after `39` of `142` interactive elements were measured with no cursor rule any selector could reach, tabular figures on every table, `output` and `time`, and the reduced-motion floor.

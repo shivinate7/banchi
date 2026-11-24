@@ -15,6 +15,7 @@ import {
 } from './server'
 import type { ExportAsked, ExportFetched, ExportScope, RunDetail, RunSummary } from './types'
 import { usePoll } from './usePoll'
+import { afterWrite, useRereadOnWrite } from './afterWrite'
 import { readUpload } from './csvUpload'
 import { Button, EmptyState, Icon, IconButton, Loading, Money, Notice, Pill, Segmented, Select, Stat } from './kit'
 import { toast } from './kit/toast'
@@ -432,9 +433,8 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
   const retryMatch = () =>
     guard('join', async () => {
       if (openRun === null) return
-      const answer = await matchRun(openRun, true)
-      setDetail(await getRun(openRun))
-      await loadRuns()
+      /* THE RE-READ IS `afterWrite`'S (D73): the open run, then the list, started whatever the Try again came to. */
+      const answer = await afterWrite(() => matchRun(openRun, true))
       if (answer.ok) toast({ kind: 'ok', title: 'Matched', body: 'The next step is on the run.', ttlMs: 4000 })
     })
 
@@ -581,13 +581,21 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
     }
   }, [])
 
+  /* EVERY STEP'S RE-READ (`afterWrite`, D73): the open run, then the list, started when a step is answered, whatever it
+     came to. A step the server failed or refused may still have moved the run. */
+  useRereadOnWrite(async () => {
+    try {
+      if (openRun !== null) setDetail(await getRun(openRun))
+    } finally {
+      await loadRuns()
+    }
+  })
+
   const settle = useCallback(
-    async (step: Command, result: { ok: boolean; console: string }) => {
+    (step: Command, result: { ok: boolean; console: string }) => {
       if (openRun === null) return
       setStepOut({ step, ok: result.ok, console: result.console })
       setOpenStep(step)
-      setDetail(await getRun(openRun))
-      await loadRuns()
       toast({
         kind: result.ok ? 'ok' : 'refusal',
         title: `${TITLES[step]} ${result.ok ? 'finished' : 'refused'}`,
@@ -595,14 +603,14 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
         ttlMs: result.ok ? 4000 : 8000,
       })
     },
-    [openRun, loadRuns, setDetail],
+    [openRun],
   )
 
   const doStep = (step: 'join' | 'emit' | 'reconcile', extra: Parameters<typeof runStep>[2] = {}) =>
     guard(step === 'join' ? 'join' : 'staged', async () => {
       if (openRun === null) return
-      const result = await runStep(openRun, step, extra)
-      await settle(step, result)
+      const result = await afterWrite(() => runStep(openRun, step, extra))
+      settle(step, result)
     })
 
   /* One press, two calls: fetch the export, then join against it — only if it landed. */
@@ -622,24 +630,25 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
         return
       }
       setFetched(answer)
-      const result = await runStep(openRun, 'join', { fetched: [answer.file], reviewBelowConfidence: reviewBelow })
-      await settle('join', result)
+      const result = await afterWrite(() => runStep(openRun, 'join', { fetched: [answer.file], reviewBelowConfidence: reviewBelow }))
+      settle('join', result)
     })
 
   const joinWithExports = (files: File[]) =>
     guard('exports', async () => {
       if (files.length === 0 || openRun === null) return
       const uploads = await Promise.all(files.map(readUpload))
-      const result = await runStep(openRun, 'join', { exports: uploads, reviewBelowConfidence: reviewBelow })
-      await settle('join', result)
+      const result = await afterWrite(() => runStep(openRun, 'join', { exports: uploads, reviewBelowConfidence: reviewBelow }))
+      settle('join', result)
     })
 
   const compareStaged = (files: File[]) =>
     guard('staged', async () => {
       const chosen = files[0]
       if (chosen === undefined || openRun === null) return
-      const result = await runStep(openRun, 'reconcile', { stagedExport: await readUpload(chosen) })
-      await settle('reconcile', result)
+      const stagedExport = await readUpload(chosen)
+      const result = await afterWrite(() => runStep(openRun, 'reconcile', { stagedExport }))
+      settle('reconcile', result)
     })
 
   /* --------------------------------------------------------------------------- render */

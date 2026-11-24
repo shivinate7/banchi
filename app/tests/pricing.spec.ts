@@ -1,11 +1,12 @@
 // Protects: Pricing shows every unsent copy, writes only what the owner sets, and sends only what the Send bar says.
 // Governs: D86, D59, D278, D277, D118, D218
-import { test, expect, type Locator, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page, type Route } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { afterPaint, settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 import { expectOneStagger } from './staggerCheck'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
+import { readAfterPost, readAfterWrite, readsAfterWrite, recordSent } from './wireOrder'
 
 import type {
   HistoryRange,
@@ -297,6 +298,11 @@ async function open(
      *  exist to hold. Absent means a server that predates the route, and the control is then
      *  not offered at all. */
     clearable?: { days: Record<string, number | null>; holds: number; unknown: number }
+    /** Answers `PUT /pricing` (the price save) with a refusal or a 5xx instead of the written file. The PUT is still recorded
+     *  into the wire; the GETs of the same path are answered as before. */
+    corpusSave?: { status: number; code: string }
+    /** Answers `POST /pricing/restore` (an Undo of a clear, or of a press's answers) with a refusal or a 5xx. Recorded into the wire first. */
+    restoreFailure?: { status: number; code: string }
     /** UN-11: the newest clear the server still remembers, on `GET /pricing`'s own envelope,
      *  beside `clearable`. Absent means no clear stands (the ordinary case, and the state
      *  after a restore or after a send has built on it). */
@@ -329,6 +335,9 @@ async function open(
     live?: LiveListing[] | ((wire: Wire[]) => LiveListing[])
     /** SPEC 7B. What `GET /pipeline/price-facts?sku=` answers: the T panel's one local read. */
     facts?: Record<string, unknown>
+    /** What `POST /pipeline/prices/refresh` answers when it fails: a refusal or a 5xx, in place of the running state. The
+     *  POST is still recorded into the wire, and the GETs of the same path are untouched. */
+    refreshPress?: { status: number; code: string }
     /** SPEC 7B. What `GET /pipeline/prices/refresh` answers. Default: resting, with the note. */
     refresh?: Record<string, unknown>
     /** SPEC 7B. The first N reads of `trends-saved` fail with a 500, as a restarted server would. */
@@ -604,6 +613,14 @@ async function open(
     const body = route.request().postDataJSON() as Record<string, unknown>
     wire.push({ method: 'POST', path: '/pricing/restore', body })
     const answers = (body.answers ?? {}) as Record<string, unknown>
+    if (options.restoreFailure !== undefined) {
+      await route.fulfill({
+        status: options.restoreFailure.status,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: options.restoreFailure.code, message: 'The server said no.' } }),
+      })
+      return
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -627,6 +644,13 @@ async function open(
         path: '/pricing',
         body: route.request().postDataJSON(),
       })
+      if (options.corpusSave !== undefined) {
+        return route.fulfill({
+          status: options.corpusSave.status,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: options.corpusSave.code, message: 'The server said no.' } }),
+        })
+      }
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -895,6 +919,14 @@ async function open(
   await page.route(/\/pipeline\/prices\/refresh$/, async (route) => {
     const post = route.request().method() === 'POST'
     wire.push({ method: post ? 'POST' : 'GET', path: '/pipeline/prices/refresh', body: post ? route.request().postDataJSON() : null })
+    if (post && options.refreshPress !== undefined) {
+      await route.fulfill({
+        status: options.refreshPress.status,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: options.refreshPress.code, message: 'The server said no.' } }),
+      })
+      return
+    }
     await route.fulfill({
       status: post ? 202 : 200,
       contentType: 'application/json',
@@ -1326,6 +1358,69 @@ test('one press sends and makes live, and says when the check comes', async ({ p
   expect(sendPosts(wire)).toHaveLength(1)
 })
 
+/* THE READS AFTER A SEND, WHATEVER ITS OUTCOME. The press reads the send status in its `finally` (`refreshLive`), so a
+   failed Send re-reads that status already: that case is the control. The owed take-offs (`reloadOwed`) and the prices
+   worklist (`onSent`, which is `afterSend`, which calls `reload`) run only when the answer arrives, so a failed Send reads
+   neither. Each case asserts an order with `recordSent`: a GET sent after the POST of /pipeline/send. */
+test('a Send the store does not confirm says so in its title, and says to press Refresh to see what is live', async ({ page }) => {
+  await open(page, { send: () => ({ status: 503, code: 'store_unavailable' }) })
+  await sendPress(page).click()
+  await expect(
+    page.getByText('The store did not confirm this send. Press Refresh to see what is live before you send again.', { exact: true }),
+    'the no-answer title names the Refresh step, not only "check what is live"',
+  ).toBeVisible()
+})
+
+test('a Send the server fails with a 5xx still re-reads the send status', async ({ page }) => {
+  await open(page, { send: () => ({ status: 503, code: 'store_unavailable' }) })
+  const sent = recordSent(page)
+  await sendPress(page).click()
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === '/pipeline/send'), { message: 'the Send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pipeline/sends'), {
+    message: 'a Send that failed with a 5xx is followed by a read of the send status',
+  }).toBe(true)
+})
+
+test('a Send the server fails with a 5xx re-reads the owed take-offs', async ({ page }) => {
+  await open(page, { send: () => ({ status: 503, code: 'store_unavailable' }) })
+  const sent = recordSent(page)
+  await sendPress(page).click()
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === '/pipeline/send'), { message: 'the Send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pipeline/sends/owed'), {
+    message: 'a Send that failed with a 5xx is followed by a read of the owed take-offs: no GET /pipeline/sends/owed reached the server after it',
+  }).toBe(true)
+})
+
+test('a refused Send re-reads the owed take-offs', async ({ page }) => {
+  await open(page, { send: () => ({ status: 409, code: 'send_busy' }) })
+  const sent = recordSent(page)
+  await sendPress(page).click()
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === '/pipeline/send'), { message: 'the Send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pipeline/sends/owed'), {
+    message: 'a refused Send is followed by a read of the owed take-offs: no GET /pipeline/sends/owed reached the server after it',
+  }).toBe(true)
+})
+
+test('a Send the server fails with a 5xx re-reads the prices worklist', async ({ page }) => {
+  await open(page, { send: () => ({ status: 503, code: 'store_unavailable' }) })
+  const sent = recordSent(page)
+  await sendPress(page).click()
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === '/pipeline/send'), { message: 'the Send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pipeline/pricing'), {
+    message: 'a Send that failed with a 5xx is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('a Send that succeeds re-reads the owed take-offs', async ({ page }) => {
+  await open(page)
+  const sent = recordSent(page)
+  await sendPress(page).click()
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === '/pipeline/send'), { message: 'the Send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pipeline/sends/owed'), {
+    message: 'a Send that succeeds is followed by a read of the owed take-offs',
+  }).toBe(true)
+})
+
 /* A SEND FROM AN EARLIER DAY SAYS THE PRICES WERE READ AGAIN FIRST, and names the day they came from, so the owner
  * knows the screen's prices may have moved. Four screens: 1440 and 820, light and dark. */
 for (const theme of ['light', 'dark'] as const) {
@@ -1361,6 +1456,21 @@ test('send from an unknown day: the prices-refreshed notice names an unknown day
   await expect(notice).toContainText('Prices were refreshed before sending.')
   await expect(notice).toContainText('They came from an unknown day')
   await expect(notice).not.toContainText(/1970|Invalid/)
+})
+
+test('an answered Send from an earlier day re-reads the Prices as of header', async ({ page }) => {
+  /* A SEND THAT RAN A REFRESH FIRST HAS MOVED THE CATALOG, so the header that says when the prices were read is read
+     again once the Send answers. The Send's own reload does not read it, and nothing else does. */
+  const refresh = { ran: true, ok: true, was: '2026-10-21', export_day: '2026-10-22' }
+  const wire = await open(page, {
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [sendSummary({ refresh })] } : SENDS_NONE),
+  })
+  const sent = recordSent(page)
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pipeline/prices/refresh'), {
+    message: 'an answered Send from an earlier day is followed by a read of the Prices as of header: no GET /pipeline/prices/refresh reached the server after it',
+  }).toBe(true)
 })
 
 test('a same-day send shows no prices-refreshed notice', async ({ page }) => {
@@ -3005,7 +3115,7 @@ test('the reason a row adds nothing is a heading, composed by the CLIENT, verbat
 
   /* AND THE FALLBACK IS NOT DEFENSIVE PADDING. This table is `pricing.json` READ OFF DISK, so
      a file written by an earlier join carries `at_cap` with no sentence beside it — measured,
-     both runs in `runs/` today. Modelled by DELETING the key, because that is the shape on
+     both runs in `runs/` today. Modeled by DELETING the key, because that is the shape on
      disk and `PricingSku` cannot express an absent field; `null` reaches the same `??` and is
      what a fresh join writes for a zero-copy match. An older file must state the bare fact,
      which is exactly what `at_cap` means, and invent no reason for it. */
@@ -3874,6 +3984,235 @@ test('the write carries the revision it read, and the refusal offers the way bac
   expect((put?.body as { revision?: string }).revision).toBe('rev-1')
 })
 
+test('a slow re-read from a first save never puts back the revision a second save took', async ({
+  page,
+}) => {
+  /* THE RECEIPT RACE. A save takes its receipt inside the write, so the re-read it starts is the
+     one that follows that receipt. A re-read from the first save can still be out when the second
+     save's receipt lands. Its answer is the older file, and it must not replace the revision the
+     second save took, or the next save is sent with a revision the server has moved past. Both
+     re-reads are held here, so the order is the test's and not the network's. */
+  const wire = await open(page)
+  let puts = 0
+  const held: (() => void)[] = []
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() === 'PUT') {
+      wire.push({ method: 'PUT', path: '/pricing', body: route.request().postDataJSON() })
+      puts += 1
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, written: '/tmp/prices.json', answers: 1, revision: `rev-${puts + 1}` }),
+      })
+    }
+    /* The read before any save is open()'s own answer. A read after a save answers the file as it
+       stands when the read arrives, and waits until the test lets it land. */
+    if (route.request().method() !== 'GET' || puts === 0) return route.fallback()
+    const revision = `rev-${puts + 1}`
+    await new Promise<void>((release) => held.push(release))
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: { version: 1, policy: { rule: 'match', basis: 'market' }, skus: {} },
+        path: '/tmp/prices.json',
+        revision,
+      }),
+    })
+  })
+
+  await field(page).fill('19.99')
+  await field(page).press('Enter')
+  await expect.poll(() => puts, { message: 'the first save reached the server' }).toBe(1)
+  await expect.poll(() => held.length, { message: 'the re-read after the first save is out' }).toBe(1)
+
+  /* THE SECOND SAVE LANDS WHILE THAT RE-READ IS STILL OUT, and takes its receipt there. */
+  await field(page).fill('21.50')
+  await field(page).press('Enter')
+  await expect.poll(() => puts, { message: 'the second save reached the server' }).toBe(2)
+
+  /* THE FIRST RE-READ LANDS LAST. The next re-read (the second save's) starts only once the first
+     round has settled, so its arrival means the first answer has been handled. */
+  held.shift()?.()
+  await expect.poll(() => held.length, { message: 'the second save\'s re-read started after the first settled' }).toBe(1)
+
+  await field(page).fill('23.75')
+  await field(page).press('Enter')
+  await expect.poll(() => puts, { message: 'the third save reached the server' }).toBe(3)
+
+  /* THE THIRD SAVE CARRIES THE REVISION THE SECOND SAVE TOOK. */
+  const third = wire.filter((r) => r.method === 'PUT').at(-1)
+  expect(
+    (third?.body as { revision?: string }).revision,
+    'a re-read that began before the second save overwrote the revision the second save took',
+  ).toBe('rev-3')
+
+  for (const release of held.splice(0)) release()
+})
+
+test('a Refresh Now re-reads the file and takes no digest while its run goes on, so the next save is refused as moved', async ({
+  page,
+}) => {
+  /* THE PRESS'S OWN RE-READ IS NO WRITE'S RECEIPT. Here another writer moves the file, the owner presses Refresh Now,
+     and the run is still going when the press's re-read lands: the refresh state stays `running`, so the end of the run
+     never reads the file. That re-read answers the moved file and must not take its digest, so the next autosave still
+     names the digest the screen read at load. The server is modeled: a write names the digest it read, and a write
+     that names an old one is refused with `corpus_moved`, so it never takes the moved file over. */
+  const wire = await open(page, { refresh: refreshState('running', { step: 'listings' }) })
+  let serverRevision = 'rev-1'
+  let overwrites = 0
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() === 'PUT') {
+      const body = route.request().postDataJSON() as { revision?: string }
+      wire.push({ method: 'PUT', path: '/pricing', body })
+      if (body.revision !== serverRevision) {
+        return route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              code: 'corpus_moved',
+              message: 'The pricing file changed since this screen read it — another tab, or an edit on disk.',
+            },
+          }),
+        })
+      }
+      overwrites += 1
+      serverRevision = 'rev-3'
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, written: '/tmp/prices.json', answers: 1, revision: serverRevision }),
+      })
+    }
+    if (route.request().method() !== 'GET') return route.fallback()
+    /* The refresh's read carries a kept clear: the screen draws it only once this read has landed, so it is the
+       signal that the read was handled before the save is typed. */
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: { version: 1, policy: { rule: 'match', basis: 'market' }, skus: {} },
+        path: '/tmp/prices.json',
+        revision: serverRevision,
+        last_clear: { count: 49, at: 1758870000 },
+      }),
+    })
+  })
+
+  /* ANOTHER WRITER MOVES THE FILE. This screen read rev-1 at load and has not heard of the move. */
+  serverRevision = 'rev-2'
+  await page.getByRole('button', { name: /Refresh Now/ }).click()
+  await expect(page.locator('.pricing-restore-clear')).toContainText('Restore 49 cleared,')
+
+  await field(page).fill('19.99')
+  await field(page).press('Enter')
+  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length, { message: 'the autosave reached the server' }).toBe(1)
+
+  /* THE DIGEST IS THE ONE THE SCREEN READ AT LOAD. A refresh that adopted rev-2 would send it back, and the server
+     would take the write over the other writer's file. */
+  const put = wire.filter((r) => r.method === 'PUT').pop()
+  expect(
+    (put?.body as { revision?: string }).revision,
+    'a Refresh Now adopted the digest its read answered, so the autosave carries the file the other writer moved to',
+  ).toBe('rev-1')
+  await expect(page.locator('.bn-status-slot')).toContainText('changed since this screen read it')
+  expect(overwrites, 'the autosave overwrote the file another writer moved').toBe(0)
+})
+
+test('a refresh that ends after another writer moved the file takes the digest it read, so the next save is accepted', async ({
+  page,
+}) => {
+  /* THE END OF A REFRESH READS THE FILE, AND THAT READ TAKES THE DIGEST. The run starts from a press, and another writer
+     moves the file while it goes on. When the run ends, the screen reads the moved file, so the next autosave must name
+     the digest that read answered, and the server takes the write. The server is modeled: a write names the digest it
+     read, and a write that names an old one is refused with `corpus_moved`. The refresh state answers `running` from the
+     press until the test ends the run. */
+  const wire = await open(page)
+  let serverRevision = 'rev-1'
+  let overwrites = 0
+  let refusals = 0
+  let running = false
+  let kept = 49
+  await page.route(/\/pipeline\/prices\/refresh$/, async (route) => {
+    const post = route.request().method() === 'POST'
+    if (!post && route.request().method() !== 'GET') return route.fallback()
+    wire.push({ method: post ? 'POST' : 'GET', path: '/pipeline/prices/refresh', body: null })
+    if (post) {
+      running = true
+      return route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ state: 'running' }) })
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(running ? refreshState('running', { step: 'listings' }) : refreshState('done')),
+    })
+  })
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() === 'PUT') {
+      const body = route.request().postDataJSON() as { revision?: string }
+      wire.push({ method: 'PUT', path: '/pricing', body })
+      if (body.revision !== serverRevision) {
+        refusals += 1
+        return route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              code: 'corpus_moved',
+              message: 'The pricing file changed since this screen read it — another tab, or an edit on disk.',
+            },
+          }),
+        })
+      }
+      overwrites += 1
+      serverRevision = 'rev-3'
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, written: '/tmp/prices.json', answers: 1, revision: serverRevision }),
+      })
+    }
+    if (route.request().method() !== 'GET') return route.fallback()
+    /* The kept clear's count tells the two reads apart: the press's re-read draws 49, and the end of the run draws 48. */
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: { version: 1, policy: { rule: 'match', basis: 'market' }, skus: {} },
+        path: '/tmp/prices.json',
+        revision: serverRevision,
+        last_clear: { count: kept, at: 1758870000 },
+      }),
+    })
+  })
+
+  await page.getByRole('button', { name: /Refresh Now/ }).click()
+  await expect(page.locator('.pricing-restore-clear')).toContainText('Restore 49 cleared,')
+
+  /* ANOTHER WRITER MOVES THE FILE WHILE THE RUN GOES ON, and the run then ends. */
+  serverRevision = 'rev-2'
+  kept = 48
+  running = false
+  await expect(page.locator('.pricing-restore-clear'), 'the end of the run read the moved file').toContainText('Restore 48 cleared,')
+
+  await field(page).fill('19.99')
+  await field(page).press('Enter')
+  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length, { message: 'the autosave reached the server' }).toBe(1)
+
+  /* THE DIGEST IS THE ONE THE END OF THE RUN READ. A run that kept the digest it read at load would send rev-1, and the
+     server would refuse the write as moved over a file the screen had already read. */
+  const put = wire.filter((r) => r.method === 'PUT').pop()
+  expect(
+    (put?.body as { revision?: string }).revision,
+    'the end of a refresh kept the digest the screen read at load, so the autosave names a file the server has moved past',
+  ).toBe('rev-2')
+  await expect.poll(() => overwrites, { message: 'the autosave was accepted' }).toBe(1)
+  expect(refusals, 'the autosave was refused as moved, though the run ended on the file the screen had read').toBe(0)
+  await expect(page.getByText('changed since this screen read it')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Read the file again, losing what is unsaved here' })).toHaveCount(0)
+})
+
 test('a corpus that moved under the screen refuses the write rather than reverting it', async ({
   page,
 }) => {
@@ -4180,6 +4519,70 @@ test('an age window narrows the label, and never takes an undated answer', async
   await expect(press).toBeDisabled()
 })
 
+/* THE PRICES AFTER A CLEAR. `ClearPrices.tsx`'s `press` reads nothing on a failure: a 5xx or a refusal only sets the sheet's
+   own sentence, so the screen keeps the prices it drew before the press. Each case counts the GETs of `/pricing` sent
+   after the POST of `/pricing/clear`. The success case is the control: `onCleared` reloads the prices. */
+function countPricingReads(page: Page): () => number {
+  let reads = 0
+  page.on('request', (request) => {
+    if (request.method() === 'GET' && new URL(request.url()).pathname === '/pricing') reads += 1
+  })
+  return () => reads
+}
+
+test('a Clear the server fails with a 5xx re-reads the prices', async ({ page }) => {
+  await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  let posts = 0
+  await page.route(/\/pricing\/clear$/, async (route) => {
+    posts += 1
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'store_unavailable', message: 'The store did not answer. Try again.' } }),
+    })
+  })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+  await expect(sheet).toBeVisible()
+  const reads = countPricingReads(page)
+  const before = reads()
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  await expect.poll(() => posts, 'the Clear reached the server').toBe(1)
+  await expect.poll(reads, { message: 'the Clear that failed with a 5xx is followed by a prices read: no GET /pricing reached the server after it' }).toBeGreaterThan(before)
+})
+
+test('a refused Clear re-reads the prices', async ({ page }) => {
+  await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  let posts = 0
+  await page.route(/\/pricing\/clear$/, async (route) => {
+    posts += 1
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'revision_moved', message: 'The prices changed since you looked. Look again, then clear.' } }),
+    })
+  })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+  await expect(sheet).toBeVisible()
+  const reads = countPricingReads(page)
+  const before = reads()
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  await expect.poll(() => posts, 'the Clear reached the server').toBe(1)
+  await expect.poll(reads, { message: 'the refused Clear is followed by a prices read: no GET /pricing reached the server after it' }).toBeGreaterThan(before)
+})
+
+test('a Clear that succeeds re-reads the prices', async ({ page }) => {
+  await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+  await expect(sheet).toBeVisible()
+  const reads = countPricingReads(page)
+  const before = reads()
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  await expect.poll(reads, { message: 'a successful Clear is followed by a prices read' }).toBeGreaterThan(before)
+})
+
 test('the scope the operator chose is the scope that travels', async ({ page }) => {
   const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
   await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
@@ -4322,6 +4725,198 @@ test('a clear empties the fields it cleared, and offers the way back', async ({ 
   )
 })
 
+/* THE FILE A CLEAR, ITS UNDO AND THE AUTOSAVE MEET WHEN ANOTHER WRITER HAS MOVED IT (D86). The server is modeled the way it
+   answers: a write names the digest it read, a write that names an old one is refused with `corpus_moved`, and an accepted write
+   moves the digest on. `GET /pricing` answers the file's digest and the newest clear that can still be undone (`last_clear`, null
+   once none stands). It is registered AFTER `open`, so the load's read is `open`'s and every later read, write and Undo is this
+   model's. */
+type ModeledFile = { version: number; revision: string; lastClear: { count: number; at: number } | null; accepted: number; refusals: number }
+
+const CLEAR_AT = 1758870000
+
+function bumpFile(file: ModeledFile): string {
+  file.version += 1
+  file.revision = `rev-${file.version}`
+  return file.revision
+}
+
+function refuseMoved(route: Route) {
+  return route.fulfill({
+    status: 409,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      error: { code: 'corpus_moved', message: 'The pricing file changed since this screen read it — another tab, or an edit on disk.' },
+    }),
+  })
+}
+
+async function modelPricingFile(page: Page, wire: Wire[]): Promise<ModeledFile> {
+  const file: ModeledFile = { version: 1, revision: 'rev-1', lastClear: null, accepted: 0, refusals: 0 }
+  await page.route(/\/pricing\/clear$/, async (route) => {
+    const body = route.request().postDataJSON() as { revision?: string }
+    wire.push({ method: 'POST', path: '/pricing/clear', body })
+    if (body.revision !== file.revision) {
+      file.refusals += 1
+      return refuseMoved(route)
+    }
+    file.accepted += 1
+    bumpFile(file)
+    file.lastClear = { count: 1, at: CLEAR_AT }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        cleared: { '8608859': { value: '4.50', at: '2026-09-07T06:50:31.891+00:00' } },
+        count: 1,
+        holds: 2,
+        unknown: 1,
+        undated: 0,
+        answers: 3,
+        revision: file.revision,
+      }),
+    })
+  })
+  await page.route(/\/pricing\/restore$/, async (route) => {
+    const body = route.request().postDataJSON() as { answers?: Record<string, unknown>; revision?: string }
+    wire.push({ method: 'POST', path: '/pricing/restore', body })
+    if (body.revision !== file.revision) {
+      file.refusals += 1
+      return refuseMoved(route)
+    }
+    file.accepted += 1
+    bumpFile(file)
+    file.lastClear = null
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, restored: Object.keys(body.answers ?? {}), skipped: [], revision: file.revision }),
+    })
+  })
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          corpus: { version: 1, policy: { rule: 'match', basis: 'market' }, skus: {} },
+          path: '/tmp/prices.json',
+          revision: file.revision,
+          clearable: CLEARABLE,
+          last_clear: file.lastClear,
+        }),
+      })
+    }
+    if (route.request().method() !== 'PUT') return route.fallback()
+    const body = route.request().postDataJSON() as { revision?: string }
+    wire.push({ method: 'PUT', path: '/pricing', body })
+    if (body.revision !== file.revision) {
+      file.refusals += 1
+      return refuseMoved(route)
+    }
+    file.accepted += 1
+    bumpFile(file)
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, written: '/tmp/prices.json', answers: 1, revision: file.revision }),
+    })
+  })
+  return file
+}
+
+test('a Clear the server refuses as moved takes no digest from its own re-read, so the next autosave is refused too', async ({
+  page,
+}) => {
+  /* A REFUSED CLEAR WRITES NOTHING, so the screen keeps the digest it read at load (rev-1). Another writer has moved the file to
+     rev-2 and the re-read the refusal starts answers rev-2. That answer is no write's receipt: the next autosave must still name
+     rev-1, so the server refuses it. A screen that adopted rev-2 would send it back and take the other writer's file over. */
+  const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  const file = await modelPricingFile(page, wire)
+  file.lastClear = { count: 49, at: CLEAR_AT }
+  bumpFile(file)
+
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  /* THE RE-READ HAS LANDED when the newest clear it answers is drawn: the restore line is set in the same step as the digest. */
+  await expect(page.locator('.pricing-restore-clear')).toContainText('Restore 49 cleared,')
+  expect(file.refusals, 'the Clear was refused as moved').toBe(1)
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+
+  await page.getByLabel('Price for Articuno').fill('19.99')
+  await page.getByLabel('Price for Articuno').press('Enter')
+  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length, { message: 'the autosave reached the server' }).toBe(1)
+  const put = wire.filter((r) => r.method === 'PUT').pop()
+  expect(
+    (put?.body as { revision?: string }).revision,
+    'a Clear refused as moved adopted the digest its re-read answered, so the autosave carries the file the other writer moved to',
+  ).toBe('rev-1')
+  /* NOTHING IS ACCEPTED HERE: the Clear was refused as moved, and the autosave names rev-1 against the moved file, so it is refused too. */
+  expect(file.accepted, 'the autosave overwrote the file another writer moved').toBe(0)
+  await expect(page.locator('.bn-status-slot')).toContainText('changed since this screen read it')
+})
+
+test('an Undo the server refuses as moved takes no digest from its own re-read, so the next autosave is refused too', async ({
+  page,
+}) => {
+  /* THE CLEAR LANDS (rev-2, the digest the screen takes from it), THEN ANOTHER WRITER MOVES THE FILE TO rev-3 before the Undo.
+     The Undo names rev-2 and is refused. Its re-read answers rev-3 and it is no write's receipt, so the next autosave must still
+     name rev-2 and be refused. */
+  const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  const file = await modelPricingFile(page, wire)
+
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  await expect(sheet).toHaveCount(0)
+  await expect(page.locator('.pricing-restore-clear')).toContainText('Restore 1 cleared,')
+
+  /* ANOTHER WRITER MOVES THE FILE. The server no longer remembers the clear, so the re-read the refused Undo starts draws no restore line:
+     that is the signal the re-read has landed. */
+  file.lastClear = null
+  bumpFile(file)
+  const toast = page.locator('.bn-toast').last()
+  await toast.getByRole('button', { name: 'Undo' }).click()
+  await expect(page.locator('.pricing-restore-clear')).toHaveCount(0)
+  expect(file.refusals, 'the Undo was refused as moved').toBe(1)
+
+  await page.getByLabel('Price for Articuno').fill('19.99')
+  await page.getByLabel('Price for Articuno').press('Enter')
+  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length, { message: 'the autosave reached the server' }).toBe(1)
+  const put = wire.filter((r) => r.method === 'PUT').pop()
+  expect(
+    (put?.body as { revision?: string }).revision,
+    'an Undo refused as moved adopted the digest its re-read answered, so the autosave carries the file the other writer moved to',
+  ).toBe('rev-2')
+  expect(file.accepted, 'the autosave overwrote the file another writer moved').toBe(1)
+  await expect(page.locator('.bn-status-slot')).toContainText('changed since this screen read it')
+})
+
+test('a Clear that lands and its Undo that lands both carry the digest the re-read after the Clear read', async ({ page }) => {
+  /* THE CONTROL. Nothing moves the file in between, so the re-read after the Clear answers rev-2, and the Undo must name rev-2 and
+     be accepted. A fix that stopped the screen taking the digest after a landed write would refuse this Undo. */
+  const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  const file = await modelPricingFile(page, wire)
+
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  await expect(sheet).toHaveCount(0)
+  await expect(page.locator('.pricing-restore-clear')).toContainText('Restore 1 cleared,')
+
+  await page.locator('.bn-toast').last().getByRole('button', { name: 'Undo' }).click()
+  await expect.poll(() => wire.filter((r) => r.path === '/pricing/restore').length, { message: 'the Undo reached the server' }).toBe(1)
+  const back = wire.filter((r) => r.path === '/pricing/restore').at(-1)
+  expect(
+    (back?.body as { revision?: string }).revision,
+    'the Undo did not carry the digest the re-read after the Clear read',
+  ).toBe('rev-2')
+  expect(file.refusals, 'the Undo was refused').toBe(0)
+  await expect(page.locator('.bn-toast', { hasText: '1 price undone' })).toBeVisible()
+})
+
 test('UN-11 (the delta review round) — the newest clear survives a reload, and Restore N reaches every SKU it cleared', async ({
   page,
 }) => {
@@ -4372,7 +4967,9 @@ test('UN-11 (the delta review round) — the newest clear survives a reload, and
 
   /* `last_clear: true`, NEVER A GUESS AT THE SKUS: unlike the toast's own Undo, this route
      names no per-SKU values, so the server decides what comes back. */
-  expect(wire[0]?.body).toEqual({ last_clear: true, revision: 'rev-1' })
+  /* The Restore is posted from the click's own handler, so its wire entry lands after the click
+     returns. The same assertion, polled until the entry is there. */
+  await expect.poll(() => wire[0]?.body, { message: 'the Restore reached the server' }).toEqual({ last_clear: true, revision: 'rev-1' })
   const toast = page.locator('.bn-toast', { hasText: '49 prices undone' })
   await expect(toast).toBeVisible()
 
@@ -6079,6 +6676,28 @@ test('7b-16: the age line has a reserved line, so a fresh row and a stale row ar
   /* THE LAST ROW IS LEFT OUT: it has no row below it to be spaced from. */
   expect(heights).toHaveLength(3)
   expect(Math.abs(heights[0]! - heights[1]!)).toBeLessThan(0.5)
+})
+
+/* THE PRICES-AS-OF PRESS AFTER A FAILED ANSWER. `usePricesRefresh`'s `press` posts the refresh; a 5xx or a refusal sets the
+   line and reads nothing, so the screen keeps the state it drew before the press. Each case asserts that a GET of the refresh
+   state reached the server after the POST. No success control: a running refresh is read only on the 3s poll, which the
+   count must not depend on. */
+test('a Refresh Now that the server fails with a 5xx re-reads the refresh state', async ({ page }) => {
+  const wire = await open(page, { refreshPress: { status: 503, code: 'store_unavailable' } })
+  await page.getByRole('button', { name: /Refresh Now/ }).click()
+  await expect.poll(() => wire.filter((r) => r.method === 'POST' && r.path === '/pipeline/prices/refresh').length, { message: 'the Refresh Now reached the server' }).toBe(1)
+  await expect.poll(() => readAfterPost(wire, '/pipeline/prices/refresh'), {
+    message: 'the Refresh Now that failed with a 5xx is followed by a read of the refresh state: no GET /pipeline/prices/refresh reached the server after it',
+  }).toBe(true)
+})
+
+test('a refused Refresh Now re-reads the refresh state', async ({ page }) => {
+  const wire = await open(page, { refreshPress: { status: 409, code: 'refresh_running' } })
+  await page.getByRole('button', { name: /Refresh Now/ }).click()
+  await expect.poll(() => wire.filter((r) => r.method === 'POST' && r.path === '/pipeline/prices/refresh').length, { message: 'the Refresh Now reached the server' }).toBe(1)
+  await expect.poll(() => readAfterPost(wire, '/pipeline/prices/refresh'), {
+    message: 'the refused Refresh Now is followed by a read of the refresh state: no GET /pipeline/prices/refresh reached the server after it',
+  }).toBe(true)
 })
 
 test('7b-17: the header says Prices as of the catalog time, at rest, beside Refresh Now', async ({ page }) => {
@@ -8169,6 +8788,166 @@ test('one list: a tick does not carry over to a new suggested price from Refresh
 const ticksPosts = (wire: Wire[]) => wire.filter((row) => row.method === 'POST' && row.path === '/pricing/ticks')
 const ticksBody = (wire: Wire[], at: number) =>
   ticksPosts(wire)[at]?.body as { ticks: Record<string, { price: string; on: boolean; group: string }>; drop: string[] }
+
+/* THE PRICES AFTER AN UNDO THAT FAILS. A clear's toast Undo posts `/pricing/restore` (`restorePricingAnswers`). A 5xx or a
+   refusal sets its failure and reads nothing, so the prices the screen holds are not read again. Each case clears the typed
+   prices, presses that toast's Undo against a stub that answers 503 or 409, and asserts that a GET of /pricing was sent after
+   the POST. */
+async function clearThenUndo(page: Page, failure: { status: number; code: string }) {
+  const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE, restoreFailure: failure })
+  const sent = recordSent(page)
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  const toast = page.locator('.bn-toast').last()
+  await expect(toast.getByRole('button', { name: 'Undo' })).toBeVisible()
+  await toast.getByRole('button', { name: 'Undo' }).click()
+  await expect.poll(() => wire.filter((r) => r.method === 'POST' && r.path === '/pricing/restore').length, { message: 'the Undo reached the server' }).toBe(1)
+  return sent
+}
+
+test('an Undo of a clear that the server fails with a 5xx re-reads the prices', async ({ page }) => {
+  const sent = await clearThenUndo(page, { status: 503, code: 'store_unavailable' })
+  await expect.poll(() => readAfterWrite(sent, 'POST', '/pricing/restore', '/pricing'), {
+    message: 'the Undo that failed with a 5xx is followed by a read of the prices: no GET /pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('a refused Undo of a clear re-reads the prices', async ({ page }) => {
+  const sent = await clearThenUndo(page, { status: 409, code: 'revision_moved' })
+  await expect.poll(() => readAfterWrite(sent, 'POST', '/pricing/restore', '/pricing'), {
+    message: 'the refused Undo is followed by a read of the prices: no GET /pricing reached the server after it',
+  }).toBe(true)
+})
+
+/* THE PRICES AFTER A SAVE THAT FAILS. A typed price is saved with `PUT /pricing`. A 5xx or a refusal sets the failure and keeps
+   the book the screen holds, and reads nothing. Each case types a price, blurs the field, and asserts that a GET of /pricing
+   was sent after the PUT. */
+test('a price save the server fails with a 5xx re-reads the prices', async ({ page }) => {
+  await open(page, { corpusSave: { status: 503, code: 'store_unavailable' } })
+  const sent = recordSent(page)
+  await field(page).fill('19.99')
+  await field(page).press('Tab')
+  await expect.poll(() => sent.some((r) => r.method === 'PUT' && r.path === '/pricing'), { message: 'the save reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'PUT', '/pricing', '/pricing'), {
+    message: 'the price save that failed with a 5xx is followed by a read of the prices: no GET /pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('a price save the server refuses re-reads the prices', async ({ page }) => {
+  await open(page, { corpusSave: { status: 409, code: 'revision_moved' } })
+  const sent = recordSent(page)
+  await field(page).fill('19.99')
+  await field(page).press('Tab')
+  await expect.poll(() => sent.some((r) => r.method === 'PUT' && r.path === '/pricing'), { message: 'the save reached the server' }).toBe(true)
+  await expect.poll(() => readAfterWrite(sent, 'PUT', '/pricing', '/pricing'), {
+    message: 'the price save that was refused is followed by a read of the prices: no GET /pricing reached the server after it',
+  }).toBe(true)
+})
+
+/* THE PRICES WORKLIST AFTER A KEPT TICK THAT FAILS. A press on a suggestion posts `/pricing/ticks` (`keepTicks`). A 5xx or a
+   refusal puts the row back to what the server holds and reads nothing else, so the worklist, which carries each row's `ticked`,
+   is not read again. Each case asserts that a GET of /pipeline/pricing was sent after the tick's POST. */
+/* WHICH READS A WRITE OWES. A Send that answered re-reads the worklist and the saved prices once, through its own reload.
+   A kept tick re-reads the worklist and no price. A price save re-reads the saved prices and no worklist. Each case waits
+   for the read it expects, then states what else left after the write. */
+test('an answered Send reads the worklist and the saved prices once each, after the send', async ({ page }) => {
+  const wire = await open(page)
+  const sent = recordSent(page)
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pipeline/pricing'), {
+    message: 'the answered Send is followed by a read of the prices worklist',
+  }).toBe(true)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pricing'), {
+    message: 'the answered Send is followed by a read of the saved prices',
+  }).toBe(true)
+  const priced = readsAfterWrite(sent, 'POST', '/pipeline/send').filter((path) => path === '/pipeline/pricing' || path === '/pricing')
+  expect(priced.sort(), 'the reads after the Send are the worklist and the saved prices, each once').toEqual(['/pipeline/pricing', '/pricing'])
+})
+
+test('a kept tick re-reads the prices worklist and never the saved prices', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, { live: ONE_LIST_LIVE })
+  const sent = recordSent(page)
+  await listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' }).click()
+  await expect.poll(() => ticksPosts(wire).length, { message: 'the tick reached the server' }).toBe(1)
+  await expect.poll(() => readAfterPost(sent, '/pricing/ticks', '/pipeline/pricing'), {
+    message: 'the kept tick is followed by a read of the prices worklist',
+  }).toBe(true)
+  expect(readsAfterWrite(sent, 'POST', '/pricing/ticks'), 'a kept tick read the saved prices').not.toContain('/pricing')
+})
+
+test('a saved price re-reads the saved prices and never the prices worklist', async ({ page }) => {
+  await open(page)
+  const sent = recordSent(page)
+  await field(page).fill('19.99')
+  await field(page).press('Enter')
+  await expect.poll(() => readAfterWrite(sent, 'PUT', '/pricing', '/pricing'), {
+    message: 'the saved price is followed by a read of the saved prices',
+  }).toBe(true)
+  expect(readsAfterWrite(sent, 'PUT', '/pricing'), 'a saved price read the prices worklist').not.toContain('/pipeline/pricing')
+})
+
+test('a tick the store does not confirm names its Send box in the toast body', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, {
+    live: ONE_LIST_LIVE,
+    ticks: () => ({ status: 503, code: 'store_unavailable', message: 'The store did not answer. Try again.' }),
+  })
+  await listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' }).click()
+  const toast = page.locator('.bn-toast', { hasText: 'did not confirm the tick for Iono' })
+  await expect(toast, 'the toast names the card the store did not confirm').toBeVisible()
+  await expect(toast, 'the toast body names the Send box by its label').toContainText(
+    'If the Send box for Iono is not as you left it, tick it again.',
+  )
+})
+
+test('an untick the store does not confirm names the untick in its title, and says to untick it again', async ({ page }) => {
+  /* THE UNTICK DIRECTION. Iono is kept ticked by the server, so the press unticks it: the toast names the untick, and its
+     body tells the owner to untick the Send box, never to tick it again. */
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, {
+    live: ONE_LIST_LIVE.map((one) => (one.sku === '9000001' ? { ...one, ticked: true } : one)),
+    ticks: () => ({ status: 503, code: 'store_unavailable', message: 'The store did not answer. Try again.' }),
+  })
+  const box = listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' })
+  await expect(box, 'the kept tick reads ticked before the press, so the press is an untick').toBeChecked()
+  await box.click()
+  const toast = page.locator('.bn-toast', { hasText: 'did not confirm the untick for Iono' })
+  await expect(toast, 'the toast title names the untick, not the tick').toBeVisible()
+  await expect(toast, 'the toast body tells the owner to untick the Send box').toContainText(
+    'If the Send box for Iono is not as you left it, untick it again.',
+  )
+})
+
+test('a tick the server fails with a 5xx re-reads the prices worklist', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, {
+    live: ONE_LIST_LIVE,
+    ticks: () => ({ status: 503, code: 'store_unavailable', message: 'The store did not answer. Try again.' }),
+  })
+  const sent = recordSent(page)
+  /* A click, not a check: the server's refusal puts the row back, so the box never stays checked. */
+  await listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' }).click()
+  await expect.poll(() => ticksPosts(wire).length, { message: 'the tick reached the server' }).toBe(1)
+  await expect.poll(() => readAfterPost(sent, '/pricing/ticks', '/pipeline/pricing'), {
+    message: 'the tick that failed with a 5xx is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('a refused tick re-reads the prices worklist', async ({ page }) => {
+  await setViewport(page, { width: 1440, height: 900 })
+  const wire = await open(page, {
+    live: ONE_LIST_LIVE,
+    ticks: () => ({ status: 409, code: 'tick_moved', message: 'The price moved. Look again.' }),
+  })
+  const sent = recordSent(page)
+  await listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' }).click()
+  await expect.poll(() => ticksPosts(wire).length, { message: 'the tick reached the server' }).toBe(1)
+  await expect.poll(() => readAfterPost(sent, '/pricing/ticks', '/pipeline/pricing'), {
+    message: 'the refused tick is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+})
 
 test('one list: kept ticks: a press posts its figure and its on, and an untick posts on false', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
