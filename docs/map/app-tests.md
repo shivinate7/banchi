@@ -122,7 +122,7 @@ The Playwright specs and unit tests of the app, and the helpers they share.
 - `app/tests/ordersFilterSheet.ts` — The Orders page's Filters sheet picks (open, close, pick a facet option, Open only, Done only), shared by `orders.spec.ts` and `order-walk.spec.ts` so neither copies them.
 - `app/tests/storeReads.ts` — The one count of the store reads a spec's wire holds after a write, shared by `order-walk.spec.ts` and `inventory.spec.ts` so neither copies it.
 - `app/tests/order-walk.spec.ts` — `OrdersWalkPane.tsx`'s OWN undo, and nothing else `tests/orders.spec.ts` already covers (that file's own docstring names this file so a reader is not sent looking for two copies of the same case).
-  - Decisions: `D118`, `D136`, `D164`, `D252`, `D304`, `D313`, `D57`, `D58`, `D113`, `D212`, `D220`, `D196`, `D171`, `D73`
+  - Decisions: `D118`, `D136`, `D164`, `D252`, `D304`, `D313`, `D57`, `D58`, `D113`, `D212`, `D220`, `D196`, `D171`, `D73`, `D329`
 - `app/tests/orders.spec.ts` — The order screen in a browser: that the six-way counts render including the zeros, that a pick already held by another line is drawn as spoken for, that the pull sends the row's own capture_id, and that the receipt reads the pre-write place rather than the sale's departed label.
   - Decisions: `D91`, `D97`, `D113`, `D118`, `D132`, `D193`, `D203`, `D58`, `D63`, `D304`, `D57`, `D263`, `D218`, `D24`, `D90`, `D123`, `D296`, `D285`, `D181`, `D171`, `D212`, `D50`, `D221`, `D274`, `D270`, `D20`, `D27`, `D28`, `D36`, `D86`, `D69`, `D73`, `D93`, `D103`, `D284`, `D196`, `D220`, `D289`
 - `app/tests/page-edge.spec.ts` — One left edge for every screen (`D197`): `.bn-page`'s `margin: 0 auto` centered a screen with a lower `--bn-page-max` inside the shell's own column instead of anchoring it, so the gutter grew with the window and differed between routes — `#/pricing`'s content sat roughly `330px` right of `#/review`'s at the same width, the owner's own report.
@@ -194,6 +194,7 @@ The Playwright specs and unit tests of the app, and the helpers they share.
 - `app/tests/unit/formatter-homes.unit.ts` — The four formatter homes: the ago phrase (`dates.relativeDate`), the count word and byte size (`kit/dataRules`), the local day key (`dates.localDay`).
   - Decisions: `D5`, `D275`
 - `app/tests/unit/kit-button-queued.unit.ts` — The kit `Button`'s queued face, lifted from the kit source and run without a browser: `data-busy` queued, `aria-busy` and `aria-disabled`, never `disabled`, a press that never reaches the caller; the busy ring and the plain button as controls.
+  - Decisions: `D329`
 - `app/tests/unit/lifted.ts` — `lifted`, the one way a unit case runs product code that imports CSS or the browser: it reads the file and asks the TypeScript parser for one top-level function or const.
 - `app/tests/unit/orders-ship-to-of.unit.ts` — `orderBuyers.shipToOf`: the ship-to name is drawn when it differs from the buyer or there is no buyer; a blank ship-to draws nothing.
   - Decisions: `D193`
