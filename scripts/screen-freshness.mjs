@@ -2340,6 +2340,74 @@ function selfTest() {
         const press = () => save()
         return <button onClick={press} />
       }`],
+    ['14q. the child writes, and the parent that renders it registers a re-read that reads', 'write through the after-write helper', `
+      export function ChildSaves() {
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
+      }
+      export function ParentReads() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        useRereadOnWrite(async () => setReloads((n) => n + 1))
+        return <div>{rows}<ChildSaves /></div>
+      }`],
+    ['14r. the child registers a function that calls a prop, and the parent binds that prop to a re-read', 'write through the after-write helper', `
+      export function ChildCalls({ onChanged }: { onChanged: () => void }) {
+        useRereadOnWrite(async () => onChanged())
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
+      }
+      export function ParentBinds() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        return <div>{rows}<ChildCalls onChanged={() => setReloads((n) => n + 1)} /></div>
+      }`],
+    ['14s. the registration is in a component that does not render the child that writes', null, `
+      export function ChildSavesAlone() {
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
+      }
+      export function RendersTheChild() {
+        return <div><ChildSavesAlone /></div>
+      }
+      export function RendersAnother() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        useRereadOnWrite(async () => setReloads((n) => n + 1))
+        return <div>{rows}<Other /></div>
+      }
+      export function Other() {
+        return <i />
+      }`],
+    ['14t. the child registers a function that calls a prop, and the parent binds that prop to nothing that reads', null, `
+      export function ChildCallsBlind({ onChanged }: { onChanged: () => void }) {
+        useRereadOnWrite(async () => onChanged())
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
+      }
+      export function ParentBindsBlind() {
+        const [rows, setRows] = useState(null)
+        useEffect(() => { void doRead().then(setRows) }, [])
+        return <div>{rows}<ChildCallsBlind onChanged={() => undefined} /></div>
+      }`],
+    ['14u. a grandchild writes, and the grandparent two components up registers a re-read that reads', 'write through the after-write helper', `
+      export function GrandchildSaves() {
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
+      }
+      export function MiddleRenders() {
+        return <GrandchildSaves />
+      }
+      export function GrandparentReads() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        useRereadOnWrite(async () => setReloads((n) => n + 1))
+        return <div>{rows}<MiddleRenders /></div>
+      }`],
     ['3e. the kit hook useSheetWrite handed a no-op onChanged', null, `
       export function KitNoop({ onChanged }: { onChanged: () => void }) {
         const { write } = useSheetWrite(() => undefined)
