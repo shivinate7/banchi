@@ -32,6 +32,7 @@
 import { count as nounCount } from './kit/dataRules'
 import { useEffect, useMemo, useState } from 'react'
 
+import { afterWrite } from './afterWrite'
 import { Button, Notice, Segmented, Sheet } from './kit'
 import { clearPricingAnswers, describeFailure, type Failure, failureTone } from './server'
 import type { PricingClearResult, PricingClearable } from './types'
@@ -135,15 +136,17 @@ export function ClearPrices({
     setBusy(true)
     setFailure(null)
     try {
-      const result = await clearPricingAnswers({
-        revision,
-        /* THE SCOPE TRAVELS AS SKUS AND THE SERVER RE-DERIVES WHAT MAY GO. Sending the list
-           the sheet counted would make this screen the authority on what is clearable; sending
-           it as a SCOPE means a list that went stale between the read and the press removes
-           fewer answers than the label said, never a different set. */
-        ...(scope === 'store' ? {} : { skus: worklist }),
-        ...(days === null ? {} : { olderThanDays: days }),
-      })
+      const result = await afterWrite(() =>
+        clearPricingAnswers({
+          revision,
+          /* THE SCOPE TRAVELS AS SKUS AND THE SERVER RE-DERIVES WHAT MAY GO. Sending the list
+             the sheet counted would make this screen the authority on what is clearable; sending
+             it as a SCOPE means a list that went stale between the read and the press removes
+             fewer answers than the label said, never a different set. */
+          ...(scope === 'store' ? {} : { skus: worklist }),
+          ...(days === null ? {} : { olderThanDays: days }),
+        }),
+      )
       onCleared(result)
       onClose()
     } catch (err) {
