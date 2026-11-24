@@ -59,8 +59,8 @@ export function usePricesRefresh(onEnded: () => void, enabled: boolean) {
     if (enabled) void read()
   }, [enabled, read])
   /* A PRESS'S RE-READ (`afterWrite`, D73): the state is read again whatever the press came to. Where the header is not drawn, nothing is read. */
-  useRereadOnWrite(async () => {
-    if (enabled) await read()
+  useRereadOnWrite(async (kind) => {
+    if (enabled && (kind === 'refresh' || kind === 'other')) await read()
   })
 
   const running = enabled && state?.state === 'running'
@@ -77,7 +77,7 @@ export function usePricesRefresh(onEnded: () => void, enabled: boolean) {
 
   const press = useCallback((force: boolean) => {
     setRefused(null)
-    afterWrite(() => startPricesRefresh(force))
+    afterWrite(() => startPricesRefresh(force), 'refresh')
       .then(() => setState((now) => ({ note: null, done: 0, total: 0, ...now, state: 'running', step: 'listings' })))
       .catch((error) => {
         /* A 5xx may still have started the refresh: the line does not say it did not. */

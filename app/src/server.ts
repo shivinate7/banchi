@@ -328,12 +328,6 @@ const RETRY_CODES: ReadonlySet<string> = new Set(['unreachable', 'bad_response',
 /** ONE RULE FOR "THE SERVER BROKE": a 5xx. `failureKind` and `failureTone` both read it. */
 const isServerFault = (status: number | undefined): boolean => status !== undefined && status >= 500
 
-/** DID THE WRITE GET NO ANSWER (a 5xx, a lost connection, a body that did not parse)? Such a write may still have
- *  committed, because the server can fail after it writes. A 4xx is the server's "no": it wrote nothing. */
-export function gotNoAnswer(err: unknown): boolean {
-  return !(err instanceof ServerError && err.status >= 400 && err.status < 500)
-}
-
 /** A rate limit from Card Ladder is a "no" until tomorrow, even though it arrives as a 429, so no second press is offered. */
 const REFUSAL_CODES: ReadonlySet<string> = new Set(['cardladder_rate_limited'])
 

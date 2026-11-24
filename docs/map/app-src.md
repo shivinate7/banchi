@@ -190,7 +190,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
   - Decisions: `D174`, `D89`, `D50`, `D196`, `D118`, `D57`, `D207`, `D33`, `D39`, `D94`
 - `app/src/TakeOffLine.tsx` — The take-off line on a master-set retire receipt: Take It Off TCGplayer at the pull and the answer in the same place, drawn in the toast kit's changing line.
   - Decisions: `D100`, `D118`, `D196`, `D313`
-- `app/src/afterWrite.ts` — The one home of re-reading after a write for a screen that registers its reads: `afterWrite` runs a write and starts the re-reads when it answers or is refused, merged to one in flight and one pending, never awaited.
+- `app/src/afterWrite.ts` — The one home of re-reading after a write for a screen that registers its reads: `afterWrite` runs a write and starts the re-reads when it answers or is refused, merged to one in flight and one pending, never awaited. Each write names its kind (a sale, a kept tick, a price save or clear, a Refresh Now, a send), and a registered read answers only the kinds it touches.
   - Decisions: `D73`, `D313`
 - `app/src/autoMatch.ts` — MATCHING RUNS BY ITSELF WHEN A READING FINISHES (the owner's Q4 ruling).
   - Decisions: `D65`, `D273`

@@ -136,8 +136,9 @@ export function ClearPrices({
     setBusy(true)
     setFailure(null)
     try {
-      const result = await afterWrite(() =>
-        clearPricingAnswers({
+      /* THE SCREEN TAKES THE RECEIPT (`onCleared`) INSIDE THE WRITE, so the re-read the write starts follows it and is never overwritten by it. */
+      await afterWrite(async () => {
+        const result = await clearPricingAnswers({
           revision,
           /* THE SCOPE TRAVELS AS SKUS AND THE SERVER RE-DERIVES WHAT MAY GO. Sending the list
              the sheet counted would make this screen the authority on what is clearable; sending
@@ -145,9 +146,10 @@ export function ClearPrices({
              fewer answers than the label said, never a different set. */
           ...(scope === 'store' ? {} : { skus: worklist }),
           ...(days === null ? {} : { olderThanDays: days }),
-        }),
-      )
-      onCleared(result)
+        })
+        onCleared(result)
+        return result
+      }, 'corpus')
       onClose()
     } catch (err) {
       setFailure(describeFailure(err))
