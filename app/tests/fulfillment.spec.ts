@@ -956,6 +956,22 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<St
     })
   })
 
+  /* D192: `getInventoryBox` reads one box, `GET /inventory/<box>`, which is not the whole-store
+   * read above. It answers from the same store narrowed to the box, so a screen that reads by
+   * box sees the same cards. A non-GET on this path is a box write, not this read, and goes to
+   * the network rather than being answered with an inventory. */
+  await page.route(/\/inventory\/\d+$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const box = Number(/\/inventory\/(\d+)$/.exec(new URL(route.request().url()).pathname)?.[1])
+    const whole = inventoryBody(states) as { version: number; cards: Record<string, { box: number }> }
+    const cards = Object.fromEntries(Object.entries(whole.cards).filter(([, row]) => row.box === box))
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ version: whole.version, cards }),
+    })
+  })
+
   await page.route(/\/photo\/(\d+\/\d+|by-card\/[0-9a-f]+)(\?.*)?$/, async (route) => {
     if (mood.noPhoto === true) {
       await route.fulfill({
