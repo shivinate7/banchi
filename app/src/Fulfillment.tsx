@@ -36,7 +36,8 @@ import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { placePartsOf, placeWordsOf, sayPlace } from './position'
-import { DidYouMean, Icon, Logo, Modal, Page, ShipTo, useOverlayLayer, useUndoHotkey } from './kit'
+import { Button, DidYouMean, Icon, Logo, Modal, Page, QueuedNote, ShipTo, useOverlayLayer, useUndoHotkey } from './kit'
+import { isQueued, queueWrite, sayQueued, writeOut, writesInLine, type LineJob } from './writeLine'
 import { UNNAMED_BOX } from './kit/data'
 import { isEditableTarget } from './keys'
 import { useSearch } from './useSearch'
@@ -104,7 +105,13 @@ const PULL_STALE = new Set([
 ])
 /** The order was canceled, or its line stood down, after this list was read: no copy is owed for it any more,
  *  so pressing again is refused again. The list re-reads and the card leaves it. */
-const NO_LONGER_NEEDED = new Set(['order_canceled', 'line_stood_down'])
+/** This screen's line in `writeLine` (D329). */
+const LINE = 'fulfillment'
+
+/** The words for a write ahead of a press: an undo ahead of an Undo is "the other undo". */
+const wordsFor = (ahead: string): string => (ahead === 'undo' ? 'other undo' : ahead)
+
+const NO_LONGER_NEEDED =new Set(['order_canceled', 'line_stood_down'])
 /** The ledger never recorded this pull, so the way back is the plain sale undo. */
 const PULL_NOT_RECORDED = 'pull_not_recorded'
 
@@ -573,6 +580,19 @@ export function Fulfillment() {
   const [pulledKey, setPulledKey] = useState<string | null>(null)
   /** A request in flight. Guards instead of disabling — his controls never grey out. */
   const [busyKey, setBusyKey] = useState<string | null>(null)
+  /** THE SCREEN'S WRITE LINE (D329). A sale and an undo both go through it, so an Undo pressed while a write is out waits
+   *  behind that write and says so at once. `what` is the write, in the words of `sayQueued`. */
+  const inLine = useCallback(
+    (what: 'sale' | 'undo', run: () => Promise<void>): LineJob => queueWrite(run, { screen: LINE, what }),
+    [],
+  )
+  /** The Undo press waiting for the write ahead of it, held so a second press queues nothing. */
+  const undoWaiting = useRef<LineJob | null>(null)
+  /** The card whose undo is out now, so a second press on it sends nothing. */
+  const undoOut = useRef<string | null>(null)
+  /** The card whose Undo is waiting, and the write it waits for. It keys on the card, not the control: a receipt that
+   *  moves from the sheet to Pulled today while its undo waits keeps the state. */
+  const [queued, setQueued] = useState<{ readonly key: string; readonly ahead: string } | null>(null)
   const [trouble, setTrouble] = useState<string | null>(null)
   /** The copy whose order was canceled, or whose line stood down, after the list was read. Its card offers no
    *  press: after the re-read the box listing still holds the copy, and without this a second press would sell it
@@ -860,9 +880,8 @@ export function Fulfillment() {
     setZoom(false)
   }, [])
 
-  const doSell = useCallback(
+  const runSell = useCallback(
     async (card: Sellable) => {
-      if (busyKey !== null) return
       setBusyKey(card.key)
       setTrouble(null)
       try {
@@ -913,15 +932,37 @@ export function Fulfillment() {
         setBusyKey(null)
       }
     },
-    [busyKey, drop, remember],
+    [drop, remember],
   )
 
-  const doUndo = useCallback(
-    async (card: Sellable) => {
-      if (busyKey !== null) return
+  /** A sale stays refused while any write is out or waiting (D57's overshoot guard), so only an Undo ever queues. */
+  const doSell = useCallback(
+    (card: Sellable) => {
+      if (busyKey !== null || writesInLine(LINE) > 0) return
+      inLine('sale', () => runSell(card))
+    },
+    [busyKey, inLine, runSell],
+  )
+
+  /** Has the store put this card back on hand since its sale was pressed? An Undo that waited sends nothing then. A read
+   *  that fails says nothing, and the press goes on: the server refuses a reversal it cannot do. This is a whole-store
+   *  read (DEBT27), paid only by an Undo that waited, because the re-read the sale ahead started has not landed yet. */
+  const backOnHand = useCallback(async (card: Sellable): Promise<boolean> => {
+    try {
+      const now = (await getInventory()).cards[card.key]
+      return now !== undefined && forSale(now)
+    } catch {
+      return false
+    }
+  }, [])
+
+  const runUndo = useCallback(
+    async (card: Sellable, waited: boolean) => {
+      undoOut.current = card.key
       setBusyKey(card.key)
       setTrouble(null)
       try {
+        if (waited && (await backOnHand(card))) return
         await afterWrite(async () => {
           if (card.order === null) {
             await unsell(card.box, card.index)
@@ -958,10 +999,32 @@ export function Fulfillment() {
           ),
         )
       } finally {
+        undoOut.current = null
         setBusyKey(null)
       }
     },
-    [busyKey],
+    [backOnHand],
+  )
+
+  /* A PRESS OF U, OR OF AN UNDO. It targets the card its own control names (U: the newest standing receipt, read when it is
+     pressed). When a write is out it waits behind that write and says so at once, on that card's own Undo (D329). One Undo
+     waits at a time, and an Undo pressed on the card whose undo is out sends nothing. The X on a receipt does not cancel
+     it: the press was taken, and the card is what the undo needs. */
+  const doUndo = useCallback(
+    (card: Sellable) => {
+      const ahead = writeOut(LINE)
+      if (undoWaiting.current !== null && isQueued(undoWaiting.current)) return
+      if (ahead === 'undo' && undoOut.current === card.key) return
+      if (ahead !== null) setQueued({ key: card.key, ahead })
+      let mine: LineJob | null = null
+      mine = inLine('undo', async () => {
+        if (undoWaiting.current === mine) undoWaiting.current = null
+        setQueued(null)
+        await runUndo(card, ahead !== null)
+      })
+      if (ahead !== null) undoWaiting.current = mine
+    },
+    [inLine, runUndo],
   )
 
   const doSellCopy = useCallback(
@@ -1098,15 +1161,22 @@ export function Fulfillment() {
             )}
           </div>
           {!newest.canUndo ? null : (
-            <button
+            <Button
               className="ff-undo"
-              type="button"
+              words="word-only-control"
+              busy={queued?.key === newest.card.key ? 'queued' : false}
               aria-label={`Undo ${sayPlace(newest.card.place)}`}
-              onClick={() => void doUndo(newest.card)}
+              aria-describedby={queued?.key === newest.card.key ? 'ff-queued-note-sheet' : undefined}
+              onClick={() => doUndo(newest.card)}
             >
               <Icon name="undo" size={22} />
               Undo
-            </button>
+            </Button>
+          )}
+          {/* THE WORDS OF A QUEUED UNDO (D329), in the strip the X already keeps above the receipt: out of the flow, so the
+              sheet does not grow on the press (D118). */}
+          {!newest.canUndo || queued?.key !== newest.card.key ? null : (
+            <QueuedNote id="ff-queued-note-sheet">{sayQueued(wordsFor(queued.ahead))}</QueuedNote>
           )}
           {/* NO CLOCK (UN-5): nothing fades this on a timer, so a way to dismiss it stands in
               for the window that used to close it. Dismissing never undoes the sale — the
@@ -1539,12 +1609,19 @@ export function Fulfillment() {
 
             {done.length === 0 ? null : (
               <section className="ff-done" aria-label="Pulled today">
-                <h2 className="ff-h2">
-                  <span className="ff-h2-icon ff-h2-icon-ok">
-                    <CheckMark size={18} />
-                  </span>
-                  Pulled today
-                </h2>
+                <div className="ff-done-head">
+                  <h2 className="ff-h2">
+                    <span className="ff-h2-icon ff-h2-icon-ok">
+                      <CheckMark size={18} />
+                    </span>
+                    Pulled today
+                  </h2>
+                  {/* THE WORDS OF A QUEUED ROW UNDO (D329): a row has no free room, so they sit on the heading line, out of
+                      the flow, and the mark shows which row. */}
+                  {queued === null || !done.some((sale) => sale.card.key === queued.key && sale.canUndo) ? null : (
+                    <QueuedNote id="ff-queued-note-head">{`Undo waits for the ${wordsFor(queued.ahead)} to save`}</QueuedNote>
+                  )}
+                </div>
                 {/* FINDING #1's OTHER HALF: the sheet only ever draws `sales[0]`. Every OLDER
                     sale still stands here, with its own Undo when `canUndo` allows one — the
                     door the sheet's own old comment claimed already existed. */}
@@ -1565,15 +1642,17 @@ export function Fulfillment() {
                         <span className="fulfillment-say ff-done-order">Order {sale.card.order.number}</span>
                       )}
                       {!sale.canUndo ? null : (
-                        <button
+                        <Button
                           className="ff-done-undo"
-                          type="button"
+                          words="word-only-control"
+                          busy={queued?.key === sale.card.key ? 'queued' : false}
                           aria-label={`Undo ${sayPlace(sale.card.place)}`}
-                          onClick={() => void doUndo(sale.card)}
+                          aria-describedby={queued?.key === sale.card.key ? 'ff-queued-note-head' : undefined}
+                          onClick={() => doUndo(sale.card)}
                         >
                           <Icon name="undo" size={18} />
                           Undo
-                        </button>
+                        </Button>
                       )}
                     </li>
                   ))}

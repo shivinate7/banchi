@@ -1415,3 +1415,25 @@
   font-weight: 700;
   color: var(--bn-ink);
 }
+
+/* ---- The queued Undo (D329) ------------------------------------------------------------- */
+/* Both Undos are kit Buttons, so the kit's own border, shadow, 13px label and light hover ground are put back to today's
+   look here, scoped to the two classes. Without it the ink pill goes light on hover and its label vanishes, and the row
+   Undo's label drops under this view's 20px floor. The kit's press squeeze stays (D50). */
+.fulfillment .bn-btn.ff-undo,
+.fulfillment .bn-btn.ff-done-undo { height: auto; border: 0; box-shadow: none; line-height: 1.5; font-size: var(--ff-fs-base); font-weight: 700; }
+.fulfillment .bn-btn.ff-done-undo { gap: var(--bn-1); padding: 0 var(--bn-4); }
+.fulfillment .bn-btn.ff-undo:hover { background: var(--bn-ink); box-shadow: var(--bn-shadow-2); }
+.fulfillment .bn-btn.ff-done-undo:hover { background: var(--bn-ink); color: var(--bn-bg); }
+/* The words at this view's floor: 20px, in ink-2, the glyph at 20px. */
+.fulfillment .bn-queued-note { font-size: var(--ff-fs-base); line-height: 1.2; min-height: 44px; }
+.fulfillment .bn-queued-note svg { width: 20px; height: 20px; }
+/* Where the words sit: in room the screen already keeps, out of the flow, so the press moves nothing (D118, D313). On a
+   receipt, in the strip above the Undo that the X already keeps, ending before the X. */
+.ff-receipt > .bn-queued-note { position: absolute; top: var(--bn-2); right: calc(var(--bn-2) + 44px + var(--bn-3)); }
+/* A Pulled today row has no free room, so its words sit on the heading line. */
+.ff-done-head { position: relative; }
+.ff-done-head .bn-queued-note { position: absolute; right: 0; top: -6px; }
+/* The mark at this view's scale: the same primitive, 24px disc and 16px glyph beside a 56px pill. */
+.fulfillment .bn-queued-mark { width: 24px; height: 24px; top: -8px; right: -8px; }
+.fulfillment .bn-queued-mark svg { width: 16px; height: 16px; }
