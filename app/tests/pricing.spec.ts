@@ -1,6 +1,6 @@
 // Protects: Pricing shows every unsent copy, writes only what the owner sets, and sends only what the Send bar says.
 // Governs: D86, D59, D278, D277, D118, D218
-import { test, expect, type Locator, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page, type Route } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { afterPaint, settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
@@ -4722,6 +4722,197 @@ test('a clear empties the fields it cleared, and offers the way back', async ({ 
   await expect(page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })).toContainText(
     'Clear 1 typed price',
   )
+})
+
+/* THE FILE A CLEAR, ITS UNDO AND THE AUTOSAVE MEET WHEN ANOTHER WRITER HAS MOVED IT (D86). The server is modelled the way it
+   answers: a write names the digest it read, a write that names an old one is refused with `corpus_moved`, and an accepted write
+   moves the digest on. `GET /pricing` answers the file's digest and the newest clear that can still be undone (`last_clear`, null
+   once none stands). It is registered AFTER `open`, so the load's read is `open`'s and every later read, write and Undo is this
+   model's. */
+type ModelledFile = { version: number; revision: string; lastClear: { count: number; at: number } | null; accepted: number; refusals: number }
+
+const CLEAR_AT = 1758870000
+
+function bumpFile(file: ModelledFile): string {
+  file.version += 1
+  file.revision = `rev-${file.version}`
+  return file.revision
+}
+
+function refuseMoved(route: Route) {
+  return route.fulfill({
+    status: 409,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      error: { code: 'corpus_moved', message: 'The pricing file changed since this screen read it — another tab, or an edit on disk.' },
+    }),
+  })
+}
+
+async function modelPricingFile(page: Page, wire: Wire[]): Promise<ModelledFile> {
+  const file: ModelledFile = { version: 1, revision: 'rev-1', lastClear: null, accepted: 0, refusals: 0 }
+  await page.route(/\/pricing\/clear$/, async (route) => {
+    const body = route.request().postDataJSON() as { revision?: string }
+    wire.push({ method: 'POST', path: '/pricing/clear', body })
+    if (body.revision !== file.revision) {
+      file.refusals += 1
+      return refuseMoved(route)
+    }
+    file.accepted += 1
+    bumpFile(file)
+    file.lastClear = { count: 1, at: CLEAR_AT }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        cleared: { '8608859': { value: '4.50', at: '2026-09-07T06:50:31.891+00:00' } },
+        count: 1,
+        holds: 2,
+        unknown: 1,
+        undated: 0,
+        answers: 3,
+        revision: file.revision,
+      }),
+    })
+  })
+  await page.route(/\/pricing\/restore$/, async (route) => {
+    const body = route.request().postDataJSON() as { answers?: Record<string, unknown>; revision?: string }
+    wire.push({ method: 'POST', path: '/pricing/restore', body })
+    if (body.revision !== file.revision) {
+      file.refusals += 1
+      return refuseMoved(route)
+    }
+    file.accepted += 1
+    bumpFile(file)
+    file.lastClear = null
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, restored: Object.keys(body.answers ?? {}), skipped: [], revision: file.revision }),
+    })
+  })
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          corpus: { version: 1, policy: { rule: 'match', basis: 'market' }, skus: {} },
+          path: '/tmp/prices.json',
+          revision: file.revision,
+          clearable: CLEARABLE,
+          last_clear: file.lastClear,
+        }),
+      })
+    }
+    if (route.request().method() !== 'PUT') return route.fallback()
+    const body = route.request().postDataJSON() as { revision?: string }
+    wire.push({ method: 'PUT', path: '/pricing', body })
+    if (body.revision !== file.revision) {
+      file.refusals += 1
+      return refuseMoved(route)
+    }
+    file.accepted += 1
+    bumpFile(file)
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, written: '/tmp/prices.json', answers: 1, revision: file.revision }),
+    })
+  })
+  return file
+}
+
+test('a Clear the server refuses as moved takes no digest from its own re-read, so the next autosave is refused too', async ({
+  page,
+}) => {
+  /* A REFUSED CLEAR WRITES NOTHING, so the screen keeps the digest it read at load (rev-1). Another writer has moved the file to
+     rev-2 and the re-read the refusal starts answers rev-2. That answer is no write's receipt: the next autosave must still name
+     rev-1, so the server refuses it. A screen that adopted rev-2 would send it back and take the other writer's file over. */
+  const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  const file = await modelPricingFile(page, wire)
+  file.lastClear = { count: 49, at: CLEAR_AT }
+  bumpFile(file)
+
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  /* THE RE-READ HAS LANDED when the newest clear it answers is drawn: the restore line is set in the same step as the digest. */
+  await expect(page.locator('.pricing-restore-clear')).toContainText('Restore 49 cleared,')
+  expect(file.refusals, 'the Clear was refused as moved').toBe(1)
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+
+  await page.getByLabel('Price for Articuno').fill('19.99')
+  await page.getByLabel('Price for Articuno').press('Enter')
+  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length, { message: 'the autosave reached the server' }).toBe(1)
+  const put = wire.filter((r) => r.method === 'PUT').pop()
+  expect(
+    (put?.body as { revision?: string }).revision,
+    'a Clear refused as moved adopted the digest its re-read answered, so the autosave carries the file the other writer moved to',
+  ).toBe('rev-1')
+  expect(file.accepted, 'the autosave overwrote the file another writer moved').toBe(1)
+  await expect(page.locator('.bn-status-slot')).toContainText('changed since this screen read it')
+})
+
+test('an Undo the server refuses as moved takes no digest from its own re-read, so the next autosave is refused too', async ({
+  page,
+}) => {
+  /* THE CLEAR LANDS (rev-2, the digest the screen takes from it), THEN ANOTHER WRITER MOVES THE FILE TO rev-3 before the Undo.
+     The Undo names rev-2 and is refused. Its re-read answers rev-3 and it is no write's receipt, so the next autosave must still
+     name rev-2 and be refused. */
+  const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  const file = await modelPricingFile(page, wire)
+
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  await expect(sheet).toHaveCount(0)
+  await expect(page.locator('.pricing-restore-clear')).toContainText('Restore 1 cleared,')
+
+  /* ANOTHER WRITER MOVES THE FILE. The server no longer remembers the clear, so the re-read the refused Undo starts draws no restore line:
+     that is the signal the re-read has landed. */
+  file.lastClear = null
+  bumpFile(file)
+  const toast = page.locator('.bn-toast').last()
+  await toast.getByRole('button', { name: 'Undo' }).click()
+  await expect(page.locator('.pricing-restore-clear')).toHaveCount(0)
+  expect(file.refusals, 'the Undo was refused as moved').toBe(1)
+
+  await page.getByLabel('Price for Articuno').fill('19.99')
+  await page.getByLabel('Price for Articuno').press('Enter')
+  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length, { message: 'the autosave reached the server' }).toBe(1)
+  const put = wire.filter((r) => r.method === 'PUT').pop()
+  expect(
+    (put?.body as { revision?: string }).revision,
+    'an Undo refused as moved adopted the digest its re-read answered, so the autosave carries the file the other writer moved to',
+  ).toBe('rev-2')
+  expect(file.accepted, 'the autosave overwrote the file another writer moved').toBe(1)
+  await expect(page.locator('.bn-status-slot')).toContainText('changed since this screen read it')
+})
+
+test('a Clear that lands and its Undo that lands both carry the digest the re-read after the Clear read', async ({ page }) => {
+  /* THE CONTROL. Nothing moves the file in between, so the re-read after the Clear answers rev-2, and the Undo must name rev-2 and
+     be accepted. A fix that stopped the screen taking the digest after a landed write would refuse this Undo. */
+  const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  const file = await modelPricingFile(page, wire)
+
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  await expect(sheet).toHaveCount(0)
+  await expect(page.locator('.pricing-restore-clear')).toContainText('Restore 1 cleared,')
+
+  await page.locator('.bn-toast').last().getByRole('button', { name: 'Undo' }).click()
+  await expect.poll(() => wire.filter((r) => r.path === '/pricing/restore').length, { message: 'the Undo reached the server' }).toBe(1)
+  const back = wire.filter((r) => r.path === '/pricing/restore').at(-1)
+  expect(
+    (back?.body as { revision?: string }).revision,
+    'the Undo did not carry the digest the re-read after the Clear read',
+  ).toBe('rev-2')
+  expect(file.refusals, 'the Undo was refused').toBe(0)
+  await expect(page.locator('.bn-toast', { hasText: '1 price undone' })).toBeVisible()
 })
 
 test('UN-11 (the delta review round) — the newest clear survives a reload, and Restore N reaches every SKU it cleared', async ({
