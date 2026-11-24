@@ -368,9 +368,17 @@ export function unconfirmedCopyWrite(what: string, name: string, place: string |
   return unconfirmedWrite(what, `${whose}. If the ${control} button is still on its row, press it again. If the ${what} went through, the second press says so.`)
 }
 
-/** WHAT EACH ICON-ONLY COPY CONTROL LOOKS LIKE ON ITS ROW, as a reader would say it: the seal's $ for Mark Sold, the undo arrow, the
- *  lidded box for Retire, and the arrow into a bar for Move. `unconfirmedCopyWrite` names the control by this, never by its label. */
-export const ROW_CONTROL_SEEN = { sale: '$', undo: '↺', retire: 'lidded box', move: '→|' } as const
+/** WHAT EACH ICON-ONLY COPY CONTROL LOOKS LIKE ON ITS ROW, as a reader would say it: the seal's $ for Mark Sold, the hooked arrow for
+ *  undo, and the lidded box for Retire. `unconfirmedCopyWrite` names the control by this, never by its label. Move has no row control
+ *  to name: its no-answer leaves the Move dialog open (`unconfirmedCopyMove`). */
+export const ROW_CONTROL_SEEN = { sale: '$', undo: 'hooked arrow', retire: 'lidded box' } as const
+
+/** THE MOVE OF A NAMED COPY THAT GOT NO ANSWER. The Move dialog stays open, so the body points at its Move button, not at a row
+ *  control. A second press after a committed move is refused by the server, and the body says the card stays where it moved. */
+export function unconfirmedCopyMove(name: string, place: string | null): Unconfirmed {
+  const whose = place === null ? name : `${name}, ${place}`
+  return unconfirmedWrite('move', `${whose}. If the Move dialog is still open, press Move again. If the move already went through, that press is refused and the card stays where it moved.`)
+}
 
 /** THE SALE OF A NAMED CARD: the one pair that Orders (the walk's toast and the pick row's line) and Inventory all say. */
 export function unconfirmedSale(name: string, place: string | null): Unconfirmed {

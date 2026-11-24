@@ -29,6 +29,7 @@ import {
   ALREADY_SOLD,
   gotNoAnswer,
   ROW_CONTROL_SEEN,
+  unconfirmedCopyMove,
   unconfirmedCopyWrite,
   unconfirmedSale,
   type Unconfirmed,
@@ -655,7 +656,7 @@ function InventoryWalk({
           setMoveTrouble(describeFailure(err))
           return
         }
-        reportWrite(err, copy, selected?.card.name ?? null, (name, place) => unconfirmedCopyWrite('move', name, place, ROW_CONTROL_SEEN.move))
+        reportWrite(err, copy, selected?.card.name ?? null, unconfirmedCopyMove)
       } finally {
         setBusyKey(null)
       }
