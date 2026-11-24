@@ -1,0 +1,1 @@
+- sendcard-stale-read-clears-press: A read in `app/src/SendCard.tsx` that began before a press's write ended is handled as not own. Its result clears the answers of the items it lists. The press's answer can be set before that result lands, since `afterWrite` never awaits its re-reads. Read from code, race not reproduced. Seen: 2026-11-24 x1

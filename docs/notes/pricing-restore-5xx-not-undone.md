@@ -1,0 +1,1 @@
+- pricing-restore-5xx-not-undone: `doRestoreClear` in `app/src/Pricing.tsx` titles every failure "Not undone", including a 5xx that may have committed. The 5xx Restore case in `app/tests/pricing.spec.ts` asserts that title, so a new title needs that case changed too. Seen: 2026-11-24 x1

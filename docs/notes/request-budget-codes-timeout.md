@@ -1,0 +1,1 @@
+- request-budget-codes-timeout: The request-budget sweep in `app/tests/request-budget.spec.ts` timed out once on the Codes screen. Cause unknown. The file has no `.bn-view` wait, so the cause may sit in a helper it imports. Seen: 2026-11-24 x1

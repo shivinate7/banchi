@@ -1,0 +1,1 @@
+- sendcard-answers-never-pruned: The `answers` map in `OwedTakeOffsLine` (`app/src/SendCard.tsx`) drops a key only when a non-own read lists it. An answer for an item no read lists stays until the component unmounts. Read from code. Seen: 2026-11-24 x1

@@ -1,0 +1,1 @@
+- pricing-no-rehold-only-unheld: `reholdCopies` has one caller, the Undo of the Unhold receipt in `app/src/Pricing.tsx`. Once that toast is gone, no control holds only the unheld copies again. Read from code. Seen: 2026-11-24 x1
