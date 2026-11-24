@@ -9423,12 +9423,16 @@ test('reread follow-on: a not-signed-in answer does not outlive a later owed rea
   const before = owedReadsSincePress(sent)
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   await expect.poll(() => owedReadsSincePress(sent), { message: 'a Refresh is followed by a read of the owed take-offs' }).toBeGreaterThan(before)
+  /* A SINGLE ENTRY DRAWS ITS SENTENCE AND ITS PRESS, both shown, so the sentence is narrowed to by its text. */
   await expect(
-    page.locator(OWED_SHOWN),
+    page.locator(OWED_SHOWN).filter({ hasText: 'TCGplayer still lists 2 copies of Thievul from your master set.' }),
     'the Refresh read draws Thievul as offered, so the line draws that, not the sign-in answer the press left',
-  ).toContainText('TCGplayer still lists 2 copies of Thievul from your master set.')
+  ).toHaveCount(1)
   await expect(page.locator('.send-owed').getByRole('button', { name: /take it off tcgplayer/i }), 'the store lists Thievul as offered, so its press is offered').toBeVisible()
-  await expect(page.locator(OWED_SHOWN), 'the sign-in answer must be gone once a later read lists Thievul as offered').not.toContainText('not signed in')
+  await expect(
+    page.locator(OWED_SHOWN).filter({ hasText: 'not signed in' }),
+    'the sign-in answer must be gone once a later read lists Thievul as offered',
+  ).toHaveCount(0)
 })
 
 test('reread follow-on: an on-its-way answer does not outlive a later owed read that draws the entry as failed', async ({ page }) => {
@@ -9455,12 +9459,16 @@ test('reread follow-on: an on-its-way answer does not outlive a later owed read 
   const before = owedReadsSincePress(sent)
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   await expect.poll(() => owedReadsSincePress(sent), { message: 'a Refresh is followed by a read of the owed take-offs' }).toBeGreaterThan(before)
+  /* A SINGLE ENTRY DRAWS ITS SENTENCE AND ITS PRESS, both shown, so the sentence is narrowed to by its text. */
   await expect(
-    page.locator(OWED_SHOWN),
+    page.locator(OWED_SHOWN).filter({ hasText: 'TCGplayer did not take Thievul off, so nothing went live.' }),
     'the Refresh read draws Thievul as failed, so the line says it did not go live, not that it is on its way',
-  ).toContainText('TCGplayer did not take Thievul off, so nothing went live.')
+  ).toHaveCount(1)
   await expect(page.locator('.send-owed').getByRole('button', { name: 'Try again' }), 'the store lists Thievul as failed, so Try again must show').toBeVisible()
-  await expect(page.locator(OWED_SHOWN), 'the on-its-way answer must be gone once a later read lists Thievul as failed').not.toContainText('on its way')
+  await expect(
+    page.locator(OWED_SHOWN).filter({ hasText: 'on its way' }),
+    'the on-its-way answer must be gone once a later read lists Thievul as failed',
+  ).toHaveCount(0)
 })
 
 /* THE SEND CARD'S OTHER WRITES, CONTROLS. Take back, dismiss, and the unreadable-claim release and restore each already read the
