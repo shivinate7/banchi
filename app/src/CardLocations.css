@@ -261,6 +261,9 @@
     box-shadow var(--bn-t) var(--bn-ease-out),
     color var(--bn-t) var(--bn-ease-out);
 }
+/* QUEUED KEEPS THE OUTLINE FRAME the walk's Undo already has, and the badge rings in the row's own ground. */
+.card-locations-undo.bn-icon-btn[data-busy='queued'] { background: transparent; }
+.card-locations-row .bn-queued-mark { box-shadow: 0 0 0 2px var(--bn-surface-2); }
 .card-locations-undo.bn-icon-btn:hover {
   background: var(--bn-hover);
   box-shadow: inset 0 0 0 1.5px var(--bn-ink-3);

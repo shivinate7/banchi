@@ -19,13 +19,13 @@
  * one press (Mark sold / Undo) `CardLocations`'s own `renderAction` slot calls per copy.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CardThumb, Icon, Loading, Notice, overlayOpen, Pill } from './kit'
+import { CardThumb, Icon, Loading, Notice, overlayOpen, Pill, QueuedNote } from './kit'
 import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
 import { isEditableTarget } from './keys'
-import { MarkSoldButton, UndoSaleButton, markFreshSale, clearFreshSale, noteUndoPressedBy } from './CardLocations'
+import { MarkSoldButton, UndoSaleButton, markFreshSale, clearFreshSale, noteUndoPressedBy, undoShownFor } from './CardLocations'
 import { ALREADY_SOLD, COPY_ALREADY_PULLED, SALE_BUILT_ON, describeFailure, failureGotNoAnswer, failureTone, photoUrl, unconfirmedSale, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
@@ -371,7 +371,7 @@ type Receipt = {
   readonly place: string
   readonly orderKey: string
   readonly sku: string
-  readonly phase: 'queued' | 'sending' | 'recorded' | 'undoing' | 'elsewhere' | 'spent'
+  readonly phase: 'queued' | 'sending' | 'recorded' | 'undoQueued' | 'undoing' | 'elsewhere' | 'spent'
 }
 
 /* ------------------------------------------------------------------------------ the sales line */
@@ -456,13 +456,20 @@ if (typeof window !== 'undefined') {
   })
 }
 
+/** What the row shows for a sale. A reversal pressed while its sale is still out is `undoQueued`: taken, and waiting for
+ *  the sale to save. Once the sale has landed and the reversal is out, it is `undoing`. */
+const phaseOf = (sale: LineSale): Receipt['phase'] => {
+  if (!sale.undoAfter) return sale.phase
+  return sale.phase === 'sending' ? 'undoQueued' : 'undoing'
+}
+
 const receiptOf = (sale: LineSale): Receipt => ({
   at: sale.at,
   target: sale.target,
   place: sale.place,
   orderKey: sale.orderKey,
   sku: sale.sku,
-  phase: sale.undoAfter ? 'undoing' : sale.phase,
+  phase: phaseOf(sale),
 })
 
 /** A sale that does not stand leaves the line, and every walk is told so its row goes back. */
@@ -487,7 +494,7 @@ async function runSell(job: Extract<Job, { kind: 'sell' }>): Promise<void> {
   const { sale } = job
   if (sale.gone) return
   sale.phase = 'sending'
-  emitLine({ type: 'phase', copyKey: sale.copyKey, phase: sale.undoAfter ? 'undoing' : 'sending' })
+  emitLine({ type: 'phase', copyKey: sale.copyKey, phase: phaseOf(sale) })
   setLineBusy(sale.copyKey)
   let outcome: WalkPullOutcome
   try {
@@ -678,9 +685,13 @@ export function undoWalkSale(held: { readonly copyKey: string }): void {
     return
   }
   if (sale.undoAfter || sale.phase === 'undoing') return
-  if (sale.phase === 'sending') sale.undoAfter = true
-  else sale.phase = 'undoing'
-  emitLine({ type: 'phase', copyKey: sale.copyKey, phase: 'undoing' })
+  if (sale.phase === 'sending') {
+    sale.undoAfter = true
+    /* THE PRESS ANSWERS AT ONCE. With the row drawn, its Undo shows the queued state and the words beside it. With no row
+       (the walk stepped to another card), nothing is there to carry the words, so a toast does. */
+    if (!undoShownFor(sale.copyKey)) toast({ kind: 'status', icon: 'queued', title: 'Undo waits for the sale to save', body: sale.place })
+  } else sale.phase = 'undoing'
+  emitLine({ type: 'phase', copyKey: sale.copyKey, phase: phaseOf(sale) })
   pushJob({ kind: 'undo', sale })
 }
 
@@ -1556,9 +1567,12 @@ export function WalkList({
  *  it is showing when `take` is omitted. */
 export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk; readonly copy: SearchCopy; readonly take?: WalkPlanTake; readonly hint?: string }) {
   const receipt = walk.receipts.get(copy.key)
-  /* BUSY ONLY WHILE THIS ROW'S OWN WRITE IS OUT (or its reversal is waiting). A sale still in the line shows
-     no busy: its Undo cancels it. Nothing here waits on another row's write. */
+  /* BUSY ONLY WHILE THIS ROW'S OWN WRITE IS OUT (the sale, or its reversal). A sale still in the line shows
+     no busy: its Undo cancels it. A reversal pressed while the sale is out shows the queued state instead of the ring, with
+     its words beside it, until the sale has saved. Nothing here waits on another row's write. */
+  const queued = receipt?.phase === 'undoQueued'
   const busy = receipt?.phase === 'sending' || receipt?.phase === 'undoing'
+  const noteId = `queued-note-${copy.key}`
   const where = copy.place.label === null ? copy.key : sayPlace(copy.place.label)
   if (receipt !== undefined && copy.key !== walk.newestUndoKey) return <Pill tone="ok" icon="check">Sold</Pill>
   const undo = receipt !== undefined
@@ -1578,13 +1592,17 @@ export function RowAction({ walk, copy, take, hint }: { readonly walk: OrderWalk
     )
   }
   return (
-    <UndoSaleButton
-      saleKey={copy.key}
-      name={`Undo sale: ${where}`}
-      busy={busy}
-      disabled={busy}
-      onClick={() => walk.undoCopy(copy.key)}
-    />
+    <>
+      <UndoSaleButton
+        saleKey={copy.key}
+        name={`Undo sale: ${where}`}
+        busy={queued ? 'queued' : busy}
+        disabled={busy}
+        describedBy={queued ? noteId : undefined}
+        onClick={() => walk.undoCopy(copy.key)}
+      />
+      {queued ? <QueuedNote id={noteId}>Waits for the sale to save.</QueuedNote> : null}
+    </>
   )
 }
 

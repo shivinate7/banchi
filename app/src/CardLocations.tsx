@@ -8,7 +8,7 @@ import { PullConfirm } from './PullConfirm'
 import { PositionBar } from './PositionBar'
 import { placePartsOf, sayPlace, sectionCountOf, type Persona } from './position'
 import { collectorNumber } from './cardNumber'
-import { Icon, IconButton, Pill, type LogoVariant } from './kit'
+import { Icon, IconButton, Pill, type Busy, type LogoVariant } from './kit'
 import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, type FrozenRank } from './frozenRank'
 import './CardLocations.css'
 import { forSale, IDENTIFIED, readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
@@ -542,6 +542,13 @@ function SaleBills({ reverse = false, onDone }: { readonly reverse?: boolean; re
  *  width inline and a stylesheet rule could only beat that with `!important`. `--sale-w` is the CSS's. */
 const SALE_FACE = { width: 'var(--sale-w)' } as const
 
+/* THE UNDO BUTTONS ON SCREEN NOW, by copy key. A press that has to wait for a write says so on this button when it is
+   drawn, and somewhere else (a toast) when it is not: a stepped-away card has no row to carry the answer. */
+const SHOWN_UNDOS = new Map<string, number>()
+
+/** Is an Undo for this copy drawn right now? */
+export const undoShownFor = (saleKey: string): boolean => (SHOWN_UNDOS.get(saleKey) ?? 0) > 0
+
 /** THE UNDO THAT STANDS WHERE MARK SOLD WAS: the same frame (`--sale-w` by 40px, D195, D118), as a
  *  neutral outline with the undo glyph, so it never reads as "sell again". Right after a press,
  *  drawn bills fly up and out of it, once. They are `pointer-events: none` and absolutely placed,
@@ -553,13 +560,17 @@ export function UndoSaleButton({
   busy,
   disabled,
   kbd,
+  describedBy,
   onClick,
 }: {
   readonly saleKey: string
   readonly name: string
-  readonly busy: boolean
+  /** `'queued'` is a press taken and waiting behind a write (`Busy`): the label stays and nothing here is disabled. */
+  readonly busy: Busy
   readonly disabled: boolean
   readonly kbd?: string
+  /** The id of the words that say what a queued press waits for (`QueuedNote`). */
+  readonly describedBy?: string
   readonly onClick: () => void
 }) {
   const [wasFresh] = useState(() => {
@@ -572,6 +583,14 @@ export function UndoSaleButton({
   useEffect(() => {
     FRESH_SALES.delete(saleKey)
     UNDONE_AT.delete(saleKey)
+  }, [saleKey])
+  useEffect(() => {
+    SHOWN_UNDOS.set(saleKey, (SHOWN_UNDOS.get(saleKey) ?? 0) + 1)
+    return () => {
+      const left = (SHOWN_UNDOS.get(saleKey) ?? 1) - 1
+      if (left > 0) SHOWN_UNDOS.set(saleKey, left)
+      else SHOWN_UNDOS.delete(saleKey)
+    }
   }, [saleKey])
   /* A sale by any path (a press, a digit key) hands focus to the Undo, and a keyboard user can take it
      back at once. Noted before `useTakesFocusNote` reads it, and it waits out a disabled Undo. */
@@ -604,6 +623,7 @@ export function UndoSaleButton({
         busy={busy}
         disabled={disabled}
         kbd={kbd}
+        aria-describedby={describedBy}
         onClick={() => {
           noteRestoreFor(saleKey, 'undo', button)
           noteFocusFor(saleKey, 'sell')

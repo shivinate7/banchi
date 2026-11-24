@@ -522,6 +522,41 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-btn-primary[data-busy='true']::after, .bn-btn-danger-solid[data-busy='true']::after { color: var(--bn-on-accent); }
 @keyframes bn-spin { to { transform: rotate(360deg); } }
 
+/* A PRESS TAKEN AND QUEUED BEHIND ANOTHER WRITE (`busy="queued"`). It is its own value, so the ring rules above
+   (`[data-busy='true']`) never match it. The face keeps its label at full strength and its own paint: it is not
+   running and not disabled. `aria-disabled` would paint the disabled opacity, so it is put back to 1. A press on it is
+   refused, so a second one queues nothing. The badge is absolute and outside the flow (D118), and it arrives on the
+   press's own frame with no transition (D50). */
+.bn-btn[data-busy='queued'] { opacity: 1; pointer-events: none; }
+/* A frameless face (ghost, a bare icon button) takes its hover ground while queued, so the badge has a frame to sit on. */
+.bn-btn-ghost[data-busy='queued'], .bn-icon-btn[data-busy='queued'] { background: var(--bn-accent-tint); }
+.bn-queued-mark {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--bn-r-full);
+  background: var(--bn-accent);
+  color: var(--bn-on-accent);
+  box-shadow: 0 0 0 2px var(--bn-surface);
+  pointer-events: none;
+}
+/* THE WORDS beside a queued press: one line, in the press's own row. */
+.bn-queued-note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-1-5);
+  min-height: 20px;
+  font-size: var(--bn-fs-md);
+  font-weight: 500;
+  color: var(--bn-ink-2);
+  white-space: nowrap;
+}
+.bn-queued-note .bn-icon { flex: none; color: var(--bn-accent); }
+
 /* ---- kbd ----------------------------------------------------------------- */
 .bn-kbd {
   display: inline-flex;

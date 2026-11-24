@@ -30,6 +30,11 @@ export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl'
  *  to get past the rule, not because that variant fit). */
 export type WordsReason = 'irreversible' | 'fact-on-face' | 'only-primary' | 'word-only-control' | 'not-in-vocabulary'
 
+/** What a press is doing. `true` is running: the ring replaces the label and the press is refused. `'queued'` is taken
+ *  and waiting its turn behind another write: the label stays, a static badge arrives, the press is refused in
+ *  script and the button is never `disabled`, so it keeps its own paint and does not read as refused. */
+export type Busy = boolean | 'queued'
+
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   readonly ref?: Ref<HTMLButtonElement>
   readonly variant?: ButtonVariant
@@ -37,7 +42,7 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   readonly icon?: IconName
   readonly iconRight?: IconName
   readonly kbd?: string
-  readonly busy?: boolean
+  readonly busy?: Busy
   readonly block?: boolean
   readonly pill?: boolean
   readonly iconOnly?: boolean
@@ -60,8 +65,11 @@ export function Button({
   className,
   children,
   type = 'button',
+  disabled,
+  onClick,
   ...rest
 }: ButtonProps) {
+  const queued = busy === 'queued'
   const classes = [
     'bn-btn',
     variant !== 'default' ? `bn-btn-${variant}` : '',
@@ -74,12 +82,36 @@ export function Button({
     .filter(Boolean)
     .join(' ')
   return (
-    <button type={type} className={classes} data-busy={busy ? 'true' : undefined} {...rest}>
+    <button
+      type={type}
+      className={classes}
+      data-busy={queued ? 'queued' : busy ? 'true' : undefined}
+      {...rest}
+      {...(queued ? { 'aria-busy': 'true', 'aria-disabled': 'true' } : null)}
+      disabled={queued ? undefined : disabled}
+      /* A queued press is refused here, so Enter and Space on the focused button queue nothing either. `preventDefault`
+         keeps a submit button from submitting the form it sits in. */
+      onClick={queued ? (event: { preventDefault?: () => void }) => event.preventDefault?.() : onClick}
+    >
+      {/* First, so the label stays the last child. Inline, not a shared part: the unit tier lifts `Button` alone, with only `Icon` and `Kbd` in reach. */}
+      {queued ? <span className="bn-queued-mark" aria-hidden="true"><Icon name="queued" size={12} /></span> : null}
       {icon ? <Icon name={icon} size={size === 'sm' ? 14 : size === 'xl' ? 20 : 16} /> : null}
       {iconOnly ? <span className="bn-sr">{children}</span> : children}
       {iconRight ? <Icon name={iconRight} size={size === 'sm' ? 14 : 16} /> : null}
       {kbd ? <Kbd>{kbd}</Kbd> : null}
     </button>
+  )
+}
+
+/** THE WORDS FOR A QUEUED PRESS, beside the press (`busy="queued"`): the mark and one sentence, as a live status so a
+ *  screen reader hears them when they arrive. Point the press at it with `aria-describedby`. The sentence is
+ *  "Waits for <the write ahead> to save.": the press names itself, so the note does not repeat it. */
+export function QueuedNote({ id, children }: { readonly id?: string; readonly children: ReactNode }) {
+  return (
+    <span className="bn-queued-note" id={id} role="status">
+      <Icon name="queued" size={14} />
+      {children}
+    </span>
   )
 }
 
@@ -202,7 +234,7 @@ export type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'chi
    *  default icon-only look (ghost), which is what every icon-only close/reload button in the
    *  product already draws. */
   readonly tone?: 'danger'
-  readonly busy?: boolean
+  readonly busy?: Busy
   /** A toggle of one act: Hold vs. Release, Reveal vs. Hide. Change the label and the icon
    *  together with it, never the icon alone (D118). */
   readonly pressed?: boolean
@@ -236,6 +268,7 @@ export function IconButton({
   rel,
   style,
   ref,
+  disabled,
   onTouchStart,
   onTouchEnd,
   onTouchCancel,
@@ -249,6 +282,7 @@ export function IconButton({
   if (import.meta.env.DEV && name !== undefined && !name.includes(label)) {
     console.error(`IconButton: name "${name}" does not contain label "${label}" (WCAG 2.5.3, Label in Name).`)
   }
+  const queued = busy === 'queued'
   const tipId = useId()
   const [longPress, setLongPress] = useState(false)
   /* HOVER AND KEYBOARD FOCUS, TRACKED IN REACT STATE (round 3): a portal breaks the descendant
@@ -301,6 +335,7 @@ export function IconButton({
         </span>
       ) : null}
       {burst}
+      {queued ? <span className="bn-queued-mark" aria-hidden="true"><Icon name="queued" size={12} /></span> : null}
     </>
   )
   /* PORTALLED TO `<body>` (round 3) — see the block comment above `IconButton`. Always
@@ -341,6 +376,11 @@ export function IconButton({
     onBlur?.(event as ReactFocusEvent<HTMLButtonElement>)
   }
   const handleClick = (event: ReactMouseEvent<HTMLButtonElement | HTMLAnchorElement>) => {
+    /* A queued press is refused here, so Enter and Space on the focused button queue nothing either. */
+    if (queued) {
+      event.preventDefault()
+      return
+    }
     setDismissed(true)
     onClick?.(event as ReactMouseEvent<HTMLButtonElement>)
   }
@@ -383,7 +423,9 @@ export function IconButton({
         aria-pressed={pressed}
         aria-keyshortcuts={kbd}
         data-tone={tone}
-        data-busy={busy ? 'true' : undefined}
+        data-busy={queued ? 'queued' : busy ? 'true' : undefined}
+        aria-busy={queued ? 'true' : undefined}
+        aria-disabled={queued ? 'true' : undefined}
         data-tip-open={longPress ? 'true' : undefined}
         data-tip-id={tipId}
         onMouseEnter={handleMouseEnter}
@@ -410,7 +452,7 @@ export function IconButton({
       aria-pressed={pressed}
       aria-keyshortcuts={kbd}
       data-tone={tone}
-      data-busy={busy ? 'true' : undefined}
+      data-busy={queued ? 'queued' : busy ? 'true' : undefined}
       data-tip-open={longPress ? 'true' : undefined}
       data-tip-id={tipId}
       onMouseEnter={handleMouseEnter}
@@ -422,6 +464,8 @@ export function IconButton({
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchCancel}
       {...rest}
+      {...(queued ? { 'aria-busy': 'true', 'aria-disabled': 'true' } : null)}
+      disabled={queued ? undefined : disabled}
     >
       {face}
       {tip}

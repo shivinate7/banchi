@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Press taken, queued: the shared state</title>
+<style>
+/* ---- tokens: copied from app/src/tokens.css, the names this page reads, both themes ---- */
+:root {
+  color-scheme: light;
+  --bn-bg: #f4f5f8; --bn-surface: #ffffff; --bn-surface-2: #eceef2; --bn-surface-3: #f7f8fa;
+  --bn-hover: rgba(15, 18, 23, 0.03);
+  --bn-ink: #0f1217; --bn-ink-2: #3b414b; --bn-ink-3: #666c76; --bn-ink-4: #7f8791;
+  --bn-line: rgba(15, 18, 23, 0.08); --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-accent: #3d5af1; --bn-accent-hover: #2f4bd9; --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10); --bn-accent-tint-2: rgba(61, 90, 241, 0.18); --bn-on-accent: #ffffff;
+  --bn-ok: #15803d; --bn-ok-tint: rgba(22, 163, 74, 0.12); --bn-pill-ink-ok: #11733a;
+  --bn-warn: #b45309; --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32), 0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-btn-bg: var(--bn-surface); --bn-btn-shadow: var(--bn-shadow-1);
+  --bn-font-display: 'Manrope', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --bn-fs-2xs: 10px; --bn-fs-xs: 11px; --bn-fs-sm: 12px; --bn-fs-md: 13px; --bn-fs-base: 14px; --bn-fs-lg: 16px; --bn-fs-xl: 18px; --bn-fs-2xl: 22px;
+  --bn-tracking-caps: 0.06em; --bn-tracking-tight: -0.02em;
+  --bn-lh-snug: 1.25; --bn-lh-base: 1.4; --bn-lh-relaxed: 1.55;
+  --bn-0-5: 2px; --bn-0-75: 3px; --bn-1: 4px; --bn-1-5: 6px; --bn-2: 8px; --bn-3: 12px; --bn-4: 16px; --bn-5: 20px; --bn-6: 24px; --bn-7: 32px; --bn-8: 40px;
+  --bn-r-xs: 4px; --bn-r-sm: 6px; --bn-r: 8px; --bn-r-lg: 12px; --bn-r-full: 999px;
+  --bn-t-fast: 120ms; --bn-ease: cubic-bezier(0.2, 0, 0, 1); --bn-ease-linear: linear; --bn-t-spin: 0.7s;
+  --bn-control-h: 34px; --bn-control-h-lg: 40px; --bn-pill-h: 22px;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bn-bg: #0c0e12; --bn-surface: #14171c; --bn-surface-2: #090b0e; --bn-surface-3: #1b1f26;
+  --bn-hover: rgba(255, 255, 255, 0.04);
+  --bn-ink: #eef0f4; --bn-ink-2: #b9bfc9; --bn-ink-3: #838b98; --bn-ink-4: #707886;
+  --bn-line: rgba(255, 255, 255, 0.08); --bn-line-strong: rgba(255, 255, 255, 0.16);
+  --bn-accent: #7f90ff; --bn-accent-hover: #93a2ff; --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14); --bn-accent-tint-2: rgba(127, 144, 255, 0.24); --bn-on-accent: #0c0e12;
+  --bn-ok: #3ddc84; --bn-ok-tint: rgba(61, 220, 132, 0.14); --bn-pill-ink-ok: var(--bn-ok);
+  --bn-warn: #f5a524; --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-btn-bg: var(--bn-surface-3); --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- the mockup's own page (not product) ---- */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bn-bg); color: var(--bn-ink); font: var(--bn-fs-base)/var(--bn-lh-base) var(--bn-font-ui); padding: 0 var(--bn-6) var(--bn-8); }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+.mk-sample { position: sticky; top: 0; z-index: 20; margin: 0 calc(-1 * var(--bn-6)) var(--bn-5); padding: var(--bn-2) var(--bn-6); background: var(--bn-warn-tint); color: var(--bn-ink); font-size: var(--bn-fs-md); font-weight: 600; border-bottom: 1px solid var(--bn-line-strong); backdrop-filter: blur(8px); }
+.mk-sample span { font-weight: 400; color: var(--bn-ink-2); }
+.mk-head h1 { font: 700 var(--bn-fs-2xl)/1.2 var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.mk-head p { color: var(--bn-ink-2); max-width: 72ch; margin-top: var(--bn-1); font-size: var(--bn-fs-md); }
+.mk-controls { display: flex; flex-wrap: wrap; gap: var(--bn-3) var(--bn-6); margin: var(--bn-4) 0 var(--bn-6); align-items: center; }
+.mk-group { display: flex; align-items: center; gap: var(--bn-1); }
+.mk-group > b { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-weight: 600; margin-right: var(--bn-1); }
+.mk-tab { height: 28px; padding: 0 var(--bn-3); border-radius: var(--bn-r-sm); font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2); background: var(--bn-surface-2); }
+.mk-tab[aria-pressed='true'] { background: var(--bn-ink); color: var(--bn-bg); }
+.mk-opt { display: inline-flex; align-items: center; padding: var(--bn-0-5); border-radius: var(--bn-r-sm); background: var(--bn-surface-2); }
+.mk-opt .mk-tab { background: transparent; }
+.mk-opt[data-on='true'] { background: var(--bn-ink); }
+.mk-opt[data-on='true'] .mk-tab, .mk-opt[data-on='true'] .mk-hide { color: var(--bn-bg); }
+.mk-hide { height: 28px; padding: 0 var(--bn-2); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); border-left: 1px solid var(--bn-line-strong); }
+.mk-opt[hidden] { display: none; }
+.mk-sec { margin-top: var(--bn-7); }
+.mk-sec > h2 { font: 700 var(--bn-fs-xl)/1.2 var(--bn-font-display); letter-spacing: var(--bn-tracking-tight); }
+.mk-sec > p { color: var(--bn-ink-2); font-size: var(--bn-fs-md); max-width: 80ch; margin-top: var(--bn-1); }
+.mk-frames { display: flex; flex-wrap: wrap; gap: var(--bn-6); margin-top: var(--bn-4); align-items: flex-start; }
+.mk-frame-cap { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-bottom: var(--bn-2); font-weight: 600; }
+.mk-verdict { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); margin-top: var(--bn-2); max-width: 100%; }
+.mk-today, .mk-new { position: relative; outline: 1.5px dashed var(--bn-ink-4); outline-offset: 4px; border-radius: var(--bn-r-sm); }
+.mk-new { outline-color: var(--bn-accent); }
+.mk-tag { position: absolute; top: -6px; right: 0; transform: translateY(-100%); font-size: var(--bn-fs-xs); font-weight: 600; white-space: nowrap; color: var(--bn-ink-3); background: var(--bn-bg); padding: 0 var(--bn-1); border: 1px dashed var(--bn-ink-4); border-radius: var(--bn-r-xs); line-height: 16px; pointer-events: none; }
+.mk-new > .mk-tag { color: var(--bn-accent-hover); border-color: var(--bn-accent); }
+:root[data-theme='dark'] .mk-new > .mk-tag { color: var(--bn-accent); }
+.mk-tag.is-left { left: 0; right: auto; }
+/* Labels on: the action foot takes room for its tag, so no tag covers a part. Labels off (l=0) is the true geometry. */
+body:not([data-l='0']) .card-locations-action { margin-top: 18px; }
+body:not([data-l='0']) .kit-send { padding-top: calc(var(--bn-5) + 18px); }
+body:not([data-l='0']) .kit-grid { row-gap: calc(var(--bn-4) + 14px); }
+body[data-l='0'] .mk-tag { display: none; }
+body[data-l='0'] .mk-today, body[data-l='0'] .mk-new { outline: none; }
+.mk-words { margin-top: var(--bn-4); border-collapse: collapse; font-size: var(--bn-fs-md); }
+.mk-words th, .mk-words td { text-align: left; padding: var(--bn-1-5) var(--bn-4) var(--bn-1-5) 0; border-bottom: 1px solid var(--bn-line); vertical-align: top; }
+.mk-words th { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-weight: 600; }
+.mk-words q { quotes: '\201C' '\201D'; font-weight: 600; }
+
+/* ---- the card pane (Today: Inventory's hero detail inside the walk) ---- */
+.pane { background: var(--bn-surface); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-1); padding: var(--bn-4); }
+.pane.is-column { padding: 0; background: transparent; box-shadow: none; }
+.pane-head { display: flex; align-items: baseline; gap: var(--bn-2); margin-bottom: var(--bn-3); }
+.pane-head h3 { font: 700 var(--bn-fs-lg)/1.2 var(--bn-font-display); }
+.pane-head .bn-pill { margin-left: var(--bn-1); }
+
+/* ---- kit: Pill ---- */
+.bn-pill { display: inline-flex; align-items: center; gap: var(--bn-1-5); height: var(--bn-pill-h); padding: 0 var(--bn-2); border-radius: var(--bn-r-full); font-size: var(--bn-fs-xs); font-weight: 600; line-height: 1; letter-spacing: 0.01em; white-space: nowrap; color: var(--bn-ink-2); background: var(--bn-surface-2); }
+.bn-pill-ok { color: var(--bn-pill-ink-ok); background: var(--bn-ok-tint); }
+.bn-pill-accent { color: var(--bn-accent-hover); background: var(--bn-accent-tint); }
+
+/* ---- CardLocations owner row: the rules from app/src/CardLocations.css ---- */
+.card-locations-rows { list-style: none; display: flex; flex-direction: column; gap: var(--bn-2); }
+.card-locations-row { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: 'place' 'bar' 'action'; align-items: center; gap: var(--bn-2); padding: var(--bn-3) var(--bn-4); border-radius: var(--bn-r-lg); background: var(--bn-surface-2); }
+.card-locations-row.is-current { box-shadow: inset 3px 0 0 0 var(--bn-ink-4); }
+.card-locations-identity span:last-child { font-variant-numeric: tabular-nums; }
+.card-locations-identity { grid-area: place; display: flex; flex-wrap: wrap; align-items: baseline; font-size: var(--bn-fs-sm); font-weight: 700; }
+.card-locations-identity span:not(:last-child)::after { content: '\00B7'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
+.card-locations-identity b { font-variant-numeric: tabular-nums; }
+.nb { grid-area: neighbors; display: flex; gap: var(--bn-2); font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); }
+.nb b { color: var(--bn-ink); font-weight: 700; }
+.nb .back::before { content: '\2190\00a0'; color: var(--bn-ink-4); font-weight: 400; }
+.nb .front::after { content: '\00a0\2192'; color: var(--bn-ink-4); font-weight: 400; }
+.pbar { grid-area: bar; display: grid; gap: var(--bn-1); }
+.pbar-sect { height: 22px; display: grid; place-items: center; border: 1px solid var(--bn-accent); border-radius: var(--bn-r-xs); background: var(--bn-accent-tint-2); font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-ink); }
+.pbar-ruler { position: relative; height: 40px; border: 1px solid var(--bn-line-strong); border-radius: var(--bn-r-xs); background: var(--bn-surface); }
+.pbar-ruler .t { position: absolute; top: 6px; padding: 0 var(--bn-1); font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+.pbar-ruler em { position: absolute; top: 12px; transform: translateX(-50%); padding: 0 var(--bn-1); height: 18px; line-height: 18px; border-radius: var(--bn-r-xs); background: var(--bn-accent); color: var(--bn-on-accent); font-style: normal; font-size: var(--bn-fs-2xs); font-weight: 700; }
+.pbar-ends { display: flex; justify-content: space-between; font-size: var(--bn-fs-2xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); }
+.card-locations-action { grid-area: action; display: flex; align-items: center; gap: var(--bn-3); min-height: var(--bn-control-h-lg); min-width: 160px; }
+
+/* ---- kit: Button and IconButton, as kit.css draws them ---- */
+.bn-btn { --btn-h: var(--bn-control-h); position: relative; display: inline-flex; align-items: center; justify-content: center; gap: var(--bn-2); height: var(--btn-h); padding: 0 var(--bn-4); border-radius: var(--bn-r); border: 1px solid transparent; font-size: var(--bn-fs-md); font-weight: 600; line-height: 1; white-space: nowrap; color: var(--bn-ink); background: var(--bn-btn-bg); box-shadow: var(--bn-btn-shadow); }
+.bn-btn-lg { --btn-h: var(--bn-control-h-lg); }
+.bn-btn-primary { color: var(--bn-on-accent); background: var(--bn-accent); box-shadow: var(--bn-shadow-1), inset 0 1px 0 rgba(255, 255, 255, 0.18); }
+.bn-btn-ghost { background: transparent; box-shadow: none; color: var(--bn-ink-2); }
+.bn-btn svg { flex: none; }
+.bn-icon-btn { padding: 0; border-radius: var(--bn-r-sm); background: transparent; box-shadow: none; color: var(--bn-ink-2); }
+/* busy: Today, unchanged */
+.bn-btn[data-busy='true'] { color: transparent; pointer-events: none; }
+.bn-btn[data-busy='true']::after { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; color: var(--bn-ink-3); animation: bn-spin var(--bn-t-spin) var(--bn-ease-linear) infinite; }
+.bn-btn-primary[data-busy='true']::after { color: var(--bn-on-accent); }
+@keyframes bn-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .bn-btn[data-busy='true']::after { animation-duration: 1.4s; } }
+/* the sale's frame (CardLocations.css) */
+.card-locations-sell, .card-locations-undo-wrap { --sale-w: 128px; }
+.card-locations-sell.bn-icon-btn, .card-locations-undo.bn-icon-btn { width: var(--sale-w); height: 40px; border-radius: var(--bn-r-lg); }
+.card-locations-sell.bn-icon-btn { background: var(--bn-accent-tint); color: var(--bn-accent-hover); }
+.card-locations-undo-wrap { position: relative; display: inline-flex; flex: none; }
+.card-locations-undo.bn-icon-btn { background: transparent; box-shadow: inset 0 0 0 1.5px var(--bn-ink-4); color: var(--bn-ink-2); }
+
+/* ==== NEW: the queued state, one rule set in kit.css ==========================================
+   data-busy='queued' is its own value, so the ring rules above ([data-busy='true']) never match it.
+   The face keeps its label (words or glyph) at full strength and its own paint: it is not busy and
+   not disabled. A press on it is refused (pointer-events) so a second press queues nothing.
+   The mark is a corner badge, absolute, outside the flow: it moves nothing (D118), and it arrives
+   on the press's own frame with no transition (D50). */
+.bn-btn[data-busy='queued'] { pointer-events: none; }
+/* A frameless face (ghost, a bare IconButton) takes its hover ground while queued, so the badge has a frame to sit on. */
+.bn-btn-ghost[data-busy='queued'], .bn-icon-btn[data-busy='queued'] { background: var(--bn-accent-tint); }
+.card-locations-undo.bn-icon-btn[data-busy='queued'] { background: transparent; }
+.bn-queued-mark { position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: var(--bn-r-full); background: var(--bn-accent); color: var(--bn-on-accent); box-shadow: 0 0 0 2px var(--bn-surface); pointer-events: none; }
+.card-locations-row .bn-queued-mark { box-shadow: 0 0 0 2px var(--bn-surface-2); }
+.bn-queued-mark svg { width: 12px; height: 12px; }
+/* the option that freezes the ring instead (drawn to be culled) */
+.bn-btn[data-busy='frozen'] { color: transparent; pointer-events: none; }
+.bn-btn[data-busy='frozen']::after { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--bn-ink-3); border-right-color: transparent; transform: rotate(45deg); }
+.bn-btn-primary[data-busy='frozen']::after { border-color: var(--bn-on-accent); border-right-color: transparent; }
+/* the words: one line, beside the control, in a slot that holds one line whether or not it is full */
+.bn-queued-note { position: relative; display: inline-flex; align-items: center; gap: var(--bn-1-5); min-height: 20px; font-size: var(--bn-fs-md); font-weight: 500; color: var(--bn-ink-2); white-space: nowrap; }
+.bn-queued-note svg { flex: none; width: 14px; height: 14px; color: var(--bn-accent); }
+:root[data-theme='dark'] .bn-queued-note svg { color: var(--bn-accent); }
+
+/* ---- kit: toast (receipt and ok), as kit.css draws it ---- */
+.toast-lane { margin-top: var(--bn-4); display: flex; justify-content: flex-end; min-height: 74px; }
+.bn-toast { display: flex; align-items: flex-start; gap: var(--bn-3); width: 360px; padding: var(--bn-3) var(--bn-3) var(--bn-3) var(--bn-4); border-radius: var(--bn-r-lg); background: var(--bn-ink); color: var(--bn-bg); box-shadow: var(--bn-shadow-3); }
+.bn-toast-icon { flex: none; margin-top: var(--bn-0-5); }
+.bn-toast-ok .bn-toast-icon { color: var(--bn-ok); }
+.bn-toast-status .bn-toast-icon { color: var(--bn-accent); }
+:root[data-theme='dark'] .bn-toast-ok .bn-toast-icon { color: var(--bn-pill-ink-ok); }
+.bn-toast-text { flex: 1 1 auto; min-width: 0; font-size: var(--bn-fs-md); line-height: 1.4; }
+.bn-toast-title { font-weight: 600; }
+.bn-toast-body { opacity: 0.75; font-size: var(--bn-fs-sm); margin-top: var(--bn-0-5); }
+
+/* ---- state switching ---- */
+[data-show] { display: none; }
+body[data-s='sending'] [data-show~='sending'],
+body[data-s='queued'] [data-show~='queued'],
+body[data-s='undone'] [data-show~='undone'] { display: revert; }
+body[data-s='sending'] .card-locations-action [data-show~='sending'],
+body[data-s='queued'] .card-locations-action [data-show~='queued'],
+body[data-s='undone'] .card-locations-action [data-show~='undone'] { display: inline-flex; }
+body[data-s='queued'] .toast-lane [data-show~='queued'], body[data-s='undone'] .toast-lane [data-show~='undone'] { display: flex; }
+[data-mark] { display: none !important; }
+[data-glyph='clock'] { display: none; }
+body[data-o='clock'] [data-glyph='clock'] { display: inline-block; }
+body[data-o='clock'] [data-glyph='hourglass'] { display: none; }
+body[data-o='hourglass'] [data-mark='hourglass'], body[data-o='clock'] [data-mark='clock'] { display: grid !important; }
+body[data-o='ring'] .bn-btn[data-busy='queued'] { color: transparent; }
+body[data-o='ring'] .bn-btn[data-busy='queued']::after { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--bn-ink-3); border-right-color: transparent; transform: rotate(45deg); }
+body[data-o='ring'] .bn-btn-primary[data-busy='queued']::after { border-color: var(--bn-on-accent); border-right-color: transparent; }
+[data-home] { visibility: hidden; }
+body[data-w='row'] [data-home='row'], body[data-w='toast'] [data-home='toast'] { visibility: visible; }
+body[data-w='row'] .toast-lane [data-home='toast'] { display: none !important; }
+body[data-w='toast'] .card-locations-action [data-home='row'] { visibility: hidden; }
+</style>
+</head>
+<body data-s="queued" data-o="hourglass" data-w="row">
+
+<div class="mk-sample">Sample. <span>No card, place, buyer or figure on this page is real. Designer kind: informed.</span></div>
+
+<header class="mk-head">
+  <h1>Press taken, queued</h1>
+  <p>One shared state for a press the app takes but cannot run yet. It answers on the press's own frame at once, and keeps that answer until the press runs. First user: <code>U</code> on the Orders walk while the newest Mark Sold is still saving.</p>
+</header>
+
+<div class="mk-controls" role="group" aria-label="Mockup controls">
+  <div class="mk-group" role="group" aria-label="State"><b>State</b>
+    <button class="mk-tab" data-set-s="sending">Sending</button>
+    <button class="mk-tab" data-set-s="queued">Queued undo</button>
+    <button class="mk-tab" data-set-s="undone">Undone</button>
+  </div>
+  <div class="mk-group" role="group" aria-label="Theme"><b>Theme</b>
+    <button class="mk-tab" data-set-t="light">Light</button>
+    <button class="mk-tab" data-set-t="dark">Dark</button>
+  </div>
+  <div class="mk-group" role="group" aria-label="Labels"><b>Labels</b>
+    <button class="mk-tab" data-set-l="1">On</button>
+    <button class="mk-tab" data-set-l="0">Off</button>
+  </div>
+  <div class="mk-group" role="group" aria-label="Queued mark"><b>Mark</b>
+    <span class="mk-opt" data-opt="hourglass"><button class="mk-tab" data-set-o="hourglass">Hourglass badge</button><button class="mk-hide" data-hide="hourglass" aria-label="Hide the hourglass badge option">Hide</button></span>
+    <span class="mk-opt" data-opt="clock"><button class="mk-tab" data-set-o="clock">Clock badge</button><button class="mk-hide" data-hide="clock" aria-label="Hide the clock badge option">Hide</button></span>
+    <span class="mk-opt" data-opt="ring"><button class="mk-tab" data-set-o="ring">Frozen ring</button><button class="mk-hide" data-hide="ring" aria-label="Hide the frozen ring option">Hide</button></span>
+  </div>
+  <div class="mk-group" role="group" aria-label="Where the words go"><b>Words</b>
+    <span class="mk-opt" data-opt="row"><button class="mk-tab" data-set-w="row">Beside the press</button><button class="mk-hide" data-hide="row" aria-label="Hide the beside-the-press option">Hide</button></span>
+    <span class="mk-opt" data-opt="toast"><button class="mk-tab" data-set-w="toast">Status toast</button><button class="mk-hide" data-hide="toast" aria-label="Hide the status toast option">Hide</button></span>
+  </div>
+</div>
+
+<!-- glyphs: undo, sold, clock, send, archive and hand are copied from app/src/kit/Icon.tsx; hourglass is the new path this design asks for, at the set's 1.75 stroke -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="g-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5 M4 9h10a6 6 0 0 1 0 12h-3" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-sold" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 6v12 M15.5 8H10a1.75 1.75 0 0 0 0 3.5h4a1.75 1.75 0 0 1 0 3.5H8.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-clock" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-hourglass" viewBox="0 0 24 24"><path d="M6 3h12 M6 21h12 M7.5 3v2.5a4.5 4.5 0 0 0 9 0V3 M7.5 21v-2.5a4.5 4.5 0 0 1 9 0V21" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-hand" viewBox="0 0 24 24"><path d="M8.9 11.6V5.6a1.5 1.5 0 0 1 3 0v6 M11.9 10.6V4.6a1.5 1.5 0 0 1 3 0v7 M14.9 11.6V6.6a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1 -6 6h-1a6 6 0 0 1 -5 -2.7L3.9 14.1a1.6 1.6 0 0 1 2.5 -2L8.9 14.6" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-send" viewBox="0 0 24 24"><path d="M22 2L11 13 M22 2l-7 20-4-9-9-4z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-archive" viewBox="0 0 24 24"><path d="M3 4.4h18v4H3z M4 8.4h16v11H4z M10 12.4h4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<template id="walk-pane">
+  <div class="pane is-column">
+    <ul class="card-locations-rows">
+      <li class="card-locations-row is-current">
+        <span class="card-locations-identity"><span>Binder A</span><span>Section 2</span><span>Card 14 of 34</span></span>
+        <span class="pbar"><span class="pbar-sect">2</span><span class="pbar-ruler"><span class="t" style="left:0">1</span><span class="t" style="left:27%">10</span><span class="t" style="left:57%">20</span><span class="t" style="left:87%">30</span><span class="t" style="right:0">34</span><em style="left:39%">14</em></span><span class="pbar-ends"><span>Back</span><span>Front</span></span></span>
+        <span class="card-locations-action">
+          <!-- sending (Today): the ring, glyph hidden, no words -->
+          <span class="card-locations-undo-wrap mk-today" data-show="sending">
+            <span class="mk-tag is-left">Today: ring while the sale saves</span>
+            <button class="bn-btn bn-icon-btn card-locations-undo" data-busy="true" aria-label="Undo sale: Binder A, Section 2, Card 14" aria-disabled="true"><svg width="18" height="18"><use href="#g-undo"/></svg></button>
+          </span>
+          <!-- queued (New): glyph back, the mark, the words beside -->
+          <span class="card-locations-undo-wrap mk-new" data-show="queued">
+            <span class="mk-tag is-left">New: queued, on the press's frame</span>
+            <button class="bn-btn bn-icon-btn card-locations-undo" id="queued-undo" data-busy="queued" aria-busy="true" aria-disabled="true" aria-describedby="__NOTE__" aria-label="Undo sale: Binder A, Section 2, Card 14"><svg width="18" height="18"><use href="#g-undo"/></svg>
+              <span class="bn-queued-mark" data-mark="hourglass" aria-hidden="true"><svg><use href="#g-hourglass"/></svg></span>
+              <span class="bn-queued-mark" data-mark="clock" aria-hidden="true"><svg><use href="#g-clock"/></svg></span>
+            </button>
+          </span>
+          <span class="bn-queued-note mk-new" data-show="queued" data-home="row" id="__NOTE__" role="status"><span class="mk-tag">New: the words</span><svg data-glyph="hourglass"><use href="#g-hourglass"/></svg><svg data-glyph="clock"><use href="#g-clock"/></svg>Waits for the sale to save.</span>
+          <!-- undone (Today): Mark Sold is back -->
+          <span class="mk-today" data-show="undone">
+            <span class="mk-tag is-left">Today: Mark Sold returns</span>
+            <button class="bn-btn bn-icon-btn card-locations-sell" aria-label="Mark Sold: Binder A, Section 2, Card 14"><svg width="18" height="18"><use href="#g-sold"/></svg></button>
+          </span>
+        </span>
+      </li>
+      <li class="card-locations-row">
+        <span class="card-locations-identity"><span>Binder A</span><span>Section 2</span><span>Card 15 of 34</span></span>
+        <span class="pbar"><span class="pbar-sect">2</span><span class="pbar-ruler"><span class="t" style="left:0">1</span><span class="t" style="left:27%">10</span><span class="t" style="left:57%">20</span><span class="t" style="left:87%">30</span><span class="t" style="right:0">34</span><em style="left:42%">15</em></span><span class="pbar-ends"><span>Back</span><span>Front</span></span></span>
+        <span class="card-locations-action">
+          <button class="bn-btn bn-icon-btn card-locations-sell" aria-label="Mark Sold: Binder A, Section 4, Card 3"><svg width="18" height="18"><use href="#g-sold"/></svg></button>
+        </span>
+      </li>
+    </ul>
+  </div>
+  <div class="toast-lane">
+    <div class="bn-toast bn-toast-status mk-new" id="queued-toast" data-show="queued" data-home="toast" role="status"><span class="mk-tag">New: status toast, the other home</span>
+      <svg class="bn-toast-icon" data-glyph="hourglass" width="16" height="16"><use href="#g-hourglass"/></svg><svg class="bn-toast-icon" data-glyph="clock" width="16" height="16"><use href="#g-clock"/></svg>
+      <div class="bn-toast-text"><div class="bn-toast-title">Undo waits for the sale to save</div><div class="bn-toast-body">Binder A, Section 2, Card 14</div></div>
+    </div>
+    <div class="bn-toast bn-toast-ok mk-today" data-show="undone" role="status"><span class="mk-tag">Today: the receipt, unchanged</span>
+      <svg class="bn-toast-icon" width="16" height="16"><use href="#g-undo"/></svg>
+      <div class="bn-toast-text"><div class="bn-toast-title">Pull undone</div><div class="bn-toast-body">Binder A, Section 2, Card 14 holds Glimmer Fox again.</div></div>
+    </div>
+  </div>
+</template>
+
+<section class="mk-sec" id="walk">
+  <h2>The walk row</h2>
+  <p>The copy column of the card pane on <code>#/orders</code> while walking: the copy rows of the current pick, Glimmer Fox, Pick 1, either copy (<code>CardLocations</code>, action from <code>RowAction</code>). Mark Sold on the first row has been pressed; its write is out. Then <code>U</code>.</p>
+  <div class="mk-frames">
+    <div style="width:495px"><div class="mk-frame-cap">1440 wide: the copy column is 495px</div><div class="mk-slot" data-w="495"></div><p class="mk-verdict" data-verdict="495"></p></div>
+    <div style="width:368px"><div class="mk-frame-cap">820 wide: the copy column is 368px</div><div class="mk-slot" data-w="368"></div><p class="mk-verdict" data-verdict="368"></p></div>
+  </div>
+</section>
+
+<section class="mk-sec" id="kit">
+  <h2>A kit Button, queued</h2>
+  <p>The same state on a worded <code>Button</code>. Rest, busy (Today) and queued (New), per variant. The label stays; only the badge arrives. The sample is Pricing's Send press, which waits for the prices to save.</p>
+  <div class="mk-frames">
+    <div style="width:1100px"><div class="mk-frame-cap">1440 wide: the send bar</div><div class="kit-slot"></div></div>
+    <div style="width:692px"><div class="mk-frame-cap">820 wide: the send bar</div><div class="kit-slot is-narrow"></div></div>
+  </div>
+</section>
+
+<template id="kit-bar">
+  <div class="pane">
+    <div class="kit-grid">
+      <span class="kit-h">Rest</span><span class="kit-h">Busy, Today</span><span class="kit-h">Queued, New</span>
+      <span><button class="bn-btn bn-btn-lg bn-btn-primary"><svg width="16" height="16"><use href="#g-send"/></svg>Send 12 copies</button></span>
+      <span><button class="bn-btn bn-btn-lg bn-btn-primary" data-busy="true"><svg width="16" height="16"><use href="#g-send"/></svg>Send 12 copies</button></span>
+      <span class="kit-q"><span class="mk-new" style="display:inline-flex"><span class="mk-tag is-left">New</span><button class="bn-btn bn-btn-lg bn-btn-primary" id="__KQ__" data-busy="queued" aria-busy="true" aria-disabled="true" aria-describedby="__KN__"><svg width="16" height="16"><use href="#g-send"/></svg>Send 12 copies<span class="bn-queued-mark" data-mark="hourglass" aria-hidden="true"><svg><use href="#g-hourglass"/></svg></span><span class="bn-queued-mark" data-mark="clock" aria-hidden="true"><svg><use href="#g-clock"/></svg></span></button></span></span>
+      <span><button class="bn-btn"><svg width="16" height="16"><use href="#g-archive"/></svg>Retire 3 copies</button></span>
+      <span><button class="bn-btn" data-busy="true"><svg width="16" height="16"><use href="#g-archive"/></svg>Retire 3 copies</button></span>
+      <span class="kit-q"><button class="bn-btn" data-busy="queued" aria-busy="true" aria-disabled="true"><svg width="16" height="16"><use href="#g-archive"/></svg>Retire 3 copies<span class="bn-queued-mark" data-mark="hourglass" aria-hidden="true"><svg><use href="#g-hourglass"/></svg></span><span class="bn-queued-mark" data-mark="clock" aria-hidden="true"><svg><use href="#g-clock"/></svg></span></button></span>
+      <span><button class="bn-btn bn-btn-ghost"><svg width="16" height="16"><use href="#g-undo"/></svg>Undo</button></span>
+      <span><button class="bn-btn bn-btn-ghost" data-busy="true"><svg width="16" height="16"><use href="#g-undo"/></svg>Undo</button></span>
+      <span class="kit-q"><button class="bn-btn bn-btn-ghost" data-busy="queued" aria-busy="true" aria-disabled="true"><svg width="16" height="16"><use href="#g-undo"/></svg>Undo<span class="bn-queued-mark" data-mark="hourglass" aria-hidden="true"><svg><use href="#g-hourglass"/></svg></span><span class="bn-queued-mark" data-mark="clock" aria-hidden="true"><svg><use href="#g-clock"/></svg></span></button></span>
+    </div>
+    <div class="kit-send">
+      <button class="bn-btn bn-btn-lg bn-btn-primary" data-busy="queued" aria-busy="true" aria-disabled="true" aria-describedby="__KN__"><svg width="16" height="16"><use href="#g-send"/></svg>Send 12 copies to TCGplayer<span class="bn-queued-mark" data-mark="hourglass" aria-hidden="true"><svg><use href="#g-hourglass"/></svg></span><span class="bn-queued-mark" data-mark="clock" aria-hidden="true"><svg><use href="#g-clock"/></svg></span></button>
+      <span class="bn-queued-note mk-new" id="__KN__" role="status"><span class="mk-tag">New: the words, beside</span><svg data-glyph="hourglass"><use href="#g-hourglass"/></svg><svg data-glyph="clock"><use href="#g-clock"/></svg>Waits for your prices to save.</span>
+    </div>
+  </div>
+</template>
+<style>
+.kit-grid { display: grid; grid-template-columns: repeat(3, max-content); gap: var(--bn-4) var(--bn-7); align-items: center; }
+.kit-h { font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); }
+.kit-send { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-3) var(--bn-4); margin-top: var(--bn-6); padding-top: var(--bn-5); border-top: 1px solid var(--bn-line); }
+.is-narrow .kit-grid { gap: var(--bn-4) var(--bn-5); }
+</style>
+
+<section class="mk-sec" id="fit">
+  <h2>Fit check: a second user, not built</h2>
+  <p>Inventory's copy row, <code>doUndo</code>. Today a press made while another write is out returns early and nothing shows. With the shared state it would queue and read like this. Same row, same kit state, words from the same template.</p>
+  <div class="mk-frames">
+    <div style="width:692px"><div class="mk-frame-cap">#/inventory, card panel</div>
+      <div class="pane">
+        <ul class="card-locations-rows">
+          <li class="card-locations-row is-current">
+            <span class="card-locations-identity"><span>Shoebox 3</span><span>Section 1</span><span>Card 40 of 52</span></span>
+            <span class="pbar"><span class="pbar-sect">1</span><span class="pbar-ruler"><span class="t" style="left:0">1</span><span class="t" style="left:37%">20</span><span class="t" style="left:75%">40</span><span class="t" style="right:0">52</span><em style="left:76%">40</em></span><span class="pbar-ends"><span>Back</span><span>Front</span></span></span>
+            <span class="card-locations-action">
+              <span class="card-locations-undo-wrap mk-new"><span class="mk-tag is-left">New: the same state</span>
+                <button class="bn-btn bn-icon-btn card-locations-undo" data-busy="queued" aria-busy="true" aria-disabled="true" aria-label="Undo sale: Shoebox 3, Section 1, Card 40"><svg width="18" height="18"><use href="#g-undo"/></svg><span class="bn-queued-mark" data-mark="hourglass" aria-hidden="true"><svg><use href="#g-hourglass"/></svg></span><span class="bn-queued-mark" data-mark="clock" aria-hidden="true"><svg><use href="#g-clock"/></svg></span></button>
+              </span>
+              <span class="bn-queued-note" role="status"><svg data-glyph="hourglass"><use href="#g-hourglass"/></svg><svg data-glyph="clock"><use href="#g-clock"/></svg>Waits for the last sale to save.</span>
+            </span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="mk-sec" id="words">
+  <h2>The words</h2>
+  <table class="mk-words">
+    <tr><th>Where</th><th>Words</th><th>Reuses</th></tr>
+    <tr><td>Template, beside the press</td><td><q>Waits for &lt;the write ahead&gt; to save.</q></td><td>the press names itself; the words name what it waits on</td></tr>
+    <tr><td>Template, away from the press</td><td><q>&lt;Press&gt; waits for &lt;the write ahead&gt; to save</q></td><td>a toast title has no press beside it</td></tr>
+    <tr><td>Walk, U while the sale saves</td><td><q>Waits for the sale to save.</q></td><td>beside the row's Undo, in the action foot</td></tr>
+    <tr><td>Status toast, if that home is picked</td><td><q>Undo waits for the sale to save</q>, body is the place</td><td><code>toast</code> kind <code>status</code></td></tr>
+    <tr><td>After the undo runs</td><td><q>Pull undone</q> and <q>Binder A, Section 2, Card 14 holds Glimmer Fox again.</q></td><td>Today's receipt, unchanged</td></tr>
+    <tr><td>Pricing Send</td><td><q>Waits for your prices to save.</q></td><td>replaces the hidden <q>Saving your prices…</q></td></tr>
+    <tr><td>Inventory, a second user</td><td><q>Waits for the last sale to save.</q></td><td>not built</td></tr>
+    <tr><td>Screen reader</td><td>The Undo keeps its name; <code>aria-busy</code>, <code>aria-disabled</code>, and the words by <code>aria-describedby</code> and <code>role="status"</code></td><td><code>IconButton</code> <code>name</code></td></tr>
+  </table>
+</section>
+
+<script>
+(function () {
+  const walk = document.getElementById('walk-pane');
+  document.querySelectorAll('.mk-slot').forEach((slot, i) => {
+    const node = walk.content.cloneNode(true);
+    const note = 'queued-note-' + i;
+    node.querySelectorAll('[id="__NOTE__"]').forEach((el) => { el.id = note; });
+    node.querySelectorAll('[aria-describedby="__NOTE__"]').forEach((el) => el.setAttribute('aria-describedby', note));
+    if (i > 0) node.querySelectorAll('#queued-undo, #queued-toast').forEach((el) => { el.id = el.id + '-' + i; });
+    slot.appendChild(node);
+  });
+  const kit = document.getElementById('kit-bar');
+  document.querySelectorAll('.kit-slot').forEach((slot, i) => {
+    const node = kit.content.cloneNode(true);
+    node.querySelectorAll('[id="__KN__"]').forEach((el) => { el.id = 'kit-note-' + i; });
+    node.querySelectorAll('[aria-describedby="__KN__"]').forEach((el) => el.setAttribute('aria-describedby', 'kit-note-' + i));
+    node.querySelectorAll('[id="__KQ__"]').forEach((el) => { el.id = i === 0 ? 'queued-send' : 'queued-send-' + i; });
+    slot.appendChild(node);
+  });
+
+  const state = { s: 'queued', o: 'hourglass', w: 'row', l: '1', t: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light', h: [] };
+  const read = () => {
+    const q = new URLSearchParams(location.hash.slice(1));
+    for (const k of ['s', 'o', 'w', 't', 'l']) if (q.get(k)) state[k] = q.get(k);
+    state.h = (q.get('h') || '').split(',').filter(Boolean);
+  };
+  const write = () => {
+    const q = new URLSearchParams({ s: state.s, o: state.o, w: state.w, t: state.t });
+    if (state.l === '0') q.set('l', '0');
+    if (state.h.length) q.set('h', state.h.join(','));
+    history.replaceState(null, '', '#' + q.toString());
+  };
+  const verdicts = {
+    sending: 'Today. The Undo shows the ring while the sale saves. Pressing U here changes nothing on screen: this is the bug.',
+    queued: { row: 'New. The Undo glyph is back with the mark; the words sit beside it on the same 40px line. Nothing in the row moves.', toast: 'New. The mark is on the Undo; the words go to a status toast. The answer lands away from the press.' },
+    undone: 'Today. Mark Sold is back on the row and the receipt toast says what happened. The queued mark and words are gone.',
+  };
+  const paint = () => {
+    const firstOn = (list, keys) => keys.find((k) => !state.h.includes(k)) || list;
+    if (state.h.includes(state.o)) state.o = firstOn(state.o, ['hourglass', 'clock', 'ring']);
+    if (state.h.includes(state.w)) state.w = firstOn(state.w, ['row', 'toast']);
+    document.documentElement.dataset.theme = state.t;
+    Object.assign(document.body.dataset, { s: state.s, o: state.o, w: state.w, l: state.l });
+    document.querySelectorAll('[data-set-l]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.setL === state.l)));
+    document.querySelectorAll('[data-set-s]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.setS === state.s)));
+    document.querySelectorAll('[data-set-t]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.setT === state.t)));
+    document.querySelectorAll('.mk-opt').forEach((o) => {
+      o.hidden = state.h.includes(o.dataset.opt);
+      o.dataset.on = String(o.dataset.opt === state.o || o.dataset.opt === state.w);
+    });
+    document.querySelectorAll('[data-verdict]').forEach((p) => {
+      const v = verdicts[state.s];
+      p.textContent = typeof v === 'string' ? v : v[state.w];
+    });
+    write();
+  };
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.setS) state.s = b.dataset.setS;
+    else if (b.dataset.setT) state.t = b.dataset.setT;
+    else if (b.dataset.setO) state.o = b.dataset.setO;
+    else if (b.dataset.setW) state.w = b.dataset.setW;
+    else if (b.dataset.setL) state.l = b.dataset.setL;
+    else if (b.dataset.hide) state.h = [...new Set([...state.h, b.dataset.hide])];
+    else return;
+    paint();
+  });
+  addEventListener('hashchange', () => { read(); paint(); });
+  read();
+  paint();
+})();
+</script>
+</body>
+</html>

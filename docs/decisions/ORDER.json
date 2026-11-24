@@ -262,6 +262,7 @@
     "D325-tcgcsv-daily-read.md",
     "D326-tcgtracking-pipe.md",
     "D327-waiting-page-export.md",
-    "D328-heavy-spec-split-across-shards.md"
+    "D328-heavy-spec-split-across-shards.md",
+    "D329-press-queued-state.md"
   ]
 }

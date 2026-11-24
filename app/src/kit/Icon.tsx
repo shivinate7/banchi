@@ -136,6 +136,8 @@ const PATHS = {
   /* A banknote: the cash that flies off a sale. One meaning, drawn in the line weight of the rest. */
   bill: 'M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z M6 12h.01 M18 12h.01',
   grip: 'M9 5.3v1.4 M9 11.3v1.4 M9 17.3v1.4 M15 5.3v1.4 M15 11.3v1.4 M15 17.3v1.4',
+  /* An hourglass: a press taken and waiting its turn. Static, so it never reads as a spinner. */
+  queued: 'M6 3h12 M6 21h12 M7.5 3v2.5a4.5 4.5 0 0 0 9 0V3 M7.5 21v-2.5a4.5 4.5 0 0 1 9 0V21',
 } as const
 
 /** WHAT AN ICON MEANS, where a meaning was ever in doubt (UX-118). A screen that draws one of
@@ -159,6 +161,7 @@ export const ICON_MEANINGS: Partial<Record<keyof typeof PATHS, string>> = {
   moveTo: 'Move to a box',
   bill: 'Cash flying off a sale: the Mark sold burst',
   grip: 'Drag to reorder',
+  queued: 'A press taken and waiting its turn behind another write',
   copy: 'Copy to the clipboard',
   download: 'Save a file to disk',
   external: 'Open elsewhere',
