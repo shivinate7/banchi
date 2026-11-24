@@ -978,10 +978,12 @@ function readEffectDependsOn(screen, dep, within = screen.src) {
   }).length > 0
 }
 
-/** JSX attribute values, everywhere in the scanned set, for `<Component prop={...}>`. */
-function jsxBindings(screens, component, prop) {
+/** JSX attribute values, in every scanned file that can render `component` from `home`, for `<Component prop={...}>`.
+ *  A file that does not import it from `home` renders another component of that name (`Row` and `Code` are real). */
+function jsxBindings(screens, home, component, prop) {
   const found = []
   for (const screen of screens) {
+    if (!seesComponent(screen, home, component)) continue
     walk(screen.src, (n) => {
       const opening = ts.isJsxSelfClosingElement(n)
         ? n
@@ -1083,7 +1085,7 @@ function registrationCausesRead(screens, screen, argument) {
   const component = owner === null ? undefined : screen.components.get(functionName(owner))
   const propReReads = (name) =>
     component !== undefined && component.props.has(name) &&
-    callbackBindingReReads(screens, functionName(owner), name) !== null
+    callbackBindingReReads(screens, screen, functionName(owner), name) !== null
   let node = argument
   if (ts.isIdentifier(argument)) {
     if (propReReads(argument.text)) return true
@@ -1091,12 +1093,16 @@ function registrationCausesRead(screens, screen, argument) {
     if (node === undefined) return false
   }
   if (reachesRead(here, node)) return true
-  for (const scoped of evidenceScope(here, node).nodes) {
+  /* A NAME CALLED INSIDE A KIT HOOK IS THE HOOK'S PARAMETER, and means whatever this component handed it: recogniser 3
+   * reads it through the same aliases. `useSheetWrite(() => undefined)` calls a no-op, however the component's own
+   * `onChanged` prop is bound. */
+  const evidence = evidenceScope(here, node)
+  for (const scoped of evidence.nodes) {
     for (const call of collect(scoped, (n) => ts.isCallExpression(n) && ts.isIdentifier(n.expression))) {
-      if (propReReads(call.expression.text)) return true
+      if (propReReads(evidence.aliases.get(call.expression.text) ?? call.expression.text)) return true
     }
   }
-  for (const scoped of evidenceScope(here, node).nodes) {
+  for (const scoped of evidence.nodes) {
     for (const bump of collect(scoped, isCounterBump)) {
       const stateName = owner === null ? screen.stateOf.get(bump.expression.text) : stateIn(owner, bump.expression.text)
       if (stateName !== undefined && counterCausesRead(screens, here, stateName, new Set(), owner ?? undefined) !== null) {
@@ -1139,15 +1145,16 @@ function onlyHandedTo(root, name, helper) {
  * caller exists and does. Forwarding is followed — `BoxOps` hands its own `onChanged` straight
  * down to `ReleaseListings` and `DeleteBox` — until it reaches an expression that bumps a
  * counter or calls a read. NO BINDING SITE ANYWHERE is a finding, not a pass: an orphan
- * callback is a re-read nobody performs.
+ * callback is a re-read nobody performs. `home` is the file the component lives in, so a binding is only taken from a
+ * file that can render that one (`seesComponent`).
  */
-function callbackBindingReReads(screens, component, prop, depth = 0, seen = new Set()) {
+function callbackBindingReReads(screens, home, component, prop, depth = 0, seen = new Set()) {
   if (depth > 4) return null
-  const key = `${component}.${prop}`
+  const key = `${home.name}:${component}.${prop}`
   if (seen.has(key)) return null
   seen.add(key)
 
-  for (const binding of jsxBindings(screens, component, prop)) {
+  for (const binding of jsxBindings(screens, home, component, prop)) {
     const { screen, node, host } = binding
     const where = `${screen.name}:<${component} ${prop}>`
 
@@ -1167,7 +1174,7 @@ function callbackBindingReReads(screens, component, prop, depth = 0, seen = new 
     if (ts.isIdentifier(node)) {
       const owner = ownerComponent(screen, host)
       if (owner !== null && owner.props.has(node.text)) {
-        const deeper = callbackBindingReReads(screens, owner.name, node.text, depth + 1, seen)
+        const deeper = callbackBindingReReads(screens, screen, owner.name, node.text, depth + 1, seen)
         if (deeper !== null) return deeper
         continue
       }
@@ -1360,7 +1367,7 @@ function recognizers(screens) {
       }
       for (const name of invoked) {
         if (!ctx.component.props.has(name)) continue
-        const bound = callbackBindingReReads(ctx.screens, ctx.component.name, name)
+        const bound = callbackBindingReReads(ctx.screens, ctx.screen, ctx.component.name, name)
         if (bound !== null) return `${name}() -> ${bound.where} ${bound.how}`
       }
       return null
