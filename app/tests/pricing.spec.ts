@@ -8902,6 +8902,24 @@ test('a tick the store does not confirm names its Send box in the toast body', a
   )
 })
 
+test('an untick the store does not confirm names the untick in its title, and says to untick it again', async ({ page }) => {
+  /* THE UNTICK DIRECTION. Iono is kept ticked by the server, so the press unticks it: the toast names the untick, and its
+     body tells the owner to untick the Send box, never to tick it again. */
+  await setViewport(page, { width: 1440, height: 900 })
+  await open(page, {
+    live: ONE_LIST_LIVE.map((one) => (one.sku === '9000001' ? { ...one, ticked: true } : one)),
+    ticks: () => ({ status: 503, code: 'store_unavailable', message: 'The store did not answer. Try again.' }),
+  })
+  const box = listGroup(page, 'Needs You').getByRole('checkbox', { name: 'Send the new price for Iono' })
+  await expect(box, 'the kept tick reads ticked before the press, so the press is an untick').toBeChecked()
+  await box.click()
+  const toast = page.locator('.bn-toast', { hasText: 'did not confirm the untick for Iono' })
+  await expect(toast, 'the toast title names the untick, not the tick').toBeVisible()
+  await expect(toast, 'the toast body tells the owner to untick the Send box').toContainText(
+    'If the Send box for Iono is not as you left it, untick it again.',
+  )
+})
+
 test('a tick the server fails with a 5xx re-reads the prices worklist', async ({ page }) => {
   await setViewport(page, { width: 1440, height: 900 })
   const wire = await open(page, {
