@@ -103,15 +103,15 @@ const PULL_STALE = new Set([
   'over_fulfilled',
   'copy_not_identifiable',
 ])
-/** The order was canceled, or its line stood down, after this list was read: no copy is owed for it any more,
- *  so pressing again is refused again. The list re-reads and the card leaves it. */
 /** This screen's line in `writeLine` (D329). */
 const LINE = 'fulfillment'
 
 /** The words for a write ahead of a press: an undo ahead of an Undo is "the other undo". */
 const wordsFor = (ahead: string): string => (ahead === 'undo' ? 'other undo' : ahead)
 
-const NO_LONGER_NEEDED =new Set(['order_canceled', 'line_stood_down'])
+/** The order was canceled, or its line stood down, after this list was read: no copy is owed for it any more,
+ *  so pressing again is refused again. The list re-reads and the card leaves it. */
+const NO_LONGER_NEEDED = new Set(['order_canceled', 'line_stood_down'])
 /** The ledger never recorded this pull, so the way back is the plain sale undo. */
 const PULL_NOT_RECORDED = 'pull_not_recorded'
 

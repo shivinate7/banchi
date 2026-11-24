@@ -788,7 +788,7 @@ export function ReviewQueue() {
   }, [])
   /* THE SCREEN'S WRITE LINE (D329). Every write goes through it, so a U pressed while an answer or a close is out is queued
      behind it and says so at once, rather than dropped. `what` is the write out, in the words of `sayQueued`. */
-  const inLine = useCallback((what: 'answer' | 'undo', run: () => Promise<unknown>): LineJob => queueWrite(async () => void (await run()), { screen: LINE, what }), [])
+  const inLine = useCallback((what: 'answer' | 'retirement' | 'undo', run: () => Promise<unknown>): LineJob => queueWrite(async () => void (await run()), { screen: LINE, what }), [])
   /** The U press waiting for the write ahead of it, held so a second press queues nothing. */
   const undoWaiting = useRef<LineJob | null>(null)
   const undoIsWaiting = useCallback(() => undoWaiting.current !== null && isQueued(undoWaiting.current), [])
@@ -1097,7 +1097,7 @@ export function ReviewQueue() {
 
       const call = how.kind === 'stand_down' ? standDown(row.entry.box, row.entry.index, how.reason) : retireCard(row.entry.box, row.entry.index, how.reason)
 
-      void inLine('answer', () =>
+      void inLine(how.kind === 'stand_down' ? 'answer' : 'retirement', () =>
         call
         .then((result: unknown) => {
           setRows((prev) => (prev === null ? prev : prev.filter((held) => held.entry.position !== position)))
