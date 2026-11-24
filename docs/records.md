@@ -26,7 +26,6 @@ Each row has the slug, the first sentence of the record, and a link to it. A rec
 
 | Slug | Gist | Link |
 |---|---|---|
-| `D-press-queued-state` | **A press that the app accepts but cannot act on yet answers on screen the moment it is pressed.** It keeps that answer until it runs, and never waits silently for the write it is queued behind. | [`docs/decisions/D-press-queued-state.md`](../docs/decisions/D-press-queued-state.md) |
 | `D138-one-process-serves-the-product` | The owner wants an easier way to package this, and one server, not two. | [`docs/decisions/D138-one-process-serves-the-product.md`](../docs/decisions/D138-one-process-serves-the-product.md) |
 | `D299-boxes-have-no-lid-or-capacity` | A box has no seal and no capacity. | [`docs/decisions/D299-boxes-have-no-lid-or-capacity.md`](../docs/decisions/D299-boxes-have-no-lid-or-capacity.md) |
 | `D319-one-retry-home` | Every network call goes through one retry method, and no caller writes its own retry loop. | [`docs/decisions/D319-one-retry-home.md`](../docs/decisions/D319-one-retry-home.md) |
@@ -34,6 +33,7 @@ Each row has the slug, the first sentence of the record, and a link to it. A rec
 | `D321-runs-join-themselves` | Every identify run joins itself at its end, and a join that fails stays visible on the run. | [`docs/decisions/D321-runs-join-themselves.md`](../docs/decisions/D321-runs-join-themselves.md) |
 | `D325-tcgcsv-daily-read` | Banchi saves TCGCSV's current Riftbound prices once per source update, so a whole-market price history builds from now on. | [`docs/decisions/D325-tcgcsv-daily-read.md`](../docs/decisions/D325-tcgcsv-daily-read.md) |
 | `D326-tcgtracking-pipe` | Banchi's server holds the TCGTracking key and calls TCGTracking itself, both to create envelope labels and to read tracking back. | [`docs/decisions/D326-tcgtracking-pipe.md`](../docs/decisions/D326-tcgtracking-pipe.md) |
+| `D329-press-queued-state` | **A press that the app accepts but cannot act on yet answers on screen the moment it is pressed.** It keeps that answer until it runs, and never waits silently for the write it is queued behind. | [`docs/decisions/D329-press-queued-state.md`](../docs/decisions/D329-press-queued-state.md) |
 
 ## Unsorted decisions
 

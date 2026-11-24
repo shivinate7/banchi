@@ -1,5 +1,5 @@
 // Protects: a press the app has taken and queued reads as queued on the kit Button, and a second press does not reach the caller.
-// Governs: D-press-queued-state (a taken press answers at once); docs/specs/undo.md section 10
+// Governs: D329 (a taken press answers at once); docs/specs/undo.md section 10
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { createElement, Fragment, type ReactElement } from 'react'

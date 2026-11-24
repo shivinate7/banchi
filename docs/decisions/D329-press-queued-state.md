@@ -1,9 +1,9 @@
-# D-press-queued-state — A press that is taken but must wait says so at once
+# D329 — A press that is taken but must wait says so at once
 
 **A press that the app accepts but cannot act on yet answers on screen the moment it is pressed.** It keeps that answer until it runs, and never waits silently for the write it is queued behind.
 
 Kind: build
-Plan: docs/decisions/D-press-queued-state.md#the-rule (web)
+Plan: D329#the-rule (web)
 
 **Why.** Bug 9 of the Orders plumbing hunt. On the Orders walk, U pressed while a Mark Sold is still saving is queued. Once the sale lands, U undoes that sale, as the undo spec's section 10 rules. But the screen showed nothing for about 560 ms, measured on main with the sale held for 600 ms. A press with no answer reads as a press that was lost, and the reader presses again.
 

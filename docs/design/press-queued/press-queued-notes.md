@@ -12,7 +12,7 @@ The one-column walking layout at 820 gives a wider column, so 368px is the tight
 and 692px) are not taken from a screen. They show the kit Button alone. Both themes draw from a copy of
 `app/src/tokens.css`. The glyphs are copied from `app/src/kit/Icon.tsx`, except the new hourglass.
 
-Governing: D-press-queued-state (a taken press answers at once), D50 (a press shows on its frame), D118 (a press
+Governing: D329 (a taken press answers at once), D50 (a press shows on its frame), D118 (a press
 moves nothing), D128 (a key press answers on screen), `docs/specs/undo.md` section 10.
 
 1. **The primitive: extend `Button` and `IconButton`, and add one words part.** The Explore pass recommended a

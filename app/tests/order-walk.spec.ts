@@ -1661,7 +1661,7 @@ test('U does nothing while the row’s Undo on B is in flight, with sale C queue
 })
 
 /* THE ROW'S UNDO AS THE NEXT PAINT SHOWS IT. A press that is taken and waits behind a write says so on its own
- * frame (D-press-queued-state). The read waits one animation frame, the earliest point a person can see it. */
+ * frame (D329). The read waits one animation frame, the earliest point a person can see it. */
 type UndoFace = { busy: string | null; ariaBusy: string | null; ariaDisabled: string | null; disabled: boolean; name: string | null }
 async function undoFaceOnNextFrame(page: Page): Promise<UndoFace | null> {
   return page.evaluate((row: string) => new Promise<UndoFace | null>((resolve) => {

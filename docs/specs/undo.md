@@ -117,7 +117,7 @@ pull hands the rank back to the pull before it, if one still stands. Only one ro
 walk never piles up open buttons. An older sold copy is a dead end in this row on purpose. Its way back is the
 card on `#/inventory` (§4). A test fakes the clock and advances it past the old window. `Undo` on the newest pull survives. The row's one `Undo` is picked by `newestOf` in `app/src/OrdersWalkPane.tsx`.
 
-A press taken behind a sale that is still saving shows the queued state at once (`D-press-queued-state`). The row's
+A press taken behind a sale that is still saving shows the queued state at once (`D329`). The row's
 Undo is the kit `IconButton` that `CardLocations.UndoSaleButton` renders, drawn by `OrdersWalkPane.RowAction`. It takes
 `busy="queued"`, the hourglass badge, and "Waits for the sale to save." beside it (`QueuedNote`). The kit `Button`
 and `IconButton` share that face, typed as `kit.Busy`. While its sale is saving, the row's own Undo is
