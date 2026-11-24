@@ -1449,6 +1449,21 @@ test('send from an unknown day: the prices-refreshed notice names an unknown day
   await expect(notice).not.toContainText(/1970|Invalid/)
 })
 
+test('an answered Send from an earlier day re-reads the Prices as of header', async ({ page }) => {
+  /* A SEND THAT RAN A REFRESH FIRST HAS MOVED THE CATALOG, so the header that says when the prices were read is read
+     again once the Send answers. The Send's own reload does not read it, and nothing else does. */
+  const refresh = { ran: true, ok: true, was: '2026-10-21', export_day: '2026-10-22' }
+  const wire = await open(page, {
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [sendSummary({ refresh })] } : SENDS_NONE),
+  })
+  const sent = recordSent(page)
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pipeline/prices/refresh'), {
+    message: 'an answered Send from an earlier day is followed by a read of the Prices as of header: no GET /pipeline/prices/refresh reached the server after it',
+  }).toBe(true)
+})
+
 test('a same-day send shows no prices-refreshed notice', async ({ page }) => {
   const wire = await open(page, {
     sends: (seen) =>
