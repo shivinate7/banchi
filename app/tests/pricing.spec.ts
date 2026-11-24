@@ -4119,6 +4119,99 @@ test('a Refresh Now re-reads the file and takes no digest while its run goes on,
   expect(overwrites, 'the autosave overwrote the file another writer moved').toBe(0)
 })
 
+test('a refresh that ends after another writer moved the file takes the digest it read, so the next save is accepted', async ({
+  page,
+}) => {
+  /* THE END OF A REFRESH READS THE FILE, AND THAT READ TAKES THE DIGEST. The run starts from a press, and another writer
+     moves the file while it goes on. When the run ends, the screen reads the moved file, so the next autosave must name
+     the digest that read answered, and the server takes the write. The server is modelled: a write names the digest it
+     read, and a write that names an old one is refused with `corpus_moved`. The refresh state answers `running` from the
+     press until the test ends the run. */
+  const wire = await open(page)
+  let serverRevision = 'rev-1'
+  let overwrites = 0
+  let refusals = 0
+  let running = false
+  let kept = 49
+  await page.route(/\/pipeline\/prices\/refresh$/, async (route) => {
+    const post = route.request().method() === 'POST'
+    if (!post && route.request().method() !== 'GET') return route.fallback()
+    wire.push({ method: post ? 'POST' : 'GET', path: '/pipeline/prices/refresh', body: null })
+    if (post) {
+      running = true
+      return route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ state: 'running' }) })
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(running ? refreshState('running', { step: 'listings' }) : refreshState('done')),
+    })
+  })
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() === 'PUT') {
+      const body = route.request().postDataJSON() as { revision?: string }
+      wire.push({ method: 'PUT', path: '/pricing', body })
+      if (body.revision !== serverRevision) {
+        refusals += 1
+        return route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              code: 'corpus_moved',
+              message: 'The pricing file changed since this screen read it — another tab, or an edit on disk.',
+            },
+          }),
+        })
+      }
+      overwrites += 1
+      serverRevision = 'rev-3'
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, written: '/tmp/prices.json', answers: 1, revision: serverRevision }),
+      })
+    }
+    if (route.request().method() !== 'GET') return route.fallback()
+    /* The kept clear's count tells the two reads apart: the press's re-read draws 49, and the end of the run draws 48. */
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: { version: 1, policy: { rule: 'match', basis: 'market' }, skus: {} },
+        path: '/tmp/prices.json',
+        revision: serverRevision,
+        last_clear: { count: kept, at: 1758870000 },
+      }),
+    })
+  })
+
+  await page.getByRole('button', { name: /Refresh Now/ }).click()
+  await expect(page.locator('.pricing-restore-clear')).toContainText('Restore 49 cleared,')
+
+  /* ANOTHER WRITER MOVES THE FILE WHILE THE RUN GOES ON, and the run then ends. */
+  serverRevision = 'rev-2'
+  kept = 48
+  running = false
+  await expect(page.locator('.pricing-restore-clear'), 'the end of the run read the moved file').toContainText('Restore 48 cleared,')
+
+  await field(page).fill('19.99')
+  await field(page).press('Enter')
+  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length, { message: 'the autosave reached the server' }).toBe(1)
+
+  /* THE DIGEST IS THE ONE THE END OF THE RUN READ. A run that kept the digest it read at load would send rev-1, and the
+     server would refuse the write as moved over a file the screen had already read. */
+  const put = wire.filter((r) => r.method === 'PUT').pop()
+  expect(
+    (put?.body as { revision?: string }).revision,
+    'the end of a refresh kept the digest the screen read at load, so the autosave names a file the server has moved past',
+  ).toBe('rev-2')
+  await expect.poll(() => overwrites, { message: 'the autosave was accepted' }).toBe(1)
+  expect(refusals, 'the autosave was refused as moved, though the run ended on the file the screen had read').toBe(0)
+  await expect(page.getByText('changed since this screen read it')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Read the file again, losing what is unsaved here' })).toHaveCount(0)
+})
+
 test('a corpus that moved under the screen refuses the write rather than reverting it', async ({
   page,
 }) => {
