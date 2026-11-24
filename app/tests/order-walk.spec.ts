@@ -1883,7 +1883,7 @@ test('a copy another Orders tab already pulled is refused in plain words, with n
 /* THE COPY ON A WRITE THAT GOT NO ANSWER. A toast pins its title and its body on their own elements. Volcanion is the card. */
 const NOT_CONFIRMED_UNDO_TITLE = 'The store did not confirm the undo'
 const NOT_CONFIRMED_UNDO_BODY =
-  'Volcanion, Box 3, Section 2, Card 15. If the ↺ button is still on its row, press it again. If the undo went through, the second press says so.'
+  'Volcanion, Box 3, Section 2, Card 15. If the hooked arrow button is still on its row, press it again. If the undo went through, the second press says so.'
 const NOT_CONFIRMED_SALE_TITLE = 'The store did not confirm the sale'
 const NOT_CONFIRMED_SALE_BODY =
   'Volcanion, Box 3, Section 2, Card 17. If the $ button is still on its row, press it again. If the sale went through, the second press says so.'

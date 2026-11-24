@@ -1762,7 +1762,7 @@ const PLACE = 'Box 3, Section 2, Card 17'
 const SALE_TITLE = 'The store did not confirm the sale'
 const SALE_BODY = `Volcanion, ${PLACE}. If the $ button is still on its row, press it again. If the sale went through, the second press says so.`
 const UNDO_TITLE = 'The store did not confirm the undo'
-const UNDO_BODY = `Volcanion, ${PLACE}. If the ↺ button is still on its row, press it again. If the undo went through, the second press says so.`
+const UNDO_BODY = `Volcanion, ${PLACE}. If the hooked arrow button is still on its row, press it again. If the undo went through, the second press says so.`
 /* A LIST WRITE THAT GOT NO ANSWER: its notice draws the title and the body as two elements, as a toast does (`expectSaidInNotice`). */
 type Said = { readonly title: string; readonly body: string }
 const FILL_NOT_CONFIRMED: Said = {
