@@ -1,0 +1,1 @@
+- inventory-5xx-hold-stale-count: In `Inventory.tsx`'s `doSell`, a 5xx takes the rank hold through `holdRank`. The failure path never releases it: `releaseRank` runs only on undo, and `clearFreshSale` does not release it either. A sale that did not commit keeps its hold, so the staleness sentence counts one copy too many.

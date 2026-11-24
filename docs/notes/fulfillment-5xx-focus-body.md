@@ -1,0 +1,1 @@
+- fulfillment-5xx-focus-body: After a 5xx that left a sale committed, the re-read removes the sold row, and focus falls to the page body. `Fulfillment.tsx` moves focus only for the zoom opener. Read from code, not run in a browser. No test in `app/tests/fulfillment.spec.ts` pins the 5xx sentence, "The store did not confirm the sale."

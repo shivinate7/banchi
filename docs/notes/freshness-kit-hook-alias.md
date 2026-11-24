@@ -1,0 +1,1 @@
+- freshness-kit-hook-alias: `kitHook` in `scripts/screen-freshness.mjs` finds a kit hook by the called name, through `KIT_HOOKS`. A screen that imports `useSheetWrite as useWrite` resolves to no kit hook. No self-test case covers that path.
