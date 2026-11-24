@@ -143,7 +143,7 @@ function refusalTitle(code: string, data?: unknown, noAnswer = false): string {
         ? 'TCGplayer did not take the send. Nothing is live, and the copies are back on the list.'
         : noAnswer
           ? /* A 5xx or a lost connection may still have sent: the title does not say it did not. */
-            'The store did not confirm this send. Check what is live before you send again.'
+            'The store did not confirm this send. Press Refresh to see what is live before you send again.'
           : 'This send did not go through. Check what is live before you send again.'
   }
 }

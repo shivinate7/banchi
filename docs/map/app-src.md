@@ -190,8 +190,8 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
   - Decisions: `D174`, `D89`, `D50`, `D196`, `D118`, `D57`, `D207`, `D33`, `D39`, `D94`
 - `app/src/TakeOffLine.tsx` — The take-off line on a master-set retire receipt: Take It Off TCGplayer at the pull and the answer in the same place, drawn in the toast kit's changing line.
   - Decisions: `D100`, `D118`, `D196`, `D313`
-- `app/src/afterWrite.ts` — The one home of re-reading after a write for a screen that registers its reads: `afterWrite` runs a write and starts the re-reads when it answers or is refused, merged to one in flight and one pending, never awaited. Each write names its kind (a sale, a kept tick, a price save or clear, a Refresh Now, a send), and a registered read answers only the kinds it touches.
-  - Decisions: `D73`, `D313`
+- `app/src/afterWrite.ts` — The one home of re-reading after a write for a screen that registers its reads: `afterWrite` runs a write and starts the re-reads when it answers or is refused, merged to one in flight and one pending, never awaited. Each write names its kind (a sale, a kept tick, a price save or clear, a Refresh Now, a send), and a registered read answers only the kinds it touches. `corpusKind` names the kind a price write owes: one that answered lets its re-read take the digest, one refused or unanswered does not.
+  - Decisions: `D73`, `D86`, `D313`
 - `app/src/autoMatch.ts` — MATCHING RUNS BY ITSELF WHEN A READING FINISHES (the owner's Q4 ruling).
   - Decisions: `D65`, `D273`
 - `app/src/base.css` — Reset and the page ground, and the six app-wide floors: the `:focus-visible` ring, the cursor floor after `39` of `142` interactive elements were measured with no cursor rule any selector could reach, tabular figures on every table, `output` and `time`, and the reduced-motion floor.

@@ -24,6 +24,11 @@ export type WriteKind = 'sale' | 'tick' | 'corpus' | 'refresh' | 'send' | 'other
 
 type Reread = (kind: WriteKind) => Promise<void>
 
+/** WHICH RE-READ A PRICE WRITE OWES (`afterWrite`, D73). A save, a clear or an Undo that answered owes the saved prices, and its re-read may take
+ *  the digest it reads (D86). One the server refused (`corpus_moved`) or never answered wrote nothing the screen knows of, so its re-read is `other`:
+ *  it reads all, and takes no digest, or the next save would overwrite the writer that moved the file. */
+export const corpusKind = (failed: boolean): WriteKind => (failed ? 'other' : 'corpus')
+
 /** How long one round of re-reads may run before the next write's round may start. */
 const ROUND_LIMIT_MS = 30_000
 

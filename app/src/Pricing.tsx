@@ -77,7 +77,7 @@ import { FLAT_KEY, subThresholdSkus } from './readiness'
 import { isWithheld, rowShare, runChip } from './standing'
 import { TrendCell, type KeptTrend, type TrendRead } from './PriceTrend'
 import { PricesAsOf, asOfOf, usePricesRefresh } from './PricesAsOf'
-import { afterWrite, useRereadOnWrite, type WriteKind } from './afterWrite'
+import { afterWrite, corpusKind, useRereadOnWrite, type WriteKind } from './afterWrite'
 import { ClearPrices } from './ClearPrices'
 import { runBoxLabel } from './runScope'
 import {
@@ -1248,7 +1248,7 @@ export function Pricing() {
               kind: 'refusal',
               tone: failureTone(trouble),
               title: `The store did not confirm the tick for ${one?.name || sku}`,
-              body: `If "Send the new price for ${one?.name || sku}" is not as you left it, press it again.`,
+              body: `If the Send box for ${one?.name || sku} is not as you left it, tick it again.`,
             })
             return
           }
@@ -1285,7 +1285,7 @@ export function Pricing() {
           const answer = await putPricingCorpus(sent, revision.current)
           takeRevision(answer.revision)
           return answer
-        }, 'corpus')
+        }, corpusKind)
         savedBook.current = sent
         failedBook.current = null
         setFailure(null)
@@ -2693,9 +2693,9 @@ export function Pricing() {
   const worklistName =
     scopeName ?? 'the cards on this screen'
 
-  /** Re-read what may still be cleared, the clears the server still remembers, and, after a save, a clear or its Undo, the digest — NOT the answers (StrictMode
-   *  runs an updater twice, and adopting them there re-dirtied the screen; see D168's receipt case). Only a read after a save, a clear or its Undo takes the digest (D86); `load` takes it with the book it swaps in.
-   *  It is NOT taken while a save has failed or been refused, and not over a receipt that landed after the read began: this read runs after a write, and a revision taken from a file that moved
+  /** Re-read what may still be cleared, the clears the server still remembers, and, after a save, a clear or its Undo that the server answered, the digest — NOT the answers (StrictMode
+   *  runs an updater twice, and adopting them there re-dirtied the screen; see D168's receipt case). Only a read after such an answered write takes the digest (D86; `corpusKind` names it); `load` takes it with the book it swaps in.
+   *  It is NOT taken after a write the server refused or never answered, while a save has failed, or over a receipt that landed after the read began: a revision taken from a file that moved
    *  under a book this screen still holds would let the next wholesale save overwrite the other writer. The stale revision
    *  keeps that save refused (`corpus_moved`) until the person reads the file again. */
   const refreshCorpus = useCallback(async (kind: WriteKind) => {
@@ -2779,7 +2779,7 @@ export function Pricing() {
                   const answer = await restorePricingAnswers(result.cleared, revision.current, result.clear_id)
                   takeRevision(answer.revision)
                   return answer
-                }, 'corpus')
+                }, corpusKind)
                 const kept = savedBook.current
                 if (kept !== null) {
                   const next = withRestored(kept, back.restored, result.cleared)

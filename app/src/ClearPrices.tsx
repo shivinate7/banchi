@@ -32,7 +32,7 @@
 import { count as nounCount } from './kit/dataRules'
 import { useEffect, useMemo, useState } from 'react'
 
-import { afterWrite } from './afterWrite'
+import { afterWrite, corpusKind } from './afterWrite'
 import { Button, Notice, Segmented, Sheet } from './kit'
 import { clearPricingAnswers, describeFailure, type Failure, failureTone } from './server'
 import type { PricingClearResult, PricingClearable } from './types'
@@ -149,7 +149,7 @@ export function ClearPrices({
         })
         onCleared(result)
         return result
-      }, 'corpus')
+      }, corpusKind)
       onClose()
     } catch (err) {
       setFailure(describeFailure(err))
