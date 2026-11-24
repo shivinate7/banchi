@@ -4,9 +4,13 @@ Mockup: `press-queued.html` in this folder. Designer kind: informed. It opens fr
 Deep links take `#s=<sending|queued|undone>&o=<hourglass|clock|ring>&w=<row|toast>&t=<light|dark>`, plus `l=0`
 (labels off: the true geometry) and `h=<keys>` (hidden options).
 Sections: the walk row, a kit `Button` queued, a fit check on Inventory, and the words.
-Widths: the walk's copy column is 495px at 1440 and 368px at 820, measured on renders of the walk at those widths.
-The one-column walking layout at 820 gives a wider column, so 368px is the tight case. Both themes draw from a copy of
-`app/src/tokens.css`.
+Focus ids for the waiting page: `o=hourglass`, `o=clock` and `o=ring` focus `queued-undo`. `w=row` focuses
+`queued-note-0`. `w=toast` focuses `queued-toast`. The kit Button's queued state is `queued-send`.
+Widths: the walk's copy column is drawn at 495px for 1440 and 368px for 820. Both widths were read off walk
+screenshots that another session left in the scratchpad, from an unknown head. They were not measured on this head.
+The one-column walking layout at 820 gives a wider column, so 368px is the tight case. The send bar frames (1100px
+and 692px) are not taken from a screen. They show the kit Button alone. Both themes draw from a copy of
+`app/src/tokens.css`. The glyphs are copied from `app/src/kit/Icon.tsx`, except the new hourglass.
 
 Governing: D-press-queued-state (a taken press answers at once), D50 (a press shows on its frame), D118 (a press
 moves nothing), D128 (a key press answers on screen), `docs/specs/undo.md` section 10.
@@ -41,6 +45,8 @@ moves nothing), D128 (a key press answers on screen), `docs/specs/undo.md` secti
 3. **The mark.** Three options, each with a Hide control:
    - Hourglass badge (`o=hourglass`). A new icon path, `queued`, meaning "a press taken and waiting its turn". It is
      static and cannot read as a spinner. It needs a path in `app/src/kit/Icon.tsx` and a line in `ICON_MEANINGS`.
+     It is drawn at the set's 1.75 stroke. At 12px in the 18px disc it reads as an hourglass when magnified, but
+     at 1x it is small. If the builder finds it unclear, the badge glyph goes to 14px in a 20px disc.
    - Clock badge (`o=clock`). No new path. But `clock` already means a time span on the same screen: the fetch
      press "Last two years" and the "since" chip in `RunsComposer` (one icon, one meaning, UX-118).
    - Frozen ring (`o=ring`). The busy ring, stopped. DESIGN.md's motion section already rejects this: "a ring

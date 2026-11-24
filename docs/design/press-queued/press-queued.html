@@ -181,6 +181,9 @@ body[data-s='queued'] .card-locations-action [data-show~='queued'],
 body[data-s='undone'] .card-locations-action [data-show~='undone'] { display: inline-flex; }
 body[data-s='queued'] .toast-lane [data-show~='queued'], body[data-s='undone'] .toast-lane [data-show~='undone'] { display: flex; }
 [data-mark] { display: none !important; }
+[data-glyph='clock'] { display: none; }
+body[data-o='clock'] [data-glyph='clock'] { display: inline-block; }
+body[data-o='clock'] [data-glyph='hourglass'] { display: none; }
 body[data-o='hourglass'] [data-mark='hourglass'], body[data-o='clock'] [data-mark='clock'] { display: grid !important; }
 body[data-o='ring'] .bn-btn[data-busy='queued'] { color: transparent; }
 body[data-o='ring'] .bn-btn[data-busy='queued']::after { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--bn-ink-3); border-right-color: transparent; transform: rotate(45deg); }
@@ -225,16 +228,16 @@ body[data-w='toast'] .card-locations-action [data-home='row'] { visibility: hidd
   </div>
 </div>
 
-<!-- glyphs: undo, sold and clock are the paths in app/src/kit/Icon.tsx; hourglass is the new path this design asks for -->
+<!-- glyphs: undo, sold, clock, send, archive and hand are copied from app/src/kit/Icon.tsx; hourglass is the new path this design asks for, at the set's 1.75 stroke -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
-    <symbol id="g-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5 M4 9h10.5a5.5 5.5 0 0 1 0 11H11" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5 M4 9h10a6 6 0 0 1 0 12h-3" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="g-sold" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 6v12 M15.5 8H10a1.75 1.75 0 0 0 0 3.5h4a1.75 1.75 0 0 1 0 3.5H8.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="g-clock" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-    <symbol id="g-hourglass" viewBox="0 0 24 24"><path d="M6 3h12 M6 21h12 M7.5 3v2.5a4.5 4.5 0 0 0 9 0V3 M7.5 21v-2.5a4.5 4.5 0 0 1 9 0V21" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-    <symbol id="g-hand" viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11 M11 10.5V4a1.5 1.5 0 0 1 3 0v6.5 M14 10.5V5.5a1.5 1.5 0 0 1 3 0V13 M17 9.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-2a6 6 0 0 1-5-2.7L4.3 14a1.5 1.5 0 0 1 2.5-1.7L8 14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-    <symbol id="g-send" viewBox="0 0 24 24"><path d="M21 3L10 14 M21 3l-7 18-4-7-7-4z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-    <symbol id="g-archive" viewBox="0 0 24 24"><path d="M3 4h18v4H3z M5 8v12h14V8 M10 12h4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-hourglass" viewBox="0 0 24 24"><path d="M6 3h12 M6 21h12 M7.5 3v2.5a4.5 4.5 0 0 0 9 0V3 M7.5 21v-2.5a4.5 4.5 0 0 1 9 0V21" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-hand" viewBox="0 0 24 24"><path d="M8.9 11.6V5.6a1.5 1.5 0 0 1 3 0v6 M11.9 10.6V4.6a1.5 1.5 0 0 1 3 0v7 M14.9 11.6V6.6a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1 -6 6h-1a6 6 0 0 1 -5 -2.7L3.9 14.1a1.6 1.6 0 0 1 2.5 -2L8.9 14.6" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-send" viewBox="0 0 24 24"><path d="M22 2L11 13 M22 2l-7 20-4-9-9-4z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-archive" viewBox="0 0 24 24"><path d="M3 4.4h18v4H3z M4 8.4h16v11H4z M10 12.4h4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   </defs>
 </svg>
 
@@ -258,7 +261,7 @@ body[data-w='toast'] .card-locations-action [data-home='row'] { visibility: hidd
               <span class="bn-queued-mark" data-mark="clock" aria-hidden="true"><svg><use href="#g-clock"/></svg></span>
             </button>
           </span>
-          <span class="bn-queued-note mk-new" data-show="queued" data-home="row" id="__NOTE__" role="status"><span class="mk-tag">New: the words</span><svg><use href="#g-hourglass"/></svg>Waits for the sale to save.</span>
+          <span class="bn-queued-note mk-new" data-show="queued" data-home="row" id="__NOTE__" role="status"><span class="mk-tag">New: the words</span><svg data-glyph="hourglass"><use href="#g-hourglass"/></svg><svg data-glyph="clock"><use href="#g-clock"/></svg>Waits for the sale to save.</span>
           <!-- undone (Today): Mark Sold is back -->
           <span class="mk-today" data-show="undone">
             <span class="mk-tag is-left">Today: Mark Sold returns</span>
@@ -276,8 +279,8 @@ body[data-w='toast'] .card-locations-action [data-home='row'] { visibility: hidd
     </ul>
   </div>
   <div class="toast-lane">
-    <div class="bn-toast bn-toast-status mk-new" data-show="queued" data-home="toast" role="status"><span class="mk-tag">New: status toast, the other home</span>
-      <svg class="bn-toast-icon" width="16" height="16"><use href="#g-hourglass"/></svg>
+    <div class="bn-toast bn-toast-status mk-new" id="queued-toast" data-show="queued" data-home="toast" role="status"><span class="mk-tag">New: status toast, the other home</span>
+      <svg class="bn-toast-icon" data-glyph="hourglass" width="16" height="16"><use href="#g-hourglass"/></svg><svg class="bn-toast-icon" data-glyph="clock" width="16" height="16"><use href="#g-clock"/></svg>
       <div class="bn-toast-text"><div class="bn-toast-title">Undo waits for the sale to save</div><div class="bn-toast-body">Binder A, Section 2, Card 14</div></div>
     </div>
     <div class="bn-toast bn-toast-ok mk-today" data-show="undone" role="status"><span class="mk-tag">Today: the receipt, unchanged</span>
@@ -321,7 +324,7 @@ body[data-w='toast'] .card-locations-action [data-home='row'] { visibility: hidd
     </div>
     <div class="kit-send">
       <button class="bn-btn bn-btn-lg bn-btn-primary" data-busy="queued" aria-busy="true" aria-disabled="true" aria-describedby="__KN__"><svg width="16" height="16"><use href="#g-send"/></svg>Send 12 copies to TCGplayer<span class="bn-queued-mark" data-mark="hourglass" aria-hidden="true"><svg><use href="#g-hourglass"/></svg></span><span class="bn-queued-mark" data-mark="clock" aria-hidden="true"><svg><use href="#g-clock"/></svg></span></button>
-      <span class="bn-queued-note mk-new" id="__KN__" role="status"><span class="mk-tag">New: the words, beside</span><svg><use href="#g-hourglass"/></svg>Waits for your prices to save.</span>
+      <span class="bn-queued-note mk-new" id="__KN__" role="status"><span class="mk-tag">New: the words, beside</span><svg data-glyph="hourglass"><use href="#g-hourglass"/></svg><svg data-glyph="clock"><use href="#g-clock"/></svg>Waits for your prices to save.</span>
     </div>
   </div>
 </template>
@@ -346,7 +349,7 @@ body[data-w='toast'] .card-locations-action [data-home='row'] { visibility: hidd
               <span class="card-locations-undo-wrap mk-new"><span class="mk-tag is-left">New: the same state</span>
                 <button class="bn-btn bn-icon-btn card-locations-undo" data-busy="queued" aria-busy="true" aria-disabled="true" aria-label="Undo sale: Shoebox 3, Section 1, Card 40"><svg width="18" height="18"><use href="#g-undo"/></svg><span class="bn-queued-mark" data-mark="hourglass" aria-hidden="true"><svg><use href="#g-hourglass"/></svg></span><span class="bn-queued-mark" data-mark="clock" aria-hidden="true"><svg><use href="#g-clock"/></svg></span></button>
               </span>
-              <span class="bn-queued-note" role="status"><svg><use href="#g-hourglass"/></svg>Waits for the last sale to save.</span>
+              <span class="bn-queued-note" role="status"><svg data-glyph="hourglass"><use href="#g-hourglass"/></svg><svg data-glyph="clock"><use href="#g-clock"/></svg>Waits for the last sale to save.</span>
             </span>
           </li>
         </ul>
@@ -378,7 +381,7 @@ body[data-w='toast'] .card-locations-action [data-home='row'] { visibility: hidd
     const note = 'queued-note-' + i;
     node.querySelectorAll('[id="__NOTE__"]').forEach((el) => { el.id = note; });
     node.querySelectorAll('[aria-describedby="__NOTE__"]').forEach((el) => el.setAttribute('aria-describedby', note));
-    if (i > 0) node.querySelectorAll('#queued-undo').forEach((el) => { el.id = 'queued-undo-' + i; });
+    if (i > 0) node.querySelectorAll('#queued-undo, #queued-toast').forEach((el) => { el.id = el.id + '-' + i; });
     slot.appendChild(node);
   });
   const kit = document.getElementById('kit-bar');
