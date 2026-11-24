@@ -63,11 +63,14 @@ export type WalkPullFn = (args: {
   readonly refresh: readonly PullRefresh[]
 }) => Promise<WalkPullOutcome>
 
+/** `place` is where the copy was sold; `rowPlace` is where its row draws it now (a later sale may have renumbered the
+ *  section), the place a no-answer undo body points the reader to. */
 export type WalkUndoFn = (
   target: PullTarget,
   place: string,
   name: string,
   refresh: readonly PullRefresh[],
+  rowPlace: string,
 ) => Promise<WalkUndoOutcome>
 
 /** A take's `for` names every order sharing it, and `ref.owed` is what it still wants: the plan's own figure,
@@ -392,6 +395,8 @@ type LineSale = {
   gone: boolean
   readonly onUndo: WalkUndoFn
   readonly refresh: () => readonly PullRefresh[]
+  /** The place label the copy's row draws now, off the walk's current state, or null when the copy is gone from it. */
+  readonly rowPlace: () => string | null
 }
 
 /** One write waiting its turn. Presses, undos and a toast's Undo share one line, so the server never hears two
@@ -543,7 +548,7 @@ async function runUndo(job: Extract<Job, { kind: 'undo' }>): Promise<void> {
   setLineBusy(sale.copyKey)
   let outcome: WalkUndoOutcome
   try {
-    outcome = await sale.onUndo(sale.target, sale.place, sale.name, sale.refresh())
+    outcome = await sale.onUndo(sale.target, sale.place, sale.name, sale.refresh(), sale.rowPlace() ?? sale.place)
   } catch {
     outcome = { ok: false }
   }
@@ -906,6 +911,8 @@ export function useOrderWalk({
   }, [plan])
 
   const [facts, setFacts] = useState<ReadonlyMap<string, Place>>(new Map())
+  const factsNow = useRef(facts)
+  factsNow.current = facts
   /* A WALK MOUNTED AFTER A PRESS (the router remounts the screen on every route change) STARTS FROM WHAT THE
      PAGE'S LINE STILL HOLDS: its rows draw those sales as sold and their Undo works. */
   const [receipts, setReceipts] = useState<ReadonlyMap<string, Receipt>>(lineReceipts)
@@ -1037,6 +1044,17 @@ export function useOrderWalk({
     return out
   }
 
+  /** THE PLACE LABEL A COPY'S ROW DRAWS NOW: the place the first sale's answer gave it (`facts`), else the plan's own. */
+  const rowPlaceOf = (copyKey: string): string | null => {
+    for (const stop of planNow.current?.stops ?? []) {
+      for (const take of stop.takes) {
+        const copy = take.copies.find((candidate) => candidate.key === copyKey)
+        if (copy !== undefined) return (factsNow.current.get(copyKey) ?? copy.place).label
+      }
+    }
+    return null
+  }
+
   const absorb = (blocks: readonly Place[]) => {
     if (blocks.length === 0) return
     setFacts((prev) => {
@@ -1151,6 +1169,7 @@ export function useOrderWalk({
       gone: false,
       onUndo,
       refresh: () => staleAfter(target.box, copy.key),
+      rowPlace: () => rowPlaceOf(copy.key),
     }
     commitReceipts(new Map(receiptsRef.current).set(copy.key, receiptOf(sale)))
     /* THE SALE IS NOTED HERE, not in the button: a digit key reaches this too, and its Undo plays the burst. */
@@ -1192,6 +1211,7 @@ export function useOrderWalk({
       gone: false,
       onUndo,
       refresh: () => staleAfter(receipt.target.box, copyKey),
+      rowPlace: () => rowPlaceOf(copyKey),
     })
     undoWalkSale({ copyKey })
   }

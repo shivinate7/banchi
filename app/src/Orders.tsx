@@ -2022,7 +2022,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   /** The walk row's own inline Undo (§8's 20s window) — a direct call rather than
    *  `undoFromToast`, because a row needs to know whether it succeeded to put its own copy
    *  back into the pressable state; `undoFromToast` only ever reports through a toast. */
-  const onWalkUndo: WalkUndoFn = async (target, place, name, refresh) => {
+  const onWalkUndo: WalkUndoFn = async (target, place, name, refresh, rowPlace) => {
     setHub({ busy: `undo/${target.capture_id}` })
     try {
       /* The copy goes back in the drawer, so the rows still ahead of it take their old
@@ -2039,7 +2039,9 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         /* THE LEDGER NO LONGER HELD THE PULL, so this undo moved nothing: the walk's figure stays what the store said. */
         return { ok: true, refreshed: [], moved: false }
       }
-      const trouble = undoFailure(err, place, name)
+      /* A BODY THAT SENDS THE READER TO A CARD NAMES THE PLACE THE ROW DRAWS NOW: a later sale may have renumbered the
+         section since this copy was sold. The success receipt and the refusals keep the place it was sold at. */
+      const trouble = undoFailure(err, gotNoAnswer(err) ? rowPlace : place, name)
       toast(undoFailureToast(err, trouble, { label: 'Undo', onPress: () => undoFromReceipt(target, place, name) }))
       if (isFinalUndoRefusal(trouble)) forgetPull(target.capture_id)
       return { ok: false, failure: trouble }
