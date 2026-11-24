@@ -282,7 +282,7 @@ function report(failure: Failure): void {
 
 /* A WRITE THAT GOT NO ANSWER MAY HAVE COMMITTED, so the server's own sentence ("Try again") would send the person to press
    a second time on a card that may already be gone. The sentence this screen owes them says the write is unconfirmed and
-   names the button to press if the card is still here. The raw server text stays off the screen (D196). Any other failure
+   names the button to press again if it is still on the copy (a committed sale leaves the row but drops its button). The raw server text stays off the screen (D196). Any other failure
    is the server's "no", and its own sentence stands. `button` is the control's label exactly. */
 function reportWrite(err: unknown, what: string, button: string): void {
   const failure = describeFailure(err)
@@ -293,7 +293,7 @@ function reportWrite(err: unknown, what: string, button: string): void {
   toast({
     kind: 'refusal',
     tone: failureTone(failure),
-    title: `The store did not confirm the ${what}. If the card is still here, press ${button} again.`,
+    title: `The store did not confirm the ${what}. If ${button} is still on this copy, press it again.`,
   })
 }
 
