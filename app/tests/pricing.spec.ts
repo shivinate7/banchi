@@ -6,7 +6,7 @@ import { afterPaint, settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 import { expectOneStagger } from './staggerCheck'
 import { describeShifts, markNow, readShifts, sumOf, watchShifts } from './layoutShift'
-import { readAfterPost } from './wireOrder'
+import { readAfterPost, recordSent } from './wireOrder'
 
 import type {
   HistoryRange,
@@ -1336,6 +1336,60 @@ test('one press sends and makes live, and says when the check comes', async ({ p
   await expect(page.locator('.send-standing')).toContainText('Banchi checks TCGplayer again after')
   await expect(page.getByRole('button', { name: /live$/i }).filter({ hasText: /^Put/ })).toHaveCount(0)
   expect(sendPosts(wire)).toHaveLength(1)
+})
+
+/* THE READS AFTER A SEND, WHATEVER ITS OUTCOME. The press reads the send status in its `finally` (`refreshLive`), so a
+   failed Send re-reads that status already: that case is the control. The owed take-offs (`reloadOwed`) and the prices
+   worklist (`onSent`, which is `afterSend`, which calls `reload`) run only when the answer arrives, so a failed Send reads
+   neither. Each case asserts an order with `recordSent`: a GET sent after the POST of /pipeline/send. */
+test('a Send the server fails with a 5xx still re-reads the send status', async ({ page }) => {
+  await open(page, { send: () => ({ status: 503, code: 'store_unavailable' }) })
+  const sent = recordSent(page)
+  await sendPress(page).click()
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === '/pipeline/send'), { message: 'the Send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pipeline/sends'), {
+    message: 'a Send that failed with a 5xx is followed by a read of the send status',
+  }).toBe(true)
+})
+
+test('a Send the server fails with a 5xx re-reads the owed take-offs', async ({ page }) => {
+  await open(page, { send: () => ({ status: 503, code: 'store_unavailable' }) })
+  const sent = recordSent(page)
+  await sendPress(page).click()
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === '/pipeline/send'), { message: 'the Send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pipeline/sends/owed'), {
+    message: 'a Send that failed with a 5xx is followed by a read of the owed take-offs: no GET /pipeline/sends/owed reached the server after it',
+  }).toBe(true)
+})
+
+test('a refused Send re-reads the owed take-offs', async ({ page }) => {
+  await open(page, { send: () => ({ status: 409, code: 'send_busy' }) })
+  const sent = recordSent(page)
+  await sendPress(page).click()
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === '/pipeline/send'), { message: 'the Send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pipeline/sends/owed'), {
+    message: 'a refused Send is followed by a read of the owed take-offs: no GET /pipeline/sends/owed reached the server after it',
+  }).toBe(true)
+})
+
+test('a Send the server fails with a 5xx re-reads the prices worklist', async ({ page }) => {
+  await open(page, { send: () => ({ status: 503, code: 'store_unavailable' }) })
+  const sent = recordSent(page)
+  await sendPress(page).click()
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === '/pipeline/send'), { message: 'the Send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pipeline/pricing'), {
+    message: 'a Send that failed with a 5xx is followed by a read of the prices worklist: no GET /pipeline/pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('a Send that succeeds re-reads the owed take-offs', async ({ page }) => {
+  await open(page)
+  const sent = recordSent(page)
+  await sendPress(page).click()
+  await expect.poll(() => sent.some((r) => r.method === 'POST' && r.path === '/pipeline/send'), { message: 'the Send reached the server' }).toBe(true)
+  await expect.poll(() => readAfterPost(sent, '/pipeline/send', '/pipeline/sends/owed'), {
+    message: 'a Send that succeeds is followed by a read of the owed take-offs',
+  }).toBe(true)
 })
 
 /* A SEND FROM AN EARLIER DAY SAYS THE PRICES WERE READ AGAIN FIRST, and names the day they came from, so the owner
