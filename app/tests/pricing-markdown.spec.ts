@@ -514,7 +514,7 @@ async function pressOnePrice(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Send 1 Price to TCGplayer' }).click()
 }
 
-/* THE DIGEST AN APPLY THAT WROTE NOTHING CARRIES (F2). `do_markdown_apply` answers the corpus digest on every apply, but `wrote` is false when no
+/* THE DIGEST AN APPLY THAT WROTE NOTHING CARRIES. `do_markdown_apply` answers the corpus digest on every apply, but `wrote` is false when no
    import file was written, so that digest is not one this screen wrote. The re-read after the apply is failed here: a re-read that lands takes its
    own digest over the answer, which would hide the adoption. The next save must still name the digest the screen read. */
 /** Presses one price, lets the apply's answer and its re-read settle, then saves a new price. Returns the digest that save names.
