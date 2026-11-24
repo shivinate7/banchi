@@ -4041,6 +4041,75 @@ test('a slow re-read from a first save never puts back the revision a second sav
   for (const release of held.splice(0)) release()
 })
 
+test('a Refresh Now does not adopt the file digest its read answers, so the next save is refused as moved', async ({
+  page,
+}) => {
+  /* A REFRESH RE-READS THE SAVED PRICES AND THE CLEARS, NEVER THE FILE'S DIGEST. Only a write's receipt, and a clear
+     or its Undo, set the digest. Here another writer moves the file, the owner presses Refresh Now, and the next
+     autosave must still name the digest the screen read at load. The server is modelled: a write names the digest it
+     read, and a write that names an old one is refused with `corpus_moved`, so it never takes the moved file over. */
+  const wire = await open(page)
+  let serverRevision = 'rev-1'
+  let overwrites = 0
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() === 'PUT') {
+      const body = route.request().postDataJSON() as { revision?: string }
+      wire.push({ method: 'PUT', path: '/pricing', body })
+      if (body.revision !== serverRevision) {
+        return route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              code: 'corpus_moved',
+              message: 'The pricing file changed since this screen read it — another tab, or an edit on disk.',
+            },
+          }),
+        })
+      }
+      overwrites += 1
+      serverRevision = 'rev-3'
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, written: '/tmp/prices.json', answers: 1, revision: serverRevision }),
+      })
+    }
+    if (route.request().method() !== 'GET') return route.fallback()
+    /* The refresh's read carries a kept clear: the screen draws it only once this read has landed, so it is the
+       signal that the read was handled before the save is typed. */
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: { version: 1, policy: { rule: 'match', basis: 'market' }, skus: {} },
+        path: '/tmp/prices.json',
+        revision: serverRevision,
+        last_clear: { count: 49, at: 1758870000 },
+      }),
+    })
+  })
+
+  /* ANOTHER WRITER MOVES THE FILE. This screen read rev-1 at load and has not heard of the move. */
+  serverRevision = 'rev-2'
+  await page.getByRole('button', { name: /Refresh Now/ }).click()
+  await expect(page.locator('.pricing-restore-clear')).toContainText('Restore 49 cleared,')
+
+  await field(page).fill('19.99')
+  await field(page).press('Enter')
+  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length, { message: 'the autosave reached the server' }).toBe(1)
+
+  /* THE DIGEST IS THE ONE THE SCREEN READ AT LOAD. A refresh that adopted rev-2 would send it back, and the server
+     would take the write over the other writer's file. */
+  const put = wire.filter((r) => r.method === 'PUT').pop()
+  expect(
+    (put?.body as { revision?: string }).revision,
+    'a Refresh Now adopted the digest its read answered, so the autosave carries the file the other writer moved to',
+  ).toBe('rev-1')
+  await expect(page.locator('.bn-status-slot')).toContainText('changed since this screen read it')
+  expect(overwrites, 'the autosave overwrote the file another writer moved').toBe(0)
+})
+
 test('a corpus that moved under the screen refuses the write rather than reverting it', async ({
   page,
 }) => {
