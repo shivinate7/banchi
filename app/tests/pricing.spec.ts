@@ -300,7 +300,7 @@ async function open(
     clearable?: { days: Record<string, number | null>; holds: number; unknown: number }
     /** Answers `PUT /pricing` (the price save) with a refusal or a 5xx instead of the written file. The PUT is still recorded
      *  into the wire; the GETs of the same path are answered as before. */
-    corpusSave?: { status: number; code: string }
+    corpusSave?: { status: number; code: string; message?: string }
     /** Answers `POST /pricing/restore` (an Undo of a clear, or of a press's answers) with a refusal or a 5xx. Recorded into the wire first. */
     restoreFailure?: { status: number; code: string }
     /** UN-11: the newest clear the server still remembers, on `GET /pricing`'s own envelope,
@@ -692,7 +692,7 @@ async function open(
         return route.fulfill({
           status: options.corpusSave.status,
           contentType: 'application/json',
-          body: JSON.stringify({ error: { code: options.corpusSave.code, message: 'The server said no.' } }),
+          body: JSON.stringify({ error: { code: options.corpusSave.code, message: options.corpusSave.message ?? 'The server said no.' } }),
         })
       }
       return route.fulfill({
@@ -8887,6 +8887,47 @@ test('a price save the server refuses re-reads the prices', async ({ page }) => 
   await expect.poll(() => readAfterWrite(sent, 'PUT', '/pricing', '/pricing'), {
     message: 'the price save that was refused is followed by a read of the prices: no GET /pricing reached the server after it',
   }).toBe(true)
+})
+
+/* A PRICE SAVE THE SERVER ANSWERS WITH A 5xx. The save may have committed (D73): the server writes the file, then fails. The generic
+   500 text is what the screen was given, and no sentence on it may say the save failed. */
+const SERVER_500 = 'Something went wrong inside the server. Try again, and if it repeats, restart the app on the Mac.'
+
+test('a price save the server answers with a 5xx after it committed says the store did not confirm the save', async ({ page }) => {
+  await open(page, { corpusSave: { status: 500, code: 'server_error', message: SERVER_500 } })
+  const sent = recordSent(page)
+  await field(page).fill('19.99')
+  await field(page).press('Tab')
+  await expect
+    .poll(() => sent.some((r) => r.method === 'PUT' && r.path === '/pricing'), { message: 'the save reached the server' })
+    .toBe(true)
+
+  await expect(
+    page.getByText(/^The store did not confirm the price save\./).first(),
+    'a 5xx after the save may have committed, so the screen must say the store did not confirm it',
+  ).toBeVisible()
+  await expect(
+    page.getByText('Something went wrong inside the server', { exact: false }),
+    'the generic server sentence is not an answer about the save',
+  ).toHaveCount(0)
+  await expect(field(page), 'the copy points the reader at the price field, so the field must be on screen').toBeVisible()
+  await expect.poll(() => readAfterWrite(sent, 'PUT', '/pricing', '/pricing'), {
+    message: 'the save that failed with a 5xx is followed by a read of the prices: no GET /pricing reached the server after it',
+  }).toBe(true)
+})
+
+test('a price save the server refuses keeps the server sentence', async ({ page }) => {
+  await open(page, { corpusSave: { status: 409, code: 'revision_moved', message: 'The file moved under this screen.' } })
+  await field(page).fill('19.99')
+  await field(page).press('Tab')
+  await expect(
+    page.getByText('The file moved under this screen.', { exact: true }).first(),
+    'a refusal is the server\'s "no": its own sentence stays on screen',
+  ).toBeVisible()
+  await expect(
+    page.getByText(/The store did not confirm/),
+    'a refusal says nothing about the store having failed to confirm',
+  ).toHaveCount(0)
 })
 
 /* THE PRICES WORKLIST AFTER A KEPT TICK THAT FAILS. A press on a suggestion posts `/pricing/ticks` (`keepTicks`). A 5xx or a
