@@ -237,7 +237,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
   - Decisions: `D5`, `D13`
 - `app/src/kit.css` — Every primitive's look, one `bn-` prefix, loaded after base.css and before any screen sheet — so a screen may refine a button and never has to redraw one.
   - Decisions: `D197`, `D195`, `D218`, `D221`, `D272`, `D5`, `D118`, `D117`, `D288`, `D313`, `D300`, `D50`, `D41`, `D269`, `D125`, `D309`, `D13`, `D26`, `D32`, `D94`, `D193`
-- `app/src/kit/Icon.tsx` — One icon set, `73` paths on a `24`-unit grid at `1.75` stroke with round joins, drawn in the Lucide idiom so the whole product speaks one line weight.
+- `app/src/kit/Icon.tsx` — One icon set, `74` paths on a `24`-unit grid at `1.75` stroke with round joins, drawn in the Lucide idiom so the whole product speaks one line weight.
   - Decisions: `D5`, `D13`, `D94`
 - `app/src/kit/Lockup.tsx` — The lockup — 番地 over BANCHI inside the mark's own brackets, drawn entirely from lockupGeometry.ts.
   - Decisions: `D102`

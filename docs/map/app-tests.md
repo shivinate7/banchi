@@ -193,6 +193,8 @@ The Playwright specs and unit tests of the app, and the helpers they share.
   - Decisions: `D316`, `D19`
 - `app/tests/unit/formatter-homes.unit.ts` — The four formatter homes: the ago phrase (`dates.relativeDate`), the count word and byte size (`kit/dataRules`), the local day key (`dates.localDay`).
   - Decisions: `D5`, `D275`
+- `app/tests/unit/kit-button-queued.unit.ts` — The kit `Button`'s queued face, lifted from the kit source and run without a browser: `data-busy` queued, `aria-busy` and `aria-disabled`, never `disabled`, a press that never reaches the caller; the busy ring and the plain button as controls.
+- `app/tests/unit/lifted.ts` — `lifted`, the one way a unit case runs product code that imports CSS or the browser: it reads the file and asks the TypeScript parser for one top-level function or const.
 - `app/tests/unit/orders-ship-to-of.unit.ts` — `orderBuyers.shipToOf`: the ship-to name is drawn when it differs from the buyer or there is no buyer; a blank ship-to draws nothing.
   - Decisions: `D193`
 - `app/tests/unit/orders-ship-to-paste.unit.ts` — `orderPaste.ts` keeps a pasted order's `ship_to` name and drops anything but a string.

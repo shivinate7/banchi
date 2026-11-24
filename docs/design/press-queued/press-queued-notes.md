@@ -100,8 +100,8 @@ moves nothing), D128 (a key press answers on screen), `docs/specs/undo.md` secti
    Fulfillment `doUndo`, BoxShelf undo, and ReviewQueue undo each return early while another write is out. Nothing
    shows. The section "Fit check" draws Inventory's copy row with its Undo queued. It is the same `CardLocations`
    row, the same kit state, and the template words "Waits for the last sale to save." Not built.
-   Departs from: each early return above. Using the state there turns a drop into a queue, which is a behaviour
-   change, not a restyle. SendCard's `'waiting'` phase already queues, and adopts the state with no behaviour change.
+   Departs from: each early return above. Using the state there turns a drop into a queue, which is a behavior
+   change, not a restyle. SendCard's `'waiting'` phase already queues, and adopts the state with no behavior change.
    Owner grant: yes, for turning each drop into a queue.
 
 9. **Critique** (impeccable, single context, because a designer has no sub-agent tool). Fixed: the mockup's tags
