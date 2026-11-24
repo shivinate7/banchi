@@ -43,6 +43,7 @@ import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
 import { forSale, IDENTIFIED, readingAgo, readingExact, stateLabel, stateTone, staleReading } from './cardState'
 import { Button, Icon, IconButton, Meter, Money, Pill, ProductLink, Skeleton } from './kit'
+import { afterWrite } from './afterWrite'
 import { toast } from './kit/toast'
 import { money } from './money'
 import { relativeDate, relativeDateShort, toDate } from './dates'
@@ -1098,7 +1099,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
   }
 
   const runUndo = (atBox: number, atIndex: number) => {
-    void undoCorrectAnswer(atBox, atIndex)
+    void afterWrite(() => undoCorrectAnswer(atBox, atIndex))
       .then((result) => {
         setWritten({
           sku: result.sku,
@@ -1122,7 +1123,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
   const choose = (row: CandidateRow) => {
     if (busy) return
     setBusy(true)
-    correctAnswer(box, index, row.sku)
+    afterWrite(() => correctAnswer(box, index, row.sku))
       .then((result) => {
         setOpen(false)
         setWritten({
@@ -1151,7 +1152,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
   // it writes, so a fresh confirm's own Undo is offered unconditionally below, unlike
   // `choose`'s `result.restores_to` check — this route has no such field to be null.
   const runUndoConfirm = (atBox: number, atIndex: number) => {
-    void undoConfirmIdentity(atBox, atIndex)
+    void afterWrite(() => undoConfirmIdentity(atBox, atIndex))
       .then((result) => {
         setWritten({
           sku: result.sku,
@@ -1175,7 +1176,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
   const runConfirm = () => {
     if (confirmBusy) return
     setConfirmBusy(true)
-    confirmIdentity(box, index)
+    afterWrite(() => confirmIdentity(box, index))
       .then((result) => {
         setWritten({
           sku: result.sku,

@@ -1,6 +1,7 @@
 import { byteSize } from './kit/dataRules'
 import { titleCase } from './CardHero'
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
+import { afterWrite } from './afterWrite'
 
 import type {
   BoxClaimResult,
@@ -48,9 +49,9 @@ import './BoxOps.css'
  * `BoxIdentity` is the reading: number, name, lid, census and the track, drawn at the top of
  * the box's own walk. `BoxOps` is the "Manage box" sheet: rename, dividers, seal, claims over
  * the ticked cards, move, and — last, and red — the three destructive operations. Every write
- * route answers with the box row it wrote and nothing here patches that into anything: it
- * calls `onChanged`, and the owner of the read re-reads the boxes AND the inventory together,
- * because a divider edit relabels every card in the box.
+ * route answers with the box row it wrote and nothing here patches that into anything: every
+ * write runs inside `afterWrite`, which re-reads the boxes AND the inventory together whatever
+ * the write came to, because a divider edit relabels every card in the box.
  */
 
 /** The word `state` carries when the lid is on. */
@@ -291,7 +292,6 @@ type Editing = 'name' | 'sections' | 'section-names' | 'claims' | 'move' | null
 
 export function BoxOps({
   record,
-  onChanged,
   cards = NO_CARDS,
   boxes = [],
   listings = NO_LISTINGS,
@@ -299,7 +299,6 @@ export function BoxOps({
   onClose,
 }: {
   record: BoxRecord
-  onChanged: () => void
   /** The box's on-hand cards by section, for narrowing a Move or a Claims write inside its own
    *  sheet. The default is the whole box; the scope sentence on the control says which. */
   cards?: readonly PickGroup[]
@@ -311,18 +310,12 @@ export function BoxOps({
   open: boolean
   onClose: () => void
 }) {
-  const { busy, trouble, write } = useSheetWrite(onChanged)
-  /* F1 — a stale-section refusal reads the boxes again, the way the one-card Move panel
-   * already does, so the re-pick offers live sections rather than looping on a dead key. A
-   * ref, not a dependency, so the effect below fires once per NEW refusal and never merely
-   * because `onChanged` (an inline callback at the call site) changed identity. */
-  const onChangedRef = useRef(onChanged)
-  onChangedRef.current = onChanged
+  const { busy, trouble, write } = useSheetWrite()
   const onWrite = (patch: {
     name?: string
     sections?: number[]
     section_names?: Record<number, string>
-  }) => write(() => updateBox(record.box, patch))
+  }) => write(() => afterWrite(() => updateBox(record.box, patch)))
   /* D132 — one draft per section, keyed by ordinal, seeded from what the wire says now. */
   const [sectionNames, setSectionNames] = useState<Record<number, string>>({})
   const [editing, setEditing] = useState<Editing>(null)
@@ -446,7 +439,7 @@ export function BoxOps({
       return
     }
     const result = await write(() =>
-      applyBoxClaims(record.box, patch, selection.length > 0 ? [...selection] : undefined),
+      afterWrite(() => applyBoxClaims(record.box, patch, selection.length > 0 ? [...selection] : undefined)),
     )
     if (result !== null) {
       setClaimed(result)
@@ -479,10 +472,12 @@ export function BoxOps({
     setRefused(null)
     setSectionTrouble(null)
     const result = await write(() =>
-      moveCards(record.box, selection.length > 0 ? [...selection] : null, toBox, {
-        div: sectionDiv as string,
-        layoutToken: moveTargetToken as string,
-      }),
+      afterWrite(() =>
+        moveCards(record.box, selection.length > 0 ? [...selection] : null, toBox, {
+          div: sectionDiv as string,
+          layoutToken: moveTargetToken as string,
+        }),
+      ),
     )
     if (result !== null) {
       setMoved(result)
@@ -521,7 +516,6 @@ export function BoxOps({
     )
     setSectionTrouble(trouble)
     setSectionDiv(null)
-    onChangedRef.current()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- movedSection is read once, from the render this failure landed on
   }, [trouble])
   /* (a) — THE SECOND, INDEPENDENT NET: a pick can also go stale with no refusal at all, from
@@ -709,9 +703,9 @@ export function BoxOps({
             <SettingsTrouble failure={trouble} />
 
             <SettingsGroup title="Danger" danger>
-              <ReleaseListings record={record} boxes={boxes} listings={listings} onChanged={onChanged} />
-              <ReclaimPhotos record={record} onChanged={onChanged} />
-              <DeleteBox record={record} onChanged={onChanged} onDeleted={onClose} />
+              <ReleaseListings record={record} boxes={boxes} listings={listings} />
+              <ReclaimPhotos record={record} />
+              <DeleteBox record={record} onDeleted={onClose} />
             </SettingsGroup>
           </>
         ) : editing === 'claims' ? (
@@ -1436,13 +1430,11 @@ function ReleaseListings({
   record,
   boxes = [],
   listings = NO_LISTINGS,
-  onChanged,
 }: {
   record: BoxRecord
   /** The registry, to name the other boxes that hold copies. */
   boxes?: readonly BoxRecord[]
   listings?: Readonly<Record<string, Listing>>
-  onChanged: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [plan, setPlan] = useState<BoxListingPlan | null>(null)
@@ -1479,11 +1471,10 @@ function ReleaseListings({
     setBusy(true)
     setTrouble(null)
     try {
-      const result = await releaseBoxListings(box)
+      const result = await afterWrite(() => releaseBoxListings(box))
       setReceipt(result)
       setOpen(false)
       setPlan(null)
-      onChanged()
     } catch (err) {
       setTrouble(describeFailure(err))
     } finally {
@@ -1601,7 +1592,7 @@ function ReleaseListings({
 /* PHOTO RECLAMATION — D89. Deletes the photographs of a box's SOLD cards and keeps every record.
  * The free count is read on opening, and the control that fires does not exist until it has
  * answered. Both presses name the box. */
-function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: () => void }) {
+function ReclaimPhotos({ record }: { record: BoxRecord }) {
   const [open, setOpen] = useState(false)
   const [plan, setPlan] = useState<BoxPhotoPlan | null>(null)
   const [loading, setLoading] = useState(false)
@@ -1637,11 +1628,10 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
     setBusy(true)
     setTrouble(null)
     try {
-      const result = await reclaimBoxPhotos(box)
+      const result = await afterWrite(() => reclaimBoxPhotos(box))
       setReceipt(result)
       setOpen(false)
       setPlan(null)
-      onChanged()
     } catch (err) {
       setTrouble(describeFailure(err))
     } finally {
@@ -1751,11 +1741,9 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
  * distinction before the press: what stays on the shelf is separate from what will refuse outright. */
 function DeleteBox({
   record,
-  onChanged,
   onDeleted,
 }: {
   record: BoxRecord
-  onChanged: () => void
   onDeleted: () => void
 }) {
   const [open, setOpen] = useState(false)
@@ -1767,7 +1755,7 @@ function DeleteBox({
     setBusy(true)
     setTrouble(null)
     try {
-      const result: BoxDeleteResult = await deleteBox(record.box)
+      const result: BoxDeleteResult = await afterWrite(() => deleteBox(record.box))
       setOpen(false)
       toast({
         kind: 'ok',
@@ -1787,7 +1775,6 @@ function DeleteBox({
           ? { action: { label: 'Open Runs', onPress: () => { window.location.hash = '#/runs' } } }
           : {}),
       })
-      onChanged()
       onDeleted()
     } catch (err) {
       setTrouble(describeFailure(err))
