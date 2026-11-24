@@ -1231,7 +1231,10 @@ function seesComponent(other, screen, name) {
   return other.src.statements.some((statement) => {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) return false
     if (statement.moduleSpecifier.text.replace(/^\.\//, '') !== home) return false
-    const named = statement.importClause?.namedBindings
+    const clause = statement.importClause
+    // A default import (`import Slabs from './Slabs'`) names the component by its own local name, which is the JSX tag.
+    if (clause?.name?.text === name) return true
+    const named = clause?.namedBindings
     return named !== undefined && ts.isNamedImports(named) &&
       named.elements.some((element) => (element.propertyName ?? element.name).text === name)
   })
@@ -2536,6 +2539,19 @@ function selfTest() {
         const [reloads, setReloads] = useState(0)
         useEffect(() => { void doRead().then(setRows) }, [reloads])
         return <div>{rows}<ChildCallsNamed onChanged={() => setReloads((n) => n + 1)} /></div>
+      }`]],
+    ['14y. the child is a default export, and a file that default-imports it binds its prop to a re-read', 'write through the after-write helper', `
+      export default function ChildDefault({ onChanged }: { onChanged: () => void }) {
+        useRereadOnWrite(async () => onChanged())
+        const press = async () => { await afterWrite(() => doWrite(1, 2)) }
+        return <button onClick={press} />
+      }`, [`
+      import ChildDefault from './__HOME__'
+      export function ParentDefaultImports() {
+        const [rows, setRows] = useState(null)
+        const [reloads, setReloads] = useState(0)
+        useEffect(() => { void doRead().then(setRows) }, [reloads])
+        return <div>{rows}<ChildDefault onChanged={() => setReloads((n) => n + 1)} /></div>
       }`]],
     ['3e. the kit hook useSheetWrite handed a no-op onChanged', null, `
       export function KitNoop({ onChanged }: { onChanged: () => void }) {
