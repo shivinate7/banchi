@@ -157,13 +157,25 @@ export type OwedTakeOffs = {
   readonly loading: boolean
   readonly failure: Failure | null
   readonly reload: () => void
+  /** The last read that landed. A new object for each one, so a read that changed nothing is still seen; `own` is the read a take-off press started. */
+  readonly lastRead: OwedRead
+  /** A press calls this as its write ends, so the owed read its `afterWrite` starts next is marked `own`. */
+  readonly markPressRead: () => void
 }
+
+type OwedRead = { readonly own: boolean }
+const NO_READ: OwedRead = { own: false }
 
 export function useOwedTakeOffs(): OwedTakeOffs {
   const [owed, setOwed] = useState<readonly OwedTakeOff[]>([])
   const [loading, setLoading] = useState(true)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [reads, setReads] = useState(0)
+  const [lastRead, setLastRead] = useState<OwedRead>(NO_READ)
+  const pressMarked = useRef(false)
+  const markPressRead = useCallback(() => {
+    pressMarked.current = true
+  }, [])
   useEffect(() => {
     let live = true
     getOwedTakeOffs()
@@ -171,6 +183,7 @@ export function useOwedTakeOffs(): OwedTakeOffs {
         if (!live) return
         setOwed(answer.owed)
         setFailure(null)
+        setLastRead({ own: false })
       })
       .catch((err: unknown) => {
         if (live) setFailure(describeFailure(err))
@@ -186,16 +199,20 @@ export function useOwedTakeOffs(): OwedTakeOffs {
   /* A WRITE'S RE-READ (`afterWrite`, D73): a send, whatever it came to, may have settled a take-off, so the list is read again. */
   useRereadOnWrite(async (kind) => {
     if (kind !== 'send' && kind !== 'other') return
+    /* THE PRESS'S OWN RE-READ KEEPS ITS ANSWER (D313): the first read after a press's write is the one that press started; any other clears the answers of the entries it lists. */
+    const own = pressMarked.current
+    pressMarked.current = false
     try {
       const answer = await getOwedTakeOffs()
       /* THE HELD LIST STANDS WHEN NOTHING DIFFERS: a new array would draw the line again for nothing. */
       setOwed((held) => (JSON.stringify(held) === JSON.stringify(answer.owed) ? held : answer.owed))
       setFailure(null)
+      setLastRead({ own })
     } catch (err) {
       setFailure(describeFailure(err))
     }
   })
-  return { owed, loading, failure, reload }
+  return { owed, loading, failure, reload, lastRead, markPressRead }
 }
 
 const ownedCopies = (entry: OwedTakeOff): number => Math.max(1, entry.excess)
@@ -246,11 +263,15 @@ function keepAnswered(
 
 function OwedTakeOffsLine({
   owed,
+  lastRead,
+  markPressRead,
   taking,
   locked,
   setTaking,
 }: {
   readonly owed: readonly OwedTakeOff[]
+  readonly lastRead: OwedRead
+  readonly markPressRead: () => void
   /** The entry key being pressed, or null. One press runs at a time. */
   readonly taking: string | null
   /** A send or a download is running, so no take-off press is offered. */
@@ -267,6 +288,15 @@ function OwedTakeOffsLine({
     setSeen(owed)
     setShown(keepAnswered(shown, owed, answers))
   }
+  /* A READ THAT IS NOT THE PRESS'S OWN CLEARS THE ANSWERS OF THE ENTRIES IT LISTS: it is the store as it is now. An entry it drops keeps its settled answer. */
+  const [handled, setHandled] = useState(lastRead)
+  if (handled !== lastRead) {
+    setHandled(lastRead)
+    if (!lastRead.own) {
+      const listed = new Set(owed.map(entryKey))
+      setAnswers((held) => Object.fromEntries(Object.entries(held).filter(([key]) => !listed.has(key))))
+    }
+  }
 
   const viewOfEntry = (entry: OwedTakeOff): TakeOffView => answers[entryKey(entry)]?.view ?? viewOf(entry.state)
   const off = taking !== null || locked
@@ -274,7 +304,13 @@ function OwedTakeOffsLine({
   const pressOne = async (entry: OwedTakeOff) => {
     setTaking(entryKey(entry))
     /* THE OWED LIST IS READ AGAIN WHATEVER THE PRESS CAME TO (`afterWrite`, D73): `pressTakeOff` turns a refusal or a 5xx into an outcome, and a take-off that got no answer may still have gone. */
-    const outcome = await afterWrite(() => pressTakeOff(entry.box, entry.index), 'send')
+    const outcome = await afterWrite(async () => {
+      try {
+        return await pressTakeOff(entry.box, entry.index)
+      } finally {
+        markPressRead()
+      }
+    }, 'send')
     setAnswers((held) => ({ ...held, [entryKey(entry)]: outcome }))
     setTaking(null)
   }
@@ -1415,7 +1451,7 @@ export function SendCard({
       </div>
 
       {/* FIRST OF THE CARD'S NOTICES, so a receipt or a refusal that comes and goes draws under it and the line never moves. */}
-      <OwedTakeOffsLine owed={owed.owed} taking={taking} locked={phase !== 'idle' || running} setTaking={setTaking} />
+      <OwedTakeOffsLine owed={owed.owed} lastRead={owed.lastRead} markPressRead={owed.markPressRead} taking={taking} locked={phase !== 'idle' || running} setTaking={setTaking} />
       {owed.failure === null ? null : (
         <Retry
           compact
