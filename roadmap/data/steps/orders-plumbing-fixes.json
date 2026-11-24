@@ -3,8 +3,8 @@
   "status": "doing",
   "phase": "Orders walk fixes",
   "why": "The plumbing hunt on the Orders screen found 9 faults, worst first: the walk plan drops owed copies, sales refused after a return read, positions off by one after Undo, and more. Source: handoff 72b8b5ec, section Findings from the plumbing hunt.",
-  "note": "Fan out per owner ruling Q1 (19:44 CST Nov 22, process-only). Branches: lane/walkplan-owed-stops (bug 1); lane/orders-pull-status (bug 4); lane/orders-undo-plumbing (bugs 3, 5, 7, 8, 9; ruling Q2 = 2a: U undoes the newest standing sale after any click, home docs/specs/undo.md section 10); lane/walk-pane-tally-focus (bugs 2, 6). Done when every fix is merged and one re-run of the hunt on a read-only store copy passes. Feedback item fb-1942-2 points here. Merged: bug 1 (PR 1126, 781a80d8f) and bug 6 focus (PR 1127, 8eb2f2883); recorded by triage.",
+  "note": "Fan out per owner ruling Q1 (19:44 CST Nov 22, process-only). Branches: lane/walkplan-owed-stops (bug 1); lane/orders-pull-status (bug 4); lane/orders-undo-plumbing (bugs 3, 5, 7, 8, 9; ruling Q2 = 2a: U undoes the newest standing sale after any click, home docs/specs/undo.md section 10); lane/walk-pane-tally-focus (bugs 2, 6). Done when every fix is merged and one re-run of the hunt on a read-only store copy passes. Feedback item fb-1942-2 points here. Merged: bug 1 (PR 1126, 781a80d8f) and bug 6 focus (PR 1127, 8eb2f2883); recorded by triage. Status 2026-11-24 10:20 CST (Orders session report): bugs 1-8 are on main: bug 1 PR 1126; bug 6 PR 1127 with PR 1132; bug 4 PR 1128; bug 7 PR 1129; bugs 2, 3, 5, 8 PR 1137. Bug 9 (low confidence: U during an in-flight sale) has no PR and no check. The hunt re-run on a store copy (04:38 CST Nov 24) found new issues, not the old nine; PR 1147 carries two of them. The step can close once bug 9 is checked or dropped.",
   "ask": null,
-  "updatedAt": "2026-11-22T21:50:28-06:00",
+  "updatedAt": "2026-11-24T10:20:55-06:00",
   "order": 999
 }
