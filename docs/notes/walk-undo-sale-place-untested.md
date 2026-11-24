@@ -1,0 +1,1 @@
+- walk-undo-sale-place-untested: No case in `app/tests/order-walk.spec.ts` pins the walk undo's fallback to the sale-time place (`undoWalkSale` in `app/src/OrdersWalkPane.tsx`) once the copy is gone from the store. A change to that fallback would not fail the suite.

@@ -1,0 +1,1 @@
+- failed-undo-toast-own-undo: `undoFailureToast` in `app/src/Orders.tsx` gives a failed-undo toast its own Undo action, while the body from `unconfirmedSaleUndo` in `app/src/server.ts` tells the reader to press the hooked arrow button (`ROW_CONTROL_SEEN.undo`). The toast offers two controls for one reversal, and its body names only one of them.

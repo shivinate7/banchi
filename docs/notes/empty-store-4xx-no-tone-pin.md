@@ -1,0 +1,1 @@
+- empty-store-4xx-no-tone-pin: The case "a paste the server refuses with a 4xx on an empty store keeps the server sentence" in `app/tests/orders.spec.ts` pins the sentence and checks that the no-answer title is absent. It does not pin the notice's tone, which `failureTone` sets on the empty state.

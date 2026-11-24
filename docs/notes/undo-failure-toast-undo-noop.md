@@ -1,0 +1,1 @@
+- undo-failure-toast-undo-noop: `undoFromReceipt` in `app/src/Orders.tsx`, the Undo that `undoFailureToast` gives a failed-undo toast, returns with nothing sent when a newer pull has the newest slot or a reversal is already held. The press then only dismisses the toast, and nothing tells the reader that the Undo did nothing.

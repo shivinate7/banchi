@@ -1,0 +1,1 @@
+- orders-no-answer-draws-message: `StatusPicker` in `app/src/Orders.tsx` draws its failure as a Notice whose title is `failure.message`, the server's sentence alone. The review called this the "Orders did not answer" branch. That branch does not use the title and body pair from `noAnswerFailure` in `app/src/server.ts`. No string with that wording is on main.

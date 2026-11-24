@@ -1,0 +1,1 @@
+- fill-buttons-literal-labels: `LineStandDown` in `app/src/Orders.tsx` draws the hand-fill button labels as JSX literals ("Shipped This by Hand", "Already Sent It", and their counted forms). `fillLabel` in the same file builds the same words for the toast. The two copies can drift apart.

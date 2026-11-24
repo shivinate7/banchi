@@ -1,0 +1,1 @@
+- legacy-copy-raw-store-key: `_move_one` in `server/capture_server.py` answers a copy that was already moved with "was already moved to <card.moved_to>". `moved_to` is a raw store key such as 7/2, so the reader sees the key where the first clause names the place with `join.said_place`.

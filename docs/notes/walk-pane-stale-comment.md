@@ -1,0 +1,1 @@
+- walk-pane-stale-comment: A comment in `app/src/OrdersWalkPane.tsx` is stale after the Orders 5xx copy change (PR 1147). The review named the pane and not the line, so the comment is not located on main. Find it by reading the pane's comments against the code they describe.

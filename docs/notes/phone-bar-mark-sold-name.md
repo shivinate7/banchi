@@ -1,0 +1,1 @@
+- phone-bar-mark-sold-name: The walk row's Mark Sold control, `MarkSoldButton` in `app/src/OrdersWalkPane.tsx`, is named "Mark Sold: <place>", but the no-answer body from `unconfirmedCopyWrite` in `app/src/server.ts` tells the reader to press the dollar sign button (`ROW_CONTROL_SEEN.sale`). The review called this the phone sticky bar. No component under that name is on main.

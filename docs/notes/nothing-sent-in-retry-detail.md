@@ -1,0 +1,1 @@
+- nothing-sent-in-retry-detail: `Pricing.tsx` gives a save that got no answer the message "Nothing was sent.", and its call of `Retry` in `app/src/kit/index.tsx` passes that message as `detail`, so the sentence sits under the server-text disclosure. `SendCard.tsx` uses the same sentence. It is not one of the title and body pairs in `app/src/server.ts`.

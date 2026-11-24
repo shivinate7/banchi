@@ -1,0 +1,1 @@
+- walk-toast-covers-header-1440: At 1440 wide, the toast stack drawn by `Toaster` in `app/src/kit/toast.tsx` covers the walk row's header in `app/src/OrdersWalkPane.tsx`. The 820 wide case on Inventory is in its own note, inventory-toast-covers-row-undo. Not measured by a screenshot here.
