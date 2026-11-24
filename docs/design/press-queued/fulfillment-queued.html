@@ -344,7 +344,7 @@ body[data-s='rest'] .ff-receipt[data-s~='rest'], body[data-s='sheet'] .ff-receip
         </ul>
       </section>
 
-      <section class="ff-owed" aria-label="Cards to Pull">
+      <section class="ff-owed" id="skip-list" aria-label="Cards to Pull">
         <div class="ff-owed-list">
           <div data-s="skipped"><div class="ff-owed-card mk-today" data-x="run"><span class="mk-tag">Today: the undo ran, so Glimmer Fox is back in the list</span>
                         <div class="ff-owed-copy"><span class="ff-owed-name">Glimmer Fox</span><span class="ff-owed-place"><span>Binder A</span><span>Section 2</span><span>Card <b>14</b></span></span></div>
@@ -386,8 +386,8 @@ body[data-s='rest'] .ff-receipt[data-s~='rest'], body[data-s='sheet'] .ff-receip
       </div>
       <span style="grid-area:undo" class="mk-today" data-s="rest"><span class="mk-tag">Today: the receipt's Undo, now a kit Button, same look</span><button class="bn-btn ff-undo" aria-label="Undo Binder A, Section 2, Card 14"><svg width="22" height="22"><use href="#g-undo"/></svg>Undo</button></span>
       <span style="grid-area:undo" data-s="row">
-        <span class="mk-today" style="display:inline-flex" data-r="plain"><span class="mk-tag">Today: its undo runs, no ring</span><button class="bn-btn ff-undo" aria-label="Undo Binder A, Section 2, Card 14"><svg width="22" height="22"><use href="#g-undo"/></svg>Undo</button></span>
-        <span class="mk-new" style="display:inline-flex" data-r="ring"><span class="mk-tag">New: the kit ring while it runs</span><button class="bn-btn ff-undo" data-busy="true" aria-busy="true" aria-label="Undo Binder A, Section 2, Card 14"><svg width="22" height="22"><use href="#g-undo"/></svg>Undo</button></span>
+        <span class="mk-today" style="display:inline-flex" data-r="plain"><span class="mk-tag">Today: its undo runs, no ring</span><button class="bn-btn ff-undo" id="run-plain" aria-label="Undo Binder A, Section 2, Card 14"><svg width="22" height="22"><use href="#g-undo"/></svg>Undo</button></span>
+        <span class="mk-new" style="display:inline-flex" data-r="ring"><span class="mk-tag">New: the kit ring while it runs</span><button class="bn-btn ff-undo" id="run-ring" data-busy="true" aria-busy="true" aria-label="Undo Binder A, Section 2, Card 14"><svg width="22" height="22"><use href="#g-undo"/></svg>Undo</button></span>
       </span>
       <button class="ff-receipt-dismiss" aria-label="Dismiss this receipt"><svg width="18" height="18"><use href="#g-x"/></svg></button>
     </div>

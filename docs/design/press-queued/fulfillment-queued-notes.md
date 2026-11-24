@@ -5,8 +5,10 @@ The frame is the screen at the page's own width: render it at 1440 or 820. Both 
 (the card view 1080px) and a 680px sheet, so the Undo geometry is the same at both.
 Deep links: `#s=<rest|sheet|handoff|row|skipped>&t=<light|dark>&wq=<right|left>&wr=<head|strip>&b=<kit|ff>&x=<cancel|run>&r=<plain|ring>`,
 plus `l=0` (labels off: the true geometry) and `h=<keys>` (hidden options).
-Focus ids for the waiting page: `sheet-undo` (receipt Undo queued), `sheet-note-right` and `sheet-note-left` (`wq`),
-`row-undo` (row Undo queued), `row-note-head` and `row-note-strip` (`wr`), `skip-sheet` (`s=skipped`).
+Focus ids for the waiting page, per option: `wq` (with `s=sheet`) focuses `sheet-note-right` and `sheet-note-left`.
+`wr` (with `s=row`) focuses `row-note-head` and `row-note-strip`. `b` (with `s=sheet`) focuses `sheet-undo`. `x` (with
+`s=skipped`) focuses `skip-list`, where Glimmer Fox comes back only under `x=run`. `r` (with `s=row`) focuses `run-plain`
+and `run-ring`. The row's queued Undo is `row-undo`.
 Tokens: a copy of `app/src/tokens.css`, light and dark. The rules are copied from `app/src/Fulfillment.css` and
 `app/src/kit.css`, in that load order. The kit Button measurements come from a scratch page that loaded the real
 `kit.css` and then `Fulfillment.css`.
@@ -62,8 +64,9 @@ moves nothing), D313 (nothing moves unless the person moved it), DESIGN.md's Ful
    - Behind another undo: "Waits for the other undo to save."
    - Heading line: "Undo waits for the other undo to save"
    - Sheet strip: "Undo for <name> waits for the other undo to save"
-   Size and color: `--ff-fs-base` (20px) in `--bn-ink-2`, with the mark at 20px in `--bn-accent`. Measured from the
-   tokens, ink-2 on `--bn-surface` is about 10:1 in both themes, and the view's floor is 7:1. The kit `QueuedNote` is 13px,
+   Size and color: `--ff-fs-base` (20px) in `--bn-ink-2`, with the mark at 20px in `--bn-accent`. Computed (WCAG) from
+   the tokens: ink-2 on `--bn-surface` (the sheet) is 10.3:1 light and 9.7:1 dark; on `--bn-bg` (the heading line) 9.4:1
+   light and 10.4:1 dark. The view's floor is 7:1. The kit `QueuedNote` is 13px,
    so `.fulfillment .bn-queued-note` needs a size override (builder).
 
 7. **The hand-off is the common case, not an edge.** `doSell` calls `remember` only after the sale lands. So the reader
@@ -86,6 +89,8 @@ moves nothing), D313 (nothing moves unless the person moved it), DESIGN.md's Ful
      and nothing on screen says so. On this screen a sale that should have been undone leaves the card sold while it sits in the binder.
    - Close keeps the undo (`x=run`): the X hides the receipt. The press was taken first, so the undo runs when the sale
      lands, and the card comes back to the list. `doUndo` takes the card, not the receipt, so it can still run.
+     Its loss: from the X until the sale lands, the press still waits, but its mark and words left with the receipt,
+     and the screen has no toasts. For that interval nothing answers on screen, which D329 asks against.
    Rejected: dimming the X while queued (the view has no disabled state), and a sentence in `ff-trouble` (it is in the
    flow and moves the page).
    Pick: close keeps the undo. Departs from: the plan's skip rule. Owner grant: yes.
