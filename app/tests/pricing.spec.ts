@@ -4180,6 +4180,70 @@ test('an age window narrows the label, and never takes an undated answer', async
   await expect(press).toBeDisabled()
 })
 
+/* THE PRICES AFTER A CLEAR. `ClearPrices.tsx`'s `press` reads nothing on a failure: a 5xx or a refusal only sets the sheet's
+   own sentence, so the screen keeps the prices it drew before the press. Each case counts the GETs of `/pricing` sent
+   after the POST of `/pricing/clear`. The success case is the control: `onCleared` reloads the prices. */
+function countPricingReads(page: Page): () => number {
+  let reads = 0
+  page.on('request', (request) => {
+    if (request.method() === 'GET' && new URL(request.url()).pathname === '/pricing') reads += 1
+  })
+  return () => reads
+}
+
+test('a Clear the server fails with a 5xx re-reads the prices', async ({ page }) => {
+  await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  let posts = 0
+  await page.route(/\/pricing\/clear$/, async (route) => {
+    posts += 1
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'store_unavailable', message: 'The store did not answer. Try again.' } }),
+    })
+  })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+  await expect(sheet).toBeVisible()
+  const reads = countPricingReads(page)
+  const before = reads()
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  await expect.poll(() => posts, 'the Clear reached the server').toBe(1)
+  await expect.poll(reads, { message: 'the Clear that failed with a 5xx is followed by a prices read: no GET /pricing reached the server after it' }).toBeGreaterThan(before)
+})
+
+test('a refused Clear re-reads the prices', async ({ page }) => {
+  await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  let posts = 0
+  await page.route(/\/pricing\/clear$/, async (route) => {
+    posts += 1
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'revision_moved', message: 'The prices changed since you looked. Look again, then clear.' } }),
+    })
+  })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+  await expect(sheet).toBeVisible()
+  const reads = countPricingReads(page)
+  const before = reads()
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  await expect.poll(() => posts, 'the Clear reached the server').toBe(1)
+  await expect.poll(reads, { message: 'the refused Clear is followed by a prices read: no GET /pricing reached the server after it' }).toBeGreaterThan(before)
+})
+
+test('a Clear that succeeds re-reads the prices', async ({ page }) => {
+  await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+  await expect(sheet).toBeVisible()
+  const reads = countPricingReads(page)
+  const before = reads()
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  await expect.poll(reads, { message: 'a successful Clear is followed by a prices read' }).toBeGreaterThan(before)
+})
+
 test('the scope the operator chose is the scope that travels', async ({ page }) => {
   const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
   await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()

@@ -206,6 +206,31 @@ test('Layout enters edit mode; a queued drop writes nothing until Confirm, which
   expect(sent[1]).toEqual({ path: '/boxes/sections/undo', body: { move: 'm1' } })
 })
 
+/* A CONFIRM THE SERVER FAILS WITH A 5XX STILL RE-READS THE SHELF. `BoxShelf.tsx`'s `confirm` loads in a `finally`, so this
+   holds on main already: it is a guard on that finally, not a red. The count is of GET /boxes sent after the POST. */
+test('a Confirm the server fails with a 5xx still re-reads the shelf', async ({ page }) => {
+  await openShelf(page)
+  let posts = 0
+  await page.route(/\/boxes\/sections\/move-batch$/, async (route) => {
+    posts += 1
+    await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'store_unavailable', message: 'The store did not answer. Try again.' } }) })
+  })
+  let reads = 0
+  page.on('request', (request) => {
+    if (request.method() === 'GET' && new URL(request.url()).pathname === '/boxes') reads += 1
+  })
+  await page.getByRole('button', { name: 'Layout' }).click()
+  await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
+  await expect(page.getByRole('button', { name: 'Old Box', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
+  await expect(page.locator('.shelf-pair .shelf-box')).toHaveCount(2)
+  await page.getByRole('button', { name: /Put Uncommons just on the far side of Promos/ }).click()
+  const before = reads
+  await page.getByRole('button', { name: 'Confirm' }).click()
+  await expect.poll(() => posts, 'the Confirm reached the server').toBe(1)
+  await expect.poll(() => reads, { message: 'the Confirm that failed with a 5xx is followed by a shelf read: no GET /boxes reached the server after it' }).toBeGreaterThan(before)
+})
+
 /* THE GRIP IS A DRAG HANDLE: a real pointer drag from "Drag section <name> of <box>" onto a slot
  * of a box. The left half of a slot drops in front of it, the right half after it. */
 async function dragGrip(page: Page, grip: string, boxName: string, slot: number, half: 'left' | 'right') {
