@@ -1,5 +1,5 @@
 {
- "readAt": "2026-11-24T01:18:01Z",
+ "readAt": "2026-11-24T01:27:28Z",
  "pulls": [
   {
    "number": 1142,
@@ -8,14 +8,6 @@
    "draft": true,
    "createdAt": "2026-11-24T00:59:54Z",
    "url": "https://github.com/shivinate7/banchi/pull/1142"
-  },
-  {
-   "number": 1141,
-   "title": "Screen-freshness: a parent's re-read covers a child component that writes",
-   "branch": "lane/freshness-child-writer",
-   "draft": false,
-   "createdAt": "2026-11-24T00:35:03Z",
-   "url": "https://github.com/shivinate7/banchi/pull/1141"
   }
  ],
  "branches": [
@@ -314,9 +306,6 @@
    "name": "lane/fix-walk-head-sold"
   },
   {
-   "name": "lane/freshness-child-writer"
-  },
-  {
    "name": "lane/hand-fed-rail-flat-design"
   },
   {
@@ -336,6 +325,9 @@
   },
   {
    "name": "lane/orders-undo-plumbing"
+  },
+  {
+   "name": "lane/rest-screens-reread"
   },
   {
    "name": "lane/shipped-order-walk"
