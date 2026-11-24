@@ -117,7 +117,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/Pricing.css` — The one list, the slim bar and the rule line, `--bn-*` only.
   - Decisions: `D277`, `D123`, `D313`, `D28`, `D118`, `D50`, `D273`, `D221`, `D117`, `D5`, `D9`, `D38`, `D41`, `D54`, `D56`, `D86`, `D103`, `D105`, `D125`, `D197`, `D218`, `D278`
 - `app/src/Pricing.tsx` — The Pricing screen: every unsent copy with its price, its holds and its readiness.
-  - Decisions: `D86`, `D277`, `D278`, `D103`, `D99`, `D118`, `D181`, `D56`, `D156`, `D115`, `D125`, `D301`, `D172`, `D7`, `D285`, `D313`, `D273`, `D271`, `D54`, `D59`, `D221`, `D9`, `D168`, `D137`, `D109`, `D36`, `D145`, `D4`, `D5`, `D22`, `D26`, `D28`, `D33`, `D35`, `D37`, `D38`, `D39`, `D41`, `D51`, `D58`, `D89`, `D100`, `D101`, `D105`, `D107`, `D117`, `D180`, `D196`, `D210`, `D218`, `D269`
+  - Decisions: `D86`, `D277`, `D278`, `D103`, `D99`, `D118`, `D181`, `D56`, `D156`, `D115`, `D125`, `D301`, `D172`, `D7`, `D285`, `D313`, `D273`, `D271`, `D54`, `D59`, `D221`, `D9`, `D168`, `D137`, `D109`, `D36`, `D145`, `D4`, `D5`, `D22`, `D26`, `D28`, `D33`, `D35`, `D37`, `D38`, `D39`, `D41`, `D51`, `D58`, `D89`, `D100`, `D101`, `D105`, `D107`, `D117`, `D180`, `D196`, `D210`, `D218`, `D269`, `D73`
 - `app/src/ProductHistory.css` — The chart at `--bn-*` tokens only.
   - Decisions: `D227`, `D278`, `D212`, `D41`, `D218`, `D94`
 - `app/src/ProductHistory.tsx` — `#/product`: one product's market history, with the owner's own sales marked on it.
@@ -149,7 +149,7 @@ The browser app: the shell, the screens, the kit and the one file that talks to 
 - `app/src/RunPanel.css` — The panel at owner density — the `4`-`16` end of the scale, mono on every number, and exactly one solid accent fill: the button that spends, drawn only once the estimate is on screen above it.
   - Decisions: `D291`, `D123`, `D117`, `D218`, `D28`, `D31`, `D32`, `D33`, `D38`, `D180`, `D50`, `D54`, `D65`, `D76`, `D86`
 - `app/src/RunPanel.tsx` — THE RUNS, AS MASTER AND DETAIL, on #/runs since D39 and in #/inventory's content column before it.
-  - Decisions: `D65`, `D76`, `D33`, `D313`, `D145`, `D207`, `D128`, `D180`, `D196`, `D118`, `D1`, `D3`, `D9`, `D13`, `D16`, `D28`, `D31`, `D32`, `D39`, `D54`, `D56`, `D86`
+  - Decisions: `D65`, `D76`, `D33`, `D313`, `D145`, `D207`, `D128`, `D180`, `D196`, `D118`, `D1`, `D3`, `D9`, `D13`, `D16`, `D28`, `D31`, `D32`, `D39`, `D54`, `D56`, `D86`, `D73`
 - `app/src/RunRescue.css` — The rescue sheet's own layout, `LiveReconcile.css`'s shape — width, padding, the thumb floor on a coarse pointer (D117).
   - Decisions: `D145`, `D210`, `D275`, `D117`
 - `app/src/RunRescue.tsx` — D145's repair, offered from `RunPanel.tsx`'s own header ONLY where `detail.box_former` is true — a run over a drawer D20 has since handed to another box.

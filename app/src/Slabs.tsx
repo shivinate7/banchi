@@ -5,6 +5,7 @@ import { Button, Count, EmptyState, FailureNotice, Icon, Money, Page, ReloadButt
 import { toast } from './kit/toast'
 import { dayDate } from './dates'
 import { count } from './kit/dataRules'
+import { afterWrite, useRereadOnWrite } from './afterWrite'
 import { addSlab, describeFailure, failureTone, getSlabDetail, getSlabs, removeSlab, type Failure } from './server'
 import { SLAB_GRADERS } from './slabGraders'
 import type { SlabDetail, SlabReceipt, SlabRow, SlabSnapshot } from './types'
@@ -306,6 +307,7 @@ export default function Slabs() {
   useEffect(() => {
     void load()
   }, [load])
+  useRereadOnWrite(load)
 
   const ordered = useMemo(() => (rows === null ? [] : sorted(rows)), [rows])
   const [detail, setDetail] = useState<SlabRow | null>(null)
@@ -338,13 +340,12 @@ export default function Slabs() {
     setAdding(true)
     if (fromSheet) setAddFailure(null)
     try {
-      const receipt = await addSlab(input)
+      const receipt = await afterWrite(() => addSlab(input))
       toast({ kind: 'receipt', title: receiptSentence(receipt.message, receipt.cert, addVerb(receipt)) })
       if (fromSheet) {
         setCert('')
         closeAdd()
       }
-      await load()
     } catch (err) {
       const f = describeFailure(err)
       if (fromSheet && addOpenNow.current) setAddFailure(f)
@@ -383,7 +384,7 @@ export default function Slabs() {
     setRemoving(true)
     setRemoveFailure(null)
     try {
-      const gone = await removeSlab(row.grader, row.cert)
+      const gone = await afterWrite(() => removeSlab(row.grader, row.cert))
       const at = ordered.findIndex((one) => rowKey(one) === rowKey(row))
       const next = ordered[at + 1] ?? ordered[at - 1]
       setHandover({ gone: rowKey(row), next: next === undefined ? null : rowKey(next) })
@@ -393,7 +394,6 @@ export default function Slabs() {
         title: receiptSentence(gone.message, gone.cert, 'Removed'),
         action: { label: 'Undo', onPress: () => void add({ cert: row.cert, grader: row.grader }, false) },
       })
-      await load()
     } catch (err) {
       setRemoveFailure(describeFailure(err))
     } finally {

@@ -76,6 +76,7 @@ import { FLAT_KEY, subThresholdSkus } from './readiness'
 import { isWithheld, rowShare, runChip } from './standing'
 import { TrendCell, type KeptTrend, type TrendRead } from './PriceTrend'
 import { PricesAsOf, asOfOf, usePricesRefresh } from './PricesAsOf'
+import { useRereadOnWrite } from './afterWrite'
 import { ClearPrices } from './ClearPrices'
 import { runBoxLabel } from './runScope'
 import {
@@ -2662,6 +2663,8 @@ export function Pricing() {
     setKept(keptOf(answer))
     revision.current = answer.revision
   }, [])
+  /* A CLEAR'S RE-READ (`afterWrite`, D73): the sheet's write, whatever it came to, reads the digest and the clearable list again. */
+  useRereadOnWrite(refreshCorpus)
 
   /** UN-11: put back the newest clear, off the server's own memory of it rather than a
    *  toast's closure. Unlike the toast's own Undo, this answer carries no SKU-keyed values
@@ -2716,7 +2719,6 @@ export function Pricing() {
         flash(input)
         touched.current.delete(sku)
       }
-      void refreshCorpus()
       toast({
         kind: 'receipt',
         title: `${result.count} typed price${result.count === 1 ? '' : 's'} cleared`,
