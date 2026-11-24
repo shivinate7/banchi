@@ -2069,13 +2069,13 @@ export function Pricing() {
           afterWrite(() => keepTicks({}, [sku.sku]), 'tick').catch((err: unknown) => {
             const trouble = describeFailure(err)
             if (trouble.code === 'demo_read_only') return
-            /* A 5xx or a lost connection may still have cleared the tick, so the toast names the untick and the Send box. */
+            /* A 5xx or a lost connection may still have cleared the tick, so the toast names the Send box and says what the send follows. */
             if (gotNoAnswer(err)) {
               toast({
                 kind: 'refusal',
                 tone: failureTone(trouble),
-                title: `The store did not confirm the untick for ${sku.name}`,
-                body: `If the Send box for ${sku.name} is still ticked, untick it again.`,
+                title: `The store did not confirm the Send box for ${sku.name}`,
+                body: 'This send follows the box as shown. On your next visit, the box may show its earlier setting.',
               })
               return
             }
@@ -2544,8 +2544,8 @@ export function Pricing() {
                       ? {
                           kind: 'refusal',
                           tone: failureTone(describeFailure(err)),
-                          title: `The store did not confirm keeping ${sku.name} off TCGplayer`,
-                          body: `If ${sku.name} does not show removed by you, press Keep off TCGplayer again.`,
+                          title: `The store did not confirm the Undo for ${sku.name}`,
+                          body: `If ${sku.name} shows ${done.unheld} removed by you, the copies stay off TCGplayer. If not, they go out with the next send.`,
                         }
                       : { ...refusalToast(err, `Could not hold ${sku.name} again`) },
                   ),

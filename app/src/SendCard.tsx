@@ -188,7 +188,7 @@ export function useOwedTakeOffs(): OwedTakeOffs {
     if (kind !== 'send' && kind !== 'other') return
     try {
       const answer = await getOwedTakeOffs()
-      /* THE HELD LIST STANDS WHEN NOTHING DIFFERS: a new array would clear the answer to a press (`OwedTakeOffsLine`'s `answers`) that the server has not yet changed (D313). */
+      /* THE HELD LIST STANDS WHEN NOTHING DIFFERS: a new array would draw the line again for nothing. */
       setOwed((held) => (JSON.stringify(held) === JSON.stringify(answer.owed) ? held : answer.owed))
       setFailure(null)
     } catch (err) {
@@ -223,6 +223,22 @@ function OwedCell({ current, states }: { readonly current: string; readonly stat
   )
 }
 
+/** THE LIST THE LINE DRAWS AFTER A RE-READ: the read's entries, with the entries it no longer lists that hold an answer, each in the place it had. */
+function keepAnswered(
+  held: readonly OwedTakeOff[],
+  read: readonly OwedTakeOff[],
+  answers: Readonly<Record<string, TakeOffOutcome>>,
+): readonly OwedTakeOff[] {
+  const listed = new Map(read.map((entry) => [entryKey(entry), entry]))
+  const kept = held.flatMap((entry) => {
+    const now = listed.get(entryKey(entry))
+    if (now !== undefined) return [now]
+    return answers[entryKey(entry)] === undefined ? [] : [entry]
+  })
+  const placed = new Set(kept.map(entryKey))
+  return [...kept, ...read.filter((entry) => !placed.has(entryKey(entry)))]
+}
+
 function OwedTakeOffsLine({
   owed,
   taking,
@@ -238,8 +254,14 @@ function OwedTakeOffsLine({
 }) {
   const [answers, setAnswers] = useState<Readonly<Record<string, TakeOffOutcome>>>({})
   const [open, setOpen] = useState(false)
-  /* An answer stands until the list is read again, so an entry never leaves from under the person (D313). */
-  useEffect(() => setAnswers({}), [owed])
+  /* AN ANSWER STANDS UNTIL THE NEXT VISIT (D313): a re-read of the owed list never takes an answered entry from under the person. An entry
+     the re-read no longer lists stays here, in its place, while it holds an answer; one with no answer leaves with the list. */
+  const [shown, setShown] = useState(owed)
+  const [seen, setSeen] = useState(owed)
+  if (seen !== owed) {
+    setSeen(owed)
+    setShown(keepAnswered(shown, owed, answers))
+  }
 
   const viewOfEntry = (entry: OwedTakeOff): TakeOffView => answers[entryKey(entry)]?.view ?? viewOf(entry.state)
   const off = taking !== null || locked
@@ -262,8 +284,9 @@ function OwedTakeOffsLine({
     </span>
   )
 
-  if (owed.length === 1) {
-    const entry = owed[0] as OwedTakeOff
+  if (shown.length === 0) return null
+  if (shown.length === 1) {
+    const entry = shown[0] as OwedTakeOff
     const view = viewOfEntry(entry)
     const answer = answers[entryKey(entry)]
     const name = <span data-typed>{entry.name || 'this card'}</span>
@@ -317,13 +340,13 @@ function OwedTakeOffsLine({
   /* SEVERAL: one line and a fold; each entry has its own press, and there is no press for all. Open, the list floats over the worklist
      (`.send-moves`), so the bar keeps its height. */
   /* THE TOTAL IS WHAT TCGPLAYER STILL LISTS: an entry that was taken off, or already matched, leaves it. */
-  const left = owed.reduce((sum, entry) => (['matches', 'sent'].includes(viewOfEntry(entry)) ? sum : sum + ownedCopies(entry)), 0)
-  const accepted = owed.reduce((sum, entry) => {
+  const left = shown.reduce((sum, entry) => (['matches', 'sent'].includes(viewOfEntry(entry)) ? sum : sum + ownedCopies(entry)), 0)
+  const accepted = shown.reduce((sum, entry) => {
     const answer = answers[entryKey(entry)]
     return answer?.view === 'sent' ? sum + (answer.taken > 0 ? answer.taken : ownedCopies(entry)) : sum
   }, 0)
-  const mode = left === 0 ? 'done' : owed.every((entry) => viewOfEntry(entry) === 'nosession') ? 'nosession' : 'several'
-  const cards = count(owed.length, 'Card')
+  const mode = left === 0 ? 'done' : shown.every((entry) => viewOfEntry(entry) === 'nosession') ? 'nosession' : 'several'
+  const cards = count(shown.length, 'Card')
   return (
     <Notice
       tone={left === 0 ? 'ok' : 'warn'}
@@ -333,7 +356,9 @@ function OwedTakeOffsLine({
         <OwedCell
           current={mode}
           states={{
-            several: `TCGplayer still lists ${count(left, 'copy', 'copies')} from your master set.`,
+            several: `TCGplayer still lists ${count(left, 'copy', 'copies')} from your master set.${
+              accepted > 0 ? ` TCGplayer accepted: ${count(accepted, 'copy', 'copies')} ${accepted === 1 ? 'is' : 'are'} off.` : ''
+            }`,
             nosession: `TCGplayer is not signed in, so these ${count(left, 'copy', 'copies')} stay listed. Sign in, then press Refresh.`,
             done:
               accepted > 0
@@ -356,7 +381,7 @@ function OwedTakeOffsLine({
       }
     >
       <ul className="send-names" hidden={!open}>
-        {owed.map((entry) => {
+        {shown.map((entry) => {
           const view = viewOfEntry(entry)
           const answer = answers[entryKey(entry)]
           return (
@@ -1040,7 +1065,7 @@ export function SendCard({
 }) {
   const live = useLiveCheck()
   const reloadOwed = owed.reload
-  /* A LIVE CHECK THAT ENDS MAY HAVE SETTLED A TAKE-OFF: read the owed list again (the answers it held leave with it). */
+  /* A LIVE CHECK THAT ENDS MAY HAVE SETTLED A TAKE-OFF: read the owed list again. */
   const wasChecking = useRef(false)
   useEffect(() => {
     if (wasChecking.current && !live.checking) reloadOwed()
@@ -1385,7 +1410,7 @@ export function SendCard({
       </div>
 
       {/* FIRST OF THE CARD'S NOTICES, so a receipt or a refusal that comes and goes draws under it and the line never moves. */}
-      {owed.owed.length === 0 ? null : <OwedTakeOffsLine owed={owed.owed} taking={taking} locked={phase !== 'idle' || running} setTaking={setTaking} />}
+      <OwedTakeOffsLine owed={owed.owed} taking={taking} locked={phase !== 'idle' || running} setTaking={setTaking} />
       {owed.failure === null ? null : (
         <Retry
           compact
