@@ -1,1 +1,0 @@
-- verdict-skip-double-count: The shared `verdict` wrapper (`bin/verdict` in the settings repo, `SKIPPED`) takes the larger of two skip counts: the sum of the runner summary lines, and the lines that start `SKIP`. The review found that a Playwright skip can be counted twice. Not measured here: no run was read.

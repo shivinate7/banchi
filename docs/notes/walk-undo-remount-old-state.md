@@ -1,1 +1,1 @@
-- walk-undo-remount-old-state: `walkUndoers` in `app/src/OrdersWalkPane.tsx` is a module-level set, and `undoWalkRecorded` asks each registered undoer. The review found that a walk undo after a remount reads the old walk's state, because an undoer can outlive the walk that registered it. No case pins this.
+- walk-undo-remount-old-state: The review found that a walk undo after a remount reads the old walk's state. The place to look is module-level line state such as `lineSales` in `app/src/OrdersWalkPane.tsx`, which outlives the walk that wrote it. No case pins this.
