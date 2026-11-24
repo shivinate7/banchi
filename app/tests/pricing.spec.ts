@@ -1416,6 +1416,25 @@ test('a Send the store does not confirm says so in its title, and says to press 
   ).toBeVisible()
 })
 
+test('a Send after a price save the store did not confirm says so, and does not say the answers could not be saved', async ({ page }) => {
+  await open(page, { corpusSave: { status: 500, code: 'server_error', message: SERVER_500 } })
+  const sent = recordSent(page)
+  await field(page).fill('19.99')
+  await field(page).press('Tab')
+  await expect.poll(() => sent.some((r) => r.method === 'PUT' && r.path === '/pricing'), { message: 'the save reached the server' }).toBe(true)
+
+  await page.getByRole('button', { name: /^Send \d+ SKU/ }).first().click()
+
+  await expect(
+    page.getByText('The store did not confirm your last price save. Change the field to save it again before you send.', { exact: true }),
+    'the Send line agrees with the save toast: the store did not confirm the save, and the field is what to change',
+  ).toBeVisible()
+  await expect(
+    page.getByText('Your answers could not be saved', { exact: false }),
+    'a Send after a save that got no answer must not say the answers could not be saved, which the save line contradicts',
+  ).toHaveCount(0)
+})
+
 test('a Send the server fails with a 5xx still re-reads the send status', async ({ page }) => {
   await open(page, { send: () => ({ status: 503, code: 'store_unavailable' }) })
   const sent = recordSent(page)
@@ -4594,6 +4613,54 @@ test('a Clear the server fails with a 5xx re-reads the prices', async ({ page })
   await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
   await expect.poll(() => posts, 'the Clear reached the server').toBe(1)
   await expect.poll(reads, { message: 'the Clear that failed with a 5xx is followed by a prices read: no GET /pricing reached the server after it' }).toBeGreaterThan(before)
+})
+
+test('a Clear the server answers with a 5xx after it committed says the store did not confirm the clear, in the sheet', async ({ page }) => {
+  await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  let posts = 0
+  await page.route(/\/pricing\/clear$/, async (route) => {
+    posts += 1
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'server_error', message: SERVER_500 } }),
+    })
+  })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+  await expect(sheet).toBeVisible()
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+  await expect.poll(() => posts, { message: 'the Clear reached the server' }).toBe(1)
+
+  await expect(
+    sheet.getByText('The store did not confirm the clear', { exact: true }),
+    'a 5xx after the clear may have committed, so the sheet says the store did not confirm it',
+  ).toBeVisible()
+  await expect(
+    sheet.getByText('Reload the page to see the prices the store holds now.', { exact: true }),
+    'the body says where to see what the store holds now',
+  ).toBeVisible()
+  await expect(sheet.getByText(SERVER_500, { exact: false }), 'the generic server sentence is not an answer about the clear').toHaveCount(0)
+})
+
+test('a Clear the server refuses keeps the server sentence in the sheet', async ({ page }) => {
+  await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
+  await page.route(/\/pricing\/clear$/, async (route) => {
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'revision_moved', message: 'The prices moved under this sheet.' } }),
+    })
+  })
+  await page.getByRole('button', { name: 'Clear Typed Prices', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear Typed Prices', exact: true })
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
+
+  await expect(
+    sheet.getByText('The prices moved under this sheet.', { exact: true }),
+    'a refusal is the server\'s "no": its own sentence stays in the sheet',
+  ).toBeVisible()
+  await expect(sheet.getByText('The store did not confirm the clear', { exact: false })).toHaveCount(0)
 })
 
 test('a refused Clear re-reads the prices', async ({ page }) => {
@@ -8903,8 +8970,12 @@ test('a price save the server answers with a 5xx after it committed says the sto
     .toBe(true)
 
   await expect(
-    page.getByText(/^The store did not confirm the price save\./).first(),
+    page.getByText('The store did not confirm the price save', { exact: true }).first(),
     'a 5xx after the save may have committed, so the screen must say the store did not confirm it',
+  ).toBeVisible()
+  await expect(
+    page.getByText('The price field shows what you typed. Change it to try the save again.', { exact: true }).first(),
+    'the body says the field holds what was typed, and to change it to save again',
   ).toBeVisible()
   await expect(
     page.getByText('Something went wrong inside the server', { exact: false }),
@@ -8932,8 +9003,10 @@ test('a price save the server refuses keeps the server sentence', async ({ page 
 
 /* THE UNDO OF A CLEAR AND THE RESTORE OF THE LAST ONE, WHEN NO ANSWER CAME BACK (`gotNoAnswer`). A 5xx after the restore may have put the
    answers back, so the copy says the store did not confirm it. A 4xx is the server's "no" and keeps its text. */
-const UNDO_NOT_CONFIRMED = 'The store did not confirm the undo.'
-const RESTORE_NOT_CONFIRMED = 'The store did not confirm the restore.'
+const UNDO_TITLE = 'The store did not confirm the undo'
+const UNDO_BODY = 'Reload the page to see the prices the store holds now.'
+const RESTORE_TITLE = 'The store did not confirm the restore'
+const RESTORE_BODY = 'If Restore 49 cleared is still on the page, press it again. If it is gone, reload the page to see the prices.'
 
 test('a Clear whose Undo the server answers with a 5xx after it committed says the store did not confirm the undo', async ({ page }) => {
   const wire = await open(page, {
@@ -8949,10 +9022,9 @@ test('a Clear whose Undo the server answers with a 5xx after it committed says t
   await page.locator('.bn-toast').last().getByRole('button', { name: 'Undo' }).click()
   await expect.poll(() => wire.filter((r) => r.path === '/pricing/restore').length, { message: 'the Undo reached the server' }).toBe(1)
 
-  await expect(
-    page.locator('.bn-toast', { hasText: UNDO_NOT_CONFIRMED }),
-    'a 5xx after the restore may have put the answers back, so the toast says the store did not confirm the undo',
-  ).toBeVisible()
+  const toast = page.locator('.bn-toast-refusal', { has: page.locator('.bn-toast-title', { hasText: UNDO_TITLE }) })
+  await expect(toast.locator('.bn-toast-title'), 'a 5xx after the restore may have put the answers back, so the toast says the store did not confirm the undo').toHaveText(UNDO_TITLE)
+  await expect(toast.locator('.bn-toast-body'), 'the body says where to look for the prices').toHaveText(UNDO_BODY)
   await expect(page.locator('.bn-toast', { hasText: SERVER_500 }), 'the generic server sentence is not an answer about the undo').toHaveCount(0)
 })
 
@@ -8973,7 +9045,7 @@ test('a Clear whose Undo the server refuses with a 4xx keeps the server sentence
     page.locator('.bn-toast', { hasText: 'Those answers are no longer on the file.' }),
     'a refusal is the server\'s "no": its own sentence stays in the toast',
   ).toBeVisible()
-  await expect(page.locator('.bn-toast', { hasText: UNDO_NOT_CONFIRMED }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+  await expect(page.locator('.bn-toast', { hasText: UNDO_TITLE }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
 })
 
 test('a restore of the last clear the server answers with a 5xx after it committed says the store did not confirm the restore', async ({ page }) => {
@@ -8984,10 +9056,9 @@ test('a restore of the last clear the server answers with a 5xx after it committ
   await page.locator('.pricing-restore-clear').getByRole('button').first().click()
   await expect.poll(() => wire.filter((r) => r.path === '/pricing/restore').length, { message: 'the restore reached the server' }).toBe(1)
 
-  await expect(
-    page.locator('.bn-toast', { hasText: RESTORE_NOT_CONFIRMED }),
-    'a 5xx after the restore may have put the answers back, so the toast says the store did not confirm the restore',
-  ).toBeVisible()
+  const toast = page.locator('.bn-toast-refusal', { has: page.locator('.bn-toast-title', { hasText: RESTORE_TITLE }) })
+  await expect(toast.locator('.bn-toast-title'), 'a 5xx after the restore may have put the answers back, so the toast says the store did not confirm the restore').toHaveText(RESTORE_TITLE)
+  await expect(toast.locator('.bn-toast-body'), 'the body names the restore button and what to look for on the page').toHaveText(RESTORE_BODY)
   await expect(page.locator('.bn-toast', { hasText: 'Not undone' }), 'the old refusal title is wrong for a restore that may have committed').toHaveCount(0)
 })
 
@@ -9003,7 +9074,7 @@ test('a restore of the last clear the server refuses with a 4xx keeps the server
     page.locator('.bn-toast', { hasText: 'Those answers are no longer on the file.' }),
     'a refusal is the server\'s "no": its own sentence stays in the toast',
   ).toBeVisible()
-  await expect(page.locator('.bn-toast', { hasText: RESTORE_NOT_CONFIRMED }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
+  await expect(page.locator('.bn-toast', { hasText: RESTORE_TITLE }), 'a refusal says nothing about the store having failed to confirm').toHaveCount(0)
 })
 
 /* THE PRICES WORKLIST AFTER A KEPT TICK THAT FAILS. A press on a suggestion posts `/pricing/ticks` (`keepTicks`). A 5xx or a
@@ -9113,7 +9184,12 @@ for (const earlier of [false, true]) {
     const wire = await open(page, { ...clearOptions(earlier), restoreFailure: { status: 503, code: 'store_unavailable' }, revisionAfterRestore: 'rev-moved' })
     const sent = recordSent(page)
     await pressRestoreCleared(page, earlier ? 2 : 3)
-    await expect(page.locator('.bn-toast', { hasText: 'The store did not confirm the restore.' }), 'the failure is said').toBeVisible()
+    const count = earlier ? 2 : 3
+    const failed = page.locator('.bn-toast-refusal', { has: page.locator('.bn-toast-title', { hasText: RESTORE_TITLE }) })
+    await expect(failed.locator('.bn-toast-title'), 'the failure is said').toHaveText(RESTORE_TITLE)
+    await expect(failed.locator('.bn-toast-body'), 'the body names the restore by its count').toHaveText(
+      `If Restore ${count} cleared is still on the page, press it again. If it is gone, reload the page to see the prices.`,
+    )
     await expect.poll(() => readAfterWrite(sent, 'POST', '/pricing/restore', '/pricing'), {
       message: 'the failed Restore is followed by its re-read of the saved prices, which must not take the digest it carries',
     }).toBe(true)
