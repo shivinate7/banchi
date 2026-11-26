@@ -8,7 +8,7 @@ The first result: `make up` prints a link. Open it to see the app, where your bo
 
 Status: working, built for one store. The code-card feature is dormant.
 
-[Live demo](https://shivinate7.github.io/banchi/): the real app on recorded answers. It
+[Live demo](https://swlshiv.github.io/banchi/): the real app on recorded answers. It
 reaches no real store ([`docs/specs/demo.md`](docs/specs/demo.md)).
 
 ## Quick start
