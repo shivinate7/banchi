@@ -22,6 +22,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: shivinate7/claude-settings/actions/readme-links@stable # tracks claude-settings stable
+      - uses: swlshiv/claude-settings/actions/readme-links@stable # tracks claude-settings stable
         with:
           open-issue: "true"

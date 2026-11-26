@@ -18,7 +18,7 @@ The `fork claude link` row of `make docs-audit` checks the link.
 
 ## Banchi names everything (D94, Banchi names everything)
 
-**Banchi** names the app, the GitHub repository `shivinate7/banchi`, the checkout, the CLI `./banchi`,
+**Banchi** names the app, the GitHub repository `swlshiv/banchi`, the checkout, the CLI `./banchi`,
 the env vars `BANCHI_*`, `~/.banchi` and the launchd labels `com.banchi.*`. The old name was
 `pkmnscan`. A new `pkmnscan` outside `fixtures/` is a defect. `inventory/store.sqlite` keeps its
 name. Fixtures are never modified.

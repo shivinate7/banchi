@@ -17,7 +17,7 @@ You need `make`, `git`, and the Python and Node.js versions that CI pins in
 [`checks.yml`](.github/workflows/checks.yml).
 
 ```sh
-git clone https://github.com/shivinate7/banchi.git banchi
+git clone https://github.com/swlshiv/banchi.git banchi
 cd banchi
 make hooks                  # arm the git hooks, once per clone
 make venv                   # Python packages into .venv

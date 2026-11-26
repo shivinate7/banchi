@@ -10,8 +10,8 @@ The local hooks stay. Protection bites at `git push`. Both incidents moved main 
 
 The first measurement, before the upgrade, showed both surfaces refusing with 403:
 
-    GET repos/shivinate7/banchi/rulesets                   403
-    GET repos/shivinate7/banchi/branches/main/protection   403
+    GET repos/swlshiv/banchi/rulesets                   403
+    GET repos/swlshiv/banchi/branches/main/protection   403
     "Upgrade to GitHub Pro or make this repository public to enable this feature."
 
 The repo was private on the free plan. Going public was not an option. `CLAUDE.md`'s opsec rule makes a live unredeemed code card a bearer instrument. So the owner chose the local guard, and later bought Pro. The repo stayed private.
@@ -149,6 +149,6 @@ At `prepared`, the hook asks `git merge-base --is-ancestor "$new" refs/remotes/o
 
 **What it does not cover:** one machine's clone. A push from anywhere else, a commit in a different clone, and the GitHub web editor are all outside it. Those are the exact gap branch protection would close.
 
-**Amended.** The premise here was that the server-side guard was not for sale. That went false, twice over. Both are done, not hypothetical. Branch protection is on. The one check it is to require is `all-jobs-passed`, which rolls up every job, `revert-guard` included (claude-settings decision same-check-kinds). Protection holds that one check and no other. And `gh api /repos/shivinate7/banchi` answers `"private": false`. The repository is public, on the owner's own separate decision. The subscription this entry's opening measurement paid to avoid is no longer the question. Server-side rulesets exist and are required now.
+**Amended.** The premise here was that the server-side guard was not for sale. That went false, twice over. Both are done, not hypothetical. Branch protection is on. The one check it is to require is `all-jobs-passed`, which rolls up every job, `revert-guard` included (claude-settings decision same-check-kinds). Protection holds that one check and no other. And `gh api /repos/swlshiv/banchi` answers `"private": false`. The repository is public, on the owner's own separate decision. The subscription this entry's opening measurement paid to avoid is no longer the question. Server-side rulesets exist and are required now.
 
 What this protected, main moving from inside this clone unreviewed, is caught remotely too. A required check on a PR is the server-side gate this entry once could not buy. **What the two local hooks still cover is the one thing a required check cannot see: a local ref move that never goes through `git push`.** `reference-transaction` catches a fast-forward, a rebase, or a `branch -f` of `refs/heads/main`, before any network call exists to gate. `pre-push` is now the redundant one. A direct push it refuses would also fail remotely. It stays, because a local guard costs nothing to keep. The local guard's ground is narrower now. It is not "the only gate there is". It is "the one gate a `git update-ref` never reaches."

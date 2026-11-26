@@ -332,7 +332,7 @@ refuses `deploy` before `actions/deploy-pages` loads.
 
 Read the `build` job's own conclusion and never the run's overall one. The run reads red because
 the environment refused `deploy`, not because anything failed. To see what got packaged, download
-the artifact: `gh run download <id> -R shivinate7/banchi -n github-pages -D <dir>`.
+the artifact: `gh run download <id> -R swlshiv/banchi -n github-pages -D <dir>`.
 
 ## 12. A second, small, real box — opt-in, additive, and off by default
 

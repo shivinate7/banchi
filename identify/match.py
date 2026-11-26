@@ -130,11 +130,11 @@ BATTLEFIELD_TYPE = "Battlefield"  # tcgcsv's `Card Type` cell
 # ------------------------------------------------------------------------ the model file
 
 # The IMAGE tower of Marqo ecommerce-B (92.9 M parameters), fp32. Exported by
-# `scripts/export-matcher-model.py`, published as a release asset on shivinate7/banchi, and
+# `scripts/export-matcher-model.py`, published as a release asset on swlshiv/banchi, and
 # pinned here by size and SHA-256. A different file is a different model: the index refuses it.
 MODEL_RELEASE_TAG = "matcher-model-1"
 MODEL_URL = (
-    "https://github.com/shivinate7/banchi/releases/download/"
+    "https://github.com/swlshiv/banchi/releases/download/"
     f"{MODEL_RELEASE_TAG}/{MODEL_FILENAME}"
 )
 DIM = 768
