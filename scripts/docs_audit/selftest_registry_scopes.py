@@ -408,7 +408,7 @@ jobs:
       - name: a script whose body reads like keys
         run: |
           echo "a # inside a string is not a comment"
-          uses: shivinate7/claude-settings/actions/stamp@@OTHER@
+          uses: swlshiv/claude-settings/actions/stamp@@OTHER@
           needs: ${{ toJSON(needs) }}
   already-passed:
     runs-on: ubuntu-latest
@@ -418,8 +418,8 @@ jobs:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     steps:
-      # - uses: shivinate7/claude-settings/actions/stamp@@OTHER@
-      - uses: shivinate7/claude-settings/actions/code-check@@PIN@
+      # - uses: swlshiv/claude-settings/actions/stamp@@OTHER@
+      - uses: swlshiv/claude-settings/actions/code-check@@PIN@
   design-check:
     needs: [ci-check]
     if: ${{ !github.event.pull_request.draft }}
@@ -444,7 +444,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@
+      - uses: swlshiv/claude-settings/actions/all-jobs-passed@@PIN@
         with:
           needs: ${{ toJSON(needs) }}
   ci-done:
@@ -458,7 +458,7 @@ jobs:
   playwright:
     runs-on: ubuntu-latest
     steps:
-      - uses: shivinate7/claude-settings/actions/playwright-setup@@PIN@
+      - uses: swlshiv/claude-settings/actions/playwright-setup@@PIN@
 """)
 
     def findings_for(check_text, stamp=GREEN_STAMP, excluded=WANTED):
@@ -522,7 +522,7 @@ jobs:
     )
     blanked = blank_fn(FIXTURE) if blank_fn else None
     ok(
-        blanked is not None and not any(line.strip().startswith("uses: shivinate7/") for line in blanked),
+        blanked is not None and not any(line.strip().startswith("uses: swlshiv/") for line in blanked),
         "a run block's body that reads like a uses key is blanked, so it is not a pin",
         NOT_BUILT if blanked is None else "a script line was read as a key",
     )
@@ -625,9 +625,9 @@ jobs:
     )
     red(
         "a uses line inside a run body is not the rollup step (the body is blanked)",
-        "      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n        with:\n          needs: ${{ toJSON(needs) }}",
-        "      - run: |\n          uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n          needs: ${{ toJSON(needs) }}",
-        "does not run `shivinate7/claude-settings/actions/all-jobs-passed`",
+        "      - uses: swlshiv/claude-settings/actions/all-jobs-passed@@PIN@\n        with:\n          needs: ${{ toJSON(needs) }}",
+        "      - run: |\n          uses: swlshiv/claude-settings/actions/all-jobs-passed@@PIN@\n          needs: ${{ toJSON(needs) }}",
+        "does not run `swlshiv/claude-settings/actions/all-jobs-passed`",
     )
     # THE REF IS EXACTLY `stable`. A rollup at a tag, at `main` or at a 40-hex sha is a finding that
     # names `stable`, and so is any other call at a ref that is not `stable`.
@@ -646,8 +646,8 @@ jobs:
     )
     red(
         "control: code-check at `main` beside code-check at `stable` in one job is a finding that names the action",
-        "      - uses: shivinate7/claude-settings/actions/code-check@@PIN@",
-        "      - uses: shivinate7/claude-settings/actions/code-check@@PIN@\n      - uses: shivinate7/claude-settings/actions/code-check@main",
+        "      - uses: swlshiv/claude-settings/actions/code-check@@PIN@",
+        "      - uses: swlshiv/claude-settings/actions/code-check@@PIN@\n      - uses: swlshiv/claude-settings/actions/code-check@main",
         "uses `code-check`",
     )
     # THE SPELLINGS THE READER MISSES. A flow-style step, a job-level reusable call and a second rollup
@@ -665,9 +665,9 @@ jobs:
 
     STABLE = "must be exactly `stable`"
     flow_step = FIXTURE.replace(
-        fill("      - uses: shivinate7/claude-settings/actions/code-check@@PIN@"),
-        fill("      - uses: shivinate7/claude-settings/actions/code-check@@PIN@\n"
-             "      - { uses: shivinate7/claude-settings/actions/stamp@main }"),
+        fill("      - uses: swlshiv/claude-settings/actions/code-check@@PIN@"),
+        fill("      - uses: swlshiv/claude-settings/actions/code-check@@PIN@\n"
+             "      - { uses: swlshiv/claude-settings/actions/stamp@main }"),
         1,
     )
     finding_on(
@@ -682,18 +682,18 @@ jobs:
         "  workflow_dispatch:\n"
         "jobs:\n"
         "  call:\n"
-        "    uses: shivinate7/claude-settings/.github/workflows/ci.yml@main\n"
+        "    uses: swlshiv/claude-settings/.github/workflows/ci.yml@main\n"
     )
     finding_on(
         "a job-level reusable call to claude-settings at `main` is a finding on its own file that says `stable`",
         {CHECK_PATH: FIXTURE, DEMO: DEMO_TEXT, REUSE: reuse_call}, REUSE, STABLE,
     )
     extra_rollup = FIXTURE.replace(
-        fill("      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n"
+        fill("      - uses: swlshiv/claude-settings/actions/all-jobs-passed@@PIN@\n"
              "        with:\n          needs: ${{ toJSON(needs) }}"),
-        fill("      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n"
+        fill("      - uses: swlshiv/claude-settings/actions/all-jobs-passed@@PIN@\n"
              "        with:\n          needs: ${{ toJSON(needs) }}\n"
-             "      - uses: shivinate7/claude-settings/actions/all-jobs-passed@main\n"
+             "      - uses: swlshiv/claude-settings/actions/all-jobs-passed@main\n"
              "        with:\n          needs: ${{ toJSON(needs) }}"),
         1,
     )
@@ -725,14 +725,14 @@ jobs:
     )
     red(
         "continue-on-error on the all-jobs-passed job is a finding that names it",
-        "    timeout-minutes: 5\n    steps:\n      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@",
-        "    timeout-minutes: 5\n    continue-on-error: true\n    steps:\n      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@",
+        "    timeout-minutes: 5\n    steps:\n      - uses: swlshiv/claude-settings/actions/all-jobs-passed@@PIN@",
+        "    timeout-minutes: 5\n    continue-on-error: true\n    steps:\n      - uses: swlshiv/claude-settings/actions/all-jobs-passed@@PIN@",
         "continue-on-error",
     )
     red(
         "continue-on-error on the all-jobs-passed step is a finding that names it",
-        "      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n        with:",
-        "      - uses: shivinate7/claude-settings/actions/all-jobs-passed@@PIN@\n        continue-on-error: true\n        with:",
+        "      - uses: swlshiv/claude-settings/actions/all-jobs-passed@@PIN@\n        with:",
+        "      - uses: swlshiv/claude-settings/actions/all-jobs-passed@@PIN@\n        continue-on-error: true\n        with:",
         "continue-on-error",
     )
     got = findings_for(FIXTURE.replace(
@@ -868,7 +868,7 @@ jobs:
                 "  stamp:\n"
                 "    runs-on: ubuntu-latest\n"
                 "    steps:\n"
-                f"      - uses: shivinate7/claude-settings/actions/stamp@{ref}\n"
+                f"      - uses: swlshiv/claude-settings/actions/stamp@{ref}\n"
             )
 
         X_YAML = ".github/workflows/x.yaml"

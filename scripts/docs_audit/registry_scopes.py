@@ -1443,10 +1443,10 @@ def check_browser_scope(report: Report) -> None:
 # quotes a `uses:` line is not read as one.
 
 ROLLUP_JOB = "all-jobs-passed"
-ROLLUP_ACTION = "shivinate7/claude-settings/actions/all-jobs-passed"
+ROLLUP_ACTION = "swlshiv/claude-settings/actions/all-jobs-passed"
 # Any call into claude-settings: an action (`actions/<name>`) or a reusable workflow
 # (`.github/workflows/<file>`). Group 1 is the action's name, or the workflow's path; group 2 is the ref.
-_CLAUDE_SETTINGS_USES_RE = re.compile(r"^shivinate7/claude-settings/(?:actions/)?([^@\s]+)@(\S+)$")
+_CLAUDE_SETTINGS_USES_RE = re.compile(r"^swlshiv/claude-settings/(?:actions/)?([^@\s]+)@(\S+)$")
 _FLOW_USES_RE = re.compile(r"(?:^|[{,])\s*uses:\s*")
 
 #: The one ref every claude-settings action is called at: child repos follow the shared `stable` branch, so a

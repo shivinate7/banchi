@@ -196,7 +196,7 @@ The spike ran the same comparison on all 500 photographs and all 1,365 stock ima
 
 **The first-run download and who triggers it.** The owner ruled that the free setup runs by itself (section 8, Free setup). The 372 MB file downloads once, and the hash is checked. The runs sheet shows a card named "Prepare matching". It states the size and the source. A press there is a manual refresh. Until the download finishes, the matcher pick is dimmed with one sentence.
 
-**The source is a release asset of `shivinate7/banchi`**, with the file's SHA-256 pinned in code. It is one download of 372 MB. The owner chose this source. Marqo's license is Apache-2.0, which allows redistribution with a notice. A legal read is unmeasured. The release does not exist yet. The owner creates it, on the owner's word, when the build lane needs it. This PR creates no release. The export script stays the developer's way to rebuild the file. It needs torch in a throwaway venv.
+**The source is a release asset of `swlshiv/banchi`**, with the file's SHA-256 pinned in code. It is one download of 372 MB. The owner chose this source. Marqo's license is Apache-2.0, which allows redistribution with a notice. A legal read is unmeasured. The release does not exist yet. The owner creates it, on the owner's word, when the build lane needs it. This PR creates no release. The export script stays the developer's way to rebuild the file. It needs torch in a throwaway venv.
 
 **Where the runtime loads.** The capture server stays free of ML code. `server/pipeline_routes.py` is stdlib only. onnxruntime loads only in the detached child that runs the identify command. The Anthropic client loads there too.
 
@@ -368,7 +368,7 @@ A worker that dies inside a chunk, even by an out-of-memory kill, leaves the fil
 - The matcher does not accept a card whose best answer shares a name with a no-image printing (section 2).
 - Dropped on the owner's word: the option that skips names with two or more printings, and the twin-margin options.
 - D301 is amended for one fingerprint read of each stock image. A model change rebuilds every fingerprint (section 4).
-- The model file is a release asset of `shivinate7/banchi`, with a pinned hash, downloaded when the owner presses a control (section 5).
+- The model file is a release asset of `swlshiv/banchi`, with a pinned hash, downloaded when the owner presses a control (section 5).
 - The control uses plain words. The model name sits in one hover tooltip, as a named exception in D196 (section 6).
 - Before adoption, a held-out check confirms the thresholds. That is a build-lane gate (section 3).
 - Process only: the build starts on fp32. The build lane commits the eval scripts.

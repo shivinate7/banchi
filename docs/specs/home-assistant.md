@@ -199,8 +199,8 @@ Asked one at a time. Each ruling moves into "Owner rulings" above.
 
 ## Sources
 
-Read-only: `shivinate7/home` records, `shivinate7/home-app` `SPEC.md`, `shivinate7/ios-adblock`
-research notes and tools, `shivinate7/degen` `ops/ha-addon/` and its hosting decision,
+Read-only: `swlshiv/home` records, `shivinate7/home-app` `SPEC.md`, `swlshiv/ios-adblock`
+research notes and tools, `swlshiv/degen` `ops/ha-addon/` and its hosting decision,
 `shivinate7/tcg-dealer` `PROTOCOL.md`. Vendor docs: HA Green, HA add-on configuration, Litestream,
 SQLite backup and "use over a network", nginx `proxy_cache`, `pmset`, MDN secure contexts, Caddy
 automatic HTTPS, Let's Encrypt challenge types.

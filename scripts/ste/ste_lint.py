@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# VENDORED COPY. Source: $HOME/.claude/lint/ste_lint.py (github.com/shivinate7/claude-settings,
+# VENDORED COPY. Source: $HOME/.claude/lint/ste_lint.py (github.com/swlshiv/claude-settings,
 # lint/ste_lint.py), copied verbatim into this repo on 2026-09-19 for D60: a
 # banchi gate cannot depend on a file outside its own cloned tree (a fresh clone, a CI
 # runner and a worktree all lack $HOME/.claude), so this is a real copy, never a symlink

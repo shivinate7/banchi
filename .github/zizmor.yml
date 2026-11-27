@@ -4,5 +4,5 @@ rules:
   unpinned-uses:
     config:
       policies:
-        shivinate7/claude-settings/*: ref-pin
+        swlshiv/claude-settings/*: ref-pin
         "*": hash-pin

@@ -318,12 +318,12 @@ jobs:
       # not exactly one downloaded copy fails.
       - name: Download claude-settings stable for the map check
         if: false
-        uses: shivinate7/claude-settings/actions/ci-alarm@stable # tracks claude-settings stable
+        uses: swlshiv/claude-settings/actions/ci-alarm@stable # tracks claude-settings stable
 
       - name: Install the map check's skill from claude-settings stable
         run: |
           set -eu
-          cached="$(dirname "$RUNNER_WORKSPACE")/_actions/shivinate7/claude-settings"
+          cached="$(dirname "$RUNNER_WORKSPACE")/_actions/swlshiv/claude-settings"
           set -- "$cached"/*/
           if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
             echo "expected exactly one claude-settings download under $cached, found: $*" >&2
@@ -366,7 +366,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: shivinate7/claude-settings/actions/all-jobs-passed@stable # tracks claude-settings stable
+      - uses: swlshiv/claude-settings/actions/all-jobs-passed@stable # tracks claude-settings stable
         with:
           needs: ${{ toJSON(needs) }}
 
@@ -408,7 +408,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: shivinate7/claude-settings/actions/stamp@stable # tracks claude-settings stable
+      - uses: swlshiv/claude-settings/actions/stamp@stable # tracks claude-settings stable
         with:
           mode: check
           config: .github/stamp.json
@@ -416,9 +416,9 @@ jobs:
       # Shared doc checks (claude-settings, at `stable` like every other claude-settings step here).
       # `claude-md-cites` fails a CLAUDE.md or .claude/**/*.md paragraph that copies a shared record.
       # `ste-lint` fails the added or changed markdown lines of the diff only.
-      - uses: shivinate7/claude-settings/actions/claude-md-cites@stable # tracks claude-settings stable
+      - uses: swlshiv/claude-settings/actions/claude-md-cites@stable # tracks claude-settings stable
 
-      - uses: shivinate7/claude-settings/actions/ste-lint@stable # tracks claude-settings stable
+      - uses: swlshiv/claude-settings/actions/ste-lint@stable # tracks claude-settings stable
 
   # THE SHARED CODE CHECK (claude-settings' `actions/code-check`). One type check and one bug lint
   # per language, read from that action's own table: ruff and mypy --strict for Python, tsc for
@@ -454,7 +454,7 @@ jobs:
       - name: Install
         run: npm ci --prefix app
 
-      - uses: shivinate7/claude-settings/actions/code-check@stable # tracks claude-settings stable
+      - uses: swlshiv/claude-settings/actions/code-check@stable # tracks claude-settings stable
         with:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
@@ -520,7 +520,7 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - uses: shivinate7/claude-settings/actions/mutation-report@stable # tracks claude-settings stable
+      - uses: swlshiv/claude-settings/actions/mutation-report@stable # tracks claude-settings stable
         with:
           profile: banchi
 
@@ -875,6 +875,6 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: shivinate7/claude-settings/actions/ci-done-comment@stable # tracks claude-settings stable
+      - uses: swlshiv/claude-settings/actions/ci-done-comment@stable # tracks claude-settings stable
         with:
           needs: ${{ toJSON(needs) }}
