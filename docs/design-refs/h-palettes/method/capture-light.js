@@ -3,7 +3,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 const OUT = '/private/tmp/claude-501/-Users-shivinate-Developer-pkmnscan/8d51bb04-23aa-47ca-ada1-d62b265fd9a4/scratchpad/cyberpunk/blind2';
-const BASE = 'https://shivinate7.github.io/banchi/';
+const BASE = 'https://swlshiv.github.io/banchi/';
 
 const routes = {
   home: '#/',

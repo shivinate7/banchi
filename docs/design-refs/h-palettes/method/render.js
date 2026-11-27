@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const OUT = __dirname;
-const BASE = 'https://shivinate7.github.io/banchi/';
+const BASE = 'https://swlshiv.github.io/banchi/';
 
 const routes = {
   home: '#/',

@@ -1,6 +1,6 @@
 # The public demo, and why it is not a fork
 
-The published page (`shivinate7.github.io/banchi`) is the real front end playing back a recorded
+The published page (`swlshiv.github.io/banchi`) is the real front end playing back a recorded
 wire. `.github/workflows/demo.yml` rebuilds it on every push to `main` that touches what it is
 built from.
 
